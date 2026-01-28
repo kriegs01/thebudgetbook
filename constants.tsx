@@ -22,7 +22,7 @@ export const INITIAL_CATEGORIES: BudgetCategory[] = [
 ];
 
 export const INITIAL_ACCOUNTS: Account[] = [
-  { id: '1', bank: 'Chase', classification: 'Checking', balance: 5240.50, type: 'Debit' },
+  { id: '1', bank: 'EastWest VISA Privilege', classification: 'Credit Card', balance: 5240.50, type: 'Credit' },
   { id: '2', bank: 'Amex', classification: 'Credit Card', balance: 1200.00, type: 'Credit', creditLimit: 10000, billingDate: '15th', dueDate: '1st' },
   { id: '3', bank: 'Ally', classification: 'Savings', balance: 15000.00, type: 'Debit' },
 ];
