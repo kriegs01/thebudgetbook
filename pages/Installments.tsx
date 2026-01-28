@@ -1,0 +1,369 @@
+import React, { useState } from 'react';
+import { Installment, Account, ViewMode } from '../types';
+import { Plus, LayoutGrid, List, Wallet, Trash2, X, Upload, AlertTriangle } from 'lucide-react';
+
+interface InstallmentsProps {
+  installments: Installment[];
+  accounts: Account[];
+  onAdd: (i: Installment) => void;
+  onUpdate?: (i: Installment) => void;
+  onDelete?: (id: string) => void;
+}
+
+const Installments: React.FC<InstallmentsProps> = ({ installments, accounts, onAdd, onUpdate, onDelete }) => {
+  const [viewMode, setViewMode] = useState<ViewMode>('card');
+  const [showModal, setShowModal] = useState(false);
+  const [showPayModal, setShowPayModal] = useState<Installment | null>(null);
+
+  const [confirmModal, setConfirmModal] = useState<{
+    show: boolean;
+    title: string;
+    message: string;
+    onConfirm: () => void;
+  }>({
+    show: false,
+    title: '',
+    message: '',
+    onConfirm: () => {},
+  });
+  
+  const [formData, setFormData] = useState({ 
+    name: '', totalAmount: '', monthlyAmount: '', termDuration: '', paidAmount: '', accountId: accounts[0]?.id || '' 
+  });
+
+  const [payFormData, setPayFormData] = useState({
+    amount: '',
+    receipt: '',
+    datePaid: new Date().toISOString().split('T')[0],
+    accountId: accounts[0]?.id || ''
+  });
+
+  const formatCurrency = (val: number) => {
+    return new Intl.NumberFormat('en-PH', { 
+      style: 'currency', 
+      currency: 'PHP',
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2 
+    }).format(val);
+  };
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    onAdd({
+      id: Math.random().toString(36).substr(2, 9),
+      name: formData.name,
+      totalAmount: parseFloat(formData.totalAmount),
+      monthlyAmount: parseFloat(formData.monthlyAmount),
+      termDuration: formData.termDuration,
+      paidAmount: parseFloat(formData.paidAmount) || 0,
+      accountId: formData.accountId
+    });
+    setShowModal(false);
+  };
+
+  const handlePaySubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!showPayModal) return;
+
+    const paymentAmount = parseFloat(payFormData.amount) || 0;
+    const updatedInstallment: Installment = {
+      ...showPayModal,
+      paidAmount: showPayModal.paidAmount + paymentAmount
+    };
+
+    onUpdate?.(updatedInstallment);
+    setShowPayModal(null);
+  };
+
+  const handleDeleteTrigger = (id: string, name: string) => {
+    setConfirmModal({
+      show: true,
+      title: 'Remove Installment',
+      message: `Are you sure you want to permanently stop tracking the installment for "${name}"?`,
+      onConfirm: () => {
+        onDelete?.(id);
+        setConfirmModal(p => ({ ...p, show: false }));
+      }
+    });
+  };
+
+  const renderCard = (item: Installment) => {
+    const progress = (item.paidAmount / item.totalAmount) * 100;
+    const remaining = item.totalAmount - item.paidAmount;
+    const account = accounts.find(a => a.id === item.accountId);
+
+    return (
+      <div key={item.id} className="bg-white p-6 rounded-3xl shadow-sm border border-gray-100 hover:shadow-md transition-all group relative overflow-hidden">
+        <div className="flex justify-between items-start mb-4">
+          <div>
+            <h3 className="font-black text-lg text-gray-900 group-hover:text-indigo-600 transition-colors uppercase tracking-tight">{item.name}</h3>
+            <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">{item.termDuration}</span>
+          </div>
+          <button 
+            onClick={() => handleDeleteTrigger(item.id, item.name)}
+            className="p-2 text-gray-300 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all"
+          >
+            <Trash2 className="w-5 h-5" />
+          </button>
+        </div>
+        
+        <div className="grid grid-cols-2 gap-4 mb-6">
+          <div>
+            <p className="text-[10px] text-gray-400 uppercase font-black tracking-widest">Monthly</p>
+            <p className="font-black text-gray-900">{formatCurrency(item.monthlyAmount)}</p>
+          </div>
+          <div className="text-right">
+            <p className="text-[10px] text-gray-400 uppercase font-black tracking-widest">Total</p>
+            <p className="font-black text-gray-900">{formatCurrency(item.totalAmount)}</p>
+          </div>
+        </div>
+
+        <div className="space-y-2 mb-6">
+          <div className="flex justify-between text-[10px] font-black uppercase tracking-widest">
+            <span className="text-indigo-600">Paid: {formatCurrency(item.paidAmount)}</span>
+            <span className="text-gray-400">Bal: {formatCurrency(remaining)}</span>
+          </div>
+          <div className="h-2.5 w-full bg-gray-100 rounded-full overflow-hidden">
+            <div 
+              className="h-full bg-indigo-500 transition-all duration-1000" 
+              style={{ width: `${Math.min(progress, 100)}%` }}
+            ></div>
+          </div>
+        </div>
+
+        <div className="flex items-center justify-between">
+          <div className="flex items-center space-x-2 text-[10px] font-black text-gray-400 uppercase tracking-widest">
+            <Wallet className="w-3.5 h-3.5" />
+            <span>{account?.bank || 'Account'}</span>
+          </div>
+          <button 
+            onClick={() => {
+              setShowPayModal(item);
+              setPayFormData({ ...payFormData, amount: item.monthlyAmount.toString() });
+            }}
+            className="bg-indigo-600 text-white px-5 py-2 rounded-xl text-xs font-black uppercase tracking-widest hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-100"
+          >
+            Pay
+          </button>
+        </div>
+      </div>
+    );
+  };
+
+  const renderListItem = (item: Installment) => {
+    const progress = (item.paidAmount / item.totalAmount) * 100;
+    const account = accounts.find(a => a.id === item.accountId);
+
+    return (
+      <div key={item.id} className="bg-white p-4 pr-6 rounded-2xl border border-gray-100 flex flex-col md:flex-row md:items-center justify-between gap-4 hover:bg-gray-50 transition-colors group">
+        <div className="flex-1">
+          <div className="flex items-center space-x-2">
+            <h3 className="font-black text-gray-900 uppercase tracking-tight">{item.name}</h3>
+            <span className="text-[10px] bg-gray-100 px-2 py-0.5 rounded-full text-gray-500 font-black uppercase tracking-widest">{item.termDuration}</span>
+          </div>
+          <p className="text-[10px] text-gray-400 font-black uppercase tracking-widest">{account?.bank || 'Account'}</p>
+        </div>
+        
+        <div className="flex flex-1 items-center space-x-6">
+           <div className="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden">
+             <div className="h-full bg-indigo-500" style={{ width: `${Math.min(progress, 100)}%` }}></div>
+           </div>
+           <span className="text-xs font-black text-gray-900 whitespace-nowrap">{Math.round(progress)}%</span>
+        </div>
+
+        <div className="flex items-center space-x-6">
+          <div className="flex flex-col text-right min-w-[120px]">
+            <span className="text-sm font-black text-gray-900">{formatCurrency(item.monthlyAmount)}</span>
+            <span className="text-[10px] text-gray-400 font-black uppercase tracking-widest">Monthly</span>
+          </div>
+          <div className="flex items-center space-x-2">
+            <button 
+              onClick={() => {
+                setShowPayModal(item);
+                setPayFormData({ ...payFormData, amount: item.monthlyAmount.toString() });
+              }}
+              className="bg-indigo-600 text-white px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest hover:bg-indigo-700 transition-all"
+            >
+              Pay
+            </button>
+            <button 
+              onClick={() => handleDeleteTrigger(item.id, item.name)}
+              className="p-2 text-gray-300 hover:text-red-500 transition-all"
+            >
+              <Trash2 className="w-5 h-5" />
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  return (
+    <div className="space-y-8 animate-in fade-in duration-500">
+      <div className="flex items-center justify-between">
+        <div className="flex bg-gray-100 p-1 rounded-2xl">
+          <button 
+            onClick={() => setViewMode('card')}
+            className={`p-2 rounded-xl transition-all ${viewMode === 'card' ? 'bg-white shadow-sm text-indigo-600' : 'text-gray-400'}`}
+          >
+            <LayoutGrid className="w-5 h-5" />
+          </button>
+          <button 
+            onClick={() => setViewMode('list')}
+            className={`p-2 rounded-xl transition-all ${viewMode === 'list' ? 'bg-white shadow-sm text-indigo-600' : 'text-gray-400'}`}
+          >
+            <List className="w-5 h-5" />
+          </button>
+        </div>
+        <button 
+          onClick={() => setShowModal(true)}
+          className="bg-indigo-600 text-white px-8 py-3 rounded-2xl font-black uppercase tracking-widest text-xs hover:bg-indigo-700 transition-all shadow-xl shadow-indigo-100 flex items-center space-x-2"
+        >
+          <Plus className="w-5 h-5" />
+          <span>New Installment</span>
+        </button>
+      </div>
+
+      <div className={viewMode === 'card' ? "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6" : "space-y-4"}>
+        {installments.length > 0 ? (
+          installments.map(item => viewMode === 'card' ? renderCard(item) : renderListItem(item))
+        ) : (
+          <div className="col-span-full p-24 text-center">
+            <p className="text-gray-400 font-black uppercase tracking-widest text-sm">No installments being tracked</p>
+          </div>
+        )}
+      </div>
+
+      {/* Track Modal */}
+      {showModal && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md">
+          <div className="bg-white rounded-[2.5rem] w-full max-w-lg p-10 shadow-2xl animate-in zoom-in-95">
+            <h2 className="text-2xl font-black text-gray-900 mb-6 uppercase tracking-tight">Track New Installment</h2>
+            <form onSubmit={handleSubmit} className="space-y-6">
+              <div>
+                <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Item Name</label>
+                <input required type="text" value={formData.name} onChange={(e) => setFormData({...formData, name: e.target.value})} className="w-full bg-gray-50 border-transparent rounded-2xl p-4 outline-none focus:ring-2 focus:ring-indigo-500 font-bold" placeholder="e.g. MacBook Pro" />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Total Amount</label>
+                  <div className="relative">
+                    <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 font-bold">₱</span>
+                    <input required type="number" value={formData.totalAmount} onChange={(e) => setFormData({...formData, totalAmount: e.target.value})} className="w-full bg-gray-50 border-transparent rounded-2xl p-4 pl-8 outline-none focus:ring-2 focus:ring-indigo-500 font-black" />
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Monthly Payment</label>
+                  <div className="relative">
+                    <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 font-bold">₱</span>
+                    <input required type="number" value={formData.monthlyAmount} onChange={(e) => setFormData({...formData, monthlyAmount: e.target.value})} className="w-full bg-gray-50 border-transparent rounded-2xl p-4 pl-8 outline-none focus:ring-2 focus:ring-indigo-500 font-black" />
+                  </div>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Already Paid</label>
+                  <div className="relative">
+                    <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 font-bold">₱</span>
+                    <input required type="number" value={formData.paidAmount} onChange={(e) => setFormData({...formData, paidAmount: e.target.value})} className="w-full bg-gray-50 border-transparent rounded-2xl p-4 pl-8 outline-none focus:ring-2 focus:ring-indigo-500 font-black" />
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Term Duration</label>
+                  <input required type="text" placeholder="e.g. 12 months" value={formData.termDuration} onChange={(e) => setFormData({...formData, termDuration: e.target.value})} className="w-full bg-gray-50 border-transparent rounded-2xl p-4 outline-none focus:ring-2 focus:ring-indigo-500 font-bold" />
+                </div>
+              </div>
+              <div>
+                <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Billing Account</label>
+                <select value={formData.accountId} onChange={(e) => setFormData({...formData, accountId: e.target.value})} className="w-full bg-gray-50 border-transparent rounded-2xl p-4 outline-none focus:ring-2 focus:ring-indigo-500 font-bold appearance-none">
+                   {accounts.map(acc => (
+                    <option key={acc.id} value={acc.id}>{acc.bank} - {acc.classification}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="flex space-x-4 pt-4">
+                <button type="button" onClick={() => setShowModal(false)} className="flex-1 bg-gray-100 py-4 rounded-2xl font-black uppercase tracking-widest text-xs text-gray-500">Cancel</button>
+                <button type="submit" className="flex-1 bg-indigo-600 text-white py-4 rounded-2xl font-black uppercase tracking-widest text-xs hover:bg-indigo-700 transition-all shadow-xl">Start Tracking</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Standardized Modals */}
+      {showPayModal && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md animate-in fade-in">
+          <div className="bg-white rounded-3xl w-full max-w-md p-10 shadow-2xl animate-in zoom-in-95 relative">
+            <button onClick={() => setShowPayModal(null)} className="absolute right-6 top-6 p-2 hover:bg-gray-100 rounded-full transition-colors">
+              <X className="w-6 h-6 text-gray-400" />
+            </button>
+            <h2 className="text-2xl font-black text-gray-900 mb-2">Pay {showPayModal.name}</h2>
+            <p className="text-gray-500 text-sm mb-8">Recording a monthly installment payment</p>
+            <form onSubmit={handlePaySubmit} className="space-y-6">
+              <div>
+                <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Amount Paid</label>
+                <div className="relative">
+                  <span className="absolute left-4 top-1/2 -translate-y-1/2 font-bold text-gray-400">₱</span>
+                  <input required type="number" value={payFormData.amount} onChange={(e) => setPayFormData({...payFormData, amount: e.target.value})} className="w-full bg-gray-50 border-transparent rounded-2xl p-4 pl-8 outline-none text-xl font-black focus:ring-2 focus:ring-indigo-500 transition-all" />
+                </div>
+              </div>
+              
+              <div>
+                <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Receipt Upload</label>
+                <div className="relative">
+                  <input type="file" className="absolute inset-0 opacity-0 cursor-pointer" onChange={(e) => setPayFormData({...payFormData, receipt: e.target.files?.[0]?.name || ''})} />
+                  <div className="w-full bg-gray-50 border-2 border-dashed border-gray-200 rounded-2xl p-6 text-center text-sm text-gray-500 hover:border-indigo-300 hover:bg-indigo-50 transition-all flex flex-col items-center">
+                    <Upload className="w-8 h-8 mb-2 text-indigo-400" />
+                    <span className="font-bold">{payFormData.receipt || 'Click or drag to upload receipt'}</span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Date Paid</label>
+                  <input required type="date" value={payFormData.datePaid} onChange={(e) => setPayFormData({...payFormData, datePaid: e.target.value})} className="w-full bg-gray-50 border-transparent rounded-2xl p-4 outline-none font-bold text-sm" />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Account</label>
+                  <select value={payFormData.accountId} onChange={(e) => setPayFormData({...payFormData, accountId: e.target.value})} className="w-full bg-gray-50 border-transparent rounded-2xl p-4 outline-none font-bold text-sm appearance-none">
+                    {accounts.map(acc => <option key={acc.id} value={acc.id}>{acc.bank} ({acc.classification})</option>)}
+                  </select>
+                </div>
+              </div>
+
+              <div className="flex space-x-4 pt-4">
+                <button type="button" onClick={() => setShowPayModal(null)} className="flex-1 bg-gray-100 py-4 rounded-2xl font-bold text-gray-500 hover:bg-gray-200 transition-colors">Cancel</button>
+                <button type="submit" className="flex-1 bg-green-600 text-white py-4 rounded-2xl font-bold hover:bg-green-700 shadow-xl shadow-green-100 transition-all active:scale-95">Record Payment</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {confirmModal.show && <ConfirmDialog {...confirmModal} onClose={() => setConfirmModal(p => ({ ...p, show: false }))} />}
+    </div>
+  );
+};
+
+const ConfirmDialog: React.FC<{ show: boolean; title: string; message: string; onConfirm: () => void; onClose: () => void }> = ({ title, message, onConfirm, onClose }) => (
+  <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-in fade-in">
+    <div className="bg-white rounded-[2.5rem] w-full max-w-sm p-10 shadow-2xl animate-in zoom-in-95 flex flex-col items-center text-center">
+      <div className="w-16 h-16 bg-red-50 text-red-600 rounded-3xl flex items-center justify-center mb-6">
+        <AlertTriangle className="w-8 h-8" />
+      </div>
+      <h3 className="text-xl font-black text-gray-900 mb-2 uppercase tracking-tight">{title}</h3>
+      <p className="text-sm text-gray-500 mb-8 font-medium leading-relaxed">{message}</p>
+      <div className="flex flex-col w-full space-y-3">
+        <button onClick={onConfirm} className="w-full bg-red-600 text-white py-4 rounded-2xl font-black uppercase tracking-widest text-[10px] hover:bg-red-700 transition-all shadow-lg shadow-red-100">
+          Proceed
+        </button>
+        <button onClick={onClose} className="w-full bg-gray-100 text-gray-500 py-4 rounded-2xl font-black uppercase tracking-widest text-[10px] hover:bg-gray-200 transition-all">
+          Cancel
+        </button>
+      </div>
+    </div>
+  </div>
+);
+
+export default Installments;
