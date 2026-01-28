@@ -66,7 +66,7 @@ const Accounts: React.FC<AccountsProps> = ({ accounts, onAdd, onDelete, onEdit, 
 
   useEffect(() => {
     const now = new Date();
-    const nextMonthIndex = (now.getMonth() + 1) % 12; // 0-11
+    const nextMonthIndex = (now.getMonth() + 1) % 12;
     const defaultYear = now.getFullYear() + (now.getMonth() === 11 ? 1 : 0);
     setDeactivateState(s => ({ ...s, month: nextMonthIndex, year: defaultYear }));
   }, []);
@@ -163,7 +163,6 @@ const Accounts: React.FC<AccountsProps> = ({ accounts, onAdd, onDelete, onEdit, 
   const renderAccount = (acc: Account) => {
     const isCredit = acc.type === 'Credit';
     const creditLimit = acc.creditLimit ?? 0;
-    // If credit limit is 0 or undefined, treat progress as 0 to avoid division by zero
     const usedPercent = creditLimit > 0 ? Math.min(100, Math.round((acc.balance / creditLimit) * 100)) : 0;
     const usedPercentSafe = usedPercent < 0 ? 0 : usedPercent;
 
@@ -215,14 +214,12 @@ const Accounts: React.FC<AccountsProps> = ({ accounts, onAdd, onDelete, onEdit, 
           <p className="text-xs text-gray-400 font-medium uppercase tracking-wider">{acc.classification}</p>
         </div>
 
-        {/* Credit-specific UI: credit limit + progress bar shown above current balance */}
         {isCredit && (
           <div className="mb-4">
             <div className="flex items-center justify-between mb-2">
               <p className="text-xs text-gray-400 font-medium">Credit Limit</p>
               <p className="text-sm font-semibold text-gray-800">{formatCurrency(creditLimit)}</p>
             </div>
-
             <div className="w-full bg-gray-100 rounded-full h-3 overflow-hidden">
               <div
                 className={`h-3 rounded-full ${usedPercentSafe >= 90 ? 'bg-red-500' : 'bg-purple-600'}`}
@@ -233,7 +230,6 @@ const Accounts: React.FC<AccountsProps> = ({ accounts, onAdd, onDelete, onEdit, 
                 role="progressbar"
               />
             </div>
-
             <div className="flex items-center justify-between mt-2 text-[11px] text-gray-500">
               <span>Used</span>
               <span className="font-medium">{usedPercentSafe}%</span>
@@ -248,13 +244,13 @@ const Accounts: React.FC<AccountsProps> = ({ accounts, onAdd, onDelete, onEdit, 
           </div>
         </div>
 
-        {/* Bottom controls: View button placed in lower-right corner */}
+        {/* "View" button as a standard link */}
         <div className="mt-6 flex items-center justify-between">
-          <div />{/* spacer */}
+          <div />
           <div className="flex items-center space-x-2">
             <a
               href={`/accounts/${acc.id}`}
-              onClick={(e) => e.stopPropagation()}
+              onClick={e => e.stopPropagation()}
               className="bg-gray-100 text-gray-700 px-3 py-2 rounded-xl text-sm font-semibold hover:bg-gray-200 transition"
               aria-label={`View ${acc.bank} transactions`}
             >
@@ -439,4 +435,20 @@ const ConfirmDialog: React.FC<{ show: boolean; title: string; message: string; o
   <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-in fade-in">
     <div className="bg-white rounded-[2.5rem] w-full max-w-sm p-10 shadow-2xl animate-in zoom-in-95 flex flex-col items-center text-center">
       <div className="w-16 h-16 bg-red-50 text-red-600 rounded-3xl flex items-center justify-center mb-6">
-        <Alert
+        <AlertTriangle className="w-8 h-8" />
+      </div>
+      <h3 className="text-xl font-black text-gray-900 mb-2 uppercase tracking-tight">{title}</h3>
+      <p className="text-sm text-gray-500 mb-8 font-medium leading-relaxed">{message}</p>
+      <div className="flex flex-col w-full space-y-3">
+        <button onClick={onConfirm} className="w-full bg-red-600 text-white py-4 rounded-2xl font-black uppercase tracking-widest text-[10px] hover:bg-red-700 transition-all shadow-lg shadow-red-100">
+          Proceed
+        </button>
+        <button onClick={onClose} className="w-full bg-gray-100 text-gray-500 py-4 rounded-2xl font-black uppercase tracking-widest text-[10px] hover:bg-gray-200 transition-all">
+          Cancel
+        </button>
+      </div>
+    </div>
+  </div>
+);
+
+export default Accounts;
