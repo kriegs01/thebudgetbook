@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import { useRouter } from 'next/router';
 import { Account, ViewMode, AccountClassification } from '../types';
 import {
   Plus,
@@ -24,7 +23,6 @@ const monthNames = [
 ];
 
 const Accounts: React.FC<AccountsProps> = ({ accounts, onAdd, onDelete, onEdit, onDeactivate }) => {
-  const router = useRouter();
   const [viewMode, setViewMode] = useState<ViewMode>('card');
   const [showModal, setShowModal] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -254,13 +252,14 @@ const Accounts: React.FC<AccountsProps> = ({ accounts, onAdd, onDelete, onEdit, 
         <div className="mt-6 flex items-center justify-between">
           <div />{/* spacer */}
           <div className="flex items-center space-x-2">
-            <button
-              onClick={(e) => { e.stopPropagation(); router.push(`/accounts/${acc.id}`); }}
+            <a
+              href={`/accounts/${acc.id}`}
+              onClick={(e) => e.stopPropagation()}
               className="bg-gray-100 text-gray-700 px-3 py-2 rounded-xl text-sm font-semibold hover:bg-gray-200 transition"
               aria-label={`View ${acc.bank} transactions`}
             >
               View
-            </button>
+            </a>
           </div>
         </div>
       </div>
@@ -440,20 +439,4 @@ const ConfirmDialog: React.FC<{ show: boolean; title: string; message: string; o
   <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-in fade-in">
     <div className="bg-white rounded-[2.5rem] w-full max-w-sm p-10 shadow-2xl animate-in zoom-in-95 flex flex-col items-center text-center">
       <div className="w-16 h-16 bg-red-50 text-red-600 rounded-3xl flex items-center justify-center mb-6">
-        <AlertTriangle className="w-8 h-8" />
-      </div>
-      <h3 className="text-xl font-black text-gray-900 mb-2 uppercase tracking-tight">{title}</h3>
-      <p className="text-sm text-gray-500 mb-8 font-medium leading-relaxed">{message}</p>
-      <div className="flex flex-col w-full space-y-3">
-        <button onClick={onConfirm} className="w-full bg-red-600 text-white py-4 rounded-2xl font-black uppercase tracking-widest text-[10px] hover:bg-red-700 transition-all shadow-lg shadow-red-100">
-          Proceed
-        </button>
-        <button onClick={onClose} className="w-full bg-gray-100 text-gray-500 py-4 rounded-2xl font-black uppercase tracking-widest text-[10px] hover:bg-gray-200 transition-all">
-          Cancel
-        </button>
-      </div>
-    </div>
-  </div>
-);
-
-export default Accounts;
+        <Alert
