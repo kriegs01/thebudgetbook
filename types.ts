@@ -97,6 +97,7 @@ export type ViewMode = 'card' | 'list';
 export enum Page {
   DASHBOARD = 'DASHBOARD',
   BUDGET = 'BUDGET',
+  TRANSACTIONS = 'TRANSACTIONS',
   BILLERS = 'BILLERS',
   INSTALLMENTS = 'INSTALLMENTS',
   ACCOUNTS = 'ACCOUNTS',
