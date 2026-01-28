@@ -1,4 +1,3 @@
-// full file (unchanged except View link uses query param)
 import React, { useState, useEffect } from 'react';
 import { Account, ViewMode, AccountClassification } from '../types';
 import {
@@ -49,8 +48,10 @@ const Accounts: React.FC<AccountsProps> = ({ accounts, onAdd, onDelete, onEdit, 
     dueDate: ''
   });
 
+  // menu open state per-account (id or null)
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
 
+  // deactivate dialog state
   const [deactivateState, setDeactivateState] = useState<{
     show: boolean;
     accountId?: string | null;
@@ -65,10 +66,21 @@ const Accounts: React.FC<AccountsProps> = ({ accounts, onAdd, onDelete, onEdit, 
 
   useEffect(() => {
     const now = new Date();
-    const nextMonthIndex = (now.getMonth() + 1) % 12;
+    const nextMonthIndex = (now.getMonth() + 1) % 12; // 0-11
     const defaultYear = now.getFullYear() + (now.getMonth() === 11 ? 1 : 0);
     setDeactivateState(s => ({ ...s, month: nextMonthIndex, year: defaultYear }));
   }, []);
+
+  // Keep a minimal accounts list (id + bank) in localStorage so the transactions page can build payment method options.
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    try {
+      const minimal = accounts.map(a => ({ id: a.id, bank: a.bank }));
+      localStorage.setItem('accounts_list', JSON.stringify(minimal));
+      // Also write per-account meta for convenience
+      minimal.forEach(m => localStorage.setItem(`account_meta_${m.id}`, JSON.stringify({ bank: m.bank })));
+    } catch (_) {}
+  }, [accounts]);
 
   const formatCurrency = (val: number | undefined) => {
     const n = val ?? 0;
@@ -162,13 +174,14 @@ const Accounts: React.FC<AccountsProps> = ({ accounts, onAdd, onDelete, onEdit, 
   const renderAccount = (acc: Account) => {
     const isCredit = acc.type === 'Credit';
     const creditLimit = acc.creditLimit ?? 0;
+    // If credit limit is 0 or undefined, treat progress as 0 to avoid division by zero
     const usedPercent = creditLimit > 0 ? Math.min(100, Math.round((acc.balance / creditLimit) * 100)) : 0;
     const usedPercentSafe = usedPercent < 0 ? 0 : usedPercent;
 
     return (
       <div key={acc.id} className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 hover:border-indigo-200 transition-all relative group overflow-hidden">
         <div className={`absolute top-0 right-0 w-24 h-24 -mr-8 -mt-8 rounded-full opacity-5 ${isCredit ? 'bg-purple-500' : 'bg-green-500'}`}></div>
-
+        
         <div className="flex justify-between items-start mb-6">
           <div className={`p-3 rounded-xl ${isCredit ? 'bg-purple-50 text-purple-600' : 'bg-green-50 text-green-600'}`}>
             {isCredit ? <CreditCard className="w-6 h-6" /> : <Landmark className="w-6 h-6" />}
@@ -213,12 +226,14 @@ const Accounts: React.FC<AccountsProps> = ({ accounts, onAdd, onDelete, onEdit, 
           <p className="text-xs text-gray-400 font-medium uppercase tracking-wider">{acc.classification}</p>
         </div>
 
+        {/* Credit-specific UI: credit limit + progress bar shown above current balance */}
         {isCredit && (
           <div className="mb-4">
             <div className="flex items-center justify-between mb-2">
               <p className="text-xs text-gray-400 font-medium">Credit Limit</p>
               <p className="text-sm font-semibold text-gray-800">{formatCurrency(creditLimit)}</p>
             </div>
+
             <div className="w-full bg-gray-100 rounded-full h-3 overflow-hidden">
               <div
                 className={`h-3 rounded-full ${usedPercentSafe >= 90 ? 'bg-red-500' : 'bg-purple-600'}`}
@@ -229,6 +244,7 @@ const Accounts: React.FC<AccountsProps> = ({ accounts, onAdd, onDelete, onEdit, 
                 role="progressbar"
               />
             </div>
+
             <div className="flex items-center justify-between mt-2 text-[11px] text-gray-500">
               <span>Used</span>
               <span className="font-medium">{usedPercentSafe}%</span>
@@ -243,9 +259,9 @@ const Accounts: React.FC<AccountsProps> = ({ accounts, onAdd, onDelete, onEdit, 
           </div>
         </div>
 
-        {/* "View" uses query param so static hosts will serve it */}
+        {/* Bottom controls: View button placed in lower-right corner */}
         <div className="mt-6 flex items-center justify-between">
-          <div />
+          <div />{/* spacer */}
           <div className="flex items-center space-x-2">
             <a
               href={`/accounts/view?id=${acc.id}`}
@@ -269,6 +285,7 @@ const Accounts: React.FC<AccountsProps> = ({ accounts, onAdd, onDelete, onEdit, 
       <div className="flex items-center justify-between">
         <h2 className="text-3xl font-black text-gray-900 uppercase">ACCOUNTS</h2>
         <div className="flex items-center space-x-4">
+          <a href="/transactions" className="px-4 py-2 rounded-lg bg-gray-100 text-gray-800 hover:bg-gray-200">Transactions</a>
           <button onClick={openAddModal} className="bg-indigo-600 text-white px-6 py-2.5 rounded-xl font-bold hover:bg-indigo-700 transition-all shadow-lg flex items-center space-x-2">
             <Plus className="w-5 h-5" />
             <span>Add Account</span>
