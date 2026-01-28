@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useRouter } from 'next/router';
 import { Account, ViewMode, AccountClassification } from '../types';
 import {
   Plus,
@@ -23,6 +24,7 @@ const monthNames = [
 ];
 
 const Accounts: React.FC<AccountsProps> = ({ accounts, onAdd, onDelete, onEdit, onDeactivate }) => {
+  const router = useRouter();
   const [viewMode, setViewMode] = useState<ViewMode>('card');
   const [showModal, setShowModal] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -245,6 +247,20 @@ const Accounts: React.FC<AccountsProps> = ({ accounts, onAdd, onDelete, onEdit, 
           <div>
             <p className="text-xs text-gray-400 font-medium">Balance</p>
             <p className={`text-2xl font-bold text-gray-900`}>{formatCurrency(acc.balance)}</p>
+          </div>
+        </div>
+
+        {/* Bottom controls: View button placed in lower-right corner */}
+        <div className="mt-6 flex items-center justify-between">
+          <div />{/* spacer */}
+          <div className="flex items-center space-x-2">
+            <button
+              onClick={(e) => { e.stopPropagation(); router.push(`/accounts/${acc.id}`); }}
+              className="bg-gray-100 text-gray-700 px-3 py-2 rounded-xl text-sm font-semibold hover:bg-gray-200 transition"
+              aria-label={`View ${acc.bank} transactions`}
+            >
+              View
+            </button>
           </div>
         </div>
       </div>
