@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Account, ViewMode, AccountClassification } from '../types';
 import { Plus, Landmark, CreditCard, LayoutGrid, List, MoreVertical, TrendingUp, Trash2, AlertTriangle } from 'lucide-react';
 
@@ -6,12 +6,18 @@ interface AccountsProps {
   accounts: Account[];
   onAdd: (a: Account) => void;
   onDelete?: (id: string) => void;
+  onEdit?: (a: Account) => void; // optional edit callback
+  onDeactivate?: (id: string, when: { month: number; year: number } | 'now') => void; // optional deactivate callback
 }
 
-const Accounts: React.FC<AccountsProps> = ({ accounts, onAdd, onDelete }) => {
+const monthNames = [
+  'January','February','March','April','May','June','July','August','September','October','November','December'
+];
+
+const Accounts: React.FC<AccountsProps> = ({ accounts, onAdd, onDelete, onEdit, onDeactivate }) => {
   const [viewMode, setViewMode] = useState<ViewMode>('card');
-  const [showModal, setShowModal] = useState(false);
-  
+  const [showModal, setShowModal] = useState(false); // used for Add
+  const [editingId, setEditingId] = useState<string | null>(null); // if set -> edit mode
   const [confirmModal, setConfirmModal] = useState<{
     show: boolean;
     title: string;
@@ -29,6 +35,30 @@ const Accounts: React.FC<AccountsProps> = ({ accounts, onAdd, onDelete }) => {
     creditLimit: '', billingDate: '', dueDate: '' 
   });
 
+  // menu open state per-account (id or null)
+  const [openMenuId, setOpenMenuId] = useState<string | null>(null);
+
+  // deactivate dialog state
+  const [deactivateState, setDeactivateState] = useState<{
+    show: boolean;
+    accountId?: string | null;
+    month: number;
+    year: number;
+  }>({
+    show: false,
+    accountId: null,
+    month: 0,
+    year: 0
+  });
+
+  useEffect(() => {
+    // set default deactivate scheduled month/year to next month / current year
+    const now = new Date();
+    const nextMonthIndex = (now.getMonth() + 1) % 12; // 0-11
+    const defaultYear = now.getFullYear() + (now.getMonth() === 11 ? 1 : 0);
+    setDeactivateState(s => ({ ...s, month: nextMonthIndex, year: defaultYear }));
+  }, []);
+
   const formatCurrency = (val: number) => {
     return new Intl.NumberFormat('en-PH', { 
       style: 'currency', 
@@ -38,19 +68,51 @@ const Accounts: React.FC<AccountsProps> = ({ accounts, onAdd, onDelete }) => {
     }).format(val);
   };
 
+  const resetForm = () => {
+    setFormData({ bank: '', classification: 'Checking', balance: '', type: 'Debit', creditLimit: '', billingDate: '', dueDate: '' });
+    setEditingId(null);
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    onAdd({
-      id: Math.random().toString(36).substr(2, 9),
+    const created: Account = {
+      id: editingId ?? Math.random().toString(36).substr(2, 9),
       bank: formData.bank,
       classification: formData.classification,
-      balance: parseFloat(formData.balance),
+      balance: parseFloat(formData.balance || '0'),
       type: formData.type,
-      creditLimit: formData.type === 'Credit' ? parseFloat(formData.creditLimit) : undefined,
-      billingDate: formData.type === 'Credit' ? formData.billingDate : undefined,
-      dueDate: formData.type === 'Credit' ? formData.dueDate : undefined
-    });
+      creditLimit: formData.type === 'Credit' ? (formData.creditLimit ? parseFloat(formData.creditLimit) : 0) : undefined,
+      billingDate: formData.type === 'Credit' ? (formData.billingDate || undefined) : undefined,
+      dueDate: formData.type === 'Credit' ? (formData.dueDate || undefined) : undefined
+    };
+
+    if (editingId) {
+      onEdit?.(created);
+    } else {
+      onAdd(created);
+    }
+
+    resetForm();
     setShowModal(false);
+  };
+
+  const openAddModal = () => {
+    resetForm();
+    setShowModal(true);
+  };
+
+  const openEditModal = (acc: Account) => {
+    setEditingId(acc.id);
+    setFormData({
+      bank: acc.bank,
+      classification: acc.classification,
+      balance: String(acc.balance ?? 0),
+      type: acc.type,
+      creditLimit: acc.creditLimit ? String(acc.creditLimit) : '',
+      billingDate: acc.billingDate ?? '',
+      dueDate: acc.dueDate ?? ''
+    });
+    setShowModal(true);
   };
 
   const handleDeleteTrigger = (id: string, bank: string) => {
@@ -65,6 +127,27 @@ const Accounts: React.FC<AccountsProps> = ({ accounts, onAdd, onDelete }) => {
     });
   };
 
+  const openDeactivateDialog = (id: string) => {
+    // default month/year computed earlier in effect, but ensure we set accountId
+    setDeactivateState(s => ({
+      ...s,
+      show: true,
+      accountId: id
+    }));
+  };
+
+  const confirmDeactivateNow = () => {
+    if (!deactivateState.accountId) return;
+    onDeactivate?.(deactivateState.accountId, 'now');
+    setDeactivateState({ show: false, accountId: null, month: 0, year: 0 });
+  };
+
+  const confirmDeactivateScheduled = () => {
+    if (!deactivateState.accountId) return;
+    onDeactivate?.(deactivateState.accountId, { month: deactivateState.month, year: deactivateState.year });
+    setDeactivateState({ show: false, accountId: null, month: 0, year: 0 });
+  };
+
   const renderAccount = (acc: Account) => (
     <div key={acc.id} className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 hover:border-indigo-200 transition-all relative group overflow-hidden">
       <div className={`absolute top-0 right-0 w-24 h-24 -mr-8 -mt-8 rounded-full opacity-5 ${acc.type === 'Credit' ? 'bg-purple-500' : 'bg-green-500'}`}></div>
@@ -73,9 +156,39 @@ const Accounts: React.FC<AccountsProps> = ({ accounts, onAdd, onDelete }) => {
         <div className={`p-3 rounded-xl ${acc.type === 'Credit' ? 'bg-purple-50 text-purple-600' : 'bg-green-50 text-green-600'}`}>
           {acc.type === 'Credit' ? <CreditCard className="w-6 h-6" /> : <Landmark className="w-6 h-6" />}
         </div>
-        <button onClick={() => handleDeleteTrigger(acc.id, acc.bank)} className="p-2 text-gray-300 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all">
-          <Trash2 className="w-4 h-4" />
-        </button>
+
+        <div className="relative">
+          <button
+            onClick={(e) => { e.stopPropagation(); setOpenMenuId(openMenuId === acc.id ? null : acc.id); }}
+            className="p-2 text-gray-400 hover:text-gray-600 rounded-xl transition-all"
+            aria-label="More options"
+          >
+            <MoreVertical className="w-4 h-4" />
+          </button>
+
+          {openMenuId === acc.id && (
+            <div className="absolute right-0 mt-2 w-44 bg-white rounded-xl shadow-lg border border-gray-100 z-50">
+              <button
+                onClick={() => { setOpenMenuId(null); openEditModal(acc); }}
+                className="w-full text-left px-4 py-3 hover:bg-gray-50 flex items-center space-x-3 text-sm"
+              >
+                <span>Edit</span>
+              </button>
+              <button
+                onClick={() => { setOpenMenuId(null); openDeactivateDialog(acc.id); }}
+                className="w-full text-left px-4 py-3 hover:bg-gray-50 flex items-center space-x-3 text-sm"
+              >
+                <span>Deactivate</span>
+              </button>
+              <button
+                onClick={() => { setOpenMenuId(null); handleDeleteTrigger(acc.id, acc.bank); }}
+                className="w-full text-left px-4 py-3 hover:bg-gray-50 flex items-center space-x-3 text-sm text-red-600"
+              >
+                <span>Delete</span>
+              </button>
+            </div>
+          )}
+        </div>
       </div>
 
       <div className="mb-6">
@@ -96,11 +209,11 @@ const Accounts: React.FC<AccountsProps> = ({ accounts, onAdd, onDelete }) => {
   const creditAccounts = accounts.filter(a => a.type === 'Credit');
 
   return (
-    <div className="space-y-12 animate-in fade-in duration-500">
+    <div className="space-y-12 animate-in fade-in duration-500" onClick={() => setOpenMenuId(null)}>
       <div className="flex items-center justify-between">
         <h2 className="text-3xl font-black text-gray-900 uppercase">ACCOUNTS</h2>
         <div className="flex items-center space-x-4">
-          <button onClick={() => setShowModal(true)} className="bg-indigo-600 text-white px-6 py-2.5 rounded-xl font-bold hover:bg-indigo-700 transition-all shadow-lg flex items-center space-x-2">
+          <button onClick={openAddModal} className="bg-indigo-600 text-white px-6 py-2.5 rounded-xl font-bold hover:bg-indigo-700 transition-all shadow-lg flex items-center space-x-2">
             <Plus className="w-5 h-5" />
             <span>Add Account</span>
           </button>
@@ -133,27 +246,132 @@ const Accounts: React.FC<AccountsProps> = ({ accounts, onAdd, onDelete }) => {
             <div className="bg-gray-900 md:w-1/3 p-8 text-white flex flex-col justify-between">
               <div>
                 <Landmark className="w-12 h-12 mb-6 text-indigo-400" />
-                <h2 className="text-2xl font-black mb-2 uppercase">Connect Account</h2>
+                <h2 className="text-2xl font-black mb-2 uppercase">{editingId ? 'Edit Account' : 'Connect Account'}</h2>
               </div>
             </div>
             <form onSubmit={handleSubmit} className="p-8 flex-1 bg-white space-y-6">
               <div className="grid grid-cols-2 gap-4">
-                <div><label className="block text-xs font-bold text-gray-400 uppercase mb-1">Bank Name</label><input required type="text" value={formData.bank} onChange={(e) => setFormData({...formData, bank: e.target.value})} className="w-full bg-gray-50 border-transparent rounded-xl p-4 outline-none focus:ring-2 focus:ring-indigo-500" /></div>
-                <div><label className="block text-xs font-bold text-gray-400 uppercase mb-1">Type</label><select value={formData.type} onChange={(e) => setFormData({...formData, type: e.target.value as 'Debit' | 'Credit'})} className="w-full bg-gray-50 border-transparent rounded-xl p-4 outline-none focus:ring-2 focus:ring-indigo-500"><option value="Debit">Debit</option><option value="Credit">Credit</option></select></div>
+                <div>
+                  <label className="block text-xs font-bold text-gray-400 uppercase mb-1">Bank Name</label>
+                  <input required type="text" value={formData.bank} onChange={(e) => setFormData({...formData, bank: e.target.value})} className="w-full border border-gray-100 rounded-lg px-3 py-2" />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-gray-400 uppercase mb-1">Type</label>
+                  <select value={formData.type} onChange={(e) => setFormData({...formData, type: e.target.value as 'Debit' | 'Credit'})} className="w-full border border-gray-100 rounded-lg px-3 py-2">
+                    <option value="Debit">Debit</option>
+                    <option value="Credit">Credit</option>
+                  </select>
+                </div>
               </div>
+
               <div className="grid grid-cols-2 gap-4">
-                <div><label className="block text-xs font-bold text-gray-400 uppercase mb-1">Classification</label><select value={formData.classification} onChange={(e) => setFormData({...formData, classification: e.target.value as AccountClassification})} className="w-full bg-gray-50 border-transparent rounded-xl p-4 outline-none focus:ring-2 focus:ring-indigo-500"><option>Checking</option><option>Savings</option><option>Credit Card</option><option>Loan</option></select></div>
-                <div><label className="block text-xs font-bold text-gray-400 uppercase mb-1">Balance</label><input required type="number" value={formData.balance} onChange={(e) => setFormData({...formData, balance: e.target.value})} className="w-full bg-gray-50 border-transparent rounded-xl p-4 outline-none focus:ring-2 focus:ring-indigo-500" /></div>
+                <div>
+                  <label className="block text-xs font-bold text-gray-400 uppercase mb-1">Classification</label>
+                  <select value={formData.classification} onChange={(e) => setFormData({...formData, classification: e.target.value as AccountClassification})} className="w-full border border-gray-100 rounded-lg px-3 py-2">
+                    <option>Checking</option>
+                    <option>Savings</option>
+                    <option>Investment</option>
+                    <option>Loan</option>
+                    <option>Other</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-gray-400 uppercase mb-1">Balance</label>
+                  <input required type="number" value={formData.balance} onChange={(e) => setFormData({...formData, balance: e.target.value})} className="w-full border border-gray-100 rounded-lg px-3 py-2" />
+                </div>
               </div>
+
+              {formData.type === 'Credit' && (
+                <>
+                  <div className="grid grid-cols-3 gap-4">
+                    <div>
+                      <label className="block text-xs font-bold text-gray-400 uppercase mb-1">Credit Limit</label>
+                      <input type="number" value={formData.creditLimit} onChange={(e) => setFormData({...formData, creditLimit: e.target.value})} className="w-full border border-gray-100 rounded-lg px-3 py-2" />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-bold text-gray-400 uppercase mb-1">Billing Date</label>
+                      <input type="date" value={formData.billingDate} onChange={(e) => setFormData({...formData, billingDate: e.target.value})} className="w-full border border-gray-100 rounded-lg px-3 py-2" />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-bold text-gray-400 uppercase mb-1">Due Date</label>
+                      <input type="date" value={formData.dueDate} onChange={(e) => setFormData({...formData, dueDate: e.target.value})} className="w-full border border-gray-100 rounded-lg px-3 py-2" />
+                    </div>
+                  </div>
+                </>
+              )}
+
               <div className="flex space-x-4 pt-4">
-                <button type="button" onClick={() => setShowModal(false)} className="flex-1 bg-gray-100 py-4 rounded-xl font-bold text-gray-500">Cancel</button>
-                <button type="submit" className="flex-1 bg-indigo-600 text-white py-4 rounded-xl font-bold hover:bg-indigo-700">Add Account</button>
+                <button type="button" onClick={() => { setShowModal(false); resetForm(); }} className="flex-1 bg-gray-100 py-4 rounded-xl font-bold text-gray-500">Cancel</button>
+                <button type="submit" className="flex-1 bg-indigo-600 text-white py-4 rounded-xl font-bold hover:bg-indigo-700">{editingId ? 'Save Changes' : 'Add Account'}</button>
               </div>
             </form>
           </div>
         </div>
       )}
+
+      {deactivateState.show && (
+        <DeactivateDialog
+          month={deactivateState.month}
+          year={deactivateState.year}
+          onChangeMonth={(m) => setDeactivateState(s => ({ ...s, month: m }))}
+          onChangeYear={(y) => setDeactivateState(s => ({ ...s, year: y }))}
+          onClose={() => setDeactivateState({ show: false, accountId: null, month: 0, year: 0 })}
+          onNow={() => confirmDeactivateNow()}
+          onSchedule={() => confirmDeactivateScheduled()}
+        />
+      )}
+
       {confirmModal.show && <ConfirmDialog {...confirmModal} onClose={() => setConfirmModal(p => ({ ...p, show: false }))} />}
+
+    </div>
+  );
+};
+
+const DeactivateDialog: React.FC<{
+  month: number;
+  year: number;
+  onChangeMonth: (m: number) => void;
+  onChangeYear: (y: number) => void;
+  onClose: () => void;
+  onNow: () => void;
+  onSchedule: () => void;
+}> = ({ month, year, onChangeMonth, onChangeYear, onClose, onNow, onSchedule }) => {
+  // prepare a short list of years (current to +5)
+  const now = new Date();
+  const currentYear = now.getFullYear();
+  const years = Array.from({ length: 6 }, (_, i) => currentYear + i);
+
+  return (
+    <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-in fade-in">
+      <div className="bg-white rounded-[2.5rem] w-full max-w-md p-8 shadow-2xl animate-in zoom-in-95">
+        <h3 className="text-xl font-black text-gray-900 mb-2 uppercase tracking-tight">Deactivate Account</h3>
+        <p className="text-sm text-gray-500 mb-6 font-medium leading-relaxed">Choose whether to deactivate the account now or schedule deactivation for a later month and year.</p>
+
+        <div className="space-y-4">
+          <button onClick={onNow} className="w-full bg-red-600 text-white py-3 rounded-2xl font-black uppercase tracking-widest hover:bg-red-700 transition-all">
+            Deactivate Now
+          </button>
+
+          <div className="p-4 border border-gray-100 rounded-xl">
+            <p className="text-sm text-gray-600 mb-2 font-medium">Deactivate on</p>
+            <div className="flex space-x-2">
+              <select value={month} onChange={(e) => onChangeMonth(parseInt(e.target.value, 10))} className="flex-1 border border-gray-100 rounded-lg px-3 py-2">
+                {monthNames.map((mName, idx) => <option key={idx} value={idx}>{mName}</option>)}
+              </select>
+              <select value={year} onChange={(e) => onChangeYear(parseInt(e.target.value, 10))} className="w-28 border border-gray-100 rounded-lg px-3 py-2">
+                {years.map(y => <option key={y} value={y}>{y}</option>)}
+              </select>
+            </div>
+            <div className="mt-4">
+              <button onClick={onSchedule} className="w-full bg-indigo-600 text-white py-2 rounded-xl font-bold hover:bg-indigo-700">Schedule Deactivation</button>
+            </div>
+          </div>
+
+          <button onClick={onClose} className="w-full bg-gray-100 text-gray-600 py-3 rounded-2xl font-black uppercase tracking-widest hover:bg-gray-200 transition-all">
+            Cancel
+          </button>
+        </div>
+      </div>
     </div>
   );
 };
