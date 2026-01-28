@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Menu, ChevronLeft, Bell, Search, User } from 'lucide-react';
+import { Menu, ChevronLeft } from 'lucide-react';
 import { Page, Account, BudgetItem, Biller, Installment, SavingsJar, SavedBudgetSetup, BudgetCategory } from './types';
 import { NAV_ITEMS, INITIAL_ACCOUNTS, INITIAL_BUDGET, INITIAL_BILLERS, INITIAL_INSTALLMENTS, INITIAL_SAVINGS, DEFAULT_SETUP, INITIAL_CATEGORIES } from './constants';
 
@@ -135,7 +135,7 @@ const App: React.FC = () => {
 
   return (
     <div className="flex min-h-screen bg-gray-50 w-full">
-      <aside className={`fixed inset-y-0 left-0 z-50 bg-white border-r border-gray-200 transition-all duration-300 ease-in-out ${isSidebarOpen ? 'w-64' : 'w-20'}`}>
+      <aside className={`fixed inset-y-0 left-0 z-50 bg-white border-r border-gray-200 transition-all duration-300 ease-in-out ${isSidebarOpen ? 'w-64' : 'w-20'}`}> 
         <div className="flex flex-col h-full">
           <div className="flex items-center justify-between h-16 px-4 border-b border-gray-100">
             {isSidebarOpen && <span className="text-xl font-black bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">Budget Book</span>}
@@ -145,7 +145,7 @@ const App: React.FC = () => {
           </div>
           <nav className="flex-1 px-3 py-4 space-y-1">
             {NAV_ITEMS.map((item) => (
-              <button key={item.id} onClick={() => setCurrentPage(item.id)} className={`w-full flex items-center p-3 rounded-xl transition-all ${currentPage === item.id ? 'bg-blue-50 text-blue-600' : 'text-gray-600 hover:bg-gray-50 hover:text-blue-600'}`}>
+              <button key={item.id} onClick={() => setCurrentPage(item.id)} className={`w-full flex items-center p-3 rounded-xl transition-all ${currentPage === item.id ? 'bg-blue-50 text-blue-600' : 'text-gray-700 hover:bg-gray-50'}`}> 
                 <div className={`${currentPage === item.id ? 'text-blue-600' : 'text-gray-400'} transition-colors`}>{item.icon}</div>
                 {isSidebarOpen && <span className="ml-3 font-bold text-sm">{item.label}</span>}
               </button>
@@ -166,33 +166,7 @@ const App: React.FC = () => {
           </div>
         </div>
       </aside>
-      <main className={`flex-1 bg-gray-50 transition-all duration-300 ease-in-out ${isSidebarOpen ? 'ml-64' : 'ml-20'} min-h-screen flex flex-col`}>
-        <header className="sticky top-0 z-40 bg-white/80 backdrop-blur-md border-b border-gray-200 h-16 flex items-center justify-between px-8 w-full">
-          <div className="flex items-center space-x-8">
-            <h1 className="text-xl font-black text-gray-900 tracking-tight uppercase mr-4">{NAV_ITEMS.find(n => n.id === currentPage)?.label}</h1>
-            <nav className="hidden lg:flex items-center space-x-1">
-              {NAV_ITEMS.slice(0, 4).map((item) => (
-                <button key={item.id} onClick={() => setCurrentPage(item.id)} className={`px-4 py-1.5 rounded-lg text-xs font-black uppercase tracking-widest transition-all ${currentPage === item.id ? 'bg-indigo-600 text-white shadow-md' : 'text-gray-400 hover:text-gray-600 hover:bg-gray-100'}`}>
-                  {item.label}
-                </button>
-              ))}
-            </nav>
-          </div>
-          <div className="flex items-center space-x-4">
-            <div className="hidden md:flex items-center bg-gray-100 rounded-lg px-3 py-1.5 w-48">
-              <Search className="w-4 h-4 text-gray-400 mr-2" />
-              <input type="text" placeholder="Quick search..." className="bg-transparent border-none focus:ring-0 text-xs w-full" />
-            </div>
-            <button className="p-2 text-gray-400 hover:text-gray-600 relative">
-              <Bell className="w-5 h-5" />
-              <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-red-500 rounded-full border-2 border-white"></span>
-            </button>
-            <button className="flex items-center space-x-2 text-gray-700 hover:text-gray-900 px-3 py-1.5 rounded-lg hover:bg-gray-100 transition-colors">
-              <User className="w-5 h-5" />
-              <span className="text-sm font-bold">Profile</span>
-            </button>
-          </div>
-        </header>
+      <main className={`flex-1 bg-gray-50 transition-all duration-300 ease-in-out ${isSidebarOpen ? 'ml-64' : 'ml-20'} min-h-screen flex flex-col`}> 
         <div className="p-8 w-full flex-1 overflow-auto">{renderPage()}</div>
       </main>
     </div>
