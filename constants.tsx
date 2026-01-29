@@ -1,17 +1,16 @@
-import React from 'react';
 import { LayoutDashboard, Wallet, Receipt, CreditCard, Landmark, PiggyBank, Settings, Trash2, FileText } from 'lucide-react';
-import { Page, Account, BudgetItem, Biller, Installment, SavingsJar, PaymentSchedule, CategorizedSetupItem, BudgetCategory } from './types';
+import { Page } from './types';
 
 export const NAV_ITEMS = [
-  { id: Page.DASHBOARD, label: 'Dashboard', icon: <LayoutDashboard className="w-5 h-5" /> },
-  { id: Page.BUDGET, label: 'Budget', icon: <Wallet className="w-5 h-5" /> },
-  { id: Page.TRANSACTIONS, label: 'Transactions', icon: <FileText className="w-5 h-5" /> },
-  { id: Page.BILLERS, label: 'Billers', icon: <Receipt className="w-5 h-5" /> },
-  { id: Page.INSTALLMENTS, label: 'Installments', icon: <CreditCard className="w-5 h-5" /> },
-  { id: Page.ACCOUNTS, label: 'Accounts', icon: <Landmark className="w-5 h-5" /> },
-  { id: Page.SAVINGS, label: 'Savings', icon: <PiggyBank className="w-5 h-5" /> },
-  { id: Page.SETTINGS, label: 'Settings', icon: <Settings className="w-5 h-5" /> },
-  { id: Page.TRASH, label: 'Trash', icon: <Trash2 className="w-5 h-5" /> },
+  { id: Page.DASHBOARD, label: 'Dashboard', icon: <LayoutDashboard className="w-5 h-5" />, path: "/" },
+  { id: Page.BUDGET, label: 'Budget', icon: <Wallet className="w-5 h-5" />, path: "/budget" },
+  { id: Page.TRANSACTIONS, label: "Transactions", icon: <FileText className="w-5 h-5" />, path: "/transactions" },
+  { id: Page.BILLERS, label: 'Billers', icon: <Receipt className="w-5 h-5" />, path: "/billers" },
+  { id: Page.INSTALLMENTS, label: 'Installments', icon: <CreditCard className="w-5 h-5" />, path: "/installments" },
+  { id: Page.ACCOUNTS, label: 'Accounts', icon: <Landmark className="w-5 h-5" />, path: "/accounts" },
+  { id: Page.SAVINGS, label: 'Savings', icon: <PiggyBank className="w-5 h-5" />, path: "/savings" },
+  { id: Page.SETTINGS, label: 'Settings', icon: <Settings className="w-5 h-5" />, path: "/settings" },
+  { id: Page.TRASH, label: 'Trash', icon: <Trash2 className="w-5 h-5" />, path: "/trash" },
 ];
 
 export const INITIAL_CATEGORIES: BudgetCategory[] = [
