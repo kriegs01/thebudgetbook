@@ -12,6 +12,7 @@ import Billers from './pages/Billers';
 import Installments from './pages/Installments';
 import Accounts from './pages/Accounts';
 import AccountFilteredTransactions from './pages/accounts/view';
+import AccountStatement from './pages/accounts/statement';
 import Savings from './pages/Savings';
 import SettingsPage from './pages/Settings';
 import TrashPage from './pages/Trash';
@@ -155,7 +156,6 @@ const App: React.FC = () => {
                   onDelete={(id) => setAccounts(prev => prev.filter(a => a.id !== id))}
                 />
               } />
-              <Route path="/accounts/view" element={<AccountFilteredTransactions />} />
               <Route path="/savings" element={
                 <Savings
                   jars={savings}
@@ -190,6 +190,9 @@ const App: React.FC = () => {
               } />
               <Route path="/accounts/view" element={
                 <AccountFilteredTransactions accounts={accounts} />
+              } />
+              <Route path="/accounts/statement" element={
+                <AccountStatement accounts={accounts} />
               } />
               {/* Add additional routes/pages as needed */}
             </Routes>

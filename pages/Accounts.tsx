@@ -264,6 +264,16 @@ const Accounts: React.FC<AccountsProps> = ({ accounts, onAdd, onDelete, onEdit, 
         <div className="mt-6 flex items-center justify-between">
           <div />{/* spacer */}
           <div className="flex items-center space-x-2">
+            {isCredit && (
+              <Link
+                to={`/accounts/statement?account=${acc.id}`}
+                onClick={(e) => e.stopPropagation()}
+                className="bg-purple-100 text-purple-700 px-3 py-2 rounded-xl text-sm font-semibold hover:bg-purple-200 transition"
+                aria-label={`View ${acc.bank} statement`}
+              >
+                View Statement
+              </Link>
+            )}
             <Link
               to={`/accounts/view?account=${acc.id}`}
               onClick={(e) => e.stopPropagation()}
