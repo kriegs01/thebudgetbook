@@ -13,6 +13,7 @@ import Accounts from './pages/Accounts';
 import Savings from './pages/Savings';
 import SettingsPage from './pages/Settings';
 import TrashPage from './pages/Trash';
+import AccountFilteredTransactions from './pages/accounts/view';
 
 const App: React.FC = () => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
@@ -184,6 +185,9 @@ const App: React.FC = () => {
               } />
               <Route path="/transactions" element={
                 <TransactionsPage />
+              } />
+              <Route path="/accounts/view" element={
+                <AccountFilteredTransactions />
               } />
               {/* Add additional routes/pages as needed */}
             </Routes>
