@@ -81,6 +81,8 @@ export interface CategorizedSetupItem {
   status?: 'Allocated' | 'Unallocated';
   timing?: '1/2' | '2/2';
   isBiller?: boolean;
+  accountId?: string;
+  settled?: boolean;
 }
 
 export interface SavedBudgetSetup {

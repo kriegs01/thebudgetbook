@@ -25,6 +25,31 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
   const [setupData, setSetupData] = useState<{ [key: string]: CategorizedSetupItem[] }>({});
   const [removedIds, setRemovedIds] = useState<Set<string>>(new Set());
 
+  // Month Summary State with localStorage persistence
+  const [projectedSalary, setProjectedSalary] = useState<string>('11000');
+  const [actualSalary, setActualSalary] = useState<string>('');
+
+  // Load from localStorage when month/timing changes
+  useEffect(() => {
+    const projectedKey = `budgetSetup_${selectedMonth}_${selectedTiming}_projectedSalary`;
+    const actualKey = `budgetSetup_${selectedMonth}_${selectedTiming}_actualSalary`;
+    const storedProjected = localStorage.getItem(projectedKey);
+    const storedActual = localStorage.getItem(actualKey);
+    setProjectedSalary(storedProjected || '11000');
+    setActualSalary(storedActual || '');
+  }, [selectedMonth, selectedTiming]);
+
+  // Save to localStorage when values change
+  useEffect(() => {
+    const projectedKey = `budgetSetup_${selectedMonth}_${selectedTiming}_projectedSalary`;
+    localStorage.setItem(projectedKey, projectedSalary);
+  }, [projectedSalary, selectedMonth, selectedTiming]);
+
+  useEffect(() => {
+    const actualKey = `budgetSetup_${selectedMonth}_${selectedTiming}_actualSalary`;
+    localStorage.setItem(actualKey, actualSalary);
+  }, [actualSalary, selectedMonth, selectedTiming]);
+
   // Modal States
   const [showPayModal, setShowPayModal] = useState<{ biller: Biller, schedule: PaymentSchedule } | null>(null);
   const [payFormData, setPayFormData] = useState({
@@ -294,6 +319,13 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
   });
   const grandTotal = categorySummary.reduce((sum, cat) => sum + cat.total, 0);
 
+  // Calculate Month Summary values
+  const totalSpend = grandTotal;
+  const actualSalaryValue = actualSalary.trim() !== '' ? parseFloat(actualSalary) : null;
+  const projectedSalaryValue = parseFloat(projectedSalary) || 0;
+  const salaryToUse = actualSalaryValue !== null && !isNaN(actualSalaryValue) ? actualSalaryValue : projectedSalaryValue;
+  const remaining = salaryToUse - totalSpend;
+
   return (
     <div className="space-y-8 animate-in slide-in-from-right-4 duration-500 pb-20 w-full">
       <div className="flex flex-col space-y-6">
@@ -323,32 +355,201 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
         </div>
       </div>
 
-      <div className="bg-white rounded-[3rem] shadow-sm border border-gray-100 overflow-hidden w-full max-w-2xl mx-auto">
-        <div className="p-8 border-b border-gray-50 bg-gray-50/30"><h3 className="text-xs font-black text-gray-900 uppercase tracking-[0.25em]">BUDGET SUMMARY</h3></div>
-        <table className="w-full text-left">
-          <thead><tr className="text-[10px] font-black text-gray-400 uppercase border-b border-gray-50"><th className="p-5 pl-10">Category</th><th className="p-5 pr-10 text-right">Amount</th></tr></thead>
-          <tbody className="divide-y divide-gray-50">
-            {categorySummary.map((item) => (
-              <tr key={item.category}><td className="p-5 pl-10 font-bold text-gray-700">{item.category}</td><td className="p-5 pr-10 text-right font-black text-gray-900">{formatCurrency(item.total)}</td></tr>
-            ))}
-            <tr className="bg-indigo-50/30"><td className="p-5 pl-10 text-xs font-black text-indigo-600 uppercase">Grand Total</td><td className="p-5 pr-10 text-right text-xl font-black text-indigo-600">{formatCurrency(grandTotal)}</td></tr>
-          </tbody>
-        </table>
+      {/* Budget Summary and Month Summary side-by-side */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+        {/* Budget Summary - Compact Version */}
+        <div className="bg-white rounded-[3rem] shadow-sm border border-gray-100 overflow-hidden w-full">
+          <div className="p-4 border-b border-gray-50 bg-gray-50/30"><h3 className="text-xs font-black text-gray-900 uppercase tracking-[0.25em]">BUDGET SUMMARY</h3></div>
+          <table className="w-full text-left">
+            <thead><tr className="text-[10px] font-black text-gray-400 uppercase border-b border-gray-50"><th className="p-3 pl-6">Category</th><th className="p-3 pr-6 text-right">Amount</th></tr></thead>
+            <tbody className="divide-y divide-gray-50">
+              {categorySummary.map((item) => (
+                <tr key={item.category}><td className="p-3 pl-6 font-bold text-gray-700 text-sm">{item.category}</td><td className="p-3 pr-6 text-right font-black text-gray-900 text-sm">{formatCurrency(item.total)}</td></tr>
+              ))}
+              <tr className="bg-indigo-50/30"><td className="p-3 pl-6 text-xs font-black text-indigo-600 uppercase">Grand Total</td><td className="p-3 pr-6 text-right text-lg font-black text-indigo-600">{formatCurrency(grandTotal)}</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        {/* Month Summary - New Component */}
+        <div className="bg-white rounded-[3rem] shadow-sm border border-gray-100 overflow-hidden w-full">
+          <div className="p-4 border-b border-gray-50 bg-gray-50/30"><h3 className="text-xs font-black text-gray-900 uppercase tracking-[0.25em]">MONTH SUMMARY</h3></div>
+          <table className="w-full text-left">
+            <thead><tr className="text-[10px] font-black text-gray-400 uppercase border-b border-gray-50"><th className="p-3 pl-6">Item</th><th className="p-3 pr-6 text-right">Amount</th></tr></thead>
+            <tbody className="divide-y divide-gray-50">
+              <tr>
+                <td className="p-3 pl-6 font-bold text-gray-700 text-sm">Projected Salary</td>
+                <td className="p-3 pr-6 text-right">
+                  <div className="flex items-center justify-end space-x-1">
+                    <span className="text-gray-400 font-bold text-sm">₱</span>
+                    <input 
+                      type="number" 
+                      min="0"
+                      step="0.01"
+                      value={projectedSalary} 
+                      onChange={(e) => setProjectedSalary(e.target.value)} 
+                      className="bg-transparent border-none text-sm font-black text-gray-900 w-28 text-right outline-none focus:bg-indigo-50 rounded px-1"
+                      aria-label="Projected Salary"
+                    />
+                  </div>
+                </td>
+              </tr>
+              <tr>
+                <td className="p-3 pl-6 font-bold text-gray-700 text-sm">Actual Salary</td>
+                <td className="p-3 pr-6 text-right">
+                  <div className="flex items-center justify-end space-x-1">
+                    <span className="text-gray-400 font-bold text-sm">₱</span>
+                    <input 
+                      type="number" 
+                      min="0"
+                      step="0.01"
+                      value={actualSalary} 
+                      onChange={(e) => setActualSalary(e.target.value)} 
+                      placeholder="Enter actual"
+                      className="bg-transparent border-none text-sm font-black text-gray-900 w-28 text-right outline-none focus:bg-indigo-50 rounded px-1 placeholder:text-gray-300"
+                      aria-label="Actual Salary"
+                    />
+                  </div>
+                </td>
+              </tr>
+              <tr>
+                <td className="p-3 pl-6 font-bold text-gray-700 text-sm">Total Spend</td>
+                <td className="p-3 pr-6 text-right font-black text-gray-900 text-sm">{formatCurrency(totalSpend)}</td>
+              </tr>
+              <tr className={`${remaining >= 0 ? 'bg-green-50/30' : 'bg-red-50/30'}`}>
+                <td className="p-3 pl-6 text-xs font-black uppercase">Remaining</td>
+                <td className={`p-3 pr-6 text-right text-lg font-black ${remaining >= 0 ? 'text-green-600' : 'text-red-600'}`}>{formatCurrency(remaining)}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        {categories.map((cat) => {
+      {/* Category Tables - Full Width and Stacked for FIXED, UTILITIES, LOANS, SUBSCRIPTIONS, PURCHASES */}
+      <div className="space-y-6">
+        {/* Fixed category - full width with account and settle columns */}
+        {categories.filter(cat => cat.name === 'Fixed').map((cat) => {
           const items = setupData[cat.name] || [];
           return (
-            <div key={cat.id} className="bg-white rounded-[3rem] shadow-sm border border-gray-100 overflow-hidden flex flex-col">
+            <div key={cat.id} className="bg-white rounded-[3rem] shadow-sm border border-gray-100 overflow-hidden w-full">
               <div className="p-8 border-b border-gray-50 bg-gray-50/30 flex justify-between items-center">
                 <h3 className="text-xs font-black text-gray-900 uppercase tracking-[0.25em]">{cat.name}</h3>
                 <span className="text-lg font-black text-indigo-600">{formatCurrency(items.filter(i => i.included).reduce((s, i) => s + (parseFloat(i.amount) || 0), 0))}</span>
               </div>
               <div className="overflow-x-auto">
                 <table className="w-full text-left">
+                  <thead>
+                    <tr className="text-[10px] font-black text-gray-400 uppercase border-b border-gray-50">
+                      <th className="p-4 pl-10">Name</th>
+                      <th className="p-4">Amount</th>
+                      <th className="p-4">Account</th>
+                      <th className="p-4 text-center">Actions</th>
+                      <th className="p-4 pr-10 text-right"></th>
+                    </tr>
+                  </thead>
                   <tbody className="divide-y divide-gray-50">
-                    {items.map((item) => {
+                    {items.length > 0 ? items.map((item) => {
+                      return (
+                        <tr key={item.id} className={`${item.included ? 'bg-white' : 'bg-gray-50 opacity-60'}`}>
+                          <td className="p-4 pl-10">
+                            <input 
+                              type="text" 
+                              value={item.name} 
+                              onChange={(e) => handleSetupUpdate(cat.name, item.id, 'name', e.target.value)} 
+                              className="bg-transparent border-none text-sm font-bold w-full" 
+                            />
+                          </td>
+                          <td className="p-4">
+                            <div className="flex items-center space-x-1">
+                              <span className="text-gray-400 font-bold">₱</span>
+                              <input 
+                                type="number" 
+                                value={item.amount} 
+                                onChange={(e) => handleSetupUpdate(cat.name, item.id, 'amount', e.target.value)} 
+                                className="bg-transparent border-none text-sm font-black w-24" 
+                              />
+                            </div>
+                          </td>
+                          <td className="p-4">
+                            <select 
+                              value={item.accountId || ''} 
+                              onChange={(e) => handleSetupUpdate(cat.name, item.id, 'accountId', e.target.value)}
+                              className="bg-gray-50 border border-gray-200 rounded-lg px-3 py-1.5 text-xs font-bold text-gray-700 outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
+                            >
+                              <option value="">Select Account</option>
+                              {accounts.map(acc => (
+                                <option key={acc.id} value={acc.id}>
+                                  {acc.bank} ({acc.classification})
+                                </option>
+                              ))}
+                            </select>
+                          </td>
+                          <td className="p-4 text-center">
+                            <div className="flex items-center justify-center space-x-2">
+                              {item.settled ? (
+                                <CheckCircle2 className="w-4 h-4 text-green-500" />
+                              ) : (
+                                <button 
+                                  onClick={() => handleSetupUpdate(cat.name, item.id, 'settled', true)}
+                                  className="px-3 py-1 bg-green-600 text-white text-[9px] font-black uppercase rounded-lg hover:bg-green-700 transition-colors"
+                                >
+                                  Settle
+                                </button>
+                              )}
+                              <button 
+                                onClick={() => handleSetupToggle(cat.name, item.id)} 
+                                className={`w-8 h-8 rounded-xl border-2 transition-all flex items-center justify-center ${item.included ? 'bg-indigo-600 border-indigo-600 text-white' : 'border-gray-200'}`}
+                              >
+                                <Check className="w-4 h-4" />
+                              </button>
+                            </div>
+                          </td>
+                          <td className="p-4 pr-10 text-right">
+                            <button 
+                              onClick={() => removeItemFromCategory(cat.name, item.id, item.name)} 
+                              className="text-[9px] font-black text-red-500 uppercase tracking-widest border border-red-50 px-2 py-1 rounded-lg"
+                            >
+                              Remove
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    }) : (
+                      <tr>
+                        <td colSpan={5} className="p-8 text-center text-gray-400 text-sm font-medium">
+                          No items yet. Click "Add Item" below to get started.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+                <button onClick={() => addItemToCategory(cat.name)} className="w-full p-4 text-[10px] font-black text-gray-400 uppercase hover:text-indigo-600 border-t border-gray-50">+ Add Item</button>
+              </div>
+            </div>
+          );
+        })}
+
+        {/* Other full-width categories: Utilities, Loans, Subscriptions, Purchases */}
+        {categories.filter(cat => ['Utilities', 'Loans', 'Subscriptions', 'Purchases'].includes(cat.name)).map((cat) => {
+          const items = setupData[cat.name] || [];
+          return (
+            <div key={cat.id} className="bg-white rounded-[3rem] shadow-sm border border-gray-100 overflow-hidden w-full">
+              <div className="p-8 border-b border-gray-50 bg-gray-50/30 flex justify-between items-center">
+                <h3 className="text-xs font-black text-gray-900 uppercase tracking-[0.25em]">{cat.name}</h3>
+                <span className="text-lg font-black text-indigo-600">{formatCurrency(items.filter(i => i.included).reduce((s, i) => s + (parseFloat(i.amount) || 0), 0))}</span>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full text-left">
+                  <thead>
+                    <tr className="text-[10px] font-black text-gray-400 uppercase border-b border-gray-50">
+                      <th className="p-4 pl-10">Name</th>
+                      <th className="p-4">Amount</th>
+                      <th className="p-4 text-center">Actions</th>
+                      <th className="p-4 pr-10 text-right"></th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-50">
+                    {items.length > 0 ? items.map((item) => {
                       let isPaid = false, linkedBiller, schedule;
                       const isBiller = item.isBiller || billers.some(b => b.id === item.id);
                       if (isBiller) {
@@ -387,14 +588,84 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                           <td className="p-4 pr-10 text-right"><button onClick={() => removeItemFromCategory(cat.name, item.id, item.name)} className="text-[9px] font-black text-red-500 uppercase tracking-widest border border-red-50 px-2 py-1 rounded-lg">Remove</button></td>
                         </tr>
                       );
-                    })}
+                    }) : (
+                      <tr>
+                        <td colSpan={4} className="p-8 text-center text-gray-400 text-sm font-medium">
+                          No items yet. Click "Add Item" below to get started.
+                        </td>
+                      </tr>
+                    )}
                   </tbody>
                 </table>
-                <button onClick={() => addItemToCategory(cat.name)} className="w-full p-4 text-[10px] font-black text-gray-400 uppercase hover:text-indigo-600">+ Add Item</button>
+                <button onClick={() => addItemToCategory(cat.name)} className="w-full p-4 text-[10px] font-black text-gray-400 uppercase hover:text-indigo-600 border-t border-gray-50">+ Add Item</button>
               </div>
             </div>
           );
         })}
+
+        {/* Remaining categories (excluding Fixed, Utilities, Loans, Subscriptions, Purchases) - keep in grid if needed */}
+        {categories.filter(cat => !['Fixed', 'Utilities', 'Loans', 'Subscriptions', 'Purchases'].includes(cat.name)).length > 0 && (
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+            {categories.filter(cat => !['Fixed', 'Utilities', 'Loans', 'Subscriptions', 'Purchases'].includes(cat.name)).map((cat) => {
+              const items = setupData[cat.name] || [];
+              return (
+                <div key={cat.id} className="bg-white rounded-[3rem] shadow-sm border border-gray-100 overflow-hidden flex flex-col">
+                  <div className="p-8 border-b border-gray-50 bg-gray-50/30 flex justify-between items-center">
+                    <h3 className="text-xs font-black text-gray-900 uppercase tracking-[0.25em]">{cat.name}</h3>
+                    <span className="text-lg font-black text-indigo-600">{formatCurrency(items.filter(i => i.included).reduce((s, i) => s + (parseFloat(i.amount) || 0), 0))}</span>
+                  </div>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left">
+                      <tbody className="divide-y divide-gray-50">
+                        {items.map((item) => {
+                          let isPaid = false, linkedBiller, schedule;
+                          const isBiller = item.isBiller || billers.some(b => b.id === item.id);
+                          if (isBiller) {
+                            linkedBiller = billers.find(b => b.id === item.id);
+                            schedule = linkedBiller?.schedules.find(s => s.month === selectedMonth);
+                            isPaid = !!schedule?.amountPaid;
+                          }
+                          return (
+                            <tr key={item.id} className={`${item.included ? 'bg-white' : 'bg-gray-50 opacity-60'}`}>
+                              <td className="p-4 pl-10"><input type="text" value={item.name} onChange={(e) => handleSetupUpdate(cat.name, item.id, 'name', e.target.value)} className="bg-transparent border-none text-sm font-bold w-full" /></td>
+                              <td className="p-4">
+                                <div className="flex items-center space-x-1"><span className="text-gray-400 font-bold">₱</span><input type="number" value={item.amount} onChange={(e) => handleSetupUpdate(cat.name, item.id, 'amount', e.target.value)} className="bg-transparent border-none text-sm font-black w-24" /></div>
+                              </td>
+                              <td className="p-4 text-center">
+                                <div className="flex items-center justify-center space-x-2">
+                                  {isBiller && (
+                                    isPaid ? (
+                                      <CheckCircle2 className="w-4 h-4 text-green-500" />
+                                    ) : (
+                                      <button 
+                                        onClick={() => { 
+                                          if(linkedBiller && schedule) { 
+                                            setShowPayModal({biller: linkedBiller, schedule}); 
+                                            setPayFormData({...payFormData, amount: schedule.expectedAmount.toString(), receipt: ''}); 
+                                          } 
+                                        }} 
+                                        className="px-3 py-1 bg-indigo-600 text-white text-[9px] font-black uppercase rounded-lg hover:bg-indigo-700 transition-colors"
+                                      >
+                                        Pay
+                                      </button>
+                                    )
+                                  )}
+                                  <button onClick={() => handleSetupToggle(cat.name, item.id)} className={`w-8 h-8 rounded-xl border-2 transition-all flex items-center justify-center ${item.included ? 'bg-indigo-600 border-indigo-600 text-white' : 'border-gray-200'}`}><Check className="w-4 h-4" /></button>
+                                </div>
+                              </td>
+                              <td className="p-4 pr-10 text-right"><button onClick={() => removeItemFromCategory(cat.name, item.id, item.name)} className="text-[9px] font-black text-red-500 uppercase tracking-widest border border-red-50 px-2 py-1 rounded-lg">Remove</button></td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                    <button onClick={() => addItemToCategory(cat.name)} className="w-full p-4 text-[10px] font-black text-gray-400 uppercase hover:text-indigo-600">+ Add Item</button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
       </div>
 
       {showPayModal && (
