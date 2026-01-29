@@ -1,3 +1,4 @@
+import TestSupabase from './TestSupabase';
 import React, { useState } from 'react';
 import { Menu, ChevronLeft } from 'lucide-react';
 import { BrowserRouter, Routes, Route, NavLink } from 'react-router-dom';
