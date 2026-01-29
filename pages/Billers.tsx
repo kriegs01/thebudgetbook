@@ -16,7 +16,7 @@ const MONTHS = ["January", "February", "March", "April", "May", "June", "July", 
 // Utility function to calculate timing based on day of month
 const calculateTiming = (dayString: string): '1/2' | '2/2' => {
   const day = parseInt(dayString);
-  if (isNaN(day)) return '1/2';
+  if (isNaN(day) || day < 1 || day > 31) return '1/2';
   return (day >= 1 && day <= 21) ? '1/2' : '2/2';
 };
 
@@ -233,6 +233,7 @@ const Billers: React.FC<BillersProps> = ({ billers, onAdd, accounts, categories,
     });
     setShowEditModal(biller);
     setActiveDropdownId(null);
+    setTimingFeedback('');
   };
 
   const renderCategoryOptions = () => (
@@ -329,7 +330,7 @@ const Billers: React.FC<BillersProps> = ({ billers, onAdd, accounts, categories,
         <>
           <div className="flex items-center justify-between mb-8">
             <div className="space-y-1"><h2 className="text-3xl font-black text-gray-900 tracking-tight uppercase">BILLERS</h2><p className="text-gray-500 text-sm">Manage recurring bills and payment schedules</p></div>
-            <button onClick={() => setShowAddModal(true)} className="flex items-center justify-center space-x-2 bg-indigo-600 text-white px-6 py-3 rounded-2xl font-bold hover:bg-indigo-700 shadow-lg"><Plus className="w-5 h-5" /><span>Add Billers</span></button>
+            <button onClick={() => { setShowAddModal(true); setTimingFeedback(''); }} className="flex items-center justify-center space-x-2 bg-indigo-600 text-white px-6 py-3 rounded-2xl font-bold hover:bg-indigo-700 shadow-lg"><Plus className="w-5 h-5" /><span>Add Billers</span></button>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">{activeBillers.map(renderBillerCard)}</div>
         </>
@@ -345,8 +346,8 @@ const Billers: React.FC<BillersProps> = ({ billers, onAdd, accounts, categories,
               </div>
               <div><label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Biller Name</label><input required type="text" value={addFormData.name} onChange={(e) => setAddFormData({ ...addFormData, name: e.target.value })} className="w-full bg-gray-50 border-transparent rounded-2xl p-4 outline-none font-bold focus:ring-2 focus:ring-indigo-500" /></div>
               <div className="grid grid-cols-2 gap-4">
-                 <div><label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Expected Amount</label><input required type="number" value={addFormData.expectedAmount} onChange={(e) => setAddFormData({ ...addFormData, expectedAmount: e.target.value })} className="w-full bg-gray-50 border-transparent rounded-2xl p-4 outline-none font-bold" /></div>
-                 <div><label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Due Date</label><input required type="text" placeholder="e.g. 15" value={addFormData.dueDate} onChange={(e) => { setAddFormData({ ...addFormData, dueDate: e.target.value }); showTimingInfo(e.target.value); }} className="w-full bg-gray-50 border-transparent rounded-2xl p-4 outline-none font-bold" /></div>
+                 <div><label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Expected Amount</label><input required type="number" min="0" step="0.01" value={addFormData.expectedAmount} onChange={(e) => setAddFormData({ ...addFormData, expectedAmount: e.target.value })} className="w-full bg-gray-50 border-transparent rounded-2xl p-4 outline-none font-bold" /></div>
+                 <div><label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Due Date (day)</label><input required type="number" min="1" max="31" placeholder="e.g. 15" value={addFormData.dueDate} onChange={(e) => { setAddFormData({ ...addFormData, dueDate: e.target.value }); showTimingInfo(e.target.value); }} className="w-full bg-gray-50 border-transparent rounded-2xl p-4 outline-none font-bold" /></div>
               </div>
               
               <div className="border-t border-gray-200 pt-6">
@@ -355,8 +356,8 @@ const Billers: React.FC<BillersProps> = ({ billers, onAdd, accounts, categories,
                   <div><label className="block text-[10px] font-bold text-gray-400 mb-2">Month</label>
                     <select value={addFormData.actMonth} onChange={(e) => setAddFormData({ ...addFormData, actMonth: e.target.value })} className="w-full bg-gray-50 border-transparent rounded-2xl p-4 outline-none font-bold text-sm appearance-none">{MONTHS.map(m => <option key={m} value={m}>{m}</option>)}</select>
                   </div>
-                  <div><label className="block text-[10px] font-bold text-gray-400 mb-2">Day (optional)</label><input type="text" placeholder="e.g. 15" value={addFormData.actDay} onChange={(e) => { setAddFormData({ ...addFormData, actDay: e.target.value }); if (!addFormData.dueDate) showTimingInfo(e.target.value); }} className="w-full bg-gray-50 border-transparent rounded-2xl p-4 outline-none font-bold" /></div>
-                  <div><label className="block text-[10px] font-bold text-gray-400 mb-2">Year</label><input required type="text" value={addFormData.actYear} onChange={(e) => setAddFormData({ ...addFormData, actYear: e.target.value })} className="w-full bg-gray-50 border-transparent rounded-2xl p-4 outline-none font-bold" /></div>
+                  <div><label className="block text-[10px] font-bold text-gray-400 mb-2">Day (optional)</label><input type="number" min="1" max="31" placeholder="e.g. 15" value={addFormData.actDay} onChange={(e) => { setAddFormData({ ...addFormData, actDay: e.target.value }); if (!addFormData.dueDate) showTimingInfo(e.target.value); }} className="w-full bg-gray-50 border-transparent rounded-2xl p-4 outline-none font-bold" /></div>
+                  <div><label className="block text-[10px] font-bold text-gray-400 mb-2">Year</label><input required type="number" min="2000" max="2100" value={addFormData.actYear} onChange={(e) => setAddFormData({ ...addFormData, actYear: e.target.value })} className="w-full bg-gray-50 border-transparent rounded-2xl p-4 outline-none font-bold" /></div>
                 </div>
               </div>
 
@@ -366,7 +367,7 @@ const Billers: React.FC<BillersProps> = ({ billers, onAdd, accounts, categories,
                   <div><label className="block text-[10px] font-bold text-gray-400 mb-2">Month</label>
                     <select value={addFormData.deactMonth} onChange={(e) => setAddFormData({ ...addFormData, deactMonth: e.target.value })} className="w-full bg-gray-50 border-transparent rounded-2xl p-4 outline-none font-bold text-sm appearance-none"><option value="">None</option>{MONTHS.map(m => <option key={m} value={m}>{m}</option>)}</select>
                   </div>
-                  <div><label className="block text-[10px] font-bold text-gray-400 mb-2">Year</label><input type="text" placeholder="e.g. 2026" value={addFormData.deactYear} onChange={(e) => setAddFormData({ ...addFormData, deactYear: e.target.value })} className="w-full bg-gray-50 border-transparent rounded-2xl p-4 outline-none font-bold" /></div>
+                  <div><label className="block text-[10px] font-bold text-gray-400 mb-2">Year</label><input type="number" min="2000" max="2100" placeholder="e.g. 2026" value={addFormData.deactYear} onChange={(e) => setAddFormData({ ...addFormData, deactYear: e.target.value })} className="w-full bg-gray-50 border-transparent rounded-2xl p-4 outline-none font-bold" /></div>
                 </div>
               </div>
 
@@ -404,8 +405,8 @@ const Billers: React.FC<BillersProps> = ({ billers, onAdd, accounts, categories,
               </div>
               <div><label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Biller Name</label><input required type="text" value={editFormData.name} onChange={(e) => setEditFormData({ ...editFormData, name: e.target.value })} className="w-full bg-gray-50 border-transparent rounded-2xl p-4 outline-none font-bold" /></div>
               <div className="grid grid-cols-2 gap-4">
-                 <div><label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Expected Amount</label><input required type="number" value={editFormData.expectedAmount} onChange={(e) => setEditFormData({ ...editFormData, expectedAmount: e.target.value })} className="w-full bg-gray-50 border-transparent rounded-2xl p-4 outline-none font-bold" /></div>
-                 <div><label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Due Date</label><input required type="text" placeholder="e.g. 15" value={editFormData.dueDate} onChange={(e) => { setEditFormData({ ...editFormData, dueDate: e.target.value }); showTimingInfo(e.target.value); }} className="w-full bg-gray-50 border-transparent rounded-2xl p-4 outline-none font-bold" /></div>
+                 <div><label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Expected Amount</label><input required type="number" min="0" step="0.01" value={editFormData.expectedAmount} onChange={(e) => setEditFormData({ ...editFormData, expectedAmount: e.target.value })} className="w-full bg-gray-50 border-transparent rounded-2xl p-4 outline-none font-bold" /></div>
+                 <div><label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Due Date (day)</label><input required type="number" min="1" max="31" placeholder="e.g. 15" value={editFormData.dueDate} onChange={(e) => { setEditFormData({ ...editFormData, dueDate: e.target.value }); showTimingInfo(e.target.value); }} className="w-full bg-gray-50 border-transparent rounded-2xl p-4 outline-none font-bold" /></div>
               </div>
               
               <div className="border-t border-gray-200 pt-6">
@@ -414,8 +415,8 @@ const Billers: React.FC<BillersProps> = ({ billers, onAdd, accounts, categories,
                   <div><label className="block text-[10px] font-bold text-gray-400 mb-2">Month</label>
                     <select value={editFormData.actMonth} onChange={(e) => setEditFormData({ ...editFormData, actMonth: e.target.value })} className="w-full bg-gray-50 border-transparent rounded-2xl p-4 outline-none font-bold text-sm appearance-none">{MONTHS.map(m => <option key={m} value={m}>{m}</option>)}</select>
                   </div>
-                  <div><label className="block text-[10px] font-bold text-gray-400 mb-2">Day (optional)</label><input type="text" placeholder="e.g. 15" value={editFormData.actDay} onChange={(e) => { setEditFormData({ ...editFormData, actDay: e.target.value }); if (!editFormData.dueDate) showTimingInfo(e.target.value); }} className="w-full bg-gray-50 border-transparent rounded-2xl p-4 outline-none font-bold" /></div>
-                  <div><label className="block text-[10px] font-bold text-gray-400 mb-2">Year</label><input required type="text" value={editFormData.actYear} onChange={(e) => setEditFormData({ ...editFormData, actYear: e.target.value })} className="w-full bg-gray-50 border-transparent rounded-2xl p-4 outline-none font-bold" /></div>
+                  <div><label className="block text-[10px] font-bold text-gray-400 mb-2">Day (optional)</label><input type="number" min="1" max="31" placeholder="e.g. 15" value={editFormData.actDay} onChange={(e) => { setEditFormData({ ...editFormData, actDay: e.target.value }); if (!editFormData.dueDate) showTimingInfo(e.target.value); }} className="w-full bg-gray-50 border-transparent rounded-2xl p-4 outline-none font-bold" /></div>
+                  <div><label className="block text-[10px] font-bold text-gray-400 mb-2">Year</label><input required type="number" min="2000" max="2100" value={editFormData.actYear} onChange={(e) => setEditFormData({ ...editFormData, actYear: e.target.value })} className="w-full bg-gray-50 border-transparent rounded-2xl p-4 outline-none font-bold" /></div>
                 </div>
               </div>
 
@@ -425,7 +426,7 @@ const Billers: React.FC<BillersProps> = ({ billers, onAdd, accounts, categories,
                   <div><label className="block text-[10px] font-bold text-gray-400 mb-2">Month</label>
                     <select value={editFormData.deactMonth} onChange={(e) => setEditFormData({ ...editFormData, deactMonth: e.target.value })} className="w-full bg-gray-50 border-transparent rounded-2xl p-4 outline-none font-bold text-sm appearance-none"><option value="">None</option>{MONTHS.map(m => <option key={m} value={m}>{m}</option>)}</select>
                   </div>
-                  <div><label className="block text-[10px] font-bold text-gray-400 mb-2">Year</label><input type="text" placeholder="e.g. 2026" value={editFormData.deactYear} onChange={(e) => setEditFormData({ ...editFormData, deactYear: e.target.value })} className="w-full bg-gray-50 border-transparent rounded-2xl p-4 outline-none font-bold" /></div>
+                  <div><label className="block text-[10px] font-bold text-gray-400 mb-2">Year</label><input type="number" min="2000" max="2100" placeholder="e.g. 2026" value={editFormData.deactYear} onChange={(e) => setEditFormData({ ...editFormData, deactYear: e.target.value })} className="w-full bg-gray-50 border-transparent rounded-2xl p-4 outline-none font-bold" /></div>
                 </div>
               </div>
 
