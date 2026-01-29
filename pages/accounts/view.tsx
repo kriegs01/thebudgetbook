@@ -1,5 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { ArrowLeft } from 'lucide-react';
+import { useSearchParams, Link } from 'react-router-dom';
+import { Account } from '../../types';
 
 type Transaction = {
   id: string;
@@ -19,45 +21,53 @@ const formatCurrency = (val: number) =>
     maximumFractionDigits: 2
   }).format(val);
 
-const AccountFilteredTransactions: React.FC = () => {
-  const [accountId, setAccountId] = useState<string | null>(null);
+interface AccountFilteredTransactionsProps {
+  accounts: Account[];
+}
+
+const AccountFilteredTransactions: React.FC<AccountFilteredTransactionsProps> = ({ accounts }) => {
+  const [searchParams] = useSearchParams();
+  const accountId = searchParams.get("account") || searchParams.get("id");
   const [accountName, setAccountName] = useState<string>("Account");
   const [transactions, setTransactions] = useState<Transaction[]>([]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
-    const qs = new URLSearchParams(window.location.search);
-    const id = qs.get("id");
-    setAccountId(id);
-
+    
     // Fetch all transactions and filter to this account
     const txRaw = localStorage.getItem('transactions');
     let allTx: Transaction[] = [];
     if (txRaw) {
       try { allTx = JSON.parse(txRaw); } catch {}
     }
-    const filtered = id ? allTx.filter(tx => tx.paymentMethodId === id) : [];
+    const filtered = accountId ? allTx.filter(tx => tx.paymentMethodId === accountId) : [];
     setTransactions(filtered);
 
-    // Fetch account meta for display name
-    if (id) {
-      const metaRaw = localStorage.getItem(`account_meta_${id}`);
-      if (metaRaw) {
-        try {
-          const meta: AccountMeta = JSON.parse(metaRaw);
-          if (meta.bank) setAccountName(meta.bank);
-        } catch {}
+    // Get account name from the passed accounts prop
+    if (accountId) {
+      const account = accounts.find(a => a.id === accountId);
+      if (account) {
+        setAccountName(account.bank);
+      } else {
+        // Fallback to localStorage if not found in accounts prop
+        const metaRaw = localStorage.getItem(`account_meta_${accountId}`);
+        if (metaRaw) {
+          try {
+            const meta: AccountMeta = JSON.parse(metaRaw);
+            if (meta.bank) setAccountName(meta.bank);
+          } catch {}
+        }
       }
     }
-  }, []);
+  }, [accountId, accounts]);
 
   return (
     <div className="min-h-screen bg-gray-50 p-8">
       <div className="max-w-4xl mx-auto">
         <div className="mb-6 flex items-center space-x-4">
-          <button onClick={() => window.history.back()} className="p-2 rounded-lg bg-white shadow-sm hover:bg-gray-100">
+          <Link to="/accounts" className="p-2 rounded-lg bg-white shadow-sm hover:bg-gray-100">
             <ArrowLeft className="w-5 h-5 text-gray-700" />
-          </button>
+          </Link>
           <h1 className="text-2xl font-black text-gray-900">
             {accountName ? accountName : `Account ${accountId}`}
           </h1>
