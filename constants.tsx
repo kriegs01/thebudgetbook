@@ -5,6 +5,7 @@ import { Page, Account, BudgetItem, Biller, Installment, SavingsJar, PaymentSche
 export const NAV_ITEMS = [
   { id: Page.DASHBOARD, label: 'Dashboard', icon: <LayoutDashboard className="w-5 h-5" /> },
   { id: Page.BUDGET, label: 'Budget', icon: <Wallet className="w-5 h-5" /> },
+  { id: Page.TRANSACTIONS, label: "Transactions", icon: <FileText />,
   { id: Page.BILLERS, label: 'Billers', icon: <Receipt className="w-5 h-5" /> },
   { id: Page.INSTALLMENTS, label: 'Installments', icon: <CreditCard className="w-5 h-5" /> },
   { id: Page.ACCOUNTS, label: 'Accounts', icon: <Landmark className="w-5 h-5" /> },
