@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { ArrowLeft, CreditCard, Calendar, DollarSign } from 'lucide-react';
+import { ArrowLeft, CreditCard, Calendar } from 'lucide-react';
 import { useSearchParams, Link } from 'react-router-dom';
 import { Account } from '../../types';
 
@@ -116,7 +116,11 @@ const AccountStatement: React.FC<AccountStatementProps> = ({ accounts }) => {
         const txRaw = localStorage.getItem('transactions');
         let allTx: Transaction[] = [];
         if (txRaw) {
-          try { allTx = JSON.parse(txRaw); } catch {}
+          try { 
+            allTx = JSON.parse(txRaw); 
+          } catch (error) {
+            console.error('Failed to parse transactions from localStorage:', error);
+          }
         }
         const accountTransactions = allTx.filter(tx => tx.paymentMethodId === accountId);
         
@@ -165,7 +169,8 @@ const AccountStatement: React.FC<AccountStatementProps> = ({ accounts }) => {
 
   const currentBalance = account.balance || 0;
   const creditLimit = account.creditLimit || 0;
-  const availableCredit = creditLimit - currentBalance;
+  // Ensure available credit doesn't exceed credit limit or go negative
+  const availableCredit = Math.max(0, Math.min(creditLimit, creditLimit - currentBalance));
 
   return (
     <div className="min-h-screen bg-gray-50 p-8">
