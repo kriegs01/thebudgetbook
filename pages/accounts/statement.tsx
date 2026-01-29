@@ -35,41 +35,50 @@ const formatDateRange = (start: Date, end: Date): string => {
 const calculateBillingCycles = (billingDate: string, numberOfCycles: number = 6): { startDate: Date; endDate: Date }[] => {
   const cycles: { startDate: Date; endDate: Date }[] = [];
   
-  // Parse billing date (could be in format "YYYY-MM-DD" or just a day number like "15")
+  // Parse billing date - expect format "YYYY-MM-DD"
   let billingDay: number;
   
   if (billingDate.includes('-')) {
-    // Full date format
+    // Full date format like "2026-01-10"
     const date = new Date(billingDate);
     billingDay = date.getDate();
   } else {
-    // Just a day number
-    billingDay = parseInt(billingDate.replace(/[^0-9]/g, ''), 10);
+    // Fallback: try to extract numeric day (e.g., "15th" -> 15)
+    const match = billingDate.match(/\d+/);
+    if (!match) return cycles; // Invalid format
+    billingDay = parseInt(match[0], 10);
   }
   
-  // Start from current month and go backwards
-  const now = new Date();
-  const currentYear = now.getFullYear();
-  const currentMonth = now.getMonth();
+  // Validate billing day
+  if (billingDay < 1 || billingDay > 31) return cycles;
   
-  for (let i = 0; i < numberOfCycles; i++) {
-    // Calculate the month for this cycle
-    const monthOffset = i;
-    const cycleYear = currentYear - Math.floor((currentMonth + monthOffset + 1) / 12);
-    const cycleMonth = (currentMonth - monthOffset + 12) % 12;
+  // Start from current date and generate cycles going forward and backward
+  const today = new Date();
+  const currentYear = today.getFullYear();
+  const currentMonth = today.getMonth();
+  
+  // Generate cycles starting from 5 months ago to current month
+  for (let i = numberOfCycles - 1; i >= 0; i--) {
+    // Calculate month/year for this cycle using Date methods to handle boundaries
+    const cycleStartDate = new Date(currentYear, currentMonth - i, billingDay);
     
-    // Cycle start date
-    const cycleStart = new Date(cycleYear, cycleMonth, billingDay);
+    // Handle months with fewer days than billingDay (e.g., Feb 31 -> Feb 28/29)
+    const daysInMonth = new Date(cycleStartDate.getFullYear(), cycleStartDate.getMonth() + 1, 0).getDate();
+    const adjustedBillingDay = Math.min(billingDay, daysInMonth);
+    cycleStartDate.setDate(adjustedBillingDay);
     
-    // Cycle end date (day before next billing date)
-    const nextMonth = (cycleMonth + 1) % 12;
-    const nextYear = cycleMonth === 11 ? cycleYear + 1 : cycleYear;
-    const cycleEnd = new Date(nextYear, nextMonth, billingDay - 1);
+    // Calculate end date (day before next billing date)
+    const cycleEndDate = new Date(cycleStartDate);
+    cycleEndDate.setMonth(cycleEndDate.getMonth() + 1);
+    cycleEndDate.setDate(cycleEndDate.getDate() - 1);
     
-    cycles.push({ startDate: cycleStart, endDate: cycleEnd });
+    cycles.push({ 
+      startDate: new Date(cycleStartDate), 
+      endDate: new Date(cycleEndDate) 
+    });
   }
   
-  return cycles.reverse();
+  return cycles;
 };
 
 // Check if transaction falls within a billing cycle
@@ -114,7 +123,9 @@ const StatementPage: React.FC<StatementPageProps> = ({ accounts }) => {
     if (txRaw) {
       try {
         allTx = JSON.parse(txRaw);
-      } catch {}
+      } catch (error) {
+        console.error('Failed to parse transactions from localStorage:', error);
+      }
     }
     
     const accountTransactions = allTx.filter(tx => tx.paymentMethodId === accountId);
