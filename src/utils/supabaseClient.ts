@@ -1,6 +1,11 @@
 import { createClient } from '@supabase/supabase-js';
 
-const supabaseUrl = 'https://YOUR_PROJECT_ID.supabase.co';  // <-- Replace with your real URL
-const supabaseKey = 'sb_publishable_xxxx...';               // <-- Replace with your publishable key
+// Use environment variables for Supabase configuration
+// Add these to your .env file:
+// VITE_SUPABASE_URL=https://your-project.supabase.co
+// VITE_SUPABASE_KEY=your-publishable-key
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || 'https://YOUR_PROJECT_ID.supabase.co';
+const supabaseKey = import.meta.env.VITE_SUPABASE_KEY || 'sb_publishable_xxxx...';
 
 export const supabase = createClient(supabaseUrl, supabaseKey);
+

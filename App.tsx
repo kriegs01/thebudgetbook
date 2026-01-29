@@ -111,7 +111,6 @@ const App: React.FC = () => {
         </aside>
         <main className={`flex-1 bg-gray-50 transition-all duration-300 ease-in-out ${isSidebarOpen ? 'ml-64' : 'ml-20'} min-h-screen flex flex-col`}> 
           <div className="p-8 w-full flex-1 overflow-auto">
-            <TestSupabase />
             <Routes>
               <Route path="/" element={<Dashboard accounts={accounts} budget={budgetItems} installments={installments} />} />
               <Route path="/budget" element={
@@ -189,6 +188,7 @@ const App: React.FC = () => {
               <Route path="/transactions" element={
                 <TransactionsPage />
               } />
+              <Route path="/test-supabase" element={<TestSupabase />} />
               {/* Add additional routes/pages as needed */}
             </Routes>
           </div>
