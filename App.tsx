@@ -10,9 +10,11 @@ import TransactionsPage from './pages/transactions';
 import Billers from './pages/Billers';
 import Installments from './pages/Installments';
 import Accounts from './pages/Accounts';
+import AccountFilteredTransactions from './pages/accounts/view';
 import Savings from './pages/Savings';
 import SettingsPage from './pages/Settings';
 import TrashPage from './pages/Trash';
+import AccountFilteredTransactions from './pages/accounts/view';
 
 const App: React.FC = () => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
@@ -153,6 +155,7 @@ const App: React.FC = () => {
                   onDelete={(id) => setAccounts(prev => prev.filter(a => a.id !== id))}
                 />
               } />
+              <Route path="/accounts/view" element={<AccountFilteredTransactions />} />
               <Route path="/savings" element={
                 <Savings
                   jars={savings}
@@ -184,6 +187,9 @@ const App: React.FC = () => {
               } />
               <Route path="/transactions" element={
                 <TransactionsPage />
+              } />
+              <Route path="/accounts/view" element={
+                <AccountFilteredTransactions accounts={accounts} />
               } />
               {/* Add additional routes/pages as needed */}
             </Routes>
