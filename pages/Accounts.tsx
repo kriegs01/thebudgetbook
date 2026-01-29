@@ -264,7 +264,7 @@ const Accounts: React.FC<AccountsProps> = ({ accounts, onAdd, onDelete, onEdit, 
           <div />{/* spacer */}
           <div className="flex items-center space-x-2">
             <a
-              href={`/accounts/view?id=${acc.id}`}
+              href={`/accounts/view?account=${acc.id}`}
               onClick={(e) => e.stopPropagation()}
               className="bg-gray-100 text-gray-700 px-3 py-2 rounded-xl text-sm font-semibold hover:bg-gray-200 transition"
               aria-label={`View ${acc.bank} transactions`}
