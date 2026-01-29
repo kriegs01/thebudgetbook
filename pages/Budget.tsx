@@ -425,8 +425,111 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
         </div>
       </div>
 
-      {/* Category Tables - Full Width and Stacked for UTILITIES, LOANS, SUBSCRIPTIONS, PURCHASES */}
+      {/* Category Tables - Full Width and Stacked for FIXED, UTILITIES, LOANS, SUBSCRIPTIONS, PURCHASES */}
       <div className="space-y-6">
+        {/* Fixed category - full width with account and settle columns */}
+        {categories.filter(cat => cat.name === 'Fixed').map((cat) => {
+          const items = setupData[cat.name] || [];
+          return (
+            <div key={cat.id} className="bg-white rounded-[3rem] shadow-sm border border-gray-100 overflow-hidden w-full">
+              <div className="p-8 border-b border-gray-50 bg-gray-50/30 flex justify-between items-center">
+                <h3 className="text-xs font-black text-gray-900 uppercase tracking-[0.25em]">{cat.name}</h3>
+                <span className="text-lg font-black text-indigo-600">{formatCurrency(items.filter(i => i.included).reduce((s, i) => s + (parseFloat(i.amount) || 0), 0))}</span>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full text-left">
+                  <thead>
+                    <tr className="text-[10px] font-black text-gray-400 uppercase border-b border-gray-50">
+                      <th className="p-4 pl-10">Name</th>
+                      <th className="p-4">Amount</th>
+                      <th className="p-4">Account</th>
+                      <th className="p-4 text-center">Actions</th>
+                      <th className="p-4 pr-10 text-right"></th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-50">
+                    {items.length > 0 ? items.map((item) => {
+                      return (
+                        <tr key={item.id} className={`${item.included ? 'bg-white' : 'bg-gray-50 opacity-60'}`}>
+                          <td className="p-4 pl-10">
+                            <input 
+                              type="text" 
+                              value={item.name} 
+                              onChange={(e) => handleSetupUpdate(cat.name, item.id, 'name', e.target.value)} 
+                              className="bg-transparent border-none text-sm font-bold w-full" 
+                            />
+                          </td>
+                          <td className="p-4">
+                            <div className="flex items-center space-x-1">
+                              <span className="text-gray-400 font-bold">₱</span>
+                              <input 
+                                type="number" 
+                                value={item.amount} 
+                                onChange={(e) => handleSetupUpdate(cat.name, item.id, 'amount', e.target.value)} 
+                                className="bg-transparent border-none text-sm font-black w-24" 
+                              />
+                            </div>
+                          </td>
+                          <td className="p-4">
+                            <select 
+                              value={item.accountId || ''} 
+                              onChange={(e) => handleSetupUpdate(cat.name, item.id, 'accountId', e.target.value)}
+                              className="bg-gray-50 border border-gray-200 rounded-lg px-3 py-1.5 text-xs font-bold text-gray-700 outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
+                            >
+                              <option value="">Select Account</option>
+                              {accounts.map(acc => (
+                                <option key={acc.id} value={acc.id}>
+                                  {acc.bank} ({acc.classification})
+                                </option>
+                              ))}
+                            </select>
+                          </td>
+                          <td className="p-4 text-center">
+                            <div className="flex items-center justify-center space-x-2">
+                              {item.settled ? (
+                                <CheckCircle2 className="w-4 h-4 text-green-500" />
+                              ) : (
+                                <button 
+                                  onClick={() => handleSetupUpdate(cat.name, item.id, 'settled', true)}
+                                  className="px-3 py-1 bg-green-600 text-white text-[9px] font-black uppercase rounded-lg hover:bg-green-700 transition-colors"
+                                >
+                                  Settle
+                                </button>
+                              )}
+                              <button 
+                                onClick={() => handleSetupToggle(cat.name, item.id)} 
+                                className={`w-8 h-8 rounded-xl border-2 transition-all flex items-center justify-center ${item.included ? 'bg-indigo-600 border-indigo-600 text-white' : 'border-gray-200'}`}
+                              >
+                                <Check className="w-4 h-4" />
+                              </button>
+                            </div>
+                          </td>
+                          <td className="p-4 pr-10 text-right">
+                            <button 
+                              onClick={() => removeItemFromCategory(cat.name, item.id, item.name)} 
+                              className="text-[9px] font-black text-red-500 uppercase tracking-widest border border-red-50 px-2 py-1 rounded-lg"
+                            >
+                              Remove
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    }) : (
+                      <tr>
+                        <td colSpan={5} className="p-8 text-center text-gray-400 text-sm font-medium">
+                          No items yet. Click "Add Item" below to get started.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+                <button onClick={() => addItemToCategory(cat.name)} className="w-full p-4 text-[10px] font-black text-gray-400 uppercase hover:text-indigo-600 border-t border-gray-50">+ Add Item</button>
+              </div>
+            </div>
+          );
+        })}
+
+        {/* Other full-width categories: Utilities, Loans, Subscriptions, Purchases */}
         {categories.filter(cat => ['Utilities', 'Loans', 'Subscriptions', 'Purchases'].includes(cat.name)).map((cat) => {
           const items = setupData[cat.name] || [];
           return (
@@ -500,10 +603,10 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
           );
         })}
 
-        {/* Remaining categories (Fixed) - keep in grid if needed */}
-        {categories.filter(cat => !['Utilities', 'Loans', 'Subscriptions', 'Purchases'].includes(cat.name)).length > 0 && (
+        {/* Remaining categories (excluding Fixed, Utilities, Loans, Subscriptions, Purchases) - keep in grid if needed */}
+        {categories.filter(cat => !['Fixed', 'Utilities', 'Loans', 'Subscriptions', 'Purchases'].includes(cat.name)).length > 0 && (
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-            {categories.filter(cat => !['Utilities', 'Loans', 'Subscriptions', 'Purchases'].includes(cat.name)).map((cat) => {
+            {categories.filter(cat => !['Fixed', 'Utilities', 'Loans', 'Subscriptions', 'Purchases'].includes(cat.name)).map((cat) => {
               const items = setupData[cat.name] || [];
               return (
                 <div key={cat.id} className="bg-white rounded-[3rem] shadow-sm border border-gray-100 overflow-hidden flex flex-col">
