@@ -6,6 +6,7 @@ import { NAV_ITEMS, INITIAL_ACCOUNTS, INITIAL_BUDGET, INITIAL_BILLERS, INITIAL_I
 // Pages
 import Dashboard from './pages/Dashboard';
 import Budget from './pages/Budget';
+import TransactionsPage from './pages/transactions';
 import Billers from './pages/Billers';
 import Installments from './pages/Installments';
 import Accounts from './pages/Accounts';
@@ -129,6 +130,8 @@ const App: React.FC = () => {
           }}
         />
       );
+      case Page.TRANSACTIONS:
+        return <TransactionsPage />;
       default: return <Dashboard accounts={accounts} budget={budgetItems} installments={installments} />;
     }
   };
