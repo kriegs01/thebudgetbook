@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import { Account, ViewMode, AccountClassification } from '../types';
 import {
   Plus,
@@ -263,14 +264,14 @@ const Accounts: React.FC<AccountsProps> = ({ accounts, onAdd, onDelete, onEdit, 
         <div className="mt-6 flex items-center justify-between">
           <div />{/* spacer */}
           <div className="flex items-center space-x-2">
-            <a
-              href={`/accounts/view?account=${acc.id}`}
+            <Link
+              to={`/accounts/view?account=${acc.id}`}
               onClick={(e) => e.stopPropagation()}
               className="bg-gray-100 text-gray-700 px-3 py-2 rounded-xl text-sm font-semibold hover:bg-gray-200 transition"
               aria-label={`View ${acc.bank} transactions`}
             >
               View
-            </a>
+            </Link>
           </div>
         </div>
       </div>
@@ -285,7 +286,7 @@ const Accounts: React.FC<AccountsProps> = ({ accounts, onAdd, onDelete, onEdit, 
       <div className="flex items-center justify-between">
         <h2 className="text-3xl font-black text-gray-900 uppercase">ACCOUNTS</h2>
         <div className="flex items-center space-x-4">
-          <a href="/transactions" className="px-4 py-2 rounded-lg bg-gray-100 text-gray-800 hover:bg-gray-200">Transactions</a>
+          <Link to="/transactions" className="px-4 py-2 rounded-lg bg-gray-100 text-gray-800 hover:bg-gray-200">Transactions</Link>
           <button onClick={openAddModal} className="bg-indigo-600 text-white px-6 py-2.5 rounded-xl font-bold hover:bg-indigo-700 transition-all shadow-lg flex items-center space-x-2">
             <Plus className="w-5 h-5" />
             <span>Add Account</span>
