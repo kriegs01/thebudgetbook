@@ -26,34 +26,29 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
   const [removedIds, setRemovedIds] = useState<Set<string>>(new Set());
 
   // Month Summary State with localStorage persistence
-  const getStorageKey = (field: string) => `budgetSetup_${selectedMonth}_${selectedTiming}_${field}`;
-  
-  const [projectedSalary, setProjectedSalary] = useState<string>(() => {
-    const stored = localStorage.getItem(getStorageKey('projectedSalary'));
-    return stored || '11000';
-  });
-  
-  const [actualSalary, setActualSalary] = useState<string>(() => {
-    const stored = localStorage.getItem(getStorageKey('actualSalary'));
-    return stored || '';
-  });
-
-  // Save to localStorage when values change
-  useEffect(() => {
-    localStorage.setItem(getStorageKey('projectedSalary'), projectedSalary);
-  }, [projectedSalary, selectedMonth, selectedTiming]);
-
-  useEffect(() => {
-    localStorage.setItem(getStorageKey('actualSalary'), actualSalary);
-  }, [actualSalary, selectedMonth, selectedTiming]);
+  const [projectedSalary, setProjectedSalary] = useState<string>('11000');
+  const [actualSalary, setActualSalary] = useState<string>('');
 
   // Load from localStorage when month/timing changes
   useEffect(() => {
-    const storedProjected = localStorage.getItem(getStorageKey('projectedSalary'));
-    const storedActual = localStorage.getItem(getStorageKey('actualSalary'));
+    const projectedKey = `budgetSetup_${selectedMonth}_${selectedTiming}_projectedSalary`;
+    const actualKey = `budgetSetup_${selectedMonth}_${selectedTiming}_actualSalary`;
+    const storedProjected = localStorage.getItem(projectedKey);
+    const storedActual = localStorage.getItem(actualKey);
     setProjectedSalary(storedProjected || '11000');
     setActualSalary(storedActual || '');
   }, [selectedMonth, selectedTiming]);
+
+  // Save to localStorage when values change
+  useEffect(() => {
+    const projectedKey = `budgetSetup_${selectedMonth}_${selectedTiming}_projectedSalary`;
+    localStorage.setItem(projectedKey, projectedSalary);
+  }, [projectedSalary, selectedMonth, selectedTiming]);
+
+  useEffect(() => {
+    const actualKey = `budgetSetup_${selectedMonth}_${selectedTiming}_actualSalary`;
+    localStorage.setItem(actualKey, actualSalary);
+  }, [actualSalary, selectedMonth, selectedTiming]);
 
   // Modal States
   const [showPayModal, setShowPayModal] = useState<{ biller: Biller, schedule: PaymentSchedule } | null>(null);
@@ -326,7 +321,9 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
 
   // Calculate Month Summary values
   const totalSpend = grandTotal;
-  const salaryToUse = actualSalary ? parseFloat(actualSalary) || 0 : parseFloat(projectedSalary) || 0;
+  const actualSalaryValue = actualSalary.trim() !== '' ? parseFloat(actualSalary) : null;
+  const projectedSalaryValue = parseFloat(projectedSalary) || 0;
+  const salaryToUse = actualSalaryValue !== null && !isNaN(actualSalaryValue) ? actualSalaryValue : projectedSalaryValue;
   const remaining = salaryToUse - totalSpend;
 
   return (
@@ -387,9 +384,12 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                     <span className="text-gray-400 font-bold text-sm">₱</span>
                     <input 
                       type="number" 
+                      min="0"
+                      step="0.01"
                       value={projectedSalary} 
                       onChange={(e) => setProjectedSalary(e.target.value)} 
-                      className="bg-transparent border-none text-sm font-black text-gray-900 w-28 text-right outline-none focus:bg-indigo-50 rounded px-1" 
+                      className="bg-transparent border-none text-sm font-black text-gray-900 w-28 text-right outline-none focus:bg-indigo-50 rounded px-1"
+                      aria-label="Projected Salary"
                     />
                   </div>
                 </td>
@@ -401,10 +401,13 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                     <span className="text-gray-400 font-bold text-sm">₱</span>
                     <input 
                       type="number" 
+                      min="0"
+                      step="0.01"
                       value={actualSalary} 
                       onChange={(e) => setActualSalary(e.target.value)} 
                       placeholder="Enter actual"
-                      className="bg-transparent border-none text-sm font-black text-gray-900 w-28 text-right outline-none focus:bg-indigo-50 rounded px-1 placeholder:text-gray-300" 
+                      className="bg-transparent border-none text-sm font-black text-gray-900 w-28 text-right outline-none focus:bg-indigo-50 rounded px-1 placeholder:text-gray-300"
+                      aria-label="Actual Salary"
                     />
                   </div>
                 </td>
