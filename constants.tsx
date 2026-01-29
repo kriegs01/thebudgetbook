@@ -1,5 +1,5 @@
 import React from 'react';
-import { LayoutDashboard, Wallet, Receipt, CreditCard, Landmark, PiggyBank, Settings, Trash2 } from 'lucide-react';
+import { LayoutDashboard, Wallet, Receipt, CreditCard, Landmark, PiggyBank, Settings, Trash2, FileText } from 'lucide-react';
 import { Page, Account, BudgetItem, Biller, Installment, SavingsJar, PaymentSchedule, CategorizedSetupItem, BudgetCategory } from './types';
 
 export const NAV_ITEMS = [
