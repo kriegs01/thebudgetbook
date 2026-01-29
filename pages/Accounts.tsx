@@ -179,8 +179,8 @@ const Accounts: React.FC<AccountsProps> = ({ accounts, onAdd, onDelete, onEdit, 
     const usedPercent = creditLimit > 0 ? Math.min(100, Math.round((acc.balance / creditLimit) * 100)) : 0;
     const usedPercentSafe = usedPercent < 0 ? 0 : usedPercent;
 
-    return (
-      <div key={acc.id} className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 hover:border-indigo-200 transition-all relative group overflow-hidden">
+    const cardContent = (
+      <>
         <div className={`absolute top-0 right-0 w-24 h-24 -mr-8 -mt-8 rounded-full opacity-5 ${isCredit ? 'bg-purple-500' : 'bg-green-500'}`}></div>
         
         <div className="flex justify-between items-start mb-6">
@@ -260,20 +260,42 @@ const Accounts: React.FC<AccountsProps> = ({ accounts, onAdd, onDelete, onEdit, 
           </div>
         </div>
 
-        {/* Bottom controls: View button placed in lower-right corner */}
-        <div className="mt-6 flex items-center justify-between">
-          <div />{/* spacer */}
-          <div className="flex items-center space-x-2">
-            <Link
-              to={`/accounts/view?account=${acc.id}`}
-              onClick={(e) => e.stopPropagation()}
-              className="bg-gray-100 text-gray-700 px-3 py-2 rounded-xl text-sm font-semibold hover:bg-gray-200 transition"
-              aria-label={`View ${acc.bank} transactions`}
-            >
-              View
-            </Link>
+        {/* Bottom controls: View button for debit accounts only */}
+        {!isCredit && (
+          <div className="mt-6 flex items-center justify-between">
+            <div />{/* spacer */}
+            <div className="flex items-center space-x-2">
+              <Link
+                to={`/accounts/view?account=${acc.id}`}
+                onClick={(e) => e.stopPropagation()}
+                className="bg-gray-100 text-gray-700 px-3 py-2 rounded-xl text-sm font-semibold hover:bg-gray-200 transition"
+                aria-label={`View ${acc.bank} transactions`}
+              >
+                View
+              </Link>
+            </div>
           </div>
-        </div>
+        )}
+      </>
+    );
+
+    // For credit accounts, wrap the card in a Link to statement page
+    if (isCredit) {
+      return (
+        <Link
+          key={acc.id}
+          to={`/accounts/statement?account=${acc.id}`}
+          className="block bg-white p-6 rounded-2xl shadow-sm border border-gray-100 hover:border-indigo-200 transition-all relative group overflow-hidden cursor-pointer"
+        >
+          {cardContent}
+        </Link>
+      );
+    }
+
+    // For debit accounts, render as a regular div
+    return (
+      <div key={acc.id} className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 hover:border-indigo-200 transition-all relative group overflow-hidden">
+        {cardContent}
       </div>
     );
   };
@@ -286,7 +308,6 @@ const Accounts: React.FC<AccountsProps> = ({ accounts, onAdd, onDelete, onEdit, 
       <div className="flex items-center justify-between">
         <h2 className="text-3xl font-black text-gray-900 uppercase">ACCOUNTS</h2>
         <div className="flex items-center space-x-4">
-          <Link to="/transactions" className="px-4 py-2 rounded-lg bg-gray-100 text-gray-800 hover:bg-gray-200">Transactions</Link>
           <button onClick={openAddModal} className="bg-indigo-600 text-white px-6 py-2.5 rounded-xl font-bold hover:bg-indigo-700 transition-all shadow-lg flex items-center space-x-2">
             <Plus className="w-5 h-5" />
             <span>Add Account</span>

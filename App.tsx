@@ -12,6 +12,8 @@ import Billers from './pages/Billers';
 import Installments from './pages/Installments';
 import Accounts from './pages/Accounts';
 import AccountFilteredTransactions from './pages/accounts/view';
+import CreditStatement from './pages/accounts/statement';
+import BillingCycleDetail from './pages/accounts/cycle';
 import Savings from './pages/Savings';
 import SettingsPage from './pages/Settings';
 import TrashPage from './pages/Trash';
@@ -153,9 +155,16 @@ const App: React.FC = () => {
                   accounts={accounts}
                   onAdd={(a) => setAccounts(prev => [...prev, a])}
                   onDelete={(id) => setAccounts(prev => prev.filter(a => a.id !== id))}
+                  onEdit={(a) => setAccounts(prev => prev.map(acc => acc.id === a.id ? a : acc))}
+                  onDeactivate={(id, when) => {
+                    // Implement deactivation logic if needed
+                    console.log('Deactivate account:', id, when);
+                  }}
                 />
               } />
-              <Route path="/accounts/view" element={<AccountFilteredTransactions />} />
+              <Route path="/accounts/view" element={<AccountFilteredTransactions accounts={accounts} />} />
+              <Route path="/accounts/statement" element={<CreditStatement accounts={accounts} />} />
+              <Route path="/accounts/cycle" element={<BillingCycleDetail accounts={accounts} />} />
               <Route path="/savings" element={
                 <Savings
                   jars={savings}
@@ -187,9 +196,6 @@ const App: React.FC = () => {
               } />
               <Route path="/transactions" element={
                 <TransactionsPage />
-              } />
-              <Route path="/accounts/view" element={
-                <AccountFilteredTransactions accounts={accounts} />
               } />
               {/* Add additional routes/pages as needed */}
             </Routes>
