@@ -13,7 +13,7 @@ import Accounts from './pages/Accounts';
 import Savings from './pages/Savings';
 import SettingsPage from './pages/Settings';
 import TrashPage from './pages/Trash';
-import AccountFilteredTransactions from './pages/accounts/view'; // Assuming you want to route to this also!
+import AccountFilteredTransactions from './pages/accounts/view'; // If you want to link here too!
 
 const App: React.FC = () => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
@@ -41,12 +41,10 @@ const App: React.FC = () => {
                   }
                   end={item.path === '/'}
                 >
-                  <div className="flex items-center">
-                    <span className={`${isSidebarOpen ? '' : 'mx-auto'} ${isActive ? 'text-blue-600' : 'text-gray-400'} transition-colors`}>
-                      {item.icon}
-                    </span>
-                    {isSidebarOpen && <span className="ml-3 font-bold text-sm">{item.label}</span>}
+                  <div className={`${isSidebarOpen ? '' : 'mx-auto'} ${window.location.pathname === item.path ? 'text-blue-600' : 'text-gray-400'} transition-colors`}>
+                    {item.icon}
                   </div>
+                  {isSidebarOpen && <span className="ml-3 font-bold text-sm">{item.label}</span>}
                 </NavLink>
               ))}
             </nav>
@@ -68,7 +66,7 @@ const App: React.FC = () => {
         <main className={`flex-1 bg-gray-50 transition-all duration-300 ease-in-out ${isSidebarOpen ? 'ml-64' : 'ml-20'} min-h-screen flex flex-col`}> 
           <div className="p-8 w-full flex-1 overflow-auto">
             <Routes>
-              <Route path="/" element={<div>Hello from root!</div>} />
+              <Route path="/" element={<Dashboard />} />
               <Route path="/budget" element={<Budget />} />
               <Route path="/transactions" element={<TransactionsPage />} />
               <Route path="/billers" element={<Billers />} />
@@ -77,11 +75,8 @@ const App: React.FC = () => {
               <Route path="/savings" element={<Savings />} />
               <Route path="/settings" element={<SettingsPage />} />
               <Route path="/trash" element={<TrashPage />} />
-
-              {/* Route for filtered transactions view */}
               <Route path="/accounts/view" element={<AccountFilteredTransactions />} />
-
-              {/* Add other routes as needed! */}
+              {/* Add additional routes as needed */}
             </Routes>
           </div>
         </main>
