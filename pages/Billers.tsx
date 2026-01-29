@@ -13,6 +13,18 @@ interface BillersProps {
 
 const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 
+// Utility function to calculate timing based on day of month
+const calculateTiming = (dayString: string): '1/2' | '2/2' => {
+  const day = parseInt(dayString);
+  if (isNaN(day)) return '1/2';
+  return (day >= 1 && day <= 21) ? '1/2' : '2/2';
+};
+
+// Utility function to calculate status based on deactivationDate
+const calculateStatus = (deactivationDate?: { month: string; year: string }): 'active' | 'inactive' => {
+  return deactivationDate ? 'inactive' : 'active';
+};
+
 const Billers: React.FC<BillersProps> = ({ billers, onAdd, accounts, categories, onUpdate, onDelete }) => {
   const [showAddModal, setShowAddModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState<Biller | null>(null);
@@ -20,6 +32,7 @@ const Billers: React.FC<BillersProps> = ({ billers, onAdd, accounts, categories,
   const [detailedBillerId, setDetailedBillerId] = useState<string | null>(null);
   const [activeDropdownId, setActiveDropdownId] = useState<string | null>(null);
   const [isInactiveOpen, setIsInactiveOpen] = useState(false);
+  const [timingFeedback, setTimingFeedback] = useState<string>('');
 
   const [confirmModal, setConfirmModal] = useState<{
     show: boolean;
@@ -38,9 +51,11 @@ const Billers: React.FC<BillersProps> = ({ billers, onAdd, accounts, categories,
     category: categories[0]?.name || '',
     dueDate: '',
     expectedAmount: '',
-    timing: '1/2' as '1/2' | '2/2',
     actMonth: MONTHS[(new Date().getMonth() + 1) % 12],
-    actYear: new Date().getFullYear().toString()
+    actDay: '',
+    actYear: new Date().getFullYear().toString(),
+    deactMonth: '',
+    deactYear: ''
   });
 
   const [editFormData, setEditFormData] = useState({
@@ -48,7 +63,11 @@ const Billers: React.FC<BillersProps> = ({ billers, onAdd, accounts, categories,
     category: '',
     dueDate: '',
     expectedAmount: '',
-    timing: '1/2' as '1/2' | '2/2'
+    actMonth: '',
+    actDay: '',
+    actYear: '',
+    deactMonth: '',
+    deactYear: ''
   });
 
   const [payFormData, setPayFormData] = useState({
@@ -58,30 +77,110 @@ const Billers: React.FC<BillersProps> = ({ billers, onAdd, accounts, categories,
     accountId: accounts[0]?.id || ''
   });
 
+  // Helper to show timing feedback when dates change
+  const showTimingInfo = (dayString: string) => {
+    if (!dayString) {
+      setTimingFeedback('');
+      return;
+    }
+    const timing = calculateTiming(dayString);
+    const day = parseInt(dayString);
+    if (!isNaN(day)) {
+      setTimingFeedback(`Timing automatically set to ${timing} (day ${day} is in ${timing === '1/2' ? 'first' : 'second'} half of month)`);
+    }
+  };
+
   const handleAddSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     const expected = parseFloat(addFormData.expectedAmount) || 0;
+    
+    // Calculate timing automatically from dueDate or actDay
+    const dayForTiming = addFormData.dueDate || addFormData.actDay;
+    const timing = calculateTiming(dayForTiming);
+    
+    // Build activationDate with optional day
+    const activationDate: { month: string; day?: string; year: string } = {
+      month: addFormData.actMonth,
+      year: addFormData.actYear
+    };
+    if (addFormData.actDay) {
+      activationDate.day = addFormData.actDay;
+    }
+    
+    // Build deactivationDate if provided
+    const deactivationDate = (addFormData.deactMonth && addFormData.deactYear) 
+      ? { month: addFormData.deactMonth, year: addFormData.deactYear }
+      : undefined;
+    
+    // Calculate status automatically
+    const status = calculateStatus(deactivationDate);
+    
     const newBiller: Biller = {
       id: Math.random().toString(36).substr(2, 9),
       name: addFormData.name,
       category: addFormData.category,
       dueDate: addFormData.dueDate,
       expectedAmount: expected,
-      timing: addFormData.timing,
-      activationDate: { month: addFormData.actMonth, year: addFormData.actYear },
-      status: 'active',
+      timing: timing,
+      activationDate: activationDate,
+      deactivationDate: deactivationDate,
+      status: status,
       schedules: MONTHS.map(month => ({ month, year: '2026', expectedAmount: expected }))
     };
     onAdd(newBiller);
     setShowAddModal(false);
-    setAddFormData({ name: '', category: categories[0]?.name || '', dueDate: '', expectedAmount: '', timing: '1/2', actMonth: MONTHS[(new Date().getMonth() + 1) % 12], actYear: new Date().getFullYear().toString() });
+    setAddFormData({ 
+      name: '', 
+      category: categories[0]?.name || '', 
+      dueDate: '', 
+      expectedAmount: '', 
+      actMonth: MONTHS[(new Date().getMonth() + 1) % 12], 
+      actDay: '',
+      actYear: new Date().getFullYear().toString(),
+      deactMonth: '',
+      deactYear: ''
+    });
+    setTimingFeedback('');
   };
 
   const handleEditSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!showEditModal) return;
-    onUpdate({ ...showEditModal, name: editFormData.name, category: editFormData.category, dueDate: editFormData.dueDate, expectedAmount: parseFloat(editFormData.expectedAmount) || 0, timing: editFormData.timing });
+    
+    // Calculate timing automatically from dueDate or actDay
+    const dayForTiming = editFormData.dueDate || editFormData.actDay;
+    const timing = calculateTiming(dayForTiming);
+    
+    // Build activationDate with optional day
+    const activationDate: { month: string; day?: string; year: string } = {
+      month: editFormData.actMonth,
+      year: editFormData.actYear
+    };
+    if (editFormData.actDay) {
+      activationDate.day = editFormData.actDay;
+    }
+    
+    // Build deactivationDate if provided
+    const deactivationDate = (editFormData.deactMonth && editFormData.deactYear) 
+      ? { month: editFormData.deactMonth, year: editFormData.deactYear }
+      : undefined;
+    
+    // Calculate status automatically
+    const status = calculateStatus(deactivationDate);
+    
+    onUpdate({ 
+      ...showEditModal, 
+      name: editFormData.name, 
+      category: editFormData.category, 
+      dueDate: editFormData.dueDate, 
+      expectedAmount: parseFloat(editFormData.expectedAmount) || 0, 
+      timing: timing,
+      activationDate: activationDate,
+      deactivationDate: deactivationDate,
+      status: status
+    });
     setShowEditModal(null);
+    setTimingFeedback('');
   };
 
   const handlePaySubmit = (e: React.FormEvent) => {
@@ -121,7 +220,17 @@ const Billers: React.FC<BillersProps> = ({ billers, onAdd, accounts, categories,
   const detailedBiller = billers.find(b => b.id === detailedBillerId);
 
   const openEditModal = (biller: Biller) => {
-    setEditFormData({ name: biller.name, category: biller.category, dueDate: biller.dueDate, expectedAmount: biller.expectedAmount.toString(), timing: biller.timing });
+    setEditFormData({ 
+      name: biller.name, 
+      category: biller.category, 
+      dueDate: biller.dueDate, 
+      expectedAmount: biller.expectedAmount.toString(),
+      actMonth: biller.activationDate.month,
+      actDay: biller.activationDate.day || '',
+      actYear: biller.activationDate.year,
+      deactMonth: biller.deactivationDate?.month || '',
+      deactYear: biller.deactivationDate?.year || ''
+    });
     setShowEditModal(biller);
     setActiveDropdownId(null);
   };
@@ -228,7 +337,7 @@ const Billers: React.FC<BillersProps> = ({ billers, onAdd, accounts, categories,
 
       {showAddModal && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md animate-in fade-in">
-          <div className="bg-white rounded-[2.5rem] w-full max-w-lg p-10 shadow-2xl animate-in zoom-in-95 relative">
+          <div className="bg-white rounded-[2.5rem] w-full max-w-lg p-10 shadow-2xl animate-in zoom-in-95 relative max-h-[90vh] overflow-y-auto">
             <h2 className="text-2xl font-black text-gray-900 mb-8 uppercase tracking-tight">New Biller</h2>
             <form onSubmit={handleAddSubmit} className="space-y-6">
               <div><label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Category</label>
@@ -237,9 +346,49 @@ const Billers: React.FC<BillersProps> = ({ billers, onAdd, accounts, categories,
               <div><label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Biller Name</label><input required type="text" value={addFormData.name} onChange={(e) => setAddFormData({ ...addFormData, name: e.target.value })} className="w-full bg-gray-50 border-transparent rounded-2xl p-4 outline-none font-bold focus:ring-2 focus:ring-indigo-500" /></div>
               <div className="grid grid-cols-2 gap-4">
                  <div><label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Expected Amount</label><input required type="number" value={addFormData.expectedAmount} onChange={(e) => setAddFormData({ ...addFormData, expectedAmount: e.target.value })} className="w-full bg-gray-50 border-transparent rounded-2xl p-4 outline-none font-bold" /></div>
-                 <div><label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Due Date</label><input required type="text" placeholder="e.g. 15th" value={addFormData.dueDate} onChange={(e) => setAddFormData({ ...addFormData, dueDate: e.target.value })} className="w-full bg-gray-50 border-transparent rounded-2xl p-4 outline-none font-bold" /></div>
+                 <div><label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Due Date</label><input required type="text" placeholder="e.g. 15" value={addFormData.dueDate} onChange={(e) => { setAddFormData({ ...addFormData, dueDate: e.target.value }); showTimingInfo(e.target.value); }} className="w-full bg-gray-50 border-transparent rounded-2xl p-4 outline-none font-bold" /></div>
               </div>
-              <div className="flex space-x-4 pt-4"><button type="button" onClick={() => setShowAddModal(false)} className="flex-1 bg-gray-100 py-4 rounded-2xl font-bold text-gray-500">Cancel</button><button type="submit" className="flex-1 bg-indigo-600 text-white py-4 rounded-2xl font-bold shadow-xl">Add Biller</button></div>
+              
+              <div className="border-t border-gray-200 pt-6">
+                <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-4">Activation Date</label>
+                <div className="grid grid-cols-3 gap-4">
+                  <div><label className="block text-[10px] font-bold text-gray-400 mb-2">Month</label>
+                    <select value={addFormData.actMonth} onChange={(e) => setAddFormData({ ...addFormData, actMonth: e.target.value })} className="w-full bg-gray-50 border-transparent rounded-2xl p-4 outline-none font-bold text-sm appearance-none">{MONTHS.map(m => <option key={m} value={m}>{m}</option>)}</select>
+                  </div>
+                  <div><label className="block text-[10px] font-bold text-gray-400 mb-2">Day (optional)</label><input type="text" placeholder="e.g. 15" value={addFormData.actDay} onChange={(e) => { setAddFormData({ ...addFormData, actDay: e.target.value }); if (!addFormData.dueDate) showTimingInfo(e.target.value); }} className="w-full bg-gray-50 border-transparent rounded-2xl p-4 outline-none font-bold" /></div>
+                  <div><label className="block text-[10px] font-bold text-gray-400 mb-2">Year</label><input required type="text" value={addFormData.actYear} onChange={(e) => setAddFormData({ ...addFormData, actYear: e.target.value })} className="w-full bg-gray-50 border-transparent rounded-2xl p-4 outline-none font-bold" /></div>
+                </div>
+              </div>
+
+              <div className="border-t border-gray-200 pt-6">
+                <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-4">Deactivation Date (optional)</label>
+                <div className="grid grid-cols-2 gap-4">
+                  <div><label className="block text-[10px] font-bold text-gray-400 mb-2">Month</label>
+                    <select value={addFormData.deactMonth} onChange={(e) => setAddFormData({ ...addFormData, deactMonth: e.target.value })} className="w-full bg-gray-50 border-transparent rounded-2xl p-4 outline-none font-bold text-sm appearance-none"><option value="">None</option>{MONTHS.map(m => <option key={m} value={m}>{m}</option>)}</select>
+                  </div>
+                  <div><label className="block text-[10px] font-bold text-gray-400 mb-2">Year</label><input type="text" placeholder="e.g. 2026" value={addFormData.deactYear} onChange={(e) => setAddFormData({ ...addFormData, deactYear: e.target.value })} className="w-full bg-gray-50 border-transparent rounded-2xl p-4 outline-none font-bold" /></div>
+                </div>
+              </div>
+
+              {/* Computed fields display */}
+              <div className="bg-indigo-50 rounded-2xl p-4 space-y-2">
+                <div className="flex justify-between items-center">
+                  <span className="text-[10px] font-black text-indigo-400 uppercase tracking-widest">Auto-Computed Timing:</span>
+                  <span className="text-sm font-black text-indigo-600">{calculateTiming(addFormData.dueDate || addFormData.actDay)}</span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-[10px] font-black text-indigo-400 uppercase tracking-widest">Auto-Computed Status:</span>
+                  <span className={`text-sm font-black ${(addFormData.deactMonth && addFormData.deactYear) ? 'text-gray-600' : 'text-green-600'}`}>{calculateStatus((addFormData.deactMonth && addFormData.deactYear) ? { month: addFormData.deactMonth, year: addFormData.deactYear } : undefined)}</span>
+                </div>
+              </div>
+
+              {timingFeedback && (
+                <div className="bg-blue-50 border-l-4 border-blue-400 p-4 rounded">
+                  <p className="text-xs font-medium text-blue-700">{timingFeedback}</p>
+                </div>
+              )}
+
+              <div className="flex space-x-4 pt-4"><button type="button" onClick={() => { setShowAddModal(false); setTimingFeedback(''); }} className="flex-1 bg-gray-100 py-4 rounded-2xl font-bold text-gray-500">Cancel</button><button type="submit" className="flex-1 bg-indigo-600 text-white py-4 rounded-2xl font-bold shadow-xl">Add Biller</button></div>
             </form>
           </div>
         </div>
@@ -247,7 +396,7 @@ const Billers: React.FC<BillersProps> = ({ billers, onAdd, accounts, categories,
 
       {showEditModal && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md animate-in fade-in">
-          <div className="bg-white rounded-[2.5rem] w-full max-w-lg p-10 shadow-2xl animate-in zoom-in-95 relative">
+          <div className="bg-white rounded-[2.5rem] w-full max-w-lg p-10 shadow-2xl animate-in zoom-in-95 relative max-h-[90vh] overflow-y-auto">
             <h2 className="text-2xl font-black text-gray-900 mb-8 uppercase tracking-tight">Edit Biller</h2>
             <form onSubmit={handleEditSubmit} className="space-y-6">
               <div><label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Category</label>
@@ -256,9 +405,49 @@ const Billers: React.FC<BillersProps> = ({ billers, onAdd, accounts, categories,
               <div><label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Biller Name</label><input required type="text" value={editFormData.name} onChange={(e) => setEditFormData({ ...editFormData, name: e.target.value })} className="w-full bg-gray-50 border-transparent rounded-2xl p-4 outline-none font-bold" /></div>
               <div className="grid grid-cols-2 gap-4">
                  <div><label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Expected Amount</label><input required type="number" value={editFormData.expectedAmount} onChange={(e) => setEditFormData({ ...editFormData, expectedAmount: e.target.value })} className="w-full bg-gray-50 border-transparent rounded-2xl p-4 outline-none font-bold" /></div>
-                 <div><label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Due Date</label><input required type="text" placeholder="e.g. 15th" value={editFormData.dueDate} onChange={(e) => setEditFormData({ ...editFormData, dueDate: e.target.value })} className="w-full bg-gray-50 border-transparent rounded-2xl p-4 outline-none font-bold" /></div>
+                 <div><label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Due Date</label><input required type="text" placeholder="e.g. 15" value={editFormData.dueDate} onChange={(e) => { setEditFormData({ ...editFormData, dueDate: e.target.value }); showTimingInfo(e.target.value); }} className="w-full bg-gray-50 border-transparent rounded-2xl p-4 outline-none font-bold" /></div>
               </div>
-              <div className="flex space-x-4 pt-4"><button type="button" onClick={() => setShowEditModal(null)} className="flex-1 bg-gray-100 py-4 rounded-2xl font-bold text-gray-500">Cancel</button><button type="submit" className="flex-1 bg-indigo-600 text-white py-4 rounded-2xl font-bold shadow-xl">Update Biller</button></div>
+              
+              <div className="border-t border-gray-200 pt-6">
+                <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-4">Activation Date</label>
+                <div className="grid grid-cols-3 gap-4">
+                  <div><label className="block text-[10px] font-bold text-gray-400 mb-2">Month</label>
+                    <select value={editFormData.actMonth} onChange={(e) => setEditFormData({ ...editFormData, actMonth: e.target.value })} className="w-full bg-gray-50 border-transparent rounded-2xl p-4 outline-none font-bold text-sm appearance-none">{MONTHS.map(m => <option key={m} value={m}>{m}</option>)}</select>
+                  </div>
+                  <div><label className="block text-[10px] font-bold text-gray-400 mb-2">Day (optional)</label><input type="text" placeholder="e.g. 15" value={editFormData.actDay} onChange={(e) => { setEditFormData({ ...editFormData, actDay: e.target.value }); if (!editFormData.dueDate) showTimingInfo(e.target.value); }} className="w-full bg-gray-50 border-transparent rounded-2xl p-4 outline-none font-bold" /></div>
+                  <div><label className="block text-[10px] font-bold text-gray-400 mb-2">Year</label><input required type="text" value={editFormData.actYear} onChange={(e) => setEditFormData({ ...editFormData, actYear: e.target.value })} className="w-full bg-gray-50 border-transparent rounded-2xl p-4 outline-none font-bold" /></div>
+                </div>
+              </div>
+
+              <div className="border-t border-gray-200 pt-6">
+                <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-4">Deactivation Date (optional)</label>
+                <div className="grid grid-cols-2 gap-4">
+                  <div><label className="block text-[10px] font-bold text-gray-400 mb-2">Month</label>
+                    <select value={editFormData.deactMonth} onChange={(e) => setEditFormData({ ...editFormData, deactMonth: e.target.value })} className="w-full bg-gray-50 border-transparent rounded-2xl p-4 outline-none font-bold text-sm appearance-none"><option value="">None</option>{MONTHS.map(m => <option key={m} value={m}>{m}</option>)}</select>
+                  </div>
+                  <div><label className="block text-[10px] font-bold text-gray-400 mb-2">Year</label><input type="text" placeholder="e.g. 2026" value={editFormData.deactYear} onChange={(e) => setEditFormData({ ...editFormData, deactYear: e.target.value })} className="w-full bg-gray-50 border-transparent rounded-2xl p-4 outline-none font-bold" /></div>
+                </div>
+              </div>
+
+              {/* Computed fields display */}
+              <div className="bg-indigo-50 rounded-2xl p-4 space-y-2">
+                <div className="flex justify-between items-center">
+                  <span className="text-[10px] font-black text-indigo-400 uppercase tracking-widest">Auto-Computed Timing:</span>
+                  <span className="text-sm font-black text-indigo-600">{calculateTiming(editFormData.dueDate || editFormData.actDay)}</span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-[10px] font-black text-indigo-400 uppercase tracking-widest">Auto-Computed Status:</span>
+                  <span className={`text-sm font-black ${(editFormData.deactMonth && editFormData.deactYear) ? 'text-gray-600' : 'text-green-600'}`}>{calculateStatus((editFormData.deactMonth && editFormData.deactYear) ? { month: editFormData.deactMonth, year: editFormData.deactYear } : undefined)}</span>
+                </div>
+              </div>
+
+              {timingFeedback && (
+                <div className="bg-blue-50 border-l-4 border-blue-400 p-4 rounded">
+                  <p className="text-xs font-medium text-blue-700">{timingFeedback}</p>
+                </div>
+              )}
+
+              <div className="flex space-x-4 pt-4"><button type="button" onClick={() => { setShowEditModal(null); setTimingFeedback(''); }} className="flex-1 bg-gray-100 py-4 rounded-2xl font-bold text-gray-500">Cancel</button><button type="submit" className="flex-1 bg-indigo-600 text-white py-4 rounded-2xl font-bold shadow-xl">Update Biller</button></div>
             </form>
           </div>
         </div>
