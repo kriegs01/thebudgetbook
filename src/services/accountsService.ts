@@ -10,6 +10,8 @@ import type {
   CreateAccountInput,
   UpdateAccountInput,
 } from '../types/supabase';
+import { supabaseAccountToFrontend, supabaseAccountsToFrontend, frontendAccountToSupabase } from '../utils/accountsAdapter';
+import type { Account } from '../../types';
 
 /**
  * Get all accounts
@@ -141,4 +143,61 @@ export const getAccountsByClassification = async (classification: string) => {
     console.error('Error fetching accounts by classification:', error);
     return { data: null, error };
   }
+};
+
+/**
+ * Frontend-friendly functions that return Account types (not SupabaseAccount)
+ */
+
+/**
+ * Get all accounts (returns frontend Account types)
+ */
+export const getAllAccountsFrontend = async (): Promise<{ data: Account[] | null; error: any }> => {
+  const { data, error } = await getAllAccounts();
+  if (error || !data) {
+    return { data: null, error };
+  }
+  return { data: supabaseAccountsToFrontend(data), error: null };
+};
+
+/**
+ * Get a single account by ID (returns frontend Account type)
+ */
+export const getAccountByIdFrontend = async (id: string): Promise<{ data: Account | null; error: any }> => {
+  const { data, error } = await getAccountById(id);
+  if (error || !data) {
+    return { data: null, error };
+  }
+  return { data: supabaseAccountToFrontend(data), error: null };
+};
+
+/**
+ * Create a new account (accepts frontend Account type)
+ */
+export const createAccountFrontend = async (account: Account): Promise<{ data: Account | null; error: any }> => {
+  const supabaseAccount = frontendAccountToSupabase(account);
+  const { data, error } = await createAccount(supabaseAccount);
+  if (error || !data) {
+    return { data: null, error };
+  }
+  return { data: supabaseAccountToFrontend(data), error: null };
+};
+
+/**
+ * Update an existing account (accepts frontend Account type)
+ */
+export const updateAccountFrontend = async (account: Account): Promise<{ data: Account | null; error: any }> => {
+  const supabaseAccount = frontendAccountToSupabase(account);
+  const { data, error } = await updateAccount(account.id, supabaseAccount);
+  if (error || !data) {
+    return { data: null, error };
+  }
+  return { data: supabaseAccountToFrontend(data), error: null };
+};
+
+/**
+ * Delete an account
+ */
+export const deleteAccountFrontend = async (id: string): Promise<{ error: any }> => {
+  return await deleteAccount(id);
 };

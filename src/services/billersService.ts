@@ -10,6 +10,8 @@ import type {
   CreateBillerInput,
   UpdateBillerInput,
 } from '../types/supabase';
+import { supabaseBillerToFrontend, supabaseBillersToFrontend, frontendBillerToSupabase } from '../utils/billersAdapter';
+import type { Biller } from '../../types';
 
 /**
  * Get all billers
@@ -141,4 +143,61 @@ export const getBillersByCategory = async (category: string) => {
     console.error('Error fetching billers by category:', error);
     return { data: null, error };
   }
+};
+
+/**
+ * Frontend-friendly functions that return Biller types (not SupabaseBiller)
+ */
+
+/**
+ * Get all billers (returns frontend Biller types)
+ */
+export const getAllBillersFrontend = async (): Promise<{ data: Biller[] | null; error: any }> => {
+  const { data, error } = await getAllBillers();
+  if (error || !data) {
+    return { data: null, error };
+  }
+  return { data: supabaseBillersToFrontend(data), error: null };
+};
+
+/**
+ * Get a single biller by ID (returns frontend Biller type)
+ */
+export const getBillerByIdFrontend = async (id: string): Promise<{ data: Biller | null; error: any }> => {
+  const { data, error } = await getBillerById(id);
+  if (error || !data) {
+    return { data: null, error };
+  }
+  return { data: supabaseBillerToFrontend(data), error: null };
+};
+
+/**
+ * Create a new biller (accepts frontend Biller type)
+ */
+export const createBillerFrontend = async (biller: Biller): Promise<{ data: Biller | null; error: any }> => {
+  const supabaseBiller = frontendBillerToSupabase(biller);
+  const { data, error } = await createBiller(supabaseBiller);
+  if (error || !data) {
+    return { data: null, error };
+  }
+  return { data: supabaseBillerToFrontend(data), error: null };
+};
+
+/**
+ * Update an existing biller (accepts frontend Biller type)
+ */
+export const updateBillerFrontend = async (biller: Biller): Promise<{ data: Biller | null; error: any }> => {
+  const supabaseBiller = frontendBillerToSupabase(biller);
+  const { data, error } = await updateBiller(biller.id, supabaseBiller);
+  if (error || !data) {
+    return { data: null, error };
+  }
+  return { data: supabaseBillerToFrontend(data), error: null };
+};
+
+/**
+ * Delete a biller
+ */
+export const deleteBillerFrontend = async (id: string): Promise<{ error: any }> => {
+  return await deleteBiller(id);
 };
