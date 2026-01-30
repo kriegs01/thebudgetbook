@@ -8,6 +8,16 @@ A modern, feature-rich budgeting application built with React, TypeScript, and S
 
 View your app in AI Studio: https://ai.studio/apps/drive/1ycYQEQFQoXZUCpk8DStQVrpnPutXVJFd
 
+## 🚀 Quick Start
+
+**Want to run the app locally right now?** See [QUICKSTART.md](QUICKSTART.md) for a 5-minute setup guide.
+
+```bash
+npm install                    # Install dependencies
+cp .env.example .env.local    # Create config (then edit with your Supabase credentials)
+npm run dev                    # Start the app at http://localhost:3000
+```
+
 ## Features
 
 - 📊 **Dashboard** - Overview of your financial status
