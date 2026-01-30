@@ -10,6 +10,8 @@ import type {
   CreateInstallmentInput,
   UpdateInstallmentInput,
 } from '../types/supabase';
+import { supabaseInstallmentToFrontend, supabaseInstallmentsToFrontend, frontendInstallmentToSupabase } from '../utils/installmentsAdapter';
+import type { Installment } from '../../types';
 
 /**
  * Get all installments
@@ -148,4 +150,61 @@ export const getActiveInstallments = async () => {
     console.error('Error fetching active installments:', error);
     return { data: null, error };
   }
+};
+
+/**
+ * Frontend-friendly functions that return Installment types (not SupabaseInstallment)
+ */
+
+/**
+ * Get all installments (returns frontend Installment types)
+ */
+export const getAllInstallmentsFrontend = async (): Promise<{ data: Installment[] | null; error: any }> => {
+  const { data, error } = await getAllInstallments();
+  if (error || !data) {
+    return { data: null, error };
+  }
+  return { data: supabaseInstallmentsToFrontend(data), error: null };
+};
+
+/**
+ * Get a single installment by ID (returns frontend Installment type)
+ */
+export const getInstallmentByIdFrontend = async (id: string): Promise<{ data: Installment | null; error: any }> => {
+  const { data, error } = await getInstallmentById(id);
+  if (error || !data) {
+    return { data: null, error };
+  }
+  return { data: supabaseInstallmentToFrontend(data), error: null };
+};
+
+/**
+ * Create a new installment (accepts frontend Installment type)
+ */
+export const createInstallmentFrontend = async (installment: Installment): Promise<{ data: Installment | null; error: any }> => {
+  const supabaseInstallment = frontendInstallmentToSupabase(installment);
+  const { data, error } = await createInstallment(supabaseInstallment);
+  if (error || !data) {
+    return { data: null, error };
+  }
+  return { data: supabaseInstallmentToFrontend(data), error: null };
+};
+
+/**
+ * Update an existing installment (accepts frontend Installment type)
+ */
+export const updateInstallmentFrontend = async (installment: Installment): Promise<{ data: Installment | null; error: any }> => {
+  const supabaseInstallment = frontendInstallmentToSupabase(installment);
+  const { data, error } = await updateInstallment(installment.id, supabaseInstallment);
+  if (error || !data) {
+    return { data: null, error };
+  }
+  return { data: supabaseInstallmentToFrontend(data), error: null };
+};
+
+/**
+ * Delete an installment
+ */
+export const deleteInstallmentFrontend = async (id: string): Promise<{ error: any }> => {
+  return await deleteInstallment(id);
 };

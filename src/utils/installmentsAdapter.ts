@@ -1,0 +1,47 @@
+/**
+ * Installments Adapter
+ * 
+ * Converts between Supabase database schema and frontend types for installments.
+ */
+
+import type { SupabaseInstallment } from '../types/supabase';
+import type { Installment } from '../../types';
+
+/**
+ * Convert Supabase installment to frontend Installment type
+ */
+export const supabaseInstallmentToFrontend = (supabaseInstallment: SupabaseInstallment): Installment => {
+  return {
+    id: supabaseInstallment.id,
+    name: supabaseInstallment.name,
+    totalAmount: supabaseInstallment.total_amount,
+    monthlyAmount: supabaseInstallment.monthly_amount,
+    termDuration: `${supabaseInstallment.term_duration} months`,
+    paidAmount: supabaseInstallment.paid_amount,
+    accountId: supabaseInstallment.account_id,
+  };
+};
+
+/**
+ * Convert frontend Installment to Supabase installment type
+ */
+export const frontendInstallmentToSupabase = (installment: Installment): Omit<SupabaseInstallment, 'id'> => {
+  // Extract the numeric value from termDuration (e.g., "12 months" -> 12)
+  const termDurationNum = parseInt(installment.termDuration.replace(/\D/g, ''), 10) || 0;
+  
+  return {
+    name: installment.name,
+    total_amount: installment.totalAmount,
+    monthly_amount: installment.monthlyAmount,
+    term_duration: termDurationNum,
+    paid_amount: installment.paidAmount,
+    account_id: installment.accountId,
+  };
+};
+
+/**
+ * Convert array of Supabase installments to frontend Installments
+ */
+export const supabaseInstallmentsToFrontend = (supabaseInstallments: SupabaseInstallment[]): Installment[] => {
+  return supabaseInstallments.map(supabaseInstallmentToFrontend);
+};
