@@ -5,11 +5,13 @@ import { Plus, Calendar, Bell, ChevronDown, ChevronRight, Upload, CheckCircle2, 
 interface BillersProps {
   billers: Biller[];
   installments?: Installment[];
-  onAdd: (b: Biller) => void;
+  onAdd: (b: Biller) => Promise<void>;
   accounts: Account[];
   categories: BudgetCategory[];
-  onUpdate: (b: Biller) => void;
-  onDelete?: (id: string) => void;
+  onUpdate: (b: Biller) => Promise<void>;
+  onDelete?: (id: string) => Promise<void>;
+  loading?: boolean;
+  error?: string | null;
 }
 
 const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
@@ -26,7 +28,7 @@ const calculateStatus = (deactivationDate?: { month: string; year: string }): 'a
   return deactivationDate ? 'inactive' : 'active';
 };
 
-const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, accounts, categories, onUpdate, onDelete }) => {
+const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, accounts, categories, onUpdate, onDelete, loading = false, error = null }) => {
   const [showAddModal, setShowAddModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState<Biller | null>(null);
   const [showPayModal, setShowPayModal] = useState<{ biller: Biller, schedule: PaymentSchedule } | null>(null);
@@ -35,6 +37,7 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
   const [isInactiveOpen, setIsInactiveOpen] = useState(false);
   const [isActiveOpen, setIsActiveOpen] = useState(true);
   const [timingFeedback, setTimingFeedback] = useState<string>('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const [confirmModal, setConfirmModal] = useState<{
     show: boolean;
@@ -92,111 +95,145 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
     }
   };
 
-  const handleAddSubmit = (e: React.FormEvent) => {
+  const handleAddSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const expected = parseFloat(addFormData.expectedAmount) || 0;
+    if (isSubmitting) return;
     
-    // Calculate timing automatically from dueDate or actDay
-    const dayForTiming = addFormData.dueDate || addFormData.actDay;
-    const timing = calculateTiming(dayForTiming);
-    
-    // Build activationDate with optional day
-    const activationDate: { month: string; day?: string; year: string } = {
-      month: addFormData.actMonth,
-      year: addFormData.actYear
-    };
-    if (addFormData.actDay) {
-      activationDate.day = addFormData.actDay;
-    }
-    
-    // Build deactivationDate if provided
-    const deactivationDate = (addFormData.deactMonth && addFormData.deactYear) 
-      ? { month: addFormData.deactMonth, year: addFormData.deactYear }
-      : undefined;
-    
-    // Calculate status automatically
-    const status = calculateStatus(deactivationDate);
-    
-    const newBiller: Biller = {
-      id: Math.random().toString(36).substr(2, 9),
-      name: addFormData.name,
-      category: addFormData.category,
-      dueDate: addFormData.dueDate,
-      expectedAmount: expected,
-      timing: timing,
-      activationDate: activationDate,
-      deactivationDate: deactivationDate,
-      status: status,
-      schedules: MONTHS.map(month => ({ month, year: '2026', expectedAmount: expected }))
-    };
-    onAdd(newBiller);
-    setShowAddModal(false);
-    setAddFormData({ 
-      name: '', 
-      category: categories[0]?.name || '', 
-      dueDate: '', 
-      expectedAmount: '', 
-      actMonth: MONTHS[(new Date().getMonth() + 1) % 12], 
-      actDay: '',
-      actYear: new Date().getFullYear().toString(),
-      deactMonth: '',
-      deactYear: ''
-    });
-    setTimingFeedback('');
-  };
-
-  const handleEditSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!showEditModal) return;
-    
-    // Calculate timing automatically from dueDate or actDay
-    const dayForTiming = editFormData.dueDate || editFormData.actDay;
-    const timing = calculateTiming(dayForTiming);
-    
-    // Build activationDate with optional day
-    const activationDate: { month: string; day?: string; year: string } = {
-      month: editFormData.actMonth,
-      year: editFormData.actYear
-    };
-    if (editFormData.actDay) {
-      activationDate.day = editFormData.actDay;
-    }
-    
-    // Build deactivationDate if provided
-    const deactivationDate = (editFormData.deactMonth && editFormData.deactYear) 
-      ? { month: editFormData.deactMonth, year: editFormData.deactYear }
-      : undefined;
-    
-    // Calculate status automatically
-    const status = calculateStatus(deactivationDate);
-    
-    onUpdate({ 
-      ...showEditModal, 
-      name: editFormData.name, 
-      category: editFormData.category, 
-      dueDate: editFormData.dueDate, 
-      expectedAmount: parseFloat(editFormData.expectedAmount) || 0, 
-      timing: timing,
-      activationDate: activationDate,
-      deactivationDate: deactivationDate,
-      status: status
-    });
-    setShowEditModal(null);
-    setTimingFeedback('');
-  };
-
-  const handlePaySubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!showPayModal) return;
-    const { biller, schedule } = showPayModal;
-    const updatedSchedules = biller.schedules.map(s => {
-      if (s.month === schedule.month && s.year === schedule.year) {
-        return { ...s, amountPaid: parseFloat(payFormData.amount), receipt: payFormData.receipt || `${biller.name}_${schedule.month}`, datePaid: payFormData.datePaid, accountId: payFormData.accountId };
+    setIsSubmitting(true);
+    try {
+      const expected = parseFloat(addFormData.expectedAmount) || 0;
+      
+      // Calculate timing automatically from dueDate or actDay
+      const dayForTiming = addFormData.dueDate || addFormData.actDay;
+      const timing = calculateTiming(dayForTiming);
+      
+      // Build activationDate with optional day
+      const activationDate: { month: string; day?: string; year: string } = {
+        month: addFormData.actMonth,
+        year: addFormData.actYear
+      };
+      if (addFormData.actDay) {
+        activationDate.day = addFormData.actDay;
       }
-      return s;
-    });
-    onUpdate({ ...biller, schedules: updatedSchedules });
-    setShowPayModal(null);
+      
+      // Build deactivationDate if provided
+      const deactivationDate = (addFormData.deactMonth && addFormData.deactYear) 
+        ? { month: addFormData.deactMonth, year: addFormData.deactYear }
+        : undefined;
+      
+      // Calculate status automatically
+      const status = calculateStatus(deactivationDate);
+      
+      const newBiller: Biller = {
+        id: '', // ID will be generated by Supabase
+        name: addFormData.name,
+        category: addFormData.category,
+        dueDate: addFormData.dueDate,
+        expectedAmount: expected,
+        timing: timing,
+        activationDate: activationDate,
+        deactivationDate: deactivationDate,
+        status: status,
+        schedules: MONTHS.map(month => ({ month, year: '2026', expectedAmount: expected }))
+      };
+      
+      await onAdd(newBiller);
+      
+      // Only close modal and reset form on success
+      setShowAddModal(false);
+      setAddFormData({ 
+        name: '', 
+        category: categories[0]?.name || '', 
+        dueDate: '', 
+        expectedAmount: '', 
+        actMonth: MONTHS[(new Date().getMonth() + 1) % 12], 
+        actDay: '',
+        actYear: new Date().getFullYear().toString(),
+        deactMonth: '',
+        deactYear: ''
+      });
+      setTimingFeedback('');
+    } catch (error) {
+      console.error('Failed to add biller:', error);
+      // Keep modal open so user can retry or fix the issue
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleEditSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!showEditModal || isSubmitting) return;
+    
+    setIsSubmitting(true);
+    try {
+      // Calculate timing automatically from dueDate or actDay
+      const dayForTiming = editFormData.dueDate || editFormData.actDay;
+      const timing = calculateTiming(dayForTiming);
+      
+      // Build activationDate with optional day
+      const activationDate: { month: string; day?: string; year: string } = {
+        month: editFormData.actMonth,
+        year: editFormData.actYear
+      };
+      if (editFormData.actDay) {
+        activationDate.day = editFormData.actDay;
+      }
+      
+      // Build deactivationDate if provided
+      const deactivationDate = (editFormData.deactMonth && editFormData.deactYear) 
+        ? { month: editFormData.deactMonth, year: editFormData.deactYear }
+        : undefined;
+      
+      // Calculate status automatically
+      const status = calculateStatus(deactivationDate);
+      
+      await onUpdate({ 
+        ...showEditModal, 
+        name: editFormData.name, 
+        category: editFormData.category, 
+        dueDate: editFormData.dueDate, 
+        expectedAmount: parseFloat(editFormData.expectedAmount) || 0, 
+        timing: timing,
+        activationDate: activationDate,
+        deactivationDate: deactivationDate,
+        status: status
+      });
+      
+      // Only close modal on success
+      setShowEditModal(null);
+      setTimingFeedback('');
+    } catch (error) {
+      console.error('Failed to update biller:', error);
+      // Keep modal open so user can retry
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handlePaySubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!showPayModal || isSubmitting) return;
+    
+    setIsSubmitting(true);
+    try {
+      const { biller, schedule } = showPayModal;
+      const updatedSchedules = biller.schedules.map(s => {
+        if (s.month === schedule.month && s.year === schedule.year) {
+          return { ...s, amountPaid: parseFloat(payFormData.amount), receipt: payFormData.receipt || `${biller.name}_${schedule.month}`, datePaid: payFormData.datePaid, accountId: payFormData.accountId };
+        }
+        return s;
+      });
+      await onUpdate({ ...biller, schedules: updatedSchedules });
+      
+      // Only close modal on success
+      setShowPayModal(null);
+    } catch (error) {
+      console.error('Failed to update payment:', error);
+      // Keep modal open so user can retry
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const handleDeleteTrigger = (id: string, name: string) => {
@@ -204,8 +241,8 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
       show: true,
       title: 'Delete Biller',
       message: `Are you sure you want to permanently delete "${name}"? This action cannot be undone.`,
-      onConfirm: () => {
-        onDelete?.(id);
+      onConfirm: async () => {
+        await onDelete?.(id);
         setDetailedBillerId(null);
         setConfirmModal(prev => ({ ...prev, show: false }));
         setActiveDropdownId(null);
@@ -317,6 +354,32 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500 pb-12">
+      {/* Loading State */}
+      {loading && (
+        <div className="flex items-center justify-center py-12">
+          <div className="text-center">
+            <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600 mb-4"></div>
+            <p className="text-gray-600 font-medium">Loading billers from database...</p>
+          </div>
+        </div>
+      )}
+
+      {/* Error State */}
+      {error && !loading && (
+        <div className="bg-red-50 border border-red-200 rounded-xl p-4 mb-6">
+          <div className="flex items-start space-x-3">
+            <AlertTriangle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
+            <div>
+              <h3 className="text-sm font-semibold text-red-800">Error Loading Billers</h3>
+              <p className="text-sm text-red-600 mt-1">{error}</p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Main Content */}
+      {!loading && (
+      <>
       {detailedBiller ? (
         <div className="space-y-6 animate-in slide-in-from-right-4 duration-500">
           <div className="flex items-center justify-between">
@@ -390,6 +453,24 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
                   {inactiveBillers.map(renderBillerCard)}
                 </div>
               )}
+            </div>
+          )}
+
+          {/* Empty State */}
+          {activeBillers.length === 0 && inactiveBillers.length === 0 && (
+            <div className="text-center py-12">
+              <div className="inline-flex items-center justify-center w-20 h-20 rounded-full bg-gray-100 mb-4">
+                <Bell className="w-10 h-10 text-gray-400" />
+              </div>
+              <h3 className="text-xl font-bold text-gray-900 mb-2">No Billers Yet</h3>
+              <p className="text-gray-500 mb-6">Get started by adding your first recurring bill</p>
+              <button 
+                onClick={() => { setShowAddModal(true); setTimingFeedback(''); }} 
+                className="inline-flex items-center space-x-2 bg-indigo-600 text-white px-6 py-3 rounded-2xl font-bold hover:bg-indigo-700 shadow-lg"
+              >
+                <Plus className="w-5 h-5" />
+                <span>Add Your First Biller</span>
+              </button>
             </div>
           )}
         </>
@@ -553,6 +634,8 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
       )}
 
       {confirmModal.show && <ConfirmDialog {...confirmModal} onClose={() => setConfirmModal(p => ({ ...p, show: false }))} />}
+      </>
+      )}
     </div>
   );
 };

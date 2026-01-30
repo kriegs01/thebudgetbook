@@ -10,6 +10,8 @@ import type {
   CreateSavingsInput,
   UpdateSavingsInput,
 } from '../types/supabase';
+import { supabaseSavingsToFrontend, supabaseSavingsArrayToFrontend, frontendSavingsToSupabase } from '../utils/savingsAdapter';
+import type { SavingsJar } from '../../types';
 
 /**
  * Get all savings jars
@@ -141,4 +143,61 @@ export const getTotalSavingsBalance = async () => {
     console.error('Error calculating total savings:', error);
     return { data: null, error };
   }
+};
+
+/**
+ * Frontend-friendly functions that return SavingsJar types (not SupabaseSavings)
+ */
+
+/**
+ * Get all savings jars (returns frontend SavingsJar types)
+ */
+export const getAllSavingsFrontend = async (): Promise<{ data: SavingsJar[] | null; error: any }> => {
+  const { data, error } = await getAllSavings();
+  if (error || !data) {
+    return { data: null, error };
+  }
+  return { data: supabaseSavingsArrayToFrontend(data), error: null };
+};
+
+/**
+ * Get a single savings jar by ID (returns frontend SavingsJar type)
+ */
+export const getSavingsByIdFrontend = async (id: string): Promise<{ data: SavingsJar | null; error: any }> => {
+  const { data, error } = await getSavingsById(id);
+  if (error || !data) {
+    return { data: null, error };
+  }
+  return { data: supabaseSavingsToFrontend(data), error: null };
+};
+
+/**
+ * Create a new savings jar (accepts frontend SavingsJar type)
+ */
+export const createSavingsFrontend = async (savingsJar: SavingsJar): Promise<{ data: SavingsJar | null; error: any }> => {
+  const supabaseSavings = frontendSavingsToSupabase(savingsJar);
+  const { data, error } = await createSavings(supabaseSavings);
+  if (error || !data) {
+    return { data: null, error };
+  }
+  return { data: supabaseSavingsToFrontend(data), error: null };
+};
+
+/**
+ * Update an existing savings jar (accepts frontend SavingsJar type)
+ */
+export const updateSavingsFrontend = async (savingsJar: SavingsJar): Promise<{ data: SavingsJar | null; error: any }> => {
+  const supabaseSavings = frontendSavingsToSupabase(savingsJar);
+  const { data, error } = await updateSavings(savingsJar.id, supabaseSavings);
+  if (error || !data) {
+    return { data: null, error };
+  }
+  return { data: supabaseSavingsToFrontend(data), error: null };
+};
+
+/**
+ * Delete a savings jar
+ */
+export const deleteSavingsFrontend = async (id: string): Promise<{ error: any }> => {
+  return await deleteSavings(id);
 };

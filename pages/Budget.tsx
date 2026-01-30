@@ -10,7 +10,7 @@ interface BudgetProps {
   savedSetups: SavedBudgetSetup[];
   setSavedSetups: React.Dispatch<React.SetStateAction<SavedBudgetSetup[]>>;
   onAdd: (item: BudgetItem) => void;
-  onUpdateBiller: (biller: Biller) => void;
+  onUpdateBiller: (biller: Biller) => Promise<void>;
   onMoveToTrash?: (setup: SavedBudgetSetup) => void;
 }
 
@@ -235,24 +235,32 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
     setShowTransactionModal(false);
   };
 
-  const handlePaySubmit = (e: React.FormEvent) => {
+  const handlePaySubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!showPayModal) return;
-    const { biller, schedule } = showPayModal;
-    const updatedSchedules = biller.schedules.map(s => {
-      if (s.month === schedule.month && s.year === schedule.year) {
-        return { 
-          ...s, 
-          amountPaid: parseFloat(payFormData.amount), 
-          receipt: payFormData.receipt || `${biller.name}_${schedule.month}`, 
-          datePaid: payFormData.datePaid, 
-          accountId: payFormData.accountId 
-        };
-      }
-      return s;
-    });
-    onUpdateBiller({ ...biller, schedules: updatedSchedules });
-    setShowPayModal(null);
+    
+    try {
+      const { biller, schedule } = showPayModal;
+      const updatedSchedules = biller.schedules.map(s => {
+        if (s.month === schedule.month && s.year === schedule.year) {
+          return { 
+            ...s, 
+            amountPaid: parseFloat(payFormData.amount), 
+            receipt: payFormData.receipt || `${biller.name}_${schedule.month}`, 
+            datePaid: payFormData.datePaid, 
+            accountId: payFormData.accountId 
+          };
+        }
+        return s;
+      });
+      await onUpdateBiller({ ...biller, schedules: updatedSchedules });
+      
+      // Only close modal on success
+      setShowPayModal(null);
+    } catch (error) {
+      console.error('Failed to update payment:', error);
+      // Keep modal open so user can retry
+    }
   };
 
   const handleOpenNew = () => {

@@ -1,7 +1,12 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Menu, ChevronLeft } from 'lucide-react';
 import { BrowserRouter, Routes, Route, NavLink } from 'react-router-dom';
-import { NAV_ITEMS, INITIAL_ACCOUNTS, INITIAL_BUDGET, INITIAL_BILLERS, INITIAL_INSTALLMENTS, INITIAL_SAVINGS, DEFAULT_SETUP, INITIAL_CATEGORIES } from './constants';
+import { NAV_ITEMS, INITIAL_BUDGET, DEFAULT_SETUP, INITIAL_CATEGORIES } from './constants';
+import { getAllBillersFrontend, createBillerFrontend, updateBillerFrontend, deleteBillerFrontend } from './src/services/billersService';
+import { getAllAccountsFrontend, createAccountFrontend, updateAccountFrontend, deleteAccountFrontend } from './src/services/accountsService';
+import { getAllInstallmentsFrontend, createInstallmentFrontend, updateInstallmentFrontend, deleteInstallmentFrontend } from './src/services/installmentsService';
+import { getAllSavingsFrontend, createSavingsFrontend, updateSavingsFrontend, deleteSavingsFrontend } from './src/services/savingsService';
+import type { Biller, Account, Installment, SavingsJar } from './types';
 
 // Pages
 import Dashboard from './pages/Dashboard';
@@ -19,11 +24,19 @@ import SupabaseDemo from './pages/SupabaseDemo';
 
 const App: React.FC = () => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
-  const [accounts, setAccounts] = useState(INITIAL_ACCOUNTS);
+  const [accounts, setAccounts] = useState<Account[]>([]);
+  const [accountsLoading, setAccountsLoading] = useState(true);
+  const [accountsError, setAccountsError] = useState<string | null>(null);
   const [budgetItems, setBudgetItems] = useState(INITIAL_BUDGET);
-  const [billers, setBillers] = useState(INITIAL_BILLERS);
-  const [installments, setInstallments] = useState(INITIAL_INSTALLMENTS);
-  const [savings, setSavings] = useState(INITIAL_SAVINGS);
+  const [billers, setBillers] = useState<Biller[]>([]);
+  const [billersLoading, setBillersLoading] = useState(true);
+  const [billersError, setBillersError] = useState<string | null>(null);
+  const [installments, setInstallments] = useState<Installment[]>([]);
+  const [installmentsLoading, setInstallmentsLoading] = useState(true);
+  const [installmentsError, setInstallmentsError] = useState<string | null>(null);
+  const [savings, setSavings] = useState<SavingsJar[]>([]);
+  const [savingsLoading, setSavingsLoading] = useState(true);
+  const [savingsError, setSavingsError] = useState<string | null>(null);
   const [currency, setCurrency] = useState('PHP');
   const [categories, setCategories] = useState(INITIAL_CATEGORIES);
   
@@ -42,12 +55,241 @@ const App: React.FC = () => {
   // Shared Trash State
   const [trashSetups, setTrashSetups] = useState([]);
 
-  const handleUpdateBiller = (updatedBiller) => {
-    setBillers(prev => prev.map(b => b.id === updatedBiller.id ? updatedBiller : b));
+  // Load all data from Supabase on component mount
+  useEffect(() => {
+    const fetchBillers = async () => {
+      setBillersLoading(true);
+      setBillersError(null);
+      
+      const { data, error } = await getAllBillersFrontend();
+      
+      if (error) {
+        console.error('Error loading billers:', error);
+        setBillersError('Failed to load billers from database');
+        setBillers([]);
+      } else {
+        setBillers(data || []);
+      }
+      
+      setBillersLoading(false);
+    };
+
+    const fetchAccounts = async () => {
+      setAccountsLoading(true);
+      setAccountsError(null);
+      
+      const { data, error } = await getAllAccountsFrontend();
+      
+      if (error) {
+        console.error('Error loading accounts:', error);
+        setAccountsError('Failed to load accounts from database');
+        setAccounts([]);
+      } else {
+        setAccounts(data || []);
+      }
+      
+      setAccountsLoading(false);
+    };
+
+    const fetchInstallments = async () => {
+      setInstallmentsLoading(true);
+      setInstallmentsError(null);
+      
+      const { data, error } = await getAllInstallmentsFrontend();
+      
+      if (error) {
+        console.error('Error loading installments:', error);
+        setInstallmentsError('Failed to load installments from database');
+        setInstallments([]);
+      } else {
+        setInstallments(data || []);
+      }
+      
+      setInstallmentsLoading(false);
+    };
+
+    const fetchSavings = async () => {
+      setSavingsLoading(true);
+      setSavingsError(null);
+      
+      const { data, error } = await getAllSavingsFrontend();
+      
+      if (error) {
+        console.error('Error loading savings:', error);
+        setSavingsError('Failed to load savings from database');
+        setSavings([]);
+      } else {
+        setSavings(data || []);
+      }
+      
+      setSavingsLoading(false);
+    };
+    
+    fetchBillers();
+    fetchAccounts();
+    fetchInstallments();
+    fetchSavings();
+  }, []);
+
+  // Reload functions for each entity
+  const reloadBillers = async () => {
+    const { data, error } = await getAllBillersFrontend();
+    if (error) {
+      console.error('Error reloading billers:', error);
+      setBillersError('Failed to reload billers from database');
+    } else {
+      setBillers(data || []);
+      setBillersError(null);
+    }
   };
 
-  const handleUpdateInstallment = (updatedInstallment) => {
-    setInstallments(prev => prev.map(i => i.id === updatedInstallment.id ? updatedInstallment : i));
+  const reloadAccounts = async () => {
+    const { data, error } = await getAllAccountsFrontend();
+    if (error) {
+      console.error('Error reloading accounts:', error);
+      setAccountsError('Failed to reload accounts from database');
+    } else {
+      setAccounts(data || []);
+      setAccountsError(null);
+    }
+  };
+
+  const reloadInstallments = async () => {
+    const { data, error } = await getAllInstallmentsFrontend();
+    if (error) {
+      console.error('Error reloading installments:', error);
+      setInstallmentsError('Failed to reload installments from database');
+    } else {
+      setInstallments(data || []);
+      setInstallmentsError(null);
+    }
+  };
+
+  const reloadSavings = async () => {
+    const { data, error } = await getAllSavingsFrontend();
+    if (error) {
+      console.error('Error reloading savings:', error);
+      setSavingsError('Failed to reload savings from database');
+    } else {
+      setSavings(data || []);
+      setSavingsError(null);
+    }
+  };
+
+  const handleAddBiller = async (newBiller: Biller) => {
+    const { data, error } = await createBillerFrontend(newBiller);
+    if (error) {
+      console.error('Error creating biller:', error);
+      alert('Failed to create biller. Please try again.');
+    } else {
+      // Reload billers to get fresh data from Supabase
+      await reloadBillers();
+    }
+  };
+
+  const handleUpdateBiller = async (updatedBiller: Biller) => {
+    const { data, error } = await updateBillerFrontend(updatedBiller);
+    if (error) {
+      console.error('Error updating biller:', error);
+      alert('Failed to update biller. Please try again.');
+    } else {
+      // Reload billers to get fresh data from Supabase
+      await reloadBillers();
+    }
+  };
+
+  const handleDeleteBiller = async (id: string) => {
+    const { error } = await deleteBillerFrontend(id);
+    if (error) {
+      console.error('Error deleting biller:', error);
+      alert('Failed to delete biller. Please try again.');
+    } else {
+      // Reload billers to get fresh data from Supabase
+      await reloadBillers();
+    }
+  };
+
+  // Account handlers
+  const handleAddAccount = async (newAccount: Account) => {
+    const { data, error } = await createAccountFrontend(newAccount);
+    if (error) {
+      console.error('Error creating account:', error);
+      alert('Failed to create account. Please try again.');
+    } else {
+      await reloadAccounts();
+    }
+  };
+
+  const handleEditAccount = async (updatedAccount: Account) => {
+    const { data, error } = await updateAccountFrontend(updatedAccount);
+    if (error) {
+      console.error('Error updating account:', error);
+      alert('Failed to update account. Please try again.');
+    } else {
+      await reloadAccounts();
+    }
+  };
+
+  const handleDeleteAccount = async (id: string) => {
+    const { error } = await deleteAccountFrontend(id);
+    if (error) {
+      console.error('Error deleting account:', error);
+      alert('Failed to delete account. Please try again.');
+    } else {
+      await reloadAccounts();
+    }
+  };
+
+  // Installment handlers
+  const handleAddInstallment = async (newInstallment: Installment) => {
+    const { data, error } = await createInstallmentFrontend(newInstallment);
+    if (error) {
+      console.error('Error creating installment:', error);
+      alert('Failed to create installment. Please try again.');
+    } else {
+      await reloadInstallments();
+    }
+  };
+
+  const handleUpdateInstallment = async (updatedInstallment: Installment) => {
+    const { data, error } = await updateInstallmentFrontend(updatedInstallment);
+    if (error) {
+      console.error('Error updating installment:', error);
+      alert('Failed to update installment. Please try again.');
+    } else {
+      await reloadInstallments();
+    }
+  };
+
+  const handleDeleteInstallment = async (id: string) => {
+    const { error } = await deleteInstallmentFrontend(id);
+    if (error) {
+      console.error('Error deleting installment:', error);
+      alert('Failed to delete installment. Please try again.');
+    } else {
+      await reloadInstallments();
+    }
+  };
+
+  // Savings handlers
+  const handleAddSavings = async (newSavings: SavingsJar) => {
+    const { data, error } = await createSavingsFrontend(newSavings);
+    if (error) {
+      console.error('Error creating savings jar:', error);
+      alert('Failed to create savings jar. Please try again.');
+    } else {
+      await reloadSavings();
+    }
+  };
+
+  const handleDeleteSavings = async (id: string) => {
+    const { error } = await deleteSavingsFrontend(id);
+    if (error) {
+      console.error('Error deleting savings jar:', error);
+      alert('Failed to delete savings jar. Please try again.');
+    } else {
+      await reloadSavings();
+    }
   };
 
   const handleResetAll = () => {
@@ -134,11 +376,13 @@ const App: React.FC = () => {
                 <Billers
                   billers={billers}
                   installments={installments}
-                  onAdd={(b) => setBillers(prev => [...prev, b])}
+                  onAdd={handleAddBiller}
                   accounts={accounts}
                   categories={categories}
                   onUpdate={handleUpdateBiller}
-                  onDelete={(id) => setBillers(prev => prev.filter(b => b.id !== id))}
+                  onDelete={handleDeleteBiller}
+                  loading={billersLoading}
+                  error={billersError}
                 />
               } />
               <Route path="/installments" element={
@@ -146,23 +390,27 @@ const App: React.FC = () => {
                   installments={installments}
                   accounts={accounts}
                   billers={billers}
-                  onAdd={(i) => setInstallments(prev => [...prev, i])}
+                  onAdd={handleAddInstallment}
                   onUpdate={handleUpdateInstallment}
-                  onDelete={(id) => setInstallments(prev => prev.filter(i => i.id !== id))}
+                  onDelete={handleDeleteInstallment}
+                  loading={installmentsLoading}
+                  error={installmentsError}
                 />
               } />
               <Route path="/accounts" element={
                 <Accounts
                   accounts={accounts}
-                  onAdd={(a) => setAccounts(prev => [...prev, a])}
-                  onEdit={(a) => setAccounts(prev => prev.map(acc => acc.id === a.id ? a : acc))}
-                  onDelete={(id) => setAccounts(prev => prev.filter(a => a.id !== id))}
-                  onDeactivate={(id, when) => {
+                  onAdd={handleAddAccount}
+                  onEdit={handleEditAccount}
+                  onDelete={handleDeleteAccount}
+                  onDeactivate={async (id, when) => {
                     // For now, just mark as inactive or remove - can be enhanced later
                     if (when === 'now') {
-                      setAccounts(prev => prev.filter(a => a.id !== id));
+                      await handleDeleteAccount(id);
                     }
                   }}
+                  loading={accountsLoading}
+                  error={accountsError}
                 />
               } />
               <Route path="/accounts/view" element={<AccountFilteredTransactions accounts={accounts} />} />
@@ -171,8 +419,10 @@ const App: React.FC = () => {
                 <Savings
                   jars={savings}
                   accounts={accounts}
-                  onAdd={(s) => setSavings(prev => [...prev, s])}
-                  onDelete={(id) => setSavings(prev => prev.filter(s => s.id !== id))}
+                  onAdd={handleAddSavings}
+                  onDelete={handleDeleteSavings}
+                  loading={savingsLoading}
+                  error={savingsError}
                 />
               } />
               <Route path="/settings" element={
