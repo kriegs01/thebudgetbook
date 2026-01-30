@@ -202,18 +202,21 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
     console.log('[Budget] Current setupData keys:', Object.keys(setupData));
     
     let total = 0;
-    (Object.values(setupData) as CategorizedSetupItem[][]).forEach(catItems => {
-      catItems.forEach(item => {
-        if (item.included) {
-          const amount = parseFloat(item.amount);
-          if (isNaN(amount)) {
-            console.warn(`[Budget] Invalid amount for item "${item.name}": "${item.amount}"`);
-          } else {
-            total += amount;
+    // Filter out non-array values (like _projectedSalary, _actualSalary) before iterating
+    Object.values(setupData)
+      .filter((value): value is CategorizedSetupItem[] => Array.isArray(value))
+      .forEach(catItems => {
+        catItems.forEach(item => {
+          if (item.included) {
+            const amount = parseFloat(item.amount);
+            if (isNaN(amount)) {
+              console.warn(`[Budget] Invalid amount for item "${item.name}": "${item.amount}"`);
+            } else {
+              total += amount;
+            }
           }
-        }
+        });
       });
-    });
 
     console.log('[Budget] Calculated total amount:', total);
 
