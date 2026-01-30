@@ -385,7 +385,12 @@ const Billers: React.FC<BillersProps> = ({ billers, onAdd, accounts, categories,
               </div>
               <div><label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Biller Name</label><input required type="text" value={addFormData.name} onChange={(e) => setAddFormData({ ...addFormData, name: e.target.value })} className="w-full bg-gray-50 border-transparent rounded-2xl p-4 outline-none font-bold focus:ring-2 focus:ring-indigo-500" /></div>
               <div className="grid grid-cols-2 gap-4">
-                 <div><label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Expected Amount</label><input required type="number" min="0" step="0.01" value={addFormData.expectedAmount} onChange={(e) => setAddFormData({ ...addFormData, expectedAmount: e.target.value })} className="w-full bg-gray-50 border-transparent rounded-2xl p-4 outline-none font-bold" /></div>
+                 <div>
+                   <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">
+                     Expected Amount {addFormData.category.startsWith('Loans') && <span className="text-gray-400 font-normal">(Optional for Loans)</span>}
+                   </label>
+                   <input required={!addFormData.category.startsWith('Loans')} type="number" min="0" step="0.01" value={addFormData.expectedAmount} onChange={(e) => setAddFormData({ ...addFormData, expectedAmount: e.target.value })} className="w-full bg-gray-50 border-transparent rounded-2xl p-4 outline-none font-bold" />
+                 </div>
                  <div><label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Due Date (day)</label><input required type="number" min="1" max="31" placeholder="e.g. 15" value={addFormData.dueDate} onChange={(e) => { setAddFormData({ ...addFormData, dueDate: e.target.value }); showTimingInfo(e.target.value); }} className="w-full bg-gray-50 border-transparent rounded-2xl p-4 outline-none font-bold" /></div>
               </div>
               
@@ -444,7 +449,12 @@ const Billers: React.FC<BillersProps> = ({ billers, onAdd, accounts, categories,
               </div>
               <div><label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Biller Name</label><input required type="text" value={editFormData.name} onChange={(e) => setEditFormData({ ...editFormData, name: e.target.value })} className="w-full bg-gray-50 border-transparent rounded-2xl p-4 outline-none font-bold" /></div>
               <div className="grid grid-cols-2 gap-4">
-                 <div><label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Expected Amount</label><input required type="number" min="0" step="0.01" value={editFormData.expectedAmount} onChange={(e) => setEditFormData({ ...editFormData, expectedAmount: e.target.value })} className="w-full bg-gray-50 border-transparent rounded-2xl p-4 outline-none font-bold" /></div>
+                 <div>
+                   <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">
+                     Expected Amount {editFormData.category.startsWith('Loans') && <span className="text-gray-400 font-normal">(Optional for Loans)</span>}
+                   </label>
+                   <input required={!editFormData.category.startsWith('Loans')} type="number" min="0" step="0.01" value={editFormData.expectedAmount} onChange={(e) => setEditFormData({ ...editFormData, expectedAmount: e.target.value })} className="w-full bg-gray-50 border-transparent rounded-2xl p-4 outline-none font-bold" />
+                 </div>
                  <div><label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Due Date (day)</label><input required type="number" min="1" max="31" placeholder="e.g. 15" value={editFormData.dueDate} onChange={(e) => { setEditFormData({ ...editFormData, dueDate: e.target.value }); showTimingInfo(e.target.value); }} className="w-full bg-gray-50 border-transparent rounded-2xl p-4 outline-none font-bold" /></div>
               </div>
               

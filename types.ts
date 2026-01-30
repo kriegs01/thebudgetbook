@@ -65,6 +65,7 @@ export interface Installment {
   paidAmount: number;
   accountId: string;
   startDate?: string; // Format: YYYY-MM
+  billerId?: string; // Link to Biller for Loans category
 }
 
 export interface SavingsJar {

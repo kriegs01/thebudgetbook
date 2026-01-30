@@ -1,16 +1,17 @@
 import React, { useState } from 'react';
-import { Installment, Account, ViewMode } from '../types';
+import { Installment, Account, ViewMode, Biller } from '../types';
 import { Plus, LayoutGrid, List, Wallet, Trash2, X, Upload, AlertTriangle, Edit2, Eye, MoreVertical } from 'lucide-react';
 
 interface InstallmentsProps {
   installments: Installment[];
   accounts: Account[];
+  billers?: Biller[];
   onAdd: (i: Installment) => void;
   onUpdate?: (i: Installment) => void;
   onDelete?: (id: string) => void;
 }
 
-const Installments: React.FC<InstallmentsProps> = ({ installments, accounts, onAdd, onUpdate, onDelete }) => {
+const Installments: React.FC<InstallmentsProps> = ({ installments, accounts, billers = [], onAdd, onUpdate, onDelete }) => {
   const [viewMode, setViewMode] = useState<ViewMode>('card');
   const [showModal, setShowModal] = useState(false);
   const [showPayModal, setShowPayModal] = useState<Installment | null>(null);
@@ -31,11 +32,11 @@ const Installments: React.FC<InstallmentsProps> = ({ installments, accounts, onA
   });
   
   const [formData, setFormData] = useState({ 
-    name: '', totalAmount: '', monthlyAmount: '', termDuration: '', paidAmount: '', accountId: accounts[0]?.id || '', startDate: '' 
+    name: '', totalAmount: '', monthlyAmount: '', termDuration: '', paidAmount: '', accountId: accounts[0]?.id || '', startDate: '', billerId: ''
   });
 
   const [editFormData, setEditFormData] = useState({ 
-    name: '', totalAmount: '', monthlyAmount: '', termDuration: '', paidAmount: '', accountId: '', startDate: ''
+    name: '', totalAmount: '', monthlyAmount: '', termDuration: '', paidAmount: '', accountId: '', startDate: '', billerId: ''
   });
 
   const [payFormData, setPayFormData] = useState({
@@ -64,10 +65,11 @@ const Installments: React.FC<InstallmentsProps> = ({ installments, accounts, onA
       termDuration: formData.termDuration,
       paidAmount: parseFloat(formData.paidAmount) || 0,
       accountId: formData.accountId,
-      startDate: formData.startDate || undefined
+      startDate: formData.startDate || undefined,
+      billerId: formData.billerId || undefined
     });
     setShowModal(false);
-    setFormData({ name: '', totalAmount: '', monthlyAmount: '', termDuration: '', paidAmount: '', accountId: accounts[0]?.id || '', startDate: '' });
+    setFormData({ name: '', totalAmount: '', monthlyAmount: '', termDuration: '', paidAmount: '', accountId: accounts[0]?.id || '', startDate: '', billerId: '' });
   };
 
   const handleEditSubmit = (e: React.FormEvent) => {
@@ -82,7 +84,8 @@ const Installments: React.FC<InstallmentsProps> = ({ installments, accounts, onA
       termDuration: editFormData.termDuration,
       paidAmount: parseFloat(editFormData.paidAmount) || 0,
       accountId: editFormData.accountId,
-      startDate: editFormData.startDate || undefined
+      startDate: editFormData.startDate || undefined,
+      billerId: editFormData.billerId || undefined
     };
 
     onUpdate?.(updatedInstallment);
@@ -123,7 +126,8 @@ const Installments: React.FC<InstallmentsProps> = ({ installments, accounts, onA
       termDuration: item.termDuration,
       paidAmount: item.paidAmount.toString(),
       accountId: item.accountId,
-      startDate: item.startDate || ''
+      startDate: item.startDate || '',
+      billerId: item.billerId || ''
     });
     setShowEditModal(item);
     setOpenMenuId(null);
@@ -399,10 +403,21 @@ const Installments: React.FC<InstallmentsProps> = ({ installments, accounts, onA
                   ))}
                 </select>
               </div>
+              {billers.filter(b => b.category.startsWith('Loans')).length > 0 && (
+                <div>
+                  <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Link to Biller (Optional - For Loans)</label>
+                  <select value={formData.billerId} onChange={(e) => setFormData({...formData, billerId: e.target.value})} className="w-full bg-gray-50 border-transparent rounded-2xl p-4 outline-none focus:ring-2 focus:ring-indigo-500 font-bold appearance-none">
+                    <option value="">None</option>
+                    {billers.filter(b => b.category.startsWith('Loans')).map(biller => (
+                      <option key={biller.id} value={biller.id}>{biller.name}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
               <div className="flex space-x-4 pt-4">
                 <button type="button" onClick={() => { 
                   setShowModal(false);
-                  setFormData({ name: '', totalAmount: '', monthlyAmount: '', termDuration: '', paidAmount: '', accountId: accounts[0]?.id || '', startDate: '' });
+                  setFormData({ name: '', totalAmount: '', monthlyAmount: '', termDuration: '', paidAmount: '', accountId: accounts[0]?.id || '', startDate: '', billerId: '' });
                 }} className="flex-1 bg-gray-100 py-4 rounded-2xl font-black uppercase tracking-widest text-xs text-gray-500">Cancel</button>
                 <button type="submit" className="flex-1 bg-indigo-600 text-white py-4 rounded-2xl font-black uppercase tracking-widest text-xs hover:bg-indigo-700 transition-all shadow-xl">Start Tracking</button>
               </div>
@@ -513,6 +528,17 @@ const Installments: React.FC<InstallmentsProps> = ({ installments, accounts, onA
                   ))}
                 </select>
               </div>
+              {billers.filter(b => b.category.startsWith('Loans')).length > 0 && (
+                <div>
+                  <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Link to Biller (Optional - For Loans)</label>
+                  <select value={editFormData.billerId} onChange={(e) => setEditFormData({...editFormData, billerId: e.target.value})} className="w-full bg-gray-50 border-transparent rounded-2xl p-4 outline-none focus:ring-2 focus:ring-indigo-500 font-bold appearance-none">
+                    <option value="">None</option>
+                    {billers.filter(b => b.category.startsWith('Loans')).map(biller => (
+                      <option key={biller.id} value={biller.id}>{biller.name}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
               <div className="flex space-x-4 pt-4">
                 <button type="button" onClick={() => setShowEditModal(null)} className="flex-1 bg-gray-100 py-4 rounded-2xl font-black uppercase tracking-widest text-xs text-gray-500">Cancel</button>
                 <button type="submit" className="flex-1 bg-indigo-600 text-white py-4 rounded-2xl font-black uppercase tracking-widest text-xs hover:bg-indigo-700 transition-all shadow-xl">Save Changes</button>

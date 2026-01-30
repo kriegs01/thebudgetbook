@@ -87,7 +87,16 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
             !removedIds.has(b.id)
           );
 
-          const existingIds = new Set(newData[cat.name].map(i => i.id));
+          // Remove billers that don't match the current timing
+          const filteredExisting = newData[cat.name].filter(item => {
+            if (item.isBiller) {
+              const biller = billers.find(b => b.id === item.id);
+              return biller && biller.timing === selectedTiming;
+            }
+            return true; // Keep non-biller items
+          });
+
+          const existingIds = new Set(filteredExisting.map(i => i.id));
           const newItems = matchingBillers
             .filter(b => !existingIds.has(b.id))
             .map(b => {
@@ -102,9 +111,7 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
               };
             });
 
-          if (newItems.length > 0) {
-            newData[cat.name] = [...newData[cat.name], ...newItems];
-          }
+          newData[cat.name] = [...filteredExisting, ...newItems];
         });
 
         return newData;
@@ -477,7 +484,7 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                               className="bg-gray-50 border border-gray-200 rounded-lg px-3 py-1.5 text-xs font-bold text-gray-700 outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
                             >
                               <option value="">Select Account</option>
-                              {accounts.map(acc => (
+                              {accounts.filter(acc => acc.type === 'Debit').map(acc => (
                                 <option key={acc.id} value={acc.id}>
                                   {acc.bank} ({acc.classification})
                                 </option>

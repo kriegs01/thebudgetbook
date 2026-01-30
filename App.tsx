@@ -143,6 +143,7 @@ const App: React.FC = () => {
                 <Installments
                   installments={installments}
                   accounts={accounts}
+                  billers={billers}
                   onAdd={(i) => setInstallments(prev => [...prev, i])}
                   onUpdate={handleUpdateInstallment}
                   onDelete={(id) => setInstallments(prev => prev.filter(i => i.id !== id))}
@@ -155,7 +156,7 @@ const App: React.FC = () => {
                   onDelete={(id) => setAccounts(prev => prev.filter(a => a.id !== id))}
                 />
               } />
-              <Route path="/accounts/view" element={<AccountFilteredTransactions />} />
+              <Route path="/accounts/view" element={<AccountFilteredTransactions accounts={accounts} />} />
               <Route path="/savings" element={
                 <Savings
                   jars={savings}
