@@ -1,4 +1,3 @@
-import TestSupabase from './TestSupabase';
 import React, { useState } from 'react';
 import { Menu, ChevronLeft } from 'lucide-react';
 import { BrowserRouter, Routes, Route, NavLink } from 'react-router-dom';
@@ -16,6 +15,7 @@ import StatementPage from './pages/accounts/statement';
 import Savings from './pages/Savings';
 import SettingsPage from './pages/Settings';
 import TrashPage from './pages/Trash';
+import SupabaseDemo from './pages/SupabaseDemo';
 
 const App: React.FC = () => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
@@ -198,6 +198,9 @@ const App: React.FC = () => {
               } />
               <Route path="/transactions" element={
                 <TransactionsPage />
+              } />
+              <Route path="/supabase-demo" element={
+                <SupabaseDemo />
               } />
               {/* Add additional routes/pages as needed */}
             </Routes>
