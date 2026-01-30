@@ -55,13 +55,17 @@ export const getInstallmentById = async (id: string) => {
  */
 export const createInstallment = async (installment: CreateInstallmentInput) => {
   try {
+    console.log('Creating installment with data:', installment);
     const { data, error } = await supabase
       .from('installments')
       .insert([installment])
       .select()
       .single();
 
-    if (error) throw error;
+    if (error) {
+      console.error('Supabase error creating installment:', error);
+      throw error;
+    }
     return { data, error: null };
   } catch (error) {
     console.error('Error creating installment:', error);
