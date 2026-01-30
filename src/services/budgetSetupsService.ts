@@ -111,18 +111,7 @@ const frontendBudgetSetupToSupabase = (setup: Partial<SavedBudgetSetup>): Partia
       throw new Error(`Invalid setupData structure: ${validation.error}`);
     }
     
-    // Ensure data is a proper object, not stringified
-    if (typeof setup.data === 'string') {
-      console.error('[budgetSetupsService] ERROR: data field is a string, attempting to parse');
-      try {
-        supabaseSetup.data = JSON.parse(setup.data);
-      } catch (e) {
-        throw new Error('setupData is a string but cannot be parsed as JSON');
-      }
-    } else {
-      supabaseSetup.data = setup.data;
-    }
-    
+    supabaseSetup.data = setup.data;
     console.log('[budgetSetupsService] Data validation passed');
   }
   
@@ -201,15 +190,9 @@ export const createBudgetSetup = async (setup: CreateBudgetSetupInput) => {
       data_keys: setup.data ? Object.keys(setup.data) : [],
     }, null, 2));
     
-    // Final validation: ensure we're passing an array to insert()
-    const insertPayload = [setup];
-    if (!Array.isArray(insertPayload)) {
-      throw new Error('Insert payload must be an array');
-    }
-    
     const { data, error } = await supabase
       .from('budget_setups')
-      .insert(insertPayload)
+      .insert([setup])
       .select()
       .single();
 

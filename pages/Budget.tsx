@@ -191,61 +191,6 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
   };
 
   /**
-   * Validate setupData structure before saving
-   */
-  const validateSetupDataStructure = (data: any): { valid: boolean; error?: string } => {
-    console.log('[Budget] Validating setupData structure');
-    console.log('[Budget] Data type:', typeof data);
-    console.log('[Budget] Is array:', Array.isArray(data));
-    
-    // Check if data is an object (not null, not array)
-    if (typeof data !== 'object' || data === null || Array.isArray(data)) {
-      return { 
-        valid: false, 
-        error: `setupData must be a plain object, got: ${typeof data} ${Array.isArray(data) ? '(array)' : ''}`
-      };
-    }
-
-    // Check each category
-    const categories = Object.keys(data).filter(key => !key.startsWith('_'));
-    console.log('[Budget] Categories found:', categories);
-    
-    for (const category of categories) {
-      const items = data[category];
-      
-      if (!Array.isArray(items)) {
-        return { 
-          valid: false, 
-          error: `Category "${category}" must contain an array, got: ${typeof items}`
-        };
-      }
-      
-      console.log(`[Budget] Category "${category}" has ${items.length} items`);
-      
-      // Validate each item
-      for (let i = 0; i < items.length; i++) {
-        const item = items[i];
-        if (typeof item !== 'object' || item === null || Array.isArray(item)) {
-          return { 
-            valid: false, 
-            error: `Item ${i} in category "${category}" must be an object, got: ${typeof item}`
-          };
-        }
-        
-        // Check required fields
-        if (!item.id || !item.name || item.amount === undefined) {
-          return { 
-            valid: false, 
-            error: `Item ${i} in category "${category}" is missing required fields (id, name, or amount)`
-          };
-        }
-      }
-    }
-
-    return { valid: true };
-  };
-
-  /**
    * Save budget setup to Supabase
    * This replaces the previous localStorage-based persistence
    */
@@ -275,19 +220,10 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
     const existingSetup = savedSetups.find(s => s.month === selectedMonth && s.timing === selectedTiming);
     console.log('[Budget] Existing setup found:', !!existingSetup);
     
-    // Validate setupData structure before saving
-    const validation = validateSetupDataStructure(setupData);
-    if (!validation.valid) {
-      console.error('[Budget] setupData validation failed:', validation.error);
-      alert(`Cannot save budget setup: ${validation.error}`);
-      return;
-    }
-    console.log('[Budget] setupData validation passed');
-    
     // Prepare data including salary information
-    // Use spread operator instead of JSON parse/stringify for cleaner deep clone
+    // Deep clone to avoid reference issues - cannot use spread for nested objects
     const dataToSave = {
-      ...JSON.parse(JSON.stringify(setupData)), // Deep clone to avoid reference issues
+      ...JSON.parse(JSON.stringify(setupData)),
       _projectedSalary: projectedSalary,
       _actualSalary: actualSalary
     };
@@ -313,7 +249,8 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
         
         if (error) {
           console.error('[Budget] Error updating budget setup:', error);
-          alert('Failed to save budget setup. Please check the console for details.');
+          const errorMessage = error?.message || 'Unknown error occurred';
+          alert(`Failed to save budget setup: ${errorMessage}`);
           return;
         }
         
@@ -342,7 +279,8 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
         
         if (error) {
           console.error('[Budget] Error creating budget setup:', error);
-          alert('Failed to save budget setup. Please check the console for details.');
+          const errorMessage = error?.message || 'Unknown error occurred';
+          alert(`Failed to save budget setup: ${errorMessage}`);
           return;
         }
         
@@ -361,7 +299,8 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
       setView('summary');
     } catch (error) {
       console.error('[Budget] Error in handleSaveSetup:', error);
-      alert('Failed to save budget setup. Please check the console for details.');
+      const errorMessage = (error as any)?.message || 'Unknown error occurred';
+      alert(`Failed to save budget setup: ${errorMessage}`);
     }
   };
 
