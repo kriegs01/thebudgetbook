@@ -41,10 +41,7 @@ View your app in AI Studio: https://ai.studio/apps/drive/1ycYQEQFQoXZUCpk8DStQVr
 
 3. **Set up Supabase database:**
    
-   See [SUPABASE_SETUP.md](SUPABASE_SETUP.md) for detailed instructions on:
-   - Creating a Supabase project
-   - Setting up the database schema
-   - Configuring authentication and security
+   See [SUPABASE_SETUP.md](SUPABASE_SETUP.md) for detailed instructions.
 
 4. **Run the app:**
    ```bash
@@ -53,7 +50,20 @@ View your app in AI Studio: https://ai.studio/apps/drive/1ycYQEQFQoXZUCpk8DStQVr
 
 5. **Access the app:**
    
-   Open [http://localhost:5173](http://localhost:5173) in your browser
+   Open [http://localhost:3000](http://localhost:3000) in your browser
+
+## Deploy to Production
+
+This application is optimized for deployment on Vercel. See [VERCEL_DEPLOYMENT.md](VERCEL_DEPLOYMENT.md) for:
+- Complete deployment instructions
+- Environment variable configuration
+- Troubleshooting common issues
+- Performance optimization tips
+
+**Quick Deploy:**
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/kriegs01/thebudgetbookv2)
+
+Don't forget to configure environment variables in Vercel after deployment!
 
 ## Supabase Integration
 
