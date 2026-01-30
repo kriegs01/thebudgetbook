@@ -6,6 +6,7 @@
 
 export * from './accountsService';
 export * from './billersService';
+export * from './budgetSetupsService';
 export * from './installmentsService';
 export * from './savingsService';
 export * from './transactionsService';

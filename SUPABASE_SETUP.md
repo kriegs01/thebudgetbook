@@ -116,12 +116,25 @@ CREATE TABLE transactions (
   payment_method_id UUID REFERENCES accounts(id) ON DELETE SET NULL
 );
 
+-- Budget Setups table
+CREATE TABLE budget_setups (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  month TEXT NOT NULL,
+  timing TEXT NOT NULL,
+  status TEXT NOT NULL,
+  total_amount NUMERIC(10, 2) NOT NULL,
+  data JSONB NOT NULL,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  CONSTRAINT unique_month_timing UNIQUE (month, timing)
+);
+
 -- Enable Row Level Security (RLS)
 ALTER TABLE accounts ENABLE ROW LEVEL SECURITY;
 ALTER TABLE billers ENABLE ROW LEVEL SECURITY;
 ALTER TABLE installments ENABLE ROW LEVEL SECURITY;
 ALTER TABLE savings ENABLE ROW LEVEL SECURITY;
 ALTER TABLE transactions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE budget_setups ENABLE ROW LEVEL SECURITY;
 
 -- Create policies for public access (adjust based on your auth needs)
 -- WARNING: These policies allow anyone to read/write. 
@@ -132,6 +145,7 @@ CREATE POLICY "Enable all for billers" ON billers FOR ALL USING (true) WITH CHEC
 CREATE POLICY "Enable all for installments" ON installments FOR ALL USING (true) WITH CHECK (true);
 CREATE POLICY "Enable all for savings" ON savings FOR ALL USING (true) WITH CHECK (true);
 CREATE POLICY "Enable all for transactions" ON transactions FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Enable all for budget_setups" ON budget_setups FOR ALL USING (true) WITH CHECK (true);
 ```
 
 ### Step 5: Install Dependencies
@@ -206,6 +220,24 @@ Visit the Supabase Demo page to test the integration!
 | amount | NUMERIC | Transaction amount |
 | payment_method_id | UUID | Foreign key to accounts |
 
+### Budget Setups
+| Column | Type | Description |
+|--------|------|-------------|
+| id | UUID | Primary key (auto-generated) |
+| month | TEXT | Month name (e.g., January, February) |
+| timing | TEXT | Budget timing period (1/2 or 2/2) |
+| status | TEXT | Status of the budget setup (e.g., Active, Saved, Completed) |
+| total_amount | NUMERIC(10,2) | Total amount allocated in this budget setup |
+| data | JSONB | JSON object containing categorized setup items and salary data |
+| created_at | TIMESTAMPTZ | Creation timestamp (auto-generated) |
+
+**Note:** The `data` field in budget_setups stores categorized items as well as special fields:
+- `_projectedSalary`: The projected salary for this budget period
+- `_actualSalary`: The actual salary received (if different from projected)
+
+**Constraints:**
+- A unique constraint on (month, timing) ensures only one setup exists per month/timing combination
+
 ## Service Layer
 
 The application provides a service layer for interacting with Supabase. All services are located in `src/services/`.
@@ -214,6 +246,7 @@ The application provides a service layer for interacting with Supabase. All serv
 
 - `accountsService.ts` - Account operations
 - `billersService.ts` - Biller operations
+- `budgetSetupsService.ts` - Budget setup operations (persistent storage)
 - `installmentsService.ts` - Installment operations
 - `savingsService.ts` - Savings jar operations
 - `transactionsService.ts` - Transaction operations
@@ -229,6 +262,33 @@ Each service provides the following operations:
 - `delete{Entity}(id)` - Delete a record
 
 Additional specialized queries are available in each service.
+
+### Budget Setups Persistence Workflow
+
+The Budget Setups feature now uses Supabase for persistent storage instead of localStorage. Here's how it works:
+
+1. **On Application Load**: Budget setups are automatically fetched from Supabase when the app starts
+2. **When Saving a Setup**: 
+   - User clicks "Save" on the Budget Setup page
+   - The setup data (including categorized items and salary information) is saved to Supabase
+   - If a setup for the same month/timing already exists, it's updated; otherwise, a new record is created
+3. **When Loading a Setup**: 
+   - User clicks the arrow button next to a saved setup
+   - The setup data is loaded from Supabase and applied to the current budget view
+   - Salary fields (projected and actual) are restored from the saved data
+4. **When Deleting a Setup**:
+   - User clicks "Remove" on a saved setup
+   - The setup is deleted from Supabase and moved to the trash
+
+The `data` JSONB field stores:
+- Categorized budget items (organized by category)
+- `_projectedSalary`: The projected salary amount
+- `_actualSalary`: The actual salary amount (if different)
+
+This approach provides:
+- **Data Persistence**: Setups are saved across sessions and devices
+- **Data Integrity**: Centralized storage in Supabase ensures consistency
+- **Scalability**: JSONB allows flexible storage of complex budget structures
 
 ## Usage Examples
 

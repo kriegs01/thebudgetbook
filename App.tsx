@@ -6,6 +6,7 @@ import { getAllBillersFrontend, createBillerFrontend, updateBillerFrontend, dele
 import { getAllAccountsFrontend, createAccountFrontend, updateAccountFrontend, deleteAccountFrontend } from './src/services/accountsService';
 import { getAllInstallmentsFrontend, createInstallmentFrontend, updateInstallmentFrontend, deleteInstallmentFrontend } from './src/services/installmentsService';
 import { getAllSavingsFrontend, createSavingsFrontend, updateSavingsFrontend, deleteSavingsFrontend } from './src/services/savingsService';
+import { getAllBudgetSetupsFrontend, deleteBudgetSetupFrontend } from './src/services/budgetSetupsService';
 import type { Biller, Account, Installment, SavingsJar } from './types';
 
 // Pages
@@ -141,17 +142,10 @@ const App: React.FC = () => {
   const [currency, setCurrency] = useState('PHP');
   const [categories, setCategories] = useState(INITIAL_CATEGORIES);
   
-  // Lifted Budget Setups State
-  const [budgetSetups, setBudgetSetups] = useState([
-    { 
-      id: '1', 
-      month: 'January', 
-      timing: '1/2', 
-      status: 'Active', 
-      totalAmount: 3000,
-      data: JSON.parse(JSON.stringify(DEFAULT_SETUP))
-    },
-  ]);
+  // Lifted Budget Setups State - now loaded from Supabase
+  const [budgetSetups, setBudgetSetups] = useState([]);
+  const [budgetSetupsLoading, setBudgetSetupsLoading] = useState(true);
+  const [budgetSetupsError, setBudgetSetupsError] = useState<string | null>(null);
 
   // Shared Trash State
   const [trashSetups, setTrashSetups] = useState([]);
@@ -225,11 +219,29 @@ const App: React.FC = () => {
       
       setSavingsLoading(false);
     };
+
+    const fetchBudgetSetups = async () => {
+      setBudgetSetupsLoading(true);
+      setBudgetSetupsError(null);
+      
+      const { data, error } = await getAllBudgetSetupsFrontend();
+      
+      if (error) {
+        console.error('Error loading budget setups:', error);
+        setBudgetSetupsError('Failed to load budget setups from database');
+        setBudgetSetups([]);
+      } else {
+        setBudgetSetups(data || []);
+      }
+      
+      setBudgetSetupsLoading(false);
+    };
     
     fetchBillers();
     fetchAccounts();
     fetchInstallments();
     fetchSavings();
+    fetchBudgetSetups();
   }, []);
 
   // Reload functions for each entity
@@ -274,6 +286,17 @@ const App: React.FC = () => {
     } else {
       setSavings(data || []);
       setSavingsError(null);
+    }
+  };
+
+  const reloadBudgetSetups = async () => {
+    const { data, error } = await getAllBudgetSetupsFrontend();
+    if (error) {
+      console.error('Error reloading budget setups:', error);
+      setBudgetSetupsError('Failed to reload budget setups from database');
+    } else {
+      setBudgetSetups(data || []);
+      setBudgetSetupsError(null);
     }
   };
 
@@ -467,10 +490,19 @@ const App: React.FC = () => {
                   setSavedSetups={setBudgetSetups}
                   onAdd={(item) => setBudgetItems(prev => [...prev, item])}
                   onUpdateBiller={handleUpdateBiller}
-                  onMoveToTrash={(setup) => {
-                    setBudgetSetups(prev => prev.filter(s => s.id !== setup.id));
-                    setTrashSetups(prev => [...prev, setup]);
+                  onMoveToTrash={async (setup) => {
+                    // Delete from Supabase
+                    const { error } = await deleteBudgetSetupFrontend(setup.id);
+                    if (error) {
+                      console.error('Error deleting budget setup:', error);
+                      alert('Failed to delete budget setup. Please try again.');
+                    } else {
+                      // Update local state
+                      setBudgetSetups(prev => prev.filter(s => s.id !== setup.id));
+                      setTrashSetups(prev => [...prev, setup]);
+                    }
                   }}
+                  onReloadSetups={reloadBudgetSetups}
                 />
               } />
               <Route path="/billers" element={
