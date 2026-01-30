@@ -25,7 +25,7 @@ This is a quick checklist to get your Budget Book app running with full Supabase
 - [ ] Open Supabase SQL Editor
 - [ ] Copy contents of `supabase_migration.sql`
 - [ ] Run the SQL script
-- [ ] Verify tables created: accounts, billers, installments, savings, transactions, trash, categories
+- [ ] Verify tables created: accounts, billers, installments, savings, transactions, trash, categories, budget_setups
 
 ### Step 4: Install Dependencies
 - [ ] Run `npm install`

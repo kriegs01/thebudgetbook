@@ -1,8 +1,8 @@
-# Implementation Summary: Full Persistence for Transactions, Trash, and Categories
+# Implementation Summary: Full Persistence for Transactions, Trash, Categories, and Budget Setups
 
 ## Overview
 
-This document summarizes the implementation of full persistence for transactions, trash (history), and categories using Supabase, replacing all localStorage and in-memory-only state for these entities.
+This document summarizes the implementation of full persistence for transactions, trash (history), categories, and budget setups using Supabase, replacing all localStorage and in-memory-only state for these entities.
 
 ## Completed Tasks
 
@@ -11,6 +11,7 @@ This document summarizes the implementation of full persistence for transactions
 **New Tables Created:**
 - `trash` table - For soft-deleted items with fields: id, type, original_id, data (JSONB), deleted_at
 - `categories` table - For budget categories with fields: id, name, subcategories (JSONB), created_at, updated_at
+- `budget_setups` table - For budget setup pages with fields: id, month, timing, status, total_amount, data (JSONB), created_at, updated_at
 
 **Files:**
 - `supabase_migration.sql` - Complete SQL migration script with indexes and RLS policies
@@ -18,12 +19,13 @@ This document summarizes the implementation of full persistence for transactions
 ### 2. Service Layer ✅
 
 **New Services Created:**
-- `src/services/trashService.ts` - CRUD operations for trash (getAllTrash, moveToTrash, permanentlyDeleteFromTrash, etc.)
+- `src/services/trashService.ts` - CRUD operations for trash (getAllTrash, moveToTrash, permanentlyDeleteFromTraash, etc.)
 - `src/services/categoriesService.ts` - CRUD operations for categories (getAllCategories, createCategory, updateCategory, deleteCategory, initializeDefaultCategories)
+- `src/services/budgetSetupsService.ts` - CRUD operations for budget setups (getAllBudgetSetups, createBudgetSetup, updateBudgetSetup, deleteBudgetSetup)
 
 **Updated:**
 - `src/services/index.ts` - Exports new services
-- `src/types/supabase.ts` - Added SupabaseTrash and SupabaseCategory types
+- `src/types/supabase.ts` - Added SupabaseTrash, SupabaseCategory, and SupabaseBudgetSetup types
 
 ### 3. Transactions Persistence ✅
 
@@ -82,12 +84,26 @@ This document summarizes the implementation of full persistence for transactions
   - Migration status display with detailed results
   - Information about what gets migrated
 
-### 7. Documentation ✅
+### 7. Budget Setups Persistence ✅
+
+**Updated:**
+- `App.tsx` - Added budget setups loading from Supabase
+  - Created helper functions: supabaseToBudgetSetup, budgetSetupToSupabase
+  - Loads budget setups on mount
+  - Added budgetSetupsLoading and budgetSetupsError states
+  - Created handleSaveBudgetSetup and handleDeleteBudgetSetup handlers
+
+**Modified:**
+- `pages/Budget.tsx` - Updated to accept onSaveBudgetSetup callback
+  - Uses callback to persist to Supabase instead of just updating state
+  - Maintains backward compatibility with fallback behavior
+
+### 8. Documentation ✅
 
 **Updated Files:**
-- `README.md` - Added new features and persistence architecture overview
+- `README.md` - Added budget setups to persistence features
 - `SUPABASE_SETUP.md` - 
-  - Added trash and categories table schemas
+  - Added trash, categories, and budget_setups table schemas
   - Updated service list
   - Added migration section with detailed instructions
   
@@ -102,7 +118,7 @@ This document summarizes the implementation of full persistence for transactions
   - Manual export/import instructions
   - Best practices and checklist
 
-### 8. Testing & Validation ✅
+### 9. Testing & Validation ✅
 
 **Build Verification:**
 - ✅ Project builds successfully with `npm run build`
@@ -119,29 +135,34 @@ This document summarizes the implementation of full persistence for transactions
 - Transactions: localStorage only
 - Trash: In-memory state for budget setups only
 - Categories: Hardcoded INITIAL_CATEGORIES constant
+- Budget Setups: Hardcoded in-memory state, lost on refresh
 
 ### After
 - Transactions: Full Supabase persistence with CRUD operations
 - Trash: Unified Supabase table for all soft-deleted items
 - Categories: Supabase persistence with fallback to defaults
+- Budget Setups: Full Supabase persistence, survive page refresh
 
 ## File Changes Summary
 
-### Created Files (10)
+### Created Files (11)
 1. `supabase_migration.sql` - Database schema
 2. `src/services/trashService.ts` - Trash service
 3. `src/services/categoriesService.ts` - Categories service
-4. `src/utils/migrationUtils.ts` - Migration utilities
-5. `pages/TrashNew.tsx` - New trash page
-6. `MIGRATION_GUIDE.md` - Migration documentation
+4. `src/services/budgetSetupsService.ts` - Budget setups service
+5. `src/utils/migrationUtils.ts` - Migration utilities
+6. `pages/TrashNew.tsx` - New trash page
+7. `MIGRATION_GUIDE.md` - Migration documentation
 
-### Modified Files (6)
+### Modified Files (8)
 1. `pages/transactions.tsx` - Supabase integration
 2. `pages/accounts/view.tsx` - Supabase integration
-3. `App.tsx` - Categories loading, trash page update
-4. `pages/Settings.tsx` - Migration UI
-5. `SUPABASE_SETUP.md` - Updated documentation
-6. `README.md` - Updated documentation
+3. `pages/Budget.tsx` - Budget setups persistence
+4. `App.tsx` - Categories and budget setups loading
+5. `pages/Settings.tsx` - Migration UI
+6. `SUPABASE_SETUP.md` - Updated documentation
+7. `README.md` - Updated documentation
+8. `IMPLEMENTATION_SUMMARY.md` - Updated summary
 7. `src/types/supabase.ts` - New types
 8. `src/services/index.ts` - Export new services
 

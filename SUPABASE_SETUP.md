@@ -134,6 +134,18 @@ CREATE TABLE categories (
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- Budget setups table (for budget setup pages)
+CREATE TABLE budget_setups (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  month TEXT NOT NULL,
+  timing TEXT NOT NULL,
+  status TEXT NOT NULL,
+  total_amount NUMERIC NOT NULL DEFAULT 0,
+  data JSONB NOT NULL DEFAULT '{}'::jsonb,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
 -- Enable Row Level Security (RLS)
 ALTER TABLE accounts ENABLE ROW LEVEL SECURITY;
 ALTER TABLE billers ENABLE ROW LEVEL SECURITY;
@@ -142,6 +154,7 @@ ALTER TABLE savings ENABLE ROW LEVEL SECURITY;
 ALTER TABLE transactions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE trash ENABLE ROW LEVEL SECURITY;
 ALTER TABLE categories ENABLE ROW LEVEL SECURITY;
+ALTER TABLE budget_setups ENABLE ROW LEVEL SECURITY;
 
 -- Create policies for public access (adjust based on your auth needs)
 -- WARNING: These policies allow anyone to read/write. 
@@ -154,6 +167,7 @@ CREATE POLICY "Enable all for savings" ON savings FOR ALL USING (true) WITH CHEC
 CREATE POLICY "Enable all for transactions" ON transactions FOR ALL USING (true) WITH CHECK (true);
 CREATE POLICY "Enable all for trash" ON trash FOR ALL USING (true) WITH CHECK (true);
 CREATE POLICY "Enable all for categories" ON categories FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Enable all for budget_setups" ON budget_setups FOR ALL USING (true) WITH CHECK (true);
 ```
 
 ### Step 5: Install Dependencies
@@ -246,6 +260,18 @@ Visit the Supabase Demo page to test the integration!
 | created_at | TIMESTAMPTZ | Creation timestamp (auto-generated) |
 | updated_at | TIMESTAMPTZ | Last update timestamp |
 
+### Budget Setups
+| Column | Type | Description |
+|--------|------|-------------|
+| id | UUID | Primary key (auto-generated) |
+| month | TEXT | Month name (e.g., "January") |
+| timing | TEXT | Timing indicator (e.g., "1/2", "2/2") |
+| status | TEXT | Status (e.g., "Active", "Saved") |
+| total_amount | NUMERIC | Total budget amount |
+| data | JSONB | Categorized setup items as JSON object |
+| created_at | TIMESTAMPTZ | Creation timestamp (auto-generated) |
+| updated_at | TIMESTAMPTZ | Last update timestamp |
+
 ## Service Layer
 
 The application provides a service layer for interacting with Supabase. All services are located in `src/services/`.
@@ -258,6 +284,8 @@ The application provides a service layer for interacting with Supabase. All serv
 - `savingsService.ts` - Savings jar operations
 - `transactionsService.ts` - Transaction operations
 - `trashService.ts` - Trash/soft-delete operations
+- `categoriesService.ts` - Budget category operations
+- `budgetSetupsService.ts` - Budget setup page operations
 - `categoriesService.ts` - Budget category operations
 
 ### Common Operations

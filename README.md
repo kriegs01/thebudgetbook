@@ -100,6 +100,7 @@ The following features now use Supabase for full persistence:
 - **Transactions**: All transaction data is stored in Supabase and can be filtered by account
 - **Trash**: Deleted items are soft-deleted to a trash table and can be restored or permanently deleted
 - **Categories**: Budget categories and subcategories are stored in Supabase and can be managed via Settings
+- **Budget Setups**: Budget setup pages persist across browser refresh and are stored in Supabase
 
 To migrate existing localStorage data to Supabase, use the Data Migration tool in Settings.
 
