@@ -22,9 +22,9 @@ const Savings: React.FC<SavingsProps> = ({ jars, accounts, onAdd, onDelete }) =>
     }).format(val);
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    onAdd({
+    await onAdd({
       id: '', // Will be replaced by Supabase UUID
       name: formData.name,
       accountId: formData.accountId,

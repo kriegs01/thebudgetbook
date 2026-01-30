@@ -73,14 +73,29 @@ const supabaseToBiller = (supabaseBiller: any): Biller => ({
 });
 
 // Helper function to convert UI Installment to Supabase format
-const installmentToSupabase = (installment: Installment) => ({
-  name: installment.name,
-  total_amount: installment.totalAmount,
-  monthly_amount: installment.monthlyAmount,
-  term_duration: parseInt(installment.termDuration.split(' ')[0]) || 0, // Extract numeric value
-  paid_amount: installment.paidAmount,
-  account_id: installment.accountId,
-});
+const installmentToSupabase = (installment: Installment) => {
+  // Extract numeric value from termDuration string (e.g., "12 months" -> 12)
+  let termDurationNum = 0;
+  if (installment.termDuration) {
+    const match = installment.termDuration.match(/\d+/);
+    if (match) {
+      termDurationNum = parseInt(match[0], 10);
+    }
+  }
+  // Default to 12 if no valid number found
+  if (termDurationNum <= 0) {
+    termDurationNum = 12;
+  }
+  
+  return {
+    name: installment.name,
+    total_amount: installment.totalAmount,
+    monthly_amount: installment.monthlyAmount,
+    term_duration: termDurationNum,
+    paid_amount: installment.paidAmount,
+    account_id: installment.accountId,
+  };
+};
 
 // Helper function to convert Supabase Installment to UI format
 const supabaseToInstallment = (supabaseInstallment: any): Installment => ({

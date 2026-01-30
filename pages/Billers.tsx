@@ -92,7 +92,7 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
     }
   };
 
-  const handleAddSubmit = (e: React.FormEvent) => {
+  const handleAddSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const expected = parseFloat(addFormData.expectedAmount) || 0;
     
@@ -129,7 +129,7 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
       status: status,
       schedules: MONTHS.map(month => ({ month, year: '2026', expectedAmount: expected }))
     };
-    onAdd(newBiller);
+    await onAdd(newBiller);
     setShowAddModal(false);
     setAddFormData({ 
       name: '', 

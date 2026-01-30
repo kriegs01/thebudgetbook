@@ -105,7 +105,7 @@ const Accounts: React.FC<AccountsProps> = ({ accounts, onAdd, onDelete, onEdit, 
     setEditingId(null);
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const created: Account = {
       id: editingId ?? '', // Will be replaced by Supabase UUID
@@ -120,12 +120,13 @@ const Accounts: React.FC<AccountsProps> = ({ accounts, onAdd, onDelete, onEdit, 
 
     if (editingId) {
       onEdit?.(created);
+      resetForm();
+      setShowModal(false);
     } else {
-      onAdd(created);
+      await onAdd(created);
+      resetForm();
+      setShowModal(false);
     }
-
-    resetForm();
-    setShowModal(false);
   };
 
   const openAddModal = () => {
