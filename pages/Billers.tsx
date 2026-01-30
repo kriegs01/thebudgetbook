@@ -32,6 +32,7 @@ const Billers: React.FC<BillersProps> = ({ billers, onAdd, accounts, categories,
   const [detailedBillerId, setDetailedBillerId] = useState<string | null>(null);
   const [activeDropdownId, setActiveDropdownId] = useState<string | null>(null);
   const [isInactiveOpen, setIsInactiveOpen] = useState(false);
+  const [isActiveOpen, setIsActiveOpen] = useState(true);
   const [timingFeedback, setTimingFeedback] = useState<string>('');
 
   const [confirmModal, setConfirmModal] = useState<{
@@ -261,6 +262,9 @@ const Billers: React.FC<BillersProps> = ({ billers, onAdd, accounts, categories,
             <div className="flex items-center space-x-2">
                <span className="text-[10px] font-bold px-2 py-0.5 bg-gray-100 rounded text-gray-500 uppercase">{biller.category}</span>
                <span className="text-[10px] font-bold px-2 py-0.5 bg-blue-50 rounded text-blue-500">{biller.timing}</span>
+               <span className={`text-[10px] font-bold px-2 py-0.5 rounded uppercase ${biller.status === 'active' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                 {biller.status === 'active' ? <div className="flex items-center gap-1"><Power className="w-3 h-3" />Active</div> : <div className="flex items-center gap-1"><PowerOff className="w-3 h-3" />Inactive</div>}
+               </span>
             </div>
           </div>
         </div>
@@ -332,7 +336,42 @@ const Billers: React.FC<BillersProps> = ({ billers, onAdd, accounts, categories,
             <div className="space-y-1"><h2 className="text-3xl font-black text-gray-900 tracking-tight uppercase">BILLERS</h2><p className="text-gray-500 text-sm">Manage recurring bills and payment schedules</p></div>
             <button onClick={() => { setShowAddModal(true); setTimingFeedback(''); }} className="flex items-center justify-center space-x-2 bg-indigo-600 text-white px-6 py-3 rounded-2xl font-bold hover:bg-indigo-700 shadow-lg"><Plus className="w-5 h-5" /><span>Add Billers</span></button>
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">{activeBillers.map(renderBillerCard)}</div>
+
+          {/* Active Billers Section */}
+          {activeBillers.length > 0 && (
+            <div className="mb-8">
+              <button 
+                onClick={() => setIsActiveOpen(!isActiveOpen)}
+                className="flex items-center space-x-2 mb-4 text-gray-700 hover:text-gray-900 font-bold text-lg"
+              >
+                {isActiveOpen ? <ChevronDown className="w-5 h-5" /> : <ChevronRight className="w-5 h-5" />}
+                <span>Active Billers ({activeBillers.length})</span>
+              </button>
+              {isActiveOpen && (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {activeBillers.map(renderBillerCard)}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Inactive Billers Section */}
+          {inactiveBillers.length > 0 && (
+            <div>
+              <button 
+                onClick={() => setIsInactiveOpen(!isInactiveOpen)}
+                className="flex items-center space-x-2 mb-4 text-gray-700 hover:text-gray-900 font-bold text-lg"
+              >
+                {isInactiveOpen ? <ChevronDown className="w-5 h-5" /> : <ChevronRight className="w-5 h-5" />}
+                <span>Inactive Billers ({inactiveBillers.length})</span>
+              </button>
+              {isInactiveOpen && (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {inactiveBillers.map(renderBillerCard)}
+                </div>
+              )}
+            </div>
+          )}
         </>
       )}
 
