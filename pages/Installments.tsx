@@ -400,7 +400,10 @@ const Installments: React.FC<InstallmentsProps> = ({ installments, accounts, onA
                 </select>
               </div>
               <div className="flex space-x-4 pt-4">
-                <button type="button" onClick={() => setShowModal(false)} className="flex-1 bg-gray-100 py-4 rounded-2xl font-black uppercase tracking-widest text-xs text-gray-500">Cancel</button>
+                <button type="button" onClick={() => { 
+                  setShowModal(false);
+                  setFormData({ name: '', totalAmount: '', monthlyAmount: '', termDuration: '', paidAmount: '', accountId: accounts[0]?.id || '', startDate: '' });
+                }} className="flex-1 bg-gray-100 py-4 rounded-2xl font-black uppercase tracking-widest text-xs text-gray-500">Cancel</button>
                 <button type="submit" className="flex-1 bg-indigo-600 text-white py-4 rounded-2xl font-black uppercase tracking-widest text-xs hover:bg-indigo-700 transition-all shadow-xl">Start Tracking</button>
               </div>
             </form>

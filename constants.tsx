@@ -75,7 +75,7 @@ export const INITIAL_BILLERS: Biller[] = [
     dueDate: '5th',
     expectedAmount: 50,
     timing: '1/2',
-    activationDate: { month: 'January', year: '2026' },
+    activationDate: { month: 'January', year: '2025' },
     deactivationDate: { month: 'December', year: '2025' },
     status: 'inactive',
     schedules: generateSchedules(50, '2026')

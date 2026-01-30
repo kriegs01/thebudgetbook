@@ -205,7 +205,8 @@ const Dashboard: React.FC<DashboardProps> = ({ accounts, budget, installments })
                 const monthlyExpense = budget
                   .filter(b => b.accountId === account.id)
                   .reduce((sum, b) => sum + b.amount, 0);
-                const percentSpent = balance > 0 ? Math.min(100, Math.round((monthlyExpense / balance) * 100)) : 0;
+                const percentSpent = balance > 0 ? Math.round((monthlyExpense / balance) * 100) : 0;
+                const isOverdraft = percentSpent > 100;
                 
                 return (
                   <div key={account.id} className="bg-gray-50 p-4 rounded-xl">
@@ -228,12 +229,14 @@ const Dashboard: React.FC<DashboardProps> = ({ accounts, budget, installments })
                         <div className="mt-2">
                           <div className="flex items-center justify-between text-xs text-gray-600 mb-1">
                             <span>Spent this month</span>
-                            <span className="font-medium">{percentSpent}%</span>
+                            <span className={`font-medium ${isOverdraft ? 'text-red-600' : ''}`}>
+                              {isOverdraft ? 'OVERDRAFT' : `${percentSpent}%`}
+                            </span>
                           </div>
                           <div className="w-full bg-gray-200 rounded-full h-2 overflow-hidden">
                             <div
-                              className={`h-2 rounded-full transition-all ${percentSpent >= 90 ? 'bg-red-500' : percentSpent >= 70 ? 'bg-yellow-500' : 'bg-green-600'}`}
-                              style={{ width: `${percentSpent}%` }}
+                              className={`h-2 rounded-full transition-all ${isOverdraft ? 'bg-red-600' : percentSpent >= 90 ? 'bg-red-500' : percentSpent >= 70 ? 'bg-yellow-500' : 'bg-green-600'}`}
+                              style={{ width: `${Math.min(percentSpent, 100)}%` }}
                             />
                           </div>
                         </div>
