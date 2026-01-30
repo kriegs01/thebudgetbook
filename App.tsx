@@ -22,6 +22,107 @@ import SettingsPage from './pages/Settings';
 import TrashPage from './pages/Trash';
 import SupabaseDemo from './pages/SupabaseDemo';
 
+// Helper function to convert UI Account to Supabase format
+const accountToSupabase = (account: Account) => ({
+  bank: account.bank,
+  classification: account.classification,
+  balance: account.balance,
+  type: account.type,
+  credit_limit: account.creditLimit ?? null,
+  billing_date: account.billingDate ?? null,
+  due_date: account.dueDate ?? null,
+});
+
+// Helper function to convert Supabase Account to UI format
+const supabaseToAccount = (supabaseAccount: any): Account => ({
+  id: supabaseAccount.id,
+  bank: supabaseAccount.bank,
+  classification: supabaseAccount.classification,
+  balance: supabaseAccount.balance,
+  type: supabaseAccount.type,
+  creditLimit: supabaseAccount.credit_limit,
+  billingDate: supabaseAccount.billing_date,
+  dueDate: supabaseAccount.due_date,
+});
+
+// Helper function to convert UI Biller to Supabase format
+const billerToSupabase = (biller: Biller) => ({
+  name: biller.name,
+  category: biller.category,
+  due_date: biller.dueDate,
+  expected_amount: biller.expectedAmount,
+  timing: biller.timing,
+  activation_date: biller.activationDate,
+  deactivation_c: biller.deactivationDate ?? null,
+  status: biller.status,
+  schedules: biller.schedules,
+});
+
+// Helper function to convert Supabase Biller to UI format
+const supabaseToBiller = (supabaseBiller: any): Biller => ({
+  id: supabaseBiller.id,
+  name: supabaseBiller.name,
+  category: supabaseBiller.category,
+  dueDate: supabaseBiller.due_date,
+  expectedAmount: supabaseBiller.expected_amount,
+  timing: supabaseBiller.timing,
+  activationDate: supabaseBiller.activation_date,
+  deactivationDate: supabaseBiller.deactivation_c,
+  status: supabaseBiller.status,
+  schedules: supabaseBiller.schedules,
+});
+
+// Helper function to convert UI Installment to Supabase format
+const installmentToSupabase = (installment: Installment) => {
+  // Extract numeric value from termDuration string (e.g., "12 months" -> 12)
+  let termDurationNum = 0;
+  if (installment.termDuration) {
+    const match = installment.termDuration.match(/\d+/);
+    if (match) {
+      termDurationNum = parseInt(match[0], 10);
+    }
+  }
+  // Default to 12 if no valid number found
+  if (termDurationNum <= 0) {
+    termDurationNum = 12;
+  }
+  
+  return {
+    name: installment.name,
+    total_amount: installment.totalAmount,
+    monthly_amount: installment.monthlyAmount,
+    term_duration: termDurationNum,
+    paid_amount: installment.paidAmount,
+    account_id: installment.accountId,
+  };
+};
+
+// Helper function to convert Supabase Installment to UI format
+const supabaseToInstallment = (supabaseInstallment: any): Installment => ({
+  id: supabaseInstallment.id,
+  name: supabaseInstallment.name,
+  totalAmount: supabaseInstallment.total_amount,
+  monthlyAmount: supabaseInstallment.monthly_amount,
+  termDuration: `${supabaseInstallment.term_duration} months`,
+  paidAmount: supabaseInstallment.paid_amount,
+  accountId: supabaseInstallment.account_id,
+});
+
+// Helper function to convert UI SavingsJar to Supabase format
+const savingsToSupabase = (savings: SavingsJar) => ({
+  name: savings.name,
+  account_id: savings.accountId,
+  current_balance: savings.currentBalance,
+});
+
+// Helper function to convert Supabase Savings to UI format
+const supabaseToSavings = (supabaseSavings: any): SavingsJar => ({
+  id: supabaseSavings.id,
+  name: supabaseSavings.name,
+  accountId: supabaseSavings.account_id,
+  currentBalance: supabaseSavings.current_balance,
+});
+
 const App: React.FC = () => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [accounts, setAccounts] = useState<Account[]>([]);
