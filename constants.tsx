@@ -1,5 +1,5 @@
 import { LayoutDashboard, Wallet, Receipt, CreditCard, Landmark, PiggyBank, Settings, Trash2, FileText } from 'lucide-react';
-import { Page } from './types';
+import { Page, Account, BudgetItem, Biller, Installment, SavingsJar, BudgetCategory, PaymentSchedule, CategorizedSetupItem } from './types';
 
 export const NAV_ITEMS = [
   { id: Page.DASHBOARD, label: 'Dashboard', icon: <LayoutDashboard className="w-5 h-5" />, path: "/" },
@@ -22,7 +22,7 @@ export const INITIAL_CATEGORIES: BudgetCategory[] = [
 ];
 
 export const INITIAL_ACCOUNTS: Account[] = [
-  { id: '1', bank: 'EastWest VISA Privilege', classification: 'Credit Card', balance: 5240.50, type: 'Credit' },
+  { id: '1', bank: 'EastWest VISA Privilege', classification: 'Credit Card', balance: 5240.50, type: 'Credit', creditLimit: 25000, billingDate: '10th', dueDate: '5th' },
   { id: '2', bank: 'Amex', classification: 'Credit Card', balance: 1200.00, type: 'Credit', creditLimit: 10000, billingDate: '15th', dueDate: '1st' },
   { id: '3', bank: 'Ally', classification: 'Savings', balance: 15000.00, type: 'Debit' },
 ];
@@ -76,14 +76,26 @@ export const INITIAL_BILLERS: Biller[] = [
     expectedAmount: 50,
     timing: '1/2',
     activationDate: { month: 'January', year: '2026' },
+    deactivationDate: { month: 'December', year: '2025' },
     status: 'inactive',
     schedules: generateSchedules(50, '2026')
+  },
+  {
+    id: 'bl3',
+    name: 'Water Service',
+    category: 'Utilities',
+    dueDate: '25th',
+    expectedAmount: 80,
+    timing: '2/2',
+    activationDate: { month: 'January', year: '2026' },
+    status: 'active',
+    schedules: generateSchedules(80, '2026')
   }
 ];
 
 export const INITIAL_INSTALLMENTS: Installment[] = [
-  { id: 'i1', name: 'iPhone 15 Pro', totalAmount: 1200, monthlyAmount: 50, termDuration: '24 months', paidAmount: 300, accountId: '2' },
-  { id: 'i2', name: 'MacBook Air', totalAmount: 1500, monthlyAmount: 125, termDuration: '12 months', paidAmount: 1500, accountId: '1' },
+  { id: 'i1', name: 'iPhone 15 Pro', totalAmount: 1200, monthlyAmount: 50, termDuration: '24 months', paidAmount: 300, accountId: '2', startDate: '2025-01' },
+  { id: 'i2', name: 'MacBook Air', totalAmount: 1500, monthlyAmount: 125, termDuration: '12 months', paidAmount: 1500, accountId: '1', startDate: '2024-12' },
 ];
 
 export const INITIAL_SAVINGS: SavingsJar[] = [
