@@ -205,21 +205,24 @@ const Accounts: React.FC<AccountsProps> = ({ accounts, onAdd, onDelete, onEdit, 
             </button>
 
             {openMenuId === acc.id && (
-              <div className="absolute right-0 mt-2 w-44 bg-white rounded-xl shadow-lg border border-gray-100 z-50">
+              <div 
+                className="absolute right-0 mt-2 w-44 bg-white rounded-xl shadow-lg border border-gray-100 z-50"
+                onClick={(e) => e.stopPropagation()}
+              >
                 <button
-                  onClick={() => { setOpenMenuId(null); openEditModal(acc); }}
+                  onClick={(e) => { e.stopPropagation(); setOpenMenuId(null); openEditModal(acc); }}
                   className="w-full text-left px-4 py-3 hover:bg-gray-50 flex items-center space-x-3 text-sm"
                 >
                   <span>Edit</span>
                 </button>
                 <button
-                  onClick={() => { setOpenMenuId(null); openDeactivateDialog(acc.id); }}
+                  onClick={(e) => { e.stopPropagation(); setOpenMenuId(null); openDeactivateDialog(acc.id); }}
                   className="w-full text-left px-4 py-3 hover:bg-gray-50 flex items-center space-x-3 text-sm"
                 >
                   <span>Deactivate</span>
                 </button>
                 <button
-                  onClick={() => { setOpenMenuId(null); handleDeleteTrigger(acc.id, acc.bank); }}
+                  onClick={(e) => { e.stopPropagation(); setOpenMenuId(null); handleDeleteTrigger(acc.id, acc.bank); }}
                   className="w-full text-left px-4 py-3 hover:bg-gray-50 flex items-center space-x-3 text-sm text-red-600"
                 >
                   <span>Delete</span>
@@ -278,6 +281,16 @@ const Accounts: React.FC<AccountsProps> = ({ accounts, onAdd, onDelete, onEdit, 
         <div className="mt-6 flex items-center justify-between">
           <div />{/* spacer */}
           <div className="flex items-center space-x-2">
+            {isCredit && (
+              <Link
+                to={`/accounts/statement?account=${acc.id}`}
+                onClick={(e) => e.stopPropagation()}
+                className="bg-purple-100 text-purple-700 px-3 py-2 rounded-xl text-sm font-semibold hover:bg-purple-200 transition"
+                aria-label={`View ${acc.bank} statement`}
+              >
+                View Statement
+              </Link>
+            )}
             <Link
               to={`/accounts/view?account=${acc.id}`}
               onClick={(e) => e.stopPropagation()}
