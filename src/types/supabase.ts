@@ -74,6 +74,17 @@ export interface SupabaseCategory {
   updated_at: string; // timestamptz
 }
 
+export interface SupabaseBudgetSetup {
+  id: string; // uuid
+  month: string;
+  timing: string;
+  status: string;
+  total_amount: number; // numeric
+  data: any; // jsonb - categorized setup items
+  created_at: string; // timestamptz
+  updated_at: string; // timestamptz
+}
+
 // Input types for creating new records (without id and timestamps)
 
 export type CreateAccountInput = Omit<SupabaseAccount, 'id' | 'created_at'>;
@@ -96,6 +107,9 @@ export type UpdateTrashInput = Partial<CreateTrashInput>;
 
 export type CreateCategoryInput = Omit<SupabaseCategory, 'id' | 'created_at' | 'updated_at'>;
 export type UpdateCategoryInput = Partial<CreateCategoryInput>;
+
+export type CreateBudgetSetupInput = Omit<SupabaseBudgetSetup, 'id' | 'created_at' | 'updated_at'>;
+export type UpdateBudgetSetupInput = Partial<CreateBudgetSetupInput>;
 
 // Database Response Types (for better type safety with Supabase responses)
 

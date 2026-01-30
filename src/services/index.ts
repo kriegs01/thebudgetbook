@@ -11,3 +11,4 @@ export * from './savingsService';
 export * from './transactionsService';
 export * from './trashService';
 export * from './categoriesService';
+export * from './budgetSetupsService';

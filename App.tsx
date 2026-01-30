@@ -7,8 +7,10 @@ import { getAllAccountsFrontend, createAccountFrontend, updateAccountFrontend, d
 import { getAllInstallmentsFrontend, createInstallmentFrontend, updateInstallmentFrontend, deleteInstallmentFrontend } from './src/services/installmentsService';
 import { getAllSavingsFrontend, createSavingsFrontend, updateSavingsFrontend, deleteSavingsFrontend } from './src/services/savingsService';
 import { getAllCategories, createCategory, updateCategory, deleteCategory } from './src/services/categoriesService';
-import type { Biller, Account, Installment, SavingsJar, BudgetCategory } from './types';
-import type { SupabaseCategory } from './src/types/supabase';
+import { getAllBudgetSetups, createBudgetSetup, updateBudgetSetup, deleteBudgetSetup } from './src/services/budgetSetupsService';
+import { moveToTrash } from './src/services/trashService';
+import type { Biller, Account, Installment, SavingsJar, BudgetCategory, SavedBudgetSetup } from './types';
+import type { SupabaseCategory, SupabaseBudgetSetup } from './src/types/supabase';
 
 // Pages
 import Dashboard from './pages/Dashboard';
@@ -139,6 +141,25 @@ const categoryToSupabase = (category: BudgetCategory) => ({
   subcategories: category.subcategories,
 });
 
+// Helper function to convert Supabase Budget Setup to UI format
+const supabaseToBudgetSetup = (supabaseSetup: SupabaseBudgetSetup): SavedBudgetSetup => ({
+  id: supabaseSetup.id,
+  month: supabaseSetup.month,
+  timing: supabaseSetup.timing,
+  status: supabaseSetup.status,
+  totalAmount: supabaseSetup.total_amount,
+  data: supabaseSetup.data,
+});
+
+// Helper function to convert UI Budget Setup to Supabase format
+const budgetSetupToSupabase = (setup: SavedBudgetSetup) => ({
+  month: setup.month,
+  timing: setup.timing,
+  status: setup.status,
+  total_amount: setup.totalAmount,
+  data: setup.data,
+});
+
 const App: React.FC = () => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [accounts, setAccounts] = useState<Account[]>([]);
@@ -160,16 +181,9 @@ const App: React.FC = () => {
   const [categoriesError, setCategoriesError] = useState<string | null>(null);
   
   // Lifted Budget Setups State
-  const [budgetSetups, setBudgetSetups] = useState([
-    { 
-      id: '1', 
-      month: 'January', 
-      timing: '1/2', 
-      status: 'Active', 
-      totalAmount: 3000,
-      data: JSON.parse(JSON.stringify(DEFAULT_SETUP))
-    },
-  ]);
+  const [budgetSetups, setBudgetSetups] = useState<SavedBudgetSetup[]>([]);
+  const [budgetSetupsLoading, setBudgetSetupsLoading] = useState(true);
+  const [budgetSetupsError, setBudgetSetupsError] = useState<string | null>(null);
 
   // Shared Trash State
   const [trashSetups, setTrashSetups] = useState([]);
@@ -265,12 +279,34 @@ const App: React.FC = () => {
       
       setCategoriesLoading(false);
     };
+
+    const fetchBudgetSetups = async () => {
+      setBudgetSetupsLoading(true);
+      setBudgetSetupsError(null);
+      
+      const { data, error } = await getAllBudgetSetups();
+      
+      if (error) {
+        console.error('Error loading budget setups:', error);
+        setBudgetSetupsError('Failed to load budget setups from database');
+        setBudgetSetups([]);
+      } else if (data && data.length > 0) {
+        // Convert Supabase budget setups to UI format
+        setBudgetSetups(data.map(supabaseToBudgetSetup));
+      } else {
+        // If no setups in database, keep empty array
+        setBudgetSetups([]);
+      }
+      
+      setBudgetSetupsLoading(false);
+    };
     
     fetchBillers();
     fetchAccounts();
     fetchInstallments();
     fetchSavings();
     fetchCategories();
+    fetchBudgetSetups();
   }, []);
 
   // Reload functions for each entity
@@ -434,6 +470,80 @@ const App: React.FC = () => {
     }
   };
 
+  // Budget Setup handlers
+  const handleSaveBudgetSetup = async (setup: SavedBudgetSetup) => {
+    try {
+      const existingIndex = budgetSetups.findIndex(s => s.month === setup.month && s.timing === setup.timing);
+      
+      if (existingIndex !== -1) {
+        // Update existing setup
+        const existingSetup = budgetSetups[existingIndex];
+        const { data, error } = await updateBudgetSetup(existingSetup.id, budgetSetupToSupabase(setup));
+        
+        if (error) {
+          console.error('Error updating budget setup:', error);
+          setBudgetSetupsError('Failed to update budget setup');
+          return;
+        }
+        
+        if (data) {
+          // Update local state
+          setBudgetSetups(prev => {
+            const updated = [...prev];
+            updated[existingIndex] = supabaseToBudgetSetup(data);
+            return updated;
+          });
+        }
+      } else {
+        // Create new setup
+        const { data, error } = await createBudgetSetup(budgetSetupToSupabase(setup));
+        
+        if (error) {
+          console.error('Error creating budget setup:', error);
+          setBudgetSetupsError('Failed to create budget setup');
+          return;
+        }
+        
+        if (data) {
+          // Add to local state
+          setBudgetSetups(prev => [supabaseToBudgetSetup(data), ...prev]);
+        }
+      }
+    } catch (err) {
+      console.error('Error saving budget setup:', err);
+      setBudgetSetupsError('Failed to save budget setup');
+    }
+  };
+
+  const handleDeleteBudgetSetup = async (id: string) => {
+    try {
+      // Move to trash first
+      const setupToDelete = budgetSetups.find(s => s.id === id);
+      if (setupToDelete) {
+        await moveToTrash({
+          type: 'budget_setup',
+          original_id: id,
+          data: setupToDelete
+        });
+      }
+      
+      // Delete from database
+      const { error } = await deleteBudgetSetup(id);
+      
+      if (error) {
+        console.error('Error deleting budget setup:', error);
+        setBudgetSetupsError('Failed to delete budget setup');
+        return;
+      }
+      
+      // Update local state
+      setBudgetSetups(prev => prev.filter(s => s.id !== id));
+    } catch (err) {
+      console.error('Error deleting budget setup:', err);
+      setBudgetSetupsError('Failed to delete budget setup');
+    }
+  };
+
   const handleResetAll = () => {
     const confirmation = window.confirm(
       "WARNING: This will permanently clear all your accounts, budget history, billers, installments, savings jars, and trash. This action cannot be undone. Do you want to proceed?"
@@ -506,12 +616,10 @@ const App: React.FC = () => {
                   categories={categories}
                   savedSetups={budgetSetups}
                   setSavedSetups={setBudgetSetups}
+                  onSaveBudgetSetup={handleSaveBudgetSetup}
                   onAdd={(item) => setBudgetItems(prev => [...prev, item])}
                   onUpdateBiller={handleUpdateBiller}
-                  onMoveToTrash={(setup) => {
-                    setBudgetSetups(prev => prev.filter(s => s.id !== setup.id));
-                    setTrashSetups(prev => [...prev, setup]);
-                  }}
+                  onMoveToTrash={handleDeleteBudgetSetup}
                 />
               } />
               <Route path="/billers" element={

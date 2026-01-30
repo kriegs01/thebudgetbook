@@ -9,6 +9,7 @@ interface BudgetProps {
   categories: BudgetCategory[];
   savedSetups: SavedBudgetSetup[];
   setSavedSetups: React.Dispatch<React.SetStateAction<SavedBudgetSetup[]>>;
+  onSaveBudgetSetup?: (setup: SavedBudgetSetup) => void;
   onAdd: (item: BudgetItem) => void;
   onUpdateBiller: (biller: Biller) => Promise<void>;
   onMoveToTrash?: (setup: SavedBudgetSetup) => void;
@@ -16,7 +17,7 @@ interface BudgetProps {
 
 const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 
-const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSetups, setSavedSetups, onUpdateBiller, onMoveToTrash }) => {
+const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSetups, setSavedSetups, onSaveBudgetSetup, onUpdateBiller, onMoveToTrash }) => {
   const [view, setView] = useState<'summary' | 'setup'>('summary');
   const [selectedMonth, setSelectedMonth] = useState(MONTHS[new Date().getMonth()]);
   const [selectedTiming, setSelectedTiming] = useState<'1/2' | '2/2'>('1/2');
@@ -193,17 +194,39 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
       });
     });
 
-    setSavedSetups(prev => {
-      const existingIndex = prev.findIndex(s => s.month === selectedMonth && s.timing === selectedTiming);
-      if (existingIndex !== -1) {
-        const updated = [...prev];
-        updated[existingIndex] = { ...updated[existingIndex], totalAmount: total, data: JSON.parse(JSON.stringify(setupData)), status: 'Saved' };
-        return updated;
-      } else {
-        const newSetup: SavedBudgetSetup = { id: Math.random().toString(36).substr(2, 9), month: selectedMonth, timing: selectedTiming, status: 'Saved', totalAmount: total, data: JSON.parse(JSON.stringify(setupData)) };
-        return [newSetup, ...prev];
-      }
-    });
+    // Create the setup object
+    const setupToSave: SavedBudgetSetup = {
+      id: '', // Will be set by Supabase or found in existing
+      month: selectedMonth,
+      timing: selectedTiming,
+      status: 'Saved',
+      totalAmount: total,
+      data: JSON.parse(JSON.stringify(setupData))
+    };
+
+    // Check if updating existing or creating new
+    const existing = savedSetups.find(s => s.month === selectedMonth && s.timing === selectedTiming);
+    if (existing) {
+      setupToSave.id = existing.id;
+    }
+
+    // Call the save handler if provided, otherwise use setState
+    if (onSaveBudgetSetup) {
+      onSaveBudgetSetup(setupToSave);
+    } else {
+      // Fallback to old behavior
+      setSavedSetups(prev => {
+        const existingIndex = prev.findIndex(s => s.month === selectedMonth && s.timing === selectedTiming);
+        if (existingIndex !== -1) {
+          const updated = [...prev];
+          updated[existingIndex] = { ...updated[existingIndex], totalAmount: total, data: JSON.parse(JSON.stringify(setupData)), status: 'Saved' };
+          return updated;
+        } else {
+          const newSetup: SavedBudgetSetup = { id: Math.random().toString(36).substr(2, 9), month: selectedMonth, timing: selectedTiming, status: 'Saved', totalAmount: total, data: JSON.parse(JSON.stringify(setupData)) };
+          return [newSetup, ...prev];
+        }
+      });
+    }
     setView('summary');
   };
 
