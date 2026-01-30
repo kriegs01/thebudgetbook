@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { BudgetItem, Account, Biller, PaymentSchedule, CategorizedSetupItem, SavedBudgetSetup, BudgetCategory } from '../types';
 import { Plus, Check, ChevronDown, Trash2, Save, FileText, ArrowRight, Upload, CheckCircle2, X, AlertTriangle } from 'lucide-react';
+import { createBudgetSetupFrontend, updateBudgetSetupFrontend } from '../src/services/budgetSetupsService';
 
 interface BudgetProps {
   items: BudgetItem[];
@@ -12,11 +13,12 @@ interface BudgetProps {
   onAdd: (item: BudgetItem) => void;
   onUpdateBiller: (biller: Biller) => Promise<void>;
   onMoveToTrash?: (setup: SavedBudgetSetup) => void;
+  onReloadSetups?: () => Promise<void>;
 }
 
 const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 
-const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSetups, setSavedSetups, onUpdateBiller, onMoveToTrash }) => {
+const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSetups, setSavedSetups, onUpdateBiller, onMoveToTrash, onReloadSetups }) => {
   const [view, setView] = useState<'summary' | 'setup'>('summary');
   const [selectedMonth, setSelectedMonth] = useState(MONTHS[new Date().getMonth()]);
   const [selectedTiming, setSelectedTiming] = useState<'1/2' | '2/2'>('1/2');
@@ -25,30 +27,31 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
   const [setupData, setSetupData] = useState<{ [key: string]: CategorizedSetupItem[] }>({});
   const [removedIds, setRemovedIds] = useState<Set<string>>(new Set());
 
-  // Month Summary State with localStorage persistence
+  // Month Summary State - stored in Supabase with setup data
   const [projectedSalary, setProjectedSalary] = useState<string>('11000');
   const [actualSalary, setActualSalary] = useState<string>('');
 
-  // Load from localStorage when month/timing changes
+  // Load from saved setup when month/timing changes
   useEffect(() => {
-    const projectedKey = `budgetSetup_${selectedMonth}_${selectedTiming}_projectedSalary`;
-    const actualKey = `budgetSetup_${selectedMonth}_${selectedTiming}_actualSalary`;
-    const storedProjected = localStorage.getItem(projectedKey);
-    const storedActual = localStorage.getItem(actualKey);
-    setProjectedSalary(storedProjected || '11000');
-    setActualSalary(storedActual || '');
-  }, [selectedMonth, selectedTiming]);
-
-  // Save to localStorage when values change
-  useEffect(() => {
-    const projectedKey = `budgetSetup_${selectedMonth}_${selectedTiming}_projectedSalary`;
-    localStorage.setItem(projectedKey, projectedSalary);
-  }, [projectedSalary, selectedMonth, selectedTiming]);
-
-  useEffect(() => {
-    const actualKey = `budgetSetup_${selectedMonth}_${selectedTiming}_actualSalary`;
-    localStorage.setItem(actualKey, actualSalary);
-  }, [actualSalary, selectedMonth, selectedTiming]);
+    const existingSetup = savedSetups.find(s => s.month === selectedMonth && s.timing === selectedTiming);
+    if (existingSetup && existingSetup.data) {
+      // Load salary data from setup if available
+      if (existingSetup.data._projectedSalary !== undefined) {
+        setProjectedSalary(existingSetup.data._projectedSalary);
+      } else {
+        setProjectedSalary('11000');
+      }
+      if (existingSetup.data._actualSalary !== undefined) {
+        setActualSalary(existingSetup.data._actualSalary);
+      } else {
+        setActualSalary('');
+      }
+    } else {
+      // Reset to defaults if no saved setup
+      setProjectedSalary('11000');
+      setActualSalary('');
+    }
+  }, [selectedMonth, selectedTiming, savedSetups]);
 
   // Modal States
   const [showPayModal, setShowPayModal] = useState<{ biller: Biller, schedule: PaymentSchedule } | null>(null);
@@ -185,7 +188,11 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
     });
   };
 
-  const handleSaveSetup = () => {
+  /**
+   * Save budget setup to Supabase
+   * This replaces the previous localStorage-based persistence
+   */
+  const handleSaveSetup = async () => {
     let total = 0;
     (Object.values(setupData) as CategorizedSetupItem[][]).forEach(catItems => {
       catItems.forEach(item => {
@@ -193,18 +200,66 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
       });
     });
 
-    setSavedSetups(prev => {
-      const existingIndex = prev.findIndex(s => s.month === selectedMonth && s.timing === selectedTiming);
-      if (existingIndex !== -1) {
-        const updated = [...prev];
-        updated[existingIndex] = { ...updated[existingIndex], totalAmount: total, data: JSON.parse(JSON.stringify(setupData)), status: 'Saved' };
-        return updated;
+    const existingSetup = savedSetups.find(s => s.month === selectedMonth && s.timing === selectedTiming);
+    
+    // Prepare data including salary information
+    const dataToSave = {
+      ...JSON.parse(JSON.stringify(setupData)),
+      _projectedSalary: projectedSalary,
+      _actualSalary: actualSalary
+    };
+    
+    try {
+      if (existingSetup) {
+        // Update existing setup in Supabase
+        const updatedSetup: SavedBudgetSetup = {
+          ...existingSetup,
+          totalAmount: total,
+          data: dataToSave,
+          status: 'Saved'
+        };
+        
+        const { data, error } = await updateBudgetSetupFrontend(updatedSetup);
+        
+        if (error) {
+          console.error('Error updating budget setup:', error);
+          alert('Failed to save budget setup. Please try again.');
+          return;
+        }
+        
+        // Update local state
+        setSavedSetups(prev => 
+          prev.map(s => s.id === existingSetup.id ? updatedSetup : s)
+        );
       } else {
-        const newSetup: SavedBudgetSetup = { id: Math.random().toString(36).substr(2, 9), month: selectedMonth, timing: selectedTiming, status: 'Saved', totalAmount: total, data: JSON.parse(JSON.stringify(setupData)) };
-        return [newSetup, ...prev];
+        // Create new setup in Supabase
+        const newSetup: Omit<SavedBudgetSetup, 'id'> = {
+          month: selectedMonth,
+          timing: selectedTiming,
+          status: 'Saved',
+          totalAmount: total,
+          data: dataToSave
+        };
+        
+        const { data, error } = await createBudgetSetupFrontend(newSetup);
+        
+        if (error) {
+          console.error('Error creating budget setup:', error);
+          alert('Failed to save budget setup. Please try again.');
+          return;
+        }
+        
+        // Reload setups from Supabase to get the new one with generated ID
+        if (onReloadSetups) {
+          await onReloadSetups();
+        }
       }
-    });
-    setView('summary');
+      
+      setView('summary');
+    } catch (error) {
+      console.error('Error in handleSaveSetup:', error);
+      alert('Failed to save budget setup. Please try again.');
+    }
   };
 
   const handleTransactionSubmit = (e: React.FormEvent) => {
