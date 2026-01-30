@@ -3,6 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { BudgetItem, Account, Biller, PaymentSchedule, CategorizedSetupItem, SavedBudgetSetup, BudgetCategory } from '../types';
 import { Plus, Check, ChevronDown, Trash2, Save, FileText, ArrowRight, Upload, CheckCircle2, X, AlertTriangle } from 'lucide-react';
 import { createBudgetSetupFrontend, updateBudgetSetupFrontend } from '../src/services/budgetSetupsService';
+import { createTransaction } from '../src/services/transactionsService';
 
 interface BudgetProps {
   items: BudgetItem[];
@@ -190,28 +191,116 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
   };
 
   /**
+   * Validate setupData structure before saving
+   */
+  const validateSetupDataStructure = (data: any): { valid: boolean; error?: string } => {
+    console.log('[Budget] Validating setupData structure');
+    console.log('[Budget] Data type:', typeof data);
+    console.log('[Budget] Is array:', Array.isArray(data));
+    
+    // Check if data is an object (not null, not array)
+    if (typeof data !== 'object' || data === null || Array.isArray(data)) {
+      return { 
+        valid: false, 
+        error: `setupData must be a plain object, got: ${typeof data} ${Array.isArray(data) ? '(array)' : ''}`
+      };
+    }
+
+    // Check each category
+    const categories = Object.keys(data).filter(key => !key.startsWith('_'));
+    console.log('[Budget] Categories found:', categories);
+    
+    for (const category of categories) {
+      const items = data[category];
+      
+      if (!Array.isArray(items)) {
+        return { 
+          valid: false, 
+          error: `Category "${category}" must contain an array, got: ${typeof items}`
+        };
+      }
+      
+      console.log(`[Budget] Category "${category}" has ${items.length} items`);
+      
+      // Validate each item
+      for (let i = 0; i < items.length; i++) {
+        const item = items[i];
+        if (typeof item !== 'object' || item === null || Array.isArray(item)) {
+          return { 
+            valid: false, 
+            error: `Item ${i} in category "${category}" must be an object, got: ${typeof item}`
+          };
+        }
+        
+        // Check required fields
+        if (!item.id || !item.name || item.amount === undefined) {
+          return { 
+            valid: false, 
+            error: `Item ${i} in category "${category}" is missing required fields (id, name, or amount)`
+          };
+        }
+      }
+    }
+
+    return { valid: true };
+  };
+
+  /**
    * Save budget setup to Supabase
    * This replaces the previous localStorage-based persistence
    */
   const handleSaveSetup = async () => {
+    console.log('[Budget] ===== Starting budget setup save =====');
+    console.log('[Budget] Selected month:', selectedMonth);
+    console.log('[Budget] Selected timing:', selectedTiming);
+    console.log('[Budget] Current setupData type:', typeof setupData);
+    console.log('[Budget] Current setupData keys:', Object.keys(setupData));
+    
     let total = 0;
     (Object.values(setupData) as CategorizedSetupItem[][]).forEach(catItems => {
       catItems.forEach(item => {
-        if (item.included) total += parseFloat(item.amount) || 0;
+        if (item.included) {
+          const amount = parseFloat(item.amount);
+          if (isNaN(amount)) {
+            console.warn(`[Budget] Invalid amount for item "${item.name}": "${item.amount}"`);
+          } else {
+            total += amount;
+          }
+        }
       });
     });
 
+    console.log('[Budget] Calculated total amount:', total);
+
     const existingSetup = savedSetups.find(s => s.month === selectedMonth && s.timing === selectedTiming);
+    console.log('[Budget] Existing setup found:', !!existingSetup);
+    
+    // Validate setupData structure before saving
+    const validation = validateSetupDataStructure(setupData);
+    if (!validation.valid) {
+      console.error('[Budget] setupData validation failed:', validation.error);
+      alert(`Cannot save budget setup: ${validation.error}`);
+      return;
+    }
+    console.log('[Budget] setupData validation passed');
     
     // Prepare data including salary information
+    // Use spread operator instead of JSON parse/stringify for cleaner deep clone
     const dataToSave = {
-      ...JSON.parse(JSON.stringify(setupData)),
+      ...JSON.parse(JSON.stringify(setupData)), // Deep clone to avoid reference issues
       _projectedSalary: projectedSalary,
       _actualSalary: actualSalary
     };
     
+    console.log('[Budget] Data to save type:', typeof dataToSave);
+    console.log('[Budget] Data to save keys:', Object.keys(dataToSave));
+    console.log('[Budget] Projected salary:', projectedSalary);
+    console.log('[Budget] Actual salary:', actualSalary);
+    
     try {
       if (existingSetup) {
+        console.log('[Budget] Updating existing setup, ID:', existingSetup.id);
+        
         // Update existing setup in Supabase
         const updatedSetup: SavedBudgetSetup = {
           ...existingSetup,
@@ -223,16 +312,23 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
         const { data, error } = await updateBudgetSetupFrontend(updatedSetup);
         
         if (error) {
-          console.error('Error updating budget setup:', error);
-          alert('Failed to save budget setup. Please try again.');
+          console.error('[Budget] Error updating budget setup:', error);
+          alert('Failed to save budget setup. Please check the console for details.');
           return;
         }
+        
+        console.log('[Budget] Budget setup updated successfully');
+        console.log('[Budget] Updated record ID:', data?.id);
+        console.log('[Budget] Updated record data type:', data?.data ? typeof data.data : 'undefined');
+        console.log('[Budget] Updated record data keys:', data?.data ? Object.keys(data.data) : []);
         
         // Reload setups from Supabase to get fresh data
         if (onReloadSetups) {
           await onReloadSetups();
         }
       } else {
+        console.log('[Budget] Creating new setup');
+        
         // Create new setup in Supabase
         const newSetup: Omit<SavedBudgetSetup, 'id'> = {
           month: selectedMonth,
@@ -245,10 +341,15 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
         const { data, error } = await createBudgetSetupFrontend(newSetup);
         
         if (error) {
-          console.error('Error creating budget setup:', error);
-          alert('Failed to save budget setup. Please try again.');
+          console.error('[Budget] Error creating budget setup:', error);
+          alert('Failed to save budget setup. Please check the console for details.');
           return;
         }
+        
+        console.log('[Budget] Budget setup created successfully');
+        console.log('[Budget] Created record ID:', data?.id);
+        console.log('[Budget] Created record data type:', data?.data ? typeof data.data : 'undefined');
+        console.log('[Budget] Created record data keys:', data?.data ? Object.keys(data.data) : []);
         
         // Reload setups from Supabase to get the new one with generated ID
         if (onReloadSetups) {
@@ -256,39 +357,45 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
         }
       }
       
+      console.log('[Budget] ===== Budget setup save completed successfully =====');
       setView('summary');
     } catch (error) {
-      console.error('Error in handleSaveSetup:', error);
-      alert('Failed to save budget setup. Please try again.');
+      console.error('[Budget] Error in handleSaveSetup:', error);
+      alert('Failed to save budget setup. Please check the console for details.');
     }
   };
 
-  const handleTransactionSubmit = (e: React.FormEvent) => {
+  const handleTransactionSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    // Save transaction to localStorage
+    console.log('[Budget] Submitting transaction to Supabase');
+    console.log('[Budget] Transaction data:', transactionFormData);
+    
+    // Save transaction to Supabase instead of localStorage
     const transaction = {
-      id: Math.random().toString(36).substr(2, 9),
       name: transactionFormData.name,
       date: new Date(transactionFormData.date).toISOString(),
       amount: parseFloat(transactionFormData.amount),
-      paymentMethodId: transactionFormData.accountId
+      payment_method_id: transactionFormData.accountId
     };
     
     try {
-      const raw = localStorage.getItem('transactions');
-      let transactions = [];
-      if (raw) {
-        transactions = JSON.parse(raw);
+      const { data, error } = await createTransaction(transaction);
+      
+      if (error) {
+        console.error('[Budget] Failed to save transaction:', error);
+        alert('Failed to save transaction. Please try again.');
+        return;
       }
-      transactions.unshift(transaction);
-      localStorage.setItem('transactions', JSON.stringify(transactions));
+      
+      console.log('[Budget] Transaction saved successfully:', data);
+      
+      // Close the modal
+      setShowTransactionModal(false);
     } catch (e) {
-      console.error('Failed to save transaction:', e);
+      console.error('[Budget] Error saving transaction:', e);
+      alert('Failed to save transaction. Please try again.');
     }
-    
-    // Just close the modal - the item is already in Purchases
-    setShowTransactionModal(false);
   };
 
   const handlePaySubmit = async (e: React.FormEvent) => {
@@ -330,11 +437,32 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
   };
 
   const handleLoadSetup = (setup: SavedBudgetSetup) => {
-    setSetupData(JSON.parse(JSON.stringify(setup.data)));
+    console.log('[Budget] ===== Loading budget setup =====');
+    console.log('[Budget] Setup ID:', setup.id);
+    console.log('[Budget] Setup month:', setup.month);
+    console.log('[Budget] Setup timing:', setup.timing);
+    console.log('[Budget] Setup data type:', typeof setup.data);
+    console.log('[Budget] Setup data keys:', setup.data ? Object.keys(setup.data) : []);
+    
+    // Validate that setup.data is an object before loading
+    if (typeof setup.data !== 'object' || setup.data === null || Array.isArray(setup.data)) {
+      console.error('[Budget] Invalid setup data structure:', typeof setup.data, Array.isArray(setup.data));
+      alert('Cannot load this setup: data structure is invalid');
+      return;
+    }
+    
+    // Deep clone the data to avoid reference issues
+    const loadedData = JSON.parse(JSON.stringify(setup.data));
+    console.log('[Budget] Loaded data type:', typeof loadedData);
+    console.log('[Budget] Loaded data keys:', Object.keys(loadedData));
+    
+    setSetupData(loadedData);
     setRemovedIds(new Set());
     setSelectedMonth(setup.month);
     setSelectedTiming(setup.timing as '1/2' | '2/2');
     setView('setup');
+    
+    console.log('[Budget] ===== Budget setup loaded successfully =====');
   };
 
   if (view === 'summary') {
