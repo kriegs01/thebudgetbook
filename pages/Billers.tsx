@@ -432,6 +432,24 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
               )}
             </div>
           )}
+
+          {/* Empty State */}
+          {!loading && activeBillers.length === 0 && inactiveBillers.length === 0 && (
+            <div className="text-center py-12">
+              <div className="inline-flex items-center justify-center w-20 h-20 rounded-full bg-gray-100 mb-4">
+                <Bell className="w-10 h-10 text-gray-400" />
+              </div>
+              <h3 className="text-xl font-bold text-gray-900 mb-2">No Billers Yet</h3>
+              <p className="text-gray-500 mb-6">Get started by adding your first recurring bill</p>
+              <button 
+                onClick={() => { setShowAddModal(true); setTimingFeedback(''); }} 
+                className="inline-flex items-center space-x-2 bg-indigo-600 text-white px-6 py-3 rounded-2xl font-bold hover:bg-indigo-700 shadow-lg"
+              >
+                <Plus className="w-5 h-5" />
+                <span>Add Your First Biller</span>
+              </button>
+            </div>
+          )}
         </>
       )}
 
