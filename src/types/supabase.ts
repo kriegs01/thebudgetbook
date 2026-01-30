@@ -58,6 +58,22 @@ export interface SupabaseTransaction {
   payment_method_id: string; // uuid
 }
 
+export interface SupabaseTrash {
+  id: string; // uuid
+  type: string; // 'transaction', 'account', 'biller', 'installment', 'savings', 'budget'
+  original_id: string; // uuid
+  data: any; // jsonb - full record as JSON
+  deleted_at: string; // timestamptz
+}
+
+export interface SupabaseCategory {
+  id: string; // uuid
+  name: string;
+  subcategories: string[]; // jsonb stored as array
+  created_at: string; // timestamptz
+  updated_at: string; // timestamptz
+}
+
 // Input types for creating new records (without id and timestamps)
 
 export type CreateAccountInput = Omit<SupabaseAccount, 'id' | 'created_at'>;
@@ -74,6 +90,12 @@ export type UpdateSavingsInput = Partial<CreateSavingsInput>;
 
 export type CreateTransactionInput = Omit<SupabaseTransaction, 'id'>;
 export type UpdateTransactionInput = Partial<CreateTransactionInput>;
+
+export type CreateTrashInput = Omit<SupabaseTrash, 'id' | 'deleted_at'>;
+export type UpdateTrashInput = Partial<CreateTrashInput>;
+
+export type CreateCategoryInput = Omit<SupabaseCategory, 'id' | 'created_at' | 'updated_at'>;
+export type UpdateCategoryInput = Partial<CreateCategoryInput>;
 
 // Database Response Types (for better type safety with Supabase responses)
 

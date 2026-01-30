@@ -9,3 +9,5 @@ export * from './billersService';
 export * from './installmentsService';
 export * from './savingsService';
 export * from './transactionsService';
+export * from './trashService';
+export * from './categoriesService';
