@@ -2,6 +2,11 @@ import React, { useState } from 'react';
 import { Menu, ChevronLeft } from 'lucide-react';
 import { BrowserRouter, Routes, Route, NavLink } from 'react-router-dom';
 import { NAV_ITEMS, INITIAL_ACCOUNTS, INITIAL_BUDGET, INITIAL_BILLERS, INITIAL_INSTALLMENTS, INITIAL_SAVINGS, DEFAULT_SETUP, INITIAL_CATEGORIES } from './constants';
+import { createAccount } from './src/services/accountsService';
+import { createBiller } from './src/services/billersService';
+import { createInstallment } from './src/services/installmentsService';
+import { createSavings } from './src/services/savingsService';
+import type { Account, Biller, Installment, SavingsJar } from './types';
 
 // Pages
 import Dashboard from './pages/Dashboard';
@@ -16,6 +21,92 @@ import Savings from './pages/Savings';
 import SettingsPage from './pages/Settings';
 import TrashPage from './pages/Trash';
 import SupabaseDemo from './pages/SupabaseDemo';
+
+// Helper function to convert UI Account to Supabase format
+const accountToSupabase = (account: Account) => ({
+  bank: account.bank,
+  classification: account.classification,
+  balance: account.balance,
+  type: account.type,
+  credit_limit: account.creditLimit ?? null,
+  billing_date: account.billingDate ?? null,
+  due_date: account.dueDate ?? null,
+});
+
+// Helper function to convert Supabase Account to UI format
+const supabaseToAccount = (supabaseAccount: any): Account => ({
+  id: supabaseAccount.id,
+  bank: supabaseAccount.bank,
+  classification: supabaseAccount.classification,
+  balance: supabaseAccount.balance,
+  type: supabaseAccount.type,
+  creditLimit: supabaseAccount.credit_limit,
+  billingDate: supabaseAccount.billing_date,
+  dueDate: supabaseAccount.due_date,
+});
+
+// Helper function to convert UI Biller to Supabase format
+const billerToSupabase = (biller: Biller) => ({
+  name: biller.name,
+  category: biller.category,
+  due_date: biller.dueDate,
+  expected_amount: biller.expectedAmount,
+  timing: biller.timing,
+  activation_date: biller.activationDate,
+  deactivation_c: biller.deactivationDate ?? null,
+  status: biller.status,
+  schedules: biller.schedules,
+});
+
+// Helper function to convert Supabase Biller to UI format
+const supabaseToBiller = (supabaseBiller: any): Biller => ({
+  id: supabaseBiller.id,
+  name: supabaseBiller.name,
+  category: supabaseBiller.category,
+  dueDate: supabaseBiller.due_date,
+  expectedAmount: supabaseBiller.expected_amount,
+  timing: supabaseBiller.timing,
+  activationDate: supabaseBiller.activation_date,
+  deactivationDate: supabaseBiller.deactivation_c,
+  status: supabaseBiller.status,
+  schedules: supabaseBiller.schedules,
+});
+
+// Helper function to convert UI Installment to Supabase format
+const installmentToSupabase = (installment: Installment) => ({
+  name: installment.name,
+  total_amount: installment.totalAmount,
+  monthly_amount: installment.monthlyAmount,
+  term_duration: parseInt(installment.termDuration.split(' ')[0]) || 0, // Extract numeric value
+  paid_amount: installment.paidAmount,
+  account_id: installment.accountId,
+});
+
+// Helper function to convert Supabase Installment to UI format
+const supabaseToInstallment = (supabaseInstallment: any): Installment => ({
+  id: supabaseInstallment.id,
+  name: supabaseInstallment.name,
+  totalAmount: supabaseInstallment.total_amount,
+  monthlyAmount: supabaseInstallment.monthly_amount,
+  termDuration: `${supabaseInstallment.term_duration} months`,
+  paidAmount: supabaseInstallment.paid_amount,
+  accountId: supabaseInstallment.account_id,
+});
+
+// Helper function to convert UI SavingsJar to Supabase format
+const savingsToSupabase = (savings: SavingsJar) => ({
+  name: savings.name,
+  account_id: savings.accountId,
+  current_balance: savings.currentBalance,
+});
+
+// Helper function to convert Supabase Savings to UI format
+const supabaseToSavings = (supabaseSavings: any): SavingsJar => ({
+  id: supabaseSavings.id,
+  name: supabaseSavings.name,
+  accountId: supabaseSavings.account_id,
+  currentBalance: supabaseSavings.current_balance,
+});
 
 const App: React.FC = () => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
@@ -41,6 +132,94 @@ const App: React.FC = () => {
 
   // Shared Trash State
   const [trashSetups, setTrashSetups] = useState([]);
+
+  // Handler for adding accounts with Supabase
+  const handleAddAccount = async (account: Account) => {
+    try {
+      const supabaseAccount = accountToSupabase(account);
+      const { data, error } = await createAccount(supabaseAccount);
+      
+      if (error) {
+        console.error('Error creating account:', error);
+        alert('Failed to create account. Please try again.');
+        return;
+      }
+      
+      if (data) {
+        // Add the new account with the ID from Supabase
+        setAccounts(prev => [...prev, supabaseToAccount(data)]);
+      }
+    } catch (err) {
+      console.error('Unexpected error creating account:', err);
+      alert('An unexpected error occurred. Please try again.');
+    }
+  };
+
+  // Handler for adding billers with Supabase
+  const handleAddBiller = async (biller: Biller) => {
+    try {
+      const supabaseBiller = billerToSupabase(biller);
+      const { data, error } = await createBiller(supabaseBiller);
+      
+      if (error) {
+        console.error('Error creating biller:', error);
+        alert('Failed to create biller. Please try again.');
+        return;
+      }
+      
+      if (data) {
+        // Add the new biller with the ID from Supabase
+        setBillers(prev => [...prev, supabaseToBiller(data)]);
+      }
+    } catch (err) {
+      console.error('Unexpected error creating biller:', err);
+      alert('An unexpected error occurred. Please try again.');
+    }
+  };
+
+  // Handler for adding installments with Supabase
+  const handleAddInstallment = async (installment: Installment) => {
+    try {
+      const supabaseInstallment = installmentToSupabase(installment);
+      const { data, error } = await createInstallment(supabaseInstallment);
+      
+      if (error) {
+        console.error('Error creating installment:', error);
+        alert('Failed to create installment. Please try again.');
+        return;
+      }
+      
+      if (data) {
+        // Add the new installment with the ID from Supabase
+        setInstallments(prev => [...prev, supabaseToInstallment(data)]);
+      }
+    } catch (err) {
+      console.error('Unexpected error creating installment:', err);
+      alert('An unexpected error occurred. Please try again.');
+    }
+  };
+
+  // Handler for adding savings with Supabase
+  const handleAddSavings = async (savingsJar: SavingsJar) => {
+    try {
+      const supabaseSavings = savingsToSupabase(savingsJar);
+      const { data, error } = await createSavings(supabaseSavings);
+      
+      if (error) {
+        console.error('Error creating savings jar:', error);
+        alert('Failed to create savings jar. Please try again.');
+        return;
+      }
+      
+      if (data) {
+        // Add the new savings jar with the ID from Supabase
+        setSavings(prev => [...prev, supabaseToSavings(data)]);
+      }
+    } catch (err) {
+      console.error('Unexpected error creating savings jar:', err);
+      alert('An unexpected error occurred. Please try again.');
+    }
+  };
 
   const handleUpdateBiller = (updatedBiller) => {
     setBillers(prev => prev.map(b => b.id === updatedBiller.id ? updatedBiller : b));
@@ -134,7 +313,7 @@ const App: React.FC = () => {
                 <Billers
                   billers={billers}
                   installments={installments}
-                  onAdd={(b) => setBillers(prev => [...prev, b])}
+                  onAdd={handleAddBiller}
                   accounts={accounts}
                   categories={categories}
                   onUpdate={handleUpdateBiller}
@@ -146,7 +325,7 @@ const App: React.FC = () => {
                   installments={installments}
                   accounts={accounts}
                   billers={billers}
-                  onAdd={(i) => setInstallments(prev => [...prev, i])}
+                  onAdd={handleAddInstallment}
                   onUpdate={handleUpdateInstallment}
                   onDelete={(id) => setInstallments(prev => prev.filter(i => i.id !== id))}
                 />
@@ -154,7 +333,7 @@ const App: React.FC = () => {
               <Route path="/accounts" element={
                 <Accounts
                   accounts={accounts}
-                  onAdd={(a) => setAccounts(prev => [...prev, a])}
+                  onAdd={handleAddAccount}
                   onEdit={(a) => setAccounts(prev => prev.map(acc => acc.id === a.id ? a : acc))}
                   onDelete={(id) => setAccounts(prev => prev.filter(a => a.id !== id))}
                   onDeactivate={(id, when) => {
@@ -171,7 +350,7 @@ const App: React.FC = () => {
                 <Savings
                   jars={savings}
                   accounts={accounts}
-                  onAdd={(s) => setSavings(prev => [...prev, s])}
+                  onAdd={handleAddSavings}
                   onDelete={(id) => setSavings(prev => prev.filter(s => s.id !== id))}
                 />
               } />

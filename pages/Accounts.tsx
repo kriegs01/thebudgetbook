@@ -108,7 +108,7 @@ const Accounts: React.FC<AccountsProps> = ({ accounts, onAdd, onDelete, onEdit, 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     const created: Account = {
-      id: editingId ?? Math.random().toString(36).substr(2, 9),
+      id: editingId ?? '', // Will be replaced by Supabase UUID
       bank: formData.bank,
       classification: formData.classification,
       balance: parseFloat(formData.balance || '0'),

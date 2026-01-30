@@ -118,7 +118,7 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
     const status = calculateStatus(deactivationDate);
     
     const newBiller: Biller = {
-      id: Math.random().toString(36).substr(2, 9),
+      id: '', // Will be replaced by Supabase UUID
       name: addFormData.name,
       category: addFormData.category,
       dueDate: addFormData.dueDate,

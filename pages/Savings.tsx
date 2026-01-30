@@ -25,7 +25,7 @@ const Savings: React.FC<SavingsProps> = ({ jars, accounts, onAdd, onDelete }) =>
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     onAdd({
-      id: Math.random().toString(36).substr(2, 9),
+      id: '', // Will be replaced by Supabase UUID
       name: formData.name,
       accountId: formData.accountId,
       currentBalance: parseFloat(formData.currentBalance)

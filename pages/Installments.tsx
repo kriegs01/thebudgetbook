@@ -58,7 +58,7 @@ const Installments: React.FC<InstallmentsProps> = ({ installments, accounts, bil
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     onAdd({
-      id: Math.random().toString(36).substr(2, 9),
+      id: '', // Will be replaced by Supabase UUID
       name: formData.name,
       totalAmount: parseFloat(formData.totalAmount),
       monthlyAmount: parseFloat(formData.monthlyAmount),
