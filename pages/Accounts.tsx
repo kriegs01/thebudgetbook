@@ -8,7 +8,10 @@ import {
   MoreVertical,
   TrendingUp,
   Trash2,
-  AlertTriangle
+  AlertTriangle,
+  Power,
+  ChevronDown,
+  ChevronRight
 } from 'lucide-react';
 
 interface AccountsProps {
@@ -51,6 +54,10 @@ const Accounts: React.FC<AccountsProps> = ({ accounts, onAdd, onDelete, onEdit, 
 
   // menu open state per-account (id or null)
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
+  
+  // collapsible sections state
+  const [isDebitOpen, setIsDebitOpen] = useState(true);
+  const [isCreditOpen, setIsCreditOpen] = useState(true);
 
   // deactivate dialog state
   const [deactivateState, setDeactivateState] = useState<{
@@ -226,8 +233,15 @@ const Accounts: React.FC<AccountsProps> = ({ accounts, onAdd, onDelete, onEdit, 
         </div>
 
         <div className="mb-4">
-          <h3 className="text-lg font-bold text-gray-900 leading-tight">{acc.bank}</h3>
-          <p className="text-xs text-gray-400 font-medium uppercase tracking-wider">{acc.classification}</p>
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className="text-lg font-bold text-gray-900 leading-tight">{acc.bank}</h3>
+              <p className="text-xs text-gray-400 font-medium uppercase tracking-wider">{acc.classification}</p>
+            </div>
+            <span className="text-[10px] font-bold px-2 py-0.5 rounded uppercase bg-green-100 text-green-700 flex items-center gap-1">
+              <Power className="w-3 h-3" />Active
+            </span>
+          </div>
         </div>
 
         {/* Credit-specific UI: credit limit + progress bar shown above current balance */}
@@ -308,23 +322,35 @@ const Accounts: React.FC<AccountsProps> = ({ accounts, onAdd, onDelete, onEdit, 
       </div>
 
       <section>
-        <div className="flex items-center space-x-2 mb-6">
+        <button 
+          onClick={() => setIsDebitOpen(!isDebitOpen)}
+          className="flex items-center space-x-2 mb-6 text-gray-700 hover:text-gray-900 font-bold text-lg"
+        >
+          {isDebitOpen ? <ChevronDown className="w-5 h-5" /> : <ChevronRight className="w-5 h-5" />}
           <TrendingUp className="w-5 h-5 text-green-500" />
-          <h3 className="text-xl font-bold text-gray-800 uppercase tracking-widest text-sm">Debit & Assets</h3>
-        </div>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {debitAccounts.map(renderAccount)}
-        </div>
+          <h3 className="text-xl font-bold text-gray-800 uppercase tracking-widest text-sm">Debit & Assets ({debitAccounts.length})</h3>
+        </button>
+        {isDebitOpen && (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {debitAccounts.map(renderAccount)}
+          </div>
+        )}
       </section>
 
       <section>
-        <div className="flex items-center space-x-2 mb-6">
+        <button 
+          onClick={() => setIsCreditOpen(!isCreditOpen)}
+          className="flex items-center space-x-2 mb-6 text-gray-700 hover:text-gray-900 font-bold text-lg"
+        >
+          {isCreditOpen ? <ChevronDown className="w-5 h-5" /> : <ChevronRight className="w-5 h-5" />}
           <CreditCard className="w-5 h-5 text-purple-500" />
-          <h3 className="text-xl font-bold text-gray-800 uppercase tracking-widest text-sm">Credit & Liabilities</h3>
-        </div>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {creditAccounts.map(renderAccount)}
-        </div>
+          <h3 className="text-xl font-bold text-gray-800 uppercase tracking-widest text-sm">Credit & Liabilities ({creditAccounts.length})</h3>
+        </button>
+        {isCreditOpen && (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {creditAccounts.map(renderAccount)}
+          </div>
+        )}
       </section>
 
       {showModal && (

@@ -133,6 +133,7 @@ const App: React.FC = () => {
               <Route path="/billers" element={
                 <Billers
                   billers={billers}
+                  installments={installments}
                   onAdd={(b) => setBillers(prev => [...prev, b])}
                   accounts={accounts}
                   categories={categories}
@@ -144,6 +145,7 @@ const App: React.FC = () => {
                 <Installments
                   installments={installments}
                   accounts={accounts}
+                  billers={billers}
                   onAdd={(i) => setInstallments(prev => [...prev, i])}
                   onUpdate={handleUpdateInstallment}
                   onDelete={(id) => setInstallments(prev => prev.filter(i => i.id !== id))}

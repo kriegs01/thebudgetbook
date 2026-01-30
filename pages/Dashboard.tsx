@@ -2,7 +2,7 @@
 import React from 'react';
 import { Account, BudgetItem, Installment } from '../types';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, PieChart, Pie } from 'recharts';
-import { TrendingUp, TrendingDown, Landmark, ArrowUpRight } from 'lucide-react';
+import { TrendingUp, TrendingDown, Landmark, ArrowUpRight, CreditCard, Wallet } from 'lucide-react';
 
 interface DashboardProps {
   accounts: Account[];
@@ -42,6 +42,10 @@ const Dashboard: React.FC<DashboardProps> = ({ accounts, budget, installments })
     else acc.push({ name: item.category, value: item.amount });
     return acc;
   }, []);
+
+  // Calculate credit account utilization
+  const creditAccounts = accounts.filter(a => a.type === 'Credit');
+  const debitAccounts = accounts.filter(a => a.type === 'Debit');
 
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
@@ -141,6 +145,109 @@ const Dashboard: React.FC<DashboardProps> = ({ accounts, budget, installments })
             ))}
           </div>
         </div>
+      </div>
+
+      {/* Account Utilization Stats */}
+      <div className="space-y-6">
+        {/* Credit Accounts Utilization */}
+        {creditAccounts.length > 0 && (
+          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+            <div className="p-6 border-b border-gray-100 flex items-center space-x-2">
+              <CreditCard className="w-5 h-5 text-purple-600" />
+              <h3 className="text-lg font-bold">Credit Accounts Utilization</h3>
+            </div>
+            <div className="p-6 space-y-4">
+              {creditAccounts.map((account) => {
+                const creditLimit = account.creditLimit ?? 0;
+                const used = account.balance;
+                const usedPercent = creditLimit > 0 ? Math.min(100, Math.round((used / creditLimit) * 100)) : 0;
+                const available = creditLimit - used;
+                
+                return (
+                  <div key={account.id} className="bg-gray-50 p-4 rounded-xl">
+                    <div className="flex items-center justify-between mb-3">
+                      <div>
+                        <h4 className="font-bold text-gray-900">{account.bank}</h4>
+                        <p className="text-xs text-gray-500">{account.classification}</p>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-xs text-gray-500">Used / Limit</p>
+                        <p className="font-bold text-gray-900">{formatCurrency(used)} / {formatCurrency(creditLimit)}</p>
+                      </div>
+                    </div>
+                    <div className="w-full bg-gray-200 rounded-full h-3 overflow-hidden mb-2">
+                      <div
+                        className={`h-3 rounded-full transition-all ${usedPercent >= 90 ? 'bg-red-500' : usedPercent >= 70 ? 'bg-yellow-500' : 'bg-purple-600'}`}
+                        style={{ width: `${usedPercent}%` }}
+                      />
+                    </div>
+                    <div className="flex items-center justify-between text-xs text-gray-600">
+                      <span>{usedPercent}% utilized</span>
+                      <span className="text-green-600 font-medium">{formatCurrency(available)} available</span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* Debit Accounts Stats */}
+        {debitAccounts.length > 0 && (
+          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+            <div className="p-6 border-b border-gray-100 flex items-center space-x-2">
+              <Wallet className="w-5 h-5 text-green-600" />
+              <h3 className="text-lg font-bold">Debit Accounts Overview</h3>
+            </div>
+            <div className="p-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {debitAccounts.map((account) => {
+                const balance = account.balance;
+                const monthlyExpense = budget
+                  .filter(b => b.accountId === account.id)
+                  .reduce((sum, b) => sum + b.amount, 0);
+                const percentSpent = balance > 0 ? Math.round((monthlyExpense / balance) * 100) : 0;
+                const isOverdraft = percentSpent > 100;
+                
+                return (
+                  <div key={account.id} className="bg-gray-50 p-4 rounded-xl">
+                    <div className="flex items-center justify-between mb-3">
+                      <div>
+                        <h4 className="font-bold text-gray-900">{account.bank}</h4>
+                        <p className="text-xs text-gray-500">{account.classification}</p>
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="text-gray-600">Balance</span>
+                        <span className="font-bold text-gray-900">{formatCurrency(balance)}</span>
+                      </div>
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="text-gray-600">Monthly Expense</span>
+                        <span className="font-bold text-red-600">{formatCurrency(monthlyExpense)}</span>
+                      </div>
+                      {balance > 0 && (
+                        <div className="mt-2">
+                          <div className="flex items-center justify-between text-xs text-gray-600 mb-1">
+                            <span>Spent this month</span>
+                            <span className={`font-medium ${isOverdraft ? 'text-red-600' : ''}`}>
+                              {isOverdraft ? 'OVERDRAFT' : `${percentSpent}%`}
+                            </span>
+                          </div>
+                          <div className="w-full bg-gray-200 rounded-full h-2 overflow-hidden">
+                            <div
+                              className={`h-2 rounded-full transition-all ${isOverdraft ? 'bg-red-600' : percentSpent >= 90 ? 'bg-red-500' : percentSpent >= 70 ? 'bg-yellow-500' : 'bg-green-600'}`}
+                              style={{ width: `${Math.min(percentSpent, 100)}%` }}
+                            />
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Recent Activity */}

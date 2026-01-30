@@ -59,6 +59,15 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
     accountId: accounts[0]?.id || ''
   });
 
+  // Transaction form modal for Purchases
+  const [showTransactionModal, setShowTransactionModal] = useState(false);
+  const [transactionFormData, setTransactionFormData] = useState({
+    name: '',
+    date: new Date().toISOString().split('T')[0],
+    amount: '',
+    accountId: accounts[0]?.id || ''
+  });
+
   const [confirmModal, setConfirmModal] = useState<{
     show: boolean;
     title: string;
@@ -87,7 +96,16 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
             !removedIds.has(b.id)
           );
 
-          const existingIds = new Set(newData[cat.name].map(i => i.id));
+          // Remove billers that don't match the current timing
+          const filteredExisting = newData[cat.name].filter(item => {
+            if (item.isBiller) {
+              const biller = billers.find(b => b.id === item.id);
+              return biller && biller.timing === selectedTiming;
+            }
+            return true; // Keep non-biller items
+          });
+
+          const existingIds = new Set(filteredExisting.map(i => i.id));
           const newItems = matchingBillers
             .filter(b => !existingIds.has(b.id))
             .map(b => {
@@ -102,9 +120,7 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
               };
             });
 
-          if (newItems.length > 0) {
-            newData[cat.name] = [...newData[cat.name], ...newItems];
-          }
+          newData[cat.name] = [...filteredExisting, ...newItems];
         });
 
         return newData;
@@ -140,6 +156,7 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
   };
 
   const addItemToCategory = (category: string) => {
+    // For all categories, add a blank item
     const newItem: CategorizedSetupItem = {
       id: Math.random().toString(36).substr(2, 9),
       name: 'New Item',
@@ -188,6 +205,34 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
       }
     });
     setView('summary');
+  };
+
+  const handleTransactionSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    // Save transaction to localStorage
+    const transaction = {
+      id: Math.random().toString(36).substr(2, 9),
+      name: transactionFormData.name,
+      date: new Date(transactionFormData.date).toISOString(),
+      amount: parseFloat(transactionFormData.amount),
+      paymentMethodId: transactionFormData.accountId
+    };
+    
+    try {
+      const raw = localStorage.getItem('transactions');
+      let transactions = [];
+      if (raw) {
+        transactions = JSON.parse(raw);
+      }
+      transactions.unshift(transaction);
+      localStorage.setItem('transactions', JSON.stringify(transactions));
+    } catch (e) {
+      console.error('Failed to save transaction:', e);
+    }
+    
+    // Just close the modal - the item is already in Purchases
+    setShowTransactionModal(false);
   };
 
   const handlePaySubmit = (e: React.FormEvent) => {
@@ -477,7 +522,7 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                               className="bg-gray-50 border border-gray-200 rounded-lg px-3 py-1.5 text-xs font-bold text-gray-700 outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
                             >
                               <option value="">Select Account</option>
-                              {accounts.map(acc => (
+                              {accounts.filter(acc => acc.type === 'Debit').map(acc => (
                                 <option key={acc.id} value={acc.id}>
                                   {acc.bank} ({acc.classification})
                                 </option>
@@ -581,6 +626,23 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                                     Pay
                                   </button>
                                 )
+                              )}
+                              {/* Add Pay button for Purchases category items that are not billers */}
+                              {!isBiller && cat.name === 'Purchases' && item.name !== 'New Item' && parseFloat(item.amount) > 0 && (
+                                <button 
+                                  onClick={() => {
+                                    setTransactionFormData({
+                                      name: item.name,
+                                      date: new Date().toISOString().split('T')[0],
+                                      amount: item.amount,
+                                      accountId: item.accountId || accounts[0]?.id || ''
+                                    });
+                                    setShowTransactionModal(true);
+                                  }}
+                                  className="px-3 py-1 bg-indigo-600 text-white text-[9px] font-black uppercase rounded-lg hover:bg-indigo-700 transition-colors"
+                                >
+                                  Pay
+                                </button>
                               )}
                               <button onClick={() => handleSetupToggle(cat.name, item.id)} className={`w-8 h-8 rounded-xl border-2 transition-all flex items-center justify-center ${item.included ? 'bg-indigo-600 border-indigo-600 text-white' : 'border-gray-200'}`}><Check className="w-4 h-4" /></button>
                             </div>
@@ -711,6 +773,76 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
               <div className="flex space-x-4 pt-4">
                 <button type="button" onClick={() => setShowPayModal(null)} className="flex-1 bg-gray-100 py-4 rounded-2xl font-bold text-gray-500">Cancel</button>
                 <button type="submit" className="flex-1 bg-green-600 text-white py-4 rounded-2xl font-bold hover:bg-green-700 shadow-xl shadow-green-100">Submit Payment</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Transaction Form Modal for Purchases */}
+      {showTransactionModal && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md animate-in fade-in">
+          <div className="bg-white rounded-3xl w-full max-w-md p-10 shadow-2xl animate-in zoom-in-95 relative">
+            <button onClick={() => setShowTransactionModal(false)} className="absolute right-6 top-6 p-2 hover:bg-gray-100 rounded-full transition-colors">
+              <X className="w-6 h-6 text-gray-400" />
+            </button>
+            <h2 className="text-2xl font-black text-gray-900 mb-2">Add Purchase Transaction</h2>
+            <p className="text-gray-500 text-sm mb-8">This will create a transaction and add it to your budget setup</p>
+            <form onSubmit={handleTransactionSubmit} className="space-y-6">
+              <div>
+                <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Purchase Name</label>
+                <input 
+                  required 
+                  type="text" 
+                  value={transactionFormData.name} 
+                  onChange={(e) => setTransactionFormData({...transactionFormData, name: e.target.value})} 
+                  placeholder="e.g. Groceries, Gas, etc."
+                  className="w-full bg-gray-50 border-transparent rounded-2xl p-4 outline-none font-bold focus:ring-2 focus:ring-indigo-500 transition-all" 
+                />
+              </div>
+              
+              <div>
+                <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Amount</label>
+                <div className="relative">
+                  <span className="absolute left-4 top-1/2 -translate-y-1/2 font-bold text-gray-400">₱</span>
+                  <input 
+                    required 
+                    type="number" 
+                    min="0" 
+                    step="0.01" 
+                    value={transactionFormData.amount} 
+                    onChange={(e) => setTransactionFormData({...transactionFormData, amount: e.target.value})} 
+                    className="w-full bg-gray-50 border-transparent rounded-2xl p-4 pl-8 outline-none text-xl font-black focus:ring-2 focus:ring-indigo-500 transition-all" 
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Date</label>
+                  <input 
+                    required 
+                    type="date" 
+                    value={transactionFormData.date} 
+                    onChange={(e) => setTransactionFormData({...transactionFormData, date: e.target.value})} 
+                    className="w-full bg-gray-50 border-transparent rounded-2xl p-4 outline-none font-bold text-sm" 
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Account</label>
+                  <select 
+                    value={transactionFormData.accountId} 
+                    onChange={(e) => setTransactionFormData({...transactionFormData, accountId: e.target.value})} 
+                    className="w-full bg-gray-50 border-transparent rounded-2xl p-4 outline-none font-bold text-sm appearance-none"
+                  >
+                    {accounts.map(acc => <option key={acc.id} value={acc.id}>{acc.bank}</option>)}
+                  </select>
+                </div>
+              </div>
+
+              <div className="flex space-x-4 pt-4">
+                <button type="button" onClick={() => setShowTransactionModal(false)} className="flex-1 bg-gray-100 py-4 rounded-2xl font-bold text-gray-500">Cancel</button>
+                <button type="submit" className="flex-1 bg-indigo-600 text-white py-4 rounded-2xl font-bold hover:bg-indigo-700 shadow-xl shadow-indigo-100">Add Purchase</button>
               </div>
             </form>
           </div>
