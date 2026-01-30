@@ -288,7 +288,17 @@ const App: React.FC = () => {
       
       if (error) {
         console.error('Error loading budget setups:', error);
-        setBudgetSetupsError('Failed to load budget setups from database');
+        
+        // Check if it's a missing table error
+        const errorStr = JSON.stringify(error);
+        if (errorStr.includes('42P01') || errorStr.includes('does not exist') || errorStr.includes('404')) {
+          setBudgetSetupsError('Database table "budget_setups" not found. Please run the SQL migration. See SUPABASE_SETUP.md.');
+          console.error('⚠️ SETUP REQUIRED: The budget_setups table does not exist in your Supabase database.');
+          console.error('📋 Action needed: Run the SQL migration script from supabase_migration.sql');
+        } else {
+          setBudgetSetupsError('Failed to load budget setups from database');
+        }
+        
         setBudgetSetups([]);
       } else if (data && data.length > 0) {
         // Convert Supabase budget setups to UI format
@@ -482,7 +492,9 @@ const App: React.FC = () => {
         
         if (error) {
           console.error('Error updating budget setup:', error);
-          setBudgetSetupsError('Failed to update budget setup');
+          const errorMessage = checkDatabaseError(error);
+          setBudgetSetupsError(errorMessage);
+          alert(errorMessage);
           return;
         }
         
@@ -500,7 +512,9 @@ const App: React.FC = () => {
         
         if (error) {
           console.error('Error creating budget setup:', error);
-          setBudgetSetupsError('Failed to create budget setup');
+          const errorMessage = checkDatabaseError(error);
+          setBudgetSetupsError(errorMessage);
+          alert(errorMessage);
           return;
         }
         
@@ -511,8 +525,28 @@ const App: React.FC = () => {
       }
     } catch (err) {
       console.error('Error saving budget setup:', err);
-      setBudgetSetupsError('Failed to save budget setup');
+      const errorMessage = 'Failed to save budget setup. Please check your database connection.';
+      setBudgetSetupsError(errorMessage);
+      alert(errorMessage);
     }
+  };
+
+  // Helper function to check database errors
+  const checkDatabaseError = (error: any): string => {
+    const errorStr = JSON.stringify(error);
+    
+    // Check for 404 or table not found errors
+    if (errorStr.includes('404') || errorStr.includes('relation') || errorStr.includes('does not exist')) {
+      return 'Database table "budget_setups" not found. Please run the SQL migration in Supabase SQL Editor. See SUPABASE_SETUP.md for instructions.';
+    }
+    
+    // Check for permission errors
+    if (errorStr.includes('permission') || errorStr.includes('policy')) {
+      return 'Permission denied. Please check your Supabase RLS policies.';
+    }
+    
+    // Generic error
+    return 'Failed to save budget setup. Please check your Supabase connection and ensure the database table exists.';
   };
 
   const handleDeleteBudgetSetup = async (id: string) => {

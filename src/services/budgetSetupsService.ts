@@ -22,9 +22,24 @@ export const getAllBudgetSetups = async () => {
       .select('*')
       .order('created_at', { ascending: false });
 
-    if (error) throw error;
+    if (error) {
+      console.error('Supabase error details:', {
+        message: error.message,
+        details: error.details,
+        hint: error.hint,
+        code: error.code
+      });
+      
+      // Provide helpful context for common errors
+      if (error.code === '42P01') {
+        console.error('❌ Table "budget_setups" does not exist.');
+        console.error('📋 Run the SQL migration: See supabase_migration.sql');
+      }
+      
+      throw error;
+    }
     return { data, error: null };
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error fetching budget setups:', error);
     return { data: null, error };
   }
@@ -80,10 +95,24 @@ export const createBudgetSetup = async (budgetSetup: CreateBudgetSetupInput) => 
       .select()
       .single();
 
-    if (error) throw error;
+    if (error) {
+      console.error('Supabase error details:', {
+        message: error.message,
+        details: error.details,
+        hint: error.hint,
+        code: error.code
+      });
+      throw error;
+    }
     return { data, error: null };
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error creating budget setup:', error);
+    
+    // Provide more context for common errors
+    if (error.code === '42P01') {
+      console.error('Table "budget_setups" does not exist. Please run the SQL migration.');
+    }
+    
     return { data: null, error };
   }
 };
