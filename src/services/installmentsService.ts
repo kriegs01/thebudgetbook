@@ -126,17 +126,24 @@ export const getInstallmentsByAccount = async (accountId: string) => {
 
 /**
  * Get active installments (where paid_amount < total_amount)
+ * Note: This fetches all installments and filters in-memory since Supabase
+ * doesn't support direct column-to-column comparisons in the query builder.
  */
 export const getActiveInstallments = async () => {
   try {
     const { data, error } = await supabase
       .from('installments')
       .select('*')
-      .lt('paid_amount', supabase.rpc('total_amount'))
       .order('name', { ascending: true });
 
     if (error) throw error;
-    return { data, error: null };
+    
+    // Filter in-memory to get active installments
+    const activeInstallments = data?.filter(
+      installment => installment.paid_amount < installment.total_amount
+    ) || [];
+    
+    return { data: activeInstallments, error: null };
   } catch (error) {
     console.error('Error fetching active installments:', error);
     return { data: null, error };

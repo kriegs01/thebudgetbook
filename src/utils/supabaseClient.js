@@ -21,9 +21,10 @@ if (!supabaseUrl || !supabaseAnonKey) {
     '  - VITE_SUPABASE_ANON_KEY\n\n' +
     'See .env.example for reference.'
   );
+  throw new Error('Missing required Supabase environment variables. Check .env.local file.');
 }
 
-export const supabase = createClient(supabaseUrl || '', supabaseAnonKey || '', {
+export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
     persistSession: true,
     autoRefreshToken: true,

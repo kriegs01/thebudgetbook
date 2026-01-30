@@ -174,7 +174,7 @@ Visit the Supabase Demo page to test the integration!
 | expected_amount | NUMERIC | Expected payment amount |
 | timing | TEXT | Payment timing (1/2, 2/2) |
 | activation_date | JSONB | Activation date object |
-| deactivation_c | JSONB | Deactivation date object (nullable) |
+| deactivation_c | JSONB | Deactivation date object (nullable, note: field name is truncated in DB) |
 | status | TEXT | active or inactive |
 | schedules | JSONB | Payment schedule array |
 
@@ -235,7 +235,9 @@ Additional specialized queries are available in each service.
 ### Example 1: Fetching All Accounts
 
 ```typescript
-import { getAllAccounts } from './src/services/accountsService';
+import { getAllAccounts } from '../src/services/accountsService';
+// Or use the barrel export:
+// import { getAllAccounts } from '../src/services';
 
 async function loadAccounts() {
   const { data, error } = await getAllAccounts();
@@ -252,7 +254,9 @@ async function loadAccounts() {
 ### Example 2: Creating a New Account
 
 ```typescript
-import { createAccount } from './src/services/accountsService';
+import { createAccount } from '../src/services/accountsService';
+// Or use the barrel export:
+// import { createAccount } from '../src/services';
 
 async function addAccount() {
   const newAccount = {
@@ -279,7 +283,9 @@ async function addAccount() {
 ### Example 3: Updating an Account Balance
 
 ```typescript
-import { updateAccount } from './src/services/accountsService';
+import { updateAccount } from '../src/services/accountsService';
+// Or use the barrel export:
+// import { updateAccount } from '../src/services';
 
 async function updateBalance(accountId: string, newBalance: number) {
   const { data, error } = await updateAccount(accountId, {
@@ -300,6 +306,8 @@ async function updateBalance(accountId: string, newBalance: number) {
 ```typescript
 import React, { useState, useEffect } from 'react';
 import { getAllAccounts } from '../src/services/accountsService';
+// Or use the barrel export:
+// import { getAllAccounts } from '../src/services';
 import type { SupabaseAccount } from '../src/types/supabase';
 
 function AccountsList() {
