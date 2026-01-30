@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Installment, Account, ViewMode } from '../types';
-import { Plus, LayoutGrid, List, Wallet, Trash2, X, Upload, AlertTriangle } from 'lucide-react';
+import { Plus, LayoutGrid, List, Wallet, Trash2, X, Upload, AlertTriangle, Edit2, Eye, MoreVertical } from 'lucide-react';
 
 interface InstallmentsProps {
   installments: Installment[];
@@ -14,6 +14,9 @@ const Installments: React.FC<InstallmentsProps> = ({ installments, accounts, onA
   const [viewMode, setViewMode] = useState<ViewMode>('card');
   const [showModal, setShowModal] = useState(false);
   const [showPayModal, setShowPayModal] = useState<Installment | null>(null);
+  const [showEditModal, setShowEditModal] = useState<Installment | null>(null);
+  const [showViewModal, setShowViewModal] = useState<Installment | null>(null);
+  const [openMenuId, setOpenMenuId] = useState<string | null>(null);
 
   const [confirmModal, setConfirmModal] = useState<{
     show: boolean;
@@ -28,7 +31,11 @@ const Installments: React.FC<InstallmentsProps> = ({ installments, accounts, onA
   });
   
   const [formData, setFormData] = useState({ 
-    name: '', totalAmount: '', monthlyAmount: '', termDuration: '', paidAmount: '', accountId: accounts[0]?.id || '' 
+    name: '', totalAmount: '', monthlyAmount: '', termDuration: '', paidAmount: '', accountId: accounts[0]?.id || '', startDate: '' 
+  });
+
+  const [editFormData, setEditFormData] = useState({ 
+    name: '', totalAmount: '', monthlyAmount: '', termDuration: '', paidAmount: '', accountId: '', startDate: ''
   });
 
   const [payFormData, setPayFormData] = useState({
@@ -56,9 +63,30 @@ const Installments: React.FC<InstallmentsProps> = ({ installments, accounts, onA
       monthlyAmount: parseFloat(formData.monthlyAmount),
       termDuration: formData.termDuration,
       paidAmount: parseFloat(formData.paidAmount) || 0,
-      accountId: formData.accountId
+      accountId: formData.accountId,
+      startDate: formData.startDate || undefined
     });
     setShowModal(false);
+    setFormData({ name: '', totalAmount: '', monthlyAmount: '', termDuration: '', paidAmount: '', accountId: accounts[0]?.id || '', startDate: '' });
+  };
+
+  const handleEditSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!showEditModal) return;
+    
+    const updatedInstallment: Installment = {
+      ...showEditModal,
+      name: editFormData.name,
+      totalAmount: parseFloat(editFormData.totalAmount),
+      monthlyAmount: parseFloat(editFormData.monthlyAmount),
+      termDuration: editFormData.termDuration,
+      paidAmount: parseFloat(editFormData.paidAmount) || 0,
+      accountId: editFormData.accountId,
+      startDate: editFormData.startDate || undefined
+    };
+
+    onUpdate?.(updatedInstallment);
+    setShowEditModal(null);
   };
 
   const handlePaySubmit = (e: React.FormEvent) => {
@@ -87,6 +115,20 @@ const Installments: React.FC<InstallmentsProps> = ({ installments, accounts, onA
     });
   };
 
+  const openEditModal = (item: Installment) => {
+    setEditFormData({
+      name: item.name,
+      totalAmount: item.totalAmount.toString(),
+      monthlyAmount: item.monthlyAmount.toString(),
+      termDuration: item.termDuration,
+      paidAmount: item.paidAmount.toString(),
+      accountId: item.accountId,
+      startDate: item.startDate || ''
+    });
+    setShowEditModal(item);
+    setOpenMenuId(null);
+  };
+
   const renderCard = (item: Installment) => {
     const progress = (item.paidAmount / item.totalAmount) * 100;
     const remaining = item.totalAmount - item.paidAmount;
@@ -99,12 +141,43 @@ const Installments: React.FC<InstallmentsProps> = ({ installments, accounts, onA
             <h3 className="font-black text-lg text-gray-900 group-hover:text-indigo-600 transition-colors uppercase tracking-tight">{item.name}</h3>
             <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">{item.termDuration}</span>
           </div>
-          <button 
-            onClick={() => handleDeleteTrigger(item.id, item.name)}
-            className="p-2 text-gray-300 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all"
-          >
-            <Trash2 className="w-5 h-5" />
-          </button>
+          <div className="relative">
+            <button 
+              onClick={() => setOpenMenuId(openMenuId === item.id ? null : item.id)}
+              className="p-2 text-gray-400 hover:text-gray-600 rounded-xl transition-all"
+            >
+              <MoreVertical className="w-5 h-5" />
+            </button>
+            {openMenuId === item.id && (
+              <>
+                <div className="fixed inset-0 z-[10]" onClick={() => setOpenMenuId(null)}></div>
+                <div className="absolute right-0 top-full mt-2 w-44 bg-white rounded-xl shadow-xl border border-gray-100 py-2 z-[20]">
+                  <button 
+                    onClick={() => { setShowViewModal(item); setOpenMenuId(null); }}
+                    className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center space-x-2"
+                  >
+                    <Eye className="w-4 h-4" />
+                    <span>View Schedule</span>
+                  </button>
+                  <button 
+                    onClick={() => openEditModal(item)}
+                    className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center space-x-2"
+                  >
+                    <Edit2 className="w-4 h-4" />
+                    <span>Edit</span>
+                  </button>
+                  <div className="border-t border-gray-100 my-1"></div>
+                  <button 
+                    onClick={() => handleDeleteTrigger(item.id, item.name)}
+                    className="w-full text-left px-4 py-2 text-sm text-red-500 hover:bg-red-50 flex items-center space-x-2"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                    <span>Delete</span>
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
         </div>
         
         <div className="grid grid-cols-2 gap-4 mb-6">
@@ -113,8 +186,8 @@ const Installments: React.FC<InstallmentsProps> = ({ installments, accounts, onA
             <p className="font-black text-gray-900">{formatCurrency(item.monthlyAmount)}</p>
           </div>
           <div className="text-right">
-            <p className="text-[10px] text-gray-400 uppercase font-black tracking-widest">Total</p>
-            <p className="font-black text-gray-900">{formatCurrency(item.totalAmount)}</p>
+            <p className="text-[10px] text-gray-400 uppercase font-black tracking-widest">Start Date</p>
+            <p className="font-black text-gray-900">{item.startDate || 'N/A'}</p>
           </div>
         </div>
 
@@ -136,15 +209,23 @@ const Installments: React.FC<InstallmentsProps> = ({ installments, accounts, onA
             <Wallet className="w-3.5 h-3.5" />
             <span>{account?.bank || 'Account'}</span>
           </div>
-          <button 
-            onClick={() => {
-              setShowPayModal(item);
-              setPayFormData({ ...payFormData, amount: item.monthlyAmount.toString() });
-            }}
-            className="bg-indigo-600 text-white px-5 py-2 rounded-xl text-xs font-black uppercase tracking-widest hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-100"
-          >
-            Pay
-          </button>
+          <div className="flex items-center space-x-2">
+            <button 
+              onClick={() => { setShowViewModal(item); }}
+              className="bg-gray-100 text-gray-700 px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest hover:bg-gray-200 transition-all"
+            >
+              View
+            </button>
+            <button 
+              onClick={() => {
+                setShowPayModal(item);
+                setPayFormData({ ...payFormData, amount: item.monthlyAmount.toString() });
+              }}
+              className="bg-indigo-600 text-white px-5 py-2 rounded-xl text-xs font-black uppercase tracking-widest hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-100"
+            >
+              Pay
+            </button>
+          </div>
         </div>
       </div>
     );
@@ -161,7 +242,10 @@ const Installments: React.FC<InstallmentsProps> = ({ installments, accounts, onA
             <h3 className="font-black text-gray-900 uppercase tracking-tight">{item.name}</h3>
             <span className="text-[10px] bg-gray-100 px-2 py-0.5 rounded-full text-gray-500 font-black uppercase tracking-widest">{item.termDuration}</span>
           </div>
-          <p className="text-[10px] text-gray-400 font-black uppercase tracking-widest">{account?.bank || 'Account'}</p>
+          <div className="flex items-center space-x-4 mt-1">
+            <p className="text-[10px] text-gray-400 font-black uppercase tracking-widest">{account?.bank || 'Account'}</p>
+            <p className="text-[10px] text-gray-500 font-black">Start: {item.startDate || 'N/A'}</p>
+          </div>
         </div>
         
         <div className="flex flex-1 items-center space-x-6">
@@ -178,6 +262,12 @@ const Installments: React.FC<InstallmentsProps> = ({ installments, accounts, onA
           </div>
           <div className="flex items-center space-x-2">
             <button 
+              onClick={() => { setShowViewModal(item); }}
+              className="bg-gray-100 text-gray-700 px-3 py-2 rounded-xl text-xs font-black uppercase tracking-widest hover:bg-gray-200 transition-all"
+            >
+              View
+            </button>
+            <button 
               onClick={() => {
                 setShowPayModal(item);
                 setPayFormData({ ...payFormData, amount: item.monthlyAmount.toString() });
@@ -186,12 +276,36 @@ const Installments: React.FC<InstallmentsProps> = ({ installments, accounts, onA
             >
               Pay
             </button>
-            <button 
-              onClick={() => handleDeleteTrigger(item.id, item.name)}
-              className="p-2 text-gray-300 hover:text-red-500 transition-all"
-            >
-              <Trash2 className="w-5 h-5" />
-            </button>
+            <div className="relative">
+              <button 
+                onClick={() => setOpenMenuId(openMenuId === item.id ? null : item.id)}
+                className="p-2 text-gray-400 hover:text-gray-600 rounded-xl transition-all"
+              >
+                <MoreVertical className="w-5 h-5" />
+              </button>
+              {openMenuId === item.id && (
+                <>
+                  <div className="fixed inset-0 z-[10]" onClick={() => setOpenMenuId(null)}></div>
+                  <div className="absolute right-0 top-full mt-2 w-44 bg-white rounded-xl shadow-xl border border-gray-100 py-2 z-[20]">
+                    <button 
+                      onClick={() => openEditModal(item)}
+                      className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center space-x-2"
+                    >
+                      <Edit2 className="w-4 h-4" />
+                      <span>Edit</span>
+                    </button>
+                    <div className="border-t border-gray-100 my-1"></div>
+                    <button 
+                      onClick={() => handleDeleteTrigger(item.id, item.name)}
+                      className="w-full text-left px-4 py-2 text-sm text-red-500 hover:bg-red-50 flex items-center space-x-2"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                      <span>Delete</span>
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
           </div>
         </div>
       </div>
@@ -262,15 +376,19 @@ const Installments: React.FC<InstallmentsProps> = ({ installments, accounts, onA
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Already Paid</label>
-                  <div className="relative">
-                    <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 font-bold">₱</span>
-                    <input required type="number" value={formData.paidAmount} onChange={(e) => setFormData({...formData, paidAmount: e.target.value})} className="w-full bg-gray-50 border-transparent rounded-2xl p-4 pl-8 outline-none focus:ring-2 focus:ring-indigo-500 font-black" />
-                  </div>
-                </div>
-                <div>
                   <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Term Duration</label>
                   <input required type="text" placeholder="e.g. 12 months" value={formData.termDuration} onChange={(e) => setFormData({...formData, termDuration: e.target.value})} className="w-full bg-gray-50 border-transparent rounded-2xl p-4 outline-none focus:ring-2 focus:ring-indigo-500 font-bold" />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Start Date</label>
+                  <input type="month" placeholder="YYYY-MM" value={formData.startDate} onChange={(e) => setFormData({...formData, startDate: e.target.value})} className="w-full bg-gray-50 border-transparent rounded-2xl p-4 outline-none focus:ring-2 focus:ring-indigo-500 font-bold" />
+                </div>
+              </div>
+              <div>
+                <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Already Paid</label>
+                <div className="relative">
+                  <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 font-bold">₱</span>
+                  <input required type="number" value={formData.paidAmount} onChange={(e) => setFormData({...formData, paidAmount: e.target.value})} className="w-full bg-gray-50 border-transparent rounded-2xl p-4 pl-8 outline-none focus:ring-2 focus:ring-indigo-500 font-black" />
                 </div>
               </div>
               <div>
@@ -340,6 +458,160 @@ const Installments: React.FC<InstallmentsProps> = ({ installments, accounts, onA
           </div>
         </div>
       )}
+
+      {/* Edit Modal */}
+      {showEditModal && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md">
+          <div className="bg-white rounded-[2.5rem] w-full max-w-lg p-10 shadow-2xl animate-in zoom-in-95 max-h-[90vh] overflow-y-auto">
+            <h2 className="text-2xl font-black text-gray-900 mb-6 uppercase tracking-tight">Edit Installment</h2>
+            <form onSubmit={handleEditSubmit} className="space-y-6">
+              <div>
+                <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Item Name</label>
+                <input required type="text" value={editFormData.name} onChange={(e) => setEditFormData({...editFormData, name: e.target.value})} className="w-full bg-gray-50 border-transparent rounded-2xl p-4 outline-none focus:ring-2 focus:ring-indigo-500 font-bold" />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Total Amount</label>
+                  <div className="relative">
+                    <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 font-bold">₱</span>
+                    <input required type="number" value={editFormData.totalAmount} onChange={(e) => setEditFormData({...editFormData, totalAmount: e.target.value})} className="w-full bg-gray-50 border-transparent rounded-2xl p-4 pl-8 outline-none focus:ring-2 focus:ring-indigo-500 font-black" />
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Monthly Payment</label>
+                  <div className="relative">
+                    <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 font-bold">₱</span>
+                    <input required type="number" value={editFormData.monthlyAmount} onChange={(e) => setEditFormData({...editFormData, monthlyAmount: e.target.value})} className="w-full bg-gray-50 border-transparent rounded-2xl p-4 pl-8 outline-none focus:ring-2 focus:ring-indigo-500 font-black" />
+                  </div>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Term Duration</label>
+                  <input required type="text" value={editFormData.termDuration} onChange={(e) => setEditFormData({...editFormData, termDuration: e.target.value})} className="w-full bg-gray-50 border-transparent rounded-2xl p-4 outline-none focus:ring-2 focus:ring-indigo-500 font-bold" />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Start Date</label>
+                  <input type="month" value={editFormData.startDate} onChange={(e) => setEditFormData({...editFormData, startDate: e.target.value})} className="w-full bg-gray-50 border-transparent rounded-2xl p-4 outline-none focus:ring-2 focus:ring-indigo-500 font-bold" />
+                </div>
+              </div>
+              <div>
+                <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Already Paid</label>
+                <div className="relative">
+                  <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 font-bold">₱</span>
+                  <input required type="number" value={editFormData.paidAmount} onChange={(e) => setEditFormData({...editFormData, paidAmount: e.target.value})} className="w-full bg-gray-50 border-transparent rounded-2xl p-4 pl-8 outline-none focus:ring-2 focus:ring-indigo-500 font-black" />
+                </div>
+              </div>
+              <div>
+                <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Billing Account</label>
+                <select value={editFormData.accountId} onChange={(e) => setEditFormData({...editFormData, accountId: e.target.value})} className="w-full bg-gray-50 border-transparent rounded-2xl p-4 outline-none focus:ring-2 focus:ring-indigo-500 font-bold appearance-none">
+                   {accounts.map(acc => (
+                    <option key={acc.id} value={acc.id}>{acc.bank} - {acc.classification}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="flex space-x-4 pt-4">
+                <button type="button" onClick={() => setShowEditModal(null)} className="flex-1 bg-gray-100 py-4 rounded-2xl font-black uppercase tracking-widest text-xs text-gray-500">Cancel</button>
+                <button type="submit" className="flex-1 bg-indigo-600 text-white py-4 rounded-2xl font-black uppercase tracking-widest text-xs hover:bg-indigo-700 transition-all shadow-xl">Save Changes</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* View Schedule Modal */}
+      {showViewModal && (() => {
+        const generateMonthlySchedule = () => {
+          if (!showViewModal.startDate) return [];
+          
+          const [startYear, startMonth] = showViewModal.startDate.split('-').map(Number);
+          const termMonths = parseInt(showViewModal.termDuration) || 12;
+          const monthlyAmount = showViewModal.monthlyAmount;
+          const schedule = [];
+          
+          for (let i = 0; i < termMonths; i++) {
+            const monthIndex = (startMonth - 1 + i) % 12;
+            const year = startYear + Math.floor((startMonth - 1 + i) / 12);
+            const monthName = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'][monthIndex];
+            
+            schedule.push({
+              month: `${monthName} ${year}`,
+              amount: monthlyAmount,
+              isPaid: (i + 1) * monthlyAmount <= showViewModal.paidAmount
+            });
+          }
+          
+          return schedule;
+        };
+        
+        const schedule = generateMonthlySchedule();
+        
+        return (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md">
+            <div className="bg-white rounded-[2.5rem] w-full max-w-3xl p-10 shadow-2xl animate-in zoom-in-95 max-h-[90vh] overflow-y-auto">
+              <div className="flex items-center justify-between mb-6">
+                <div>
+                  <h2 className="text-2xl font-black text-gray-900 uppercase tracking-tight">{showViewModal.name}</h2>
+                  <p className="text-gray-500 text-sm mt-1">Monthly Payment Schedule</p>
+                </div>
+                <button onClick={() => setShowViewModal(null)} className="p-2 hover:bg-gray-100 rounded-full transition-colors">
+                  <X className="w-6 h-6 text-gray-400" />
+                </button>
+              </div>
+              
+              <div className="bg-gray-50 rounded-2xl p-6 mb-6 grid grid-cols-3 gap-4">
+                <div>
+                  <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Total Amount</p>
+                  <p className="text-lg font-black text-gray-900">{formatCurrency(showViewModal.totalAmount)}</p>
+                </div>
+                <div>
+                  <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Paid Amount</p>
+                  <p className="text-lg font-black text-green-600">{formatCurrency(showViewModal.paidAmount)}</p>
+                </div>
+                <div>
+                  <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Remaining</p>
+                  <p className="text-lg font-black text-gray-900">{formatCurrency(showViewModal.totalAmount - showViewModal.paidAmount)}</p>
+                </div>
+              </div>
+              
+              {schedule.length > 0 ? (
+                <div className="space-y-2">
+                  <h3 className="text-sm font-black text-gray-400 uppercase tracking-widest mb-4">Payment Schedule</h3>
+                  {schedule.map((item, index) => (
+                    <div key={index} className={`flex items-center justify-between p-4 rounded-xl border transition-all ${item.isPaid ? 'bg-green-50 border-green-200' : 'bg-white border-gray-100 hover:bg-gray-50'}`}>
+                      <div className="flex items-center space-x-4">
+                        <span className={`text-sm font-black ${item.isPaid ? 'text-green-600' : 'text-gray-900'}`}>{item.month}</span>
+                        {item.isPaid && (
+                          <span className="text-[10px] font-bold px-2 py-0.5 bg-green-100 text-green-700 rounded uppercase">Paid</span>
+                        )}
+                      </div>
+                      <div className="flex items-center space-x-4">
+                        <span className="font-black text-gray-900">{formatCurrency(item.amount)}</span>
+                        {!item.isPaid && (
+                          <button 
+                            onClick={() => {
+                              setShowViewModal(null);
+                              setShowPayModal(showViewModal);
+                              setPayFormData({ ...payFormData, amount: showViewModal.monthlyAmount.toString() });
+                            }}
+                            className="bg-indigo-600 text-white px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest hover:bg-indigo-700 transition-all"
+                          >
+                            Pay
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center py-12">
+                  <p className="text-gray-400 font-bold">No start date set. Please edit the installment to add a start date.</p>
+                </div>
+              )}
+            </div>
+          </div>
+        );
+      })()}
 
       {confirmModal.show && <ConfirmDialog {...confirmModal} onClose={() => setConfirmModal(p => ({ ...p, show: false }))} />}
     </div>
