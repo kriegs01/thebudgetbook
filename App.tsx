@@ -6,7 +6,9 @@ import { getAllBillersFrontend, createBillerFrontend, updateBillerFrontend, dele
 import { getAllAccountsFrontend, createAccountFrontend, updateAccountFrontend, deleteAccountFrontend } from './src/services/accountsService';
 import { getAllInstallmentsFrontend, createInstallmentFrontend, updateInstallmentFrontend, deleteInstallmentFrontend } from './src/services/installmentsService';
 import { getAllSavingsFrontend, createSavingsFrontend, updateSavingsFrontend, deleteSavingsFrontend } from './src/services/savingsService';
-import type { Biller, Account, Installment, SavingsJar } from './types';
+import { getAllCategories, createCategory, updateCategory, deleteCategory } from './src/services/categoriesService';
+import type { Biller, Account, Installment, SavingsJar, BudgetCategory } from './types';
+import type { SupabaseCategory } from './src/types/supabase';
 
 // Pages
 import Dashboard from './pages/Dashboard';
@@ -124,6 +126,19 @@ const supabaseToSavings = (supabaseSavings: any): SavingsJar => ({
   currentBalance: supabaseSavings.current_balance,
 });
 
+// Helper function to convert Supabase Category to UI format
+const supabaseToCategory = (supabaseCategory: SupabaseCategory): BudgetCategory => ({
+  id: supabaseCategory.id,
+  name: supabaseCategory.name,
+  subcategories: supabaseCategory.subcategories,
+});
+
+// Helper function to convert UI Category to Supabase format
+const categoryToSupabase = (category: BudgetCategory) => ({
+  name: category.name,
+  subcategories: category.subcategories,
+});
+
 const App: React.FC = () => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [accounts, setAccounts] = useState<Account[]>([]);
@@ -140,7 +155,9 @@ const App: React.FC = () => {
   const [savingsLoading, setSavingsLoading] = useState(true);
   const [savingsError, setSavingsError] = useState<string | null>(null);
   const [currency, setCurrency] = useState('PHP');
-  const [categories, setCategories] = useState(INITIAL_CATEGORIES);
+  const [categories, setCategories] = useState<BudgetCategory[]>(INITIAL_CATEGORIES);
+  const [categoriesLoading, setCategoriesLoading] = useState(true);
+  const [categoriesError, setCategoriesError] = useState<string | null>(null);
   
   // Lifted Budget Setups State
   const [budgetSetups, setBudgetSetups] = useState([
@@ -226,11 +243,34 @@ const App: React.FC = () => {
       
       setSavingsLoading(false);
     };
+
+    const fetchCategories = async () => {
+      setCategoriesLoading(true);
+      setCategoriesError(null);
+      
+      const { data, error } = await getAllCategories();
+      
+      if (error) {
+        console.error('Error loading categories:', error);
+        setCategoriesError('Failed to load categories from database');
+        // Fallback to initial categories if database fetch fails
+        setCategories(INITIAL_CATEGORIES);
+      } else if (data && data.length > 0) {
+        // Convert Supabase categories to UI format
+        setCategories(data.map(supabaseToCategory));
+      } else {
+        // If no categories in database, use initial categories as fallback
+        setCategories(INITIAL_CATEGORIES);
+      }
+      
+      setCategoriesLoading(false);
+    };
     
     fetchBillers();
     fetchAccounts();
     fetchInstallments();
     fetchSavings();
+    fetchCategories();
   }, []);
 
   // Reload functions for each entity

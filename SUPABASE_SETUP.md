@@ -116,12 +116,32 @@ CREATE TABLE transactions (
   payment_method_id UUID REFERENCES accounts(id) ON DELETE SET NULL
 );
 
+-- Trash table (for soft-deleted items)
+CREATE TABLE trash (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  type TEXT NOT NULL,
+  original_id UUID NOT NULL,
+  data JSONB NOT NULL,
+  deleted_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Categories table (for budget categories)
+CREATE TABLE categories (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  name TEXT NOT NULL UNIQUE,
+  subcategories JSONB NOT NULL DEFAULT '[]'::jsonb,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
 -- Enable Row Level Security (RLS)
 ALTER TABLE accounts ENABLE ROW LEVEL SECURITY;
 ALTER TABLE billers ENABLE ROW LEVEL SECURITY;
 ALTER TABLE installments ENABLE ROW LEVEL SECURITY;
 ALTER TABLE savings ENABLE ROW LEVEL SECURITY;
 ALTER TABLE transactions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE trash ENABLE ROW LEVEL SECURITY;
+ALTER TABLE categories ENABLE ROW LEVEL SECURITY;
 
 -- Create policies for public access (adjust based on your auth needs)
 -- WARNING: These policies allow anyone to read/write. 
@@ -132,6 +152,8 @@ CREATE POLICY "Enable all for billers" ON billers FOR ALL USING (true) WITH CHEC
 CREATE POLICY "Enable all for installments" ON installments FOR ALL USING (true) WITH CHECK (true);
 CREATE POLICY "Enable all for savings" ON savings FOR ALL USING (true) WITH CHECK (true);
 CREATE POLICY "Enable all for transactions" ON transactions FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Enable all for trash" ON trash FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Enable all for categories" ON categories FOR ALL USING (true) WITH CHECK (true);
 ```
 
 ### Step 5: Install Dependencies
@@ -206,6 +228,24 @@ Visit the Supabase Demo page to test the integration!
 | amount | NUMERIC | Transaction amount |
 | payment_method_id | UUID | Foreign key to accounts |
 
+### Trash
+| Column | Type | Description |
+|--------|------|-------------|
+| id | UUID | Primary key (auto-generated) |
+| type | TEXT | Type of deleted item (transaction, account, biller, etc.) |
+| original_id | UUID | Original ID from source table |
+| data | JSONB | Full JSON representation of deleted record |
+| deleted_at | TIMESTAMPTZ | When the item was deleted (auto-generated) |
+
+### Categories
+| Column | Type | Description |
+|--------|------|-------------|
+| id | UUID | Primary key (auto-generated) |
+| name | TEXT | Category name (unique) |
+| subcategories | JSONB | Array of subcategory names |
+| created_at | TIMESTAMPTZ | Creation timestamp (auto-generated) |
+| updated_at | TIMESTAMPTZ | Last update timestamp |
+
 ## Service Layer
 
 The application provides a service layer for interacting with Supabase. All services are located in `src/services/`.
@@ -217,6 +257,8 @@ The application provides a service layer for interacting with Supabase. All serv
 - `installmentsService.ts` - Installment operations
 - `savingsService.ts` - Savings jar operations
 - `transactionsService.ts` - Transaction operations
+- `trashService.ts` - Trash/soft-delete operations
+- `categoriesService.ts` - Budget category operations
 
 ### Common Operations
 
@@ -410,6 +452,56 @@ import type { SupabaseAccount } from '../src/types/supabase';
 2. Review the browser console for detailed error messages
 3. Check the Supabase Dashboard logs
 4. Verify your database schema matches the expected structure
+
+## Data Migration from localStorage
+
+If you have existing data in localStorage (from previous versions of the app), you can migrate it to Supabase using the built-in migration tools.
+
+### Migration Steps
+
+1. **Backup Your Data** (Optional but recommended)
+   - Open browser console (F12)
+   - Export localStorage: `console.log(JSON.stringify(localStorage))`
+   - Copy and save the output
+
+2. **Run the Migration**
+   - Navigate to Settings page in the app
+   - Find the "Data Migration" section
+   - Click "Run Migration" button
+   - Wait for completion message
+
+3. **What Gets Migrated**
+   - All transactions from localStorage → Supabase `transactions` table
+   - Default categories → Supabase `categories` table
+   - Each migration runs only once (tracked via localStorage flags)
+
+4. **Verify Migration**
+   - Check Transactions page to see your migrated transactions
+   - Check Supabase dashboard to verify data in tables
+
+5. **Post-Migration**
+   - Your localStorage data remains intact (not deleted)
+   - The app will now use Supabase for all new operations
+   - You can manually clear localStorage if desired
+
+### Manual Migration (Advanced)
+
+If you prefer to migrate data manually or need to migrate other data types:
+
+```javascript
+import { 
+  migrateTransactionsFromLocalStorage, 
+  migrateDefaultCategories 
+} from './src/utils/migrationUtils';
+
+// Migrate transactions
+const txResult = await migrateTransactionsFromLocalStorage();
+console.log(txResult);
+
+// Migrate categories
+const catResult = await migrateDefaultCategories();
+console.log(catResult);
+```
 
 ## Local Development with Supabase CLI (Optional)
 

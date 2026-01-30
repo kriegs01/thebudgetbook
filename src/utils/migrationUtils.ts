@@ -4,9 +4,9 @@
  * Helper functions to migrate data from localStorage to Supabase
  */
 
-import { createTransaction } from '../src/services/transactionsService';
-import { initializeDefaultCategories } from '../src/services/categoriesService';
-import { INITIAL_CATEGORIES } from '../constants';
+import { createTransaction } from '../services/transactionsService';
+import { initializeDefaultCategories } from '../services/categoriesService';
+import { INITIAL_CATEGORIES } from '../../constants';
 
 /**
  * Migrate transactions from localStorage to Supabase

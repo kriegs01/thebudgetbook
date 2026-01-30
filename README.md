@@ -25,8 +25,11 @@ npm run dev                    # Start the app at http://localhost:3000
 - 📝 **Billers** - Track recurring bills and payments
 - 💳 **Installments** - Monitor payment plans and loans
 - 🐷 **Savings** - Organize savings goals with virtual jars
-- 📈 **Transactions** - Record and analyze spending
+- 📈 **Transactions** - Record and analyze spending (with Supabase persistence)
+- 🗑️ **Trash** - Recover or permanently delete soft-deleted items
+- 🏷️ **Categories** - Manage budget categories and subcategories
 - 🗄️ **Supabase Integration** - Cloud database with real-time sync
+- 🔄 **Data Migration** - Easy migration from localStorage to Supabase
 
 ## Run Locally
 
@@ -82,10 +85,23 @@ This application uses Supabase as its backend database. Key features:
 - ✅ Environment-based configuration (no hardcoded credentials)
 - ✅ Type-safe TypeScript interfaces for all database tables
 - ✅ Reusable service layer with CRUD operations
+- ✅ Full persistence for transactions, trash, and categories
+- ✅ Soft-delete functionality via trash table
+- ✅ Data migration tools from localStorage
 - ✅ Demo page for testing database operations
 - ✅ Comprehensive documentation
 
 For detailed setup instructions, see [SUPABASE_SETUP.md](SUPABASE_SETUP.md).
+
+### New in v2: Full Persistence
+
+The following features now use Supabase for full persistence:
+
+- **Transactions**: All transaction data is stored in Supabase and can be filtered by account
+- **Trash**: Deleted items are soft-deleted to a trash table and can be restored or permanently deleted
+- **Categories**: Budget categories and subcategories are stored in Supabase and can be managed via Settings
+
+To migrate existing localStorage data to Supabase, use the Data Migration tool in Settings.
 
 ## Project Structure
 
