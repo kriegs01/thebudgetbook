@@ -40,6 +40,7 @@ export interface SupabaseInstallment {
   term_duration: number; // int
   paid_amount: number; // numeric
   account_id: string; // uuid
+  start_date: string | null; // date, nullable
 }
 
 export interface SupabaseSavings {

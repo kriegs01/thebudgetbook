@@ -19,6 +19,7 @@ export const supabaseInstallmentToFrontend = (supabaseInstallment: SupabaseInsta
     termDuration: `${supabaseInstallment.term_duration} months`,
     paidAmount: supabaseInstallment.paid_amount,
     accountId: supabaseInstallment.account_id,
+    startDate: supabaseInstallment.start_date || undefined,
   };
 };
 
@@ -36,6 +37,7 @@ export const frontendInstallmentToSupabase = (installment: Installment): Omit<Su
     term_duration: termDurationNum,
     paid_amount: installment.paidAmount,
     account_id: installment.accountId,
+    start_date: installment.startDate || null,
   };
 };
 

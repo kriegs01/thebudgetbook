@@ -409,7 +409,7 @@ const Installments: React.FC<InstallmentsProps> = ({ installments, accounts, bil
       {/* Track Modal */}
       {showModal && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md">
-          <div className="bg-white rounded-[2.5rem] w-full max-w-lg p-10 shadow-2xl animate-in zoom-in-95">
+          <div className="bg-white rounded-[2.5rem] w-full max-w-lg p-10 shadow-2xl animate-in zoom-in-95 max-h-[90vh] overflow-y-auto">
             <h2 className="text-2xl font-black text-gray-900 mb-6 uppercase tracking-tight">Track New Installment</h2>
             <form onSubmit={handleSubmit} className="space-y-6">
               <div>
