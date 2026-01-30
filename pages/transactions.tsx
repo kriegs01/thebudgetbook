@@ -1,15 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import { Plus, ArrowLeft } from 'lucide-react';
-
-type Transaction = {
-  id: string;
-  name: string;
-  date: string; // ISO
-  amount: number;
-  paymentMethodId: string; // account id
-};
-
-type AccountOption = { id: string; bank: string };
+import { getAllTransactions, createTransaction, deleteTransaction } from '../src/services/transactionsService';
+import { getAllAccounts } from '../src/services/accountsService';
+import { moveToTrash } from '../src/services/trashService';
+import type { SupabaseTransaction, SupabaseAccount } from '../src/types/supabase';
 
 const todayIso = () => {
   const d = new Date();
@@ -20,9 +14,11 @@ const formatCurrency = (val: number) =>
   new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP', minimumFractionDigits: 2 }).format(val);
 
 const TransactionsPage: React.FC = () => {
-  const [transactions, setTransactions] = useState<Transaction[]>([]);
-  const [accounts, setAccounts] = useState<AccountOption[]>([]);
+  const [transactions, setTransactions] = useState<SupabaseTransaction[]>([]);
+  const [accounts, setAccounts] = useState<SupabaseAccount[]>([]);
   const [showForm, setShowForm] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   const [form, setForm] = useState({
     name: '',
@@ -31,55 +27,128 @@ const TransactionsPage: React.FC = () => {
     paymentMethodId: ''
   });
 
+  // Load accounts and transactions from Supabase
   useEffect(() => {
-    if (typeof window === 'undefined') return;
-    const rawAcc = localStorage.getItem('accounts_list');
-    if (rawAcc) {
-      try { setAccounts(JSON.parse(rawAcc) as AccountOption[]); } catch { setAccounts([]); }
-    } else setAccounts([]);
-
-    const raw = localStorage.getItem('transactions');
-    if (raw) {
-      try { setTransactions(JSON.parse(raw) as Transaction[]); } catch { setTransactions([]); }
-    } else setTransactions([]);
+    loadData();
   }, []);
 
-  useEffect(() => {
-    // ensure default paymentMethodId when accounts exist
-    if (accounts.length > 0 && !form.paymentMethodId) {
-      setForm(f => ({ ...f, paymentMethodId: accounts[0].id }));
-    }
-  }, [accounts]);
+  const loadData = async () => {
+    setLoading(true);
+    setError(null);
 
-  const saveTransactions = (next: Transaction[]) => {
-    setTransactions(next);
-    try { localStorage.setItem('transactions', JSON.stringify(next)); } catch {}
+    try {
+      // Load accounts
+      const { data: accountsData, error: accountsError } = await getAllAccounts();
+      if (accountsError) {
+        console.error('Failed to load accounts:', accountsError);
+        setError('Failed to load accounts');
+      } else if (accountsData) {
+        setAccounts(accountsData);
+        // Set default payment method if available
+        if (accountsData.length > 0 && !form.paymentMethodId) {
+          setForm(f => ({ ...f, paymentMethodId: accountsData[0].id }));
+        }
+      }
+
+      // Load transactions
+      const { data: transactionsData, error: transactionsError } = await getAllTransactions();
+      if (transactionsError) {
+        console.error('Failed to load transactions:', transactionsError);
+        setError('Failed to load transactions');
+      } else if (transactionsData) {
+        setTransactions(transactionsData);
+      }
+    } catch (err) {
+      console.error('Error loading data:', err);
+      setError('An unexpected error occurred');
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const onSubmit = (e: React.FormEvent) => {
+  const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!form.name || !form.date || !form.amount || !form.paymentMethodId) return;
-    const tx: Transaction = {
-      id: Math.random().toString(36).substr(2, 9),
-      name: form.name,
-      date: new Date(form.date).toISOString(),
-      amount: parseFloat(form.amount),
-      paymentMethodId: form.paymentMethodId
-    };
-    const next = [tx, ...transactions];
-    saveTransactions(next);
-    setShowForm(false);
-    setForm({ name: '', date: todayIso(), amount: '', paymentMethodId: accounts[0]?.id ?? '' });
+
+    try {
+      const txData = {
+        name: form.name,
+        date: new Date(form.date).toISOString(),
+        amount: parseFloat(form.amount),
+        payment_method_id: form.paymentMethodId
+      };
+
+      const { data, error } = await createTransaction(txData);
+      if (error) {
+        console.error('Failed to create transaction:', error);
+        setError('Failed to create transaction');
+        return;
+      }
+
+      if (data) {
+        setTransactions([data, ...transactions]);
+        setShowForm(false);
+        setForm({ name: '', date: todayIso(), amount: '', paymentMethodId: accounts[0]?.id ?? '' });
+      }
+    } catch (err) {
+      console.error('Error creating transaction:', err);
+      setError('Failed to create transaction');
+    }
   };
 
-  const removeTx = (id: string) => {
-    const next = transactions.filter(t => t.id !== id);
-    saveTransactions(next);
+  const removeTx = async (id: string) => {
+    if (!window.confirm('Delete this transaction? It will be moved to trash.')) return;
+
+    try {
+      // Find the transaction to move to trash
+      const txToDelete = transactions.find(t => t.id === id);
+      if (!txToDelete) return;
+
+      // Move to trash first
+      const { error: trashError } = await moveToTrash({
+        type: 'transaction',
+        original_id: id,
+        data: txToDelete
+      });
+
+      if (trashError) {
+        console.error('Failed to move to trash:', trashError);
+        // Continue with deletion even if trash fails
+      }
+
+      // Delete from transactions table
+      const { error: deleteError } = await deleteTransaction(id);
+      if (deleteError) {
+        console.error('Failed to delete transaction:', deleteError);
+        setError('Failed to delete transaction');
+        return;
+      }
+
+      // Update local state
+      setTransactions(transactions.filter(t => t.id !== id));
+    } catch (err) {
+      console.error('Error deleting transaction:', err);
+      setError('Failed to delete transaction');
+    }
   };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gray-50 p-8 flex items-center justify-center">
+        <div className="text-gray-500">Loading...</div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gray-50 p-8">
       <div className="max-w-6xl mx-auto">
+        {error && (
+          <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg text-red-700">
+            {error}
+          </div>
+        )}
+
         <div className="mb-6 flex items-center justify-between">
           <h1 className="text-2xl font-black text-gray-900">Transactions</h1>
           <div className="flex items-center space-x-3">
@@ -111,15 +180,15 @@ const TransactionsPage: React.FC = () => {
                 </thead>
                 <tbody>
                   {transactions.map(tx => {
-                    const pm = accounts.find(a => a.id === tx.paymentMethodId);
+                    const pm = accounts.find(a => a.id === tx.payment_method_id);
                     return (
                       <tr key={tx.id} className="border-t border-gray-100">
                         <td className="px-4 py-3"><div className="text-sm font-medium text-gray-900">{tx.name}</div></td>
                         <td className="px-4 py-3"><div className="text-sm text-gray-500">{new Date(tx.date).toLocaleDateString()}</div></td>
                         <td className="px-4 py-3"><div className={`text-sm font-semibold ${tx.amount < 0 ? 'text-red-600' : 'text-green-600'}`}>{formatCurrency(tx.amount)}</div></td>
-                        <td className="px-4 py-3"><div className="text-sm text-gray-700">{pm ? pm.bank : tx.paymentMethodId}</div></td>
+                        <td className="px-4 py-3"><div className="text-sm text-gray-700">{pm ? pm.bank : tx.payment_method_id}</div></td>
                         <td className="px-4 py-3 text-right">
-                          <button onClick={() => removeTx(tx.id)} className="text-sm text-red-600">Delete</button>
+                          <button onClick={() => removeTx(tx.id)} className="text-sm text-red-600 hover:text-red-800">Delete</button>
                         </td>
                       </tr>
                     );
@@ -161,7 +230,7 @@ const TransactionsPage: React.FC = () => {
 
               <div className="flex justify-end space-x-2">
                 <button type="button" onClick={() => setShowForm(false)} className="px-4 py-2 rounded-lg bg-gray-100">Cancel</button>
-                <button type="submit" disabled={accounts.length === 0} className="px-4 py-2 rounded-lg bg-indigo-600 text-white">Save</button>
+                <button type="submit" disabled={accounts.length === 0} className="px-4 py-2 rounded-lg bg-indigo-600 text-white disabled:opacity-50">Save</button>
               </div>
             </form>
           </div>

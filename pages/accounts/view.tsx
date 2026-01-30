@@ -2,16 +2,8 @@ import React, { useEffect, useState } from 'react';
 import { ArrowLeft } from 'lucide-react';
 import { useSearchParams, Link } from 'react-router-dom';
 import { Account } from '../../types';
-
-type Transaction = {
-  id: string;
-  name: string;
-  date: string; // ISO string
-  amount: number;
-  paymentMethodId: string;
-};
-
-type AccountMeta = { bank?: string };
+import { getTransactionsByPaymentMethod } from '../../src/services/transactionsService';
+import type { SupabaseTransaction } from '../../src/types/supabase';
 
 const formatCurrency = (val: number) =>
   new Intl.NumberFormat('en-PH', {
@@ -29,41 +21,64 @@ const AccountFilteredTransactions: React.FC<AccountFilteredTransactionsProps> = 
   const [searchParams] = useSearchParams();
   const accountId = searchParams.get("account") || searchParams.get("id");
   const [accountName, setAccountName] = useState<string>("Account");
-  const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [transactions, setTransactions] = useState<SupabaseTransaction[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (typeof window === "undefined") return;
-    
-    // Fetch all transactions and filter to this account
-    const txRaw = localStorage.getItem('transactions');
-    let allTx: Transaction[] = [];
-    if (txRaw) {
-      try { allTx = JSON.parse(txRaw); } catch {}
+    if (!accountId) {
+      setLoading(false);
+      return;
     }
-    const filtered = accountId ? allTx.filter(tx => tx.paymentMethodId === accountId) : [];
-    setTransactions(filtered);
 
+    loadTransactions();
+    
     // Get account name from the passed accounts prop
-    if (accountId) {
-      const account = accounts.find(a => a.id === accountId);
-      if (account) {
-        setAccountName(account.bank);
-      } else {
-        // Fallback to localStorage if not found in accounts prop
-        const metaRaw = localStorage.getItem(`account_meta_${accountId}`);
-        if (metaRaw) {
-          try {
-            const meta: AccountMeta = JSON.parse(metaRaw);
-            if (meta.bank) setAccountName(meta.bank);
-          } catch {}
-        }
-      }
+    const account = accounts.find(a => a.id === accountId);
+    if (account) {
+      setAccountName(account.bank);
     }
   }, [accountId, accounts]);
+
+  const loadTransactions = async () => {
+    if (!accountId) return;
+
+    setLoading(true);
+    setError(null);
+
+    try {
+      const { data, error: fetchError } = await getTransactionsByPaymentMethod(accountId);
+      if (fetchError) {
+        console.error('Failed to load transactions:', fetchError);
+        setError('Failed to load transactions');
+      } else if (data) {
+        setTransactions(data);
+      }
+    } catch (err) {
+      console.error('Error loading transactions:', err);
+      setError('An unexpected error occurred');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gray-50 p-8 flex items-center justify-center">
+        <div className="text-gray-500">Loading...</div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gray-50 p-8">
       <div className="max-w-4xl mx-auto">
+        {error && (
+          <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg text-red-700">
+            {error}
+          </div>
+        )}
+
         <div className="mb-6 flex items-center space-x-4">
           <Link to="/accounts" className="p-2 rounded-lg bg-white shadow-sm hover:bg-gray-100">
             <ArrowLeft className="w-5 h-5 text-gray-700" />
