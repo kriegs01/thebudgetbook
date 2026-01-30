@@ -4,6 +4,16 @@
  * Provides CRUD operations for the budget_setups table in Supabase.
  * This service manages persistent storage of budget configurations,
  * replacing the previous localStorage-based approach.
+ * 
+ * PERSISTENCE WORKFLOW:
+ * 1. Budget setups are loaded from Supabase when the application starts
+ * 2. When a user saves a budget setup, it's created or updated in Supabase
+ * 3. The setup data includes categorized items plus salary information (_projectedSalary, _actualSalary)
+ * 4. When a user loads a setup, it's retrieved from Supabase and applied to the current view
+ * 5. When a user deletes a setup, it's removed from Supabase
+ * 
+ * This provides data persistence across sessions and devices, ensuring budget configurations
+ * are not lost when the browser is closed or cleared.
  */
 
 import { supabase } from '../utils/supabaseClient';
