@@ -132,6 +132,7 @@ const App: React.FC = () => {
               <Route path="/billers" element={
                 <Billers
                   billers={billers}
+                  installments={installments}
                   onAdd={(b) => setBillers(prev => [...prev, b])}
                   accounts={accounts}
                   categories={categories}

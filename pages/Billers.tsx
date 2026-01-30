@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
-import { Biller, Account, PaymentSchedule, BudgetCategory } from '../types';
+import { Biller, Account, PaymentSchedule, BudgetCategory, Installment } from '../types';
 import { Plus, Calendar, Bell, ChevronDown, ChevronRight, Upload, CheckCircle2, X, ArrowLeft, Power, PowerOff, MoreVertical, Edit2, Eye, Trash2, AlertTriangle } from 'lucide-react';
 
 interface BillersProps {
   billers: Biller[];
+  installments?: Installment[];
   onAdd: (b: Biller) => void;
   accounts: Account[];
   categories: BudgetCategory[];
@@ -25,7 +26,7 @@ const calculateStatus = (deactivationDate?: { month: string; year: string }): 'a
   return deactivationDate ? 'inactive' : 'active';
 };
 
-const Billers: React.FC<BillersProps> = ({ billers, onAdd, accounts, categories, onUpdate, onDelete }) => {
+const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, accounts, categories, onUpdate, onDelete }) => {
   const [showAddModal, setShowAddModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState<Biller | null>(null);
   const [showPayModal, setShowPayModal] = useState<{ biller: Biller, schedule: PaymentSchedule } | null>(null);
@@ -250,16 +251,34 @@ const Billers: React.FC<BillersProps> = ({ billers, onAdd, accounts, categories,
     </>
   );
 
-  const renderBillerCard = (biller: Biller) => (
-    <div key={biller.id} className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 hover:shadow-md transition-all flex flex-col h-full group relative">
+  // Calculate expected amount from linked installments for Loans billers
+  const getExpectedAmount = (biller: Biller): number => {
+    if (biller.category.startsWith('Loans')) {
+      // Find installments linked to this biller
+      const linkedInstallments = installments.filter(inst => inst.billerId === biller.id);
+      if (linkedInstallments.length > 0) {
+        // Sum up monthly amounts from all linked installments
+        const totalMonthly = linkedInstallments.reduce((sum, inst) => sum + inst.monthlyAmount, 0);
+        return totalMonthly;
+      }
+    }
+    // Return the biller's expected amount for non-Loans or if no linked installments
+    return biller.expectedAmount || 0;
+  };
+
+  const renderBillerCard = (biller: Biller) => {
+    const displayAmount = getExpectedAmount(biller);
+    
+    return (
+    <div key={biller.id} className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 hover:shadow-md transition-all flex flex-col h-full group relative overflow-visible">
       <div className="flex items-start justify-between mb-4">
-        <div className="flex items-center space-x-4">
-          <div className={`p-3 rounded-2xl ${biller.status === 'active' ? 'bg-indigo-50 text-indigo-600' : 'bg-gray-100 text-gray-400'}`}>
+        <div className="flex items-center space-x-4 flex-1 min-w-0">
+          <div className={`p-3 rounded-2xl flex-shrink-0 ${biller.status === 'active' ? 'bg-indigo-50 text-indigo-600' : 'bg-gray-100 text-gray-400'}`}>
             <Bell className="w-6 h-6" />
           </div>
-          <div>
-            <h3 className="text-lg font-bold text-gray-900 group-hover:text-indigo-600 transition-colors">{biller.name}</h3>
-            <div className="flex items-center space-x-2">
+          <div className="flex-1 min-w-0">
+            <h3 className="text-lg font-bold text-gray-900 group-hover:text-indigo-600 transition-colors truncate">{biller.name}</h3>
+            <div className="flex items-center space-x-2 flex-wrap gap-y-1">
                <span className="text-[10px] font-bold px-2 py-0.5 bg-gray-100 rounded text-gray-500 uppercase">{biller.category}</span>
                <span className="text-[10px] font-bold px-2 py-0.5 bg-blue-50 rounded text-blue-500">{biller.timing}</span>
                <span className={`text-[10px] font-bold px-2 py-0.5 rounded uppercase ${biller.status === 'active' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
@@ -268,7 +287,7 @@ const Billers: React.FC<BillersProps> = ({ billers, onAdd, accounts, categories,
             </div>
           </div>
         </div>
-        <div className="relative">
+        <div className="relative flex-shrink-0">
           <button onClick={() => setActiveDropdownId(activeDropdownId === biller.id ? null : biller.id)} className="p-2 hover:bg-gray-100 rounded-lg text-gray-400">
             <MoreVertical className="w-5 h-5" />
           </button>
@@ -289,11 +308,12 @@ const Billers: React.FC<BillersProps> = ({ billers, onAdd, accounts, categories,
         <div className="flex items-center"><Calendar className="w-3.5 h-3.5 mr-2" />Due every {biller.dueDate}</div>
       </div>
       <div className="mt-auto pt-4 border-t border-gray-50 flex items-center justify-between">
-        <div className="flex flex-col"><span className="text-[10px] font-bold text-gray-400 uppercase">Expected</span><span className="text-lg font-black text-gray-900">{formatCurrency(biller.expectedAmount)}</span></div>
+        <div className="flex flex-col"><span className="text-[10px] font-bold text-gray-400 uppercase">Expected</span><span className="text-lg font-black text-gray-900">{formatCurrency(displayAmount)}</span></div>
         <button onClick={() => setDetailedBillerId(biller.id)} className="bg-gray-50 text-indigo-600 px-4 py-2 rounded-xl text-xs font-bold hover:bg-indigo-50 transition-colors">Details</button>
       </div>
     </div>
-  );
+    );
+  };
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500 pb-12">

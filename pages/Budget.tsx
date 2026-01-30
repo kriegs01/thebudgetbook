@@ -156,19 +156,7 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
   };
 
   const addItemToCategory = (category: string) => {
-    // For Purchases category, open transaction form instead
-    if (category === 'Purchases') {
-      setTransactionFormData({
-        name: '',
-        date: new Date().toISOString().split('T')[0],
-        amount: '',
-        accountId: accounts[0]?.id || ''
-      });
-      setShowTransactionModal(true);
-      return;
-    }
-    
-    // For other categories, add a blank item as before
+    // For all categories, add a blank item
     const newItem: CategorizedSetupItem = {
       id: Math.random().toString(36).substr(2, 9),
       name: 'New Item',
@@ -243,20 +231,7 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
       console.error('Failed to save transaction:', e);
     }
     
-    // Add item to Purchases category in budget setup
-    const newItem: CategorizedSetupItem = {
-      id: Math.random().toString(36).substr(2, 9),
-      name: transactionFormData.name,
-      amount: transactionFormData.amount,
-      included: true,
-      accountId: transactionFormData.accountId,
-    };
-    
-    setSetupData(prev => ({
-      ...prev,
-      ['Purchases']: [...(prev['Purchases'] || []), newItem]
-    }));
-    
+    // Just close the modal - the item is already in Purchases
     setShowTransactionModal(false);
   };
 
@@ -651,6 +626,23 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                                     Pay
                                   </button>
                                 )
+                              )}
+                              {/* Add Pay button for Purchases category items that are not billers */}
+                              {!isBiller && cat.name === 'Purchases' && item.name !== 'New Item' && parseFloat(item.amount) > 0 && (
+                                <button 
+                                  onClick={() => {
+                                    setTransactionFormData({
+                                      name: item.name,
+                                      date: new Date().toISOString().split('T')[0],
+                                      amount: item.amount,
+                                      accountId: item.accountId || accounts[0]?.id || ''
+                                    });
+                                    setShowTransactionModal(true);
+                                  }}
+                                  className="px-3 py-1 bg-indigo-600 text-white text-[9px] font-black uppercase rounded-lg hover:bg-indigo-700 transition-colors"
+                                >
+                                  Pay
+                                </button>
                               )}
                               <button onClick={() => handleSetupToggle(cat.name, item.id)} className={`w-8 h-8 rounded-xl border-2 transition-all flex items-center justify-center ${item.included ? 'bg-indigo-600 border-indigo-600 text-white' : 'border-gray-200'}`}><Check className="w-4 h-4" /></button>
                             </div>
