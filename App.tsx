@@ -1,7 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Menu, ChevronLeft } from 'lucide-react';
 import { BrowserRouter, Routes, Route, NavLink } from 'react-router-dom';
-import { NAV_ITEMS, INITIAL_ACCOUNTS, INITIAL_BUDGET, INITIAL_BILLERS, INITIAL_INSTALLMENTS, INITIAL_SAVINGS, DEFAULT_SETUP, INITIAL_CATEGORIES } from './constants';
+import { NAV_ITEMS, INITIAL_ACCOUNTS, INITIAL_BUDGET, INITIAL_INSTALLMENTS, INITIAL_SAVINGS, DEFAULT_SETUP, INITIAL_CATEGORIES } from './constants';
+import { getAllBillersFrontend, createBillerFrontend, updateBillerFrontend, deleteBillerFrontend } from './src/services/billersService';
+import type { Biller } from './types';
 
 // Pages
 import Dashboard from './pages/Dashboard';
@@ -21,7 +23,9 @@ const App: React.FC = () => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [accounts, setAccounts] = useState(INITIAL_ACCOUNTS);
   const [budgetItems, setBudgetItems] = useState(INITIAL_BUDGET);
-  const [billers, setBillers] = useState(INITIAL_BILLERS);
+  const [billers, setBillers] = useState<Biller[]>([]);
+  const [billersLoading, setBillersLoading] = useState(true);
+  const [billersError, setBillersError] = useState<string | null>(null);
   const [installments, setInstallments] = useState(INITIAL_INSTALLMENTS);
   const [savings, setSavings] = useState(INITIAL_SAVINGS);
   const [currency, setCurrency] = useState('PHP');
@@ -42,8 +46,71 @@ const App: React.FC = () => {
   // Shared Trash State
   const [trashSetups, setTrashSetups] = useState([]);
 
-  const handleUpdateBiller = (updatedBiller) => {
-    setBillers(prev => prev.map(b => b.id === updatedBiller.id ? updatedBiller : b));
+  // Load billers from Supabase on component mount
+  useEffect(() => {
+    const fetchBillers = async () => {
+      setBillersLoading(true);
+      setBillersError(null);
+      
+      const { data, error } = await getAllBillersFrontend();
+      
+      if (error) {
+        console.error('Error loading billers:', error);
+        setBillersError('Failed to load billers from database');
+        setBillers([]);
+      } else {
+        setBillers(data || []);
+      }
+      
+      setBillersLoading(false);
+    };
+    
+    fetchBillers();
+  }, []);
+
+  // Reload billers from Supabase
+  const reloadBillers = async () => {
+    const { data, error } = await getAllBillersFrontend();
+    if (error) {
+      console.error('Error reloading billers:', error);
+      setBillersError('Failed to reload billers from database');
+    } else {
+      setBillers(data || []);
+      setBillersError(null);
+    }
+  };
+
+  const handleAddBiller = async (newBiller: Biller) => {
+    const { data, error } = await createBillerFrontend(newBiller);
+    if (error) {
+      console.error('Error creating biller:', error);
+      alert('Failed to create biller. Please try again.');
+    } else {
+      // Reload billers to get fresh data from Supabase
+      await reloadBillers();
+    }
+  };
+
+  const handleUpdateBiller = async (updatedBiller: Biller) => {
+    const { data, error } = await updateBillerFrontend(updatedBiller);
+    if (error) {
+      console.error('Error updating biller:', error);
+      alert('Failed to update biller. Please try again.');
+    } else {
+      // Reload billers to get fresh data from Supabase
+      await reloadBillers();
+    }
+  };
+
+  const handleDeleteBiller = async (id: string) => {
+    const { error } = await deleteBillerFrontend(id);
+    if (error) {
+      console.error('Error deleting biller:', error);
+      alert('Failed to delete biller. Please try again.');
+    } else {
+      // Reload billers to get fresh data from Supabase
+      await reloadBillers();
+    }
   };
 
   const handleUpdateInstallment = (updatedInstallment) => {
@@ -134,11 +201,13 @@ const App: React.FC = () => {
                 <Billers
                   billers={billers}
                   installments={installments}
-                  onAdd={(b) => setBillers(prev => [...prev, b])}
+                  onAdd={handleAddBiller}
                   accounts={accounts}
                   categories={categories}
                   onUpdate={handleUpdateBiller}
-                  onDelete={(id) => setBillers(prev => prev.filter(b => b.id !== id))}
+                  onDelete={handleDeleteBiller}
+                  loading={billersLoading}
+                  error={billersError}
                 />
               } />
               <Route path="/installments" element={

@@ -46,53 +46,6 @@ export const DEFAULT_SETUP: { [key: string]: CategorizedSetupItem[] } = {
   ],
 };
 
-const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
-
-const generateSchedules = (expectedAmount: number, year: string): PaymentSchedule[] => {
-  return MONTHS.map(month => ({
-    month,
-    year,
-    expectedAmount
-  }));
-};
-
-export const INITIAL_BILLERS: Biller[] = [
-  {
-    id: 'bl1',
-    name: 'Electric Co',
-    category: 'Utilities',
-    dueDate: '20th',
-    expectedAmount: 120,
-    timing: '1/2',
-    activationDate: { month: 'January', year: '2026' },
-    status: 'active',
-    schedules: generateSchedules(120, '2026')
-  },
-  {
-    id: 'bl2',
-    name: 'Internet Sub',
-    category: 'Subscriptions',
-    dueDate: '5th',
-    expectedAmount: 50,
-    timing: '1/2',
-    activationDate: { month: 'January', year: '2025' },
-    deactivationDate: { month: 'December', year: '2025' },
-    status: 'inactive',
-    schedules: generateSchedules(50, '2026')
-  },
-  {
-    id: 'bl3',
-    name: 'Water Service',
-    category: 'Utilities',
-    dueDate: '25th',
-    expectedAmount: 80,
-    timing: '2/2',
-    activationDate: { month: 'January', year: '2026' },
-    status: 'active',
-    schedules: generateSchedules(80, '2026')
-  }
-];
-
 export const INITIAL_INSTALLMENTS: Installment[] = [
   { id: 'i1', name: 'iPhone 15 Pro', totalAmount: 1200, monthlyAmount: 50, termDuration: '24 months', paidAmount: 300, accountId: '2', startDate: '2025-01' },
   { id: 'i2', name: 'MacBook Air', totalAmount: 1500, monthlyAmount: 125, termDuration: '12 months', paidAmount: 1500, accountId: '1', startDate: '2024-12' },
