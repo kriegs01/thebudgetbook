@@ -122,9 +122,10 @@ CREATE TABLE budget_setups (
   month TEXT NOT NULL,
   timing TEXT NOT NULL,
   status TEXT NOT NULL,
-  total_amount FLOAT NOT NULL,
+  total_amount NUMERIC(10, 2) NOT NULL,
   data JSONB NOT NULL,
-  created_at TIMESTAMPTZ DEFAULT NOW()
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  CONSTRAINT unique_month_timing UNIQUE (month, timing)
 );
 
 -- Enable Row Level Security (RLS)
@@ -226,13 +227,16 @@ Visit the Supabase Demo page to test the integration!
 | month | TEXT | Month name (e.g., January, February) |
 | timing | TEXT | Budget timing period (1/2 or 2/2) |
 | status | TEXT | Status of the budget setup (e.g., Active, Saved, Completed) |
-| total_amount | FLOAT | Total amount allocated in this budget setup |
+| total_amount | NUMERIC(10,2) | Total amount allocated in this budget setup |
 | data | JSONB | JSON object containing categorized setup items and salary data |
 | created_at | TIMESTAMPTZ | Creation timestamp (auto-generated) |
 
 **Note:** The `data` field in budget_setups stores categorized items as well as special fields:
 - `_projectedSalary`: The projected salary for this budget period
 - `_actualSalary`: The actual salary received (if different from projected)
+
+**Constraints:**
+- A unique constraint on (month, timing) ensures only one setup exists per month/timing combination
 
 ## Service Layer
 

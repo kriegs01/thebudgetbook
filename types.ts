@@ -93,7 +93,10 @@ export interface SavedBudgetSetup {
   timing: string;
   status: string;
   totalAmount: number;
-  data: { [key: string]: CategorizedSetupItem[] };
+  data: { [key: string]: CategorizedSetupItem[] } & {
+    _projectedSalary?: string;
+    _actualSalary?: string;
+  };
 }
 
 export type ViewMode = 'card' | 'list';

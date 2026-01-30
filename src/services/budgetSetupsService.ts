@@ -42,7 +42,7 @@ const supabaseBudgetSetupToFrontend = (setup: SupabaseBudgetSetup): SavedBudgetS
  * Convert frontend budget setup to Supabase format
  */
 const frontendBudgetSetupToSupabase = (setup: Partial<SavedBudgetSetup>): Partial<CreateBudgetSetupInput> => {
-  const supabaseSetup: any = {};
+  const supabaseSetup: Partial<CreateBudgetSetupInput> = {};
   
   if (setup.month !== undefined) supabaseSetup.month = setup.month;
   if (setup.timing !== undefined) supabaseSetup.timing = setup.timing;

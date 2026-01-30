@@ -63,8 +63,11 @@ export interface SupabaseBudgetSetup {
   month: string;
   timing: string;
   status: string;
-  total_amount: number; // float
-  data: any; // jsonb - stores CategorizedSetupItem[]
+  total_amount: number; // numeric
+  data: Record<string, any> & { // jsonb - stores categorized items and salary data
+    _projectedSalary?: string;
+    _actualSalary?: string;
+  };
   created_at: string; // timestamptz
 }
 

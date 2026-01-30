@@ -227,10 +227,10 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
           return;
         }
         
-        // Update local state
-        setSavedSetups(prev => 
-          prev.map(s => s.id === existingSetup.id ? updatedSetup : s)
-        );
+        // Reload setups from Supabase to get fresh data
+        if (onReloadSetups) {
+          await onReloadSetups();
+        }
       } else {
         // Create new setup in Supabase
         const newSetup: Omit<SavedBudgetSetup, 'id'> = {

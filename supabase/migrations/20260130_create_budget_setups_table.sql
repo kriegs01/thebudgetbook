@@ -8,9 +8,10 @@ CREATE TABLE IF NOT EXISTS budget_setups (
   month TEXT NOT NULL,
   timing TEXT NOT NULL,
   status TEXT NOT NULL,
-  total_amount FLOAT NOT NULL,
+  total_amount NUMERIC(10, 2) NOT NULL,
   data JSONB NOT NULL,
-  created_at TIMESTAMPTZ DEFAULT NOW()
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  CONSTRAINT unique_month_timing UNIQUE (month, timing)
 );
 
 -- Add comments to document the columns
@@ -30,3 +31,11 @@ ON budget_setups(month, timing);
 -- Create index on created_at for chronological queries
 CREATE INDEX IF NOT EXISTS idx_budget_setups_created_at 
 ON budget_setups(created_at DESC);
+
+-- Enable Row Level Security
+ALTER TABLE budget_setups ENABLE ROW LEVEL SECURITY;
+
+-- Create policy for public access (adjust based on your auth needs)
+-- WARNING: This policy allows anyone to read/write. 
+-- In production, restrict based on user authentication!
+CREATE POLICY "Enable all for budget_setups" ON budget_setups FOR ALL USING (true) WITH CHECK (true);
