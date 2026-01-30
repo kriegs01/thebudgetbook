@@ -58,6 +58,16 @@ export interface SupabaseTransaction {
   payment_method_id: string; // uuid
 }
 
+export interface SupabaseBudgetSetup {
+  id: string; // uuid
+  month: string;
+  timing: string;
+  status: string;
+  total_amount: number; // float
+  data: any; // jsonb - stores CategorizedSetupItem[]
+  created_at: string; // timestamptz
+}
+
 // Input types for creating new records (without id and timestamps)
 
 export type CreateAccountInput = Omit<SupabaseAccount, 'id' | 'created_at'>;
@@ -74,6 +84,9 @@ export type UpdateSavingsInput = Partial<CreateSavingsInput>;
 
 export type CreateTransactionInput = Omit<SupabaseTransaction, 'id'>;
 export type UpdateTransactionInput = Partial<CreateTransactionInput>;
+
+export type CreateBudgetSetupInput = Omit<SupabaseBudgetSetup, 'id' | 'created_at'>;
+export type UpdateBudgetSetupInput = Partial<CreateBudgetSetupInput>;
 
 // Database Response Types (for better type safety with Supabase responses)
 
