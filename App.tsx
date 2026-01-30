@@ -20,6 +20,7 @@ import StatementPage from './pages/accounts/statement';
 import Savings from './pages/Savings';
 import SettingsPage from './pages/Settings';
 import TrashPage from './pages/Trash';
+import TrashPageNew from './pages/TrashNew';
 import SupabaseDemo from './pages/SupabaseDemo';
 
 // Helper function to convert UI Account to Supabase format
@@ -535,18 +536,7 @@ const App: React.FC = () => {
                   onResetAll={handleResetAll}
                 />
               } />
-              <Route path="/trash" element={
-                <TrashPage
-                  items={trashSetups}
-                  onRestore={(setup) => {
-                    setTrashSetups(prev => prev.filter(s => s.id !== setup.id));
-                    setBudgetSetups(prev => [setup, ...prev]);
-                  }}
-                  onDeletePermanently={(id) => {
-                    setTrashSetups(prev => prev.filter(s => s.id !== id));
-                  }}
-                />
-              } />
+              <Route path="/trash" element={<TrashPageNew />} />
               <Route path="/transactions" element={
                 <TransactionsPage />
               } />

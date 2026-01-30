@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
-import { ChevronDown, ChevronRight, Hash, Globe, Bell, Lock, Trash2, AlertTriangle, RotateCcw, Plus, X } from 'lucide-react';
+import { ChevronDown, ChevronRight, Hash, Globe, Bell, Lock, Trash2, AlertTriangle, RotateCcw, Plus, X, Database, Upload } from 'lucide-react';
 import { BudgetCategory } from '../types';
+import { runAllMigrations, migrateTransactionsFromLocalStorage, migrateDefaultCategories, resetMigrationFlags } from '../src/utils/migrationUtils';
 
 interface SettingsProps {
   currency: string;
@@ -15,6 +16,8 @@ const Settings: React.FC<SettingsProps> = ({ currency, setCurrency, categories, 
   const [newCatName, setNewCatName] = useState('');
   const [showAddCat, setShowAddCat] = useState(false);
   const [newSubcatNames, setNewSubcatNames] = useState<{ [id: string]: string }>({});
+  const [migrationStatus, setMigrationStatus] = useState<string>('');
+  const [migrationLoading, setMigrationLoading] = useState(false);
 
   const [confirmModal, setConfirmModal] = useState<{
     show: boolean;
@@ -73,6 +76,29 @@ const Settings: React.FC<SettingsProps> = ({ currency, setCurrency, categories, 
         setConfirmModal(p => ({ ...p, show: false }));
       }
     });
+  };
+
+  const handleRunMigration = async () => {
+    setMigrationLoading(true);
+    setMigrationStatus('Running migration...');
+
+    try {
+      const results = await runAllMigrations();
+      
+      let message = 'Migration Complete!\n\n';
+      message += `✓ ${results.transactions.message}\n`;
+      message += `✓ ${results.categories.message}`;
+      
+      if (results.transactions.errors) {
+        message += '\n\nErrors:\n' + results.transactions.errors.slice(0, 3).join('\n');
+      }
+      
+      setMigrationStatus(message);
+    } catch (err) {
+      setMigrationStatus(`Migration failed: ${err}`);
+    } finally {
+      setMigrationLoading(false);
+    }
   };
 
   const sections = [
@@ -145,6 +171,45 @@ const Settings: React.FC<SettingsProps> = ({ currency, setCurrency, categories, 
               <span>Create New Category</span>
             </button>
           )}
+        </div>
+      )
+    },
+    { 
+      id: 'migration', 
+      label: 'Data Migration', 
+      icon: <Database className="w-5 h-5" />,
+      content: (
+        <div className="space-y-6 pt-2">
+          <div className="p-6 bg-blue-50 rounded-2xl border border-blue-100">
+            <h4 className="text-blue-900 font-black uppercase text-sm mb-2">Migrate to Supabase</h4>
+            <p className="text-blue-700 text-xs mb-4 font-medium">
+              If you have existing data in localStorage, use this tool to migrate it to Supabase. 
+              This migration runs only once and cannot be undone.
+            </p>
+            <button 
+              onClick={handleRunMigration}
+              disabled={migrationLoading}
+              className="flex items-center justify-center space-x-2 w-full py-3 bg-blue-600 text-white rounded-xl font-bold uppercase text-xs hover:bg-blue-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <Upload className="w-4 h-4" />
+              <span>{migrationLoading ? 'Migrating...' : 'Run Migration'}</span>
+            </button>
+            {migrationStatus && (
+              <div className="mt-4 p-4 bg-white rounded-xl border border-blue-200">
+                <pre className="text-xs text-gray-700 whitespace-pre-wrap font-mono">{migrationStatus}</pre>
+              </div>
+            )}
+          </div>
+          <div className="text-xs text-gray-500 space-y-2">
+            <p><strong>What gets migrated:</strong></p>
+            <ul className="list-disc list-inside space-y-1 ml-2">
+              <li>Transactions from localStorage to Supabase transactions table</li>
+              <li>Default categories to Supabase categories table</li>
+            </ul>
+            <p className="mt-4 text-gray-400">
+              Note: After migration, your localStorage data remains intact. You can manually clear it from browser settings if needed.
+            </p>
+          </div>
         </div>
       )
     },
