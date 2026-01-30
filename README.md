@@ -15,8 +15,20 @@ View your app in AI Studio: https://ai.studio/apps/drive/1ycYQEQFQoXZUCpk8DStQVr
 ```bash
 npm install                    # Install dependencies
 cp .env.example .env.local    # Create config (then edit with your Supabase credentials)
+# ⚠️ IMPORTANT: Run supabase_migration.sql in Supabase SQL Editor before using the app
 npm run dev                    # Start the app at http://localhost:3000
 ```
+
+## ⚠️ Important Setup Step
+
+Before using the app, you **must** run the SQL migration in your Supabase database:
+1. Open Supabase SQL Editor
+2. Copy contents of `supabase_migration.sql`
+3. Run the script to create all required tables
+
+**Without this step, features like Budget Setups will show 404 errors!**
+
+See [SUPABASE_SETUP.md](SUPABASE_SETUP.md) for detailed instructions.
 
 ## Features
 

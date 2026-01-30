@@ -56,8 +56,18 @@ The Budget Book application now supports Supabase as a backend database. This in
 
 3. **NEVER commit `.env.local` to version control!** It's already in `.gitignore`.
 
-### Step 4: Set Up the Database Schema
+### Step 4: Set Up the Database Schema ⚠️ CRITICAL
 
+**This step is REQUIRED before using the app!** Without running this SQL migration, you will get 404 errors when trying to save data.
+
+**Quick Method (Recommended):**
+1. Open the file `supabase_migration.sql` in your code editor
+2. Copy ALL the contents (Ctrl+A, Ctrl+C)
+3. Open Supabase SQL Editor in your dashboard
+4. Paste the SQL and click "Run" (or press Ctrl+Enter)
+5. Verify all tables are created in the Table Editor
+
+**Manual Method:**
 Run the following SQL in your Supabase SQL Editor to create the required tables:
 
 ```sql
