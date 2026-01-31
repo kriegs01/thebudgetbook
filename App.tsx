@@ -503,6 +503,7 @@ const App: React.FC = () => {
                     }
                   }}
                   onReloadSetups={reloadBudgetSetups}
+                  onReloadBillers={reloadBillers}
                 />
               } />
               <Route path="/billers" element={

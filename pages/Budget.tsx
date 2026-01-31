@@ -1,9 +1,10 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { BudgetItem, Account, Biller, PaymentSchedule, CategorizedSetupItem, SavedBudgetSetup, BudgetCategory } from '../types';
 import { Plus, Check, ChevronDown, Trash2, Save, FileText, ArrowRight, Upload, CheckCircle2, X, AlertTriangle } from 'lucide-react';
 import { createBudgetSetupFrontend, updateBudgetSetupFrontend } from '../src/services/budgetSetupsService';
-import { createTransaction } from '../src/services/transactionsService';
+import { createTransaction, getAllTransactions } from '../src/services/transactionsService';
+import type { SupabaseTransaction } from '../src/types/supabase';
 
 interface BudgetProps {
   items: BudgetItem[];
@@ -16,11 +17,20 @@ interface BudgetProps {
   onUpdateBiller: (biller: Biller) => Promise<void>;
   onMoveToTrash?: (setup: SavedBudgetSetup) => void;
   onReloadSetups?: () => Promise<void>;
+  onReloadBillers?: () => Promise<void>;
 }
 
 const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 
-const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSetups, setSavedSetups, onUpdateBiller, onMoveToTrash, onReloadSetups }) => {
+// Autosave configuration constants
+const AUTO_SAVE_DEBOUNCE_MS = 3000; // 3 seconds debounce for autosave
+const AUTO_SAVE_STATUS_TIMEOUT_MS = 3000; // How long to show status messages
+
+// Transaction matching configuration
+const TRANSACTION_AMOUNT_TOLERANCE = 1; // ±1 peso tolerance for amount matching (accounts for rounding differences)
+const TRANSACTION_MIN_NAME_LENGTH = 3; // Minimum length for partial name matching to avoid false positives
+
+const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSetups, setSavedSetups, onUpdateBiller, onMoveToTrash, onReloadSetups, onReloadBillers }) => {
   const [view, setView] = useState<'summary' | 'setup'>('summary');
   const [selectedMonth, setSelectedMonth] = useState(MONTHS[new Date().getMonth()]);
   const [selectedTiming, setSelectedTiming] = useState<'1/2' | '2/2'>('1/2');
@@ -32,6 +42,9 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
   // Month Summary State - stored in Supabase with setup data
   const [projectedSalary, setProjectedSalary] = useState<string>('11000');
   const [actualSalary, setActualSalary] = useState<string>('');
+
+  // Transactions state - used for matching payments
+  const [transactions, setTransactions] = useState<SupabaseTransaction[]>([]);
 
   // Load from saved setup when month/timing changes
   useEffect(() => {
@@ -54,6 +67,40 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
       setActualSalary('');
     }
   }, [selectedMonth, selectedTiming, savedSetups]);
+
+  // Load transactions for matching payment status
+  // Only loads once on mount to avoid excessive DB queries
+  useEffect(() => {
+    const loadTransactions = async () => {
+      try {
+        const { data, error } = await getAllTransactions();
+        if (error) {
+          console.error('[Budget] Failed to load transactions:', error);
+        } else if (data) {
+          // Filter transactions to last 24 months to improve performance
+          const twoYearsAgo = new Date();
+          twoYearsAgo.setFullYear(twoYearsAgo.getFullYear() - 2);
+          
+          const recentTransactions = data.filter(tx => {
+            const txDate = new Date(tx.date);
+            return txDate >= twoYearsAgo;
+          });
+          
+          setTransactions(recentTransactions);
+          console.log('[Budget] Loaded transactions:', recentTransactions.length, 'of', data.length);
+        }
+      } catch (error) {
+        console.error('[Budget] Error loading transactions:', error);
+      }
+    };
+
+    loadTransactions();
+  }, []); // Load once on mount, reload happens after creating transactions
+
+  // Autosave State
+  const [autoSaveStatus, setAutoSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+  const autoSaveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const lastSavedDataRef = useRef<string>('');
 
   // Modal States
   const [showPayModal, setShowPayModal] = useState<{ biller: Biller, schedule: PaymentSchedule } | null>(null);
@@ -141,6 +188,219 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
       maximumFractionDigits: 2 
     }).format(val);
   };
+
+  /**
+   * Check if an item is paid by matching transactions
+   * Matches by name (with minimum length), amount (within tolerance), and date (within month/year)
+   */
+  const checkIfPaidByTransaction = useCallback((
+    itemName: string, 
+    itemAmount: string | number, 
+    month: string,
+    year?: number // Optional year parameter for viewing past budgets
+  ): boolean => {
+    const amount = typeof itemAmount === 'string' ? parseFloat(itemAmount) : itemAmount;
+    if (isNaN(amount) || amount <= 0) return false;
+
+    // Get month index (0-11) for date comparison
+    const monthIndex = MONTHS.indexOf(month);
+    if (monthIndex === -1) return false;
+
+    // Determine target year (use provided year or current year)
+    const targetYear = year || new Date().getFullYear();
+
+    // Find matching transaction
+    const matchingTransaction = transactions.find(tx => {
+      // Check name match with minimum length requirement to avoid false positives
+      const itemNameLower = itemName.toLowerCase();
+      const txNameLower = tx.name.toLowerCase();
+      
+      // Require at least TRANSACTION_MIN_NAME_LENGTH characters to match
+      const nameMatch = (
+        (txNameLower.includes(itemNameLower) && itemNameLower.length >= TRANSACTION_MIN_NAME_LENGTH) ||
+        (itemNameLower.includes(txNameLower) && txNameLower.length >= TRANSACTION_MIN_NAME_LENGTH)
+      );
+      
+      // Check amount match (within tolerance)
+      const amountMatch = Math.abs(tx.amount - amount) <= TRANSACTION_AMOUNT_TOLERANCE;
+      
+      // Check date match (same month and year, or previous year for year-end scenarios)
+      const txDate = new Date(tx.date);
+      const txMonth = txDate.getMonth();
+      const txYear = txDate.getFullYear();
+      
+      // Match if transaction is in the selected month of target year or previous year
+      const dateMatch = (txMonth === monthIndex) && 
+                       (txYear === targetYear || txYear === targetYear - 1);
+
+      return nameMatch && amountMatch && dateMatch;
+    });
+
+    if (matchingTransaction) {
+      console.log(`[Budget] ✓ Found matching transaction for "${itemName}":`, {
+        txName: matchingTransaction.name,
+        txAmount: matchingTransaction.amount,
+        txDate: matchingTransaction.date,
+        itemAmount: amount
+      });
+    } else {
+      console.log(`[Budget] ✗ No matching transaction for "${itemName}" (${amount}) in ${month}`, {
+        totalTransactions: transactions.length,
+        itemAmount: amount,
+        month,
+        targetYear: year || new Date().getFullYear()
+      });
+    }
+
+    return !!matchingTransaction;
+  }, [transactions]);
+
+  /**
+   * Reload transactions from Supabase
+   */
+  const reloadTransactions = useCallback(async () => {
+    try {
+      const { data, error } = await getAllTransactions();
+      if (error) {
+        console.error('[Budget] Failed to reload transactions:', error);
+      } else if (data) {
+        setTransactions(data);
+        console.log('[Budget] Reloaded transactions:', data.length);
+      }
+    } catch (error) {
+      console.error('[Budget] Error reloading transactions:', error);
+    }
+  }, []);
+
+  /**
+   * Auto-save budget setup with debouncing
+   * Automatically saves changes after 3 seconds of inactivity
+   */
+  const autoSave = useCallback(async () => {
+    // Only auto-save in setup view
+    if (view !== 'setup') return;
+    
+    // Prepare data including salary information (use structuredClone for better performance)
+    const dataToSave = {
+      ...structuredClone(setupData),
+      _projectedSalary: projectedSalary,
+      _actualSalary: actualSalary
+    };
+    
+    // Check if data has actually changed
+    const currentDataString = JSON.stringify(dataToSave);
+    if (currentDataString === lastSavedDataRef.current) {
+      console.log('[Budget] No changes detected, skipping auto-save');
+      return;
+    }
+    
+    // Calculate total amount
+    let total = 0;
+    Object.values(setupData)
+      .filter((value): value is CategorizedSetupItem[] => Array.isArray(value))
+      .forEach(catItems => {
+        catItems.forEach(item => {
+          if (item.included) {
+            const amount = parseFloat(item.amount);
+            if (!isNaN(amount)) {
+              total += amount;
+            }
+          }
+        });
+      });
+
+    const existingSetup = savedSetups.find(s => s.month === selectedMonth && s.timing === selectedTiming);
+    
+    try {
+      setAutoSaveStatus('saving');
+      console.log('[Budget] Auto-saving budget setup...');
+      
+      if (existingSetup) {
+        // Update existing setup
+        const updatedSetup: SavedBudgetSetup = {
+          ...existingSetup,
+          totalAmount: total,
+          data: dataToSave,
+          status: 'Saved'
+        };
+        
+        const { error } = await updateBudgetSetupFrontend(updatedSetup);
+        
+        if (error) {
+          console.error('[Budget] Auto-save failed:', error);
+          setAutoSaveStatus('error');
+          setTimeout(() => setAutoSaveStatus('idle'), AUTO_SAVE_STATUS_TIMEOUT_MS);
+          return;
+        }
+      } else {
+        // Create new setup
+        const newSetup: Omit<SavedBudgetSetup, 'id'> = {
+          month: selectedMonth,
+          timing: selectedTiming,
+          status: 'Saved',
+          totalAmount: total,
+          data: dataToSave
+        };
+        
+        const { error } = await createBudgetSetupFrontend(newSetup);
+        
+        if (error) {
+          console.error('[Budget] Auto-save failed:', error);
+          setAutoSaveStatus('error');
+          setTimeout(() => setAutoSaveStatus('idle'), AUTO_SAVE_STATUS_TIMEOUT_MS);
+          return;
+        }
+      }
+      
+      // Update last saved data reference
+      lastSavedDataRef.current = currentDataString;
+      
+      // Reload setups to get fresh data
+      if (onReloadSetups) {
+        await onReloadSetups();
+      }
+      
+      console.log('[Budget] Auto-save completed successfully');
+      setAutoSaveStatus('saved');
+      setTimeout(() => setAutoSaveStatus('idle'), 2000);
+    } catch (error) {
+      console.error('[Budget] Error in auto-save:', error);
+      setAutoSaveStatus('error');
+      setTimeout(() => setAutoSaveStatus('idle'), AUTO_SAVE_STATUS_TIMEOUT_MS);
+    }
+  }, [view, setupData, projectedSalary, actualSalary, selectedMonth, selectedTiming, savedSetups, onReloadSetups]);
+
+  /**
+   * Debounced auto-save trigger
+   * Waits for specified delay after last change before auto-saving
+   */
+  const triggerAutoSave = useCallback(() => {
+    // Clear any existing timeout
+    if (autoSaveTimeoutRef.current) {
+      clearTimeout(autoSaveTimeoutRef.current);
+    }
+    
+    // Set new timeout for auto-save
+    autoSaveTimeoutRef.current = setTimeout(() => {
+      autoSave();
+    }, AUTO_SAVE_DEBOUNCE_MS);
+  }, [autoSave]);
+
+  // Trigger auto-save when setupData, projectedSalary, or actualSalary changes
+  useEffect(() => {
+    if (view === 'setup') {
+      triggerAutoSave();
+    }
+  }, [setupData, projectedSalary, actualSalary, view, triggerAutoSave]);
+
+  // Cleanup timeout on component unmount only
+  useEffect(() => {
+    return () => {
+      if (autoSaveTimeoutRef.current) {
+        clearTimeout(autoSaveTimeoutRef.current);
+      }
+    };
+  }, []); // Empty dependency array ensures this only runs on unmount
 
   const handleSetupToggle = (category: string, id: string) => {
     setSetupData(prev => ({
@@ -332,6 +592,9 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
       
       console.log('[Budget] Transaction saved successfully:', data);
       
+      // Reload transactions to update paid status
+      await reloadTransactions();
+      
       // Close the modal
       setShowTransactionModal(false);
     } catch (e) {
@@ -346,6 +609,27 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
     
     try {
       const { biller, schedule } = showPayModal;
+      
+      // Create a transaction record in Supabase
+      console.log('[Budget] Creating transaction for payment');
+      const transaction = {
+        name: `${biller.name} - ${schedule.month} ${schedule.year}`,
+        date: new Date(payFormData.datePaid).toISOString(),
+        amount: parseFloat(payFormData.amount),
+        payment_method_id: payFormData.accountId
+      };
+      
+      const { data: transactionData, error: transactionError } = await createTransaction(transaction);
+      
+      if (transactionError) {
+        console.error('[Budget] Failed to create transaction:', transactionError);
+        alert('Failed to save transaction. Please try again.');
+        return;
+      }
+      
+      console.log('[Budget] Transaction created successfully:', transactionData);
+      
+      // Update the biller's payment schedule
       const updatedSchedules = biller.schedules.map(s => {
         if (s.month === schedule.month && s.year === schedule.year) {
           return { 
@@ -358,12 +642,26 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
         }
         return s;
       });
+      
+      console.log('[Budget] Updating biller with new schedule');
       await onUpdateBiller({ ...biller, schedules: updatedSchedules });
+      
+      // Reload transactions to update paid status
+      await reloadTransactions();
+      
+      // Explicitly reload billers to ensure UI updates
+      if (onReloadBillers) {
+        console.log('[Budget] Reloading billers after payment');
+        await onReloadBillers();
+      }
+      
+      console.log('[Budget] Payment completed successfully');
       
       // Only close modal on success
       setShowPayModal(null);
     } catch (error) {
       console.error('Failed to update payment:', error);
+      alert('Failed to process payment. Please try again.');
       // Keep modal open so user can retry
     }
   };
@@ -517,10 +815,35 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
             <h2 className="text-2xl font-black text-gray-900 tracking-tighter uppercase">BUDGET SETUP</h2>
             <p className="text-xs text-gray-400 font-bold uppercase tracking-widest mt-1">Configure Recurring Expenses</p>
           </div>
-          <button onClick={handleSaveSetup} className="flex items-center space-x-3 bg-indigo-600 text-white px-8 py-3 rounded-2xl font-black uppercase tracking-widest text-xs hover:bg-indigo-700 shadow-xl">
-            <Save className="w-5 h-5" />
-            <span>Save</span>
-          </button>
+          <div className="flex items-center space-x-3">
+            {/* Autosave Status Indicator */}
+            {autoSaveStatus !== 'idle' && (
+              <div className="flex items-center space-x-2 text-xs font-bold">
+                {autoSaveStatus === 'saving' && (
+                  <>
+                    <div className="w-4 h-4 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
+                    <span className="text-gray-600">Saving...</span>
+                  </>
+                )}
+                {autoSaveStatus === 'saved' && (
+                  <>
+                    <Check className="w-4 h-4 text-green-600" />
+                    <span className="text-green-600">Saved</span>
+                  </>
+                )}
+                {autoSaveStatus === 'error' && (
+                  <>
+                    <AlertTriangle className="w-4 h-4 text-red-600" />
+                    <span className="text-red-600">Error</span>
+                  </>
+                )}
+              </div>
+            )}
+            <button onClick={handleSaveSetup} className="flex items-center space-x-3 bg-indigo-600 text-white px-8 py-3 rounded-2xl font-black uppercase tracking-widest text-xs hover:bg-indigo-700 shadow-xl">
+              <Save className="w-5 h-5" />
+              <span>Save</span>
+            </button>
+          </div>
         </div>
 
         <div className="flex justify-center items-center space-x-6">
@@ -666,7 +989,7 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                           <td className="p-4 text-center">
                             <div className="flex items-center justify-center space-x-2">
                               {item.settled ? (
-                                <CheckCircle2 className="w-4 h-4 text-green-500" />
+                                <CheckCircle2 className="w-4 h-4 text-green-500" aria-label="Item settled" title="Settled" />
                               ) : (
                                 <button 
                                   onClick={() => handleSetupUpdate(cat.name, item.id, 'settled', true)}
@@ -731,10 +1054,16 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                     {items.length > 0 ? items.map((item) => {
                       let isPaid = false, linkedBiller, schedule;
                       const isBiller = item.isBiller || billers.some(b => b.id === item.id);
+                      
                       if (isBiller) {
                         linkedBiller = billers.find(b => b.id === item.id);
                         schedule = linkedBiller?.schedules.find(s => s.month === selectedMonth);
-                        isPaid = !!schedule?.amountPaid;
+                        // Check both biller schedule and transaction matching
+                        isPaid = !!schedule?.amountPaid || 
+                                 checkIfPaidByTransaction(item.name, item.amount, selectedMonth);
+                      } else {
+                        // For non-biller items (like Purchases), only check transactions
+                        isPaid = checkIfPaidByTransaction(item.name, item.amount, selectedMonth);
                       }
                       return (
                         <tr key={item.id} className={`${item.included ? 'bg-white' : 'bg-gray-50 opacity-60'}`}>
@@ -746,7 +1075,7 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                             <div className="flex items-center justify-center space-x-2">
                               {isBiller && (
                                 isPaid ? (
-                                  <CheckCircle2 className="w-4 h-4 text-green-500" />
+                                  <CheckCircle2 className="w-4 h-4 text-green-500" aria-label="Payment completed" title="Paid" />
                                 ) : (
                                   <button 
                                     onClick={() => { 
@@ -761,22 +1090,26 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                                   </button>
                                 )
                               )}
-                              {/* Add Pay button for Purchases category items that are not billers */}
+                              {/* Add Pay button or checkmark for Purchases category items that are not billers */}
                               {!isBiller && cat.name === 'Purchases' && item.name !== 'New Item' && parseFloat(item.amount) > 0 && (
-                                <button 
-                                  onClick={() => {
-                                    setTransactionFormData({
-                                      name: item.name,
-                                      date: new Date().toISOString().split('T')[0],
-                                      amount: item.amount,
-                                      accountId: item.accountId || accounts[0]?.id || ''
-                                    });
-                                    setShowTransactionModal(true);
-                                  }}
-                                  className="px-3 py-1 bg-indigo-600 text-white text-[9px] font-black uppercase rounded-lg hover:bg-indigo-700 transition-colors"
-                                >
-                                  Pay
-                                </button>
+                                isPaid ? (
+                                  <CheckCircle2 className="w-4 h-4 text-green-500" aria-label="Payment completed" title="Paid" />
+                                ) : (
+                                  <button 
+                                    onClick={() => {
+                                      setTransactionFormData({
+                                        name: item.name,
+                                        date: new Date().toISOString().split('T')[0],
+                                        amount: item.amount,
+                                        accountId: item.accountId || accounts[0]?.id || ''
+                                      });
+                                      setShowTransactionModal(true);
+                                    }}
+                                    className="px-3 py-1 bg-indigo-600 text-white text-[9px] font-black uppercase rounded-lg hover:bg-indigo-700 transition-colors"
+                                  >
+                                    Pay
+                                  </button>
+                                )
                               )}
                               <button onClick={() => handleSetupToggle(cat.name, item.id)} className={`w-8 h-8 rounded-xl border-2 transition-all flex items-center justify-center ${item.included ? 'bg-indigo-600 border-indigo-600 text-white' : 'border-gray-200'}`}><Check className="w-4 h-4" /></button>
                             </div>
@@ -816,10 +1149,16 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                         {items.map((item) => {
                           let isPaid = false, linkedBiller, schedule;
                           const isBiller = item.isBiller || billers.some(b => b.id === item.id);
+                          
                           if (isBiller) {
                             linkedBiller = billers.find(b => b.id === item.id);
                             schedule = linkedBiller?.schedules.find(s => s.month === selectedMonth);
-                            isPaid = !!schedule?.amountPaid;
+                            // Check both biller schedule and transaction matching
+                            isPaid = !!schedule?.amountPaid || 
+                                     checkIfPaidByTransaction(item.name, item.amount, selectedMonth);
+                          } else {
+                            // For non-biller items, only check transactions
+                            isPaid = checkIfPaidByTransaction(item.name, item.amount, selectedMonth);
                           }
                           return (
                             <tr key={item.id} className={`${item.included ? 'bg-white' : 'bg-gray-50 opacity-60'}`}>
@@ -831,7 +1170,7 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                                 <div className="flex items-center justify-center space-x-2">
                                   {isBiller && (
                                     isPaid ? (
-                                      <CheckCircle2 className="w-4 h-4 text-green-500" />
+                                      <CheckCircle2 className="w-4 h-4 text-green-500" aria-label="Payment completed" title="Paid" />
                                     ) : (
                                       <button 
                                         onClick={() => { 

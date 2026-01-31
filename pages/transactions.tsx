@@ -1,5 +1,7 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { Plus, ArrowLeft } from 'lucide-react';
+import { getAllTransactions, createTransaction, deleteTransaction } from '../src/services/transactionsService';
+import { getAllAccountsFrontend } from '../src/services/accountsService';
 
 type Transaction = {
   id: string;
@@ -23,6 +25,7 @@ const TransactionsPage: React.FC = () => {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [accounts, setAccounts] = useState<AccountOption[]>([]);
   const [showForm, setShowForm] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
 
   const [form, setForm] = useState({
     name: '',
@@ -31,50 +34,100 @@ const TransactionsPage: React.FC = () => {
     paymentMethodId: ''
   });
 
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-    const rawAcc = localStorage.getItem('accounts_list');
-    if (rawAcc) {
-      try { setAccounts(JSON.parse(rawAcc) as AccountOption[]); } catch { setAccounts([]); }
-    } else setAccounts([]);
+  // Load transactions and accounts from Supabase
+  const loadData = useCallback(async () => {
+    setIsLoading(true);
+    try {
+      // Load accounts
+      const { data: accountsData, error: accountsError } = await getAllAccountsFrontend();
+      if (accountsError) {
+        console.error('Error loading accounts:', accountsError);
+      } else if (accountsData) {
+        const accountOptions = accountsData.map(a => ({ id: a.id, bank: a.bank }));
+        setAccounts(accountOptions);
+      }
 
-    const raw = localStorage.getItem('transactions');
-    if (raw) {
-      try { setTransactions(JSON.parse(raw) as Transaction[]); } catch { setTransactions([]); }
-    } else setTransactions([]);
+      // Load transactions
+      const { data: transactionsData, error: transactionsError } = await getAllTransactions();
+      if (transactionsError) {
+        console.error('Error loading transactions:', transactionsError);
+      } else if (transactionsData) {
+        const txList = transactionsData.map(t => ({
+          id: t.id,
+          name: t.name,
+          date: t.date,
+          amount: t.amount,
+          paymentMethodId: t.payment_method_id
+        }));
+        setTransactions(txList);
+      }
+    } catch (error) {
+      console.error('Error loading data:', error);
+    } finally {
+      setIsLoading(false);
+    }
   }, []);
 
   useEffect(() => {
-    // ensure default paymentMethodId when accounts exist
+    loadData();
+  }, [loadData]);
+
+  useEffect(() => {
+    // Set default paymentMethodId when accounts are loaded and form hasn't been touched
     if (accounts.length > 0 && !form.paymentMethodId) {
       setForm(f => ({ ...f, paymentMethodId: accounts[0].id }));
     }
-  }, [accounts]);
+  }, [accounts, form.paymentMethodId]);
 
-  const saveTransactions = (next: Transaction[]) => {
-    setTransactions(next);
-    try { localStorage.setItem('transactions', JSON.stringify(next)); } catch {}
-  };
-
-  const onSubmit = (e: React.FormEvent) => {
+  const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!form.name || !form.date || !form.amount || !form.paymentMethodId) return;
-    const tx: Transaction = {
-      id: Math.random().toString(36).substr(2, 9),
-      name: form.name,
-      date: new Date(form.date).toISOString(),
-      amount: parseFloat(form.amount),
-      paymentMethodId: form.paymentMethodId
-    };
-    const next = [tx, ...transactions];
-    saveTransactions(next);
-    setShowForm(false);
-    setForm({ name: '', date: todayIso(), amount: '', paymentMethodId: accounts[0]?.id ?? '' });
+    
+    try {
+      const transaction = {
+        name: form.name,
+        date: new Date(form.date).toISOString(),
+        amount: parseFloat(form.amount),
+        payment_method_id: form.paymentMethodId
+      };
+      
+      const { data, error } = await createTransaction(transaction);
+      
+      if (error) {
+        console.error('Error creating transaction:', error);
+        alert('Failed to create transaction. Please try again.');
+        return;
+      }
+      
+      console.log('Transaction created successfully:', data);
+      
+      // Reload transactions to get fresh data
+      await loadData();
+      
+      setShowForm(false);
+      setForm({ name: '', date: todayIso(), amount: '', paymentMethodId: accounts[0]?.id ?? '' });
+    } catch (error) {
+      console.error('Error creating transaction:', error);
+      alert('Failed to create transaction. Please try again.');
+    }
   };
 
-  const removeTx = (id: string) => {
-    const next = transactions.filter(t => t.id !== id);
-    saveTransactions(next);
+  const removeTx = async (id: string) => {
+    try {
+      const { error } = await deleteTransaction(id);
+      
+      if (error) {
+        console.error('Error deleting transaction:', error);
+        alert('Failed to delete transaction. Please try again.');
+        return;
+      }
+      
+      // Reload transactions after deletion
+      await loadData();
+    } catch (error) {
+      console.error('Error deleting transaction:', error);
+      alert('Failed to delete transaction. Please try again.');
+    }
   };
 
   return (
@@ -98,38 +151,42 @@ const TransactionsPage: React.FC = () => {
           </div>
 
           <div className="p-4">
-            <div className="w-full overflow-x-auto">
-              <table className="min-w-full text-left">
-                <thead>
-                  <tr>
-                    <th className="px-4 py-3 text-xs text-gray-500 uppercase tracking-wider">Name</th>
-                    <th className="px-4 py-3 text-xs text-gray-500 uppercase tracking-wider">Date</th>
-                    <th className="px-4 py-3 text-xs text-gray-500 uppercase tracking-wider">Amount</th>
-                    <th className="px-4 py-3 text-xs text-gray-500 uppercase tracking-wider">Payment Method</th>
-                    <th className="px-4 py-3" />
-                  </tr>
-                </thead>
-                <tbody>
-                  {transactions.map(tx => {
-                    const pm = accounts.find(a => a.id === tx.paymentMethodId);
-                    return (
-                      <tr key={tx.id} className="border-t border-gray-100">
-                        <td className="px-4 py-3"><div className="text-sm font-medium text-gray-900">{tx.name}</div></td>
-                        <td className="px-4 py-3"><div className="text-sm text-gray-500">{new Date(tx.date).toLocaleDateString()}</div></td>
-                        <td className="px-4 py-3"><div className={`text-sm font-semibold ${tx.amount < 0 ? 'text-red-600' : 'text-green-600'}`}>{formatCurrency(tx.amount)}</div></td>
-                        <td className="px-4 py-3"><div className="text-sm text-gray-700">{pm ? pm.bank : tx.paymentMethodId}</div></td>
-                        <td className="px-4 py-3 text-right">
-                          <button onClick={() => removeTx(tx.id)} className="text-sm text-red-600">Delete</button>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                  {transactions.length === 0 && (
-                    <tr><td colSpan={5} className="px-4 py-6 text-center text-gray-400">No transactions yet.</td></tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
+            {isLoading ? (
+              <div className="text-center py-8 text-gray-500">Loading transactions...</div>
+            ) : (
+              <div className="w-full overflow-x-auto">
+                <table className="min-w-full text-left">
+                  <thead>
+                    <tr>
+                      <th className="px-4 py-3 text-xs text-gray-500 uppercase tracking-wider">Name</th>
+                      <th className="px-4 py-3 text-xs text-gray-500 uppercase tracking-wider">Date</th>
+                      <th className="px-4 py-3 text-xs text-gray-500 uppercase tracking-wider">Amount</th>
+                      <th className="px-4 py-3 text-xs text-gray-500 uppercase tracking-wider">Payment Method</th>
+                      <th className="px-4 py-3" />
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {transactions.map(tx => {
+                      const pm = accounts.find(a => a.id === tx.paymentMethodId);
+                      return (
+                        <tr key={tx.id} className="border-t border-gray-100">
+                          <td className="px-4 py-3"><div className="text-sm font-medium text-gray-900">{tx.name}</div></td>
+                          <td className="px-4 py-3"><div className="text-sm text-gray-500">{new Date(tx.date).toLocaleDateString()}</div></td>
+                          <td className="px-4 py-3"><div className={`text-sm font-semibold ${tx.amount < 0 ? 'text-red-600' : 'text-green-600'}`}>{formatCurrency(tx.amount)}</div></td>
+                          <td className="px-4 py-3"><div className="text-sm text-gray-700">{pm ? pm.bank : tx.paymentMethodId}</div></td>
+                          <td className="px-4 py-3 text-right">
+                            <button onClick={() => removeTx(tx.id)} className="text-sm text-red-600">Delete</button>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                    {transactions.length === 0 && (
+                      <tr><td colSpan={5} className="px-4 py-6 text-center text-gray-400">No transactions yet.</td></tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
         </div>
 
