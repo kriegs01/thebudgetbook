@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { Plus, ArrowLeft } from 'lucide-react';
 import { getAllTransactions, createTransaction, deleteTransaction } from '../src/services/transactionsService';
 import { getAllAccountsFrontend } from '../src/services/accountsService';
@@ -35,7 +35,7 @@ const TransactionsPage: React.FC = () => {
   });
 
   // Load transactions and accounts from Supabase
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     setIsLoading(true);
     try {
       // Load accounts
@@ -45,11 +45,6 @@ const TransactionsPage: React.FC = () => {
       } else if (accountsData) {
         const accountOptions = accountsData.map(a => ({ id: a.id, bank: a.bank }));
         setAccounts(accountOptions);
-        
-        // Set default payment method if not set
-        if (accountOptions.length > 0 && !form.paymentMethodId) {
-          setForm(f => ({ ...f, paymentMethodId: accountOptions[0].id }));
-        }
       }
 
       // Load transactions
@@ -71,18 +66,18 @@ const TransactionsPage: React.FC = () => {
     } finally {
       setIsLoading(false);
     }
-  };
-
-  useEffect(() => {
-    loadData();
   }, []);
 
   useEffect(() => {
-    // ensure default paymentMethodId when accounts exist
+    loadData();
+  }, [loadData]);
+
+  useEffect(() => {
+    // Set default paymentMethodId when accounts are loaded and form hasn't been touched
     if (accounts.length > 0 && !form.paymentMethodId) {
       setForm(f => ({ ...f, paymentMethodId: accounts[0].id }));
     }
-  }, [accounts]);
+  }, [accounts, form.paymentMethodId]);
 
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
