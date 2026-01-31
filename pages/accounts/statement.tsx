@@ -249,6 +249,23 @@ const StatementPage: React.FC<StatementPageProps> = ({ accounts }) => {
                   <p className="text-lg font-bold text-gray-900">{formatCurrency(account.creditLimit ?? 0)}</p>
                 </div>
               </div>
+              <div className="mt-6 pt-6 border-t border-gray-100">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-xs text-gray-500 font-medium mb-1">This statement total is automatically reflected in</p>
+                    <p className="text-sm font-bold text-purple-600">Billers &gt; {account.bank} Statement</p>
+                  </div>
+                  <a 
+                    href="/billers"
+                    className="inline-flex items-center space-x-2 px-4 py-2 bg-purple-50 text-purple-600 rounded-xl text-sm font-bold hover:bg-purple-100 transition-colors"
+                  >
+                    <span>View in Billers</span>
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                    </svg>
+                  </a>
+                </div>
+              </div>
             </div>
 
             {/* Transactions Table */}

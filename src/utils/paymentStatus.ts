@@ -334,3 +334,77 @@ export const getInstallmentPaymentSchedule = (
   
   return schedule;
 };
+
+/**
+ * Generate a virtual biller from a credit card account
+ * 
+ * Creates a virtual biller that aggregates credit card transactions by billing cycle.
+ * This allows credit card statements to appear in the Billers view with proper
+ * month-by-month breakdowns.
+ * 
+ * @param account - Credit card account
+ * @param transactions - All transactions
+ * @param installments - All installments (to exclude from regular purchases)
+ * @returns Virtual biller with schedules matching billing cycles
+ */
+export const generateCreditCardVirtualBiller = (
+  account: Account,
+  transactions: SupabaseTransaction[],
+  installments: Installment[] = []
+): any => {
+  if (account.classification !== 'Credit Card' || !account.billingDate) {
+    return null;
+  }
+
+  // Aggregate purchases by billing cycle
+  const cycleSummaries = aggregateCreditCardPurchases(account, transactions, installments);
+
+  // Calculate timing based on billing date
+  const billingDay = parseInt(account.billingDate.split('-')[2], 10) || 15;
+  const timing: '1/2' | '2/2' = (billingDay >= 1 && billingDay <= 21) ? '1/2' : '2/2';
+
+  // Generate schedules from cycle summaries
+  const schedules = cycleSummaries.map(cycle => {
+    const monthNames = [
+      'January', 'February', 'March', 'April', 'May', 'June',
+      'July', 'August', 'September', 'October', 'November', 'December'
+    ];
+    
+    return {
+      month: monthNames[cycle.cycleStart.getMonth()],
+      year: cycle.cycleStart.getFullYear().toString(),
+      expectedAmount: cycle.totalAmount,
+      amountPaid: cycle.totalAmount, // Auto-mark as paid since transactions exist
+      receipt: `Statement-${cycle.cycleLabel}`,
+      datePaid: cycle.cycleEnd.toISOString().split('T')[0],
+      accountId: account.id,
+      // Add metadata for display purposes
+      _isCreditCardBiller: true,
+      _transactionCount: cycle.transactionCount,
+      _cycleLabel: cycle.cycleLabel,
+      _cycleStart: cycle.cycleStart.toISOString(),
+      _cycleEnd: cycle.cycleEnd.toISOString()
+    };
+  }).filter(schedule => schedule.expectedAmount > 0); // Only include cycles with transactions
+
+  // Create virtual biller
+  return {
+    id: `virtual-cc-${account.id}`,
+    name: `${account.bank} Statement`,
+    category: 'Credit Card',
+    dueDate: account.dueDate || account.billingDate,
+    expectedAmount: 0, // Not applicable for virtual billers
+    timing: timing,
+    activationDate: {
+      month: 'January',
+      day: billingDay.toString(),
+      year: new Date().getFullYear().toString()
+    },
+    status: 'active',
+    schedules: schedules,
+    // Metadata to identify as virtual biller
+    _isVirtual: true,
+    _isCreditCardBiller: true,
+    _sourceAccountId: account.id
+  };
+};
