@@ -40,6 +40,9 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
   // Categorized Setup State
   const [setupData, setSetupData] = useState<{ [key: string]: CategorizedSetupItem[] }>({});
   const [removedIds, setRemovedIds] = useState<Set<string>>(new Set());
+  
+  // PROTOTYPE: Track excluded installments (by default all are included)
+  const [excludedInstallmentIds, setExcludedInstallmentIds] = useState<Set<string>>(new Set());
 
   // Month Summary State - stored in Supabase with setup data
   const [projectedSalary, setProjectedSalary] = useState<string>('11000');
@@ -1045,9 +1048,11 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
             );
           }
           
-          // PROTOTYPE: Calculate total including installment monthly amounts
+          // PROTOTYPE: Calculate total including installment monthly amounts (only included ones)
           const itemsTotal = items.filter(i => i.included).reduce((s, i) => s + (parseFloat(i.amount) || 0), 0);
-          const installmentsTotal = relevantInstallments.reduce((s, inst) => s + inst.monthlyAmount, 0);
+          const installmentsTotal = relevantInstallments
+            .filter(inst => !excludedInstallmentIds.has(inst.id))
+            .reduce((s, inst) => s + inst.monthlyAmount, 0);
           const categoryTotal = itemsTotal + installmentsTotal;
           
           return (
@@ -1145,6 +1150,7 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                       <>
                         {relevantInstallments.map((installment) => {
                           const account = accounts.find(a => a.id === installment.accountId);
+                          const isIncluded = !excludedInstallmentIds.has(installment.id);
                           // Check payment status using transaction matching (simplified for now)
                           const isPaid = checkIfPaidByTransaction(
                             installment.name, 
@@ -1153,7 +1159,7 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                           );
                           
                           return (
-                            <tr key={`installment-${installment.id}`} className="bg-blue-50/30">
+                            <tr key={`installment-${installment.id}`} className={`${isIncluded ? 'bg-blue-50/30' : 'bg-gray-50 opacity-60'}`}>
                               <td className="p-4 pl-10">
                                 <div className="flex items-center gap-2">
                                   <span className="text-sm font-bold text-gray-900">{installment.name}</span>
@@ -1193,11 +1199,41 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                                       Pay
                                     </button>
                                   )}
-                                  <span className="text-xs text-gray-400 font-medium">Auto-included</span>
+                                  <button 
+                                    onClick={() => {
+                                      setExcludedInstallmentIds(prev => {
+                                        const newSet = new Set(prev);
+                                        if (newSet.has(installment.id)) {
+                                          newSet.delete(installment.id);
+                                        } else {
+                                          newSet.add(installment.id);
+                                        }
+                                        return newSet;
+                                      });
+                                    }}
+                                    className={`w-8 h-8 rounded-xl border-2 transition-all flex items-center justify-center ${isIncluded ? 'bg-indigo-600 border-indigo-600 text-white' : 'border-gray-200'}`}
+                                  >
+                                    <Check className="w-4 h-4" />
+                                  </button>
                                 </div>
                               </td>
                               <td className="p-4 pr-10 text-right">
-                                <span className="text-[9px] font-medium text-gray-400 uppercase tracking-widest">Read-only</span>
+                                <button 
+                                  onClick={() => {
+                                    setConfirmModal({
+                                      show: true,
+                                      title: 'Exclude Installment',
+                                      message: `Are you sure you want to exclude "${installment.name}" from this budget period? This will not delete the installment, just exclude it from this budget.`,
+                                      onConfirm: () => {
+                                        setExcludedInstallmentIds(prev => new Set([...prev, installment.id]));
+                                        setConfirmModal(prev => ({ ...prev, show: false }));
+                                      }
+                                    });
+                                  }}
+                                  className="text-[9px] font-black text-red-500 uppercase tracking-widest border border-red-50 px-2 py-1 rounded-lg hover:bg-red-50 transition-colors"
+                                >
+                                  Exclude
+                                </button>
                               </td>
                             </tr>
                           );

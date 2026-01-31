@@ -449,8 +449,8 @@ const Installments: React.FC<InstallmentsProps> = ({ installments, accounts, bil
                 <div>
                   <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Timing (PROTOTYPE)</label>
                   <select value={formData.timing} onChange={(e) => setFormData({...formData, timing: e.target.value as '1/2' | '2/2'})} className="w-full bg-gray-50 border-transparent rounded-2xl p-4 outline-none focus:ring-2 focus:ring-indigo-500 font-bold appearance-none">
-                    <option value="1/2">1/2 (First Half)</option>
-                    <option value="2/2">2/2 (Second Half)</option>
+                    <option value="1/2">1/2</option>
+                    <option value="2/2">2/2</option>
                   </select>
                 </div>
               </div>
@@ -577,8 +577,8 @@ const Installments: React.FC<InstallmentsProps> = ({ installments, accounts, bil
                 <div>
                   <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Timing (PROTOTYPE)</label>
                   <select value={editFormData.timing} onChange={(e) => setEditFormData({...editFormData, timing: e.target.value as '1/2' | '2/2'})} className="w-full bg-gray-50 border-transparent rounded-2xl p-4 outline-none focus:ring-2 focus:ring-indigo-500 font-bold appearance-none">
-                    <option value="1/2">1/2 (First Half)</option>
-                    <option value="2/2">2/2 (Second Half)</option>
+                    <option value="1/2">1/2</option>
+                    <option value="2/2">2/2</option>
                   </select>
                 </div>
               </div>
