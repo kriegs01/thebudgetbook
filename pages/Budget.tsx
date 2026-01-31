@@ -3,7 +3,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { BudgetItem, Account, Biller, PaymentSchedule, CategorizedSetupItem, SavedBudgetSetup, BudgetCategory, Installment } from '../types';
 import { Plus, Check, ChevronDown, Trash2, Save, FileText, ArrowRight, Upload, CheckCircle2, X, AlertTriangle } from 'lucide-react';
 import { createBudgetSetupFrontend, updateBudgetSetupFrontend } from '../src/services/budgetSetupsService';
-import { createTransaction, getAllTransactions } from '../src/services/transactionsService';
+import { createTransaction, getAllTransactions, updateTransaction } from '../src/services/transactionsService';
 import type { SupabaseTransaction } from '../src/types/supabase';
 import { getInstallmentPaymentSchedule, aggregateCreditCardPurchases } from '../src/utils/paymentStatus'; // PROTOTYPE: Import payment status utilities
 import { getScheduleExpectedAmount } from '../src/utils/linkedAccountUtils'; // ENHANCEMENT: Import for linked account amount calculation
@@ -117,9 +117,11 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
     accountId: accounts[0]?.id || ''
   });
 
-  // Transaction form modal for Purchases
+  // QA: Transaction form modal for Purchases (supports create and edit)
+  // Fix for Issue #6: Enable transaction editing
   const [showTransactionModal, setShowTransactionModal] = useState(false);
   const [transactionFormData, setTransactionFormData] = useState({
+    id: '', // Empty for new, set for editing
     name: '',
     date: new Date().toISOString().split('T')[0],
     amount: '',
@@ -231,6 +233,32 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
       maximumFractionDigits: 2 
     }).format(val);
   };
+
+  /**
+   * QA: Check if installment should be displayed for selected month
+   * Only shows installments that have started on or before the selected month
+   * Fix for Issue #2: Incorrect installment scheduling
+   */
+  const shouldShowInstallment = useCallback((installment: Installment, month: string, year?: number): boolean => {
+    // If no start date is set, always show (backward compatibility)
+    if (!installment.startDate) return true;
+    
+    // Parse installment start date (format: YYYY-MM)
+    const [startYear, startMonth] = installment.startDate.split('-').map(Number);
+    
+    // Parse selected month
+    const selectedMonthIndex = MONTHS.indexOf(month);
+    if (selectedMonthIndex === -1) return false;
+    
+    // Determine target year (use provided year or current year)
+    const targetYear = year || new Date().getFullYear();
+    
+    // Compare: installment should only show if start date is on or before selected month
+    if (startYear < targetYear) return true;
+    if (startYear > targetYear) return false;
+    // Same year: compare months (startMonth is 1-12, selectedMonthIndex is 0-11)
+    return startMonth <= (selectedMonthIndex + 1);
+  }, []);
 
   /**
    * Check if an item is paid by matching transactions
@@ -477,11 +505,13 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
     }));
   };
 
+  // QA: Exclude item from current Budget Setup view only (doesn't delete master record)
+  // Fix for Issue #4: Exclude button behavior
   const removeItemFromCategory = (category: string, id: string, name: string) => {
     setConfirmModal({
       show: true,
-      title: 'Remove Item',
-      message: `Are you sure you want to exclude "${name}" from the current budget setup?`,
+      title: 'Exclude Item',
+      message: `Are you sure you want to exclude "${name}" from this month's budget? This will NOT delete the biller or payment schedule.`,
       onConfirm: () => {
         setRemovedIds(prev => new Set([...prev, id]));
         setSetupData(prev => ({
@@ -610,13 +640,15 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
     }
   };
 
+  // QA: Handle transaction create/update
+  // Fix for Issue #6: Enable transaction editing
   const handleTransactionSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    console.log('[Budget] Submitting transaction to Supabase');
+    const isEditing = !!transactionFormData.id;
+    console.log(`[Budget] ${isEditing ? 'Updating' : 'Creating'} transaction in Supabase`);
     console.log('[Budget] Transaction data:', transactionFormData);
     
-    // Save transaction to Supabase instead of localStorage
     const transaction = {
       name: transactionFormData.name,
       date: new Date(transactionFormData.date).toISOString(),
@@ -625,21 +657,37 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
     };
     
     try {
-      const { data, error } = await createTransaction(transaction);
+      let result;
+      if (isEditing) {
+        // Update existing transaction
+        result = await updateTransaction(transactionFormData.id, transaction);
+      } else {
+        // Create new transaction
+        result = await createTransaction(transaction);
+      }
+      
+      const { data, error } = result;
       
       if (error) {
-        console.error('[Budget] Failed to save transaction:', error);
-        alert('Failed to save transaction. Please try again.');
+        console.error(`[Budget] Failed to ${isEditing ? 'update' : 'save'} transaction:`, error);
+        alert(`Failed to ${isEditing ? 'update' : 'save'} transaction. Please try again.`);
         return;
       }
       
-      console.log('[Budget] Transaction saved successfully:', data);
+      console.log(`[Budget] Transaction ${isEditing ? 'updated' : 'saved'} successfully:`, data);
       
       // Reload transactions to update paid status
       await reloadTransactions();
       
-      // Close the modal
+      // Close the modal and reset form
       setShowTransactionModal(false);
+      setTransactionFormData({
+        id: '',
+        name: '',
+        date: new Date().toISOString().split('T')[0],
+        amount: '',
+        accountId: accounts[0]?.id || ''
+      });
     } catch (e) {
       console.error('[Budget] Error saving transaction:', e);
       alert('Failed to save transaction. Please try again.');
@@ -1054,7 +1102,7 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                               onClick={() => removeItemFromCategory(cat.name, item.id, item.name)} 
                               className="text-[9px] font-black text-red-500 uppercase tracking-widest border border-red-50 px-2 py-1 rounded-lg"
                             >
-                              Remove
+                              Exclude
                             </button>
                           </td>
                         </tr>
@@ -1078,12 +1126,17 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
         {categories.filter(cat => ['Utilities', 'Loans', 'Subscriptions', 'Purchases'].includes(cat.name)).map((cat) => {
           const items = setupData[cat.name] || [];
           
-          // PROTOTYPE: For Loans category, filter installments by current timing
+          // QA: For Loans category, filter installments by timing AND start date
+          // Fix for Issue #1 & #2: Missing loan items and incorrect scheduling
           let relevantInstallments: Installment[] = [];
           if (cat.name === 'Loans') {
-            relevantInstallments = installments.filter(inst => 
-              !inst.timing || inst.timing === selectedTiming
-            );
+            relevantInstallments = installments.filter(inst => {
+              // Filter by timing (if set, must match selected timing)
+              const timingMatch = !inst.timing || inst.timing === selectedTiming;
+              // Filter by start date (only show if on/after start date)
+              const dateMatch = shouldShowInstallment(inst, selectedMonth);
+              return timingMatch && dateMatch;
+            });
           }
           
           // PROTOTYPE: Calculate total including installment monthly amounts (only included ones)
@@ -1173,7 +1226,7 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                               <button onClick={() => handleSetupToggle(cat.name, item.id)} className={`w-8 h-8 rounded-xl border-2 transition-all flex items-center justify-center ${item.included ? 'bg-indigo-600 border-indigo-600 text-white' : 'border-gray-200'}`}><Check className="w-4 h-4" /></button>
                             </div>
                           </td>
-                          <td className="p-4 pr-10 text-right"><button onClick={() => removeItemFromCategory(cat.name, item.id, item.name)} className="text-[9px] font-black text-red-500 uppercase tracking-widest border border-red-50 px-2 py-1 rounded-lg">Remove</button></td>
+                          <td className="p-4 pr-10 text-right"><button onClick={() => removeItemFromCategory(cat.name, item.id, item.name)} className="text-[9px] font-black text-red-500 uppercase tracking-widest border border-red-50 px-2 py-1 rounded-lg">Exclude</button></td>
                         </tr>
                       );
                     }) : (
@@ -1438,7 +1491,7 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                                   <button onClick={() => handleSetupToggle(cat.name, item.id)} className={`w-8 h-8 rounded-xl border-2 transition-all flex items-center justify-center ${item.included ? 'bg-indigo-600 border-indigo-600 text-white' : 'border-gray-200'}`}><Check className="w-4 h-4" /></button>
                                 </div>
                               </td>
-                              <td className="p-4 pr-10 text-right"><button onClick={() => removeItemFromCategory(cat.name, item.id, item.name)} className="text-[9px] font-black text-red-500 uppercase tracking-widest border border-red-50 px-2 py-1 rounded-lg">Remove</button></td>
+                              <td className="p-4 pr-10 text-right"><button onClick={() => removeItemFromCategory(cat.name, item.id, item.name)} className="text-[9px] font-black text-red-500 uppercase tracking-widest border border-red-50 px-2 py-1 rounded-lg">Exclude</button></td>
                             </tr>
                           );
                         })}
@@ -1509,8 +1562,14 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
             <button onClick={() => setShowTransactionModal(false)} className="absolute right-6 top-6 p-2 hover:bg-gray-100 rounded-full transition-colors">
               <X className="w-6 h-6 text-gray-400" />
             </button>
-            <h2 className="text-2xl font-black text-gray-900 mb-2">Add Purchase Transaction</h2>
-            <p className="text-gray-500 text-sm mb-8">This will create a transaction and add it to your budget setup</p>
+            <h2 className="text-2xl font-black text-gray-900 mb-2">
+              {transactionFormData.id ? 'Edit Transaction' : 'Add Purchase Transaction'}
+            </h2>
+            <p className="text-gray-500 text-sm mb-8">
+              {transactionFormData.id 
+                ? 'Update the transaction details below' 
+                : 'This will create a transaction and add it to your budget setup'}
+            </p>
             <form onSubmit={handleTransactionSubmit} className="space-y-6">
               <div>
                 <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Purchase Name</label>
@@ -1565,7 +1624,9 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
 
               <div className="flex space-x-4 pt-4">
                 <button type="button" onClick={() => setShowTransactionModal(false)} className="flex-1 bg-gray-100 py-4 rounded-2xl font-bold text-gray-500">Cancel</button>
-                <button type="submit" className="flex-1 bg-indigo-600 text-white py-4 rounded-2xl font-bold hover:bg-indigo-700 shadow-xl shadow-indigo-100">Add Purchase</button>
+                <button type="submit" className="flex-1 bg-indigo-600 text-white py-4 rounded-2xl font-bold hover:bg-indigo-700 shadow-xl shadow-indigo-100">
+                  {transactionFormData.id ? 'Update Transaction' : 'Add Purchase'}
+                </button>
               </div>
             </form>
           </div>
