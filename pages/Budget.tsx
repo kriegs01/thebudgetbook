@@ -1,10 +1,11 @@
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { BudgetItem, Account, Biller, PaymentSchedule, CategorizedSetupItem, SavedBudgetSetup, BudgetCategory } from '../types';
+import { BudgetItem, Account, Biller, PaymentSchedule, CategorizedSetupItem, SavedBudgetSetup, BudgetCategory, Installment } from '../types';
 import { Plus, Check, ChevronDown, Trash2, Save, FileText, ArrowRight, Upload, CheckCircle2, X, AlertTriangle } from 'lucide-react';
 import { createBudgetSetupFrontend, updateBudgetSetupFrontend } from '../src/services/budgetSetupsService';
 import { createTransaction, getAllTransactions } from '../src/services/transactionsService';
 import type { SupabaseTransaction } from '../src/types/supabase';
+import { getInstallmentPaymentSchedule } from '../src/utils/paymentStatus'; // PROTOTYPE: Import payment status utilities
 
 interface BudgetProps {
   items: BudgetItem[];
@@ -18,6 +19,7 @@ interface BudgetProps {
   onMoveToTrash?: (setup: SavedBudgetSetup) => void;
   onReloadSetups?: () => Promise<void>;
   onReloadBillers?: () => Promise<void>;
+  installments?: Installment[]; // PROTOTYPE: Installments for Loans section
 }
 
 const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
@@ -30,7 +32,7 @@ const AUTO_SAVE_STATUS_TIMEOUT_MS = 3000; // How long to show status messages
 const TRANSACTION_AMOUNT_TOLERANCE = 1; // ±1 peso tolerance for amount matching (accounts for rounding differences)
 const TRANSACTION_MIN_NAME_LENGTH = 3; // Minimum length for partial name matching to avoid false positives
 
-const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSetups, setSavedSetups, onUpdateBiller, onMoveToTrash, onReloadSetups, onReloadBillers }) => {
+const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSetups, setSavedSetups, onUpdateBiller, onMoveToTrash, onReloadSetups, onReloadBillers, installments = [] }) => {
   const [view, setView] = useState<'summary' | 'setup'>('summary');
   const [selectedMonth, setSelectedMonth] = useState(MONTHS[new Date().getMonth()]);
   const [selectedTiming, setSelectedTiming] = useState<'1/2' | '2/2'>('1/2');
@@ -1034,11 +1036,25 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
         {/* Other full-width categories: Utilities, Loans, Subscriptions, Purchases */}
         {categories.filter(cat => ['Utilities', 'Loans', 'Subscriptions', 'Purchases'].includes(cat.name)).map((cat) => {
           const items = setupData[cat.name] || [];
+          
+          // PROTOTYPE: For Loans category, filter installments by current timing
+          let relevantInstallments: Installment[] = [];
+          if (cat.name === 'Loans') {
+            relevantInstallments = installments.filter(inst => 
+              !inst.timing || inst.timing === selectedTiming
+            );
+          }
+          
+          // PROTOTYPE: Calculate total including installment monthly amounts
+          const itemsTotal = items.filter(i => i.included).reduce((s, i) => s + (parseFloat(i.amount) || 0), 0);
+          const installmentsTotal = relevantInstallments.reduce((s, inst) => s + inst.monthlyAmount, 0);
+          const categoryTotal = itemsTotal + installmentsTotal;
+          
           return (
             <div key={cat.id} className="bg-white rounded-[3rem] shadow-sm border border-gray-100 overflow-hidden w-full">
               <div className="p-8 border-b border-gray-50 bg-gray-50/30 flex justify-between items-center">
                 <h3 className="text-xs font-black text-gray-900 uppercase tracking-[0.25em]">{cat.name}</h3>
-                <span className="text-lg font-black text-indigo-600">{formatCurrency(items.filter(i => i.included).reduce((s, i) => s + (parseFloat(i.amount) || 0), 0))}</span>
+                <span className="text-lg font-black text-indigo-600">{formatCurrency(categoryTotal)}</span>
               </div>
               <div className="overflow-x-auto">
                 <table className="w-full text-left">
@@ -1123,6 +1139,70 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                           No items yet. Click "Add Item" below to get started.
                         </td>
                       </tr>
+                    )}
+                    {/* PROTOTYPE: Render installments for Loans category */}
+                    {cat.name === 'Loans' && relevantInstallments.length > 0 && (
+                      <>
+                        {relevantInstallments.map((installment) => {
+                          const account = accounts.find(a => a.id === installment.accountId);
+                          // Check payment status using transaction matching (simplified for now)
+                          const isPaid = checkIfPaidByTransaction(
+                            installment.name, 
+                            installment.monthlyAmount, 
+                            selectedMonth
+                          );
+                          
+                          return (
+                            <tr key={`installment-${installment.id}`} className="bg-blue-50/30">
+                              <td className="p-4 pl-10">
+                                <div className="flex items-center gap-2">
+                                  <span className="text-sm font-bold text-gray-900">{installment.name}</span>
+                                  <span className="text-[9px] font-bold px-2 py-0.5 bg-blue-100 rounded text-blue-600">
+                                    INSTALLMENT {installment.timing ? `• ${installment.timing}` : ''}
+                                  </span>
+                                </div>
+                                {account && (
+                                  <div className="text-[10px] text-gray-400 font-medium mt-1">
+                                    {account.bank} • {installment.termDuration}
+                                  </div>
+                                )}
+                              </td>
+                              <td className="p-4">
+                                <div className="flex items-center space-x-1">
+                                  <span className="text-gray-400 font-bold">₱</span>
+                                  <span className="text-sm font-black">{formatCurrency(installment.monthlyAmount).replace('₱', '')}</span>
+                                </div>
+                              </td>
+                              <td className="p-4 text-center">
+                                <div className="flex items-center justify-center space-x-2">
+                                  {isPaid ? (
+                                    <CheckCircle2 className="w-4 h-4 text-green-500" aria-label="Payment completed" title="Paid" />
+                                  ) : (
+                                    <button 
+                                      onClick={() => {
+                                        setTransactionFormData({
+                                          name: `${installment.name} - ${selectedMonth} ${new Date().getFullYear()}`,
+                                          date: new Date().toISOString().split('T')[0],
+                                          amount: installment.monthlyAmount.toString(),
+                                          accountId: installment.accountId || accounts[0]?.id || ''
+                                        });
+                                        setShowTransactionModal(true);
+                                      }}
+                                      className="px-3 py-1 bg-indigo-600 text-white text-[9px] font-black uppercase rounded-lg hover:bg-indigo-700 transition-colors"
+                                    >
+                                      Pay
+                                    </button>
+                                  )}
+                                  <span className="text-xs text-gray-400 font-medium">Auto-included</span>
+                                </div>
+                              </td>
+                              <td className="p-4 pr-10 text-right">
+                                <span className="text-[9px] font-medium text-gray-400 uppercase tracking-widest">Read-only</span>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </>
                     )}
                   </tbody>
                 </table>
