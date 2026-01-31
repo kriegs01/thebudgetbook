@@ -3,6 +3,14 @@ import { Biller, Account, PaymentSchedule, BudgetCategory, Installment } from '.
 import { Plus, Calendar, Bell, ChevronDown, ChevronRight, Upload, CheckCircle2, X, ArrowLeft, Power, PowerOff, MoreVertical, Edit2, Eye, Trash2, AlertTriangle } from 'lucide-react';
 import { getAllTransactions } from '../src/services/transactionsService';
 import type { SupabaseTransaction } from '../src/types/supabase';
+// ENHANCEMENT: Import linked account utilities for billing cycle-based amount calculation
+import { 
+  getScheduleExpectedAmount, 
+  getScheduleDisplayLabel, 
+  shouldUseLinkedAccount, 
+  getLinkedAccount 
+} from '../src/utils/linkedAccountUtils';
+
 
 interface BillersProps {
   billers: Biller[];
@@ -453,6 +461,9 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
 
   const renderBillerCard = (biller: Biller) => {
     const displayAmount = getExpectedAmount(biller);
+    // ENHANCEMENT: Check if biller has linked account
+    const hasLinkedAccount = shouldUseLinkedAccount(biller);
+    const linkedAccount = hasLinkedAccount ? getLinkedAccount(biller, accounts) : null;
     
     return (
     <div key={biller.id} className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 hover:shadow-md transition-all flex flex-col h-full group relative overflow-visible">
@@ -465,6 +476,19 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
             <h3 className="text-lg font-bold text-gray-900 group-hover:text-indigo-600 transition-colors truncate">{biller.name}</h3>
             <div className="flex items-center space-x-2 flex-wrap gap-y-1">
                <span className="text-[10px] font-bold px-2 py-0.5 bg-gray-100 rounded text-gray-500 uppercase">{biller.category}</span>
+               <span className="text-[10px] font-bold px-2 py-0.5 bg-blue-50 rounded text-blue-500">{biller.timing}</span>
+               <span className={`text-[10px] font-bold px-2 py-0.5 rounded uppercase ${biller.status === 'active' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                 {biller.status === 'active' ? <div className="flex items-center gap-1"><Power className="w-3 h-3" />Active</div> : <div className="flex items-center gap-1"><PowerOff className="w-3 h-3" />Inactive</div>}
+               </span>
+               {/* ENHANCEMENT: Show linked account indicator */}
+               {linkedAccount && (
+                 <span className="text-[10px] font-bold px-2 py-0.5 bg-purple-100 rounded text-purple-600 uppercase">
+                   🔗 {linkedAccount.bank}
+                 </span>
+               )}
+            </div>
+          </div>
+        </div>
                <span className="text-[10px] font-bold px-2 py-0.5 bg-blue-50 rounded text-blue-500">{biller.timing}</span>
                <span className={`text-[10px] font-bold px-2 py-0.5 rounded uppercase ${biller.status === 'active' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
                  {biller.status === 'active' ? <div className="flex items-center gap-1"><Power className="w-3 h-3" />Active</div> : <div className="flex items-center gap-1"><PowerOff className="w-3 h-3" />Inactive</div>}
@@ -541,7 +565,19 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-8">
               <div className="flex items-center space-x-6">
                 <div className="p-5 bg-indigo-50 text-indigo-600 rounded-3xl"><Bell className="w-10 h-10" /></div>
-                <div><h2 className="text-3xl font-black text-gray-900">{detailedBiller.name}</h2><div className="flex items-center space-x-3 mt-2"><span className="px-3 py-1 bg-gray-100 rounded-full text-xs font-bold text-gray-500 uppercase">{detailedBiller.category}</span><span className="text-sm text-gray-400 font-medium">Due every {detailedBiller.dueDate}</span></div></div>
+                <div>
+                  <h2 className="text-3xl font-black text-gray-900">{detailedBiller.name}</h2>
+                  <div className="flex items-center space-x-3 mt-2">
+                    <span className="px-3 py-1 bg-gray-100 rounded-full text-xs font-bold text-gray-500 uppercase">{detailedBiller.category}</span>
+                    <span className="text-sm text-gray-400 font-medium">Due every {detailedBiller.dueDate}</span>
+                    {/* ENHANCEMENT: Show linked account info */}
+                    {shouldUseLinkedAccount(detailedBiller) && getLinkedAccount(detailedBiller, accounts) && (
+                      <span className="px-3 py-1 bg-purple-100 rounded-full text-xs font-bold text-purple-600">
+                        🔗 Linked to {getLinkedAccount(detailedBiller, accounts)?.bank}
+                      </span>
+                    )}
+                  </div>
+                </div>
               </div>
               <div className="text-right"><p className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Expected Amount</p><p className="text-3xl font-black text-indigo-600">{formatCurrency(detailedBiller.expectedAmount)}</p></div>
             </div>
@@ -550,25 +586,33 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
                 <table className="w-full text-left">
                   <thead><tr className="bg-gray-50 border-b border-gray-100"><th className="p-4 text-xs font-bold text-gray-400 uppercase">Month</th><th className="p-4 text-xs font-bold text-gray-400 uppercase">Amount</th><th className="p-4 text-xs font-bold text-gray-400 uppercase text-center">Action</th></tr></thead>
                   <tbody className="divide-y divide-gray-50">{detailedBiller.schedules.map((sched, idx) => {
+                    // ENHANCEMENT: Calculate amount from linked account if applicable
+                    const { amount: calculatedAmount, isFromLinkedAccount } = getScheduleExpectedAmount(
+                      detailedBiller,
+                      sched,
+                      accounts,
+                      transactions
+                    );
+                    
                     // Check if paid via biller schedule OR via transaction matching
                     const isPaidViaSchedule = !!sched.amountPaid;
                     const isPaidViaTransaction = checkIfPaidByTransaction(
                       detailedBiller.name,
-                      sched.expectedAmount,
+                      calculatedAmount, // Use calculated amount for matching
                       sched.month,
                       sched.year
                     );
                     const isPaid = isPaidViaSchedule || isPaidViaTransaction;
                     
                     // Get actual paid amount (from schedule or matching transaction)
-                    let displayAmount = sched.expectedAmount;
+                    let displayAmount = calculatedAmount; // Use calculated amount
                     if (isPaid) {
                       if (isPaidViaSchedule && sched.amountPaid) {
                         displayAmount = sched.amountPaid;
                       } else {
                         const matchingTx = getMatchingTransaction(
                           detailedBiller.name,
-                          sched.expectedAmount,
+                          calculatedAmount, // Use calculated amount for matching
                           sched.month,
                           sched.year
                         );
@@ -578,11 +622,27 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
                       }
                     }
                     
+                    // ENHANCEMENT: Get display label with cycle date range if linked account
+                    const linkedAccount = shouldUseLinkedAccount(detailedBiller) 
+                      ? getLinkedAccount(detailedBiller, accounts) 
+                      : null;
+                    const displayLabel = getScheduleDisplayLabel(sched, linkedAccount);
+                    
                     return (
                       <tr key={idx} className={`${isPaid ? 'bg-green-50' : 'hover:bg-gray-50/50'} transition-colors`}>
-                        <td className="p-4 font-bold text-gray-900">{sched.month} {sched.year}</td>
+                        <td className="p-4">
+                          <div className="flex flex-col">
+                            <span className="font-bold text-gray-900">{displayLabel}</span>
+                            {isFromLinkedAccount && (
+                              <span className="text-[10px] text-purple-600 font-medium mt-1 flex items-center gap-1">
+                                <span className="inline-block w-1.5 h-1.5 rounded-full bg-purple-600"></span>
+                                From linked account
+                              </span>
+                            )}
+                          </div>
+                        </td>
                         <td className="p-4 font-medium text-gray-600">{formatCurrency(displayAmount)}</td>
-                        <td className="p-4 text-center">{!isPaid ? <button onClick={() => { setShowPayModal({ biller: detailedBiller, schedule: sched }); setPayFormData({ ...payFormData, amount: sched.expectedAmount.toString(), receipt: '' }); }} className="bg-indigo-600 text-white px-6 py-2 rounded-xl font-bold hover:bg-indigo-700 text-xs transition-all">Pay</button> : <span role="status" className="flex items-center justify-center text-green-600"><CheckCircle2 className="w-5 h-5" aria-label="Payment completed" title="Paid" /></span>}</td>
+                        <td className="p-4 text-center">{!isPaid ? <button onClick={() => { setShowPayModal({ biller: detailedBiller, schedule: sched }); setPayFormData({ ...payFormData, amount: displayAmount.toString(), receipt: '' }); }} className="bg-indigo-600 text-white px-6 py-2 rounded-xl font-bold hover:bg-indigo-700 text-xs transition-all">Pay</button> : <span role="status" className="flex items-center justify-center text-green-600"><CheckCircle2 className="w-5 h-5" aria-label="Payment completed" title="Paid" /></span>}</td>
                       </tr>
                     );
                   })}</tbody>
