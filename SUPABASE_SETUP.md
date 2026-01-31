@@ -85,7 +85,8 @@ CREATE TABLE billers (
   activation_date JSONB NOT NULL,
   deactivation_c JSONB,
   status TEXT NOT NULL,
-  schedules JSONB NOT NULL DEFAULT '[]'::jsonb
+  schedules JSONB NOT NULL DEFAULT '[]'::jsonb,
+  linked_account_id UUID REFERENCES accounts(id) ON DELETE SET NULL
 );
 
 -- Installments table
@@ -191,6 +192,7 @@ Visit the Supabase Demo page to test the integration!
 | deactivation_c | JSONB | Deactivation date object (nullable, note: field name is truncated in DB) |
 | status | TEXT | active or inactive |
 | schedules | JSONB | Payment schedule array |
+| linked_account_id | UUID | Foreign key to accounts (nullable) - Links Loans-category billers to credit accounts for dynamic billing cycle-based amount calculation |
 
 ### Installments
 | Column | Type | Description |
