@@ -26,6 +26,10 @@ const MONTHS = ["January", "February", "March", "April", "May", "June", "July", 
 const AUTO_SAVE_DEBOUNCE_MS = 3000; // 3 seconds debounce for autosave
 const AUTO_SAVE_STATUS_TIMEOUT_MS = 3000; // How long to show status messages
 
+// Transaction matching configuration
+const TRANSACTION_AMOUNT_TOLERANCE = 1; // ±1 peso tolerance for amount matching (accounts for rounding differences)
+const TRANSACTION_MIN_NAME_LENGTH = 3; // Minimum length for partial name matching to avoid false positives
+
 const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSetups, setSavedSetups, onUpdateBiller, onMoveToTrash, onReloadSetups, onReloadBillers }) => {
   const [view, setView] = useState<'summary' | 'setup'>('summary');
   const [selectedMonth, setSelectedMonth] = useState(MONTHS[new Date().getMonth()]);
@@ -65,6 +69,7 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
   }, [selectedMonth, selectedTiming, savedSetups]);
 
   // Load transactions for matching payment status
+  // Only loads once on mount to avoid excessive DB queries
   useEffect(() => {
     const loadTransactions = async () => {
       try {
@@ -72,8 +77,17 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
         if (error) {
           console.error('[Budget] Failed to load transactions:', error);
         } else if (data) {
-          setTransactions(data);
-          console.log('[Budget] Loaded transactions:', data.length);
+          // Filter transactions to last 24 months to improve performance
+          const twoYearsAgo = new Date();
+          twoYearsAgo.setFullYear(twoYearsAgo.getFullYear() - 2);
+          
+          const recentTransactions = data.filter(tx => {
+            const txDate = new Date(tx.date);
+            return txDate >= twoYearsAgo;
+          });
+          
+          setTransactions(recentTransactions);
+          console.log('[Budget] Loaded transactions:', recentTransactions.length, 'of', data.length);
         }
       } catch (error) {
         console.error('[Budget] Error loading transactions:', error);
@@ -81,7 +95,7 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
     };
 
     loadTransactions();
-  }, [selectedMonth, selectedTiming]); // Reload when month/timing changes
+  }, []); // Load once on mount, reload happens after creating transactions
 
   // Autosave State
   const [autoSaveStatus, setAutoSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
@@ -177,12 +191,13 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
 
   /**
    * Check if an item is paid by matching transactions
-   * Matches by name, amount (within tolerance), and date (within month)
+   * Matches by name (with minimum length), amount (within tolerance), and date (within month/year)
    */
   const checkIfPaidByTransaction = useCallback((
     itemName: string, 
     itemAmount: string | number, 
-    month: string
+    month: string,
+    year?: number // Optional year parameter for viewing past budgets
   ): boolean => {
     const amount = typeof itemAmount === 'string' ? parseFloat(itemAmount) : itemAmount;
     if (isNaN(amount) || amount <= 0) return false;
@@ -191,27 +206,32 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
     const monthIndex = MONTHS.indexOf(month);
     if (monthIndex === -1) return false;
 
-    // Define tolerance for amount matching (1 peso)
-    const AMOUNT_TOLERANCE = 1;
+    // Determine target year (use provided year or current year)
+    const targetYear = year || new Date().getFullYear();
 
     // Find matching transaction
     const matchingTransaction = transactions.find(tx => {
-      // Check name match (case-insensitive, contains)
-      const nameMatch = tx.name.toLowerCase().includes(itemName.toLowerCase()) ||
-                        itemName.toLowerCase().includes(tx.name.toLowerCase());
+      // Check name match with minimum length requirement to avoid false positives
+      const itemNameLower = itemName.toLowerCase();
+      const txNameLower = tx.name.toLowerCase();
+      
+      // Require at least TRANSACTION_MIN_NAME_LENGTH characters to match
+      const nameMatch = (
+        (txNameLower.includes(itemNameLower) && itemNameLower.length >= TRANSACTION_MIN_NAME_LENGTH) ||
+        (itemNameLower.includes(txNameLower) && txNameLower.length >= TRANSACTION_MIN_NAME_LENGTH)
+      );
       
       // Check amount match (within tolerance)
-      const amountMatch = Math.abs(tx.amount - amount) <= AMOUNT_TOLERANCE;
+      const amountMatch = Math.abs(tx.amount - amount) <= TRANSACTION_AMOUNT_TOLERANCE;
       
-      // Check date match (same month and year)
+      // Check date match (same month and year, or previous year for year-end scenarios)
       const txDate = new Date(tx.date);
       const txMonth = txDate.getMonth();
-      const currentYear = new Date().getFullYear();
       const txYear = txDate.getFullYear();
       
-      // Match if transaction is in the selected month of current or previous year
+      // Match if transaction is in the selected month of target year or previous year
       const dateMatch = (txMonth === monthIndex) && 
-                       (txYear === currentYear || txYear === currentYear - 1);
+                       (txYear === targetYear || txYear === targetYear - 1);
 
       return nameMatch && amountMatch && dateMatch;
     });
@@ -220,7 +240,8 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
       console.log(`[Budget] Found matching transaction for "${itemName}":`, {
         txName: matchingTransaction.name,
         txAmount: matchingTransaction.amount,
-        txDate: matchingTransaction.date
+        txDate: matchingTransaction.date,
+        itemAmount: amount
       });
     }
 
