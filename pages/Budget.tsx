@@ -237,11 +237,18 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
     });
 
     if (matchingTransaction) {
-      console.log(`[Budget] Found matching transaction for "${itemName}":`, {
+      console.log(`[Budget] ✓ Found matching transaction for "${itemName}":`, {
         txName: matchingTransaction.name,
         txAmount: matchingTransaction.amount,
         txDate: matchingTransaction.date,
         itemAmount: amount
+      });
+    } else {
+      console.log(`[Budget] ✗ No matching transaction for "${itemName}" (${amount}) in ${month}`, {
+        totalTransactions: transactions.length,
+        itemAmount: amount,
+        month,
+        targetYear: year || new Date().getFullYear()
       });
     }
 
@@ -1083,22 +1090,26 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                                   </button>
                                 )
                               )}
-                              {/* Add Pay button for Purchases category items that are not billers */}
+                              {/* Add Pay button or checkmark for Purchases category items that are not billers */}
                               {!isBiller && cat.name === 'Purchases' && item.name !== 'New Item' && parseFloat(item.amount) > 0 && (
-                                <button 
-                                  onClick={() => {
-                                    setTransactionFormData({
-                                      name: item.name,
-                                      date: new Date().toISOString().split('T')[0],
-                                      amount: item.amount,
-                                      accountId: item.accountId || accounts[0]?.id || ''
-                                    });
-                                    setShowTransactionModal(true);
-                                  }}
-                                  className="px-3 py-1 bg-indigo-600 text-white text-[9px] font-black uppercase rounded-lg hover:bg-indigo-700 transition-colors"
-                                >
-                                  Pay
-                                </button>
+                                isPaid ? (
+                                  <CheckCircle2 className="w-4 h-4 text-green-500" />
+                                ) : (
+                                  <button 
+                                    onClick={() => {
+                                      setTransactionFormData({
+                                        name: item.name,
+                                        date: new Date().toISOString().split('T')[0],
+                                        amount: item.amount,
+                                        accountId: item.accountId || accounts[0]?.id || ''
+                                      });
+                                      setShowTransactionModal(true);
+                                    }}
+                                    className="px-3 py-1 bg-indigo-600 text-white text-[9px] font-black uppercase rounded-lg hover:bg-indigo-700 transition-colors"
+                                  >
+                                    Pay
+                                  </button>
+                                )
                               )}
                               <button onClick={() => handleSetupToggle(cat.name, item.id)} className={`w-8 h-8 rounded-xl border-2 transition-all flex items-center justify-center ${item.included ? 'bg-indigo-600 border-indigo-600 text-white' : 'border-gray-200'}`}><Check className="w-4 h-4" /></button>
                             </div>
