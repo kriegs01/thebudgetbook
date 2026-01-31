@@ -152,7 +152,9 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
       // Check amount match (within tolerance)
       const amountMatch = Math.abs(tx.amount - expectedAmount) <= TRANSACTION_AMOUNT_TOLERANCE;
       
-      // Check date match (same month and year, or previous year)
+      // Check date match (same month and year, or previous year for year-end carryover)
+      // Note: Previous year matching is intentional - allows for payments made in December
+      // for January bills, or delayed transaction recording across year boundaries
       const txDate = new Date(tx.date);
       const txMonth = txDate.getMonth();
       const txYear = txDate.getFullYear();
@@ -163,7 +165,8 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
       return nameMatch && amountMatch && dateMatch;
     });
 
-    if (matchingTransaction) {
+    // Debug logging (can be removed in production)
+    if (process.env.NODE_ENV === 'development' && matchingTransaction) {
       console.log(`[Billers] ✓ Found matching transaction for "${billerName}" (${month} ${year}):`, {
         txName: matchingTransaction.name,
         txAmount: matchingTransaction.amount,
@@ -508,7 +511,7 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
                       <tr key={idx} className={`${isPaid ? 'bg-green-50' : 'hover:bg-gray-50/50'} transition-colors`}>
                         <td className="p-4 font-bold text-gray-900">{sched.month} {sched.year}</td>
                         <td className="p-4 font-medium text-gray-600">{formatCurrency(sched.expectedAmount)}</td>
-                        <td className="p-4 text-center">{!isPaid ? <button onClick={() => { setShowPayModal({ biller: detailedBiller, schedule: sched }); setPayFormData({ ...payFormData, amount: sched.expectedAmount.toString(), receipt: '' }); }} className="bg-indigo-600 text-white px-6 py-2 rounded-xl font-bold hover:bg-indigo-700 text-xs transition-all">Pay</button> : <div className="flex items-center justify-center text-green-600"><CheckCircle2 className="w-5 h-5" aria-label="Payment completed" title="Paid" /></div>}</td>
+                        <td className="p-4 text-center">{!isPaid ? <button onClick={() => { setShowPayModal({ biller: detailedBiller, schedule: sched }); setPayFormData({ ...payFormData, amount: sched.expectedAmount.toString(), receipt: '' }); }} className="bg-indigo-600 text-white px-6 py-2 rounded-xl font-bold hover:bg-indigo-700 text-xs transition-all">Pay</button> : <span role="status" className="flex items-center justify-center text-green-600"><CheckCircle2 className="w-5 h-5" aria-label="Payment completed" title="Paid" /></span>}</td>
                       </tr>
                     );
                   })}</tbody>
