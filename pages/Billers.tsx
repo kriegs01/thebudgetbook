@@ -3,6 +3,14 @@ import { Biller, Account, PaymentSchedule, BudgetCategory, Installment } from '.
 import { Plus, Calendar, Bell, ChevronDown, ChevronRight, Upload, CheckCircle2, X, ArrowLeft, Power, PowerOff, MoreVertical, Edit2, Eye, Trash2, AlertTriangle } from 'lucide-react';
 import { getAllTransactions } from '../src/services/transactionsService';
 import type { SupabaseTransaction } from '../src/types/supabase';
+// ENHANCEMENT: Import linked account utilities for billing cycle-based amount calculation
+import { 
+  getScheduleExpectedAmount, 
+  getScheduleDisplayLabel, 
+  shouldUseLinkedAccount, 
+  getLinkedAccount 
+} from '../src/utils/linkedAccountUtils';
+
 
 interface BillersProps {
   billers: Biller[];
@@ -69,7 +77,8 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
     actDay: '',
     actYear: new Date().getFullYear().toString(),
     deactMonth: '',
-    deactYear: ''
+    deactYear: '',
+    linkedAccountId: '' // ENHANCEMENT: Support linking Loans-category billers to credit accounts
   });
 
   const [editFormData, setEditFormData] = useState({
@@ -81,7 +90,8 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
     actDay: '',
     actYear: '',
     deactMonth: '',
-    deactYear: ''
+    deactYear: '',
+    linkedAccountId: '' // ENHANCEMENT: Support linking Loans-category billers to credit accounts
   });
 
   const [payFormData, setPayFormData] = useState({
@@ -276,7 +286,8 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
         activationDate: activationDate,
         deactivationDate: deactivationDate,
         status: status,
-        schedules: MONTHS.map(month => ({ month, year: '2026', expectedAmount: expected }))
+        schedules: MONTHS.map(month => ({ month, year: '2026', expectedAmount: expected })),
+        linkedAccountId: addFormData.linkedAccountId || undefined // ENHANCEMENT: Support linked credit accounts
       };
       
       await onAdd(newBiller);
@@ -292,7 +303,8 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
         actDay: '',
         actYear: new Date().getFullYear().toString(),
         deactMonth: '',
-        deactYear: ''
+        deactYear: '',
+        linkedAccountId: '' // ENHANCEMENT: Reset linked account field
       });
       setTimingFeedback('');
     } catch (error) {
@@ -339,7 +351,8 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
         timing: timing,
         activationDate: activationDate,
         deactivationDate: deactivationDate,
-        status: status
+        status: status,
+        linkedAccountId: editFormData.linkedAccountId || undefined // ENHANCEMENT: Support linked credit accounts
       });
       
       // Only close modal on success
@@ -410,7 +423,8 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
       actDay: biller.activationDate.day || '',
       actYear: biller.activationDate.year,
       deactMonth: biller.deactivationDate?.month || '',
-      deactYear: biller.deactivationDate?.year || ''
+      deactYear: biller.deactivationDate?.year || '',
+      linkedAccountId: biller.linkedAccountId || '' // ENHANCEMENT: Populate linked account field
     });
     setShowEditModal(biller);
     setActiveDropdownId(null);
@@ -447,6 +461,9 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
 
   const renderBillerCard = (biller: Biller) => {
     const displayAmount = getExpectedAmount(biller);
+    // ENHANCEMENT: Check if biller has linked account
+    const hasLinkedAccount = shouldUseLinkedAccount(biller);
+    const linkedAccount = hasLinkedAccount ? getLinkedAccount(biller, accounts) : null;
     
     return (
     <div key={biller.id} className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 hover:shadow-md transition-all flex flex-col h-full group relative overflow-visible">
@@ -463,6 +480,12 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
                <span className={`text-[10px] font-bold px-2 py-0.5 rounded uppercase ${biller.status === 'active' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
                  {biller.status === 'active' ? <div className="flex items-center gap-1"><Power className="w-3 h-3" />Active</div> : <div className="flex items-center gap-1"><PowerOff className="w-3 h-3" />Inactive</div>}
                </span>
+               {/* ENHANCEMENT: Show linked account indicator */}
+               {linkedAccount && (
+                 <span className="text-[10px] font-bold px-2 py-0.5 bg-purple-100 rounded text-purple-600 uppercase">
+                   <span role="img" aria-label="Linked">🔗</span> {linkedAccount.bank}
+                 </span>
+               )}
             </div>
           </div>
         </div>
@@ -535,7 +558,19 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-8">
               <div className="flex items-center space-x-6">
                 <div className="p-5 bg-indigo-50 text-indigo-600 rounded-3xl"><Bell className="w-10 h-10" /></div>
-                <div><h2 className="text-3xl font-black text-gray-900">{detailedBiller.name}</h2><div className="flex items-center space-x-3 mt-2"><span className="px-3 py-1 bg-gray-100 rounded-full text-xs font-bold text-gray-500 uppercase">{detailedBiller.category}</span><span className="text-sm text-gray-400 font-medium">Due every {detailedBiller.dueDate}</span></div></div>
+                <div>
+                  <h2 className="text-3xl font-black text-gray-900">{detailedBiller.name}</h2>
+                  <div className="flex items-center space-x-3 mt-2">
+                    <span className="px-3 py-1 bg-gray-100 rounded-full text-xs font-bold text-gray-500 uppercase">{detailedBiller.category}</span>
+                    <span className="text-sm text-gray-400 font-medium">Due every {detailedBiller.dueDate}</span>
+                    {/* ENHANCEMENT: Show linked account info */}
+                    {shouldUseLinkedAccount(detailedBiller) && getLinkedAccount(detailedBiller, accounts) && (
+                      <span className="px-3 py-1 bg-purple-100 rounded-full text-xs font-bold text-purple-600">
+                        <span role="img" aria-label="Linked">🔗</span> Linked to {getLinkedAccount(detailedBiller, accounts)?.bank}
+                      </span>
+                    )}
+                  </div>
+                </div>
               </div>
               <div className="text-right"><p className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Expected Amount</p><p className="text-3xl font-black text-indigo-600">{formatCurrency(detailedBiller.expectedAmount)}</p></div>
             </div>
@@ -544,25 +579,33 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
                 <table className="w-full text-left">
                   <thead><tr className="bg-gray-50 border-b border-gray-100"><th className="p-4 text-xs font-bold text-gray-400 uppercase">Month</th><th className="p-4 text-xs font-bold text-gray-400 uppercase">Amount</th><th className="p-4 text-xs font-bold text-gray-400 uppercase text-center">Action</th></tr></thead>
                   <tbody className="divide-y divide-gray-50">{detailedBiller.schedules.map((sched, idx) => {
+                    // ENHANCEMENT: Calculate amount from linked account if applicable
+                    const { amount: calculatedAmount, isFromLinkedAccount } = getScheduleExpectedAmount(
+                      detailedBiller,
+                      sched,
+                      accounts,
+                      transactions
+                    );
+                    
                     // Check if paid via biller schedule OR via transaction matching
                     const isPaidViaSchedule = !!sched.amountPaid;
                     const isPaidViaTransaction = checkIfPaidByTransaction(
                       detailedBiller.name,
-                      sched.expectedAmount,
+                      calculatedAmount, // Use calculated amount for matching
                       sched.month,
                       sched.year
                     );
                     const isPaid = isPaidViaSchedule || isPaidViaTransaction;
                     
                     // Get actual paid amount (from schedule or matching transaction)
-                    let displayAmount = sched.expectedAmount;
+                    let displayAmount = calculatedAmount; // Use calculated amount
                     if (isPaid) {
                       if (isPaidViaSchedule && sched.amountPaid) {
                         displayAmount = sched.amountPaid;
                       } else {
                         const matchingTx = getMatchingTransaction(
                           detailedBiller.name,
-                          sched.expectedAmount,
+                          calculatedAmount, // Use calculated amount for matching
                           sched.month,
                           sched.year
                         );
@@ -572,11 +615,27 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
                       }
                     }
                     
+                    // ENHANCEMENT: Get display label with cycle date range if linked account
+                    const linkedAccount = shouldUseLinkedAccount(detailedBiller) 
+                      ? getLinkedAccount(detailedBiller, accounts) 
+                      : null;
+                    const displayLabel = getScheduleDisplayLabel(sched, linkedAccount);
+                    
                     return (
                       <tr key={idx} className={`${isPaid ? 'bg-green-50' : 'hover:bg-gray-50/50'} transition-colors`}>
-                        <td className="p-4 font-bold text-gray-900">{sched.month} {sched.year}</td>
+                        <td className="p-4">
+                          <div className="flex flex-col">
+                            <span className="font-bold text-gray-900">{displayLabel}</span>
+                            {isFromLinkedAccount && (
+                              <span className="text-[10px] text-purple-600 font-medium mt-1 flex items-center gap-1">
+                                <span className="inline-block w-1.5 h-1.5 rounded-full bg-purple-600" aria-hidden="true"></span>
+                                From linked account
+                              </span>
+                            )}
+                          </div>
+                        </td>
                         <td className="p-4 font-medium text-gray-600">{formatCurrency(displayAmount)}</td>
-                        <td className="p-4 text-center">{!isPaid ? <button onClick={() => { setShowPayModal({ biller: detailedBiller, schedule: sched }); setPayFormData({ ...payFormData, amount: sched.expectedAmount.toString(), receipt: '' }); }} className="bg-indigo-600 text-white px-6 py-2 rounded-xl font-bold hover:bg-indigo-700 text-xs transition-all">Pay</button> : <span role="status" className="flex items-center justify-center text-green-600"><CheckCircle2 className="w-5 h-5" aria-label="Payment completed" title="Paid" /></span>}</td>
+                        <td className="p-4 text-center">{!isPaid ? <button onClick={() => { setShowPayModal({ biller: detailedBiller, schedule: sched }); setPayFormData({ ...payFormData, amount: displayAmount.toString(), receipt: '' }); }} className="bg-indigo-600 text-white px-6 py-2 rounded-xl font-bold hover:bg-indigo-700 text-xs transition-all">Pay</button> : <span role="status" className="flex items-center justify-center text-green-600"><CheckCircle2 className="w-5 h-5" aria-label="Payment completed" title="Paid" /></span>}</td>
                       </tr>
                     );
                   })}</tbody>
@@ -667,6 +726,54 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
                  <div><label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Due Date (day)</label><input required type="number" min="1" max="31" placeholder="e.g. 15" value={addFormData.dueDate} onChange={(e) => { setAddFormData({ ...addFormData, dueDate: e.target.value }); showTimingInfo(e.target.value); }} className="w-full bg-gray-50 border-transparent rounded-2xl p-4 outline-none font-bold" /></div>
               </div>
               
+              {/* ENHANCEMENT: Linked Account for Loans Category */}
+              {addFormData.category.startsWith('Loans') && (
+                <div className="bg-purple-50 rounded-2xl p-4 border-2 border-purple-200">
+                  <label className="block text-[10px] font-black text-purple-600 uppercase tracking-widest mb-2">
+                    Linked Credit Account (Optional)
+                  </label>
+                  <select 
+                    value={addFormData.linkedAccountId} 
+                    onChange={(e) => setAddFormData({ ...addFormData, linkedAccountId: e.target.value })} 
+                    className="w-full bg-white border-transparent rounded-2xl p-4 outline-none font-bold text-sm appearance-none"
+                  >
+                    <option value="">None - Use Manual Amount</option>
+                    {accounts
+                      .filter(acc => acc.type === 'Credit' && acc.billingDate)
+                      .map(acc => (
+                        <option key={acc.id} value={acc.id}>
+                          {acc.bank} (Billing Day: {new Date(acc.billingDate).getDate()})
+                        </option>
+                      ))
+                    }
+                  </select>
+                  {(() => {
+                    const creditAccounts = accounts.filter(acc => acc.type === 'Credit');
+                    const creditAccountsWithBilling = creditAccounts.filter(acc => acc.billingDate);
+                    
+                    if (creditAccounts.length === 0) {
+                      return (
+                        <p className="text-xs text-orange-600 mt-2 flex items-center gap-1">
+                          <span className="font-bold">⚠️ No credit accounts found.</span> Create a credit account first to enable linking.
+                        </p>
+                      );
+                    } else if (creditAccountsWithBilling.length === 0) {
+                      return (
+                        <p className="text-xs text-orange-600 mt-2 flex items-center gap-1">
+                          <span className="font-bold">⚠️ No credit accounts with billing dates.</span> Edit your credit accounts to add billing dates.
+                        </p>
+                      );
+                    } else {
+                      return (
+                        <p className="text-xs text-purple-600 mt-2">
+                          Link to a credit account to automatically calculate expected amounts from billing cycle transactions
+                        </p>
+                      );
+                    }
+                  })()}
+                </div>
+              )}
+              
               <div className="border-t border-gray-200 pt-6">
                 <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-4">Activation Date</label>
                 <div className="grid grid-cols-3 gap-4">
@@ -730,6 +837,54 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
                  </div>
                  <div><label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Due Date (day)</label><input required type="number" min="1" max="31" placeholder="e.g. 15" value={editFormData.dueDate} onChange={(e) => { setEditFormData({ ...editFormData, dueDate: e.target.value }); showTimingInfo(e.target.value); }} className="w-full bg-gray-50 border-transparent rounded-2xl p-4 outline-none font-bold" /></div>
               </div>
+              
+              {/* ENHANCEMENT: Linked Account for Loans Category */}
+              {editFormData.category.startsWith('Loans') && (
+                <div className="bg-purple-50 rounded-2xl p-4 border-2 border-purple-200">
+                  <label className="block text-[10px] font-black text-purple-600 uppercase tracking-widest mb-2">
+                    Linked Credit Account (Optional)
+                  </label>
+                  <select 
+                    value={editFormData.linkedAccountId} 
+                    onChange={(e) => setEditFormData({ ...editFormData, linkedAccountId: e.target.value })} 
+                    className="w-full bg-white border-transparent rounded-2xl p-4 outline-none font-bold text-sm appearance-none"
+                  >
+                    <option value="">None - Use Manual Amount</option>
+                    {accounts
+                      .filter(acc => acc.type === 'Credit' && acc.billingDate)
+                      .map(acc => (
+                        <option key={acc.id} value={acc.id}>
+                          {acc.bank} (Billing Day: {new Date(acc.billingDate).getDate()})
+                        </option>
+                      ))
+                    }
+                  </select>
+                  {(() => {
+                    const creditAccounts = accounts.filter(acc => acc.type === 'Credit');
+                    const creditAccountsWithBilling = creditAccounts.filter(acc => acc.billingDate);
+                    
+                    if (creditAccounts.length === 0) {
+                      return (
+                        <p className="text-xs text-orange-600 mt-2 flex items-center gap-1">
+                          <span className="font-bold">⚠️ No credit accounts found.</span> Create a credit account first to enable linking.
+                        </p>
+                      );
+                    } else if (creditAccountsWithBilling.length === 0) {
+                      return (
+                        <p className="text-xs text-orange-600 mt-2 flex items-center gap-1">
+                          <span className="font-bold">⚠️ No credit accounts with billing dates.</span> Edit your credit accounts to add billing dates.
+                        </p>
+                      );
+                    } else {
+                      return (
+                        <p className="text-xs text-purple-600 mt-2">
+                          Link to a credit account to automatically calculate expected amounts from billing cycle transactions
+                        </p>
+                      );
+                    }
+                  })()}
+                </div>
+              )}
               
               <div className="border-t border-gray-200 pt-6">
                 <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-4">Activation Date</label>

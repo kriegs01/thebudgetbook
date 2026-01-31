@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { ArrowLeft } from 'lucide-react';
 import { useSearchParams, Link } from 'react-router-dom';
 import { Account } from '../../types';
+import { getAllTransactions } from '../../src/services/transactionsService';
 
 type Transaction = {
   id: string;
@@ -32,33 +33,48 @@ const AccountFilteredTransactions: React.FC<AccountFilteredTransactionsProps> = 
   const [transactions, setTransactions] = useState<Transaction[]>([]);
 
   useEffect(() => {
-    if (typeof window === "undefined") return;
-    
-    // Fetch all transactions and filter to this account
-    const txRaw = localStorage.getItem('transactions');
-    let allTx: Transaction[] = [];
-    if (txRaw) {
-      try { allTx = JSON.parse(txRaw); } catch {}
-    }
-    const filtered = accountId ? allTx.filter(tx => tx.paymentMethodId === accountId) : [];
-    setTransactions(filtered);
+    const loadTransactions = async () => {
+      if (typeof window === "undefined") return;
+      
+      // FIX: Load transactions from Supabase instead of localStorage
+      try {
+        const { data: transactionsData, error: transactionsError } = await getAllTransactions();
+        
+        if (transactionsError) {
+          console.error('Error loading transactions:', transactionsError);
+          return;
+        }
+        
+        if (!transactionsData) {
+          setTransactions([]);
+          return;
+        }
+        
+        // Convert Supabase transactions to local format
+        const allTx: Transaction[] = transactionsData.map(t => ({
+          id: t.id,
+          name: t.name,
+          date: t.date,
+          amount: t.amount,
+          paymentMethodId: t.payment_method_id
+        }));
+        
+        const filtered = accountId ? allTx.filter(tx => tx.paymentMethodId === accountId) : [];
+        setTransactions(filtered);
+      } catch (error) {
+        console.error('Error loading transactions:', error);
+      }
 
-    // Get account name from the passed accounts prop
-    if (accountId) {
-      const account = accounts.find(a => a.id === accountId);
-      if (account) {
-        setAccountName(account.bank);
-      } else {
-        // Fallback to localStorage if not found in accounts prop
-        const metaRaw = localStorage.getItem(`account_meta_${accountId}`);
-        if (metaRaw) {
-          try {
-            const meta: AccountMeta = JSON.parse(metaRaw);
-            if (meta.bank) setAccountName(meta.bank);
-          } catch {}
+      // Get account name from the passed accounts prop
+      if (accountId) {
+        const account = accounts.find(a => a.id === accountId);
+        if (account) {
+          setAccountName(account.bank);
         }
       }
-    }
+    };
+    
+    loadTransactions();
   }, [accountId, accounts]);
 
   return (

@@ -30,6 +30,7 @@ export interface SupabaseBiller {
   deactivation_c: any | null; // jsonb, nullable (note: field name is 'deactivation_c')
   status: string;
   schedules: any; // jsonb
+  linked_account_id: string | null; // uuid, nullable - ENHANCEMENT: Links Loans-category billers to credit accounts
 }
 
 export interface SupabaseInstallment {

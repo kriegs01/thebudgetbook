@@ -54,6 +54,7 @@ export interface Biller {
   };
   status: 'active' | 'inactive';
   schedules: PaymentSchedule[];
+  linkedAccountId?: string; // ENHANCEMENT: Links Loans-category billers to credit accounts for dynamic amount calculation
 }
 
 export interface Installment {
