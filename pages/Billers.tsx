@@ -177,6 +177,53 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
     return !!matchingTransaction;
   }, [transactions]);
 
+  /**
+   * Get the matching transaction for a biller schedule
+   * Returns the transaction object if found, null otherwise
+   */
+  const getMatchingTransaction = useCallback((
+    billerName: string,
+    expectedAmount: number,
+    month: string,
+    year: string
+  ): SupabaseTransaction | null => {
+    if (isNaN(expectedAmount) || expectedAmount <= 0) return null;
+
+    // Get month index (0-11) for date comparison
+    const monthIndex = MONTHS.indexOf(month);
+    if (monthIndex === -1) return null;
+
+    const targetYear = parseInt(year);
+    if (isNaN(targetYear)) return null;
+
+    // Find matching transaction
+    const matchingTransaction = transactions.find(tx => {
+      // Check name match with minimum length requirement
+      const billerNameLower = billerName.toLowerCase();
+      const txNameLower = tx.name.toLowerCase();
+      
+      const nameMatch = (
+        (txNameLower.includes(billerNameLower) && billerNameLower.length >= TRANSACTION_MIN_NAME_LENGTH) ||
+        (billerNameLower.includes(txNameLower) && txNameLower.length >= TRANSACTION_MIN_NAME_LENGTH)
+      );
+      
+      // Check amount match (within tolerance)
+      const amountMatch = Math.abs(tx.amount - expectedAmount) <= TRANSACTION_AMOUNT_TOLERANCE;
+      
+      // Check date match (same month and year, or previous year for year-end carryover)
+      const txDate = new Date(tx.date);
+      const txMonth = txDate.getMonth();
+      const txYear = txDate.getFullYear();
+      
+      const dateMatch = (txMonth === monthIndex) && 
+                       (txYear === targetYear || txYear === targetYear - 1);
+
+      return nameMatch && amountMatch && dateMatch;
+    });
+
+    return matchingTransaction || null;
+  }, [transactions]);
+
   // Helper to show timing feedback when dates change
   const showTimingInfo = (dayString: string) => {
     if (!dayString) {
@@ -507,10 +554,28 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
                     );
                     const isPaid = isPaidViaSchedule || isPaidViaTransaction;
                     
+                    // Get actual paid amount (from schedule or matching transaction)
+                    let displayAmount = sched.expectedAmount;
+                    if (isPaid) {
+                      if (isPaidViaSchedule && sched.amountPaid) {
+                        displayAmount = sched.amountPaid;
+                      } else {
+                        const matchingTx = getMatchingTransaction(
+                          detailedBiller.name,
+                          sched.expectedAmount,
+                          sched.month,
+                          sched.year
+                        );
+                        if (matchingTx) {
+                          displayAmount = matchingTx.amount;
+                        }
+                      }
+                    }
+                    
                     return (
                       <tr key={idx} className={`${isPaid ? 'bg-green-50' : 'hover:bg-gray-50/50'} transition-colors`}>
                         <td className="p-4 font-bold text-gray-900">{sched.month} {sched.year}</td>
-                        <td className="p-4 font-medium text-gray-600">{formatCurrency(sched.expectedAmount)}</td>
+                        <td className="p-4 font-medium text-gray-600">{formatCurrency(displayAmount)}</td>
                         <td className="p-4 text-center">{!isPaid ? <button onClick={() => { setShowPayModal({ biller: detailedBiller, schedule: sched }); setPayFormData({ ...payFormData, amount: sched.expectedAmount.toString(), receipt: '' }); }} className="bg-indigo-600 text-white px-6 py-2 rounded-xl font-bold hover:bg-indigo-700 text-xs transition-all">Pay</button> : <span role="status" className="flex items-center justify-center text-green-600"><CheckCircle2 className="w-5 h-5" aria-label="Payment completed" title="Paid" /></span>}</td>
                       </tr>
                     );
