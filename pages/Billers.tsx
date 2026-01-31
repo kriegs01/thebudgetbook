@@ -1,6 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Biller, Account, PaymentSchedule, BudgetCategory, Installment } from '../types';
 import { Plus, Calendar, Bell, ChevronDown, ChevronRight, Upload, CheckCircle2, X, ArrowLeft, Power, PowerOff, MoreVertical, Edit2, Eye, Trash2, AlertTriangle } from 'lucide-react';
+import { getAllTransactions } from '../src/services/transactionsService';
+import type { SupabaseTransaction } from '../src/types/supabase';
 
 interface BillersProps {
   billers: Biller[];
@@ -15,6 +17,10 @@ interface BillersProps {
 }
 
 const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+
+// Transaction matching configuration
+const TRANSACTION_AMOUNT_TOLERANCE = 1; // ±1 peso tolerance for amount matching
+const TRANSACTION_MIN_NAME_LENGTH = 3; // Minimum length for partial name matching
 
 // Utility function to calculate timing based on day of month
 const calculateTiming = (dayString: string): '1/2' | '2/2' => {
@@ -38,6 +44,9 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
   const [isActiveOpen, setIsActiveOpen] = useState(true);
   const [timingFeedback, setTimingFeedback] = useState<string>('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Transactions state for payment status matching
+  const [transactions, setTransactions] = useState<SupabaseTransaction[]>([]);
 
   const [confirmModal, setConfirmModal] = useState<{
     show: boolean;
@@ -81,6 +90,89 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
     datePaid: new Date().toISOString().split('T')[0],
     accountId: accounts[0]?.id || ''
   });
+
+  // Load transactions for payment status matching
+  useEffect(() => {
+    const loadTransactions = async () => {
+      try {
+        const { data, error } = await getAllTransactions();
+        if (error) {
+          console.error('[Billers] Failed to load transactions:', error);
+        } else if (data) {
+          // Filter to last 24 months for performance
+          const twoYearsAgo = new Date();
+          twoYearsAgo.setFullYear(twoYearsAgo.getFullYear() - 2);
+          
+          const recentTransactions = data.filter(tx => {
+            const txDate = new Date(tx.date);
+            return txDate >= twoYearsAgo;
+          });
+          
+          setTransactions(recentTransactions);
+          console.log('[Billers] Loaded transactions:', recentTransactions.length, 'of', data.length);
+        }
+      } catch (error) {
+        console.error('[Billers] Error loading transactions:', error);
+      }
+    };
+
+    loadTransactions();
+  }, []); // Load once on mount
+
+  /**
+   * Check if a biller schedule is paid by matching transactions
+   * Matches by name, amount (within tolerance), and date (within month/year)
+   */
+  const checkIfPaidByTransaction = useCallback((
+    billerName: string,
+    expectedAmount: number,
+    month: string,
+    year: string
+  ): boolean => {
+    if (isNaN(expectedAmount) || expectedAmount <= 0) return false;
+
+    // Get month index (0-11) for date comparison
+    const monthIndex = MONTHS.indexOf(month);
+    if (monthIndex === -1) return false;
+
+    const targetYear = parseInt(year);
+    if (isNaN(targetYear)) return false;
+
+    // Find matching transaction
+    const matchingTransaction = transactions.find(tx => {
+      // Check name match with minimum length requirement
+      const billerNameLower = billerName.toLowerCase();
+      const txNameLower = tx.name.toLowerCase();
+      
+      const nameMatch = (
+        (txNameLower.includes(billerNameLower) && billerNameLower.length >= TRANSACTION_MIN_NAME_LENGTH) ||
+        (billerNameLower.includes(txNameLower) && txNameLower.length >= TRANSACTION_MIN_NAME_LENGTH)
+      );
+      
+      // Check amount match (within tolerance)
+      const amountMatch = Math.abs(tx.amount - expectedAmount) <= TRANSACTION_AMOUNT_TOLERANCE;
+      
+      // Check date match (same month and year, or previous year)
+      const txDate = new Date(tx.date);
+      const txMonth = txDate.getMonth();
+      const txYear = txDate.getFullYear();
+      
+      const dateMatch = (txMonth === monthIndex) && 
+                       (txYear === targetYear || txYear === targetYear - 1);
+
+      return nameMatch && amountMatch && dateMatch;
+    });
+
+    if (matchingTransaction) {
+      console.log(`[Billers] ✓ Found matching transaction for "${billerName}" (${month} ${year}):`, {
+        txName: matchingTransaction.name,
+        txAmount: matchingTransaction.amount,
+        txDate: matchingTransaction.date
+      });
+    }
+
+    return !!matchingTransaction;
+  }, [transactions]);
 
   // Helper to show timing feedback when dates change
   const showTimingInfo = (dayString: string) => {
@@ -401,13 +493,25 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
               <div className="overflow-x-auto">
                 <table className="w-full text-left">
                   <thead><tr className="bg-gray-50 border-b border-gray-100"><th className="p-4 text-xs font-bold text-gray-400 uppercase">Month</th><th className="p-4 text-xs font-bold text-gray-400 uppercase">Amount</th><th className="p-4 text-xs font-bold text-gray-400 uppercase text-center">Action</th></tr></thead>
-                  <tbody className="divide-y divide-gray-50">{detailedBiller.schedules.map((sched, idx) => (
-                      <tr key={idx} className={`${sched.amountPaid ? 'bg-green-50' : 'hover:bg-gray-50/50'} transition-colors`}>
+                  <tbody className="divide-y divide-gray-50">{detailedBiller.schedules.map((sched, idx) => {
+                    // Check if paid via biller schedule OR via transaction matching
+                    const isPaidViaSchedule = !!sched.amountPaid;
+                    const isPaidViaTransaction = checkIfPaidByTransaction(
+                      detailedBiller.name,
+                      sched.expectedAmount,
+                      sched.month,
+                      sched.year
+                    );
+                    const isPaid = isPaidViaSchedule || isPaidViaTransaction;
+                    
+                    return (
+                      <tr key={idx} className={`${isPaid ? 'bg-green-50' : 'hover:bg-gray-50/50'} transition-colors`}>
                         <td className="p-4 font-bold text-gray-900">{sched.month} {sched.year}</td>
                         <td className="p-4 font-medium text-gray-600">{formatCurrency(sched.expectedAmount)}</td>
-                        <td className="p-4 text-center">{!sched.amountPaid ? <button onClick={() => { setShowPayModal({ biller: detailedBiller, schedule: sched }); setPayFormData({ ...payFormData, amount: sched.expectedAmount.toString(), receipt: '' }); }} className="bg-indigo-600 text-white px-6 py-2 rounded-xl font-bold hover:bg-indigo-700 text-xs transition-all">Pay</button> : <div className="flex items-center justify-center text-green-600"><CheckCircle2 className="w-5 h-5" /></div>}</td>
+                        <td className="p-4 text-center">{!isPaid ? <button onClick={() => { setShowPayModal({ biller: detailedBiller, schedule: sched }); setPayFormData({ ...payFormData, amount: sched.expectedAmount.toString(), receipt: '' }); }} className="bg-indigo-600 text-white px-6 py-2 rounded-xl font-bold hover:bg-indigo-700 text-xs transition-all">Pay</button> : <div className="flex items-center justify-center text-green-600"><CheckCircle2 className="w-5 h-5" aria-label="Payment completed" title="Paid" /></div>}</td>
                       </tr>
-                    ))}</tbody>
+                    );
+                  })}</tbody>
                 </table>
               </div>
             </div>
