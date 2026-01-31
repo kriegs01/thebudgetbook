@@ -346,6 +346,27 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
     
     try {
       const { biller, schedule } = showPayModal;
+      
+      // Create a transaction record in Supabase
+      console.log('[Budget] Creating transaction for payment');
+      const transaction = {
+        name: `${biller.name} - ${schedule.month} ${schedule.year}`,
+        date: new Date(payFormData.datePaid).toISOString(),
+        amount: parseFloat(payFormData.amount),
+        payment_method_id: payFormData.accountId
+      };
+      
+      const { data: transactionData, error: transactionError } = await createTransaction(transaction);
+      
+      if (transactionError) {
+        console.error('[Budget] Failed to create transaction:', transactionError);
+        alert('Failed to save transaction. Please try again.');
+        return;
+      }
+      
+      console.log('[Budget] Transaction created successfully:', transactionData);
+      
+      // Update the biller's payment schedule
       const updatedSchedules = biller.schedules.map(s => {
         if (s.month === schedule.month && s.year === schedule.year) {
           return { 
