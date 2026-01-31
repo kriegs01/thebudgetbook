@@ -989,7 +989,7 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                           <td className="p-4 text-center">
                             <div className="flex items-center justify-center space-x-2">
                               {item.settled ? (
-                                <CheckCircle2 className="w-4 h-4 text-green-500" />
+                                <CheckCircle2 className="w-4 h-4 text-green-500" aria-label="Item settled" title="Settled" />
                               ) : (
                                 <button 
                                   onClick={() => handleSetupUpdate(cat.name, item.id, 'settled', true)}
@@ -1075,7 +1075,7 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                             <div className="flex items-center justify-center space-x-2">
                               {isBiller && (
                                 isPaid ? (
-                                  <CheckCircle2 className="w-4 h-4 text-green-500" />
+                                  <CheckCircle2 className="w-4 h-4 text-green-500" aria-label="Payment completed" title="Paid" />
                                 ) : (
                                   <button 
                                     onClick={() => { 
@@ -1093,7 +1093,7 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                               {/* Add Pay button or checkmark for Purchases category items that are not billers */}
                               {!isBiller && cat.name === 'Purchases' && item.name !== 'New Item' && parseFloat(item.amount) > 0 && (
                                 isPaid ? (
-                                  <CheckCircle2 className="w-4 h-4 text-green-500" />
+                                  <CheckCircle2 className="w-4 h-4 text-green-500" aria-label="Payment completed" title="Paid" />
                                 ) : (
                                   <button 
                                     onClick={() => {
@@ -1170,7 +1170,7 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                                 <div className="flex items-center justify-center space-x-2">
                                   {isBiller && (
                                     isPaid ? (
-                                      <CheckCircle2 className="w-4 h-4 text-green-500" />
+                                      <CheckCircle2 className="w-4 h-4 text-green-500" aria-label="Payment completed" title="Paid" />
                                     ) : (
                                       <button 
                                         onClick={() => { 
