@@ -92,6 +92,17 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
   });
 
   // Load transactions for payment status matching
+  // PROTOTYPE: This could be replaced with the centralized payment sync utility
+  // Example integration:
+  // const paymentSync = usePaymentSync({
+  //   installments,
+  //   billers,
+  //   accounts,
+  //   transactions,
+  //   targetMonth: selectedMonth,
+  //   targetYear: selectedYear,
+  // });
+  // Then use: paymentSync.billerStatus.get(billerId)?.get(scheduleKey) for each schedule
   useEffect(() => {
     const loadTransactions = async () => {
       try {

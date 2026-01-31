@@ -22,6 +22,7 @@ import Savings from './pages/Savings';
 import SettingsPage from './pages/Settings';
 import TrashPage from './pages/Trash';
 import SupabaseDemo from './pages/SupabaseDemo';
+import PaymentSyncDemo from './pages/PaymentSyncDemo';
 
 // Helper function to convert UI Account to Supabase format
 const accountToSupabase = (account: Account) => ({
@@ -585,6 +586,13 @@ const App: React.FC = () => {
               } />
               <Route path="/supabase-demo" element={
                 <SupabaseDemo />
+              } />
+              <Route path="/payment-sync-demo" element={
+                <PaymentSyncDemo 
+                  installments={installments}
+                  billers={billers}
+                  accounts={accounts}
+                />
               } />
               {/* Add additional routes/pages as needed */}
             </Routes>

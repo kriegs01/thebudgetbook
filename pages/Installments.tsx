@@ -2,6 +2,11 @@ import React, { useState } from 'react';
 import { Installment, Account, ViewMode, Biller } from '../types';
 import { Plus, LayoutGrid, List, Wallet, Trash2, X, Upload, AlertTriangle, Edit2, Eye, MoreVertical } from 'lucide-react';
 
+// PROTOTYPE: Uncomment these imports to enable payment sync integration
+// import type { SupabaseTransaction } from '../src/types/supabase';
+// import { useInstallmentPaymentStatus } from '../src/utils/usePaymentSync';
+// import { getAllTransactions } from '../src/services/transactionsService';
+
 interface InstallmentsProps {
   installments: Installment[];
   accounts: Account[];
@@ -21,6 +26,29 @@ const Installments: React.FC<InstallmentsProps> = ({ installments, accounts, bil
   const [showViewModal, setShowViewModal] = useState<Installment | null>(null);
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // PROTOTYPE: Uncomment to enable payment sync integration
+  // const [transactions, setTransactions] = useState<SupabaseTransaction[]>([]);
+  // const [showSyncData, setShowSyncData] = useState(false);
+  // 
+  // // Load transactions for payment sync
+  // useEffect(() => {
+  //   const loadTransactions = async () => {
+  //     const { data, error } = await getAllTransactions();
+  //     if (!error && data) {
+  //       setTransactions(data);
+  //     }
+  //   };
+  //   loadTransactions();
+  // }, []);
+  // 
+  // // Use payment sync hook to get transaction-based payment status
+  // const paymentStatus = useInstallmentPaymentStatus(installments, transactions);
+  // 
+  // // Helper to get sync status for an installment
+  // const getSyncStatus = (installmentId: string) => {
+  //   return paymentStatus.get(installmentId);
+  // };
 
   const [confirmModal, setConfirmModal] = useState<{
     show: boolean;

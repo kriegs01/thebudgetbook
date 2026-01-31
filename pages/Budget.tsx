@@ -192,6 +192,10 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
   /**
    * Check if an item is paid by matching transactions
    * Matches by name (with minimum length), amount (within tolerance), and date (within month/year)
+   * 
+   * PROTOTYPE: This function could be replaced with the centralized payment sync utility:
+   * const status = paymentSync.computeBudgetItemStatus(itemName, amount, month, year);
+   * return status.isPaid;
    */
   const checkIfPaidByTransaction = useCallback((
     itemName: string, 
