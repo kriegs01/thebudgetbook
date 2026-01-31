@@ -54,6 +54,7 @@ export interface Biller {
   };
   status: 'active' | 'inactive';
   schedules: PaymentSchedule[];
+  linkedAccountId?: string; // Optional link to a credit card Account for auto-sync
 }
 
 export interface Installment {
