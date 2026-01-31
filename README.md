@@ -23,6 +23,7 @@ npm run dev                    # Start the app at http://localhost:3000
 - 📊 **Dashboard** - Overview of your financial status
 - 💰 **Accounts** - Manage checking, savings, and credit card accounts
 - 📝 **Billers** - Track recurring bills and payments
+  - 🔗 **NEW: Credit Card Linking** - Link billers to credit cards and auto-sync transaction totals
 - 💳 **Installments** - Monitor payment plans and loans
 - 🐷 **Savings** - Organize savings goals with virtual jars
 - 📈 **Transactions** - Record and analyze spending
@@ -103,6 +104,9 @@ For detailed setup instructions, see [SUPABASE_SETUP.md](SUPABASE_SETUP.md).
 ## Documentation
 
 - [SUPABASE_SETUP.md](SUPABASE_SETUP.md) - Complete Supabase integration guide
+- [CREDIT_CARD_BILLER_LINKING.md](CREDIT_CARD_BILLER_LINKING.md) - **NEW:** Guide for linking billers to credit cards
+- [UI_CHANGES_GUIDE.md](UI_CHANGES_GUIDE.md) - Visual reference for UI features
+- [FEATURE_SUMMARY.md](FEATURE_SUMMARY.md) - Technical implementation details
 - [.env.example](.env.example) - Environment variable template
 
 ## Development vs Production
