@@ -50,6 +50,10 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
 
   // Transactions state - used for matching payments
   const [transactions, setTransactions] = useState<SupabaseTransaction[]>([]);
+  
+  // Track last transaction load time to prevent excessive reloads
+  const lastTransactionLoadRef = useRef<number>(0);
+  const TRANSACTION_RELOAD_DEBOUNCE_MS = 30000; // 30 seconds minimum between reloads
 
   // Load from saved setup when month/timing changes
   useEffect(() => {
@@ -97,15 +101,26 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
       } catch (error) {
         console.error('[Budget] Error loading transactions:', error);
       }
+      
+      // Update last load timestamp
+      lastTransactionLoadRef.current = Date.now();
     };
 
     // Load on mount
     loadTransactions();
     
-    // Reload when window regains focus (e.g., after navigating back from Transactions page)
+    // Reload when window regains focus (debounced to prevent excessive queries)
     const handleFocus = () => {
-      console.log('[Budget] Window focused, reloading transactions...');
-      loadTransactions();
+      const now = Date.now();
+      const timeSinceLastLoad = now - lastTransactionLoadRef.current;
+      
+      // Only reload if at least TRANSACTION_RELOAD_DEBOUNCE_MS has passed
+      if (timeSinceLastLoad >= TRANSACTION_RELOAD_DEBOUNCE_MS) {
+        console.log('[Budget] Window focused, reloading transactions...');
+        loadTransactions();
+      } else {
+        console.log(`[Budget] Window focused, but skipping reload (${Math.round(timeSinceLastLoad / 1000)}s since last load)`);
+      }
     };
     
     window.addEventListener('focus', handleFocus);
@@ -293,6 +308,9 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
         
         setTransactions(recentTransactions);
         console.log('[Budget] Reloaded transactions:', recentTransactions.length, 'of', data.length);
+        
+        // Update last load timestamp
+        lastTransactionLoadRef.current = Date.now();
       }
     } catch (error) {
       console.error('[Budget] Error reloading transactions:', error);

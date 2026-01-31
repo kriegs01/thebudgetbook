@@ -98,14 +98,22 @@ const StatementPage: React.FC<StatementPageProps> = ({ accounts }) => {
   const [account, setAccount] = useState<Account | null>(null);
   const [cycles, setCycles] = useState<BillingCycle[]>([]);
   const [selectedCycleIndex, setSelectedCycleIndex] = useState<number>(0);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     const loadAccountAndTransactions = async () => {
       if (!accountId) return;
       
+      setIsLoading(true);
+      setError(null);
+      
       // Find the account
       const acc = accounts.find(a => a.id === accountId);
-      if (!acc || acc.type !== 'Credit') return;
+      if (!acc || acc.type !== 'Credit') {
+        setIsLoading(false);
+        return;
+      }
       
       setAccount(acc);
       
@@ -113,6 +121,7 @@ const StatementPage: React.FC<StatementPageProps> = ({ accounts }) => {
       const billingDate = acc.billingDate;
       if (!billingDate) {
         // No billing date set, can't calculate cycles
+        setIsLoading(false);
         return;
       }
       
@@ -120,9 +129,11 @@ const StatementPage: React.FC<StatementPageProps> = ({ accounts }) => {
       const cycleData = calculateBillingCycles(billingDate, 6);
       
       // Load all transactions from Supabase
-      const { data: transactionsData, error } = await getAllTransactions();
-      if (error) {
-        console.error('[StatementPage] Failed to load transactions:', error);
+      const { data: transactionsData, error: txError } = await getAllTransactions();
+      if (txError) {
+        console.error('[StatementPage] Failed to load transactions:', txError);
+        setError('Failed to load transactions. Please try again.');
+        setIsLoading(false);
         return;
       }
       
@@ -152,6 +163,7 @@ const StatementPage: React.FC<StatementPageProps> = ({ accounts }) => {
       });
       
       setCycles(billingCycles);
+      setIsLoading(false);
     };
     
     loadAccountAndTransactions();
@@ -161,12 +173,19 @@ const StatementPage: React.FC<StatementPageProps> = ({ accounts }) => {
     return (
       <div className="min-h-screen bg-gray-50 p-8">
         <div className="max-w-4xl mx-auto">
-          <div className="bg-white rounded-2xl shadow-sm p-8 text-center">
+          {isLoading ? (
+            <div className="bg-white rounded-2xl shadow-sm p-8 text-center">
+              <div className="inline-block w-8 h-8 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
+              <p className="mt-2 text-sm text-gray-500">Loading...</p>
+            </div>
+          ) : (
+            <div className="bg-white rounded-2xl shadow-sm p-8 text-center">
             <p className="text-gray-500">Account not found or not a credit account.</p>
             <Link to="/accounts" className="mt-4 inline-block text-indigo-600 hover:text-indigo-700">
               Return to Accounts
             </Link>
           </div>
+          )}
         </div>
       </div>
     );
@@ -213,35 +232,52 @@ const StatementPage: React.FC<StatementPageProps> = ({ accounts }) => {
           </div>
         </div>
 
-        {/* Cycle Selector */}
-        <div className="bg-white rounded-2xl shadow-sm p-6 mb-6">
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center space-x-2">
-              <Calendar className="w-5 h-5 text-gray-400" />
-              <h2 className="text-sm font-bold uppercase text-gray-600 tracking-widest">Billing Cycle</h2>
-            </div>
+        {/* Error Message */}
+        {error && (
+          <div className="mb-6 bg-red-50 border border-red-200 rounded-2xl p-4">
+            <p className="text-sm text-red-600 font-medium">{error}</p>
           </div>
-          
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-            {cycles.map((cycle, index) => (
-              <button
-                key={index}
-                onClick={() => setSelectedCycleIndex(index)}
-                className={`p-4 rounded-xl border-2 transition-all text-left ${
-                  selectedCycleIndex === index
-                    ? 'border-purple-600 bg-purple-50'
-                    : 'border-gray-100 hover:border-purple-200'
-                }`}
-              >
-                <div className="text-sm font-semibold text-gray-900">{cycle.label}</div>
-                <div className="text-xs text-gray-500 mt-1">{cycle.transactions.length} transactions</div>
-              </button>
-            ))}
-          </div>
-        </div>
+        )}
 
-        {/* Statement Summary */}
-        {selectedCycle && (
+        {/* Loading State */}
+        {isLoading && (
+          <div className="bg-white rounded-2xl shadow-sm p-8 text-center">
+            <div className="inline-block w-8 h-8 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
+            <p className="mt-2 text-sm text-gray-500">Loading statement...</p>
+          </div>
+        )}
+
+        {/* Cycle Selector and Statement Summary */}
+        {!isLoading && !error && (
+          <>
+            <div className="bg-white rounded-2xl shadow-sm p-6 mb-6">
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center space-x-2">
+                  <Calendar className="w-5 h-5 text-gray-400" />
+                  <h2 className="text-sm font-bold uppercase text-gray-600 tracking-widest">Billing Cycle</h2>
+                </div>
+              </div>
+              
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                {cycles.map((cycle, index) => (
+                  <button
+                    key={index}
+                    onClick={() => setSelectedCycleIndex(index)}
+                    className={`p-4 rounded-xl border-2 transition-all text-left ${
+                      selectedCycleIndex === index
+                        ? 'border-purple-600 bg-purple-50'
+                        : 'border-gray-100 hover:border-purple-200'
+                    }`}
+                  >
+                    <div className="text-sm font-semibold text-gray-900">{cycle.label}</div>
+                    <div className="text-xs text-gray-500 mt-1">{cycle.transactions.length} transactions</div>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Statement Summary */}
+            {selectedCycle && (
           <>
             <div className="bg-white rounded-2xl shadow-sm p-6 mb-6">
               <h3 className="text-sm font-bold uppercase text-gray-600 tracking-widest mb-4">Statement Summary</h3>
@@ -311,6 +347,8 @@ const StatementPage: React.FC<StatementPageProps> = ({ accounts }) => {
                 </div>
               </div>
             </div>
+          </>
+        )}
           </>
         )}
       </div>

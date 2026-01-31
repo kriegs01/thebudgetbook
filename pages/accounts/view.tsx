@@ -31,16 +31,26 @@ const AccountFilteredTransactions: React.FC<AccountFilteredTransactionsProps> = 
   const accountId = searchParams.get("account") || searchParams.get("id");
   const [accountName, setAccountName] = useState<string>("Account");
   const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     const loadTransactionsAndAccount = async () => {
       if (typeof window === "undefined") return;
       
+      setIsLoading(true);
+      setError(null);
+      
       // Load all transactions from Supabase and filter to this account
-      const { data: transactionsData, error } = await getAllTransactions();
-      if (error) {
-        console.error('[AccountView] Failed to load transactions:', error);
-      } else if (transactionsData) {
+      const { data: transactionsData, error: txError } = await getAllTransactions();
+      if (txError) {
+        console.error('[AccountView] Failed to load transactions:', txError);
+        setError('Failed to load transactions. Please try again.');
+        setIsLoading(false);
+        return;
+      }
+      
+      if (transactionsData) {
         // Convert to local Transaction type
         const allTx: Transaction[] = transactionsData.map(t => ({
           id: t.id,
@@ -61,6 +71,8 @@ const AccountFilteredTransactions: React.FC<AccountFilteredTransactionsProps> = 
           setAccountName(account.bank);
         }
       }
+      
+      setIsLoading(false);
     };
     
     loadTransactionsAndAccount();
@@ -77,39 +89,53 @@ const AccountFilteredTransactions: React.FC<AccountFilteredTransactionsProps> = 
             {accountName ? accountName : `Account ${accountId}`}
           </h1>
         </div>
+        
+        {error && (
+          <div className="mb-6 bg-red-50 border border-red-200 rounded-2xl p-4">
+            <p className="text-sm text-red-600 font-medium">{error}</p>
+          </div>
+        )}
+        
         <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
           <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
             <h2 className="text-sm font-bold uppercase text-gray-600 tracking-widest">Transactions</h2>
             <div className="text-sm text-gray-500">{transactions.length} items</div>
           </div>
           <div className="p-4">
-            <div className="w-full overflow-x-auto">
-              <table className="min-w-full text-left">
-                <thead>
-                  <tr>
-                    <th className="px-4 py-3 text-xs text-gray-500 uppercase tracking-wider">Name</th>
-                    <th className="px-4 py-3 text-xs text-gray-500 uppercase tracking-wider">Date</th>
-                    <th className="px-4 py-3 text-xs text-gray-500 uppercase tracking-wider">Amount</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {transactions.map(tx => (
-                    <tr key={tx.id} className="border-t border-gray-100">
-                      <td className="px-4 py-3"><div className="text-sm font-medium text-gray-900">{tx.name}</div></td>
-                      <td className="px-4 py-3"><div className="text-sm text-gray-500">{new Date(tx.date).toLocaleDateString()}</div></td>
-                      <td className="px-4 py-3">
-                        <div className={`text-sm font-semibold ${tx.amount < 0 ? 'text-red-600' : 'text-green-600'}`}>
-                          {formatCurrency(tx.amount)}
-                        </div>
-                      </td>
+            {isLoading ? (
+              <div className="py-8 text-center">
+                <div className="inline-block w-8 h-8 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
+                <p className="mt-2 text-sm text-gray-500">Loading transactions...</p>
+              </div>
+            ) : (
+              <div className="w-full overflow-x-auto">
+                <table className="min-w-full text-left">
+                  <thead>
+                    <tr>
+                      <th className="px-4 py-3 text-xs text-gray-500 uppercase tracking-wider">Name</th>
+                      <th className="px-4 py-3 text-xs text-gray-500 uppercase tracking-wider">Date</th>
+                      <th className="px-4 py-3 text-xs text-gray-500 uppercase tracking-wider">Amount</th>
                     </tr>
-                  ))}
-                  {transactions.length === 0 && (
-                    <tr><td colSpan={3} className="px-4 py-6 text-center text-gray-400">No transactions for this account.</td></tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
+                  </thead>
+                  <tbody>
+                    {transactions.map(tx => (
+                      <tr key={tx.id} className="border-t border-gray-100">
+                        <td className="px-4 py-3"><div className="text-sm font-medium text-gray-900">{tx.name}</div></td>
+                        <td className="px-4 py-3"><div className="text-sm text-gray-500">{new Date(tx.date).toLocaleDateString()}</div></td>
+                        <td className="px-4 py-3">
+                          <div className={`text-sm font-semibold ${tx.amount < 0 ? 'text-red-600' : 'text-green-600'}`}>
+                            {formatCurrency(tx.amount)}
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                    {transactions.length === 0 && (
+                      <tr><td colSpan={3} className="px-4 py-6 text-center text-gray-400">No transactions for this account.</td></tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
         </div>
       </div>
