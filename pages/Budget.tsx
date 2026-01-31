@@ -110,7 +110,9 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
 
   // Modal States
   const [showPayModal, setShowPayModal] = useState<{ biller: Biller, schedule: PaymentSchedule } | null>(null);
+  // QA: Add transactionId to support editing from Pay modal
   const [payFormData, setPayFormData] = useState({
+    transactionId: '', // Empty for new, set for editing
     amount: '',
     receipt: '',
     datePaid: new Date().toISOString().split('T')[0],
@@ -328,6 +330,46 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
     }
 
     return !!matchingTransaction;
+  }, [transactions]);
+
+  /**
+   * QA: Find existing transaction for an item
+   * Fix for Issue: Transaction editing from Pay modal
+   */
+  const findExistingTransaction = useCallback((
+    itemName: string, 
+    itemAmount: string | number, 
+    month: string,
+    year?: number
+  ): SupabaseTransaction | undefined => {
+    const amount = typeof itemAmount === 'string' ? parseFloat(itemAmount) : itemAmount;
+    if (isNaN(amount) || amount <= 0) return undefined;
+
+    const monthIndex = MONTHS.indexOf(month);
+    if (monthIndex === -1) return undefined;
+
+    const targetYear = year || new Date().getFullYear();
+
+    return transactions.find(tx => {
+      const itemNameLower = itemName.toLowerCase();
+      const txNameLower = tx.name.toLowerCase();
+      
+      const nameMatch = (
+        (txNameLower.includes(itemNameLower) && itemNameLower.length >= TRANSACTION_MIN_NAME_LENGTH) ||
+        (itemNameLower.includes(txNameLower) && txNameLower.length >= TRANSACTION_MIN_NAME_LENGTH)
+      );
+      
+      const amountMatch = Math.abs(tx.amount - amount) <= TRANSACTION_AMOUNT_TOLERANCE;
+      
+      const txDate = new Date(tx.date);
+      const txMonth = txDate.getMonth();
+      const txYear = txDate.getFullYear();
+      
+      const dateMatch = (txMonth === monthIndex) && 
+                       (txYear === targetYear || txYear === targetYear - 1);
+
+      return nameMatch && amountMatch && dateMatch;
+    });
   }, [transactions]);
 
   /**
@@ -692,15 +734,17 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
     }
   };
 
+  // QA: Handle Pay modal submission - supports create and update
+  // Fix for Issue: Transaction editing from Pay modal
   const handlePaySubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!showPayModal) return;
     
     try {
       const { biller, schedule } = showPayModal;
+      const isEditing = !!payFormData.transactionId;
       
-      // Create a transaction record in Supabase
-      console.log('[Budget] Creating transaction for payment');
+      console.log(`[Budget] ${isEditing ? 'Updating' : 'Creating'} transaction for payment`);
       const transaction = {
         name: `${biller.name} - ${schedule.month} ${schedule.year}`,
         date: new Date(payFormData.datePaid).toISOString(),
@@ -708,15 +752,26 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
         payment_method_id: payFormData.accountId
       };
       
-      const { data: transactionData, error: transactionError } = await createTransaction(transaction);
+      let transactionData, transactionError;
+      if (isEditing) {
+        // Update existing transaction
+        const result = await updateTransaction(payFormData.transactionId, transaction);
+        transactionData = result.data;
+        transactionError = result.error;
+      } else {
+        // Create new transaction
+        const result = await createTransaction(transaction);
+        transactionData = result.data;
+        transactionError = result.error;
+      }
       
       if (transactionError) {
-        console.error('[Budget] Failed to create transaction:', transactionError);
-        alert('Failed to save transaction. Please try again.');
+        console.error(`[Budget] Failed to ${isEditing ? 'update' : 'create'} transaction:`, transactionError);
+        alert(`Failed to ${isEditing ? 'update' : 'save'} transaction. Please try again.`);
         return;
       }
       
-      console.log('[Budget] Transaction created successfully:', transactionData);
+      console.log(`[Budget] Transaction ${isEditing ? 'updated' : 'created'} successfully:`, transactionData);
       
       // Update the biller's payment schedule
       const updatedSchedules = biller.schedules.map(s => {
@@ -746,8 +801,15 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
       
       console.log('[Budget] Payment completed successfully');
       
-      // Only close modal on success
+      // Only close modal on success and reset form
       setShowPayModal(null);
+      setPayFormData({
+        transactionId: '',
+        amount: '',
+        receipt: '',
+        datePaid: new Date().toISOString().split('T')[0],
+        accountId: accounts[0]?.id || ''
+      });
     } catch (error) {
       console.error('Failed to update payment:', error);
       alert('Failed to process payment. Please try again.');
@@ -1189,9 +1251,22 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                                 ) : (
                                   <button 
                                     onClick={() => { 
-                                      if(linkedBiller && schedule) { 
+                                      if(linkedBiller && schedule) {
+                                        // QA: Check for existing transaction to enable editing
+                                        const existingTx = findExistingTransaction(
+                                          linkedBiller.name,
+                                          schedule.expectedAmount,
+                                          selectedMonth
+                                        );
+                                        
                                         setShowPayModal({biller: linkedBiller, schedule}); 
-                                        setPayFormData({...payFormData, amount: schedule.expectedAmount.toString(), receipt: ''}); 
+                                        setPayFormData({
+                                          transactionId: existingTx?.id || '',
+                                          amount: existingTx?.amount.toString() || schedule.expectedAmount.toString(),
+                                          receipt: existingTx ? 'Receipt on file' : '',
+                                          datePaid: existingTx ? new Date(existingTx.date).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
+                                          accountId: existingTx?.payment_method_id || payFormData.accountId
+                                        }); 
                                       } 
                                     }} 
                                     className="px-3 py-1 bg-indigo-600 text-white text-[9px] font-black uppercase rounded-lg hover:bg-indigo-700 transition-colors"
@@ -1492,9 +1567,22 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                                     ) : (
                                       <button 
                                         onClick={() => { 
-                                          if(linkedBiller && schedule) { 
+                                          if(linkedBiller && schedule) {
+                                            // QA: Check for existing transaction to enable editing
+                                            const existingTx = findExistingTransaction(
+                                              linkedBiller.name,
+                                              schedule.expectedAmount,
+                                              selectedMonth
+                                            );
+                                            
                                             setShowPayModal({biller: linkedBiller, schedule}); 
-                                            setPayFormData({...payFormData, amount: schedule.expectedAmount.toString(), receipt: ''}); 
+                                            setPayFormData({
+                                              transactionId: existingTx?.id || '',
+                                              amount: existingTx?.amount.toString() || schedule.expectedAmount.toString(),
+                                              receipt: existingTx ? 'Receipt on file' : '',
+                                              datePaid: existingTx ? new Date(existingTx.date).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
+                                              accountId: existingTx?.payment_method_id || payFormData.accountId
+                                            }); 
                                           } 
                                         }} 
                                         className="px-3 py-1 bg-indigo-600 text-white text-[9px] font-black uppercase rounded-lg hover:bg-indigo-700 transition-colors"
@@ -1527,8 +1615,15 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
             <button onClick={() => setShowPayModal(null)} className="absolute right-6 top-6 p-2 hover:bg-gray-100 rounded-full transition-colors">
               <X className="w-6 h-6 text-gray-400" />
             </button>
-            <h2 className="text-2xl font-black text-gray-900 mb-2">Pay {showPayModal.biller.name}</h2>
-            <p className="text-gray-500 text-sm mb-8">Recording payment for {showPayModal.schedule.month}</p>
+            {/* QA: Update title based on edit mode */}
+            <h2 className="text-2xl font-black text-gray-900 mb-2">
+              {payFormData.transactionId ? 'Edit Payment' : 'Pay'} {showPayModal.biller.name}
+            </h2>
+            <p className="text-gray-500 text-sm mb-8">
+              {payFormData.transactionId 
+                ? `Updating payment for ${showPayModal.schedule.month}`
+                : `Recording payment for ${showPayModal.schedule.month}`}
+            </p>
             <form onSubmit={handlePaySubmit} className="space-y-6">
               <div>
                 <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Amount Paid</label>
@@ -1563,7 +1658,9 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
               </div>
               <div className="flex space-x-4 pt-4">
                 <button type="button" onClick={() => setShowPayModal(null)} className="flex-1 bg-gray-100 py-4 rounded-2xl font-bold text-gray-500">Cancel</button>
-                <button type="submit" className="flex-1 bg-green-600 text-white py-4 rounded-2xl font-bold hover:bg-green-700 shadow-xl shadow-green-100">Submit Payment</button>
+                <button type="submit" className="flex-1 bg-green-600 text-white py-4 rounded-2xl font-bold hover:bg-green-700 shadow-xl shadow-green-100">
+                  {payFormData.transactionId ? 'Update Payment' : 'Submit Payment'}
+                </button>
               </div>
             </form>
           </div>
