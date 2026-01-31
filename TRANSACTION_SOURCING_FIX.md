@@ -71,18 +71,34 @@ useEffect(() => {
 
 **After:**
 ```typescript
+// Track last transaction load time to prevent excessive reloads
+const lastTransactionLoadRef = useRef<number>(Date.now());
+const TRANSACTION_RELOAD_DEBOUNCE_MS = 30000; // 30 seconds minimum
+
 useEffect(() => {
+  // Load on mount
   loadTransactions();
   
+  // Reload when window regains focus (debounced to prevent excessive queries)
   const handleFocus = () => {
-    console.log('[Budget] Window focused, reloading transactions...');
-    loadTransactions();
+    const now = Date.now();
+    const timeSinceLastLoad = now - lastTransactionLoadRef.current;
+    
+    // Only reload if at least 30 seconds has passed
+    if (timeSinceLastLoad >= TRANSACTION_RELOAD_DEBOUNCE_MS) {
+      console.log('[Budget] Window focused, reloading transactions...');
+      loadTransactions();
+    } else {
+      console.log(`[Budget] Skipping reload (${Math.round(timeSinceLastLoad / 1000)}s since last load)`);
+    }
   };
   
   window.addEventListener('focus', handleFocus);
   return () => window.removeEventListener('focus', handleFocus);
 }, []);
 ```
+
+**Key Improvement:** Added 30-second debounce to prevent excessive database queries when user frequently switches windows/tabs.
 
 ## How It Works Now
 

@@ -52,7 +52,8 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
   const [transactions, setTransactions] = useState<SupabaseTransaction[]>([]);
   
   // Track last transaction load time to prevent excessive reloads
-  const lastTransactionLoadRef = useRef<number>(0);
+  // Initialize to current time to prevent immediate reload on first focus
+  const lastTransactionLoadRef = useRef<number>(Date.now());
   const TRANSACTION_RELOAD_DEBOUNCE_MS = 30000; // 30 seconds minimum between reloads
 
   // Load from saved setup when month/timing changes
