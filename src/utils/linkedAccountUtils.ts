@@ -75,10 +75,12 @@ export const calculateLinkedAccountAmount = (
   );
   
   // Aggregate by cycle
+  // Generate enough cycles to cover historical and future schedules (24 cycles = 2 years)
+  const CYCLE_LOOKBACK_COUNT = 24;
   const cyclesWithTx = aggregateTransactionsByCycle(
     accountTransactions,
     account.billingDate,
-    24 // Generate enough cycles to cover the schedule
+    CYCLE_LOOKBACK_COUNT
   );
   
   // Find the cycle matching our schedule

@@ -31,7 +31,7 @@ export interface BillingCycleWithTransactions extends BillingCycle {
  * 
  * ENHANCEMENT: Extracted from statement.tsx to enable reuse in Billers
  * 
- * @param billingDate - The billing date in "YYYY-MM-DD" format or day number (e.g., "15")
+ * @param billingDate - The billing date in "YYYY-MM-DD" format or day number (e.g., "15", "15th")
  * @param numberOfCycles - Number of cycles to generate (default: 6)
  * @returns Array of billing cycles with start/end dates
  */
@@ -175,12 +175,14 @@ export const getCycleForMonth = (
   const targetYear = parseInt(year);
   if (isNaN(targetYear)) return null;
   
-  // Generate cycles for the target year (12 months before to 12 months after)
-  const cycles = calculateBillingCycles(billingDate, 24);
+  // Generate enough cycles to cover historical and future schedules (24 cycles = 2 years)
+  const CYCLE_LOOKBACK_COUNT = 24;
+  const cycles = calculateBillingCycles(billingDate, CYCLE_LOOKBACK_COUNT);
   
   // Find the cycle that best represents this month/year
   // We look for a cycle whose start or end date falls in the target month
-  const targetDate = new Date(targetYear, monthIndex, 15); // Middle of the month
+  const MONTH_MIDPOINT = 15; // Middle of the month for comparison
+  const targetDate = new Date(targetYear, monthIndex, MONTH_MIDPOINT);
   
   for (const cycle of cycles) {
     if (targetDate >= cycle.startDate && targetDate <= cycle.endDate) {

@@ -483,7 +483,7 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
                {/* ENHANCEMENT: Show linked account indicator */}
                {linkedAccount && (
                  <span className="text-[10px] font-bold px-2 py-0.5 bg-purple-100 rounded text-purple-600 uppercase">
-                   🔗 {linkedAccount.bank}
+                   <span role="img" aria-label="Linked">🔗</span> {linkedAccount.bank}
                  </span>
                )}
             </div>
@@ -566,7 +566,7 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
                     {/* ENHANCEMENT: Show linked account info */}
                     {shouldUseLinkedAccount(detailedBiller) && getLinkedAccount(detailedBiller, accounts) && (
                       <span className="px-3 py-1 bg-purple-100 rounded-full text-xs font-bold text-purple-600">
-                        🔗 Linked to {getLinkedAccount(detailedBiller, accounts)?.bank}
+                        <span role="img" aria-label="Linked">🔗</span> Linked to {getLinkedAccount(detailedBiller, accounts)?.bank}
                       </span>
                     )}
                   </div>
@@ -628,7 +628,7 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
                             <span className="font-bold text-gray-900">{displayLabel}</span>
                             {isFromLinkedAccount && (
                               <span className="text-[10px] text-purple-600 font-medium mt-1 flex items-center gap-1">
-                                <span className="inline-block w-1.5 h-1.5 rounded-full bg-purple-600"></span>
+                                <span className="inline-block w-1.5 h-1.5 rounded-full bg-purple-600" aria-hidden="true"></span>
                                 From linked account
                               </span>
                             )}
