@@ -2,6 +2,9 @@ import React, { useEffect, useState } from 'react';
 import { ArrowLeft, Calendar, CreditCard } from 'lucide-react';
 import { useSearchParams, Link } from 'react-router-dom';
 import { Account } from '../../types';
+import { getAllTransactions } from '../../src/services/transactionsService';
+import type { SupabaseTransaction } from '../../src/types/supabase';
+import { calculateBillingCycles, formatDateRange } from '../../src/utils/billingCycles';
 
 type Transaction = {
   id: string;
@@ -26,61 +29,6 @@ const formatCurrency = (val: number) =>
     maximumFractionDigits: 2
   }).format(val);
 
-const formatDateRange = (start: Date, end: Date): string => {
-  const options: Intl.DateTimeFormatOptions = { month: 'short', day: 'numeric', year: 'numeric' };
-  return `${start.toLocaleDateString('en-US', options)} – ${end.toLocaleDateString('en-US', options)}`;
-};
-
-// Calculate billing cycles based on billing date
-const calculateBillingCycles = (billingDate: string, numberOfCycles: number = 6): { startDate: Date; endDate: Date }[] => {
-  const cycles: { startDate: Date; endDate: Date }[] = [];
-  
-  // Parse billing date - expect format "YYYY-MM-DD"
-  let billingDay: number;
-  
-  if (billingDate.includes('-')) {
-    // Full date format like "2026-01-10"
-    const date = new Date(billingDate);
-    billingDay = date.getDate();
-  } else {
-    // Fallback: try to extract numeric day (e.g., "15th" -> 15)
-    const match = billingDate.match(/\d+/);
-    if (!match) return cycles; // Invalid format
-    billingDay = parseInt(match[0], 10);
-  }
-  
-  // Validate billing day
-  if (billingDay < 1 || billingDay > 31) return cycles;
-  
-  // Start from current date and generate cycles going forward and backward
-  const today = new Date();
-  const currentYear = today.getFullYear();
-  const currentMonth = today.getMonth();
-  
-  // Generate cycles starting from 5 months ago to current month
-  for (let i = numberOfCycles - 1; i >= 0; i--) {
-    // Calculate month/year for this cycle using Date methods to handle boundaries
-    const cycleStartDate = new Date(currentYear, currentMonth - i, billingDay);
-    
-    // Handle months with fewer days than billingDay (e.g., Feb 31 -> Feb 28/29)
-    const daysInMonth = new Date(cycleStartDate.getFullYear(), cycleStartDate.getMonth() + 1, 0).getDate();
-    const adjustedBillingDay = Math.min(billingDay, daysInMonth);
-    cycleStartDate.setDate(adjustedBillingDay);
-    
-    // Calculate end date (day before next billing date)
-    const cycleEndDate = new Date(cycleStartDate);
-    cycleEndDate.setMonth(cycleEndDate.getMonth() + 1);
-    cycleEndDate.setDate(cycleEndDate.getDate() - 1);
-    
-    cycles.push({ 
-      startDate: new Date(cycleStartDate), 
-      endDate: new Date(cycleEndDate) 
-    });
-  }
-  
-  return cycles;
-};
-
 // Check if transaction falls within a billing cycle
 const isInCycle = (transaction: Transaction, cycleStart: Date, cycleEnd: Date): boolean => {
   const txDate = new Date(transaction.date);
@@ -99,52 +47,71 @@ const StatementPage: React.FC<StatementPageProps> = ({ accounts }) => {
   const [selectedCycleIndex, setSelectedCycleIndex] = useState<number>(0);
 
   useEffect(() => {
-    if (!accountId) return;
-    
-    // Find the account
-    const acc = accounts.find(a => a.id === accountId);
-    if (!acc || acc.type !== 'Credit') return;
-    
-    setAccount(acc);
-    
-    // Get billing date
-    const billingDate = acc.billingDate;
-    if (!billingDate) {
-      // No billing date set, can't calculate cycles
-      return;
-    }
-    
-    // Calculate billing cycles
-    const cycleData = calculateBillingCycles(billingDate, 6);
-    
-    // Get all transactions for this account
-    const txRaw = localStorage.getItem('transactions');
-    let allTx: Transaction[] = [];
-    if (txRaw) {
-      try {
-        allTx = JSON.parse(txRaw);
-      } catch (error) {
-        console.error('Failed to parse transactions from localStorage:', error);
-      }
-    }
-    
-    const accountTransactions = allTx.filter(tx => tx.paymentMethodId === accountId);
-    
-    // Group transactions by cycle
-    const billingCycles: BillingCycle[] = cycleData.map((cycle, index) => {
-      const cycleTxs = accountTransactions.filter(tx => 
-        isInCycle(tx, cycle.startDate, cycle.endDate)
-      );
+    const loadAccountAndTransactions = async () => {
+      if (!accountId) return;
       
-      return {
-        startDate: cycle.startDate,
-        endDate: cycle.endDate,
-        label: formatDateRange(cycle.startDate, cycle.endDate),
-        transactions: cycleTxs
-      };
-    });
+      // Find the account
+      const acc = accounts.find(a => a.id === accountId);
+      if (!acc || acc.type !== 'Credit') return;
+      
+      setAccount(acc);
+      
+      // Get billing date
+      const billingDate = acc.billingDate;
+      if (!billingDate) {
+        // No billing date set, can't calculate cycles
+        return;
+      }
+      
+      // Calculate billing cycles - FIX: Only show current year onwards to avoid clutter
+      const cycleData = calculateBillingCycles(billingDate, 12, true);
+      
+      // FIX: Load transactions from Supabase instead of localStorage
+      try {
+        const { data: transactionsData, error: transactionsError } = await getAllTransactions();
+        
+        if (transactionsError) {
+          console.error('Error loading transactions:', transactionsError);
+          return;
+        }
+        
+        if (!transactionsData) {
+          setCycles([]);
+          return;
+        }
+        
+        // Convert Supabase transactions to local format
+        const allTx: Transaction[] = transactionsData.map(t => ({
+          id: t.id,
+          name: t.name,
+          date: t.date,
+          amount: t.amount,
+          paymentMethodId: t.payment_method_id
+        }));
+        
+        const accountTransactions = allTx.filter(tx => tx.paymentMethodId === accountId);
+        
+        // Group transactions by cycle
+        const billingCycles: BillingCycle[] = cycleData.map((cycle, index) => {
+          const cycleTxs = accountTransactions.filter(tx => 
+            isInCycle(tx, cycle.startDate, cycle.endDate)
+          );
+          
+          return {
+            startDate: cycle.startDate,
+            endDate: cycle.endDate,
+            label: formatDateRange(cycle.startDate, cycle.endDate),
+            transactions: cycleTxs
+          };
+        });
+        
+        setCycles(billingCycles);
+      } catch (error) {
+        console.error('Error loading transactions:', error);
+      }
+    };
     
-    setCycles(billingCycles);
+    loadAccountAndTransactions();
   }, [accountId, accounts]);
 
   if (!accountId || !account) {

@@ -33,11 +33,13 @@ export interface BillingCycleWithTransactions extends BillingCycle {
  * 
  * @param billingDate - The billing date in "YYYY-MM-DD" format or day number (e.g., "15", "15th")
  * @param numberOfCycles - Number of cycles to generate (default: 6)
+ * @param onlyCurrentYear - If true, only show cycles from current year onwards (default: false)
  * @returns Array of billing cycles with start/end dates
  */
 export const calculateBillingCycles = (
   billingDate: string, 
-  numberOfCycles: number = 6
+  numberOfCycles: number = 6,
+  onlyCurrentYear: boolean = false
 ): BillingCycle[] => {
   const cycles: BillingCycle[] = [];
   
@@ -63,26 +65,56 @@ export const calculateBillingCycles = (
   const currentYear = today.getFullYear();
   const currentMonth = today.getMonth();
   
-  // Generate cycles starting from (numberOfCycles - 1) months ago to current month
-  for (let i = numberOfCycles - 1; i >= 0; i--) {
-    // Calculate month/year for this cycle using Date methods to handle boundaries
-    const cycleStartDate = new Date(currentYear, currentMonth - i, billingDay);
+  if (onlyCurrentYear) {
+    // FIX: Only show cycles from current year onwards
+    // Start from January of current year or current month (whichever is later)
+    const startMonth = currentMonth; // Start from current month
     
-    // Handle months with fewer days than billingDay (e.g., Feb 31 -> Feb 28/29)
-    const daysInMonth = new Date(cycleStartDate.getFullYear(), cycleStartDate.getMonth() + 1, 0).getDate();
-    const adjustedBillingDay = Math.min(billingDay, daysInMonth);
-    cycleStartDate.setDate(adjustedBillingDay);
+    // Calculate how many months until end of current year
+    const monthsUntilYearEnd = 12 - currentMonth; // Remaining months in current year
+    const cyclesToShow = Math.min(numberOfCycles, monthsUntilYearEnd + 3); // Add 3 months into next year
     
-    // Calculate end date (day before next billing date)
-    const cycleEndDate = new Date(cycleStartDate);
-    cycleEndDate.setMonth(cycleEndDate.getMonth() + 1);
-    cycleEndDate.setDate(cycleEndDate.getDate() - 1);
-    
-    cycles.push({ 
-      startDate: new Date(cycleStartDate), 
-      endDate: new Date(cycleEndDate),
-      label: formatDateRange(cycleStartDate, cycleEndDate)
-    });
+    for (let i = 0; i < cyclesToShow; i++) {
+      const cycleStartDate = new Date(currentYear, currentMonth + i, billingDay);
+      
+      // Handle months with fewer days than billingDay (e.g., Feb 31 -> Feb 28/29)
+      const daysInMonth = new Date(cycleStartDate.getFullYear(), cycleStartDate.getMonth() + 1, 0).getDate();
+      const adjustedBillingDay = Math.min(billingDay, daysInMonth);
+      cycleStartDate.setDate(adjustedBillingDay);
+      
+      // Calculate end date (day before next billing date)
+      const cycleEndDate = new Date(cycleStartDate);
+      cycleEndDate.setMonth(cycleEndDate.getMonth() + 1);
+      cycleEndDate.setDate(cycleEndDate.getDate() - 1);
+      
+      cycles.push({ 
+        startDate: new Date(cycleStartDate), 
+        endDate: new Date(cycleEndDate),
+        label: formatDateRange(cycleStartDate, cycleEndDate)
+      });
+    }
+  } else {
+    // Original behavior: Generate cycles starting from (numberOfCycles - 1) months ago to current month
+    for (let i = numberOfCycles - 1; i >= 0; i--) {
+      // Calculate month/year for this cycle using Date methods to handle boundaries
+      const cycleStartDate = new Date(currentYear, currentMonth - i, billingDay);
+      
+      // Handle months with fewer days than billingDay (e.g., Feb 31 -> Feb 28/29)
+      const daysInMonth = new Date(cycleStartDate.getFullYear(), cycleStartDate.getMonth() + 1, 0).getDate();
+      const adjustedBillingDay = Math.min(billingDay, daysInMonth);
+      cycleStartDate.setDate(adjustedBillingDay);
+      
+      // Calculate end date (day before next billing date)
+      const cycleEndDate = new Date(cycleStartDate);
+      cycleEndDate.setMonth(cycleEndDate.getMonth() + 1);
+      cycleEndDate.setDate(cycleEndDate.getDate() - 1);
+      
+      cycles.push({ 
+        startDate: new Date(cycleStartDate), 
+        endDate: new Date(cycleEndDate),
+        label: formatDateRange(cycleStartDate, cycleEndDate)
+      });
+    }
   }
   
   return cycles;
