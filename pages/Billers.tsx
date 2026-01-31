@@ -410,9 +410,6 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
   // Combine regular billers with virtual credit card billers
   const allBillers = [...billers, ...virtualCreditCardBillers];
 
-  // Combine regular billers with virtual credit card billers
-  const allBillers = [...billers, ...virtualCreditCardBillers];
-
   const activeBillers = allBillers.filter(b => b.status === 'active');
   const inactiveBillers = allBillers.filter(b => b.status === 'inactive');
   const detailedBiller = allBillers.find(b => b.id === detailedBillerId);
