@@ -15,7 +15,7 @@
  */
 
 import type { SupabaseTransaction } from '../types/supabase';
-import type { Installment, Account } from '../../types';
+import type { Installment, Account, Biller, PaymentSchedule } from '../../types';
 
 // Configuration constants for transaction matching
 export const TRANSACTION_AMOUNT_TOLERANCE = 1; // ±1 peso tolerance for rounding differences
@@ -345,13 +345,13 @@ export const getInstallmentPaymentSchedule = (
  * @param account - Credit card account
  * @param transactions - All transactions
  * @param installments - All installments (to exclude from regular purchases)
- * @returns Virtual biller with schedules matching billing cycles
+ * @returns Virtual biller with schedules matching billing cycles, or null if invalid
  */
 export const generateCreditCardVirtualBiller = (
   account: Account,
   transactions: SupabaseTransaction[],
   installments: Installment[] = []
-): any => {
+): Biller | null => {
   if (account.classification !== 'Credit Card' || !account.billingDate) {
     return null;
   }
@@ -359,12 +359,23 @@ export const generateCreditCardVirtualBiller = (
   // Aggregate purchases by billing cycle
   const cycleSummaries = aggregateCreditCardPurchases(account, transactions, installments);
 
+  // Parse billing day with validation
+  let billingDay = 15; // Default to middle of month
+  if (account.billingDate) {
+    const parts = account.billingDate.split('-');
+    if (parts.length === 3) {
+      const day = parseInt(parts[2], 10);
+      if (!isNaN(day) && day >= 1 && day <= 31) {
+        billingDay = day;
+      }
+    }
+  }
+
   // Calculate timing based on billing date
-  const billingDay = parseInt(account.billingDate.split('-')[2], 10) || 15;
   const timing: '1/2' | '2/2' = (billingDay >= 1 && billingDay <= 21) ? '1/2' : '2/2';
 
   // Generate schedules from cycle summaries
-  const schedules = cycleSummaries.map(cycle => {
+  const schedules: PaymentSchedule[] = cycleSummaries.map(cycle => {
     const monthNames = [
       'January', 'February', 'March', 'April', 'May', 'June',
       'July', 'August', 'September', 'October', 'November', 'December'
@@ -388,7 +399,7 @@ export const generateCreditCardVirtualBiller = (
   }).filter(schedule => schedule.expectedAmount > 0); // Only include cycles with transactions
 
   // Create virtual biller
-  return {
+  const virtualBiller: Biller = {
     id: `virtual-cc-${account.id}`,
     name: `${account.bank} Statement`,
     category: 'Credit Card',
@@ -407,4 +418,6 @@ export const generateCreditCardVirtualBiller = (
     _isCreditCardBiller: true,
     _sourceAccountId: account.id
   };
+
+  return virtualBiller;
 };

@@ -461,9 +461,9 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
 
   const renderBillerCard = (biller: Biller) => {
     const displayAmount = getExpectedAmount(biller);
-    const isVirtual = (biller as any)._isVirtual;
-    const isCreditCard = (biller as any)._isCreditCardBiller;
-    const sourceAccountId = (biller as any)._sourceAccountId;
+    const isVirtual = biller._isVirtual;
+    const isCreditCard = biller._isCreditCardBiller;
+    const sourceAccountId = biller._sourceAccountId;
     
     return (
     <div key={biller.id} className={`bg-white p-6 rounded-2xl shadow-sm border ${isCreditCard ? 'border-purple-200' : 'border-gray-100'} hover:shadow-md transition-all flex flex-col h-full group relative overflow-visible ${isCreditCard ? 'bg-gradient-to-br from-white to-purple-50/30' : ''}`}>
@@ -576,15 +576,15 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
           <div className="flex items-center justify-between">
             <button onClick={() => setDetailedBillerId(null)} className="flex items-center space-x-2 text-gray-500 hover:text-gray-900 group"><ArrowLeft className="w-5 h-5 group-hover:-translate-x-1 transition-transform" /><span className="font-medium">Back to Billers</span></button>
             <div className="flex items-center space-x-3">
-              {!(detailedBiller as any)._isVirtual && (
+              {!detailedBiller._isVirtual && (
                 <>
                   <button onClick={() => openEditModal(detailedBiller)} className="flex items-center space-x-2 px-4 py-2 bg-gray-100 text-gray-600 rounded-xl text-xs font-bold hover:bg-gray-200"><Edit2 className="w-4 h-4" /><span>Edit</span></button>
                   <button onClick={() => handleDeleteTrigger(detailedBiller.id, detailedBiller.name)} className="flex items-center space-x-2 px-4 py-2 bg-red-50 text-red-600 rounded-xl text-xs font-bold hover:bg-red-100"><Trash2 className="w-4 h-4" /><span>Delete</span></button>
                 </>
               )}
-              {(detailedBiller as any)._isCreditCardBiller && (
+              {detailedBiller._isCreditCardBiller && (
                 <a 
-                  href={`/accounts/statement?account=${(detailedBiller as any)._sourceAccountId}`}
+                  href={`/accounts/statement?account=${detailedBiller._sourceAccountId}`}
                   className="flex items-center space-x-2 px-4 py-2 bg-purple-100 text-purple-600 rounded-xl text-xs font-bold hover:bg-purple-200"
                 >
                   <ExternalLink className="w-4 h-4" />
@@ -596,16 +596,16 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
           <div className="bg-white p-8 rounded-3xl border border-gray-100 shadow-sm">
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-8">
               <div className="flex items-center space-x-6">
-                <div className={`p-5 rounded-3xl ${(detailedBiller as any)._isCreditCardBiller ? 'bg-purple-50 text-purple-600' : 'bg-indigo-50 text-indigo-600'}`}>
-                  {(detailedBiller as any)._isCreditCardBiller ? <CreditCard className="w-10 h-10" /> : <Bell className="w-10 h-10" />}
+                <div className={`p-5 rounded-3xl ${detailedBiller._isCreditCardBiller ? 'bg-purple-50 text-purple-600' : 'bg-indigo-50 text-indigo-600'}`}>
+                  {detailedBiller._isCreditCardBiller ? <CreditCard className="w-10 h-10" /> : <Bell className="w-10 h-10" />}
                 </div>
                 <div>
                   <h2 className="text-3xl font-black text-gray-900">{detailedBiller.name}</h2>
                   <div className="flex items-center space-x-3 mt-2">
-                    <span className={`px-3 py-1 rounded-full text-xs font-bold uppercase ${(detailedBiller as any)._isCreditCardBiller ? 'bg-purple-100 text-purple-600' : 'bg-gray-100 text-gray-500'}`}>
+                    <span className={`px-3 py-1 rounded-full text-xs font-bold uppercase ${detailedBiller._isCreditCardBiller ? 'bg-purple-100 text-purple-600' : 'bg-gray-100 text-gray-500'}`}>
                       {detailedBiller.category}
                     </span>
-                    {(detailedBiller as any)._isCreditCardBiller ? (
+                    {detailedBiller._isCreditCardBiller ? (
                       <span className="text-sm text-gray-400 font-medium">Billing on {detailedBiller.dueDate}</span>
                     ) : (
                       <span className="text-sm text-gray-400 font-medium">Due every {detailedBiller.dueDate}</span>
@@ -613,11 +613,11 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
                   </div>
                 </div>
               </div>
-              {!(detailedBiller as any)._isCreditCardBiller && (
+              {!detailedBiller._isCreditCardBiller && (
                 <div className="text-right"><p className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Expected Amount</p><p className="text-3xl font-black text-indigo-600">{formatCurrency(detailedBiller.expectedAmount)}</p></div>
               )}
             </div>
-            {(detailedBiller as any)._isCreditCardBiller && (
+            {detailedBiller._isCreditCardBiller && (
               <div className="mb-6 p-4 bg-purple-50/50 rounded-2xl border border-purple-100">
                 <p className="text-sm text-purple-800 font-medium">
                   <span className="font-bold">Auto-tracked Credit Card:</span> Amounts shown are automatically calculated from your transactions for each billing cycle. Click any cycle to see transaction details.
@@ -630,7 +630,7 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
                   <thead><tr className="bg-gray-50 border-b border-gray-100">
                     <th className="p-4 text-xs font-bold text-gray-400 uppercase">Month</th>
                     <th className="p-4 text-xs font-bold text-gray-400 uppercase">Amount</th>
-                    {(detailedBiller as any)._isCreditCardBiller && (
+                    {detailedBiller._isCreditCardBiller && (
                       <th className="p-4 text-xs font-bold text-gray-400 uppercase text-center">Transactions</th>
                     )}
                     <th className="p-4 text-xs font-bold text-gray-400 uppercase text-center">Action</th>
@@ -664,12 +664,12 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
                       }
                     }
                     
-                    const isCreditCardBiller = (detailedBiller as any)._isCreditCardBiller;
-                    const transactionCount = (sched as any)._transactionCount || 0;
-                    const cycleLabel = (sched as any)._cycleLabel;
+                    const isCreditCardBiller = detailedBiller._isCreditCardBiller;
+                    const transactionCount = sched._transactionCount || 0;
+                    const cycleLabel = sched._cycleLabel;
                     
                     return (
-                      <tr key={idx} className={`${isPaid ? 'bg-green-50/30' : 'hover:bg-gray-50/50'} transition-colors`}>
+                      <tr key={idx} className={`${isPaid ? (isCreditCardBiller ? 'bg-green-50/30' : 'bg-green-50') : 'hover:bg-gray-50/50'} transition-colors`}>
                         <td className="p-4 font-bold text-gray-900">
                           {sched.month} {sched.year}
                           {isCreditCardBiller && cycleLabel && (
@@ -685,7 +685,7 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
                         <td className="p-4 text-center">
                           {isCreditCardBiller ? (
                             <a 
-                              href={`/accounts/statement?account=${(detailedBiller as any)._sourceAccountId}`}
+                              href={`/accounts/statement?account=${detailedBiller._sourceAccountId}`}
                               className="inline-flex items-center space-x-1 bg-purple-50 text-purple-600 px-4 py-2 rounded-xl font-bold hover:bg-purple-100 text-xs transition-all"
                             >
                               <ExternalLink className="w-3 h-3" />

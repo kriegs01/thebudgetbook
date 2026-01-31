@@ -34,6 +34,12 @@ export interface PaymentSchedule {
   receipt?: string;
   datePaid?: string;
   accountId?: string;
+  // Virtual biller schedule metadata
+  _isCreditCardBiller?: boolean;
+  _transactionCount?: number;
+  _cycleLabel?: string;
+  _cycleStart?: string;
+  _cycleEnd?: string;
 }
 
 export interface Biller {
@@ -54,6 +60,10 @@ export interface Biller {
   };
   status: 'active' | 'inactive';
   schedules: PaymentSchedule[];
+  // Virtual biller metadata
+  _isVirtual?: boolean;
+  _isCreditCardBiller?: boolean;
+  _sourceAccountId?: string;
 }
 
 export interface Installment {
