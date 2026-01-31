@@ -94,10 +94,35 @@ export const calculateBillingCycles = (
       });
     }
   } else {
-    // Original behavior: Generate cycles starting from (numberOfCycles - 1) months ago to current month
-    for (let i = numberOfCycles - 1; i >= 0; i--) {
-      // Calculate month/year for this cycle using Date methods to handle boundaries
+    // FIX: Generate cycles covering both past and future
+    // Split cycles to cover historical data and future schedules
+    const cyclesBack = Math.floor(numberOfCycles / 2);
+    const cyclesForward = numberOfCycles - cyclesBack;
+    
+    // Generate past cycles including current month (going backwards)
+    for (let i = cyclesBack - 1; i >= 0; i--) {
       const cycleStartDate = new Date(currentYear, currentMonth - i, billingDay);
+      
+      // Handle months with fewer days than billingDay (e.g., Feb 31 -> Feb 28/29)
+      const daysInMonth = new Date(cycleStartDate.getFullYear(), cycleStartDate.getMonth() + 1, 0).getDate();
+      const adjustedBillingDay = Math.min(billingDay, daysInMonth);
+      cycleStartDate.setDate(adjustedBillingDay);
+      
+      // Calculate end date (day before next billing date)
+      const cycleEndDate = new Date(cycleStartDate);
+      cycleEndDate.setMonth(cycleEndDate.getMonth() + 1);
+      cycleEndDate.setDate(cycleEndDate.getDate() - 1);
+      
+      cycles.push({ 
+        startDate: new Date(cycleStartDate), 
+        endDate: new Date(cycleEndDate),
+        label: formatDateRange(cycleStartDate, cycleEndDate)
+      });
+    }
+    
+    // Generate future cycles (starting from next month)
+    for (let i = 1; i < cyclesForward; i++) {
+      const cycleStartDate = new Date(currentYear, currentMonth + i, billingDay);
       
       // Handle months with fewer days than billingDay (e.g., Feb 31 -> Feb 28/29)
       const daysInMonth = new Date(cycleStartDate.getFullYear(), cycleStartDate.getMonth() + 1, 0).getDate();
