@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { BudgetItem, Account, Biller, PaymentSchedule, CategorizedSetupItem, SavedBudgetSetup, BudgetCategory } from '../types';
 import { Plus, Check, ChevronDown, Trash2, Save, FileText, ArrowRight, Upload, CheckCircle2, X, AlertTriangle } from 'lucide-react';
 import { createBudgetSetupFrontend, updateBudgetSetupFrontend } from '../src/services/budgetSetupsService';
@@ -16,11 +16,12 @@ interface BudgetProps {
   onUpdateBiller: (biller: Biller) => Promise<void>;
   onMoveToTrash?: (setup: SavedBudgetSetup) => void;
   onReloadSetups?: () => Promise<void>;
+  onReloadBillers?: () => Promise<void>;
 }
 
 const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 
-const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSetups, setSavedSetups, onUpdateBiller, onMoveToTrash, onReloadSetups }) => {
+const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSetups, setSavedSetups, onUpdateBiller, onMoveToTrash, onReloadSetups, onReloadBillers }) => {
   const [view, setView] = useState<'summary' | 'setup'>('summary');
   const [selectedMonth, setSelectedMonth] = useState(MONTHS[new Date().getMonth()]);
   const [selectedTiming, setSelectedTiming] = useState<'1/2' | '2/2'>('1/2');
@@ -54,6 +55,11 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
       setActualSalary('');
     }
   }, [selectedMonth, selectedTiming, savedSetups]);
+
+  // Autosave State
+  const [autoSaveStatus, setAutoSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+  const autoSaveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const lastSavedDataRef = useRef<string>('');
 
   // Modal States
   const [showPayModal, setShowPayModal] = useState<{ biller: Biller, schedule: PaymentSchedule } | null>(null);
@@ -141,6 +147,134 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
       maximumFractionDigits: 2 
     }).format(val);
   };
+
+  /**
+   * Auto-save budget setup with debouncing
+   * Automatically saves changes after 3 seconds of inactivity
+   */
+  const autoSave = useCallback(async () => {
+    // Only auto-save in setup view
+    if (view !== 'setup') return;
+    
+    // Calculate total amount
+    let total = 0;
+    Object.values(setupData)
+      .filter((value): value is CategorizedSetupItem[] => Array.isArray(value))
+      .forEach(catItems => {
+        catItems.forEach(item => {
+          if (item.included) {
+            const amount = parseFloat(item.amount);
+            if (!isNaN(amount)) {
+              total += amount;
+            }
+          }
+        });
+      });
+
+    const existingSetup = savedSetups.find(s => s.month === selectedMonth && s.timing === selectedTiming);
+    
+    // Prepare data including salary information
+    const dataToSave = {
+      ...JSON.parse(JSON.stringify(setupData)),
+      _projectedSalary: projectedSalary,
+      _actualSalary: actualSalary
+    };
+    
+    // Check if data has actually changed
+    const currentDataString = JSON.stringify(dataToSave);
+    if (currentDataString === lastSavedDataRef.current) {
+      console.log('[Budget] No changes detected, skipping auto-save');
+      return;
+    }
+    
+    try {
+      setAutoSaveStatus('saving');
+      console.log('[Budget] Auto-saving budget setup...');
+      
+      if (existingSetup) {
+        // Update existing setup
+        const updatedSetup: SavedBudgetSetup = {
+          ...existingSetup,
+          totalAmount: total,
+          data: dataToSave,
+          status: 'Saved'
+        };
+        
+        const { error } = await updateBudgetSetupFrontend(updatedSetup);
+        
+        if (error) {
+          console.error('[Budget] Auto-save failed:', error);
+          setAutoSaveStatus('error');
+          setTimeout(() => setAutoSaveStatus('idle'), 3000);
+          return;
+        }
+      } else {
+        // Create new setup
+        const newSetup: Omit<SavedBudgetSetup, 'id'> = {
+          month: selectedMonth,
+          timing: selectedTiming,
+          status: 'Saved',
+          totalAmount: total,
+          data: dataToSave
+        };
+        
+        const { error } = await createBudgetSetupFrontend(newSetup);
+        
+        if (error) {
+          console.error('[Budget] Auto-save failed:', error);
+          setAutoSaveStatus('error');
+          setTimeout(() => setAutoSaveStatus('idle'), 3000);
+          return;
+        }
+      }
+      
+      // Update last saved data reference
+      lastSavedDataRef.current = currentDataString;
+      
+      // Reload setups to get fresh data
+      if (onReloadSetups) {
+        await onReloadSetups();
+      }
+      
+      console.log('[Budget] Auto-save completed successfully');
+      setAutoSaveStatus('saved');
+      setTimeout(() => setAutoSaveStatus('idle'), 2000);
+    } catch (error) {
+      console.error('[Budget] Error in auto-save:', error);
+      setAutoSaveStatus('error');
+      setTimeout(() => setAutoSaveStatus('idle'), 3000);
+    }
+  }, [view, setupData, projectedSalary, actualSalary, selectedMonth, selectedTiming, savedSetups, onReloadSetups]);
+
+  /**
+   * Debounced auto-save trigger
+   * Waits 3 seconds after last change before auto-saving
+   */
+  const triggerAutoSave = useCallback(() => {
+    // Clear any existing timeout
+    if (autoSaveTimeoutRef.current) {
+      clearTimeout(autoSaveTimeoutRef.current);
+    }
+    
+    // Set new timeout for auto-save
+    autoSaveTimeoutRef.current = setTimeout(() => {
+      autoSave();
+    }, 3000); // 3 second debounce
+  }, [autoSave]);
+
+  // Trigger auto-save when setupData, projectedSalary, or actualSalary changes
+  useEffect(() => {
+    if (view === 'setup') {
+      triggerAutoSave();
+    }
+    
+    // Cleanup timeout on unmount
+    return () => {
+      if (autoSaveTimeoutRef.current) {
+        clearTimeout(autoSaveTimeoutRef.current);
+      }
+    };
+  }, [setupData, projectedSalary, actualSalary, view, triggerAutoSave]);
 
   const handleSetupToggle = (category: string, id: string) => {
     setSetupData(prev => ({
@@ -379,12 +513,23 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
         }
         return s;
       });
+      
+      console.log('[Budget] Updating biller with new schedule');
       await onUpdateBiller({ ...biller, schedules: updatedSchedules });
+      
+      // Explicitly reload billers to ensure UI updates
+      if (onReloadBillers) {
+        console.log('[Budget] Reloading billers after payment');
+        await onReloadBillers();
+      }
+      
+      console.log('[Budget] Payment completed successfully');
       
       // Only close modal on success
       setShowPayModal(null);
     } catch (error) {
       console.error('Failed to update payment:', error);
+      alert('Failed to process payment. Please try again.');
       // Keep modal open so user can retry
     }
   };
@@ -538,10 +683,35 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
             <h2 className="text-2xl font-black text-gray-900 tracking-tighter uppercase">BUDGET SETUP</h2>
             <p className="text-xs text-gray-400 font-bold uppercase tracking-widest mt-1">Configure Recurring Expenses</p>
           </div>
-          <button onClick={handleSaveSetup} className="flex items-center space-x-3 bg-indigo-600 text-white px-8 py-3 rounded-2xl font-black uppercase tracking-widest text-xs hover:bg-indigo-700 shadow-xl">
-            <Save className="w-5 h-5" />
-            <span>Save</span>
-          </button>
+          <div className="flex items-center space-x-3">
+            {/* Autosave Status Indicator */}
+            {autoSaveStatus !== 'idle' && (
+              <div className="flex items-center space-x-2 text-xs font-bold">
+                {autoSaveStatus === 'saving' && (
+                  <>
+                    <div className="w-4 h-4 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
+                    <span className="text-gray-600">Saving...</span>
+                  </>
+                )}
+                {autoSaveStatus === 'saved' && (
+                  <>
+                    <Check className="w-4 h-4 text-green-600" />
+                    <span className="text-green-600">Saved</span>
+                  </>
+                )}
+                {autoSaveStatus === 'error' && (
+                  <>
+                    <AlertTriangle className="w-4 h-4 text-red-600" />
+                    <span className="text-red-600">Error</span>
+                  </>
+                )}
+              </div>
+            )}
+            <button onClick={handleSaveSetup} className="flex items-center space-x-3 bg-indigo-600 text-white px-8 py-3 rounded-2xl font-black uppercase tracking-widest text-xs hover:bg-indigo-700 shadow-xl">
+              <Save className="w-5 h-5" />
+              <span>Save</span>
+            </button>
+          </div>
         </div>
 
         <div className="flex justify-center items-center space-x-6">
