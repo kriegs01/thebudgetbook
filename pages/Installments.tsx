@@ -80,6 +80,13 @@ const Installments: React.FC<InstallmentsProps> = ({ installments, accounts, bil
       setFormData({ name: '', totalAmount: '', monthlyAmount: '', termDuration: '', paidAmount: '', accountId: accounts[0]?.id || '', startDate: '', billerId: '', timing: '1/2' });
     } catch (error) {
       console.error('Failed to add installment:', error);
+      // PROTOTYPE: Show helpful message if timing column is missing
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      if (errorMessage.includes('Database migration required')) {
+        alert('⚠️ Database Setup Required\n\nThe timing feature requires a database update. Please run the migration in Supabase.\n\nSee HOW_TO_ADD_TIMING_COLUMN.md for step-by-step instructions.');
+      } else {
+        alert('Failed to add installment. Please try again.');
+      }
     } finally {
       setIsSubmitting(false);
     }
@@ -108,6 +115,13 @@ const Installments: React.FC<InstallmentsProps> = ({ installments, accounts, bil
       setShowEditModal(null);
     } catch (error) {
       console.error('Failed to update installment:', error);
+      // PROTOTYPE: Show helpful message if timing column is missing
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      if (errorMessage.includes('Database migration required')) {
+        alert('⚠️ Database Setup Required\n\nThe timing feature requires a database update. Please run the migration in Supabase.\n\nSee HOW_TO_ADD_TIMING_COLUMN.md for step-by-step instructions.');
+      } else {
+        alert('Failed to update installment. Please try again.');
+      }
     } finally {
       setIsSubmitting(false);
     }

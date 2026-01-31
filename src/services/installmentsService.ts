@@ -64,6 +64,12 @@ export const createInstallment = async (installment: CreateInstallmentInput) => 
 
     if (error) {
       console.error('Supabase error creating installment:', error);
+      // PROTOTYPE: Provide helpful error message for missing timing column
+      if (error.message && error.message.includes('timing') && error.code === '42703') {
+        console.error('Missing timing column. Please run the database migration:');
+        console.error('See HOW_TO_ADD_TIMING_COLUMN.md for instructions');
+        throw new Error('Database migration required: The timing column needs to be added to the installments table. Please contact your administrator or check HOW_TO_ADD_TIMING_COLUMN.md');
+      }
       throw error;
     }
     return { data, error: null };
@@ -85,7 +91,15 @@ export const updateInstallment = async (id: string, updates: UpdateInstallmentIn
       .select()
       .single();
 
-    if (error) throw error;
+    if (error) {
+      // PROTOTYPE: Provide helpful error message for missing timing column
+      if (error.message && error.message.includes('timing') && error.code === '42703') {
+        console.error('Missing timing column. Please run the database migration:');
+        console.error('See HOW_TO_ADD_TIMING_COLUMN.md for instructions');
+        throw new Error('Database migration required: The timing column needs to be added to the installments table. Please contact your administrator or check HOW_TO_ADD_TIMING_COLUMN.md');
+      }
+      throw error;
+    }
     return { data, error: null };
   } catch (error) {
     console.error('Error updating installment:', error);
