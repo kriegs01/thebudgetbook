@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Biller, Account, PaymentSchedule, BudgetCategory, Installment } from '../types';
-import { Plus, Calendar, Bell, ChevronDown, ChevronRight, Upload, CheckCircle2, X, ArrowLeft, Power, PowerOff, MoreVertical, Edit2, Eye, Trash2, AlertTriangle } from 'lucide-react';
+import { Plus, Calendar, Bell, ChevronDown, ChevronRight, Upload, CheckCircle2, X, ArrowLeft, Power, PowerOff, MoreVertical, Edit2, Eye, Trash2, AlertTriangle, RefreshCw, Link as LinkIcon } from 'lucide-react';
 import { getAllTransactions } from '../src/services/transactionsService';
 import type { SupabaseTransaction } from '../src/types/supabase';
+import { syncCreditCardToBillerSchedule } from '../src/utils/creditCardBillerSync';
 
 interface BillersProps {
   billers: Biller[];
@@ -69,7 +70,8 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
     actDay: '',
     actYear: new Date().getFullYear().toString(),
     deactMonth: '',
-    deactYear: ''
+    deactYear: '',
+    linkedAccountId: '' // Link to credit card account
   });
 
   const [editFormData, setEditFormData] = useState({
@@ -81,7 +83,8 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
     actDay: '',
     actYear: '',
     deactMonth: '',
-    deactYear: ''
+    deactYear: '',
+    linkedAccountId: '' // Link to credit card account
   });
 
   const [payFormData, setPayFormData] = useState({
@@ -276,7 +279,8 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
         activationDate: activationDate,
         deactivationDate: deactivationDate,
         status: status,
-        schedules: MONTHS.map(month => ({ month, year: '2026', expectedAmount: expected }))
+        schedules: MONTHS.map(month => ({ month, year: '2026', expectedAmount: expected })),
+        linkedAccountId: addFormData.linkedAccountId || undefined
       };
       
       await onAdd(newBiller);
@@ -292,7 +296,8 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
         actDay: '',
         actYear: new Date().getFullYear().toString(),
         deactMonth: '',
-        deactYear: ''
+        deactYear: '',
+        linkedAccountId: ''
       });
       setTimingFeedback('');
     } catch (error) {
@@ -339,7 +344,8 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
         timing: timing,
         activationDate: activationDate,
         deactivationDate: deactivationDate,
-        status: status
+        status: status,
+        linkedAccountId: editFormData.linkedAccountId || undefined
       });
       
       // Only close modal on success
@@ -396,6 +402,46 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
     return new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(val);
   };
 
+  /**
+   * Sync credit card transaction totals to biller payment schedules
+   */
+  const handleSyncCreditCard = async (biller: Biller) => {
+    if (!biller.linkedAccountId) {
+      console.warn('No linked account for biller:', biller.name);
+      return;
+    }
+
+    const linkedAccount = accounts.find(a => a.id === biller.linkedAccountId);
+    if (!linkedAccount) {
+      console.warn('Linked account not found:', biller.linkedAccountId);
+      return;
+    }
+
+    if (linkedAccount.classification !== 'Credit Card' || !linkedAccount.billingDate) {
+      alert('Linked account must be a Credit Card with a billing date set.');
+      return;
+    }
+
+    try {
+      // Sync the biller schedules with credit card totals
+      const syncedBiller = syncCreditCardToBillerSchedule(
+        biller,
+        linkedAccount,
+        transactions,
+        installments
+      );
+
+      // Update the biller
+      await onUpdate(syncedBiller);
+      
+      // Show success message
+      alert(`Successfully synced ${biller.name} with ${linkedAccount.bank} credit card totals!`);
+    } catch (error) {
+      console.error('Failed to sync credit card:', error);
+      alert('Failed to sync credit card totals. Please try again.');
+    }
+  };
+
   const activeBillers = billers.filter(b => b.status === 'active');
   const inactiveBillers = billers.filter(b => b.status === 'inactive');
   const detailedBiller = billers.find(b => b.id === detailedBillerId);
@@ -410,7 +456,8 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
       actDay: biller.activationDate.day || '',
       actYear: biller.activationDate.year,
       deactMonth: biller.deactivationDate?.month || '',
-      deactYear: biller.deactivationDate?.year || ''
+      deactYear: biller.deactivationDate?.year || '',
+      linkedAccountId: biller.linkedAccountId || ''
     });
     setShowEditModal(biller);
     setActiveDropdownId(null);
@@ -476,6 +523,9 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
               <div className="absolute right-0 top-full mt-2 w-48 bg-white rounded-xl shadow-xl border border-gray-100 py-2 z-[20] animate-in zoom-in-95">
                 <button onClick={() => { setDetailedBillerId(biller.id); setActiveDropdownId(null); }} className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center space-x-2"><Eye className="w-4 h-4" /><span>View Details</span></button>
                 <button onClick={() => openEditModal(biller)} className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center space-x-2"><Edit2 className="w-4 h-4" /><span>Edit Biller</span></button>
+                {biller.linkedAccountId && (
+                  <button onClick={() => { handleSyncCreditCard(biller); setActiveDropdownId(null); }} className="w-full text-left px-4 py-2 text-sm text-purple-600 hover:bg-purple-50 flex items-center space-x-2"><RefreshCw className="w-4 h-4" /><span>Sync Credit Card</span></button>
+                )}
                 <div className="border-t border-gray-100 my-1"></div>
                 <button onClick={() => handleDeleteTrigger(biller.id, biller.name)} className="w-full text-left px-4 py-2 text-sm text-red-500 hover:bg-red-50 flex items-center space-x-2"><Trash2 className="w-4 h-4" /><span>Delete</span></button>
               </div>
@@ -485,6 +535,15 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
       </div>
       <div className="space-y-2 mb-6 text-xs text-gray-500">
         <div className="flex items-center"><Calendar className="w-3.5 h-3.5 mr-2" />Due every {biller.dueDate}</div>
+        {biller.linkedAccountId && (() => {
+          const linkedAccount = accounts.find(a => a.id === biller.linkedAccountId);
+          return linkedAccount ? (
+            <div className="flex items-center text-purple-600">
+              <LinkIcon className="w-3.5 h-3.5 mr-2" />
+              Linked to {linkedAccount.bank}
+            </div>
+          ) : null;
+        })()}
       </div>
       <div className="mt-auto pt-4 border-t border-gray-50 flex items-center justify-between">
         <div className="flex flex-col"><span className="text-[10px] font-bold text-gray-400 uppercase">Expected</span><span className="text-lg font-black text-gray-900">{formatCurrency(displayAmount)}</span></div>
@@ -666,6 +725,32 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
                  </div>
                  <div><label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Due Date (day)</label><input required type="number" min="1" max="31" placeholder="e.g. 15" value={addFormData.dueDate} onChange={(e) => { setAddFormData({ ...addFormData, dueDate: e.target.value }); showTimingInfo(e.target.value); }} className="w-full bg-gray-50 border-transparent rounded-2xl p-4 outline-none font-bold" /></div>
               </div>
+
+              {/* Link to Credit Card Account */}
+              <div>
+                <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">
+                  <span className="flex items-center gap-2">
+                    <LinkIcon className="w-3.5 h-3.5" />
+                    Link to Credit Card (Optional)
+                  </span>
+                </label>
+                <select 
+                  value={addFormData.linkedAccountId} 
+                  onChange={(e) => setAddFormData({ ...addFormData, linkedAccountId: e.target.value })} 
+                  className="w-full bg-gray-50 border-transparent rounded-2xl p-4 outline-none font-bold text-sm appearance-none"
+                >
+                  <option value="">No linked account</option>
+                  {accounts
+                    .filter(acc => acc.classification === 'Credit Card' && acc.billingDate)
+                    .map(acc => (
+                      <option key={acc.id} value={acc.id}>{acc.bank}</option>
+                    ))
+                  }
+                </select>
+                <p className="text-[10px] text-gray-500 mt-2">
+                  Link this biller to a credit card to automatically sync transaction totals to payment schedules.
+                </p>
+              </div>
               
               <div className="border-t border-gray-200 pt-6">
                 <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-4">Activation Date</label>
@@ -729,6 +814,32 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
                    <input required={!editFormData.category.startsWith('Loans')} type="number" min="0" step="0.01" value={editFormData.expectedAmount} onChange={(e) => setEditFormData({ ...editFormData, expectedAmount: e.target.value })} className="w-full bg-gray-50 border-transparent rounded-2xl p-4 outline-none font-bold" />
                  </div>
                  <div><label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Due Date (day)</label><input required type="number" min="1" max="31" placeholder="e.g. 15" value={editFormData.dueDate} onChange={(e) => { setEditFormData({ ...editFormData, dueDate: e.target.value }); showTimingInfo(e.target.value); }} className="w-full bg-gray-50 border-transparent rounded-2xl p-4 outline-none font-bold" /></div>
+              </div>
+
+              {/* Link to Credit Card Account */}
+              <div>
+                <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">
+                  <span className="flex items-center gap-2">
+                    <LinkIcon className="w-3.5 h-3.5" />
+                    Link to Credit Card (Optional)
+                  </span>
+                </label>
+                <select 
+                  value={editFormData.linkedAccountId} 
+                  onChange={(e) => setEditFormData({ ...editFormData, linkedAccountId: e.target.value })} 
+                  className="w-full bg-gray-50 border-transparent rounded-2xl p-4 outline-none font-bold text-sm appearance-none"
+                >
+                  <option value="">No linked account</option>
+                  {accounts
+                    .filter(acc => acc.classification === 'Credit Card' && acc.billingDate)
+                    .map(acc => (
+                      <option key={acc.id} value={acc.id}>{acc.bank}</option>
+                    ))
+                  }
+                </select>
+                <p className="text-[10px] text-gray-500 mt-2">
+                  Link this biller to a credit card to automatically sync transaction totals to payment schedules.
+                </p>
               </div>
               
               <div className="border-t border-gray-200 pt-6">
