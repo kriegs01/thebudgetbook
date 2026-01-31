@@ -6,6 +6,7 @@ import { createBudgetSetupFrontend, updateBudgetSetupFrontend } from '../src/ser
 import { createTransaction, getAllTransactions } from '../src/services/transactionsService';
 import type { SupabaseTransaction } from '../src/types/supabase';
 import { getInstallmentPaymentSchedule, aggregateCreditCardPurchases } from '../src/utils/paymentStatus'; // PROTOTYPE: Import payment status utilities
+import { getScheduleExpectedAmount } from '../src/utils/linkedAccountUtils'; // ENHANCEMENT: Import for linked account amount calculation
 
 interface BudgetProps {
   items: BudgetItem[];
@@ -154,12 +155,34 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
           );
 
           // Remove billers that don't match the current timing
+          // ENHANCEMENT: Also update amounts for existing billers (in case of linked account changes)
           const filteredExisting = newData[cat.name].filter(item => {
             if (item.isBiller) {
               const biller = billers.find(b => b.id === item.id);
               return biller && biller.timing === selectedTiming;
             }
             return true; // Keep non-biller items
+          }).map(item => {
+            // ENHANCEMENT: Update amount for existing biller items
+            if (item.isBiller) {
+              const biller = billers.find(b => b.id === item.id);
+              if (biller) {
+                const schedule = biller.schedules.find(s => s.month === selectedMonth);
+                if (schedule) {
+                  const { amount: calculatedAmount } = getScheduleExpectedAmount(
+                    biller,
+                    schedule,
+                    accounts,
+                    transactions
+                  );
+                  return {
+                    ...item,
+                    amount: calculatedAmount.toString()
+                  };
+                }
+              }
+            }
+            return item;
           });
 
           const existingIds = new Set(filteredExisting.map(i => i.id));
@@ -167,10 +190,25 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
             .filter(b => !existingIds.has(b.id))
             .map(b => {
               const schedule = b.schedules.find(s => s.month === selectedMonth);
+              
+              // ENHANCEMENT: For linked billers, calculate amount from transactions
+              let amount: number;
+              if (schedule) {
+                const { amount: calculatedAmount } = getScheduleExpectedAmount(
+                  b,
+                  schedule,
+                  accounts,
+                  transactions
+                );
+                amount = calculatedAmount;
+              } else {
+                amount = b.expectedAmount;
+              }
+              
               return {
                 id: b.id,
                 name: b.name,
-                amount: schedule ? schedule.expectedAmount.toString() : b.expectedAmount.toString(),
+                amount: amount.toString(),
                 included: true,
                 timing: b.timing,
                 isBiller: true
