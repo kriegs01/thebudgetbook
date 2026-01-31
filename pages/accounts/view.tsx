@@ -2,16 +2,10 @@ import React, { useEffect, useState } from 'react';
 import { ArrowLeft } from 'lucide-react';
 import { useSearchParams, Link } from 'react-router-dom';
 import { Account } from '../../types';
+import { getAllTransactions } from '../../src/services/transactionsService';
+import type { SupabaseTransaction } from '../../src/types/supabase';
 
-type Transaction = {
-  id: string;
-  name: string;
-  date: string; // ISO string
-  amount: number;
-  paymentMethodId: string;
-};
-
-type AccountMeta = { bank?: string };
+type Transaction = SupabaseTransaction;
 
 const formatCurrency = (val: number) =>
   new Intl.NumberFormat('en-PH', {
@@ -30,35 +24,42 @@ const AccountFilteredTransactions: React.FC<AccountFilteredTransactionsProps> = 
   const accountId = searchParams.get("account") || searchParams.get("id");
   const [accountName, setAccountName] = useState<string>("Account");
   const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [loading, setLoading] = useState<boolean>(true);
 
   useEffect(() => {
-    if (typeof window === "undefined") return;
-    
-    // Fetch all transactions and filter to this account
-    const txRaw = localStorage.getItem('transactions');
-    let allTx: Transaction[] = [];
-    if (txRaw) {
-      try { allTx = JSON.parse(txRaw); } catch {}
-    }
-    const filtered = accountId ? allTx.filter(tx => tx.paymentMethodId === accountId) : [];
-    setTransactions(filtered);
+    const loadData = async () => {
+      if (typeof window === "undefined") return;
+      
+      setLoading(true);
+      
+      // Fetch all transactions from Supabase and filter to this account
+      let allTx: Transaction[] = [];
+      try {
+        const { data, error } = await getAllTransactions();
+        if (error) {
+          console.error('[AccountView] Failed to load transactions:', error);
+        } else if (data) {
+          allTx = data;
+        }
+      } catch (error) {
+        console.error('[AccountView] Error loading transactions:', error);
+      }
+      
+      const filtered = accountId ? allTx.filter(tx => tx.payment_method_id === accountId) : [];
+      setTransactions(filtered);
 
-    // Get account name from the passed accounts prop
-    if (accountId) {
-      const account = accounts.find(a => a.id === accountId);
-      if (account) {
-        setAccountName(account.bank);
-      } else {
-        // Fallback to localStorage if not found in accounts prop
-        const metaRaw = localStorage.getItem(`account_meta_${accountId}`);
-        if (metaRaw) {
-          try {
-            const meta: AccountMeta = JSON.parse(metaRaw);
-            if (meta.bank) setAccountName(meta.bank);
-          } catch {}
+      // Get account name from the passed accounts prop
+      if (accountId) {
+        const account = accounts.find(a => a.id === accountId);
+        if (account) {
+          setAccountName(account.bank);
         }
       }
-    }
+      
+      setLoading(false);
+    };
+    
+    loadData();
   }, [accountId, accounts]);
 
   return (
@@ -75,7 +76,9 @@ const AccountFilteredTransactions: React.FC<AccountFilteredTransactionsProps> = 
         <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
           <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
             <h2 className="text-sm font-bold uppercase text-gray-600 tracking-widest">Transactions</h2>
-            <div className="text-sm text-gray-500">{transactions.length} items</div>
+            <div className="text-sm text-gray-500">
+              {loading ? 'Loading...' : `${transactions.length} items`}
+            </div>
           </div>
           <div className="p-4">
             <div className="w-full overflow-x-auto">
@@ -88,19 +91,29 @@ const AccountFilteredTransactions: React.FC<AccountFilteredTransactionsProps> = 
                   </tr>
                 </thead>
                 <tbody>
-                  {transactions.map(tx => (
-                    <tr key={tx.id} className="border-t border-gray-100">
-                      <td className="px-4 py-3"><div className="text-sm font-medium text-gray-900">{tx.name}</div></td>
-                      <td className="px-4 py-3"><div className="text-sm text-gray-500">{new Date(tx.date).toLocaleDateString()}</div></td>
-                      <td className="px-4 py-3">
-                        <div className={`text-sm font-semibold ${tx.amount < 0 ? 'text-red-600' : 'text-green-600'}`}>
-                          {formatCurrency(tx.amount)}
-                        </div>
+                  {loading ? (
+                    <tr>
+                      <td colSpan={3} className="px-4 py-6 text-center text-gray-400">
+                        Loading transactions...
                       </td>
                     </tr>
-                  ))}
-                  {transactions.length === 0 && (
-                    <tr><td colSpan={3} className="px-4 py-6 text-center text-gray-400">No transactions for this account.</td></tr>
+                  ) : (
+                    <>
+                      {transactions.map(tx => (
+                        <tr key={tx.id} className="border-t border-gray-100">
+                          <td className="px-4 py-3"><div className="text-sm font-medium text-gray-900">{tx.name}</div></td>
+                          <td className="px-4 py-3"><div className="text-sm text-gray-500">{new Date(tx.date).toLocaleDateString()}</div></td>
+                          <td className="px-4 py-3">
+                            <div className={`text-sm font-semibold ${tx.amount < 0 ? 'text-red-600' : 'text-green-600'}`}>
+                              {formatCurrency(tx.amount)}
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                      {transactions.length === 0 && (
+                        <tr><td colSpan={3} className="px-4 py-6 text-center text-gray-400">No transactions for this account.</td></tr>
+                      )}
+                    </>
                   )}
                 </tbody>
               </table>

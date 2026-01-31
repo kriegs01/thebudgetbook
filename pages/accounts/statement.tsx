@@ -2,14 +2,10 @@ import React, { useEffect, useState } from 'react';
 import { ArrowLeft, Calendar, CreditCard } from 'lucide-react';
 import { useSearchParams, Link } from 'react-router-dom';
 import { Account } from '../../types';
+import { getAllTransactions } from '../../src/services/transactionsService';
+import type { SupabaseTransaction } from '../../src/types/supabase';
 
-type Transaction = {
-  id: string;
-  name: string;
-  date: string; // ISO string
-  amount: number;
-  paymentMethodId: string;
-};
+type Transaction = SupabaseTransaction;
 
 type BillingCycle = {
   startDate: Date;
@@ -97,54 +93,67 @@ const StatementPage: React.FC<StatementPageProps> = ({ accounts }) => {
   const [account, setAccount] = useState<Account | null>(null);
   const [cycles, setCycles] = useState<BillingCycle[]>([]);
   const [selectedCycleIndex, setSelectedCycleIndex] = useState<number>(0);
+  const [loading, setLoading] = useState<boolean>(true);
 
   useEffect(() => {
-    if (!accountId) return;
-    
-    // Find the account
-    const acc = accounts.find(a => a.id === accountId);
-    if (!acc || acc.type !== 'Credit') return;
-    
-    setAccount(acc);
-    
-    // Get billing date
-    const billingDate = acc.billingDate;
-    if (!billingDate) {
-      // No billing date set, can't calculate cycles
-      return;
-    }
-    
-    // Calculate billing cycles
-    const cycleData = calculateBillingCycles(billingDate, 6);
-    
-    // Get all transactions for this account
-    const txRaw = localStorage.getItem('transactions');
-    let allTx: Transaction[] = [];
-    if (txRaw) {
-      try {
-        allTx = JSON.parse(txRaw);
-      } catch (error) {
-        console.error('Failed to parse transactions from localStorage:', error);
-      }
-    }
-    
-    const accountTransactions = allTx.filter(tx => tx.paymentMethodId === accountId);
-    
-    // Group transactions by cycle
-    const billingCycles: BillingCycle[] = cycleData.map((cycle, index) => {
-      const cycleTxs = accountTransactions.filter(tx => 
-        isInCycle(tx, cycle.startDate, cycle.endDate)
-      );
+    const loadData = async () => {
+      if (!accountId) return;
       
-      return {
-        startDate: cycle.startDate,
-        endDate: cycle.endDate,
-        label: formatDateRange(cycle.startDate, cycle.endDate),
-        transactions: cycleTxs
-      };
-    });
-    
-    setCycles(billingCycles);
+      setLoading(true);
+      
+      // Find the account
+      const acc = accounts.find(a => a.id === accountId);
+      if (!acc || acc.type !== 'Credit') {
+        setLoading(false);
+        return;
+      }
+      
+      setAccount(acc);
+      
+      // Get billing date
+      const billingDate = acc.billingDate;
+      if (!billingDate) {
+        setLoading(false);
+        return;
+      }
+      
+      // Calculate billing cycles
+      const cycleData = calculateBillingCycles(billingDate, 6);
+      
+      // Get all transactions for this account from Supabase
+      let allTx: Transaction[] = [];
+      try {
+        const { data, error } = await getAllTransactions();
+        if (error) {
+          console.error('[Statement] Failed to load transactions:', error);
+        } else if (data) {
+          allTx = data;
+        }
+      } catch (error) {
+        console.error('[Statement] Error loading transactions:', error);
+      }
+      
+      const accountTransactions = allTx.filter(tx => tx.payment_method_id === accountId);
+      
+      // Group transactions by cycle
+      const billingCycles: BillingCycle[] = cycleData.map((cycle, index) => {
+        const cycleTxs = accountTransactions.filter(tx => 
+          isInCycle(tx, cycle.startDate, cycle.endDate)
+        );
+        
+        return {
+          startDate: cycle.startDate,
+          endDate: cycle.endDate,
+          label: formatDateRange(cycle.startDate, cycle.endDate),
+          transactions: cycleTxs
+        };
+      });
+      
+      setCycles(billingCycles);
+      setLoading(false);
+    };
+
+    loadData();
   }, [accountId, accounts]);
 
   if (!accountId || !account) {
@@ -152,10 +161,16 @@ const StatementPage: React.FC<StatementPageProps> = ({ accounts }) => {
       <div className="min-h-screen bg-gray-50 p-8">
         <div className="max-w-4xl mx-auto">
           <div className="bg-white rounded-2xl shadow-sm p-8 text-center">
-            <p className="text-gray-500">Account not found or not a credit account.</p>
-            <Link to="/accounts" className="mt-4 inline-block text-indigo-600 hover:text-indigo-700">
-              Return to Accounts
-            </Link>
+            {loading ? (
+              <p className="text-gray-500">Loading...</p>
+            ) : (
+              <>
+                <p className="text-gray-500">Account not found or not a credit account.</p>
+                <Link to="/accounts" className="mt-4 inline-block text-indigo-600 hover:text-indigo-700">
+                  Return to Accounts
+                </Link>
+              </>
+            )}
           </div>
         </div>
       </div>
