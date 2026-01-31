@@ -5,7 +5,7 @@ import { Plus, Check, ChevronDown, Trash2, Save, FileText, ArrowRight, Upload, C
 import { createBudgetSetupFrontend, updateBudgetSetupFrontend } from '../src/services/budgetSetupsService';
 import { createTransaction, getAllTransactions } from '../src/services/transactionsService';
 import type { SupabaseTransaction } from '../src/types/supabase';
-import { getInstallmentPaymentSchedule } from '../src/utils/paymentStatus'; // PROTOTYPE: Import payment status utilities
+import { getInstallmentPaymentSchedule, aggregateCreditCardPurchases } from '../src/utils/paymentStatus'; // PROTOTYPE: Import payment status utilities
 
 interface BudgetProps {
   items: BudgetItem[];
@@ -1211,6 +1211,102 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
             </div>
           );
         })}
+
+        {/* PROTOTYPE: Credit Card Regular Purchases Section */}
+        {(() => {
+          // Get all credit card accounts
+          const creditCardAccounts = accounts.filter(acc => acc.classification === 'Credit Card' && acc.billingDate);
+          
+          if (creditCardAccounts.length === 0) return null;
+          
+          // Aggregate purchases for each credit card for the selected month
+          const monthIndex = MONTHS.indexOf(selectedMonth);
+          const currentYear = new Date().getFullYear();
+          
+          return creditCardAccounts.map(account => {
+            const cycleSummaries = aggregateCreditCardPurchases(account, transactions, installments);
+            
+            // Find the cycle that contains the selected month
+            const relevantCycle = cycleSummaries.find(cycle => {
+              const cycleMonth = cycle.cycleStart.getMonth();
+              const cycleYear = cycle.cycleStart.getFullYear();
+              // Match if cycle overlaps with selected month
+              return (cycleMonth === monthIndex && cycleYear === currentYear) ||
+                     (cycle.cycleEnd.getMonth() === monthIndex && cycle.cycleEnd.getFullYear() === currentYear);
+            });
+            
+            if (!relevantCycle || relevantCycle.transactionCount === 0) return null;
+            
+            return (
+              <div key={`cc-${account.id}`} className="bg-white rounded-[3rem] shadow-sm border border-gray-100 overflow-hidden w-full">
+                <div className="p-8 border-b border-gray-50 bg-gray-50/30 flex justify-between items-center">
+                  <div>
+                    <h3 className="text-xs font-black text-gray-900 uppercase tracking-[0.25em]">Credit Card Purchases</h3>
+                    <p className="text-[10px] text-gray-500 font-medium mt-1">{account.bank} • {relevantCycle.cycleLabel}</p>
+                  </div>
+                  <span className="text-lg font-black text-purple-600">{formatCurrency(relevantCycle.totalAmount)}</span>
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left">
+                    <thead>
+                      <tr className="text-[10px] font-black text-gray-400 uppercase border-b border-gray-50">
+                        <th className="p-4 pl-10">Transaction</th>
+                        <th className="p-4">Date</th>
+                        <th className="p-4">Amount</th>
+                        <th className="p-4 pr-10 text-right"></th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-50">
+                      {relevantCycle.transactions.map((tx) => (
+                        <tr key={tx.id} className="bg-purple-50/20">
+                          <td className="p-4 pl-10">
+                            <span className="text-sm font-bold text-gray-900">{tx.name}</span>
+                          </td>
+                          <td className="p-4">
+                            <span className="text-xs text-gray-500 font-medium">
+                              {new Date(tx.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                            </span>
+                          </td>
+                          <td className="p-4">
+                            <div className="flex items-center space-x-1">
+                              <span className="text-gray-400 font-bold">₱</span>
+                              <span className="text-sm font-black">{formatCurrency(tx.amount).replace('₱', '')}</span>
+                            </div>
+                          </td>
+                          <td className="p-4 pr-10 text-right">
+                            <span className="text-[9px] font-medium text-gray-400 uppercase tracking-widest">Auto-tracked</span>
+                          </td>
+                        </tr>
+                      ))}
+                      <tr className="bg-purple-100/30">
+                        <td colSpan={2} className="p-4 pl-10 text-xs font-black text-gray-700 uppercase">
+                          Total Regular Purchases
+                        </td>
+                        <td className="p-4">
+                          <div className="flex items-center space-x-1">
+                            <span className="text-gray-400 font-bold">₱</span>
+                            <span className="text-sm font-black text-purple-600">{formatCurrency(relevantCycle.totalAmount).replace('₱', '')}</span>
+                          </div>
+                        </td>
+                        <td className="p-4 pr-10 text-right">
+                          <span className="text-[9px] font-bold text-purple-600 uppercase tracking-widest">
+                            {relevantCycle.transactionCount} txn(s)
+                          </span>
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                  <div className="p-4 border-t border-gray-50 bg-gray-50/50">
+                    <p className="text-[10px] text-gray-500 font-medium text-center">
+                      <span className="font-bold">PROTOTYPE:</span> Regular credit card purchases are auto-aggregated from transactions. 
+                      Excludes installment payments.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            );
+          });
+        })()}
 
         {/* Remaining categories (excluding Fixed, Utilities, Loans, Subscriptions, Purchases) - keep in grid if needed */}
         {categories.filter(cat => !['Fixed', 'Utilities', 'Loans', 'Subscriptions', 'Purchases'].includes(cat.name)).length > 0 && (
