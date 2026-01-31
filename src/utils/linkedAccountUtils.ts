@@ -50,8 +50,12 @@ export const getLinkedAccount = (
  * ENHANCEMENT: Core function that calculates the amount from transaction history
  * using the credit account's billing cycle window (not calendar month)
  * 
+ * FIX: Cycles are now mapped by END DATE (cutoff/statement date).
+ * For example, if schedule.month is "January", this will fetch the billing cycle
+ * whose END DATE falls in January (e.g., Dec 13 – Jan 11).
+ * 
  * @param biller - The biller with linked account
- * @param schedule - The payment schedule (month/year)
+ * @param schedule - The payment schedule (month/year) - refers to the cutoff month
  * @param account - The linked credit account
  * @param transactions - All transactions for the account
  * @returns The calculated amount, or null if cannot calculate
@@ -97,7 +101,11 @@ export const calculateLinkedAccountAmount = (
  * ENHANCEMENT: Generates a display label showing the actual billing cycle dates
  * instead of just the month name (e.g., "Jan 12 – Feb 11, 2026" instead of "January 2026")
  * 
- * @param schedule - The payment schedule
+ * FIX: The cycle is now determined by END DATE mapping. For example, if schedule.month
+ * is "February", this returns the cycle whose END DATE is in February (e.g., "Jan 12 – Feb 11, 2026").
+ * This clearly shows which transactions (from Jan 12 to Feb 11) are included in the "February" bill.
+ * 
+ * @param schedule - The payment schedule (month refers to cutoff/statement month)
  * @param account - The linked credit account (optional)
  * @returns Display label with cycle dates if account available, otherwise month/year
  */
@@ -179,6 +187,13 @@ export const getScheduleExpectedAmount = (
     isFromLinkedAccount: true
   };
 };
+
+
+// CHANGELOG: Billing Cycle-to-Month Mapping Fix
+// - Updated calculateLinkedAccountAmount() and getScheduleDisplayLabel() documentation
+// - Both functions now use END DATE (cutoff/statement date) mapping via getCycleForMonth()
+// - Schedule month names now refer to the cutoff/statement month, not the start month
+// - Example: "February" schedule displays the cycle ending in February (e.g., Jan 12 – Feb 11)
 
 // TODO: Future enhancements
 // - Add caching for calculated amounts to improve performance
