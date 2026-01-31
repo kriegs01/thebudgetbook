@@ -3,7 +3,8 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { BudgetItem, Account, Biller, PaymentSchedule, CategorizedSetupItem, SavedBudgetSetup, BudgetCategory } from '../types';
 import { Plus, Check, ChevronDown, Trash2, Save, FileText, ArrowRight, Upload, CheckCircle2, X, AlertTriangle } from 'lucide-react';
 import { createBudgetSetupFrontend, updateBudgetSetupFrontend } from '../src/services/budgetSetupsService';
-import { createTransaction } from '../src/services/transactionsService';
+import { createTransaction, getAllTransactions } from '../src/services/transactionsService';
+import type { SupabaseTransaction } from '../src/types/supabase';
 
 interface BudgetProps {
   items: BudgetItem[];
@@ -38,6 +39,9 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
   const [projectedSalary, setProjectedSalary] = useState<string>('11000');
   const [actualSalary, setActualSalary] = useState<string>('');
 
+  // Transactions state - used for matching payments
+  const [transactions, setTransactions] = useState<SupabaseTransaction[]>([]);
+
   // Load from saved setup when month/timing changes
   useEffect(() => {
     const existingSetup = savedSetups.find(s => s.month === selectedMonth && s.timing === selectedTiming);
@@ -59,6 +63,25 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
       setActualSalary('');
     }
   }, [selectedMonth, selectedTiming, savedSetups]);
+
+  // Load transactions for matching payment status
+  useEffect(() => {
+    const loadTransactions = async () => {
+      try {
+        const { data, error } = await getAllTransactions();
+        if (error) {
+          console.error('[Budget] Failed to load transactions:', error);
+        } else if (data) {
+          setTransactions(data);
+          console.log('[Budget] Loaded transactions:', data.length);
+        }
+      } catch (error) {
+        console.error('[Budget] Error loading transactions:', error);
+      }
+    };
+
+    loadTransactions();
+  }, [selectedMonth, selectedTiming]); // Reload when month/timing changes
 
   // Autosave State
   const [autoSaveStatus, setAutoSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
@@ -151,6 +174,75 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
       maximumFractionDigits: 2 
     }).format(val);
   };
+
+  /**
+   * Check if an item is paid by matching transactions
+   * Matches by name, amount (within tolerance), and date (within month)
+   */
+  const checkIfPaidByTransaction = useCallback((
+    itemName: string, 
+    itemAmount: string | number, 
+    month: string
+  ): boolean => {
+    const amount = typeof itemAmount === 'string' ? parseFloat(itemAmount) : itemAmount;
+    if (isNaN(amount) || amount <= 0) return false;
+
+    // Get month index (0-11) for date comparison
+    const monthIndex = MONTHS.indexOf(month);
+    if (monthIndex === -1) return false;
+
+    // Define tolerance for amount matching (1 peso)
+    const AMOUNT_TOLERANCE = 1;
+
+    // Find matching transaction
+    const matchingTransaction = transactions.find(tx => {
+      // Check name match (case-insensitive, contains)
+      const nameMatch = tx.name.toLowerCase().includes(itemName.toLowerCase()) ||
+                        itemName.toLowerCase().includes(tx.name.toLowerCase());
+      
+      // Check amount match (within tolerance)
+      const amountMatch = Math.abs(tx.amount - amount) <= AMOUNT_TOLERANCE;
+      
+      // Check date match (same month and year)
+      const txDate = new Date(tx.date);
+      const txMonth = txDate.getMonth();
+      const currentYear = new Date().getFullYear();
+      const txYear = txDate.getFullYear();
+      
+      // Match if transaction is in the selected month of current or previous year
+      const dateMatch = (txMonth === monthIndex) && 
+                       (txYear === currentYear || txYear === currentYear - 1);
+
+      return nameMatch && amountMatch && dateMatch;
+    });
+
+    if (matchingTransaction) {
+      console.log(`[Budget] Found matching transaction for "${itemName}":`, {
+        txName: matchingTransaction.name,
+        txAmount: matchingTransaction.amount,
+        txDate: matchingTransaction.date
+      });
+    }
+
+    return !!matchingTransaction;
+  }, [transactions]);
+
+  /**
+   * Reload transactions from Supabase
+   */
+  const reloadTransactions = useCallback(async () => {
+    try {
+      const { data, error } = await getAllTransactions();
+      if (error) {
+        console.error('[Budget] Failed to reload transactions:', error);
+      } else if (data) {
+        setTransactions(data);
+        console.log('[Budget] Reloaded transactions:', data.length);
+      }
+    } catch (error) {
+      console.error('[Budget] Error reloading transactions:', error);
+    }
+  }, []);
 
   /**
    * Auto-save budget setup with debouncing
@@ -472,6 +564,9 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
       
       console.log('[Budget] Transaction saved successfully:', data);
       
+      // Reload transactions to update paid status
+      await reloadTransactions();
+      
       // Close the modal
       setShowTransactionModal(false);
     } catch (e) {
@@ -522,6 +617,9 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
       
       console.log('[Budget] Updating biller with new schedule');
       await onUpdateBiller({ ...biller, schedules: updatedSchedules });
+      
+      // Reload transactions to update paid status
+      await reloadTransactions();
       
       // Explicitly reload billers to ensure UI updates
       if (onReloadBillers) {
@@ -928,10 +1026,16 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                     {items.length > 0 ? items.map((item) => {
                       let isPaid = false, linkedBiller, schedule;
                       const isBiller = item.isBiller || billers.some(b => b.id === item.id);
+                      
                       if (isBiller) {
                         linkedBiller = billers.find(b => b.id === item.id);
                         schedule = linkedBiller?.schedules.find(s => s.month === selectedMonth);
-                        isPaid = !!schedule?.amountPaid;
+                        // Check both biller schedule and transaction matching
+                        isPaid = !!schedule?.amountPaid || 
+                                 checkIfPaidByTransaction(item.name, item.amount, selectedMonth);
+                      } else {
+                        // For non-biller items (like Purchases), only check transactions
+                        isPaid = checkIfPaidByTransaction(item.name, item.amount, selectedMonth);
                       }
                       return (
                         <tr key={item.id} className={`${item.included ? 'bg-white' : 'bg-gray-50 opacity-60'}`}>
@@ -1013,10 +1117,16 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                         {items.map((item) => {
                           let isPaid = false, linkedBiller, schedule;
                           const isBiller = item.isBiller || billers.some(b => b.id === item.id);
+                          
                           if (isBiller) {
                             linkedBiller = billers.find(b => b.id === item.id);
                             schedule = linkedBiller?.schedules.find(s => s.month === selectedMonth);
-                            isPaid = !!schedule?.amountPaid;
+                            // Check both biller schedule and transaction matching
+                            isPaid = !!schedule?.amountPaid || 
+                                     checkIfPaidByTransaction(item.name, item.amount, selectedMonth);
+                          } else {
+                            // For non-biller items, only check transactions
+                            isPaid = checkIfPaidByTransaction(item.name, item.amount, selectedMonth);
                           }
                           return (
                             <tr key={item.id} className={`${item.included ? 'bg-white' : 'bg-gray-50 opacity-60'}`}>
