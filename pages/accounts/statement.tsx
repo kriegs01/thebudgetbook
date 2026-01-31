@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { ArrowLeft, Calendar, CreditCard } from 'lucide-react';
 import { useSearchParams, Link } from 'react-router-dom';
 import { Account } from '../../types';
+import { getAllTransactions } from '../../src/services/transactionsService';
 
 type Transaction = {
   id: string;
@@ -99,52 +100,61 @@ const StatementPage: React.FC<StatementPageProps> = ({ accounts }) => {
   const [selectedCycleIndex, setSelectedCycleIndex] = useState<number>(0);
 
   useEffect(() => {
-    if (!accountId) return;
-    
-    // Find the account
-    const acc = accounts.find(a => a.id === accountId);
-    if (!acc || acc.type !== 'Credit') return;
-    
-    setAccount(acc);
-    
-    // Get billing date
-    const billingDate = acc.billingDate;
-    if (!billingDate) {
-      // No billing date set, can't calculate cycles
-      return;
-    }
-    
-    // Calculate billing cycles
-    const cycleData = calculateBillingCycles(billingDate, 6);
-    
-    // Get all transactions for this account
-    const txRaw = localStorage.getItem('transactions');
-    let allTx: Transaction[] = [];
-    if (txRaw) {
-      try {
-        allTx = JSON.parse(txRaw);
-      } catch (error) {
-        console.error('Failed to parse transactions from localStorage:', error);
-      }
-    }
-    
-    const accountTransactions = allTx.filter(tx => tx.paymentMethodId === accountId);
-    
-    // Group transactions by cycle
-    const billingCycles: BillingCycle[] = cycleData.map((cycle, index) => {
-      const cycleTxs = accountTransactions.filter(tx => 
-        isInCycle(tx, cycle.startDate, cycle.endDate)
-      );
+    const loadAccountAndTransactions = async () => {
+      if (!accountId) return;
       
-      return {
-        startDate: cycle.startDate,
-        endDate: cycle.endDate,
-        label: formatDateRange(cycle.startDate, cycle.endDate),
-        transactions: cycleTxs
-      };
-    });
+      // Find the account
+      const acc = accounts.find(a => a.id === accountId);
+      if (!acc || acc.type !== 'Credit') return;
+      
+      setAccount(acc);
+      
+      // Get billing date
+      const billingDate = acc.billingDate;
+      if (!billingDate) {
+        // No billing date set, can't calculate cycles
+        return;
+      }
+      
+      // Calculate billing cycles
+      const cycleData = calculateBillingCycles(billingDate, 6);
+      
+      // Load all transactions from Supabase
+      const { data: transactionsData, error } = await getAllTransactions();
+      if (error) {
+        console.error('[StatementPage] Failed to load transactions:', error);
+        return;
+      }
+      
+      // Convert to local Transaction type and filter by account
+      const allTx: Transaction[] = transactionsData?.map(t => ({
+        id: t.id,
+        name: t.name,
+        date: t.date,
+        amount: t.amount,
+        paymentMethodId: t.payment_method_id
+      })) || [];
+      
+      const accountTransactions = allTx.filter(tx => tx.paymentMethodId === accountId);
+      
+      // Group transactions by cycle
+      const billingCycles: BillingCycle[] = cycleData.map((cycle, index) => {
+        const cycleTxs = accountTransactions.filter(tx => 
+          isInCycle(tx, cycle.startDate, cycle.endDate)
+        );
+        
+        return {
+          startDate: cycle.startDate,
+          endDate: cycle.endDate,
+          label: formatDateRange(cycle.startDate, cycle.endDate),
+          transactions: cycleTxs
+        };
+      });
+      
+      setCycles(billingCycles);
+    };
     
-    setCycles(billingCycles);
+    loadAccountAndTransactions();
   }, [accountId, accounts]);
 
   if (!accountId || !account) {

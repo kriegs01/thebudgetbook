@@ -74,7 +74,7 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
   }, [selectedMonth, selectedTiming, savedSetups]);
 
   // Load transactions for matching payment status
-  // Only loads once on mount to avoid excessive DB queries
+  // Loads on mount and reloads when window regains focus
   useEffect(() => {
     const loadTransactions = async () => {
       try {
@@ -99,8 +99,21 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
       }
     };
 
+    // Load on mount
     loadTransactions();
-  }, []); // Load once on mount, reload happens after creating transactions
+    
+    // Reload when window regains focus (e.g., after navigating back from Transactions page)
+    const handleFocus = () => {
+      console.log('[Budget] Window focused, reloading transactions...');
+      loadTransactions();
+    };
+    
+    window.addEventListener('focus', handleFocus);
+    
+    return () => {
+      window.removeEventListener('focus', handleFocus);
+    };
+  }, []); // Load once on mount and set up focus listener
 
   // Autosave State
   const [autoSaveStatus, setAutoSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
@@ -269,8 +282,17 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
       if (error) {
         console.error('[Budget] Failed to reload transactions:', error);
       } else if (data) {
-        setTransactions(data);
-        console.log('[Budget] Reloaded transactions:', data.length);
+        // Filter transactions to last 24 months to improve performance (consistent with initial load)
+        const twoYearsAgo = new Date();
+        twoYearsAgo.setFullYear(twoYearsAgo.getFullYear() - 2);
+        
+        const recentTransactions = data.filter(tx => {
+          const txDate = new Date(tx.date);
+          return txDate >= twoYearsAgo;
+        });
+        
+        setTransactions(recentTransactions);
+        console.log('[Budget] Reloaded transactions:', recentTransactions.length, 'of', data.length);
       }
     } catch (error) {
       console.error('[Budget] Error reloading transactions:', error);
