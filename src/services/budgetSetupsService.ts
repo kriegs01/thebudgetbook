@@ -39,7 +39,55 @@ const supabaseBudgetSetupToFrontend = (setup: SupabaseBudgetSetup): SavedBudgetS
 };
 
 /**
- * Convert frontend budget setup to Supabase format
+ * Validate that a value is a plain object (not an array or null)
+ */
+const isPlainObject = (value: any): boolean => {
+  return value !== null && typeof value === 'object' && !Array.isArray(value);
+};
+
+/**
+ * Validate setupData structure
+ * Ensures it's an object containing arrays of items, not a stringified JSON or malformed data
+ */
+const validateSetupData = (data: any): { valid: boolean; error?: string } => {
+  // Check if data is an object
+  if (!isPlainObject(data)) {
+    return { 
+      valid: false, 
+      error: `setupData must be a plain object, got: ${typeof data} ${Array.isArray(data) ? '(array)' : ''}`
+    };
+  }
+
+  // Check each category contains an array
+  for (const [key, value] of Object.entries(data)) {
+    // Skip special fields like _projectedSalary and _actualSalary
+    if (key.startsWith('_')) {
+      continue;
+    }
+
+    if (!Array.isArray(value)) {
+      return { 
+        valid: false, 
+        error: `Category "${key}" must be an array, got: ${typeof value}`
+      };
+    }
+
+    // Validate each item in the array is an object
+    for (const item of value as any[]) {
+      if (!isPlainObject(item)) {
+        return { 
+          valid: false, 
+          error: `Item in category "${key}" must be an object, got: ${typeof item}`
+        };
+      }
+    }
+  }
+
+  return { valid: true };
+};
+
+/**
+ * Convert frontend budget setup to Supabase format with validation
  */
 const frontendBudgetSetupToSupabase = (setup: Partial<SavedBudgetSetup>): Partial<CreateBudgetSetupInput> => {
   const supabaseSetup: Partial<CreateBudgetSetupInput> = {};
@@ -48,7 +96,24 @@ const frontendBudgetSetupToSupabase = (setup: Partial<SavedBudgetSetup>): Partia
   if (setup.timing !== undefined) supabaseSetup.timing = setup.timing;
   if (setup.status !== undefined) supabaseSetup.status = setup.status;
   if (setup.totalAmount !== undefined) supabaseSetup.total_amount = setup.totalAmount;
-  if (setup.data !== undefined) supabaseSetup.data = setup.data;
+  
+  // Validate and log data field
+  if (setup.data !== undefined) {
+    console.log('[budgetSetupsService] Converting setup data to Supabase format');
+    console.log('[budgetSetupsService] Data type:', typeof setup.data);
+    console.log('[budgetSetupsService] Is array:', Array.isArray(setup.data));
+    console.log('[budgetSetupsService] Data keys:', Object.keys(setup.data));
+    
+    // Validate data structure
+    const validation = validateSetupData(setup.data);
+    if (!validation.valid) {
+      console.error('[budgetSetupsService] Invalid setupData structure:', validation.error);
+      throw new Error(`Invalid setupData structure: ${validation.error}`);
+    }
+    
+    supabaseSetup.data = setup.data;
+    console.log('[budgetSetupsService] Data validation passed');
+  }
   
   return supabaseSetup;
 };
@@ -115,6 +180,16 @@ export const getBudgetSetupsByMonthAndTiming = async (month: string, timing: str
  */
 export const createBudgetSetup = async (setup: CreateBudgetSetupInput) => {
   try {
+    console.log('[budgetSetupsService] Creating budget setup');
+    console.log('[budgetSetupsService] Setup payload:', JSON.stringify({
+      month: setup.month,
+      timing: setup.timing,
+      status: setup.status,
+      total_amount: setup.total_amount,
+      data_type: typeof setup.data,
+      data_keys: setup.data ? Object.keys(setup.data) : [],
+    }, null, 2));
+    
     const { data, error } = await supabase
       .from('budget_setups')
       .insert([setup])
@@ -122,9 +197,21 @@ export const createBudgetSetup = async (setup: CreateBudgetSetupInput) => {
       .single();
 
     if (error) throw error;
+    
+    console.log('[budgetSetupsService] Budget setup created successfully');
+    console.log('[budgetSetupsService] Created record:', JSON.stringify({
+      id: data.id,
+      month: data.month,
+      timing: data.timing,
+      status: data.status,
+      total_amount: data.total_amount,
+      data_type: typeof data.data,
+      data_keys: data.data ? Object.keys(data.data) : [],
+    }, null, 2));
+    
     return { data, error: null };
   } catch (error) {
-    console.error('Error creating budget setup:', error);
+    console.error('[budgetSetupsService] Error creating budget setup:', error);
     return { data: null, error };
   }
 };
@@ -134,6 +221,16 @@ export const createBudgetSetup = async (setup: CreateBudgetSetupInput) => {
  */
 export const updateBudgetSetup = async (id: string, updates: UpdateBudgetSetupInput) => {
   try {
+    console.log('[budgetSetupsService] Updating budget setup:', id);
+    console.log('[budgetSetupsService] Update payload:', JSON.stringify({
+      month: updates.month,
+      timing: updates.timing,
+      status: updates.status,
+      total_amount: updates.total_amount,
+      data_type: typeof updates.data,
+      data_keys: updates.data ? Object.keys(updates.data) : [],
+    }, null, 2));
+    
     const { data, error } = await supabase
       .from('budget_setups')
       .update(updates)
@@ -142,9 +239,21 @@ export const updateBudgetSetup = async (id: string, updates: UpdateBudgetSetupIn
       .single();
 
     if (error) throw error;
+    
+    console.log('[budgetSetupsService] Budget setup updated successfully');
+    console.log('[budgetSetupsService] Updated record:', JSON.stringify({
+      id: data.id,
+      month: data.month,
+      timing: data.timing,
+      status: data.status,
+      total_amount: data.total_amount,
+      data_type: typeof data.data,
+      data_keys: data.data ? Object.keys(data.data) : [],
+    }, null, 2));
+    
     return { data, error: null };
   } catch (error) {
-    console.error('Error updating budget setup:', error);
+    console.error('[budgetSetupsService] Error updating budget setup:', error);
     return { data: null, error };
   }
 };
