@@ -27,6 +27,10 @@ export const supabaseInstallmentToFrontend = (supabaseInstallment: SupabaseInsta
     paidAmount: supabaseInstallment.paid_amount,
     accountId: supabaseInstallment.account_id,
     startDate: startDateFormatted,
+    // PROTOTYPE: Handle timing field conversion
+    timing: (supabaseInstallment.timing === '1/2' || supabaseInstallment.timing === '2/2') 
+      ? supabaseInstallment.timing 
+      : undefined,
   };
 };
 
@@ -52,6 +56,8 @@ export const frontendInstallmentToSupabase = (installment: Installment): Omit<Su
     paid_amount: installment.paidAmount,
     account_id: installment.accountId,
     start_date: startDateFormatted,
+    // PROTOTYPE: Include timing field if set
+    timing: installment.timing || null,
   };
 };
 

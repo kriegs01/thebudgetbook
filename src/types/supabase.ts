@@ -41,6 +41,7 @@ export interface SupabaseInstallment {
   paid_amount: number; // numeric
   account_id: string; // uuid
   start_date: string | null; // date, nullable
+  timing: string | null; // PROTOTYPE: '1/2' or '2/2' - payment timing within month
 }
 
 export interface SupabaseSavings {

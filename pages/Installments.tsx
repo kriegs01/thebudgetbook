@@ -35,11 +35,11 @@ const Installments: React.FC<InstallmentsProps> = ({ installments, accounts, bil
   });
   
   const [formData, setFormData] = useState({ 
-    name: '', totalAmount: '', monthlyAmount: '', termDuration: '', paidAmount: '', accountId: accounts[0]?.id || '', startDate: '', billerId: ''
+    name: '', totalAmount: '', monthlyAmount: '', termDuration: '', paidAmount: '', accountId: accounts[0]?.id || '', startDate: '', billerId: '', timing: '1/2' as '1/2' | '2/2'
   });
 
   const [editFormData, setEditFormData] = useState({ 
-    name: '', totalAmount: '', monthlyAmount: '', termDuration: '', paidAmount: '', accountId: '', startDate: '', billerId: ''
+    name: '', totalAmount: '', monthlyAmount: '', termDuration: '', paidAmount: '', accountId: '', startDate: '', billerId: '', timing: '1/2' as '1/2' | '2/2'
   });
 
   const [payFormData, setPayFormData] = useState({
@@ -73,12 +73,20 @@ const Installments: React.FC<InstallmentsProps> = ({ installments, accounts, bil
         paidAmount: parseFloat(formData.paidAmount) || 0,
         accountId: formData.accountId,
         startDate: formData.startDate || undefined,
-        billerId: formData.billerId || undefined
+        billerId: formData.billerId || undefined,
+        timing: formData.timing // PROTOTYPE: Include timing field
       });
       setShowModal(false);
-      setFormData({ name: '', totalAmount: '', monthlyAmount: '', termDuration: '', paidAmount: '', accountId: accounts[0]?.id || '', startDate: '', billerId: '' });
+      setFormData({ name: '', totalAmount: '', monthlyAmount: '', termDuration: '', paidAmount: '', accountId: accounts[0]?.id || '', startDate: '', billerId: '', timing: '1/2' });
     } catch (error) {
       console.error('Failed to add installment:', error);
+      // PROTOTYPE: Show helpful message if timing column is missing
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      if (errorMessage.includes('Database migration required')) {
+        alert('⚠️ Database Setup Required\n\nThe timing feature requires a database update. Please run the migration in Supabase.\n\nSee HOW_TO_ADD_TIMING_COLUMN.md for step-by-step instructions.');
+      } else {
+        alert('Failed to add installment. Please try again.');
+      }
     } finally {
       setIsSubmitting(false);
     }
@@ -99,13 +107,21 @@ const Installments: React.FC<InstallmentsProps> = ({ installments, accounts, bil
         paidAmount: parseFloat(editFormData.paidAmount) || 0,
         accountId: editFormData.accountId,
         startDate: editFormData.startDate || undefined,
-        billerId: editFormData.billerId || undefined
+        billerId: editFormData.billerId || undefined,
+        timing: editFormData.timing // PROTOTYPE: Include timing field
       };
 
       await onUpdate?.(updatedInstallment);
       setShowEditModal(null);
     } catch (error) {
       console.error('Failed to update installment:', error);
+      // PROTOTYPE: Show helpful message if timing column is missing
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      if (errorMessage.includes('Database migration required')) {
+        alert('⚠️ Database Setup Required\n\nThe timing feature requires a database update. Please run the migration in Supabase.\n\nSee HOW_TO_ADD_TIMING_COLUMN.md for step-by-step instructions.');
+      } else {
+        alert('Failed to update installment. Please try again.');
+      }
     } finally {
       setIsSubmitting(false);
     }
@@ -153,7 +169,8 @@ const Installments: React.FC<InstallmentsProps> = ({ installments, accounts, bil
       paidAmount: item.paidAmount.toString(),
       accountId: item.accountId,
       startDate: item.startDate || '',
-      billerId: item.billerId || ''
+      billerId: item.billerId || '',
+      timing: item.timing || '1/2' // PROTOTYPE: Default to 1/2 if not set
     });
     setShowEditModal(item);
     setOpenMenuId(null);
@@ -167,8 +184,14 @@ const Installments: React.FC<InstallmentsProps> = ({ installments, accounts, bil
     return (
       <div key={item.id} className="bg-white p-6 rounded-3xl shadow-sm border border-gray-100 hover:shadow-md transition-all group relative overflow-hidden">
         <div className="flex justify-between items-start mb-4">
-          <div>
-            <h3 className="font-black text-lg text-gray-900 group-hover:text-indigo-600 transition-colors uppercase tracking-tight">{item.name}</h3>
+          <div className="flex-1">
+            <div className="flex items-center gap-2 mb-1">
+              <h3 className="font-black text-lg text-gray-900 group-hover:text-indigo-600 transition-colors uppercase tracking-tight">{item.name}</h3>
+              {/* PROTOTYPE: Timing badge */}
+              {item.timing && (
+                <span className="text-[10px] font-bold px-2 py-0.5 bg-blue-50 rounded text-blue-500">{item.timing}</span>
+              )}
+            </div>
             <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">{item.termDuration}</span>
           </div>
           <div className="relative">
@@ -434,12 +457,15 @@ const Installments: React.FC<InstallmentsProps> = ({ installments, accounts, bil
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Term Duration</label>
-                  <input required type="text" placeholder="e.g. 12 months" value={formData.termDuration} onChange={(e) => setFormData({...formData, termDuration: e.target.value})} className="w-full bg-gray-50 border-transparent rounded-2xl p-4 outline-none focus:ring-2 focus:ring-indigo-500 font-bold" />
-                </div>
-                <div>
                   <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Start Date</label>
                   <input type="month" placeholder="YYYY-MM" value={formData.startDate} onChange={(e) => setFormData({...formData, startDate: e.target.value})} className="w-full bg-gray-50 border-transparent rounded-2xl p-4 outline-none focus:ring-2 focus:ring-indigo-500 font-bold" />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Timing (PROTOTYPE)</label>
+                  <select value={formData.timing} onChange={(e) => setFormData({...formData, timing: e.target.value as '1/2' | '2/2'})} className="w-full bg-gray-50 border-transparent rounded-2xl p-4 outline-none focus:ring-2 focus:ring-indigo-500 font-bold appearance-none">
+                    <option value="1/2">1/2</option>
+                    <option value="2/2">2/2</option>
+                  </select>
                 </div>
               </div>
               <div>
@@ -471,7 +497,7 @@ const Installments: React.FC<InstallmentsProps> = ({ installments, accounts, bil
               <div className="flex space-x-4 pt-4">
                 <button type="button" onClick={() => { 
                   setShowModal(false);
-                  setFormData({ name: '', totalAmount: '', monthlyAmount: '', termDuration: '', paidAmount: '', accountId: accounts[0]?.id || '', startDate: '', billerId: '' });
+                  setFormData({ name: '', totalAmount: '', monthlyAmount: '', termDuration: '', paidAmount: '', accountId: accounts[0]?.id || '', startDate: '', billerId: '', timing: '1/2' });
                 }} className="flex-1 bg-gray-100 py-4 rounded-2xl font-black uppercase tracking-widest text-xs text-gray-500">Cancel</button>
                 <button type="submit" className="flex-1 bg-indigo-600 text-white py-4 rounded-2xl font-black uppercase tracking-widest text-xs hover:bg-indigo-700 transition-all shadow-xl">Start Tracking</button>
               </div>
@@ -559,12 +585,15 @@ const Installments: React.FC<InstallmentsProps> = ({ installments, accounts, bil
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Term Duration</label>
-                  <input required type="text" value={editFormData.termDuration} onChange={(e) => setEditFormData({...editFormData, termDuration: e.target.value})} className="w-full bg-gray-50 border-transparent rounded-2xl p-4 outline-none focus:ring-2 focus:ring-indigo-500 font-bold" />
-                </div>
-                <div>
                   <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Start Date</label>
                   <input type="month" value={editFormData.startDate} onChange={(e) => setEditFormData({...editFormData, startDate: e.target.value})} className="w-full bg-gray-50 border-transparent rounded-2xl p-4 outline-none focus:ring-2 focus:ring-indigo-500 font-bold" />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Timing (PROTOTYPE)</label>
+                  <select value={editFormData.timing} onChange={(e) => setEditFormData({...editFormData, timing: e.target.value as '1/2' | '2/2'})} className="w-full bg-gray-50 border-transparent rounded-2xl p-4 outline-none focus:ring-2 focus:ring-indigo-500 font-bold appearance-none">
+                    <option value="1/2">1/2</option>
+                    <option value="2/2">2/2</option>
+                  </select>
                 </div>
               </div>
               <div>

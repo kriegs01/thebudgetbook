@@ -1,10 +1,11 @@
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { BudgetItem, Account, Biller, PaymentSchedule, CategorizedSetupItem, SavedBudgetSetup, BudgetCategory } from '../types';
+import { BudgetItem, Account, Biller, PaymentSchedule, CategorizedSetupItem, SavedBudgetSetup, BudgetCategory, Installment } from '../types';
 import { Plus, Check, ChevronDown, Trash2, Save, FileText, ArrowRight, Upload, CheckCircle2, X, AlertTriangle } from 'lucide-react';
 import { createBudgetSetupFrontend, updateBudgetSetupFrontend } from '../src/services/budgetSetupsService';
 import { createTransaction, getAllTransactions } from '../src/services/transactionsService';
 import type { SupabaseTransaction } from '../src/types/supabase';
+import { getInstallmentPaymentSchedule, aggregateCreditCardPurchases } from '../src/utils/paymentStatus'; // PROTOTYPE: Import payment status utilities
 
 interface BudgetProps {
   items: BudgetItem[];
@@ -18,6 +19,7 @@ interface BudgetProps {
   onMoveToTrash?: (setup: SavedBudgetSetup) => void;
   onReloadSetups?: () => Promise<void>;
   onReloadBillers?: () => Promise<void>;
+  installments?: Installment[]; // PROTOTYPE: Installments for Loans section
 }
 
 const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
@@ -30,7 +32,7 @@ const AUTO_SAVE_STATUS_TIMEOUT_MS = 3000; // How long to show status messages
 const TRANSACTION_AMOUNT_TOLERANCE = 1; // ±1 peso tolerance for amount matching (accounts for rounding differences)
 const TRANSACTION_MIN_NAME_LENGTH = 3; // Minimum length for partial name matching to avoid false positives
 
-const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSetups, setSavedSetups, onUpdateBiller, onMoveToTrash, onReloadSetups, onReloadBillers }) => {
+const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSetups, setSavedSetups, onUpdateBiller, onMoveToTrash, onReloadSetups, onReloadBillers, installments = [] }) => {
   const [view, setView] = useState<'summary' | 'setup'>('summary');
   const [selectedMonth, setSelectedMonth] = useState(MONTHS[new Date().getMonth()]);
   const [selectedTiming, setSelectedTiming] = useState<'1/2' | '2/2'>('1/2');
@@ -38,6 +40,9 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
   // Categorized Setup State
   const [setupData, setSetupData] = useState<{ [key: string]: CategorizedSetupItem[] }>({});
   const [removedIds, setRemovedIds] = useState<Set<string>>(new Set());
+  
+  // PROTOTYPE: Track excluded installments (by default all are included)
+  const [excludedInstallmentIds, setExcludedInstallmentIds] = useState<Set<string>>(new Set());
 
   // Month Summary State - stored in Supabase with setup data
   const [projectedSalary, setProjectedSalary] = useState<string>('11000');
@@ -1034,11 +1039,27 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
         {/* Other full-width categories: Utilities, Loans, Subscriptions, Purchases */}
         {categories.filter(cat => ['Utilities', 'Loans', 'Subscriptions', 'Purchases'].includes(cat.name)).map((cat) => {
           const items = setupData[cat.name] || [];
+          
+          // PROTOTYPE: For Loans category, filter installments by current timing
+          let relevantInstallments: Installment[] = [];
+          if (cat.name === 'Loans') {
+            relevantInstallments = installments.filter(inst => 
+              !inst.timing || inst.timing === selectedTiming
+            );
+          }
+          
+          // PROTOTYPE: Calculate total including installment monthly amounts (only included ones)
+          const itemsTotal = items.filter(i => i.included).reduce((s, i) => s + (parseFloat(i.amount) || 0), 0);
+          const installmentsTotal = relevantInstallments
+            .filter(inst => !excludedInstallmentIds.has(inst.id))
+            .reduce((s, inst) => s + inst.monthlyAmount, 0);
+          const categoryTotal = itemsTotal + installmentsTotal;
+          
           return (
             <div key={cat.id} className="bg-white rounded-[3rem] shadow-sm border border-gray-100 overflow-hidden w-full">
               <div className="p-8 border-b border-gray-50 bg-gray-50/30 flex justify-between items-center">
                 <h3 className="text-xs font-black text-gray-900 uppercase tracking-[0.25em]">{cat.name}</h3>
-                <span className="text-lg font-black text-indigo-600">{formatCurrency(items.filter(i => i.included).reduce((s, i) => s + (parseFloat(i.amount) || 0), 0))}</span>
+                <span className="text-lg font-black text-indigo-600">{formatCurrency(categoryTotal)}</span>
               </div>
               <div className="overflow-x-auto">
                 <table className="w-full text-left">
@@ -1124,6 +1145,101 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                         </td>
                       </tr>
                     )}
+                    {/* PROTOTYPE: Render installments for Loans category */}
+                    {cat.name === 'Loans' && relevantInstallments.length > 0 && (
+                      <>
+                        {relevantInstallments.map((installment) => {
+                          const account = accounts.find(a => a.id === installment.accountId);
+                          const isIncluded = !excludedInstallmentIds.has(installment.id);
+                          // Check payment status using transaction matching (simplified for now)
+                          const isPaid = checkIfPaidByTransaction(
+                            installment.name, 
+                            installment.monthlyAmount, 
+                            selectedMonth
+                          );
+                          
+                          return (
+                            <tr key={`installment-${installment.id}`} className={`${isIncluded ? 'bg-blue-50/30' : 'bg-gray-50 opacity-60'}`}>
+                              <td className="p-4 pl-10">
+                                <div className="flex items-center gap-2">
+                                  <span className="text-sm font-bold text-gray-900">{installment.name}</span>
+                                  <span className="text-[9px] font-bold px-2 py-0.5 bg-blue-100 rounded text-blue-600">
+                                    INSTALLMENT {installment.timing ? `• ${installment.timing}` : ''}
+                                  </span>
+                                </div>
+                                {account && (
+                                  <div className="text-[10px] text-gray-400 font-medium mt-1">
+                                    {account.bank} • {installment.termDuration}
+                                  </div>
+                                )}
+                              </td>
+                              <td className="p-4">
+                                <div className="flex items-center space-x-1">
+                                  <span className="text-gray-400 font-bold">₱</span>
+                                  <span className="text-sm font-black">{formatCurrency(installment.monthlyAmount).replace('₱', '')}</span>
+                                </div>
+                              </td>
+                              <td className="p-4 text-center">
+                                <div className="flex items-center justify-center space-x-2">
+                                  {isPaid ? (
+                                    <CheckCircle2 className="w-4 h-4 text-green-500" aria-label="Payment completed" title="Paid" />
+                                  ) : (
+                                    <button 
+                                      onClick={() => {
+                                        setTransactionFormData({
+                                          name: `${installment.name} - ${selectedMonth} ${new Date().getFullYear()}`,
+                                          date: new Date().toISOString().split('T')[0],
+                                          amount: installment.monthlyAmount.toString(),
+                                          accountId: installment.accountId || accounts[0]?.id || ''
+                                        });
+                                        setShowTransactionModal(true);
+                                      }}
+                                      className="px-3 py-1 bg-indigo-600 text-white text-[9px] font-black uppercase rounded-lg hover:bg-indigo-700 transition-colors"
+                                    >
+                                      Pay
+                                    </button>
+                                  )}
+                                  <button 
+                                    onClick={() => {
+                                      setExcludedInstallmentIds(prev => {
+                                        const newSet = new Set(prev);
+                                        if (newSet.has(installment.id)) {
+                                          newSet.delete(installment.id);
+                                        } else {
+                                          newSet.add(installment.id);
+                                        }
+                                        return newSet;
+                                      });
+                                    }}
+                                    className={`w-8 h-8 rounded-xl border-2 transition-all flex items-center justify-center ${isIncluded ? 'bg-indigo-600 border-indigo-600 text-white' : 'border-gray-200'}`}
+                                  >
+                                    <Check className="w-4 h-4" />
+                                  </button>
+                                </div>
+                              </td>
+                              <td className="p-4 pr-10 text-right">
+                                <button 
+                                  onClick={() => {
+                                    setConfirmModal({
+                                      show: true,
+                                      title: 'Exclude Installment',
+                                      message: `Are you sure you want to exclude "${installment.name}" from this budget period? This will not delete the installment, just exclude it from this budget.`,
+                                      onConfirm: () => {
+                                        setExcludedInstallmentIds(prev => new Set([...prev, installment.id]));
+                                        setConfirmModal(prev => ({ ...prev, show: false }));
+                                      }
+                                    });
+                                  }}
+                                  className="text-[9px] font-black text-red-500 uppercase tracking-widest border border-red-50 px-2 py-1 rounded-lg hover:bg-red-50 transition-colors"
+                                >
+                                  Exclude
+                                </button>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </>
+                    )}
                   </tbody>
                 </table>
                 <button onClick={() => addItemToCategory(cat.name)} className="w-full p-4 text-[10px] font-black text-gray-400 uppercase hover:text-indigo-600 border-t border-gray-50">+ Add Item</button>
@@ -1131,6 +1247,102 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
             </div>
           );
         })}
+
+        {/* PROTOTYPE: Credit Card Regular Purchases Section */}
+        {(() => {
+          // Get all credit card accounts
+          const creditCardAccounts = accounts.filter(acc => acc.classification === 'Credit Card' && acc.billingDate);
+          
+          if (creditCardAccounts.length === 0) return null;
+          
+          // Aggregate purchases for each credit card for the selected month
+          const monthIndex = MONTHS.indexOf(selectedMonth);
+          const currentYear = new Date().getFullYear();
+          
+          return creditCardAccounts.map(account => {
+            const cycleSummaries = aggregateCreditCardPurchases(account, transactions, installments);
+            
+            // Find the cycle that contains the selected month
+            const relevantCycle = cycleSummaries.find(cycle => {
+              const cycleMonth = cycle.cycleStart.getMonth();
+              const cycleYear = cycle.cycleStart.getFullYear();
+              // Match if cycle overlaps with selected month
+              return (cycleMonth === monthIndex && cycleYear === currentYear) ||
+                     (cycle.cycleEnd.getMonth() === monthIndex && cycle.cycleEnd.getFullYear() === currentYear);
+            });
+            
+            if (!relevantCycle || relevantCycle.transactionCount === 0) return null;
+            
+            return (
+              <div key={`cc-${account.id}`} className="bg-white rounded-[3rem] shadow-sm border border-gray-100 overflow-hidden w-full">
+                <div className="p-8 border-b border-gray-50 bg-gray-50/30 flex justify-between items-center">
+                  <div>
+                    <h3 className="text-xs font-black text-gray-900 uppercase tracking-[0.25em]">Credit Card Purchases</h3>
+                    <p className="text-[10px] text-gray-500 font-medium mt-1">{account.bank} • {relevantCycle.cycleLabel}</p>
+                  </div>
+                  <span className="text-lg font-black text-purple-600">{formatCurrency(relevantCycle.totalAmount)}</span>
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left">
+                    <thead>
+                      <tr className="text-[10px] font-black text-gray-400 uppercase border-b border-gray-50">
+                        <th className="p-4 pl-10">Transaction</th>
+                        <th className="p-4">Date</th>
+                        <th className="p-4">Amount</th>
+                        <th className="p-4 pr-10 text-right"></th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-50">
+                      {relevantCycle.transactions.map((tx) => (
+                        <tr key={tx.id} className="bg-purple-50/20">
+                          <td className="p-4 pl-10">
+                            <span className="text-sm font-bold text-gray-900">{tx.name}</span>
+                          </td>
+                          <td className="p-4">
+                            <span className="text-xs text-gray-500 font-medium">
+                              {new Date(tx.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                            </span>
+                          </td>
+                          <td className="p-4">
+                            <div className="flex items-center space-x-1">
+                              <span className="text-gray-400 font-bold">₱</span>
+                              <span className="text-sm font-black">{formatCurrency(tx.amount).replace('₱', '')}</span>
+                            </div>
+                          </td>
+                          <td className="p-4 pr-10 text-right">
+                            <span className="text-[9px] font-medium text-gray-400 uppercase tracking-widest">Auto-tracked</span>
+                          </td>
+                        </tr>
+                      ))}
+                      <tr className="bg-purple-100/30">
+                        <td colSpan={2} className="p-4 pl-10 text-xs font-black text-gray-700 uppercase">
+                          Total Regular Purchases
+                        </td>
+                        <td className="p-4">
+                          <div className="flex items-center space-x-1">
+                            <span className="text-gray-400 font-bold">₱</span>
+                            <span className="text-sm font-black text-purple-600">{formatCurrency(relevantCycle.totalAmount).replace('₱', '')}</span>
+                          </div>
+                        </td>
+                        <td className="p-4 pr-10 text-right">
+                          <span className="text-[9px] font-bold text-purple-600 uppercase tracking-widest">
+                            {relevantCycle.transactionCount} txn(s)
+                          </span>
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                  <div className="p-4 border-t border-gray-50 bg-gray-50/50">
+                    <p className="text-[10px] text-gray-500 font-medium text-center">
+                      <span className="font-bold">PROTOTYPE:</span> Regular credit card purchases are auto-aggregated from transactions. 
+                      Excludes installment payments.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            );
+          });
+        })()}
 
         {/* Remaining categories (excluding Fixed, Utilities, Loans, Subscriptions, Purchases) - keep in grid if needed */}
         {categories.filter(cat => !['Fixed', 'Utilities', 'Loans', 'Subscriptions', 'Purchases'].includes(cat.name)).length > 0 && (
