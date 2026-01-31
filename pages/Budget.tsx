@@ -1401,7 +1401,24 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                             </div>
                           </td>
                           <td className="p-4 pr-10 text-right">
-                            <span className="text-[9px] font-medium text-gray-400 uppercase tracking-widest">Auto-tracked</span>
+                            {/* QA: Add edit button for transactions - Fix for Issue #6 */}
+                            <button
+                              onClick={() => {
+                                // Format date as YYYY-MM-DD for input
+                                const dateStr = new Date(tx.date).toISOString().split('T')[0];
+                                setTransactionFormData({
+                                  id: tx.id,
+                                  name: tx.name,
+                                  date: dateStr,
+                                  amount: tx.amount.toString(),
+                                  accountId: tx.payment_method_id
+                                });
+                                setShowTransactionModal(true);
+                              }}
+                              className="text-[9px] font-black text-indigo-600 uppercase tracking-widest border border-indigo-100 px-2 py-1 rounded-lg hover:bg-indigo-50 transition-colors"
+                            >
+                              Edit
+                            </button>
                           </td>
                         </tr>
                       ))}
