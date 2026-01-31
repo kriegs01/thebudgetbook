@@ -120,13 +120,17 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
   // QA: Transaction form modal for Purchases (supports create and edit)
   // Fix for Issue #6: Enable transaction editing
   const [showTransactionModal, setShowTransactionModal] = useState(false);
-  const [transactionFormData, setTransactionFormData] = useState({
-    id: '', // Empty for new, set for editing
+  
+  // Default transaction form state - used for resetting
+  const getDefaultTransactionFormData = () => ({
+    id: '',
     name: '',
     date: new Date().toISOString().split('T')[0],
     amount: '',
     accountId: accounts[0]?.id || ''
   });
+  
+  const [transactionFormData, setTransactionFormData] = useState(getDefaultTransactionFormData());
 
   const [confirmModal, setConfirmModal] = useState<{
     show: boolean;
@@ -258,7 +262,7 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
     if (startYear > targetYear) return false;
     // Same year: compare months (startMonth is 1-12, selectedMonthIndex is 0-11)
     return startMonth <= (selectedMonthIndex + 1);
-  }, []);
+  }, []); // MONTHS is a constant, no need to include in deps
 
   /**
    * Check if an item is paid by matching transactions
@@ -679,15 +683,9 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
       // Reload transactions to update paid status
       await reloadTransactions();
       
-      // Close the modal and reset form
+      // Close the modal and reset form to defaults
       setShowTransactionModal(false);
-      setTransactionFormData({
-        id: '',
-        name: '',
-        date: new Date().toISOString().split('T')[0],
-        amount: '',
-        accountId: accounts[0]?.id || ''
-      });
+      setTransactionFormData(getDefaultTransactionFormData());
     } catch (e) {
       console.error('[Budget] Error saving transaction:', e);
       alert('Failed to save transaction. Please try again.');

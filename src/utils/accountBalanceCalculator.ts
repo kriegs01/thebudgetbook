@@ -21,9 +21,12 @@ import type { SupabaseTransaction } from '../types/supabase';
  * Calculate account balance from transactions
  * 
  * @param account - The account to calculate balance for
- * @param transactions - All transactions for this account
+ * @param transactions - All transactions (will be filtered by account)
  * @param initialBalance - Starting balance (optional, defaults to account's current balance)
  * @returns Calculated current balance
+ * 
+ * Note: For performance-critical use cases where this is called frequently,
+ * consider pre-filtering transactions by account before calling this function.
  */
 export const calculateAccountBalance = (
   account: Account,
@@ -34,9 +37,53 @@ export const calculateAccountBalance = (
   const baseline = initialBalance ?? account.balance;
   
   // Filter transactions for this account
+  // Note: If calling this in a loop, consider pre-filtering transactions
   const accountTransactions = transactions.filter(
     tx => tx.payment_method_id === account.id
   );
+  
+  // Sort transactions by date (oldest first)
+  const sortedTransactions = [...accountTransactions].sort((a, b) => 
+    new Date(a.date).getTime() - new Date(b.date).getTime()
+  );
+  
+  // Calculate balance based on account type
+  if (account.type === 'Debit') {
+    // For debit accounts: subtract transaction amounts from balance
+    return sortedTransactions.reduce(
+      (balance, tx) => balance - tx.amount,
+      baseline
+    );
+  } else if (account.type === 'Credit') {
+    // For credit accounts: add transaction amounts (increases usage)
+    // The balance represents how much is owed/used
+    return sortedTransactions.reduce(
+      (balance, tx) => balance + tx.amount,
+      baseline
+    );
+  }
+  
+  return baseline;
+};
+
+/**
+ * Calculate account balance from pre-filtered transactions
+ * 
+ * More efficient version when you already have filtered transactions.
+ * Use this in loops or when calculating balances for multiple time periods.
+ * 
+ * @param account - The account to calculate balance for
+ * @param accountTransactions - Transactions already filtered for this account
+ * @param initialBalance - Starting balance (optional, defaults to account's current balance)
+ * @returns Calculated current balance
+ */
+export const calculateAccountBalanceFromFiltered = (
+  account: Account,
+  accountTransactions: SupabaseTransaction[],
+  initialBalance?: number
+): number => {
+  // Use provided initial balance or account's current balance as baseline
+  const baseline = initialBalance ?? account.balance;
   
   // Sort transactions by date (oldest first)
   const sortedTransactions = [...accountTransactions].sort((a, b) => 
