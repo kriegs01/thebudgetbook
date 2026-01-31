@@ -69,7 +69,8 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
     actDay: '',
     actYear: new Date().getFullYear().toString(),
     deactMonth: '',
-    deactYear: ''
+    deactYear: '',
+    linkedAccountId: '' // ENHANCEMENT: Support linking Loans-category billers to credit accounts
   });
 
   const [editFormData, setEditFormData] = useState({
@@ -81,7 +82,8 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
     actDay: '',
     actYear: '',
     deactMonth: '',
-    deactYear: ''
+    deactYear: '',
+    linkedAccountId: '' // ENHANCEMENT: Support linking Loans-category billers to credit accounts
   });
 
   const [payFormData, setPayFormData] = useState({
@@ -276,7 +278,8 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
         activationDate: activationDate,
         deactivationDate: deactivationDate,
         status: status,
-        schedules: MONTHS.map(month => ({ month, year: '2026', expectedAmount: expected }))
+        schedules: MONTHS.map(month => ({ month, year: '2026', expectedAmount: expected })),
+        linkedAccountId: addFormData.linkedAccountId || undefined // ENHANCEMENT: Support linked credit accounts
       };
       
       await onAdd(newBiller);
@@ -292,7 +295,8 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
         actDay: '',
         actYear: new Date().getFullYear().toString(),
         deactMonth: '',
-        deactYear: ''
+        deactYear: '',
+        linkedAccountId: '' // ENHANCEMENT: Reset linked account field
       });
       setTimingFeedback('');
     } catch (error) {
@@ -339,7 +343,8 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
         timing: timing,
         activationDate: activationDate,
         deactivationDate: deactivationDate,
-        status: status
+        status: status,
+        linkedAccountId: editFormData.linkedAccountId || undefined // ENHANCEMENT: Support linked credit accounts
       });
       
       // Only close modal on success
@@ -410,7 +415,8 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
       actDay: biller.activationDate.day || '',
       actYear: biller.activationDate.year,
       deactMonth: biller.deactivationDate?.month || '',
-      deactYear: biller.deactivationDate?.year || ''
+      deactYear: biller.deactivationDate?.year || '',
+      linkedAccountId: biller.linkedAccountId || '' // ENHANCEMENT: Populate linked account field
     });
     setShowEditModal(biller);
     setActiveDropdownId(null);
@@ -667,6 +673,33 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
                  <div><label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Due Date (day)</label><input required type="number" min="1" max="31" placeholder="e.g. 15" value={addFormData.dueDate} onChange={(e) => { setAddFormData({ ...addFormData, dueDate: e.target.value }); showTimingInfo(e.target.value); }} className="w-full bg-gray-50 border-transparent rounded-2xl p-4 outline-none font-bold" /></div>
               </div>
               
+              {/* ENHANCEMENT: Linked Account for Loans Category */}
+              {addFormData.category.startsWith('Loans') && (
+                <div className="bg-purple-50 rounded-2xl p-4 border-2 border-purple-200">
+                  <label className="block text-[10px] font-black text-purple-600 uppercase tracking-widest mb-2">
+                    Linked Credit Account (Optional)
+                  </label>
+                  <select 
+                    value={addFormData.linkedAccountId} 
+                    onChange={(e) => setAddFormData({ ...addFormData, linkedAccountId: e.target.value })} 
+                    className="w-full bg-white border-transparent rounded-2xl p-4 outline-none font-bold text-sm appearance-none"
+                  >
+                    <option value="">None - Use Manual Amount</option>
+                    {accounts
+                      .filter(acc => acc.type === 'Credit' && acc.billingDate)
+                      .map(acc => (
+                        <option key={acc.id} value={acc.id}>
+                          {acc.bank} (Billing: {acc.billingDate})
+                        </option>
+                      ))
+                    }
+                  </select>
+                  <p className="text-xs text-purple-600 mt-2">
+                    Link to a credit account to automatically calculate expected amounts from billing cycle transactions
+                  </p>
+                </div>
+              )}
+              
               <div className="border-t border-gray-200 pt-6">
                 <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-4">Activation Date</label>
                 <div className="grid grid-cols-3 gap-4">
@@ -730,6 +763,33 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
                  </div>
                  <div><label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Due Date (day)</label><input required type="number" min="1" max="31" placeholder="e.g. 15" value={editFormData.dueDate} onChange={(e) => { setEditFormData({ ...editFormData, dueDate: e.target.value }); showTimingInfo(e.target.value); }} className="w-full bg-gray-50 border-transparent rounded-2xl p-4 outline-none font-bold" /></div>
               </div>
+              
+              {/* ENHANCEMENT: Linked Account for Loans Category */}
+              {editFormData.category.startsWith('Loans') && (
+                <div className="bg-purple-50 rounded-2xl p-4 border-2 border-purple-200">
+                  <label className="block text-[10px] font-black text-purple-600 uppercase tracking-widest mb-2">
+                    Linked Credit Account (Optional)
+                  </label>
+                  <select 
+                    value={editFormData.linkedAccountId} 
+                    onChange={(e) => setEditFormData({ ...editFormData, linkedAccountId: e.target.value })} 
+                    className="w-full bg-white border-transparent rounded-2xl p-4 outline-none font-bold text-sm appearance-none"
+                  >
+                    <option value="">None - Use Manual Amount</option>
+                    {accounts
+                      .filter(acc => acc.type === 'Credit' && acc.billingDate)
+                      .map(acc => (
+                        <option key={acc.id} value={acc.id}>
+                          {acc.bank} (Billing: {acc.billingDate})
+                        </option>
+                      ))
+                    }
+                  </select>
+                  <p className="text-xs text-purple-600 mt-2">
+                    Link to a credit account to automatically calculate expected amounts from billing cycle transactions
+                  </p>
+                </div>
+              )}
               
               <div className="border-t border-gray-200 pt-6">
                 <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-4">Activation Date</label>

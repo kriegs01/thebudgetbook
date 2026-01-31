@@ -21,7 +21,8 @@ export const supabaseBillerToFrontend = (supabaseBiller: SupabaseBiller): Biller
     activationDate: supabaseBiller.activation_date,
     deactivationDate: supabaseBiller.deactivation_c || undefined,
     status: supabaseBiller.status as 'active' | 'inactive',
-    schedules: supabaseBiller.schedules || []
+    schedules: supabaseBiller.schedules || [],
+    linkedAccountId: supabaseBiller.linked_account_id || undefined // ENHANCEMENT: Support linked credit accounts
   };
 };
 
@@ -38,7 +39,8 @@ export const frontendBillerToSupabase = (biller: Biller): Omit<SupabaseBiller, '
     activation_date: biller.activationDate,
     deactivation_c: biller.deactivationDate || null,
     status: biller.status,
-    schedules: biller.schedules
+    schedules: biller.schedules,
+    linked_account_id: biller.linkedAccountId || null // ENHANCEMENT: Support linked credit accounts
   };
 };
 
