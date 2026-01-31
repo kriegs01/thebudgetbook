@@ -21,6 +21,10 @@ interface BudgetProps {
 
 const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 
+// Autosave configuration constants
+const AUTO_SAVE_DEBOUNCE_MS = 3000; // 3 seconds debounce for autosave
+const AUTO_SAVE_STATUS_TIMEOUT_MS = 3000; // How long to show status messages
+
 const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSetups, setSavedSetups, onUpdateBiller, onMoveToTrash, onReloadSetups, onReloadBillers }) => {
   const [view, setView] = useState<'summary' | 'setup'>('summary');
   const [selectedMonth, setSelectedMonth] = useState(MONTHS[new Date().getMonth()]);
@@ -156,6 +160,20 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
     // Only auto-save in setup view
     if (view !== 'setup') return;
     
+    // Prepare data including salary information (use structuredClone for better performance)
+    const dataToSave = {
+      ...structuredClone(setupData),
+      _projectedSalary: projectedSalary,
+      _actualSalary: actualSalary
+    };
+    
+    // Check if data has actually changed
+    const currentDataString = JSON.stringify(dataToSave);
+    if (currentDataString === lastSavedDataRef.current) {
+      console.log('[Budget] No changes detected, skipping auto-save');
+      return;
+    }
+    
     // Calculate total amount
     let total = 0;
     Object.values(setupData)
@@ -172,20 +190,6 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
       });
 
     const existingSetup = savedSetups.find(s => s.month === selectedMonth && s.timing === selectedTiming);
-    
-    // Prepare data including salary information
-    const dataToSave = {
-      ...JSON.parse(JSON.stringify(setupData)),
-      _projectedSalary: projectedSalary,
-      _actualSalary: actualSalary
-    };
-    
-    // Check if data has actually changed
-    const currentDataString = JSON.stringify(dataToSave);
-    if (currentDataString === lastSavedDataRef.current) {
-      console.log('[Budget] No changes detected, skipping auto-save');
-      return;
-    }
     
     try {
       setAutoSaveStatus('saving');
@@ -205,7 +209,7 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
         if (error) {
           console.error('[Budget] Auto-save failed:', error);
           setAutoSaveStatus('error');
-          setTimeout(() => setAutoSaveStatus('idle'), 3000);
+          setTimeout(() => setAutoSaveStatus('idle'), AUTO_SAVE_STATUS_TIMEOUT_MS);
           return;
         }
       } else {
@@ -223,7 +227,7 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
         if (error) {
           console.error('[Budget] Auto-save failed:', error);
           setAutoSaveStatus('error');
-          setTimeout(() => setAutoSaveStatus('idle'), 3000);
+          setTimeout(() => setAutoSaveStatus('idle'), AUTO_SAVE_STATUS_TIMEOUT_MS);
           return;
         }
       }
@@ -242,13 +246,13 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
     } catch (error) {
       console.error('[Budget] Error in auto-save:', error);
       setAutoSaveStatus('error');
-      setTimeout(() => setAutoSaveStatus('idle'), 3000);
+      setTimeout(() => setAutoSaveStatus('idle'), AUTO_SAVE_STATUS_TIMEOUT_MS);
     }
   }, [view, setupData, projectedSalary, actualSalary, selectedMonth, selectedTiming, savedSetups, onReloadSetups]);
 
   /**
    * Debounced auto-save trigger
-   * Waits 3 seconds after last change before auto-saving
+   * Waits for specified delay after last change before auto-saving
    */
   const triggerAutoSave = useCallback(() => {
     // Clear any existing timeout
@@ -259,7 +263,7 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
     // Set new timeout for auto-save
     autoSaveTimeoutRef.current = setTimeout(() => {
       autoSave();
-    }, 3000); // 3 second debounce
+    }, AUTO_SAVE_DEBOUNCE_MS);
   }, [autoSave]);
 
   // Trigger auto-save when setupData, projectedSalary, or actualSalary changes
@@ -267,14 +271,16 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
     if (view === 'setup') {
       triggerAutoSave();
     }
-    
-    // Cleanup timeout on unmount
+  }, [setupData, projectedSalary, actualSalary, view, triggerAutoSave]);
+
+  // Cleanup timeout on component unmount only
+  useEffect(() => {
     return () => {
       if (autoSaveTimeoutRef.current) {
         clearTimeout(autoSaveTimeoutRef.current);
       }
     };
-  }, [setupData, projectedSalary, actualSalary, view, triggerAutoSave]);
+  }, []); // Empty dependency array ensures this only runs on unmount
 
   const handleSetupToggle = (category: string, id: string) => {
     setSetupData(prev => ({
