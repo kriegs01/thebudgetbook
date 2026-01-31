@@ -742,14 +742,35 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
                       .filter(acc => acc.type === 'Credit' && acc.billingDate)
                       .map(acc => (
                         <option key={acc.id} value={acc.id}>
-                          {acc.bank} (Billing: {acc.billingDate})
+                          {acc.bank} (Billing Day: {new Date(acc.billingDate).getDate()})
                         </option>
                       ))
                     }
                   </select>
-                  <p className="text-xs text-purple-600 mt-2">
-                    Link to a credit account to automatically calculate expected amounts from billing cycle transactions
-                  </p>
+                  {(() => {
+                    const creditAccounts = accounts.filter(acc => acc.type === 'Credit');
+                    const creditAccountsWithBilling = creditAccounts.filter(acc => acc.billingDate);
+                    
+                    if (creditAccounts.length === 0) {
+                      return (
+                        <p className="text-xs text-orange-600 mt-2 flex items-center gap-1">
+                          <span className="font-bold">⚠️ No credit accounts found.</span> Create a credit account first to enable linking.
+                        </p>
+                      );
+                    } else if (creditAccountsWithBilling.length === 0) {
+                      return (
+                        <p className="text-xs text-orange-600 mt-2 flex items-center gap-1">
+                          <span className="font-bold">⚠️ No credit accounts with billing dates.</span> Edit your credit accounts to add billing dates.
+                        </p>
+                      );
+                    } else {
+                      return (
+                        <p className="text-xs text-purple-600 mt-2">
+                          Link to a credit account to automatically calculate expected amounts from billing cycle transactions
+                        </p>
+                      );
+                    }
+                  })()}
                 </div>
               )}
               
@@ -833,14 +854,35 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
                       .filter(acc => acc.type === 'Credit' && acc.billingDate)
                       .map(acc => (
                         <option key={acc.id} value={acc.id}>
-                          {acc.bank} (Billing: {acc.billingDate})
+                          {acc.bank} (Billing Day: {new Date(acc.billingDate).getDate()})
                         </option>
                       ))
                     }
                   </select>
-                  <p className="text-xs text-purple-600 mt-2">
-                    Link to a credit account to automatically calculate expected amounts from billing cycle transactions
-                  </p>
+                  {(() => {
+                    const creditAccounts = accounts.filter(acc => acc.type === 'Credit');
+                    const creditAccountsWithBilling = creditAccounts.filter(acc => acc.billingDate);
+                    
+                    if (creditAccounts.length === 0) {
+                      return (
+                        <p className="text-xs text-orange-600 mt-2 flex items-center gap-1">
+                          <span className="font-bold">⚠️ No credit accounts found.</span> Create a credit account first to enable linking.
+                        </p>
+                      );
+                    } else if (creditAccountsWithBilling.length === 0) {
+                      return (
+                        <p className="text-xs text-orange-600 mt-2 flex items-center gap-1">
+                          <span className="font-bold">⚠️ No credit accounts with billing dates.</span> Edit your credit accounts to add billing dates.
+                        </p>
+                      );
+                    } else {
+                      return (
+                        <p className="text-xs text-purple-600 mt-2">
+                          Link to a credit account to automatically calculate expected amounts from billing cycle transactions
+                        </p>
+                      );
+                    }
+                  })()}
                 </div>
               )}
               
