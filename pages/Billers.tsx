@@ -489,13 +489,6 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
             </div>
           </div>
         </div>
-               <span className="text-[10px] font-bold px-2 py-0.5 bg-blue-50 rounded text-blue-500">{biller.timing}</span>
-               <span className={`text-[10px] font-bold px-2 py-0.5 rounded uppercase ${biller.status === 'active' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
-                 {biller.status === 'active' ? <div className="flex items-center gap-1"><Power className="w-3 h-3" />Active</div> : <div className="flex items-center gap-1"><PowerOff className="w-3 h-3" />Inactive</div>}
-               </span>
-            </div>
-          </div>
-        </div>
         <div className="relative flex-shrink-0">
           <button onClick={() => setActiveDropdownId(activeDropdownId === biller.id ? null : biller.id)} className="p-2 hover:bg-gray-100 rounded-lg text-gray-400">
             <MoreVertical className="w-5 h-5" />
