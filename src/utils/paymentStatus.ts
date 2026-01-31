@@ -103,8 +103,9 @@ export const checkPaymentStatus = (
     const txMonth = txDate.getMonth();
     const txYear = txDate.getFullYear();
     
-    const dateMatch = (txMonth === monthIndex) && 
-                     (txYear === year || txYear === year - 1);
+    // Allow previous year matching only for January looking at December transactions
+    const dateMatch = (txMonth === monthIndex && txYear === year) ||
+                     (monthIndex === 0 && txMonth === 11 && txYear === year - 1); // Jan looking at Dec of prev year
 
     return dateMatch;
   });
