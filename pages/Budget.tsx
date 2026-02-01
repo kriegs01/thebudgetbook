@@ -7,6 +7,7 @@ import { createTransaction, getAllTransactions, updateTransaction } from '../src
 import type { SupabaseTransaction } from '../src/types/supabase';
 import { getInstallmentPaymentSchedule, aggregateCreditCardPurchases } from '../src/utils/paymentStatus'; // PROTOTYPE: Import payment status utilities
 import { getScheduleExpectedAmount } from '../src/utils/linkedAccountUtils'; // ENHANCEMENT: Import for linked account amount calculation
+import { getPaymentSchedulesForBudget, markPaymentScheduleAsPaid, type PaymentScheduleWithDetails } from '../src/services/paymentSchedulesService'; // Import payment schedules service
 
 interface BudgetProps {
   items: BudgetItem[];
@@ -61,6 +62,10 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
   // Transactions state - used for matching payments
   const [transactions, setTransactions] = useState<SupabaseTransaction[]>([]);
 
+  // Payment schedules state - loaded from payment_schedules table
+  const [paymentSchedules, setPaymentSchedules] = useState<PaymentScheduleWithDetails[]>([]);
+  const [paymentSchedulesLoading, setPaymentSchedulesLoading] = useState(false);
+
   // Load from saved setup when month/timing changes
   useEffect(() => {
     const existingSetup = savedSetups.find(s => s.month === selectedMonth && s.timing === selectedTiming);
@@ -111,6 +116,36 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
 
     loadTransactions();
   }, []); // Load once on mount, reload happens after creating transactions
+
+  // Load payment schedules when month/timing changes
+  useEffect(() => {
+    const loadPaymentSchedules = async () => {
+      setPaymentSchedulesLoading(true);
+      try {
+        const currentYear = new Date().getFullYear().toString();
+        const { data, error } = await getPaymentSchedulesForBudget(
+          selectedMonth,
+          currentYear,
+          selectedTiming
+        );
+        
+        if (error) {
+          console.error('[Budget] Error loading payment schedules:', error);
+          setPaymentSchedules([]);
+        } else {
+          console.log('[Budget] Loaded payment schedules:', data?.length || 0);
+          setPaymentSchedules(data || []);
+        }
+      } catch (error) {
+        console.error('[Budget] Error loading payment schedules:', error);
+        setPaymentSchedules([]);
+      } finally {
+        setPaymentSchedulesLoading(false);
+      }
+    };
+    
+    loadPaymentSchedules();
+  }, [selectedMonth, selectedTiming]);
 
   // Autosave State
   const [autoSaveStatus, setAutoSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
@@ -184,8 +219,21 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
             if (item.isBiller) {
               const biller = billers.find(b => b.id === item.id);
               if (biller) {
-                const schedule = biller.schedules.find(s => s.month === selectedMonth);
-                if (schedule) {
+                // Get schedule from payment_schedules table instead of biller.schedules
+                const dbSchedule = findScheduleForBiller(biller.id);
+                if (dbSchedule) {
+                  // Convert to PaymentSchedule format for compatibility
+                  const schedule: PaymentSchedule = {
+                    id: dbSchedule.id,
+                    month: dbSchedule.schedule_month,
+                    year: dbSchedule.schedule_year,
+                    expectedAmount: dbSchedule.expected_amount,
+                    amountPaid: dbSchedule.amount_paid || undefined,
+                    receipt: dbSchedule.receipt || undefined,
+                    datePaid: dbSchedule.date_paid || undefined,
+                    accountId: dbSchedule.account_id || undefined
+                  };
+                  
                   const { amount: calculatedAmount } = getScheduleExpectedAmount(
                     biller,
                     schedule,
@@ -206,11 +254,24 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
           const newItems = matchingBillers
             .filter(b => !existingIds.has(b.id))
             .map(b => {
-              const schedule = b.schedules.find(s => s.month === selectedMonth);
+              // Get schedule from payment_schedules table instead of b.schedules
+              const dbSchedule = findScheduleForBiller(b.id);
               
               // ENHANCEMENT: For linked billers, calculate amount from transactions
               let amount: number;
-              if (schedule) {
+              if (dbSchedule) {
+                // Convert to PaymentSchedule format for compatibility
+                const schedule: PaymentSchedule = {
+                  id: dbSchedule.id,
+                  month: dbSchedule.schedule_month,
+                  year: dbSchedule.schedule_year,
+                  expectedAmount: dbSchedule.expected_amount,
+                  amountPaid: dbSchedule.amount_paid || undefined,
+                  receipt: dbSchedule.receipt || undefined,
+                  datePaid: dbSchedule.date_paid || undefined,
+                  accountId: dbSchedule.account_id || undefined
+                };
+                
                 const { amount: calculatedAmount } = getScheduleExpectedAmount(
                   b,
                   schedule,
@@ -248,6 +309,20 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
       maximumFractionDigits: 2 
     }).format(val);
   };
+
+  /**
+   * Helper function to find payment schedule for a biller from the loaded payment schedules
+   */
+  const findScheduleForBiller = useCallback((billerId: string): PaymentScheduleWithDetails | undefined => {
+    return paymentSchedules.find(ps => ps.biller_id === billerId);
+  }, [paymentSchedules]);
+
+  /**
+   * Helper function to find payment schedule for an installment from the loaded payment schedules
+   */
+  const findScheduleForInstallment = useCallback((installmentId: string): PaymentScheduleWithDetails | undefined => {
+    return paymentSchedules.find(ps => ps.installment_id === installmentId);
+  }, [paymentSchedules]);
 
   /**
    * QA: Check if installment should be displayed for selected month
@@ -807,43 +882,50 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
       
       console.log(`[Budget] Transaction ${isEditing ? 'updated' : 'created'} successfully:`, transactionData);
       
-      // Update the biller's payment schedule using schedule ID for exact matching
-      const updatedSchedules = biller.schedules.map(s => {
-        // Match by ID if available (checking for null/undefined explicitly), otherwise fallback to month/year matching
-        const isMatch = (schedule.id != null) ? 
-          (s.id === schedule.id) : 
-          (s.month === schedule.month && s.year === schedule.year);
+      // Update the payment schedule directly in payment_schedules table
+      // Find the schedule from our loaded schedules
+      const dbSchedule = findScheduleForBiller(biller.id);
+      
+      if (dbSchedule) {
+        console.log(`[Budget] Updating payment schedule:`, {
+          scheduleId: dbSchedule.id,
+          scheduleMonth: dbSchedule.schedule_month,
+          scheduleYear: dbSchedule.schedule_year,
+          paymentDate: payFormData.datePaid,
+          amount: parseFloat(payFormData.amount)
+        });
+        
+        // Mark the schedule as paid using the payment schedules service
+        const { error: scheduleError } = await markPaymentScheduleAsPaid(
+          dbSchedule.id,
+          parseFloat(payFormData.amount),
+          payFormData.datePaid,
+          payFormData.accountId || undefined,
+          payFormData.receipt || `${biller.name}_${schedule.month}`
+        );
+        
+        if (scheduleError) {
+          console.error('[Budget] Failed to update payment schedule:', scheduleError);
+          alert('Payment transaction created but failed to update schedule. Please refresh the page.');
+        } else {
+          console.log('[Budget] Payment schedule updated successfully');
           
-        if (isMatch) {
-          console.log(`[Budget] MATCHED schedule for update:`, {
-            scheduleId: s.id,
-            scheduleMonth: s.month,
-            scheduleYear: s.year,
-            paymentDate: payFormData.datePaid,
-            amount: parseFloat(payFormData.amount),
-            matchedBy: (schedule.id != null) ? 'ID' : 'month/year'
-          });
-          return { 
-            ...s, 
-            amountPaid: parseFloat(payFormData.amount), 
-            receipt: payFormData.receipt || `${biller.name}_${schedule.month}`, 
-            datePaid: payFormData.datePaid, 
-            accountId: payFormData.accountId 
-          };
+          // Reload payment schedules to reflect the update
+          const currentYear = new Date().getFullYear().toString();
+          const { data } = await getPaymentSchedulesForBudget(
+            selectedMonth,
+            currentYear,
+            selectedTiming
+          );
+          if (data) {
+            setPaymentSchedules(data);
+          }
         }
-        return s;
-      });
+      } else {
+        console.warn('[Budget] No payment schedule found for biller:', biller.id);
+      }
       
-      console.log('[Budget] All updated schedules:', updatedSchedules.map(s => ({
-        id: s.id,
-        month: s.month,
-        year: s.year,
-        amountPaid: s.amountPaid,
-        datePaid: s.datePaid
-      })));
-      
-      console.log('[Budget] Updating biller with new schedule');
-      await onUpdateBiller({ ...biller, schedules: updatedSchedules });
+      console.log('[Budget] Payment marking completed');
       
       // FIX: Update linked installment's paidAmount if this biller is linked to an installment
       if (biller.category.startsWith('Loans') && installments && installments.length > 0) {
