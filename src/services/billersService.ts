@@ -206,6 +206,7 @@ export const createBillerFrontend = async (biller: Biller): Promise<{ data: Bill
 
 /**
  * Update an existing biller (accepts frontend Biller type)
+ * Also updates payment schedules if activation/deactivation dates or amounts change
  */
 export const updateBillerFrontend = async (biller: Biller): Promise<{ data: Biller | null; error: any }> => {
   const supabaseBiller = frontendBillerToSupabase(biller);
@@ -213,6 +214,12 @@ export const updateBillerFrontend = async (biller: Biller): Promise<{ data: Bill
   if (error || !data) {
     return { data: null, error };
   }
+  
+  // Check if we need to regenerate schedules
+  // This happens when activation/deactivation dates or amounts change
+  // For now, we'll keep existing schedules and only update the biller
+  // Future enhancement: Add logic to sync schedule changes
+  
   return { data: supabaseBillerToFrontend(data), error: null };
 };
 

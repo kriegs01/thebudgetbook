@@ -129,6 +129,28 @@ CREATE TABLE budget_setups (
   CONSTRAINT unique_month_timing UNIQUE (month, timing)
 );
 
+-- Payment Schedules table
+-- Replaces the legacy schedules JSONB array in billers table
+CREATE TABLE payment_schedules (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  biller_id UUID NOT NULL REFERENCES billers(id) ON DELETE CASCADE,
+  month TEXT NOT NULL,
+  year TEXT NOT NULL,
+  expected_amount NUMERIC NOT NULL,
+  amount_paid NUMERIC,
+  receipt TEXT,
+  date_paid DATE,
+  account_id UUID REFERENCES accounts(id) ON DELETE SET NULL,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW(),
+  CONSTRAINT unique_biller_month_year UNIQUE (biller_id, month, year)
+);
+
+-- Add indexes for payment_schedules
+CREATE INDEX idx_payment_schedules_biller_id ON payment_schedules(biller_id);
+CREATE INDEX idx_payment_schedules_month_year ON payment_schedules(month, year);
+CREATE INDEX idx_payment_schedules_account_id ON payment_schedules(account_id);
+
 -- Enable Row Level Security (RLS)
 ALTER TABLE accounts ENABLE ROW LEVEL SECURITY;
 ALTER TABLE billers ENABLE ROW LEVEL SECURITY;
@@ -136,6 +158,7 @@ ALTER TABLE installments ENABLE ROW LEVEL SECURITY;
 ALTER TABLE savings ENABLE ROW LEVEL SECURITY;
 ALTER TABLE transactions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE budget_setups ENABLE ROW LEVEL SECURITY;
+ALTER TABLE payment_schedules ENABLE ROW LEVEL SECURITY;
 
 -- Create policies for public access (adjust based on your auth needs)
 -- WARNING: These policies allow anyone to read/write. 
@@ -147,6 +170,7 @@ CREATE POLICY "Enable all for installments" ON installments FOR ALL USING (true)
 CREATE POLICY "Enable all for savings" ON savings FOR ALL USING (true) WITH CHECK (true);
 CREATE POLICY "Enable all for transactions" ON transactions FOR ALL USING (true) WITH CHECK (true);
 CREATE POLICY "Enable all for budget_setups" ON budget_setups FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Enable all for payment_schedules" ON payment_schedules FOR ALL USING (true) WITH CHECK (true);
 ```
 
 ### Step 5: Install Dependencies
@@ -191,8 +215,27 @@ Visit the Supabase Demo page to test the integration!
 | activation_date | JSONB | Activation date object |
 | deactivation_c | JSONB | Deactivation date object (nullable, note: field name is truncated in DB) |
 | status | TEXT | active or inactive |
-| schedules | JSONB | Payment schedule array |
+| schedules | JSONB | **DEPRECATED**: Legacy payment schedule array - use payment_schedules table instead |
 | linked_account_id | UUID | Foreign key to accounts (nullable) - Links Loans-category billers to credit accounts for dynamic billing cycle-based amount calculation |
+
+### Payment Schedules
+**NEW**: Replaces the legacy schedules JSONB array in billers table
+
+| Column | Type | Description |
+|--------|------|-------------|
+| id | UUID | Primary key (auto-generated) |
+| biller_id | UUID | Foreign key to billers (cascade delete) |
+| month | TEXT | Month name (January, February, etc.) |
+| year | TEXT | Year as string (2024, 2025, etc.) |
+| expected_amount | NUMERIC | Expected payment amount for this month |
+| amount_paid | NUMERIC | Actual amount paid (nullable) |
+| receipt | TEXT | Receipt file name or path (nullable) |
+| date_paid | DATE | Date when payment was made (nullable) |
+| account_id | UUID | Foreign key to accounts - payment method (nullable) |
+| created_at | TIMESTAMPTZ | Creation timestamp (auto-generated) |
+| updated_at | TIMESTAMPTZ | Last update timestamp (auto-updated) |
+
+**Constraints**: Unique constraint on (biller_id, month, year) ensures one schedule per biller per month/year
 
 ### Installments
 | Column | Type | Description |
@@ -472,6 +515,90 @@ import type { SupabaseAccount } from '../src/types/supabase';
 2. Review the browser console for detailed error messages
 3. Check the Supabase Dashboard logs
 4. Verify your database schema matches the expected structure
+
+## Payment Schedules Migration Guide
+
+### Overview
+
+The application has been refactored to use a dedicated `payment_schedules` table instead of storing schedules in the `billers.schedules` JSONB array. This provides better relational integrity, query performance, and data management.
+
+### Migration Steps
+
+#### 1. Create the payment_schedules Table
+
+Run the migration SQL file:
+```bash
+# In Supabase SQL Editor
+# Execute: supabase/migrations/20260201_create_payment_schedules_table.sql
+```
+
+This creates:
+- The `payment_schedules` table with proper foreign keys
+- Indexes for performance
+- RLS policies for security
+- Automatic timestamp update triggers
+
+#### 2. Migrate Legacy Data
+
+Run the legacy data migration script:
+```bash
+# In Supabase SQL Editor  
+# Execute: supabase/migrations/20260201_migrate_legacy_schedules.sql
+```
+
+This script:
+- Walks through all existing billers with schedules in JSONB
+- Inserts corresponding rows into `payment_schedules` table
+- Is **idempotent** - safe to run multiple times
+- Preserves all payment data (amounts paid, receipts, dates, accounts)
+- Provides verification output showing migration status
+
+#### 3. Verify Migration
+
+After running the migration, verify:
+```sql
+-- Check total schedules migrated
+SELECT COUNT(*) FROM payment_schedules;
+
+-- Check schedules for a specific biller
+SELECT * FROM payment_schedules WHERE biller_id = 'your-biller-id';
+
+-- Check for any paid schedules
+SELECT * FROM payment_schedules WHERE amount_paid IS NOT NULL;
+```
+
+### How It Works Now
+
+#### Creating a Biller
+- When you create a new biller, the system automatically generates payment schedule rows from the activation month forward (24 months by default)
+- Schedules are stored directly in the `payment_schedules` table
+- The biller's `schedules` JSONB field is kept empty for backwards compatibility
+
+#### Marking Payments
+- Payment modal now updates the `payment_schedules` table directly
+- Uses the unique `payment_schedule_id` for precise record updates
+- Automatically reloads schedules after payment to reflect changes
+
+#### Viewing Schedules
+- Biller detail view loads schedules from `payment_schedules` table
+- Payment status checks both explicit marking and transaction matching
+- Linked account integration still works for dynamic amount calculation
+
+### Backwards Compatibility
+
+The system maintains backwards compatibility:
+- Legacy billers with schedules in JSONB continue to work
+- The migration script transfers old data to the new table
+- The `schedules` JSONB field is preserved but deprecated
+- New billers use only the `payment_schedules` table
+
+### Benefits
+
+1. **Better Data Integrity**: Foreign key constraints ensure data consistency
+2. **Improved Performance**: Indexed queries are faster than JSONB searches
+3. **Easier Querying**: Standard SQL queries instead of JSONB operations
+4. **Scalability**: Relational structure scales better than nested JSONB
+5. **Audit Trail**: Automatic timestamps track when schedules are created/updated
 
 ## Local Development with Supabase CLI (Optional)
 
