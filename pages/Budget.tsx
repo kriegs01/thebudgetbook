@@ -983,8 +983,22 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
 
   const categorySummary = categories.map((cat) => {
     const items = setupData[cat.name] || [];
-    const total = items.filter(i => i.included).reduce((sum, item) => sum + (parseFloat(item.amount) || 0), 0);
-    return { category: cat.name, total };
+    const itemsTotal = items.filter(i => i.included).reduce((sum, item) => sum + (parseFloat(item.amount) || 0), 0);
+    
+    // FIX: Include installments for Loans category (same logic as Setup view)
+    let installmentsTotal = 0;
+    if (cat.name === 'Loans') {
+      const relevantInstallments = installments.filter(inst => {
+        const timingMatch = !inst.timing || inst.timing === selectedTiming;
+        const dateMatch = shouldShowInstallment(inst, selectedMonth);
+        return timingMatch && dateMatch;
+      });
+      installmentsTotal = relevantInstallments
+        .filter(inst => !excludedInstallmentIds.has(inst.id))
+        .reduce((s, inst) => s + inst.monthlyAmount, 0);
+    }
+    
+    return { category: cat.name, total: itemsTotal + installmentsTotal };
   });
   const grandTotal = categorySummary.reduce((sum, cat) => sum + cat.total, 0);
 
