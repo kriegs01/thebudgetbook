@@ -3,14 +3,35 @@
 ## Overview
 This document provides a comprehensive summary of the refactoring that moved payment schedule tracking from a JSONB array in the `billers` table to a dedicated `payment_schedules` relational table.
 
+## ⚠️ IMPORTANT: Column Names
+The `payment_schedules` table uses **`schedule_month`** and **`schedule_year`** as column names (not `month` or `year`). Always use these exact names when inserting or updating rows to avoid "null value in column" errors.
+
+```typescript
+// ✅ CORRECT
+await supabase.from('payment_schedules').insert([{
+  biller_id: billerId,
+  schedule_month: 'February',
+  schedule_year: '2026',
+  ...otherFields
+}]);
+
+// ❌ INCORRECT (will cause errors)
+await supabase.from('payment_schedules').insert([{
+  biller_id: billerId,
+  month: 'February',  // Wrong!
+  year: '2026',       // Wrong!
+  ...otherFields
+}]);
+```
+
 ## What Changed
 
 ### Database Schema
 **New Table**: `payment_schedules`
 - Stores one row per biller per month/year
 - Foreign key to `billers.id` with cascade delete
-- Unique constraint on (biller_id, month, year)
-- Indexed columns for performance: biller_id, month/year, account_id
+- Unique constraint on (biller_id, schedule_month, schedule_year)
+- Indexed columns for performance: biller_id, schedule_month/schedule_year, account_id
 - Automatic timestamp updates (created_at, updated_at)
 
 **Deprecated Field**: `billers.schedules` JSONB
@@ -26,8 +47,8 @@ This document provides a comprehensive summary of the refactoring that moved pay
 export interface SupabasePaymentSchedule {
   id: string;
   biller_id: string;
-  month: string;
-  year: string;
+  schedule_month: string; // Month name (e.g., January, February)
+  schedule_year: string; // Year as string (e.g., 2024, 2025)
   expected_amount: number;
   amount_paid: number | null;
   receipt: string | null;
@@ -37,6 +58,8 @@ export interface SupabasePaymentSchedule {
   updated_at: string;
 }
 ```
+
+**IMPORTANT**: Column names are `schedule_month` and `schedule_year` (not `month` or `year`).
 
 #### 2. Payment Schedules Service (`src/services/paymentSchedulesService.ts`)
 New service with full CRUD operations:

@@ -134,8 +134,8 @@ CREATE TABLE budget_setups (
 CREATE TABLE payment_schedules (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   biller_id UUID NOT NULL REFERENCES billers(id) ON DELETE CASCADE,
-  month TEXT NOT NULL,
-  year TEXT NOT NULL,
+  schedule_month TEXT NOT NULL,
+  schedule_year TEXT NOT NULL,
   expected_amount NUMERIC NOT NULL,
   amount_paid NUMERIC,
   receipt TEXT,
@@ -143,12 +143,12 @@ CREATE TABLE payment_schedules (
   account_id UUID REFERENCES accounts(id) ON DELETE SET NULL,
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW(),
-  CONSTRAINT unique_biller_month_year UNIQUE (biller_id, month, year)
+  CONSTRAINT unique_biller_month_year UNIQUE (biller_id, schedule_month, schedule_year)
 );
 
 -- Add indexes for payment_schedules
 CREATE INDEX idx_payment_schedules_biller_id ON payment_schedules(biller_id);
-CREATE INDEX idx_payment_schedules_month_year ON payment_schedules(month, year);
+CREATE INDEX idx_payment_schedules_month_year ON payment_schedules(schedule_month, schedule_year);
 CREATE INDEX idx_payment_schedules_account_id ON payment_schedules(account_id);
 
 -- Enable Row Level Security (RLS)
@@ -225,8 +225,8 @@ Visit the Supabase Demo page to test the integration!
 |--------|------|-------------|
 | id | UUID | Primary key (auto-generated) |
 | biller_id | UUID | Foreign key to billers (cascade delete) |
-| month | TEXT | Month name (January, February, etc.) |
-| year | TEXT | Year as string (2024, 2025, etc.) |
+| schedule_month | TEXT | Month name (January, February, etc.) |
+| schedule_year | TEXT | Year as string (2024, 2025, etc.) |
 | expected_amount | NUMERIC | Expected payment amount for this month |
 | amount_paid | NUMERIC | Actual amount paid (nullable) |
 | receipt | TEXT | Receipt file name or path (nullable) |
@@ -235,7 +235,9 @@ Visit the Supabase Demo page to test the integration!
 | created_at | TIMESTAMPTZ | Creation timestamp (auto-generated) |
 | updated_at | TIMESTAMPTZ | Last update timestamp (auto-updated) |
 
-**Constraints**: Unique constraint on (biller_id, month, year) ensures one schedule per biller per month/year
+**Constraints**: Unique constraint on (biller_id, schedule_month, schedule_year) ensures one schedule per biller per month/year
+
+**IMPORTANT**: When inserting or updating rows, always use column names `schedule_month` and `schedule_year` (not `month` or `year`).
 
 ### Installments
 | Column | Type | Description |
