@@ -3,6 +3,8 @@
 ## Overview
 This document provides a comprehensive summary of the refactoring that moved payment schedule tracking from a JSONB array in the `billers` table to a dedicated `payment_schedules` relational table.
 
+**Update**: Budget Setup has been migrated to use the unified payment_schedules table. See [BUDGET_MIGRATION_TO_PAYMENT_SCHEDULES.md](./BUDGET_MIGRATION_TO_PAYMENT_SCHEDULES.md) for details.
+
 ## ⚠️ IMPORTANT: Column Names
 The `payment_schedules` table uses **`schedule_month`** and **`schedule_year`** as column names (not `month` or `year`). Always use these exact names when inserting or updating rows to avoid "null value in column" errors.
 
