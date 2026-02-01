@@ -190,11 +190,11 @@ const TransactionsPage: React.FC = () => {
           </div>
         </div>
 
-        {/* QA: Standardized Transaction Form - consistent with Budget.tsx Pay modal */}
+        {/* QA: Consistent Transaction Form - with receipt upload, exclude credit accounts */}
         {showForm && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-md">
             <div className="w-full max-w-md bg-white rounded-3xl p-10 shadow-2xl relative">
-              <h2 className="text-2xl font-black text-gray-900 mb-2">Add Transaction</h2>
+              <h2 className="text-2xl font-black text-gray-900 mb-2">Add New Transaction</h2>
               <p className="text-gray-500 text-sm mb-8">Record a payment transaction</p>
               <form onSubmit={onSubmit} className="space-y-6">
                 <div>
@@ -245,9 +245,19 @@ const TransactionsPage: React.FC = () => {
                         onChange={e => setForm(f => ({ ...f, paymentMethodId: e.target.value }))} 
                         className="w-full bg-gray-50 border-transparent rounded-2xl p-4 outline-none font-bold text-sm appearance-none"
                       >
-                        {accounts.map(a => <option key={a.id} value={a.id}>{a.bank}</option>)}
+                        {accounts.filter(a => a.classification !== 'Credit Card').map(a => <option key={a.id} value={a.id}>{a.bank}</option>)}
                       </select>
                     )}
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Upload Receipt (Optional)</label>
+                  <div className="relative">
+                    <input type="file" className="absolute inset-0 opacity-0 cursor-pointer" />
+                    <div className="w-full bg-gray-50 border-2 border-dashed border-gray-200 rounded-2xl p-6 text-center text-sm text-gray-500 hover:border-indigo-300 hover:bg-indigo-50 transition-all flex flex-col items-center">
+                      <span className="font-bold">Click or drag to upload receipt</span>
+                    </div>
                   </div>
                 </div>
 

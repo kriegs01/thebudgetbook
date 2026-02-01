@@ -1615,9 +1615,9 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
             <button onClick={() => setShowPayModal(null)} className="absolute right-6 top-6 p-2 hover:bg-gray-100 rounded-full transition-colors">
               <X className="w-6 h-6 text-gray-400" />
             </button>
-            {/* QA: Standardized Pay form - removed receipt upload, added name field */}
+            {/* QA: Consistent Pay form - receipt upload added back, name in title */}
             <h2 className="text-2xl font-black text-gray-900 mb-2">
-              {payFormData.transactionId ? 'Edit Payment' : 'Pay'}
+              Pay {showPayModal.biller.name}
             </h2>
             <p className="text-gray-500 text-sm mb-8">
               {payFormData.transactionId 
@@ -1625,17 +1625,6 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                 : `Recording payment for ${showPayModal.schedule.month}`}
             </p>
             <form onSubmit={handlePaySubmit} className="space-y-6">
-              <div>
-                <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Name</label>
-                <input 
-                  required 
-                  type="text" 
-                  value={`${showPayModal.biller.name} - ${showPayModal.schedule.month} ${showPayModal.schedule.year}`}
-                  readOnly
-                  className="w-full bg-gray-50 border-transparent rounded-2xl p-4 outline-none font-bold focus:ring-2 focus:ring-indigo-500 transition-all text-gray-700" 
-                />
-              </div>
-              
               <div>
                 <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Amount</label>
                 <div className="relative">
@@ -1656,6 +1645,17 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                   </select>
                 </div>
               </div>
+
+              <div>
+                <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Upload Receipt (Optional)</label>
+                <div className="relative">
+                  <input type="file" className="absolute inset-0 opacity-0 cursor-pointer" onChange={(e) => setPayFormData({...payFormData, receipt: e.target.files?.[0]?.name || ''})} />
+                  <div className="w-full bg-gray-50 border-2 border-dashed border-gray-200 rounded-2xl p-6 text-center text-sm text-gray-500 hover:border-indigo-300 hover:bg-indigo-50 transition-all flex flex-col items-center">
+                    <Upload className="w-8 h-8 mb-2 text-indigo-400" />
+                    <span className="font-bold">{payFormData.receipt || 'Click or drag to upload receipt'}</span>
+                  </div>
+                </div>
+              </div>
               <div className="flex space-x-4 pt-4">
                 <button type="button" onClick={() => setShowPayModal(null)} className="flex-1 bg-gray-100 py-4 rounded-2xl font-bold text-gray-500">Cancel</button>
                 <button type="submit" className="flex-1 bg-green-600 text-white py-4 rounded-2xl font-bold hover:bg-green-700 shadow-xl shadow-green-100">
@@ -1667,7 +1667,7 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
         </div>
       )}
 
-      {/* QA: Standardized Transaction Form Modal - consistent with Pay modal */}
+      {/* QA: Consistent Transaction Form Modal - with receipt upload */}
       {showTransactionModal && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md animate-in fade-in">
           <div className="bg-white rounded-3xl w-full max-w-md p-10 shadow-2xl animate-in zoom-in-95 relative">
@@ -1675,7 +1675,7 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
               <X className="w-6 h-6 text-gray-400" />
             </button>
             <h2 className="text-2xl font-black text-gray-900 mb-2">
-              {transactionFormData.id ? 'Edit Payment' : 'Pay'}
+              {transactionFormData.id ? `Edit Payment` : `Pay ${transactionFormData.name || 'Item'}`}
             </h2>
             <p className="text-gray-500 text-sm mb-8">
               {transactionFormData.id 
@@ -1683,18 +1683,6 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                 : 'Record a payment transaction'}
             </p>
             <form onSubmit={handleTransactionSubmit} className="space-y-6">
-              <div>
-                <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Name</label>
-                <input 
-                  required 
-                  type="text" 
-                  value={transactionFormData.name} 
-                  onChange={(e) => setTransactionFormData({...transactionFormData, name: e.target.value})} 
-                  placeholder="e.g. Groceries, Gas, etc."
-                  className="w-full bg-gray-50 border-transparent rounded-2xl p-4 outline-none font-bold focus:ring-2 focus:ring-indigo-500 transition-all" 
-                />
-              </div>
-              
               <div>
                 <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Amount</label>
                 <div className="relative">
@@ -1731,6 +1719,17 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                   >
                     {accounts.map(acc => <option key={acc.id} value={acc.id}>{acc.bank} ({acc.classification})</option>)}
                   </select>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Upload Receipt (Optional)</label>
+                <div className="relative">
+                  <input type="file" className="absolute inset-0 opacity-0 cursor-pointer" />
+                  <div className="w-full bg-gray-50 border-2 border-dashed border-gray-200 rounded-2xl p-6 text-center text-sm text-gray-500 hover:border-indigo-300 hover:bg-indigo-50 transition-all flex flex-col items-center">
+                    <Upload className="w-8 h-8 mb-2 text-indigo-400" />
+                    <span className="font-bold">Click or drag to upload receipt</span>
+                  </div>
                 </div>
               </div>
 
