@@ -988,13 +988,13 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
     // FIX: Include installments for Loans category (same logic as Setup view)
     let installmentsTotal = 0;
     if (cat.name === 'Loans') {
-      const relevantInstallments = installments.filter(inst => {
-        const timingMatch = !inst.timing || inst.timing === selectedTiming;
-        const dateMatch = shouldShowInstallment(inst, selectedMonth);
-        return timingMatch && dateMatch;
-      });
-      installmentsTotal = relevantInstallments
-        .filter(inst => !excludedInstallmentIds.has(inst.id))
+      installmentsTotal = installments
+        .filter(inst => {
+          const timingMatch = !inst.timing || inst.timing === selectedTiming;
+          const dateMatch = shouldShowInstallment(inst, selectedMonth);
+          const notExcluded = !excludedInstallmentIds.has(inst.id);
+          return timingMatch && dateMatch && notExcluded;
+        })
         .reduce((s, inst) => s + inst.monthlyAmount, 0);
     }
     
