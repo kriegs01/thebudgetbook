@@ -40,6 +40,7 @@ const AUTO_SAVE_STATUS_TIMEOUT_MS = 3000; // How long to show status messages
 // Transaction matching configuration
 const TRANSACTION_AMOUNT_TOLERANCE = 1; // ±1 peso tolerance for amount matching (accounts for rounding differences)
 const TRANSACTION_MIN_NAME_LENGTH = 3; // Minimum length for partial name matching to avoid false positives
+const TRANSACTION_DATE_GRACE_DAYS = 7; // Allow transactions up to N days after budget month ends (for late payments)
 
 const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSetups, setSavedSetups, onUpdateBiller, onMoveToTrash, onReloadSetups, onReloadBillers, onUpdateInstallment, installments = [] }) => {
   const [view, setView] = useState<'summary' | 'setup'>('summary');
@@ -309,14 +310,34 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
       // Check amount match (within tolerance)
       const amountMatch = Math.abs(tx.amount - amount) <= TRANSACTION_AMOUNT_TOLERANCE;
       
-      // Check date match (same month and year, or previous year for year-end scenarios)
+      // Check date match with grace period for late payments
+      // Allow:
+      // 1. Transactions in the same month and year
+      // 2. Transactions in December of previous year (for January budgets)
+      // 3. Transactions within TRANSACTION_DATE_GRACE_DAYS after month ends
       const txDate = new Date(tx.date);
       const txMonth = txDate.getMonth();
       const txYear = txDate.getFullYear();
       
-      // Match if transaction is in the selected month of target year or previous year
-      const dateMatch = (txMonth === monthIndex) && 
-                       (txYear === targetYear || txYear === targetYear - 1);
+      let dateMatch = false;
+      
+      // Same month and year
+      if (txMonth === monthIndex && txYear === targetYear) {
+        dateMatch = true;
+      }
+      // December of previous year for January budgets
+      else if (monthIndex === 0 && txMonth === 11 && txYear === targetYear - 1) {
+        dateMatch = true;
+      }
+      // Within grace period after month ends (next month, within first N days)
+      else {
+        const budgetMonthEnd = new Date(targetYear, monthIndex + 1, 0); // Last day of budget month
+        const daysDifference = Math.floor((txDate.getTime() - budgetMonthEnd.getTime()) / (1000 * 60 * 60 * 24));
+        
+        if (daysDifference >= 0 && daysDifference <= TRANSACTION_DATE_GRACE_DAYS) {
+          dateMatch = true;
+        }
+      }
 
       return nameMatch && amountMatch && dateMatch;
     });
