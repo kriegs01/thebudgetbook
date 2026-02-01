@@ -75,7 +75,8 @@ export interface SupabaseBudgetSetup {
 
 export interface SupabasePaymentSchedule {
   id: string; // uuid
-  biller_id: string; // uuid, foreign key to billers
+  biller_id: string | null; // uuid, foreign key to billers (nullable, either biller_id or installment_id must be set)
+  installment_id: string | null; // uuid, foreign key to installments (nullable, either biller_id or installment_id must be set)
   schedule_month: string; // Month name (e.g., January, February)
   schedule_year: string; // Year as string (e.g., 2024, 2025)
   expected_amount: number; // numeric

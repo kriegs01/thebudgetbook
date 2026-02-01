@@ -13,6 +13,23 @@ import type {
 } from '../types/supabase';
 
 /**
+ * Payment schedule with joined biller and installment data for Budget display
+ */
+export interface PaymentScheduleWithDetails extends SupabasePaymentSchedule {
+  biller?: {
+    id: string;
+    name: string;
+    category: string;
+    timing: string;
+  } | null;
+  installment?: {
+    id: string;
+    name: string;
+    timing: string;
+  } | null;
+}
+
+/**
  * Get all payment schedules
  * Note: Schedules are sorted client-side by year and month order, not by database
  */
@@ -118,6 +135,59 @@ export const getPaymentScheduleByBillerMonthYear = async (
     return { data, error: null };
   } catch (error) {
     console.error('Error fetching payment schedule by biller/month/year:', error);
+    return { data: null, error };
+  }
+};
+
+/**
+ * Get payment schedules for Budget page with joined biller and installment data
+ * Filters by month, year, and optionally by timing (1/2 or 2/2)
+ */
+export const getPaymentSchedulesForBudget = async (
+  month: string,
+  year: string,
+  timing?: '1/2' | '2/2'
+): Promise<{ data: PaymentScheduleWithDetails[] | null; error: any }> => {
+  try {
+    let query = supabase
+      .from('payment_schedules')
+      .select(`
+        *,
+        billers:biller_id (id, name, category, timing),
+        installments:installment_id (id, name, timing)
+      `)
+      .eq('schedule_month', month)
+      .eq('schedule_year', year);
+
+    // If timing is specified, filter by it
+    // Note: We need to filter on the joined tables' timing field
+    // This will be done client-side after fetching
+    
+    const { data, error } = await query;
+
+    if (error) throw error;
+
+    // Cast the data to the correct type
+    let schedules = data as unknown as PaymentScheduleWithDetails[];
+
+    // Filter by timing if specified (client-side filtering)
+    if (timing && schedules) {
+      schedules = schedules.filter(schedule => {
+        // Check biller timing
+        if (schedule.biller && schedule.biller.timing === timing) {
+          return true;
+        }
+        // Check installment timing
+        if (schedule.installment && schedule.installment.timing === timing) {
+          return true;
+        }
+        return false;
+      });
+    }
+
+    return { data: schedules, error: null };
+  } catch (error) {
+    console.error('Error fetching payment schedules for budget:', error);
     return { data: null, error };
   }
 };
@@ -310,6 +380,7 @@ export const generateSchedulesForBiller = (
 
     schedules.push({
       biller_id: billerId,
+      installment_id: null,
       schedule_month: MONTHS_ORDERED[monthIndex],
       schedule_year: activationYear.toString(),
       expected_amount: expectedAmount,
