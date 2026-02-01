@@ -190,37 +190,83 @@ const TransactionsPage: React.FC = () => {
           </div>
         </div>
 
+        {/* QA: Consistent Transaction Form - with receipt upload, exclude credit accounts */}
         {showForm && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
-            <form onSubmit={onSubmit} className="w-full max-w-md bg-white rounded-xl p-6 shadow-lg space-y-4">
-              <div>
-                <label className="block text-xs text-gray-500 mb-1">Name</label>
-                <input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} required className="w-full border rounded-lg px-3 py-2" />
-              </div>
-              <div>
-                <label className="block text-xs text-gray-500 mb-1">Date</label>
-                <input type="date" value={form.date} onChange={e => setForm(f => ({ ...f, date: e.target.value }))} required className="w-full border rounded-lg px-3 py-2" />
-              </div>
-              <div>
-                <label className="block text-xs text-gray-500 mb-1">Amount</label>
-                <input type="number" step="0.01" value={form.amount} onChange={e => setForm(f => ({ ...f, amount: e.target.value }))} required className="w-full border rounded-lg px-3 py-2" />
-              </div>
-              <div>
-                <label className="block text-xs text-gray-500 mb-1">Payment Method</label>
-                {accounts.length === 0 ? (
-                  <div className="text-sm text-red-600">No payment methods available. Add accounts first.</div>
-                ) : (
-                  <select value={form.paymentMethodId} onChange={e => setForm(f => ({ ...f, paymentMethodId: e.target.value }))} className="w-full border rounded-lg px-3 py-2">
-                    {accounts.map(a => <option key={a.id} value={a.id}>{a.bank}</option>)}
-                  </select>
-                )}
-              </div>
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-md">
+            <div className="w-full max-w-md bg-white rounded-3xl p-10 shadow-2xl relative">
+              <h2 className="text-2xl font-black text-gray-900 mb-2">Add New Transaction</h2>
+              <p className="text-gray-500 text-sm mb-8">Record a payment transaction</p>
+              <form onSubmit={onSubmit} className="space-y-6">
+                <div>
+                  <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Name</label>
+                  <input 
+                    value={form.name} 
+                    onChange={e => setForm(f => ({ ...f, name: e.target.value }))} 
+                    required 
+                    placeholder="e.g. Groceries, Gas, etc."
+                    className="w-full bg-gray-50 border-transparent rounded-2xl p-4 outline-none font-bold focus:ring-2 focus:ring-indigo-500 transition-all" 
+                  />
+                </div>
+                
+                <div>
+                  <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Amount</label>
+                  <div className="relative">
+                    <span className="absolute left-4 top-1/2 -translate-y-1/2 font-bold text-gray-400">₱</span>
+                    <input 
+                      type="number" 
+                      step="0.01" 
+                      min="0"
+                      value={form.amount} 
+                      onChange={e => setForm(f => ({ ...f, amount: e.target.value }))} 
+                      required 
+                      className="w-full bg-gray-50 border-transparent rounded-2xl p-4 pl-8 outline-none text-xl font-black focus:ring-2 focus:ring-indigo-500 transition-all" 
+                    />
+                  </div>
+                </div>
 
-              <div className="flex justify-end space-x-2">
-                <button type="button" onClick={() => setShowForm(false)} className="px-4 py-2 rounded-lg bg-gray-100">Cancel</button>
-                <button type="submit" disabled={accounts.length === 0} className="px-4 py-2 rounded-lg bg-indigo-600 text-white">Save</button>
-              </div>
-            </form>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Date Paid</label>
+                    <input 
+                      type="date" 
+                      value={form.date} 
+                      onChange={e => setForm(f => ({ ...f, date: e.target.value }))} 
+                      required 
+                      className="w-full bg-gray-50 border-transparent rounded-2xl p-4 outline-none font-bold text-sm" 
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Payment Method</label>
+                    {accounts.length === 0 ? (
+                      <div className="text-xs text-red-600 p-4">No payment methods available</div>
+                    ) : (
+                      <select 
+                        value={form.paymentMethodId} 
+                        onChange={e => setForm(f => ({ ...f, paymentMethodId: e.target.value }))} 
+                        className="w-full bg-gray-50 border-transparent rounded-2xl p-4 outline-none font-bold text-sm appearance-none"
+                      >
+                        {accounts.filter(a => a.classification !== 'Credit Card').map(a => <option key={a.id} value={a.id}>{a.bank}</option>)}
+                      </select>
+                    )}
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Upload Receipt (Optional)</label>
+                  <div className="relative">
+                    <input type="file" className="absolute inset-0 opacity-0 cursor-pointer" />
+                    <div className="w-full bg-gray-50 border-2 border-dashed border-gray-200 rounded-2xl p-6 text-center text-sm text-gray-500 hover:border-indigo-300 hover:bg-indigo-50 transition-all flex flex-col items-center">
+                      <span className="font-bold">Click or drag to upload receipt</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex space-x-4 pt-4">
+                  <button type="button" onClick={() => setShowForm(false)} className="flex-1 bg-gray-100 py-4 rounded-2xl font-bold text-gray-500">Cancel</button>
+                  <button type="submit" disabled={accounts.length === 0} className="flex-1 bg-green-600 text-white py-4 rounded-2xl font-bold hover:bg-green-700 shadow-xl shadow-green-100">Submit Payment</button>
+                </div>
+              </form>
+            </div>
           </div>
         )}
       </div>

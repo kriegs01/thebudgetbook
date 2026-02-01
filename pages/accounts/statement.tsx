@@ -63,8 +63,8 @@ const StatementPage: React.FC<StatementPageProps> = ({ accounts }) => {
         return;
       }
       
-      // Calculate billing cycles - FIX: Only show current year onwards to avoid clutter
-      const cycleData = calculateBillingCycles(billingDate, 12, true);
+      // Calculate billing cycles - Generate both past and future cycles to show all transactions
+      const cycleData = calculateBillingCycles(billingDate, 12, false);
       
       // FIX: Load transactions from Supabase instead of localStorage
       try {
