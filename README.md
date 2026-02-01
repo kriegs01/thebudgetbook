@@ -27,6 +27,7 @@ npm run dev                    # Start the app at http://localhost:3000
 - 🐷 **Savings** - Organize savings goals with virtual jars
 - 📈 **Transactions** - Record and analyze spending
 - 🗄️ **Supabase Integration** - Cloud database with real-time sync
+- 🔒 **Payment Schedules** - Unique payment tracking system that prevents duplicate and misapplied payments
 
 ## Run Locally
 
@@ -103,6 +104,7 @@ For detailed setup instructions, see [SUPABASE_SETUP.md](SUPABASE_SETUP.md).
 ## Documentation
 
 - [SUPABASE_SETUP.md](SUPABASE_SETUP.md) - Complete Supabase integration guide
+- [PAYMENT_SCHEDULES_IMPLEMENTATION.md](PAYMENT_SCHEDULES_IMPLEMENTATION.md) - Payment schedules system guide
 - [.env.example](.env.example) - Environment variable template
 
 ## Development vs Production

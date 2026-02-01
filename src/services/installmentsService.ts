@@ -52,6 +52,7 @@ export const getInstallmentById = async (id: string) => {
 
 /**
  * Create a new installment
+ * Automatically generates payment schedules for the installment
  */
 export const createInstallment = async (installment: CreateInstallmentInput) => {
   try {
@@ -72,6 +73,26 @@ export const createInstallment = async (installment: CreateInstallmentInput) => 
       }
       throw error;
     }
+    
+    // Auto-generate payment schedules for this installment
+    if (data && installment.start_date) {
+      try {
+        const { generateInstallmentSchedules } = await import('./paymentSchedulesService');
+        await generateInstallmentSchedules(
+          data.id,
+          installment.start_date,
+          installment.term_duration,
+          installment.monthly_amount,
+          installment.timing
+        );
+      } catch (scheduleError) {
+        // Log but don't fail - schedules can be generated later
+        console.warn('Failed to auto-generate payment schedules for installment:', scheduleError);
+      }
+    } else if (data && !installment.start_date) {
+      console.warn('Installment created without start_date. Payment schedules not generated. Please set start_date and generate schedules manually.');
+    }
+    
     return { data, error: null };
   } catch (error) {
     console.error('Error creating installment:', error);

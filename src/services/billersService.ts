@@ -52,6 +52,7 @@ export const getBillerById = async (id: string) => {
 
 /**
  * Create a new biller
+ * Automatically generates payment schedules for the biller
  */
 export const createBiller = async (biller: CreateBillerInput) => {
   try {
@@ -62,6 +63,24 @@ export const createBiller = async (biller: CreateBillerInput) => {
       .single();
 
     if (error) throw error;
+    
+    // Auto-generate payment schedules for this biller (12 months ahead)
+    if (data) {
+      try {
+        const { generateBillerSchedules } = await import('./paymentSchedulesService');
+        await generateBillerSchedules(
+          data.id,
+          biller.activation_date,
+          biller.expected_amount,
+          biller.timing,
+          12 // Generate 12 months of schedules
+        );
+      } catch (scheduleError) {
+        // Log but don't fail - schedules can be generated later
+        console.warn('Failed to auto-generate payment schedules for biller:', scheduleError);
+      }
+    }
+    
     return { data, error: null };
   } catch (error) {
     console.error('Error creating biller:', error);
