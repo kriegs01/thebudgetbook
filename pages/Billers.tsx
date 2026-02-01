@@ -2,7 +2,11 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { Biller, Account, PaymentSchedule, BudgetCategory, Installment } from '../types';
 import { Plus, Calendar, Bell, ChevronDown, ChevronRight, Upload, CheckCircle2, X, ArrowLeft, Power, PowerOff, MoreVertical, Edit2, Eye, Trash2, AlertTriangle } from 'lucide-react';
 import { getAllTransactions } from '../src/services/transactionsService';
-import type { SupabaseTransaction } from '../src/types/supabase';
+import type { SupabaseTransaction, SupabasePaymentSchedule } from '../src/types/supabase';
+import { 
+  getPaymentSchedulesByBillerId, 
+  markPaymentScheduleAsPaid 
+} from '../src/services/paymentSchedulesService';
 // ENHANCEMENT: Import linked account utilities for billing cycle-based amount calculation
 import { 
   getScheduleExpectedAmount, 
@@ -57,6 +61,9 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
 
   // Transactions state for payment status matching
   const [transactions, setTransactions] = useState<SupabaseTransaction[]>([]);
+  
+  // Payment schedules state - maps biller ID to their schedules
+  const [paymentSchedules, setPaymentSchedules] = useState<Record<string, SupabasePaymentSchedule[]>>({});
 
   const [confirmModal, setConfirmModal] = useState<{
     show: boolean;
@@ -130,6 +137,35 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
 
     loadTransactions();
   }, []); // Load once on mount
+
+  /**
+   * Load payment schedules for a specific biller
+   */
+  const loadPaymentSchedulesForBiller = useCallback(async (billerId: string) => {
+    try {
+      const { data, error } = await getPaymentSchedulesByBillerId(billerId);
+      if (error) {
+        console.error('[Billers] Error loading payment schedules:', error);
+      } else if (data) {
+        setPaymentSchedules(prev => ({
+          ...prev,
+          [billerId]: data
+        }));
+        console.log('[Billers] Loaded payment schedules for biller:', billerId, data.length);
+      }
+    } catch (error) {
+      console.error('[Billers] Error loading payment schedules:', error);
+    }
+  }, []);
+
+  /**
+   * Load payment schedules when detailed biller changes
+   */
+  useEffect(() => {
+    if (detailedBillerId) {
+      loadPaymentSchedulesForBiller(detailedBillerId);
+    }
+  }, [detailedBillerId, loadPaymentSchedulesForBiller]);
 
   /**
    * Check if a biller schedule is paid by matching transactions
@@ -288,12 +324,7 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
         activationDate: activationDate,
         deactivationDate: deactivationDate,
         status: status,
-        schedules: MONTHS.map(month => ({ 
-          id: generateScheduleId(month, '2026'), 
-          month, 
-          year: '2026', 
-          expectedAmount: expected 
-        })),
+        schedules: [], // Schedules will be created in payment_schedules table by service
         linkedAccountId: addFormData.linkedAccountId || undefined // ENHANCEMENT: Support linked credit accounts
       };
       
@@ -380,18 +411,36 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
     setIsSubmitting(true);
     try {
       const { biller, schedule } = showPayModal;
-      const updatedSchedules = biller.schedules.map(s => {
-        // Match by ID if available (checking for null/undefined explicitly), otherwise fallback to month/year matching
-        const isMatch = (schedule.id != null) ? 
-          (s.id === schedule.id) : 
-          (s.month === schedule.month && s.year === schedule.year);
-          
-        if (isMatch) {
-          return { ...s, amountPaid: parseFloat(payFormData.amount), receipt: payFormData.receipt || `${biller.name}_${schedule.month}`, datePaid: payFormData.datePaid, accountId: payFormData.accountId };
-        }
-        return s;
-      });
-      await onUpdate({ ...biller, schedules: updatedSchedules });
+      
+      // Find the payment schedule in the database using biller ID, month, and year
+      const billerSchedules = paymentSchedules[biller.id] || [];
+      const dbSchedule = billerSchedules.find(
+        s => s.month === schedule.month && s.year === schedule.year
+      );
+      
+      if (!dbSchedule) {
+        console.error('[Billers] Payment schedule not found in database');
+        alert('Payment schedule not found. Please refresh and try again.');
+        return;
+      }
+      
+      // Mark the payment schedule as paid in the database
+      const { data, error } = await markPaymentScheduleAsPaid(
+        dbSchedule.id,
+        parseFloat(payFormData.amount),
+        payFormData.datePaid,
+        payFormData.accountId || undefined,
+        payFormData.receipt || `${biller.name}_${schedule.month}`
+      );
+      
+      if (error) {
+        console.error('[Billers] Error marking payment schedule as paid:', error);
+        alert('Failed to update payment. Please try again.');
+        return;
+      }
+      
+      // Reload payment schedules for this biller to reflect the update
+      await loadPaymentSchedulesForBiller(biller.id);
       
       // Only close modal on success
       setShowPayModal(null);
@@ -590,17 +639,29 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
               <div className="overflow-x-auto">
                 <table className="w-full text-left">
                   <thead><tr className="bg-gray-50 border-b border-gray-100"><th className="p-4 text-xs font-bold text-gray-400 uppercase">Month</th><th className="p-4 text-xs font-bold text-gray-400 uppercase">Amount</th><th className="p-4 text-xs font-bold text-gray-400 uppercase text-center">Action</th></tr></thead>
-                  <tbody className="divide-y divide-gray-50">{detailedBiller.schedules.map((sched, idx) => {
+                  <tbody className="divide-y divide-gray-50">{(paymentSchedules[detailedBiller.id] || []).map((sched, idx) => {
+                    // Convert SupabasePaymentSchedule to PaymentSchedule for compatibility
+                    const scheduleForDisplay: PaymentSchedule = {
+                      id: sched.id,
+                      month: sched.month,
+                      year: sched.year,
+                      expectedAmount: sched.expected_amount,
+                      amountPaid: sched.amount_paid || undefined,
+                      receipt: sched.receipt || undefined,
+                      datePaid: sched.date_paid || undefined,
+                      accountId: sched.account_id || undefined
+                    };
+                    
                     // ENHANCEMENT: Calculate amount from linked account if applicable
                     const { amount: calculatedAmount, isFromLinkedAccount } = getScheduleExpectedAmount(
                       detailedBiller,
-                      sched,
+                      scheduleForDisplay,
                       accounts,
                       transactions
                     );
                     
-                    // Check if paid via biller schedule OR via transaction matching
-                    const isPaidViaSchedule = !!sched.amountPaid;
+                    // Check if paid via payment schedule OR via transaction matching
+                    const isPaidViaSchedule = !!sched.amount_paid;
                     const isPaidViaTransaction = checkIfPaidByTransaction(
                       detailedBiller.name,
                       calculatedAmount, // Use calculated amount for matching
@@ -612,8 +673,8 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
                     // Get actual paid amount (from schedule or matching transaction)
                     let displayAmount = calculatedAmount; // Use calculated amount
                     if (isPaid) {
-                      if (isPaidViaSchedule && sched.amountPaid) {
-                        displayAmount = sched.amountPaid;
+                      if (isPaidViaSchedule && sched.amount_paid) {
+                        displayAmount = sched.amount_paid;
                       } else {
                         const matchingTx = getMatchingTransaction(
                           detailedBiller.name,
@@ -631,7 +692,7 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
                     const linkedAccount = shouldUseLinkedAccount(detailedBiller) 
                       ? getLinkedAccount(detailedBiller, accounts) 
                       : null;
-                    const displayLabel = getScheduleDisplayLabel(sched, linkedAccount);
+                    const displayLabel = getScheduleDisplayLabel(scheduleForDisplay, linkedAccount);
                     
                     return (
                       <tr key={idx} className={`${isPaid ? 'bg-green-50' : 'hover:bg-gray-50/50'} transition-colors`}>
@@ -647,7 +708,7 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
                           </div>
                         </td>
                         <td className="p-4 font-medium text-gray-600">{formatCurrency(displayAmount)}</td>
-                        <td className="p-4 text-center">{!isPaid ? <button onClick={() => { setShowPayModal({ biller: detailedBiller, schedule: sched }); setPayFormData({ ...payFormData, amount: displayAmount.toString(), receipt: '' }); }} className="bg-indigo-600 text-white px-6 py-2 rounded-xl font-bold hover:bg-indigo-700 text-xs transition-all">Pay</button> : <span role="status" className="flex items-center justify-center text-green-600"><CheckCircle2 className="w-5 h-5" aria-label="Payment completed" title="Paid" /></span>}</td>
+                        <td className="p-4 text-center">{!isPaid ? <button onClick={() => { setShowPayModal({ biller: detailedBiller, schedule: scheduleForDisplay }); setPayFormData({ ...payFormData, amount: displayAmount.toString(), receipt: '' }); }} className="bg-indigo-600 text-white px-6 py-2 rounded-xl font-bold hover:bg-indigo-700 text-xs transition-all">Pay</button> : <span role="status" className="flex items-center justify-center text-green-600"><CheckCircle2 className="w-5 h-5" aria-label="Payment completed" title="Paid" /></span>}</td>
                       </tr>
                     );
                   })}</tbody>

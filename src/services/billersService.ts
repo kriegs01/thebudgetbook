@@ -12,6 +12,7 @@ import type {
 } from '../types/supabase';
 import { supabaseBillerToFrontend, supabaseBillersToFrontend, frontendBillerToSupabase } from '../utils/billersAdapter';
 import type { Biller } from '../../types';
+import { generateSchedulesForBiller, createPaymentSchedulesBatch } from './paymentSchedulesService';
 
 /**
  * Get all billers
@@ -173,6 +174,7 @@ export const getBillerByIdFrontend = async (id: string): Promise<{ data: Biller 
 
 /**
  * Create a new biller (accepts frontend Biller type)
+ * Also generates payment schedules from activation month forward
  */
 export const createBillerFrontend = async (biller: Biller): Promise<{ data: Biller | null; error: any }> => {
   const supabaseBiller = frontendBillerToSupabase(biller);
@@ -180,6 +182,25 @@ export const createBillerFrontend = async (biller: Biller): Promise<{ data: Bill
   if (error || !data) {
     return { data: null, error };
   }
+  
+  // Generate payment schedules from activation month forward
+  const schedules = generateSchedulesForBiller(
+    data.id,
+    biller.activationDate,
+    biller.deactivationDate,
+    biller.expectedAmount
+  );
+  
+  // Create payment schedules in batch
+  if (schedules.length > 0) {
+    const { error: schedulesError } = await createPaymentSchedulesBatch(schedules);
+    if (schedulesError) {
+      console.error('Error creating payment schedules for new biller:', schedulesError);
+      // Note: We don't return error here to avoid breaking the biller creation
+      // The biller is created but schedules may need to be added manually
+    }
+  }
+  
   return { data: supabaseBillerToFrontend(data), error: null };
 };
 

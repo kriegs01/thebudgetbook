@@ -20,9 +20,11 @@ export const generateScheduleId = (month: string, year: string): string => {
 /**
  * Convert Supabase biller to frontend Biller type
  * Ensures all schedules have unique IDs for payment tracking
+ * Note: schedules are now stored in payment_schedules table, but kept for backwards compatibility
  */
 export const supabaseBillerToFrontend = (supabaseBiller: SupabaseBiller): Biller => {
   // Ensure all schedules have IDs (migration for existing data)
+  // This is kept for backwards compatibility with legacy data
   const schedules = (supabaseBiller.schedules || []).map(schedule => {
     if (!schedule.id) {
       // Generate ID for schedules that don't have one
@@ -44,13 +46,14 @@ export const supabaseBillerToFrontend = (supabaseBiller: SupabaseBiller): Biller
     activationDate: supabaseBiller.activation_date,
     deactivationDate: supabaseBiller.deactivation_c || undefined,
     status: supabaseBiller.status as 'active' | 'inactive',
-    schedules: schedules,
+    schedules: schedules, // Kept for backwards compatibility, but should use payment_schedules table
     linkedAccountId: supabaseBiller.linked_account_id || undefined // ENHANCEMENT: Support linked credit accounts
   };
 };
 
 /**
  * Convert frontend Biller to Supabase biller type
+ * Note: schedules are now stored in payment_schedules table, but kept for backwards compatibility
  */
 export const frontendBillerToSupabase = (biller: Biller): Omit<SupabaseBiller, 'id'> => {
   return {
@@ -62,7 +65,7 @@ export const frontendBillerToSupabase = (biller: Biller): Omit<SupabaseBiller, '
     activation_date: biller.activationDate,
     deactivation_c: biller.deactivationDate || null,
     status: biller.status,
-    schedules: biller.schedules,
+    schedules: biller.schedules || [], // Empty array if not provided, schedules are in payment_schedules table
     linked_account_id: biller.linkedAccountId || null // ENHANCEMENT: Support linked credit accounts
   };
 };
