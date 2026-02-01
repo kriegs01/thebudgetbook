@@ -89,15 +89,45 @@ export const updateTransaction = async (id: string, updates: UpdateTransactionIn
 
 /**
  * Delete a transaction
+ * If the transaction is linked to a payment schedule, also clears the payment information from that schedule
  */
 export const deleteTransaction = async (id: string) => {
   try {
-    const { error } = await supabase
+    // First, get the transaction to check if it has a payment_schedule_id
+    const { data: transaction, error: fetchError } = await supabase
+      .from('transactions')
+      .select('payment_schedule_id')
+      .eq('id', id)
+      .single();
+
+    if (fetchError) throw fetchError;
+
+    // Delete the transaction
+    const { error: deleteError } = await supabase
       .from('transactions')
       .delete()
       .eq('id', id);
 
-    if (error) throw error;
+    if (deleteError) throw deleteError;
+
+    // If the transaction was linked to a payment schedule, clear the payment information
+    if (transaction?.payment_schedule_id) {
+      const { error: updateError } = await supabase
+        .from('payment_schedules')
+        .update({
+          amount_paid: null,
+          date_paid: null,
+          receipt: null,
+          account_id: null
+        })
+        .eq('id', transaction.payment_schedule_id);
+
+      if (updateError) {
+        console.error('Error clearing payment schedule:', updateError);
+        // Don't throw - transaction is already deleted, just log the error
+      }
+    }
+
     return { error: null };
   } catch (error) {
     console.error('Error deleting transaction:', error);
