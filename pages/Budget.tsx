@@ -1443,27 +1443,41 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                           const isIncluded = !excludedInstallmentIds.has(installment.id);
                           
                           // Calculate payment status based on cumulative paid amount (like in Installments.tsx view modal)
-                          // Find which payment period we're in based on selected month
-                          const monthIndex = MONTHS.indexOf(selectedMonth);
-                          const installmentMonthIndex = installment.startDate ? 
-                            MONTHS.indexOf(installment.startDate.split('-')[1]) : 0;
+                          let isPaid = false;
                           
-                          // Calculate how many months have passed since start
-                          let monthsPassed = monthIndex - installmentMonthIndex;
-                          if (monthsPassed < 0) monthsPassed += 12; // Handle year wrap
-                          
-                          // Check if this month's installment is paid based on cumulative amount
-                          const expectedPaidByThisMonth = (monthsPassed + 1) * installment.monthlyAmount;
-                          const isPaid = installment.paidAmount >= expectedPaidByThisMonth;
-                          
-                          console.log('[Budget] Installment payment check:', {
-                            name: installment.name,
-                            selectedMonth,
-                            monthsPassed,
-                            expectedPaidByThisMonth,
-                            actualPaidAmount: installment.paidAmount,
-                            isPaid
-                          });
+                          if (installment.startDate) {
+                            try {
+                              // Parse start date (format: YYYY-MM)
+                              const [startYear, startMonthNum] = installment.startDate.split('-').map(Number);
+                              const startMonthIndex = startMonthNum - 1; // Convert to 0-based index
+                              
+                              // Get current month index
+                              const currentYear = new Date().getFullYear();
+                              const selectedMonthIndex = MONTHS.indexOf(selectedMonth);
+                              
+                              // Calculate months passed (accounting for years)
+                              const monthsPassed = (currentYear - startYear) * 12 + (selectedMonthIndex - startMonthIndex);
+                              
+                              if (monthsPassed >= 0) {
+                                // Check if this month's installment is paid based on cumulative amount
+                                const expectedPaidByThisMonth = (monthsPassed + 1) * installment.monthlyAmount;
+                                isPaid = installment.paidAmount >= expectedPaidByThisMonth;
+                                
+                                console.log('[Budget] Installment payment check:', {
+                                  name: installment.name,
+                                  selectedMonth,
+                                  monthsPassed,
+                                  expectedPaidByThisMonth,
+                                  actualPaidAmount: installment.paidAmount,
+                                  isPaid
+                                });
+                              }
+                            } catch (error) {
+                              console.error('[Budget] Error calculating installment payment status:', error);
+                              // Fallback to unpaid if calculation fails
+                              isPaid = false;
+                            }
+                          }
                           
                           return (
                             <tr key={`installment-${installment.id}`} className={`${isIncluded ? 'bg-blue-50/30' : 'bg-gray-50 opacity-60'}`}>
