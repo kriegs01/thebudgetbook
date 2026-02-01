@@ -89,142 +89,21 @@ export const updateTransaction = async (id: string, updates: UpdateTransactionIn
 
 /**
  * Delete a transaction
- * Also clears payment information from related billers/installments schedules
- * Works with both new (payment_schedule_id) and old (name-based) transaction styles
  */
 export const deleteTransaction = async (id: string) => {
   try {
-    // First, get the full transaction details including name, date, and amount
-    const { data: transaction, error: fetchError } = await supabase
-      .from('transactions')
-      .select('*')
-      .eq('id', id)
-      .single();
-
-    if (fetchError) throw fetchError;
-    if (!transaction) {
-      return { error: 'Transaction not found' };
-    }
-
-    console.log('[deleteTransaction] Deleting transaction:', {
-      id: transaction.id,
-      name: transaction.name,
-      amount: transaction.amount,
-      date: transaction.date,
-      has_payment_schedule_id: !!transaction.payment_schedule_id
-    });
-
-    // Delete the transaction
-    const { error: deleteError } = await supabase
+    const { error } = await supabase
       .from('transactions')
       .delete()
       .eq('id', id);
 
-    if (deleteError) throw deleteError;
-
-    // Clear payment schedules using TWO approaches:
-    // 1. If transaction has payment_schedule_id, use it (new system)
-    // 2. Otherwise, use heuristic matching on name/date/amount (old system)
-    
-    if (transaction.payment_schedule_id) {
-      // NEW SYSTEM: Transaction linked to payment schedule
-      console.log('[deleteTransaction] Clearing via payment_schedule_id');
-      
-      const { data: schedule } = await supabase
-        .from('payment_schedules')
-        .select('*')
-        .eq('id', transaction.payment_schedule_id)
-        .single();
-
-      if (schedule) {
-        // Clear payment_schedules table
-        await supabase
-          .from('payment_schedules')
-          .update({
-            amount_paid: null,
-            date_paid: null,
-            receipt: null,
-            account_id: null
-          })
-          .eq('id', transaction.payment_schedule_id);
-
-        // Clear biller JSON schedules
-        if (schedule.biller_id) {
-          await clearBillerSchedule(schedule.biller_id, schedule.schedule_month, schedule.schedule_year);
-        }
-      }
-    } else {
-      // OLD SYSTEM: Transaction not linked, use heuristic matching
-      console.log('[deleteTransaction] Clearing via heuristic matching');
-      
-      // Parse transaction name to extract biller name and month/year
-      // Format: "{BillerName} - {Month} {Year}"
-      const nameMatch = transaction.name.match(/^(.+?)\s*-\s*(\w+)\s+(\d{4})$/);
-      
-      if (nameMatch) {
-        const [, billerName, month, year] = nameMatch;
-        console.log('[deleteTransaction] Parsed transaction:', { billerName, month, year });
-        
-        // Find matching biller by name
-        const { data: billers } = await supabase
-          .from('billers')
-          .select('*')
-          .ilike('name', billerName.trim());
-        
-        if (billers && billers.length > 0) {
-          // Clear schedule for each matching biller (usually just one)
-          for (const biller of billers) {
-            console.log('[deleteTransaction] Clearing schedule for biller:', biller.name);
-            await clearBillerSchedule(biller.id, month, year);
-          }
-        }
-      }
-    }
-
+    if (error) throw error;
     return { error: null };
   } catch (error) {
     console.error('Error deleting transaction:', error);
     return { error };
   }
 };
-
-/**
- * Helper function to clear a biller's schedule for a specific month/year
- */
-async function clearBillerSchedule(billerId: string, month: string, year: string) {
-  try {
-    const { data: biller } = await supabase
-      .from('billers')
-      .select('schedules')
-      .eq('id', billerId)
-      .single();
-
-    if (biller && biller.schedules) {
-      const updatedSchedules = biller.schedules.map((s: any) => {
-        if (s.month === month && s.year === year) {
-          console.log('[clearBillerSchedule] Clearing schedule:', { month, year });
-          return {
-            ...s,
-            amountPaid: undefined,
-            datePaid: undefined,
-            receipt: undefined,
-            accountId: undefined
-          };
-        }
-        return s;
-      });
-
-      await supabase
-        .from('billers')
-        .update({ schedules: updatedSchedules })
-        .eq('id', billerId);
-      
-      console.log('[clearBillerSchedule] Schedule cleared successfully');
-    }
-  } catch (error) {
-    console.error('[clearBillerSchedule] Error:', error);
-  }
-}
 
 /**
  * Get transactions by payment method

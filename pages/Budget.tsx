@@ -46,7 +46,6 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
   const [view, setView] = useState<'summary' | 'setup'>('summary');
   const [selectedMonth, setSelectedMonth] = useState(MONTHS[new Date().getMonth()]);
   const [selectedTiming, setSelectedTiming] = useState<'1/2' | '2/2'>('1/2');
-  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear().toString());
 
   // Categorized Setup State
   const [setupData, setSetupData] = useState<{ [key: string]: CategorizedSetupItem[] }>({});
@@ -185,7 +184,7 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
             if (item.isBiller) {
               const biller = billers.find(b => b.id === item.id);
               if (biller) {
-                const schedule = biller.schedules.find(s => s.month === selectedMonth && s.year === selectedYear);
+                const schedule = biller.schedules.find(s => s.month === selectedMonth);
                 if (schedule) {
                   const { amount: calculatedAmount } = getScheduleExpectedAmount(
                     biller,
@@ -207,7 +206,7 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
           const newItems = matchingBillers
             .filter(b => !existingIds.has(b.id))
             .map(b => {
-              const schedule = b.schedules.find(s => s.month === selectedMonth && s.year === selectedYear);
+              const schedule = b.schedules.find(s => s.month === selectedMonth);
               
               // ENHANCEMENT: For linked billers, calculate amount from transactions
               let amount: number;
@@ -1332,21 +1331,7 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                       
                       if (isBiller) {
                         linkedBiller = billers.find(b => b.id === item.id);
-                        schedule = linkedBiller?.schedules.find(s => s.month === selectedMonth && s.year === selectedYear);
-                        
-                        console.log(`[Budget] Checking payment for ${item.name} in ${selectedMonth} ${selectedYear}:`, {
-                          foundSchedule: !!schedule,
-                          scheduleMonth: schedule?.month,
-                          scheduleYear: schedule?.year,
-                          selectedMonth: selectedMonth,
-                          selectedYear: selectedYear,
-                          scheduleAmountPaid: schedule?.amountPaid,
-                          allSchedules: linkedBiller?.schedules.map(s => ({
-                            month: s.month,
-                            year: s.year,
-                            amountPaid: s.amountPaid
-                          }))
-                        });
+                        schedule = linkedBiller?.schedules.find(s => s.month === selectedMonth);
                         
                         // FIX: For billers with schedules, ONLY use schedule.amountPaid
                         // This prevents double-counting when transactions match multiple months via grace period
@@ -1710,7 +1695,7 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                           
                           if (isBiller) {
                             linkedBiller = billers.find(b => b.id === item.id);
-                            schedule = linkedBiller?.schedules.find(s => s.month === selectedMonth && s.year === selectedYear);
+                            schedule = linkedBiller?.schedules.find(s => s.month === selectedMonth);
                             // FIX: For billers with schedules, ONLY use schedule.amountPaid
                             // This prevents double-counting when transactions match multiple months via grace period
                             if (schedule) {
