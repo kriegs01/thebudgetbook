@@ -58,6 +58,23 @@ export interface SupabaseTransaction {
   date: string; // timestamp
   amount: number; // numeric
   payment_method_id: string; // uuid
+  payment_schedule_id: string | null; // uuid, nullable - links to payment_schedules table
+}
+
+export interface SupabasePaymentSchedule {
+  id: string; // uuid
+  biller_id: string | null; // uuid, nullable
+  installment_id: string | null; // uuid, nullable
+  schedule_month: string; // e.g., "January", "February"
+  schedule_year: string; // e.g., "2024", "2025"
+  expected_amount: number; // numeric
+  amount_paid: number | null; // numeric, nullable
+  date_paid: string | null; // date, nullable
+  receipt: string | null; // text, nullable
+  account_id: string | null; // uuid, nullable
+  timing: string | null; // '1/2' or '2/2', nullable
+  created_at: string; // timestamptz
+  updated_at: string; // timestamptz
 }
 
 export interface SupabaseBudgetSetup {
@@ -92,6 +109,9 @@ export type UpdateTransactionInput = Partial<CreateTransactionInput>;
 
 export type CreateBudgetSetupInput = Omit<SupabaseBudgetSetup, 'id' | 'created_at'>;
 export type UpdateBudgetSetupInput = Partial<CreateBudgetSetupInput>;
+
+export type CreatePaymentScheduleInput = Omit<SupabasePaymentSchedule, 'id' | 'created_at' | 'updated_at'>;
+export type UpdatePaymentScheduleInput = Partial<CreatePaymentScheduleInput>;
 
 // Database Response Types (for better type safety with Supabase responses)
 

@@ -10,3 +10,4 @@ export * from './budgetSetupsService';
 export * from './installmentsService';
 export * from './savingsService';
 export * from './transactionsService';
+export * from './paymentSchedulesService';
