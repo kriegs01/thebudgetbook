@@ -20,8 +20,8 @@ export const getAllPaymentSchedules = async () => {
     const { data, error } = await supabase
       .from('payment_schedules')
       .select('*')
-      .order('year', { ascending: true })
-      .order('month', { ascending: true });
+      .order('schedule_year', { ascending: true })
+      .order('schedule_month', { ascending: true });
 
     if (error) throw error;
     return { data, error: null };
@@ -40,8 +40,8 @@ export const getPaymentSchedulesByBillerId = async (billerId: string) => {
       .from('payment_schedules')
       .select('*')
       .eq('biller_id', billerId)
-      .order('year', { ascending: true })
-      .order('month', { ascending: true });
+      .order('schedule_year', { ascending: true })
+      .order('schedule_month', { ascending: true });
 
     if (error) throw error;
     return { data, error: null };
@@ -78,8 +78,8 @@ export const getPaymentSchedulesByMonthYear = async (month: string, year: string
     const { data, error } = await supabase
       .from('payment_schedules')
       .select('*')
-      .eq('month', month)
-      .eq('year', year);
+      .eq('schedule_month', month)
+      .eq('schedule_year', year);
 
     if (error) throw error;
     return { data, error: null };
@@ -102,8 +102,8 @@ export const getPaymentScheduleByBillerMonthYear = async (
       .from('payment_schedules')
       .select('*')
       .eq('biller_id', billerId)
-      .eq('month', month)
-      .eq('year', year)
+      .eq('schedule_month', month)
+      .eq('schedule_year', year)
       .single();
 
     if (error) throw error;
@@ -284,8 +284,8 @@ export const generateSchedulesForBiller = (
 
     schedules.push({
       biller_id: billerId,
-      month: MONTHS[currentMonthIndex],
-      year: currentYear.toString(),
+      schedule_month: MONTHS[currentMonthIndex],
+      schedule_year: currentYear.toString(),
       expected_amount: expectedAmount,
       amount_paid: null,
       receipt: null,

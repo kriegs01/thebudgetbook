@@ -415,7 +415,7 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
       // Find the payment schedule in the database using biller ID, month, and year
       const billerSchedules = paymentSchedules[biller.id] || [];
       const dbSchedule = billerSchedules.find(
-        s => s.month === schedule.month && s.year === schedule.year
+        s => s.schedule_month === schedule.month && s.schedule_year === schedule.year
       );
       
       if (!dbSchedule) {
@@ -643,8 +643,8 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
                     // Convert SupabasePaymentSchedule to PaymentSchedule for compatibility
                     const scheduleForDisplay: PaymentSchedule = {
                       id: sched.id,
-                      month: sched.month,
-                      year: sched.year,
+                      month: sched.schedule_month,
+                      year: sched.schedule_year,
                       expectedAmount: sched.expected_amount,
                       amountPaid: sched.amount_paid || undefined,
                       receipt: sched.receipt || undefined,
@@ -665,8 +665,8 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
                     const isPaidViaTransaction = checkIfPaidByTransaction(
                       detailedBiller.name,
                       calculatedAmount, // Use calculated amount for matching
-                      sched.month,
-                      sched.year
+                      sched.schedule_month,
+                      sched.schedule_year
                     );
                     const isPaid = isPaidViaSchedule || isPaidViaTransaction;
                     
@@ -679,8 +679,8 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
                         const matchingTx = getMatchingTransaction(
                           detailedBiller.name,
                           calculatedAmount, // Use calculated amount for matching
-                          sched.month,
-                          sched.year
+                          sched.schedule_month,
+                          sched.schedule_year
                         );
                         if (matchingTx) {
                           displayAmount = matchingTx.amount;

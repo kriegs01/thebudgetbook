@@ -76,8 +76,8 @@ export interface SupabaseBudgetSetup {
 export interface SupabasePaymentSchedule {
   id: string; // uuid
   biller_id: string; // uuid, foreign key to billers
-  month: string;
-  year: string;
+  schedule_month: string; // Month name (e.g., January, February)
+  schedule_year: string; // Year as string (e.g., 2024, 2025)
   expected_amount: number; // numeric
   amount_paid: number | null; // numeric, nullable
   receipt: string | null; // text, nullable
@@ -108,7 +108,7 @@ export type CreateBudgetSetupInput = Omit<SupabaseBudgetSetup, 'id' | 'created_a
 export type UpdateBudgetSetupInput = Partial<CreateBudgetSetupInput>;
 
 export type CreatePaymentScheduleInput = Omit<SupabasePaymentSchedule, 'id' | 'created_at' | 'updated_at'>;
-export type UpdatePaymentScheduleInput = Partial<Omit<CreatePaymentScheduleInput, 'biller_id' | 'month' | 'year'>>;
+export type UpdatePaymentScheduleInput = Partial<Omit<CreatePaymentScheduleInput, 'biller_id' | 'schedule_month' | 'schedule_year'>>;
 
 // Database Response Types (for better type safety with Supabase responses)
 

@@ -42,15 +42,15 @@ BEGIN
       SELECT COUNT(*) INTO existing_count
       FROM payment_schedules
       WHERE biller_id = biller_record.id
-        AND month = schedule_month
-        AND year = schedule_year;
+        AND schedule_month = schedule_month
+        AND schedule_year = schedule_year;
       
       -- Only insert if it doesn't exist (idempotent)
       IF existing_count = 0 THEN
         INSERT INTO payment_schedules (
           biller_id,
-          month,
-          year,
+          schedule_month,
+          schedule_year,
           expected_amount,
           amount_paid,
           receipt,
