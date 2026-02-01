@@ -420,7 +420,7 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
       
       if (!dbSchedule) {
         console.error('[Billers] Payment schedule not found in database');
-        alert('Payment schedule not found. Please refresh and try again.');
+        alert('Payment schedule not found in database. The schedule may not have been created yet. Please refresh the page and try again, or contact support if this issue persists.');
         return;
       }
       
@@ -435,7 +435,7 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
       
       if (error) {
         console.error('[Billers] Error marking payment schedule as paid:', error);
-        alert('Failed to update payment. Please try again.');
+        alert(`Failed to update payment schedule in database: ${error.message || 'Unknown error'}. Please check your connection and try again.`);
         return;
       }
       

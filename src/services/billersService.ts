@@ -196,8 +196,11 @@ export const createBillerFrontend = async (biller: Biller): Promise<{ data: Bill
     const { error: schedulesError } = await createPaymentSchedulesBatch(schedules);
     if (schedulesError) {
       console.error('Error creating payment schedules for new biller:', schedulesError);
-      // Note: We don't return error here to avoid breaking the biller creation
-      // The biller is created but schedules may need to be added manually
+      // Return error to notify user about schedule creation failure
+      return { 
+        data: null, 
+        error: new Error(`Biller created but payment schedules failed to generate. Please contact support. Details: ${schedulesError.message || schedulesError}`) 
+      };
     }
   }
   

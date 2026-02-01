@@ -5,7 +5,6 @@ DO $$
 DECLARE
   biller_record RECORD;
   schedule_item JSONB;
-  schedule_id TEXT;
   schedule_month TEXT;
   schedule_year TEXT;
   schedule_expected_amount NUMERIC;
@@ -28,8 +27,7 @@ BEGIN
     FOR schedule_item IN 
       SELECT * FROM jsonb_array_elements(biller_record.schedules)
     LOOP
-      -- Extract schedule fields
-      schedule_id := schedule_item->>'id';
+      -- Extract schedule fields (id is not used in migration)
       schedule_month := schedule_item->>'month';
       schedule_year := schedule_item->>'year';
       schedule_expected_amount := (schedule_item->>'expectedAmount')::NUMERIC;

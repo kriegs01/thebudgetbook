@@ -29,6 +29,10 @@ ALTER TABLE payment_schedules ENABLE ROW LEVEL SECURITY;
 -- Create policy for public access (adjust based on your auth needs)
 -- WARNING: This policy allows anyone to read/write.
 -- In production, restrict based on user authentication!
+-- TODO: Replace with proper authentication-based policies:
+--   CREATE POLICY "Users can manage their own schedules" ON payment_schedules
+--   FOR ALL USING (biller_id IN (SELECT id FROM billers WHERE user_id = auth.uid()))
+--   WITH CHECK (biller_id IN (SELECT id FROM billers WHERE user_id = auth.uid()));
 CREATE POLICY "Enable all for payment_schedules" ON payment_schedules FOR ALL USING (true) WITH CHECK (true);
 
 -- Add comment to document the purpose
