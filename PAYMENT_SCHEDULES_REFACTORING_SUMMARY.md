@@ -97,7 +97,6 @@ The service now:
 4. Returns error if schedule creation fails
 
 **Note**: Schedules are only created for the activation year. For subsequent years, schedules should be created separately (e.g., at year rollover or on-demand).
-4. Returns error if schedule creation fails
 
 #### 4. Payment Marking (`pages/Billers.tsx`)
 **Before**: Updated schedules JSONB array in biller
