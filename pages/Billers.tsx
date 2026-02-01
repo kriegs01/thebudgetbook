@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Biller, Account, PaymentSchedule, BudgetCategory, Installment } from '../types';
 import { Plus, Calendar, Bell, ChevronDown, ChevronRight, Upload, CheckCircle2, X, ArrowLeft, Power, PowerOff, MoreVertical, Edit2, Eye, Trash2, AlertTriangle } from 'lucide-react';
-import { getAllTransactions } from '../src/services/transactionsService';
+import { getAllTransactions, createTransaction, checkTransactionExistsForSchedule } from '../src/services/transactionsService';
 import type { SupabaseTransaction } from '../src/types/supabase';
+import { getPaymentScheduleByBillerAndMonth } from '../src/services/paymentSchedulesService';
 // ENHANCEMENT: Import linked account utilities for billing cycle-based amount calculation
 import { 
   getScheduleExpectedAmount, 
@@ -380,6 +381,56 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
     setIsSubmitting(true);
     try {
       const { biller, schedule } = showPayModal;
+      
+      // Convert month name and year to YYYY-MM format for schedule lookup
+      const monthNames = ["January", "February", "March", "April", "May", "June", 
+                        "July", "August", "September", "October", "November", "December"];
+      const monthIndex = monthNames.indexOf(schedule.month);
+      const scheduleMonth = `${schedule.year}-${String(monthIndex + 1).padStart(2, '0')}`;
+      
+      // Look up the payment schedule in the database
+      const { data: paymentSchedule, error: scheduleError } = await getPaymentScheduleByBillerAndMonth(
+        biller.id,
+        scheduleMonth
+      );
+      
+      if (scheduleError) {
+        console.error('Error fetching payment schedule:', scheduleError);
+        alert('Failed to find payment schedule. Please try again.');
+        return;
+      }
+      
+      if (!paymentSchedule) {
+        console.error('No payment schedule found for biller:', biller.id, 'month:', scheduleMonth);
+        alert('Payment schedule not found. This may be a legacy biller. Please contact support.');
+        return;
+      }
+      
+      // Check if a transaction already exists for this schedule
+      const transactionExists = await checkTransactionExistsForSchedule(paymentSchedule.id);
+      if (transactionExists) {
+        alert('A payment has already been recorded for this schedule. Duplicate payments are not allowed.');
+        return;
+      }
+      
+      // Create the transaction with payment_schedule_id
+      const transactionData = {
+        name: `${biller.name} - ${schedule.month} ${schedule.year}`,
+        date: new Date(payFormData.datePaid).toISOString(),
+        amount: parseFloat(payFormData.amount),
+        payment_method_id: payFormData.accountId,
+        payment_schedule_id: paymentSchedule.id,
+      };
+      
+      const { error: transactionError } = await createTransaction(transactionData);
+      
+      if (transactionError) {
+        console.error('Error creating transaction:', transactionError);
+        alert(`Failed to create transaction: ${transactionError.message || 'Unknown error'}`);
+        return;
+      }
+      
+      // Also update the biller's schedules in JSONB for backward compatibility
       const updatedSchedules = biller.schedules.map(s => {
         // Match by ID if available (checking for null/undefined explicitly), otherwise fallback to month/year matching
         const isMatch = (schedule.id != null) ? 
@@ -393,10 +444,24 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
       });
       await onUpdate({ ...biller, schedules: updatedSchedules });
       
+      // Reload transactions to update the UI
+      const { data: updatedTransactions } = await getAllTransactions();
+      if (updatedTransactions) {
+        const twoYearsAgo = new Date();
+        twoYearsAgo.setFullYear(twoYearsAgo.getFullYear() - 2);
+        const recentTransactions = updatedTransactions.filter(tx => {
+          const txDate = new Date(tx.date);
+          return txDate >= twoYearsAgo;
+        });
+        setTransactions(recentTransactions);
+      }
+      
       // Only close modal on success
       setShowPayModal(null);
+      alert('Payment recorded successfully!');
     } catch (error) {
       console.error('Failed to update payment:', error);
+      alert('Failed to record payment. Please try again.');
       // Keep modal open so user can retry
     } finally {
       setIsSubmitting(false);

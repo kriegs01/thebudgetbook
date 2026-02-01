@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import { Installment, Account, ViewMode, Biller } from '../types';
 import { Plus, LayoutGrid, List, Wallet, Trash2, X, Upload, AlertTriangle, Edit2, Eye, MoreVertical } from 'lucide-react';
+import { createTransaction, checkTransactionExistsForSchedule } from '../src/services/transactionsService';
+import { getPaymentScheduleByInstallmentAndMonth } from '../src/services/paymentSchedulesService';
 
 interface InstallmentsProps {
   installments: Installment[];
@@ -140,6 +142,67 @@ const Installments: React.FC<InstallmentsProps> = ({ installments, accounts, bil
     setIsSubmitting(true);
     try {
       const paymentAmount = parseFloat(payFormData.amount) || 0;
+      
+      // Calculate which payment period this is (1st payment, 2nd payment, etc.)
+      // based on how much has already been paid
+      const numberOfPaymentsMade = Math.floor(showPayModal.paidAmount / showPayModal.monthlyAmount);
+      
+      // Determine the schedule month for this payment
+      let scheduleMonth: string;
+      if (showPayModal.startDate) {
+        // Parse start date (format: YYYY-MM)
+        const [year, month] = showPayModal.startDate.split('-').map(Number);
+        const paymentDate = new Date(year, month - 1 + numberOfPaymentsMade, 1);
+        scheduleMonth = `${paymentDate.getFullYear()}-${String(paymentDate.getMonth() + 1).padStart(2, '0')}`;
+      } else {
+        // If no start date, use current month
+        const now = new Date();
+        scheduleMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+      }
+      
+      // Look up the payment schedule in the database
+      const { data: paymentSchedule, error: scheduleError } = await getPaymentScheduleByInstallmentAndMonth(
+        showPayModal.id,
+        scheduleMonth
+      );
+      
+      if (scheduleError) {
+        console.error('[Installments] Error fetching payment schedule:', scheduleError);
+        alert('Failed to find payment schedule. Please try again.');
+        return;
+      }
+      
+      if (!paymentSchedule) {
+        console.error('[Installments] No payment schedule found for installment:', showPayModal.id, 'month:', scheduleMonth);
+        alert('Payment schedule not found. This may be a legacy installment without schedules. Please contact support.');
+        return;
+      }
+      
+      // Check if a transaction already exists for this schedule
+      const transactionExists = await checkTransactionExistsForSchedule(paymentSchedule.id);
+      if (transactionExists) {
+        alert('A payment has already been recorded for this schedule period. Duplicate payments are not allowed.');
+        return;
+      }
+      
+      // Create the transaction with payment_schedule_id
+      const transactionData = {
+        name: `${showPayModal.name} - Payment ${numberOfPaymentsMade + 1}`,
+        date: new Date(payFormData.datePaid).toISOString(),
+        amount: paymentAmount,
+        payment_method_id: payFormData.accountId,
+        payment_schedule_id: paymentSchedule.id,
+      };
+      
+      const { error: transactionError } = await createTransaction(transactionData);
+      
+      if (transactionError) {
+        console.error('[Installments] Error creating transaction:', transactionError);
+        alert(`Failed to create transaction: ${transactionError.message || 'Unknown error'}`);
+        return;
+      }
+      
+      // Update the installment's paid amount
       const updatedInstallment: Installment = {
         ...showPayModal,
         paidAmount: showPayModal.paidAmount + paymentAmount
@@ -150,7 +213,9 @@ const Installments: React.FC<InstallmentsProps> = ({ installments, accounts, bil
         installmentName: showPayModal.name,
         previousPaidAmount: showPayModal.paidAmount,
         paymentAmount: paymentAmount,
-        newPaidAmount: updatedInstallment.paidAmount
+        newPaidAmount: updatedInstallment.paidAmount,
+        scheduleMonth: scheduleMonth,
+        paymentScheduleId: paymentSchedule.id
       });
 
       await onUpdate?.(updatedInstallment);
@@ -159,6 +224,7 @@ const Installments: React.FC<InstallmentsProps> = ({ installments, accounts, bil
       
       // Close pay modal after successful payment
       setShowPayModal(null);
+      alert('Payment recorded successfully!');
       
       // If view modal is open, refresh it with updated installment data
       if (showViewModal && showViewModal.id === updatedInstallment.id) {
