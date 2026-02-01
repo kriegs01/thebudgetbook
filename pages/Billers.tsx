@@ -381,7 +381,12 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
     try {
       const { biller, schedule } = showPayModal;
       const updatedSchedules = biller.schedules.map(s => {
-        if (s.id === schedule.id) {
+        // Match by ID if available, otherwise fallback to month/year matching
+        const isMatch = schedule.id ? 
+          (s.id === schedule.id) : 
+          (s.month === schedule.month && s.year === schedule.year);
+          
+        if (isMatch) {
           return { ...s, amountPaid: parseFloat(payFormData.amount), receipt: payFormData.receipt || `${biller.name}_${schedule.month}`, datePaid: payFormData.datePaid, accountId: payFormData.accountId };
         }
         return s;

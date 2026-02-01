@@ -809,13 +809,19 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
       
       // Update the biller's payment schedule using schedule ID for exact matching
       const updatedSchedules = biller.schedules.map(s => {
-        if (s.id === schedule.id) {
-          console.log(`[Budget] MATCHED schedule by ID for update:`, {
+        // Match by ID if available, otherwise fallback to month/year matching
+        const isMatch = schedule.id ? 
+          (s.id === schedule.id) : 
+          (s.month === schedule.month && s.year === schedule.year);
+          
+        if (isMatch) {
+          console.log(`[Budget] MATCHED schedule for update:`, {
             scheduleId: s.id,
             scheduleMonth: s.month,
             scheduleYear: s.year,
             paymentDate: payFormData.datePaid,
-            amount: parseFloat(payFormData.amount)
+            amount: parseFloat(payFormData.amount),
+            matchedBy: schedule.id ? 'ID' : 'month/year'
           });
           return { 
             ...s, 
