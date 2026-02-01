@@ -73,6 +73,20 @@ export interface SupabaseBudgetSetup {
   created_at: string; // timestamptz
 }
 
+export interface SupabasePaymentSchedule {
+  id: string; // uuid
+  biller_id: string; // uuid, foreign key to billers
+  month: string;
+  year: string;
+  expected_amount: number; // numeric
+  amount_paid: number | null; // numeric, nullable
+  receipt: string | null; // text, nullable
+  date_paid: string | null; // date, nullable
+  account_id: string | null; // uuid, nullable - payment method account
+  created_at: string; // timestamptz
+  updated_at: string; // timestamptz
+}
+
 // Input types for creating new records (without id and timestamps)
 
 export type CreateAccountInput = Omit<SupabaseAccount, 'id' | 'created_at'>;
@@ -92,6 +106,9 @@ export type UpdateTransactionInput = Partial<CreateTransactionInput>;
 
 export type CreateBudgetSetupInput = Omit<SupabaseBudgetSetup, 'id' | 'created_at'>;
 export type UpdateBudgetSetupInput = Partial<CreateBudgetSetupInput>;
+
+export type CreatePaymentScheduleInput = Omit<SupabasePaymentSchedule, 'id' | 'created_at' | 'updated_at'>;
+export type UpdatePaymentScheduleInput = Partial<Omit<CreatePaymentScheduleInput, 'biller_id' | 'month' | 'year'>>;
 
 // Database Response Types (for better type safety with Supabase responses)
 
