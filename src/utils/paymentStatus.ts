@@ -118,13 +118,18 @@ export const checkPaymentStatus = (
     else if (monthIndex === 0 && txMonth === 11 && txYear === year - 1) {
       dateMatch = true;
     }
-    // Within grace period after month ends (next month, within first N days)
-    else {
+    // Within grace period after month ends (next month only, within first N days)
+    else if (txMonth === (monthIndex + 1) % 12) {
       const budgetMonthEnd = new Date(year, monthIndex + 1, 0); // Last day of budget month
       const daysDifference = Math.floor((txDate.getTime() - budgetMonthEnd.getTime()) / (1000 * 60 * 60 * 24));
       
-      if (daysDifference >= 0 && daysDifference <= TRANSACTION_DATE_GRACE_DAYS) {
-        dateMatch = true;
+      // Ensure transaction is after month end and within grace period
+      if (daysDifference > 0 && daysDifference <= TRANSACTION_DATE_GRACE_DAYS) {
+        // Handle year transition for December -> January
+        const expectedYear = monthIndex === 11 ? year + 1 : year;
+        if (txYear === expectedYear) {
+          dateMatch = true;
+        }
       }
     }
 

@@ -329,13 +329,18 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
       else if (monthIndex === 0 && txMonth === 11 && txYear === targetYear - 1) {
         dateMatch = true;
       }
-      // Within grace period after month ends (next month, within first N days)
-      else {
+      // Within grace period after month ends (next month only, within first N days)
+      else if (txMonth === (monthIndex + 1) % 12) {
         const budgetMonthEnd = new Date(targetYear, monthIndex + 1, 0); // Last day of budget month
         const daysDifference = Math.floor((txDate.getTime() - budgetMonthEnd.getTime()) / (1000 * 60 * 60 * 24));
         
-        if (daysDifference >= 0 && daysDifference <= TRANSACTION_DATE_GRACE_DAYS) {
-          dateMatch = true;
+        // Ensure transaction is after month end and within grace period
+        if (daysDifference > 0 && daysDifference <= TRANSACTION_DATE_GRACE_DAYS) {
+          // Handle year transition for December -> January
+          const expectedYear = monthIndex === 11 ? targetYear + 1 : targetYear;
+          if (txYear === expectedYear) {
+            dateMatch = true;
+          }
         }
       }
 
