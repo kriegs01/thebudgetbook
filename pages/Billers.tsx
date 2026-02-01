@@ -10,6 +10,8 @@ import {
   shouldUseLinkedAccount, 
   getLinkedAccount 
 } from '../src/utils/linkedAccountUtils';
+// Import schedule ID generator for consistent ID creation
+import { generateScheduleId } from '../src/utils/billersAdapter';
 
 
 interface BillersProps {
@@ -287,7 +289,7 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
         deactivationDate: deactivationDate,
         status: status,
         schedules: MONTHS.map(month => ({ 
-          id: `${Math.random().toString(36).substr(2, 9)}-${Date.now()}`, 
+          id: generateScheduleId(month, '2026'), 
           month, 
           year: '2026', 
           expectedAmount: expected 
