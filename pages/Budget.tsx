@@ -807,14 +807,13 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
       
       console.log(`[Budget] Transaction ${isEditing ? 'updated' : 'created'} successfully:`, transactionData);
       
-      // Update the biller's payment schedule
+      // Update the biller's payment schedule using schedule ID for exact matching
       const updatedSchedules = biller.schedules.map(s => {
-        if (s.month === schedule.month && s.year === schedule.year) {
-          console.log(`[Budget] MATCHED schedule for update:`, {
+        if (s.id === schedule.id) {
+          console.log(`[Budget] MATCHED schedule by ID for update:`, {
+            scheduleId: s.id,
             scheduleMonth: s.month,
             scheduleYear: s.year,
-            targetMonth: schedule.month,
-            targetYear: schedule.year,
             paymentDate: payFormData.datePaid,
             amount: parseFloat(payFormData.amount)
           });
@@ -826,19 +825,11 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
             accountId: payFormData.accountId 
           };
         }
-        // Log schedules that are NOT being updated
-        if (s.amountPaid) {
-          console.log(`[Budget] Schedule NOT matched (but has amountPaid):`, {
-            scheduleMonth: s.month,
-            scheduleYear: s.year,
-            existingAmountPaid: s.amountPaid,
-            existingDatePaid: s.datePaid
-          });
-        }
         return s;
       });
       
       console.log('[Budget] All updated schedules:', updatedSchedules.map(s => ({
+        id: s.id,
         month: s.month,
         year: s.year,
         amountPaid: s.amountPaid,

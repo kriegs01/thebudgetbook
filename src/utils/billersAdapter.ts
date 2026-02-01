@@ -9,8 +9,21 @@ import type { Biller } from '../../types';
 
 /**
  * Convert Supabase biller to frontend Biller type
+ * Ensures all schedules have unique IDs for payment tracking
  */
 export const supabaseBillerToFrontend = (supabaseBiller: SupabaseBiller): Biller => {
+  // Ensure all schedules have IDs (migration for existing data)
+  const schedules = (supabaseBiller.schedules || []).map(schedule => {
+    if (!schedule.id) {
+      // Generate ID for schedules that don't have one
+      return {
+        ...schedule,
+        id: `${schedule.month}-${schedule.year}-${Math.random().toString(36).substr(2, 9)}`
+      };
+    }
+    return schedule;
+  });
+  
   return {
     id: supabaseBiller.id,
     name: supabaseBiller.name,
@@ -21,7 +34,7 @@ export const supabaseBillerToFrontend = (supabaseBiller: SupabaseBiller): Biller
     activationDate: supabaseBiller.activation_date,
     deactivationDate: supabaseBiller.deactivation_c || undefined,
     status: supabaseBiller.status as 'active' | 'inactive',
-    schedules: supabaseBiller.schedules || [],
+    schedules: schedules,
     linkedAccountId: supabaseBiller.linked_account_id || undefined // ENHANCEMENT: Support linked credit accounts
   };
 };

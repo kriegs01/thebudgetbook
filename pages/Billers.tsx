@@ -286,7 +286,12 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
         activationDate: activationDate,
         deactivationDate: deactivationDate,
         status: status,
-        schedules: MONTHS.map(month => ({ month, year: '2026', expectedAmount: expected })),
+        schedules: MONTHS.map(month => ({ 
+          id: `${Math.random().toString(36).substr(2, 9)}-${Date.now()}`, 
+          month, 
+          year: '2026', 
+          expectedAmount: expected 
+        })),
         linkedAccountId: addFormData.linkedAccountId || undefined // ENHANCEMENT: Support linked credit accounts
       };
       
@@ -374,7 +379,7 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
     try {
       const { biller, schedule } = showPayModal;
       const updatedSchedules = biller.schedules.map(s => {
-        if (s.month === schedule.month && s.year === schedule.year) {
+        if (s.id === schedule.id) {
           return { ...s, amountPaid: parseFloat(payFormData.amount), receipt: payFormData.receipt || `${biller.name}_${schedule.month}`, datePaid: payFormData.datePaid, accountId: payFormData.accountId };
         }
         return s;
