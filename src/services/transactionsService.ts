@@ -12,6 +12,45 @@ import type {
 } from '../types/supabase';
 
 /**
+ * Check if a transaction already exists for a payment schedule
+ * Returns true if a transaction exists, false otherwise
+ */
+export const checkTransactionExistsForSchedule = async (paymentScheduleId: string): Promise<boolean> => {
+  try {
+    const { data, error } = await supabase
+      .from('transactions')
+      .select('id')
+      .eq('payment_schedule_id', paymentScheduleId)
+      .maybeSingle();
+
+    if (error) throw error;
+    return !!data;
+  } catch (error) {
+    console.error('Error checking transaction for schedule:', error);
+    return false;
+  }
+};
+
+/**
+ * Get transaction for a specific payment schedule
+ */
+export const getTransactionByPaymentSchedule = async (paymentScheduleId: string) => {
+  try {
+    const { data, error } = await supabase
+      .from('transactions')
+      .select('*')
+      .eq('payment_schedule_id', paymentScheduleId)
+      .maybeSingle();
+
+    if (error) throw error;
+    return { data, error: null };
+  } catch (error) {
+    console.error('Error fetching transaction by payment schedule:', error);
+    return { data: null, error };
+  }
+};
+
+/**
  * Get all transactions
  */
 export const getAllTransactions = async () => {
@@ -50,9 +89,20 @@ export const getTransactionById = async (id: string) => {
 
 /**
  * Create a new transaction
+ * Checks for duplicate payment schedules before creating
  */
 export const createTransaction = async (transaction: CreateTransactionInput) => {
   try {
+    // If payment_schedule_id is provided, check for duplicates
+    if (transaction.payment_schedule_id) {
+      const exists = await checkTransactionExistsForSchedule(transaction.payment_schedule_id);
+      if (exists) {
+        const error = new Error('A transaction already exists for this payment schedule. Duplicate payments are not allowed.');
+        console.error('Duplicate transaction prevented:', error);
+        return { data: null, error };
+      }
+    }
+
     const { data, error } = await supabase
       .from('transactions')
       .insert([transaction])

@@ -12,6 +12,7 @@ import type {
 } from '../types/supabase';
 import { supabaseInstallmentToFrontend, supabaseInstallmentsToFrontend, frontendInstallmentToSupabase } from '../utils/installmentsAdapter';
 import type { Installment } from '../../types';
+import { generateInstallmentSchedules } from './paymentSchedulesService';
 
 /**
  * Get all installments
@@ -52,6 +53,7 @@ export const getInstallmentById = async (id: string) => {
 
 /**
  * Create a new installment
+ * Also generates payment schedules based on start date and term duration
  */
 export const createInstallment = async (installment: CreateInstallmentInput) => {
   try {
@@ -72,6 +74,24 @@ export const createInstallment = async (installment: CreateInstallmentInput) => 
       }
       throw error;
     }
+    
+    // Generate payment schedules if we have the necessary data
+    if (data && data.id && installment.start_date && installment.term_duration) {
+      const scheduleResult = await generateInstallmentSchedules(
+        data.id,
+        installment.monthly_amount,
+        installment.start_date,
+        installment.term_duration
+      );
+      
+      if (scheduleResult.error) {
+        console.warn('Failed to generate payment schedules for installment:', scheduleResult.error);
+        // Don't fail the installment creation if schedule generation fails
+      } else {
+        console.log('Generated payment schedules for installment:', data.id, scheduleResult.data?.length, 'schedules');
+      }
+    }
+    
     return { data, error: null };
   } catch (error) {
     console.error('Error creating installment:', error);

@@ -58,6 +58,17 @@ export interface SupabaseTransaction {
   date: string; // timestamp
   amount: number; // numeric
   payment_method_id: string; // uuid
+  payment_schedule_id: string | null; // uuid, nullable - links to payment_schedules for duplicate prevention
+}
+
+export interface SupabasePaymentSchedule {
+  id: string; // uuid
+  biller_id: string | null; // uuid, nullable - FK to billers (mutually exclusive with installment_id)
+  installment_id: string | null; // uuid, nullable - FK to installments (mutually exclusive with biller_id)
+  schedule_month: string; // format: YYYY-MM (e.g., '2026-03')
+  expected_amount: number; // numeric
+  created_at: string; // timestamptz
+  updated_at: string; // timestamptz
 }
 
 export interface SupabaseBudgetSetup {
@@ -89,6 +100,9 @@ export type UpdateSavingsInput = Partial<CreateSavingsInput>;
 
 export type CreateTransactionInput = Omit<SupabaseTransaction, 'id'>;
 export type UpdateTransactionInput = Partial<CreateTransactionInput>;
+
+export type CreatePaymentScheduleInput = Omit<SupabasePaymentSchedule, 'id' | 'created_at' | 'updated_at'>;
+export type UpdatePaymentScheduleInput = Partial<CreatePaymentScheduleInput>;
 
 export type CreateBudgetSetupInput = Omit<SupabaseBudgetSetup, 'id' | 'created_at'>;
 export type UpdateBudgetSetupInput = Partial<CreateBudgetSetupInput>;

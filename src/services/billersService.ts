@@ -12,6 +12,7 @@ import type {
 } from '../types/supabase';
 import { supabaseBillerToFrontend, supabaseBillersToFrontend, frontendBillerToSupabase } from '../utils/billersAdapter';
 import type { Biller } from '../../types';
+import { generateBillerSchedules } from './paymentSchedulesService';
 
 /**
  * Get all billers
@@ -52,6 +53,7 @@ export const getBillerById = async (id: string) => {
 
 /**
  * Create a new biller
+ * Also generates payment schedules for the next 24 months
  */
 export const createBiller = async (biller: CreateBillerInput) => {
   try {
@@ -62,6 +64,42 @@ export const createBiller = async (biller: CreateBillerInput) => {
       .single();
 
     if (error) throw error;
+    
+    // Generate payment schedules for the next 24 months
+    if (data && data.id) {
+      // Determine start month from activation date
+      const activationDate = biller.activation_date;
+      let startMonth: string;
+      
+      if (activationDate && activationDate.month && activationDate.year) {
+        // Convert month name to number (e.g., "January" -> "01")
+        const monthNames = ["January", "February", "March", "April", "May", "June", 
+                          "July", "August", "September", "October", "November", "December"];
+        const monthIndex = monthNames.indexOf(activationDate.month);
+        const monthNum = monthIndex >= 0 ? monthIndex + 1 : new Date().getMonth() + 1;
+        startMonth = `${activationDate.year}-${String(monthNum).padStart(2, '0')}`;
+      } else {
+        // Default to current month if no activation date
+        const now = new Date();
+        startMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+      }
+      
+      // Generate 24 months of schedules
+      const scheduleResult = await generateBillerSchedules(
+        data.id,
+        biller.expected_amount,
+        startMonth,
+        24
+      );
+      
+      if (scheduleResult.error) {
+        console.warn('Failed to generate payment schedules for biller:', scheduleResult.error);
+        // Don't fail the biller creation if schedule generation fails
+      } else {
+        console.log('Generated payment schedules for biller:', data.id, scheduleResult.data?.length, 'schedules');
+      }
+    }
+    
     return { data, error: null };
   } catch (error) {
     console.error('Error creating biller:', error);
