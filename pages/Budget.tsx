@@ -26,6 +26,13 @@ interface BudgetProps {
 
 const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 
+// Budget setup status constants
+const BUDGET_SETUP_STATUS = {
+  SAVED: 'Saved',
+  ACTIVE: 'Active',
+  COMPLETED: 'Completed'
+} as const;
+
 // Autosave configuration constants
 const AUTO_SAVE_DEBOUNCE_MS = 3000; // 3 seconds debounce for autosave
 const AUTO_SAVE_STATUS_TIMEOUT_MS = 3000; // How long to show status messages
@@ -455,7 +462,7 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
         const newSetup: Omit<SavedBudgetSetup, 'id'> = {
           month: selectedMonth,
           timing: selectedTiming,
-          status: 'Saved',
+          status: BUDGET_SETUP_STATUS.SAVED,
           totalAmount: total,
           data: dataToSave
         };
@@ -625,7 +632,7 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
           ...existingSetup,
           totalAmount: total,
           data: dataToSave,
-          status: 'Saved'
+          status: BUDGET_SETUP_STATUS.SAVED
         };
         
         const { data, error } = await updateBudgetSetupFrontend(updatedSetup);
@@ -653,7 +660,7 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
         const newSetup: Omit<SavedBudgetSetup, 'id'> = {
           month: selectedMonth,
           timing: selectedTiming,
-          status: 'Saved',
+          status: BUDGET_SETUP_STATUS.SAVED,
           totalAmount: total,
           data: dataToSave
         };
@@ -813,7 +820,7 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
         console.log('[Budget] Updating budget setup status after payment');
         const updatedSetup: SavedBudgetSetup = {
           ...existingSetup,
-          status: 'Active' // Mark as Active when payments are being made
+          status: BUDGET_SETUP_STATUS.ACTIVE // Mark as Active when payments are being made
         };
         await updateBudgetSetupFrontend(updatedSetup);
         console.log('[Budget] Budget setup status updated to Active');
@@ -932,7 +939,7 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                         <td className="p-8"><span className="text-[10px] font-black text-gray-500 bg-gray-100/80 px-4 py-1.5 rounded-full uppercase tracking-widest">{setup.timing}</span></td>
                         <td className="p-8"><span className="text-base font-black text-gray-900 tracking-tight">{formatCurrency(setup.totalAmount)}</span></td>
                         <td className="p-8">
-                          <span className={`text-[10px] font-black uppercase tracking-[0.15em] px-4 py-1.5 rounded-full ${setup.status === 'Active' ? 'bg-green-100 text-green-700' : 'bg-blue-100 text-blue-700'}`}>
+                          <span className={`text-[10px] font-black uppercase tracking-[0.15em] px-4 py-1.5 rounded-full ${setup.status === BUDGET_SETUP_STATUS.ACTIVE ? 'bg-green-100 text-green-700' : 'bg-blue-100 text-blue-700'}`}>
                             {setup.status}
                           </span>
                         </td>
