@@ -40,10 +40,10 @@ BEGIN
       
       -- Check if this schedule already exists in payment_schedules
       SELECT COUNT(*) INTO existing_count
-      FROM payment_schedules
-      WHERE biller_id = biller_record.id
-        AND schedule_month = schedule_month
-        AND schedule_year = schedule_year;
+      FROM payment_schedules ps
+      WHERE ps.biller_id = biller_record.id
+        AND ps.schedule_month = schedule_month
+        AND ps.schedule_year = schedule_year;
       
       -- Only insert if it doesn't exist (idempotent)
       IF existing_count = 0 THEN
