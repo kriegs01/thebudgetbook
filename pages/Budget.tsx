@@ -20,6 +20,7 @@ interface BudgetProps {
   onMoveToTrash?: (setup: SavedBudgetSetup) => void;
   onReloadSetups?: () => Promise<void>;
   onReloadBillers?: () => Promise<void>;
+  onUpdateInstallment?: (installment: Installment) => Promise<void>; // For updating installment payments
   installments?: Installment[]; // PROTOTYPE: Installments for Loans section
 }
 
@@ -33,7 +34,7 @@ const AUTO_SAVE_STATUS_TIMEOUT_MS = 3000; // How long to show status messages
 const TRANSACTION_AMOUNT_TOLERANCE = 1; // ±1 peso tolerance for amount matching (accounts for rounding differences)
 const TRANSACTION_MIN_NAME_LENGTH = 3; // Minimum length for partial name matching to avoid false positives
 
-const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSetups, setSavedSetups, onUpdateBiller, onMoveToTrash, onReloadSetups, onReloadBillers, installments = [] }) => {
+const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSetups, setSavedSetups, onUpdateBiller, onMoveToTrash, onReloadSetups, onReloadBillers, onUpdateInstallment, installments = [] }) => {
   const [view, setView] = useState<'summary' | 'setup'>('summary');
   const [selectedMonth, setSelectedMonth] = useState(MONTHS[new Date().getMonth()]);
   const [selectedTiming, setSelectedTiming] = useState<'1/2' | '2/2'>('1/2');
@@ -789,6 +790,39 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
       
       console.log('[Budget] Updating biller with new schedule');
       await onUpdateBiller({ ...biller, schedules: updatedSchedules });
+      
+      // FIX: Update linked installment's paidAmount if this biller is linked to an installment
+      if (biller.category.startsWith('Loans') && installments && installments.length > 0) {
+        const linkedInstallment = installments.find(inst => inst.billerId === biller.id);
+        if (linkedInstallment && onUpdateInstallment) {
+          console.log('[Budget] Found linked installment, updating paidAmount');
+          const updatedInstallment: Installment = {
+            ...linkedInstallment,
+            paidAmount: linkedInstallment.paidAmount + parseFloat(payFormData.amount)
+          };
+          await onUpdateInstallment(updatedInstallment);
+          console.log('[Budget] Installment paidAmount updated successfully');
+        }
+      }
+      
+      // FIX: Update budget setup status to reflect payment activity
+      const existingSetup = savedSetups.find(s => 
+        s.month === schedule.month && s.timing === selectedTiming
+      );
+      if (existingSetup) {
+        console.log('[Budget] Updating budget setup status after payment');
+        const updatedSetup: SavedBudgetSetup = {
+          ...existingSetup,
+          status: 'Active' // Mark as Active when payments are being made
+        };
+        await updateBudgetSetupFrontend(updatedSetup);
+        console.log('[Budget] Budget setup status updated to Active');
+        
+        // Reload setups to refresh UI
+        if (onReloadSetups) {
+          await onReloadSetups();
+        }
+      }
       
       // Reload transactions to update paid status
       await reloadTransactions();
