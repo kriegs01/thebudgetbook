@@ -89,15 +89,23 @@ Implement a robust payment schedule system where every monthly payment for Bille
 
 ## 🚀 How to Deploy
 
+⚠️ **UPDATED:** Added base tables migration!
+
 ### Step 1: Run Database Migrations
+
+**See [HOW_TO_RUN_MIGRATIONS.md](HOW_TO_RUN_MIGRATIONS.md) for detailed instructions!**
 
 In your Supabase SQL Editor, run in this order:
 
 ```bash
-1. supabase/migrations/20260201_create_payment_schedules_table.sql
-2. supabase/migrations/20260201_add_payment_schedule_to_transactions.sql
-3. supabase/migrations/20260201_backfill_biller_schedules.sql
-4. supabase/migrations/20260201_backfill_installment_schedules.sql
+0. supabase/migrations/20260100_create_base_tables.sql  ⭐ CRITICAL - RUN FIRST!
+1. supabase/migrations/20260130_create_budget_setups_table.sql
+2. supabase/migrations/20260131_add_linked_account_to_billers.sql
+3. supabase/migrations/20260131_add_installment_timing.sql
+4. supabase/migrations/20260201_create_payment_schedules_table.sql
+5. supabase/migrations/20260201_add_payment_schedule_to_transactions.sql
+6. supabase/migrations/20260201_backfill_biller_schedules.sql (optional - if you have data)
+7. supabase/migrations/20260201_backfill_installment_schedules.sql (optional - if you have data)
 ```
 
 ### Step 2: Verify Migration

@@ -26,24 +26,43 @@ Use this checklist when deploying the payment schedules system to ensure nothing
 
 ### Phase 1: Database Setup (Critical Path)
 
+**⚠️ IMPORTANT: See HOW_TO_RUN_MIGRATIONS.md for detailed instructions!**
+
 **Do these in exact order:**
 
-1. [ ] **Migration 1:** Run `20260201_create_payment_schedules_table.sql`
+0. [ ] **Migration 0 (NEW!):** Run `20260100_create_base_tables.sql` ⭐ **CRITICAL**
+   - [ ] Creates base tables: accounts, billers, installments, savings, transactions
+   - [ ] Verify: `SELECT COUNT(*) FROM pg_tables WHERE schemaname='public' AND tablename IN ('accounts','billers','installments','savings','transactions')`
+   - [ ] Should return 5
+   - **If this fails, STOP! Nothing else will work.**
+
+1. [ ] **Migration 1:** Run `20260130_create_budget_setups_table.sql`
+   - [ ] Verify table created: `\d budget_setups`
+
+2. [ ] **Migration 2:** Run `20260131_add_linked_account_to_billers.sql`
+   - [ ] Verify column added: `\d billers`
+
+3. [ ] **Migration 3:** Run `20260131_add_installment_timing.sql`
+   - [ ] Verify column added: `\d installments`
+
+4. [ ] **Migration 4:** Run `20260201_create_payment_schedules_table.sql`
    - [ ] Verify table created: `\d payment_schedules`
    - [ ] Verify indexes created
    - [ ] Verify triggers created
 
-2. [ ] **Migration 2:** Run `20260201_add_payment_schedule_to_transactions.sql`
+5. [ ] **Migration 5:** Run `20260201_add_payment_schedule_to_transactions.sql`
    - [ ] Verify column added: `\d transactions`
    - [ ] Verify unique index created
    - [ ] Test index: `\di idx_transactions_unique_payment_schedule`
 
-3. [ ] **Backfill 1:** Run `20260201_backfill_biller_schedules.sql`
+6. [ ] **Backfill 1 (Optional):** Run `20260201_backfill_biller_schedules.sql`
+   - [ ] Only if you have existing biller data
    - [ ] Review output for errors
    - [ ] Verify count: `SELECT COUNT(*) FROM payment_schedules WHERE biller_id IS NOT NULL`
    - [ ] Spot-check 5 billers manually
 
-4. [ ] **Backfill 2:** Run `20260201_backfill_installment_schedules.sql`
+7. [ ] **Backfill 2 (Optional):** Run `20260201_backfill_installment_schedules.sql`
+   - [ ] Only if you have existing installment data
    - [ ] Review output for errors
    - [ ] Verify count: `SELECT COUNT(*) FROM payment_schedules WHERE installment_id IS NOT NULL`
    - [ ] Spot-check 5 installments manually

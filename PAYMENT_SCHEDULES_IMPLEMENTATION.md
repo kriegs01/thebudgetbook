@@ -97,17 +97,41 @@ WHERE payment_schedule_id IS NOT NULL;
 
 ### Step 1: Run Database Migrations
 
+⚠️ **IMPORTANT UPDATE:** Base tables must be created first!
+
+**See [HOW_TO_RUN_MIGRATIONS.md](HOW_TO_RUN_MIGRATIONS.md) for detailed step-by-step instructions.**
+
 Run migrations in this specific order:
 
-1. **Create payment_schedules table**
+**0. Create base tables (NEW - CRITICAL!)** ⭐
    ```bash
-   # In Supabase SQL Editor, run:
+   # In Supabase SQL Editor, run FIRST:
+   supabase/migrations/20260100_create_base_tables.sql
+   ```
+   This creates: accounts, billers, installments, savings, transactions
+
+1. **Create budget_setups table**
+   ```bash
+   supabase/migrations/20260130_create_budget_setups_table.sql
+   ```
+
+2. **Add linked_account_id to billers**
+   ```bash
+   supabase/migrations/20260131_add_linked_account_to_billers.sql
+   ```
+
+3. **Add timing to installments**
+   ```bash
+   supabase/migrations/20260131_add_installment_timing.sql
+   ```
+
+4. **Create payment_schedules table**
+   ```bash
    supabase/migrations/20260201_create_payment_schedules_table.sql
    ```
 
-2. **Add payment_schedule_id to transactions**
+5. **Add payment_schedule_id to transactions**
    ```bash
-   # In Supabase SQL Editor, run:
    supabase/migrations/20260201_add_payment_schedule_to_transactions.sql
    ```
 
