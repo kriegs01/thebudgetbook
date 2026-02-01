@@ -3,7 +3,9 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { BudgetItem, Account, Biller, PaymentSchedule, CategorizedSetupItem, SavedBudgetSetup, BudgetCategory, Installment } from '../types';
 import { Plus, Check, ChevronDown, Trash2, Save, FileText, ArrowRight, Upload, CheckCircle2, X, AlertTriangle } from 'lucide-react';
 import { createBudgetSetupFrontend, updateBudgetSetupFrontend } from '../src/services/budgetSetupsService';
-import { createTransaction, getAllTransactions, updateTransaction } from '../src/services/transactionsService';
+import { createTransaction, getAllTransactions, updateTransaction, checkTransactionExistsForSchedule } from '../src/services/transactionsService';
+import { getPaymentScheduleByBillerAndMonth } from '../src/services/paymentSchedulesService';
+import { MONTH_NAMES } from '../src/utils/dateUtils';
 import type { SupabaseTransaction } from '../src/types/supabase';
 import { getInstallmentPaymentSchedule, aggregateCreditCardPurchases } from '../src/utils/paymentStatus'; // PROTOTYPE: Import payment status utilities
 import { getScheduleExpectedAmount } from '../src/utils/linkedAccountUtils'; // ENHANCEMENT: Import for linked account amount calculation
@@ -24,7 +26,7 @@ interface BudgetProps {
   installments?: Installment[]; // PROTOTYPE: Installments for Loans section
 }
 
-const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+const MONTHS = Array.from(MONTH_NAMES);
 
 // Budget setup status constants
 const BUDGET_SETUP_STATUS = {
@@ -768,8 +770,9 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
     }
   };
 
-  // QA: Handle Pay modal submission - supports create and update
+  // QA: Handle Pay modal submission - supports create and update with payment schedules
   // Fix for Issue: Transaction editing from Pay modal
+  // UPDATED: Now uses payment_schedules table for duplicate prevention
   const handlePaySubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!showPayModal) return;
@@ -779,11 +782,54 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
       const isEditing = !!payFormData.transactionId;
       
       console.log(`[Budget] ${isEditing ? 'Updating' : 'Creating'} transaction for payment`);
+      
+      let paymentScheduleId: string | null = null;
+      
+      // If creating a new transaction, look up the payment schedule and check for duplicates
+      if (!isEditing) {
+        // Convert month name and year to YYYY-MM format for schedule lookup
+        const monthIndex = MONTH_NAMES.indexOf(schedule.month);
+        const scheduleMonth = `${schedule.year}-${String(monthIndex + 1).padStart(2, '0')}`;
+        
+        console.log('[Budget] Looking up payment schedule:', { billerId: biller.id, scheduleMonth });
+        
+        // Look up the payment schedule in the database
+        const { data: paymentSchedule, error: scheduleError } = await getPaymentScheduleByBillerAndMonth(
+          biller.id,
+          scheduleMonth
+        );
+        
+        if (scheduleError) {
+          console.error('[Budget] Error fetching payment schedule:', scheduleError);
+          alert('Failed to find payment schedule. Please try again.');
+          return;
+        }
+        
+        if (!paymentSchedule) {
+          console.warn('[Budget] No payment schedule found for biller:', biller.id, 'month:', scheduleMonth);
+          alert('Payment schedule not found. This may be a legacy biller. Please contact support or recreate the biller.');
+          return;
+        }
+        
+        console.log('[Budget] Found payment schedule:', paymentSchedule.id);
+        paymentScheduleId = paymentSchedule.id;
+        
+        // Check if a transaction already exists for this schedule
+        const transactionExists = await checkTransactionExistsForSchedule(paymentSchedule.id);
+        if (transactionExists) {
+          alert('A payment has already been recorded for this schedule. Duplicate payments are not allowed.');
+          return;
+        }
+        
+        console.log('[Budget] No duplicate transaction found, proceeding with payment');
+      }
+      
       const transaction = {
         name: `${biller.name} - ${schedule.month} ${schedule.year}`,
         date: new Date(payFormData.datePaid).toISOString(),
         amount: parseFloat(payFormData.amount),
-        payment_method_id: payFormData.accountId
+        payment_method_id: payFormData.accountId,
+        ...(paymentScheduleId && { payment_schedule_id: paymentScheduleId })
       };
       
       let transactionData, transactionError;
@@ -801,7 +847,7 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
       
       if (transactionError) {
         console.error(`[Budget] Failed to ${isEditing ? 'update' : 'create'} transaction:`, transactionError);
-        alert(`Failed to ${isEditing ? 'update' : 'save'} transaction. Please try again.`);
+        alert(`Failed to ${isEditing ? 'update' : 'save'} transaction: ${transactionError.message || 'Unknown error'}`);
         return;
       }
       
@@ -888,6 +934,7 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
       }
       
       console.log('[Budget] Payment completed successfully');
+      alert('Payment recorded successfully!');
       
       // Only close modal on success and reset form
       setShowPayModal(null);

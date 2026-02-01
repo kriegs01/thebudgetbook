@@ -58,16 +58,23 @@ export const getBillerById = async (id: string) => {
  */
 export const createBiller = async (biller: CreateBillerInput) => {
   try {
+    console.log('[billersService] Creating biller:', biller.name);
     const { data, error } = await supabase
       .from('billers')
       .insert([biller])
       .select()
       .single();
 
-    if (error) throw error;
+    if (error) {
+      console.error('[billersService] Error creating biller:', error);
+      throw error;
+    }
+    
+    console.log('[billersService] Biller created successfully:', data.id);
     
     // Generate payment schedules for the next 24 months
     if (data && data.id) {
+      console.log('[billersService] Starting payment schedule generation');
       // Determine start month from activation date
       const activationDate = biller.activation_date;
       let startMonth: string;
@@ -77,11 +84,20 @@ export const createBiller = async (biller: CreateBillerInput) => {
         const monthIndex = MONTH_NAMES.indexOf(activationDate.month);
         const monthNum = monthIndex >= 0 ? monthIndex + 1 : new Date().getMonth() + 1;
         startMonth = `${activationDate.year}-${String(monthNum).padStart(2, '0')}`;
+        console.log('[billersService] Using activation date for start month:', startMonth);
       } else {
         // Default to current month if no activation date
         const now = new Date();
         startMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+        console.log('[billersService] Using current month for start month:', startMonth);
       }
+      
+      console.log('[billersService] Calling generateBillerSchedules with:', {
+        billerId: data.id,
+        expectedAmount: biller.expected_amount,
+        startMonth,
+        numberOfMonths: 24
+      });
       
       // Generate 24 months of schedules
       const scheduleResult = await generateBillerSchedules(
@@ -92,16 +108,16 @@ export const createBiller = async (biller: CreateBillerInput) => {
       );
       
       if (scheduleResult.error) {
-        console.warn('Failed to generate payment schedules for biller:', scheduleResult.error);
+        console.error('[billersService] Failed to generate payment schedules:', scheduleResult.error);
         // Don't fail the biller creation if schedule generation fails
       } else {
-        console.log('Generated payment schedules for biller:', data.id, scheduleResult.data?.length, 'schedules');
+        console.log('[billersService] Generated payment schedules successfully:', scheduleResult.data?.length, 'schedules');
       }
     }
     
     return { data, error: null };
   } catch (error) {
-    console.error('Error creating biller:', error);
+    console.error('[billersService] Error creating biller:', error);
     return { data: null, error };
   }
 };

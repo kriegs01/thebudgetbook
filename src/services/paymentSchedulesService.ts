@@ -152,15 +152,23 @@ export const createPaymentSchedule = async (schedule: CreatePaymentScheduleInput
  */
 export const createPaymentSchedules = async (schedules: CreatePaymentScheduleInput[]) => {
   try {
+    console.log('[paymentSchedulesService] Creating', schedules.length, 'payment schedules');
+    console.log('[paymentSchedulesService] First schedule:', schedules[0]);
+    
     const { data, error } = await supabase
       .from('payment_schedules')
       .insert(schedules)
       .select();
 
-    if (error) throw error;
+    if (error) {
+      console.error('[paymentSchedulesService] Error creating schedules:', error);
+      throw error;
+    }
+    
+    console.log('[paymentSchedulesService] Successfully created', data?.length, 'schedules');
     return { data, error: null };
   } catch (error) {
-    console.error('Error creating payment schedules:', error);
+    console.error('[paymentSchedulesService] Error creating payment schedules:', error);
     return { data: null, error };
   }
 };
