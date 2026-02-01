@@ -14,17 +14,21 @@ import type {
 
 /**
  * Get all payment schedules
+ * Note: Schedules are sorted client-side by year and month order, not by database
  */
 export const getAllPaymentSchedules = async () => {
   try {
     const { data, error } = await supabase
       .from('payment_schedules')
       .select('*')
-      .order('schedule_year', { ascending: true })
-      .order('schedule_month', { ascending: true });
+      .order('schedule_year', { ascending: true });
 
     if (error) throw error;
-    return { data, error: null };
+    
+    // Sort client-side by month order (not alphabetically)
+    const sortedData = data ? sortSchedulesChronologically(data) : null;
+    
+    return { data: sortedData, error: null };
   } catch (error) {
     console.error('Error fetching payment schedules:', error);
     return { data: null, error };
@@ -33,6 +37,7 @@ export const getAllPaymentSchedules = async () => {
 
 /**
  * Get payment schedules for a specific biller
+ * Note: Schedules are sorted client-side by year and month order, not by database
  */
 export const getPaymentSchedulesByBillerId = async (billerId: string) => {
   try {
@@ -40,11 +45,14 @@ export const getPaymentSchedulesByBillerId = async (billerId: string) => {
       .from('payment_schedules')
       .select('*')
       .eq('biller_id', billerId)
-      .order('schedule_year', { ascending: true })
-      .order('schedule_month', { ascending: true });
+      .order('schedule_year', { ascending: true });
 
     if (error) throw error;
-    return { data, error: null };
+    
+    // Sort client-side by month order (not alphabetically)
+    const sortedData = data ? sortSchedulesChronologically(data) : null;
+    
+    return { data: sortedData, error: null };
   } catch (error) {
     console.error('Error fetching payment schedules for biller:', error);
     return { data: null, error };
@@ -241,64 +249,75 @@ export const deletePaymentSchedulesByBillerId = async (billerId: string) => {
 };
 
 /**
- * Generate payment schedules for a biller from activation month forward
+ * Month order for proper chronological sorting
+ */
+const MONTHS_ORDERED = [
+  'January', 'February', 'March', 'April', 'May', 'June',
+  'July', 'August', 'September', 'October', 'November', 'December'
+];
+
+/**
+ * Sort payment schedules by year then month in chronological order
+ */
+export const sortSchedulesChronologically = (schedules: SupabasePaymentSchedule[]): SupabasePaymentSchedule[] => {
+  return schedules.sort((a, b) => {
+    // First sort by year
+    if (a.schedule_year !== b.schedule_year) {
+      return Number(a.schedule_year) - Number(b.schedule_year);
+    }
+    // Then sort by month order (not alphabetically)
+    return MONTHS_ORDERED.indexOf(a.schedule_month) - MONTHS_ORDERED.indexOf(b.schedule_month);
+  });
+};
+
+/**
+ * Generate payment schedules for a biller from activation month through end of activation year
  * Used when creating or updating a biller
  */
 export const generateSchedulesForBiller = (
   billerId: string,
   activationDate: { month: string; year: string },
   deactivationDate: { month: string; year: string } | undefined,
-  expectedAmount: number,
-  monthsForward: number = 24 // Generate 24 months forward by default
+  expectedAmount: number
 ): CreatePaymentScheduleInput[] => {
-  const MONTHS = [
-    'January', 'February', 'March', 'April', 'May', 'June',
-    'July', 'August', 'September', 'October', 'November', 'December'
-  ];
-
   const schedules: CreatePaymentScheduleInput[] = [];
   
-  const activationMonthIndex = MONTHS.indexOf(activationDate.month);
+  const activationMonthIndex = MONTHS_ORDERED.indexOf(activationDate.month);
   const activationYear = parseInt(activationDate.year);
+  
+  if (activationMonthIndex === -1) {
+    console.error(`Invalid activation month: ${activationDate.month}`);
+    return schedules;
+  }
   
   // Calculate deactivation if provided
   let deactivationMonthIndex = -1;
   let deactivationYear = -1;
   if (deactivationDate) {
-    deactivationMonthIndex = MONTHS.indexOf(deactivationDate.month);
+    deactivationMonthIndex = MONTHS_ORDERED.indexOf(deactivationDate.month);
     deactivationYear = parseInt(deactivationDate.year);
   }
 
-  // Generate schedules from activation month forward
-  let currentMonthIndex = activationMonthIndex;
-  let currentYear = activationYear;
-  
-  for (let i = 0; i < monthsForward; i++) {
-    // Check if we've reached deactivation date
-    if (deactivationDate) {
-      if (currentYear > deactivationYear || 
-          (currentYear === deactivationYear && currentMonthIndex > deactivationMonthIndex)) {
-        break;
-      }
+  // Generate schedules from activation month through December of activation year
+  // This creates schedules only for the current year, in calendar order
+  for (let monthIndex = activationMonthIndex; monthIndex < 12; monthIndex++) {
+    // Check if we've reached deactivation date in the same year
+    if (deactivationDate && 
+        activationYear === deactivationYear && 
+        monthIndex > deactivationMonthIndex) {
+      break;
     }
 
     schedules.push({
       biller_id: billerId,
-      schedule_month: MONTHS[currentMonthIndex],
-      schedule_year: currentYear.toString(),
+      schedule_month: MONTHS_ORDERED[monthIndex],
+      schedule_year: activationYear.toString(),
       expected_amount: expectedAmount,
       amount_paid: null,
       receipt: null,
       date_paid: null,
       account_id: null,
     });
-
-    // Move to next month
-    currentMonthIndex++;
-    if (currentMonthIndex >= 12) {
-      currentMonthIndex = 0;
-      currentYear++;
-    }
   }
 
   return schedules;
