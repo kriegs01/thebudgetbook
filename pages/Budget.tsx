@@ -1311,9 +1311,14 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                       if (isBiller) {
                         linkedBiller = billers.find(b => b.id === item.id);
                         schedule = linkedBiller?.schedules.find(s => s.month === selectedMonth);
-                        // Check both biller schedule and transaction matching
-                        isPaid = !!schedule?.amountPaid || 
-                                 checkIfPaidByTransaction(item.name, item.amount, selectedMonth);
+                        // FIX: For billers with schedules, ONLY use schedule.amountPaid
+                        // This prevents double-counting when transactions match multiple months via grace period
+                        if (schedule) {
+                          isPaid = !!schedule.amountPaid;
+                        } else {
+                          // Fallback to transaction matching if no schedule found
+                          isPaid = checkIfPaidByTransaction(item.name, item.amount, selectedMonth);
+                        }
                       } else {
                         // For non-biller items (like Purchases), only check transactions
                         isPaid = checkIfPaidByTransaction(item.name, item.amount, selectedMonth);
@@ -1627,9 +1632,14 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                           if (isBiller) {
                             linkedBiller = billers.find(b => b.id === item.id);
                             schedule = linkedBiller?.schedules.find(s => s.month === selectedMonth);
-                            // Check both biller schedule and transaction matching
-                            isPaid = !!schedule?.amountPaid || 
-                                     checkIfPaidByTransaction(item.name, item.amount, selectedMonth);
+                            // FIX: For billers with schedules, ONLY use schedule.amountPaid
+                            // This prevents double-counting when transactions match multiple months via grace period
+                            if (schedule) {
+                              isPaid = !!schedule.amountPaid;
+                            } else {
+                              // Fallback to transaction matching if no schedule found
+                              isPaid = checkIfPaidByTransaction(item.name, item.amount, selectedMonth);
+                            }
                           } else {
                             // For non-biller items, only check transactions
                             isPaid = checkIfPaidByTransaction(item.name, item.amount, selectedMonth);
