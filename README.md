@@ -52,7 +52,11 @@ npm run dev                    # Start the app at http://localhost:3000
 
 3. **Set up Supabase database:**
    
-   See [SUPABASE_SETUP.md](SUPABASE_SETUP.md) for detailed instructions.
+   ⚠️ **Important:** Run database migrations in the correct order!
+   
+   See [HOW_TO_RUN_MIGRATIONS.md](HOW_TO_RUN_MIGRATIONS.md) for step-by-step instructions.
+   
+   Or see [SUPABASE_SETUP.md](SUPABASE_SETUP.md) for detailed setup information.
 
 4. **Run the app:**
    ```bash
@@ -103,9 +107,28 @@ For detailed setup instructions, see [SUPABASE_SETUP.md](SUPABASE_SETUP.md).
 
 ## Documentation
 
+- **[HOW_TO_RUN_MIGRATIONS.md](HOW_TO_RUN_MIGRATIONS.md)** - ⭐ Database migration guide (START HERE!)
 - [SUPABASE_SETUP.md](SUPABASE_SETUP.md) - Complete Supabase integration guide
 - [PAYMENT_SCHEDULES_IMPLEMENTATION.md](PAYMENT_SCHEDULES_IMPLEMENTATION.md) - Payment schedules system guide
 - [.env.example](.env.example) - Environment variable template
+
+## Troubleshooting
+
+### SQL Migrations Not Working?
+
+If you see errors like `relation "accounts" does not exist`:
+
+1. **Read:** [HOW_TO_RUN_MIGRATIONS.md](HOW_TO_RUN_MIGRATIONS.md)
+2. **Run:** Base tables migration first (`20260100_create_base_tables.sql`)
+3. **Verify:** Run `VERIFY_SETUP.sql` to check your setup
+4. **Details:** See [SQL_FIX_SUMMARY.md](SQL_FIX_SUMMARY.md) for the complete fix
+
+### Common Issues
+
+- **"relation does not exist"** → Run migrations in correct order (see HOW_TO_RUN_MIGRATIONS.md)
+- **"column already exists"** → That's okay! Migration already ran, continue to next
+- **Build errors** → Run `npm install` to ensure dependencies are installed
+- **Supabase connection fails** → Check your `.env.local` file has correct credentials
 
 ## Development vs Production
 
