@@ -1441,12 +1441,29 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                         {relevantInstallments.map((installment) => {
                           const account = accounts.find(a => a.id === installment.accountId);
                           const isIncluded = !excludedInstallmentIds.has(installment.id);
-                          // Check payment status using transaction matching (simplified for now)
-                          const isPaid = checkIfPaidByTransaction(
-                            installment.name, 
-                            installment.monthlyAmount, 
-                            selectedMonth
-                          );
+                          
+                          // Calculate payment status based on cumulative paid amount (like in Installments.tsx view modal)
+                          // Find which payment period we're in based on selected month
+                          const monthIndex = MONTHS.indexOf(selectedMonth);
+                          const installmentMonthIndex = installment.startDate ? 
+                            MONTHS.indexOf(installment.startDate.split('-')[1]) : 0;
+                          
+                          // Calculate how many months have passed since start
+                          let monthsPassed = monthIndex - installmentMonthIndex;
+                          if (monthsPassed < 0) monthsPassed += 12; // Handle year wrap
+                          
+                          // Check if this month's installment is paid based on cumulative amount
+                          const expectedPaidByThisMonth = (monthsPassed + 1) * installment.monthlyAmount;
+                          const isPaid = installment.paidAmount >= expectedPaidByThisMonth;
+                          
+                          console.log('[Budget] Installment payment check:', {
+                            name: installment.name,
+                            selectedMonth,
+                            monthsPassed,
+                            expectedPaidByThisMonth,
+                            actualPaidAmount: installment.paidAmount,
+                            isPaid
+                          });
                           
                           return (
                             <tr key={`installment-${installment.id}`} className={`${isIncluded ? 'bg-blue-50/30' : 'bg-gray-50 opacity-60'}`}>

@@ -145,10 +145,28 @@ const Installments: React.FC<InstallmentsProps> = ({ installments, accounts, bil
         paidAmount: showPayModal.paidAmount + paymentAmount
       };
 
+      console.log('[Installments] Processing payment:', {
+        installmentId: showPayModal.id,
+        installmentName: showPayModal.name,
+        previousPaidAmount: showPayModal.paidAmount,
+        paymentAmount: paymentAmount,
+        newPaidAmount: updatedInstallment.paidAmount
+      });
+
       await onUpdate?.(updatedInstallment);
+      
+      console.log('[Installments] Payment recorded successfully');
+      
+      // Close pay modal after successful payment
       setShowPayModal(null);
+      
+      // If view modal is open, refresh it with updated installment data
+      if (showViewModal && showViewModal.id === updatedInstallment.id) {
+        setShowViewModal(updatedInstallment);
+      }
     } catch (error) {
-      console.error('Failed to process payment:', error);
+      console.error('[Installments] Failed to process payment:', error);
+      alert('Failed to process payment. Please try again.');
     } finally {
       setIsSubmitting(false);
     }
