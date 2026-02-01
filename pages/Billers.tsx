@@ -4,6 +4,7 @@ import { Plus, Calendar, Bell, ChevronDown, ChevronRight, Upload, CheckCircle2, 
 import { getAllTransactions, createTransaction, checkTransactionExistsForSchedule } from '../src/services/transactionsService';
 import type { SupabaseTransaction } from '../src/types/supabase';
 import { getPaymentScheduleByBillerAndMonth } from '../src/services/paymentSchedulesService';
+import { MONTH_NAMES } from '../src/utils/dateUtils';
 // ENHANCEMENT: Import linked account utilities for billing cycle-based amount calculation
 import { 
   getScheduleExpectedAmount, 
@@ -27,7 +28,7 @@ interface BillersProps {
   error?: string | null;
 }
 
-const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+const MONTHS = Array.from(MONTH_NAMES);
 
 // Transaction matching configuration
 const TRANSACTION_AMOUNT_TOLERANCE = 1; // ±1 peso tolerance for amount matching
@@ -383,9 +384,7 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
       const { biller, schedule } = showPayModal;
       
       // Convert month name and year to YYYY-MM format for schedule lookup
-      const monthNames = ["January", "February", "March", "April", "May", "June", 
-                        "July", "August", "September", "October", "November", "December"];
-      const monthIndex = monthNames.indexOf(schedule.month);
+      const monthIndex = MONTH_NAMES.indexOf(schedule.month);
       const scheduleMonth = `${schedule.year}-${String(monthIndex + 1).padStart(2, '0')}`;
       
       // Look up the payment schedule in the database

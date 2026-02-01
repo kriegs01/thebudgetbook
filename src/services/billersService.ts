@@ -13,6 +13,7 @@ import type {
 import { supabaseBillerToFrontend, supabaseBillersToFrontend, frontendBillerToSupabase } from '../utils/billersAdapter';
 import type { Biller } from '../../types';
 import { generateBillerSchedules } from './paymentSchedulesService';
+import { MONTH_NAMES } from '../utils/dateUtils';
 
 /**
  * Get all billers
@@ -73,9 +74,7 @@ export const createBiller = async (biller: CreateBillerInput) => {
       
       if (activationDate && activationDate.month && activationDate.year) {
         // Convert month name to number (e.g., "January" -> "01")
-        const monthNames = ["January", "February", "March", "April", "May", "June", 
-                          "July", "August", "September", "October", "November", "December"];
-        const monthIndex = monthNames.indexOf(activationDate.month);
+        const monthIndex = MONTH_NAMES.indexOf(activationDate.month);
         const monthNum = monthIndex >= 0 ? monthIndex + 1 : new Date().getMonth() + 1;
         startMonth = `${activationDate.year}-${String(monthNum).padStart(2, '0')}`;
       } else {

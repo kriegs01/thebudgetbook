@@ -65,8 +65,13 @@ ON payment_schedules(installment_id, schedule_month) WHERE installment_id IS NOT
 ALTER TABLE payment_schedules ENABLE ROW LEVEL SECURITY;
 
 -- Create policy for public access (adjust based on your auth needs)
--- WARNING: This policy allows anyone to read/write. 
+-- TODO: SECURITY - This policy allows anyone to read/write. 
 -- In production, restrict based on user authentication!
+-- Example production policy:
+-- CREATE POLICY "Users can manage their own payment schedules" 
+-- ON payment_schedules FOR ALL 
+-- USING (auth.uid() = user_id) 
+-- WITH CHECK (auth.uid() = user_id);
 CREATE POLICY "Enable all for payment_schedules" ON payment_schedules FOR ALL USING (true) WITH CHECK (true);
 
 -- Create function to automatically update updated_at timestamp

@@ -11,6 +11,7 @@ import type {
   CreatePaymentScheduleInput,
   UpdatePaymentScheduleInput,
 } from '../types/supabase';
+import { formatScheduleMonthFromDate } from '../utils/dateUtils';
 
 /**
  * Get all payment schedules
@@ -256,7 +257,7 @@ export const generateBillerSchedules = async (
     // Generate schedules for the specified number of months
     for (let i = 0; i < numberOfMonths; i++) {
       const date = new Date(year, month - 1 + i, 1);
-      const scheduleMonth = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+      const scheduleMonth = formatScheduleMonthFromDate(date);
       
       schedules.push({
         biller_id: billerId,
@@ -293,7 +294,7 @@ export const generateInstallmentSchedules = async (
     // Generate schedules for the term duration (in months)
     for (let i = 0; i < termDuration; i++) {
       const date = new Date(year, month - 1 + i, 1);
-      const scheduleMonth = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+      const scheduleMonth = formatScheduleMonthFromDate(date);
       
       schedules.push({
         biller_id: null,

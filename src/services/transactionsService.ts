@@ -14,6 +14,7 @@ import type {
 /**
  * Check if a transaction already exists for a payment schedule
  * Returns true if a transaction exists, false otherwise
+ * Throws error if the check fails to prevent potentially duplicate transactions
  */
 export const checkTransactionExistsForSchedule = async (paymentScheduleId: string): Promise<boolean> => {
   try {
@@ -27,7 +28,8 @@ export const checkTransactionExistsForSchedule = async (paymentScheduleId: strin
     return !!data;
   } catch (error) {
     console.error('Error checking transaction for schedule:', error);
-    return false;
+    // Re-throw to prevent proceeding with potentially duplicate transaction
+    throw new Error('Failed to check for existing transaction. Cannot proceed with payment to ensure no duplicates.');
   }
 };
 
