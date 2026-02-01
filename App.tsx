@@ -490,6 +490,7 @@ const App: React.FC = () => {
                   setSavedSetups={setBudgetSetups}
                   onAdd={(item) => setBudgetItems(prev => [...prev, item])}
                   onUpdateBiller={handleUpdateBiller}
+                  onUpdateInstallment={handleUpdateInstallment}
                   installments={installments}
                   onMoveToTrash={async (setup) => {
                     // Delete from Supabase

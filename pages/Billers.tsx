@@ -10,6 +10,8 @@ import {
   shouldUseLinkedAccount, 
   getLinkedAccount 
 } from '../src/utils/linkedAccountUtils';
+// Import schedule ID generator for consistent ID creation
+import { generateScheduleId } from '../src/utils/billersAdapter';
 
 
 interface BillersProps {
@@ -286,7 +288,12 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
         activationDate: activationDate,
         deactivationDate: deactivationDate,
         status: status,
-        schedules: MONTHS.map(month => ({ month, year: '2026', expectedAmount: expected })),
+        schedules: MONTHS.map(month => ({ 
+          id: generateScheduleId(month, '2026'), 
+          month, 
+          year: '2026', 
+          expectedAmount: expected 
+        })),
         linkedAccountId: addFormData.linkedAccountId || undefined // ENHANCEMENT: Support linked credit accounts
       };
       
@@ -374,7 +381,12 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
     try {
       const { biller, schedule } = showPayModal;
       const updatedSchedules = biller.schedules.map(s => {
-        if (s.month === schedule.month && s.year === schedule.year) {
+        // Match by ID if available (checking for null/undefined explicitly), otherwise fallback to month/year matching
+        const isMatch = (schedule.id != null) ? 
+          (s.id === schedule.id) : 
+          (s.month === schedule.month && s.year === schedule.year);
+          
+        if (isMatch) {
           return { ...s, amountPaid: parseFloat(payFormData.amount), receipt: payFormData.receipt || `${biller.name}_${schedule.month}`, datePaid: payFormData.datePaid, accountId: payFormData.accountId };
         }
         return s;

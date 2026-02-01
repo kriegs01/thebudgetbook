@@ -27,6 +27,7 @@ export interface BudgetCategory {
 }
 
 export interface PaymentSchedule {
+  id: string; // Unique identifier for the schedule
   month: string;
   year: string;
   expectedAmount: number;

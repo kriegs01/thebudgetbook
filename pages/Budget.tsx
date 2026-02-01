@@ -20,10 +20,18 @@ interface BudgetProps {
   onMoveToTrash?: (setup: SavedBudgetSetup) => void;
   onReloadSetups?: () => Promise<void>;
   onReloadBillers?: () => Promise<void>;
+  onUpdateInstallment?: (installment: Installment) => Promise<void>; // For updating installment payments
   installments?: Installment[]; // PROTOTYPE: Installments for Loans section
 }
 
 const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+
+// Budget setup status constants
+const BUDGET_SETUP_STATUS = {
+  SAVED: 'Saved',
+  ACTIVE: 'Active',
+  COMPLETED: 'Completed'
+} as const;
 
 // Autosave configuration constants
 const AUTO_SAVE_DEBOUNCE_MS = 3000; // 3 seconds debounce for autosave
@@ -32,8 +40,9 @@ const AUTO_SAVE_STATUS_TIMEOUT_MS = 3000; // How long to show status messages
 // Transaction matching configuration
 const TRANSACTION_AMOUNT_TOLERANCE = 1; // ±1 peso tolerance for amount matching (accounts for rounding differences)
 const TRANSACTION_MIN_NAME_LENGTH = 3; // Minimum length for partial name matching to avoid false positives
+const TRANSACTION_DATE_GRACE_DAYS = 7; // Allow transactions up to N days after budget month ends (for late payments)
 
-const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSetups, setSavedSetups, onUpdateBiller, onMoveToTrash, onReloadSetups, onReloadBillers, installments = [] }) => {
+const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSetups, setSavedSetups, onUpdateBiller, onMoveToTrash, onReloadSetups, onReloadBillers, onUpdateInstallment, installments = [] }) => {
   const [view, setView] = useState<'summary' | 'setup'>('summary');
   const [selectedMonth, setSelectedMonth] = useState(MONTHS[new Date().getMonth()]);
   const [selectedTiming, setSelectedTiming] = useState<'1/2' | '2/2'>('1/2');
@@ -301,14 +310,39 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
       // Check amount match (within tolerance)
       const amountMatch = Math.abs(tx.amount - amount) <= TRANSACTION_AMOUNT_TOLERANCE;
       
-      // Check date match (same month and year, or previous year for year-end scenarios)
+      // Check date match with grace period for late payments
+      // Allow:
+      // 1. Transactions in the same month and year
+      // 2. Transactions in December of previous year (for January budgets)
+      // 3. Transactions within TRANSACTION_DATE_GRACE_DAYS after month ends
       const txDate = new Date(tx.date);
       const txMonth = txDate.getMonth();
       const txYear = txDate.getFullYear();
       
-      // Match if transaction is in the selected month of target year or previous year
-      const dateMatch = (txMonth === monthIndex) && 
-                       (txYear === targetYear || txYear === targetYear - 1);
+      let dateMatch = false;
+      
+      // Same month and year
+      if (txMonth === monthIndex && txYear === targetYear) {
+        dateMatch = true;
+      }
+      // December of previous year for January budgets
+      else if (monthIndex === 0 && txMonth === 11 && txYear === targetYear - 1) {
+        dateMatch = true;
+      }
+      // Within grace period after month ends (next month only, within first N days)
+      else if (txMonth === (monthIndex + 1) % 12) {
+        const budgetMonthEnd = new Date(targetYear, monthIndex + 1, 0); // Last day of budget month
+        const daysDifference = Math.floor((txDate.getTime() - budgetMonthEnd.getTime()) / (1000 * 60 * 60 * 24));
+        
+        // Ensure transaction is after month end and within grace period
+        if (daysDifference > 0 && daysDifference <= TRANSACTION_DATE_GRACE_DAYS) {
+          // Handle year transition for December -> January
+          const expectedYear = monthIndex === 11 ? targetYear + 1 : targetYear;
+          if (txYear === expectedYear) {
+            dateMatch = true;
+          }
+        }
+      }
 
       return nameMatch && amountMatch && dateMatch;
     });
@@ -454,7 +488,7 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
         const newSetup: Omit<SavedBudgetSetup, 'id'> = {
           month: selectedMonth,
           timing: selectedTiming,
-          status: 'Saved',
+          status: BUDGET_SETUP_STATUS.SAVED,
           totalAmount: total,
           data: dataToSave
         };
@@ -624,7 +658,7 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
           ...existingSetup,
           totalAmount: total,
           data: dataToSave,
-          status: 'Saved'
+          status: BUDGET_SETUP_STATUS.SAVED
         };
         
         const { data, error } = await updateBudgetSetupFrontend(updatedSetup);
@@ -652,7 +686,7 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
         const newSetup: Omit<SavedBudgetSetup, 'id'> = {
           month: selectedMonth,
           timing: selectedTiming,
-          status: 'Saved',
+          status: BUDGET_SETUP_STATUS.SAVED,
           totalAmount: total,
           data: dataToSave
         };
@@ -773,9 +807,22 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
       
       console.log(`[Budget] Transaction ${isEditing ? 'updated' : 'created'} successfully:`, transactionData);
       
-      // Update the biller's payment schedule
+      // Update the biller's payment schedule using schedule ID for exact matching
       const updatedSchedules = biller.schedules.map(s => {
-        if (s.month === schedule.month && s.year === schedule.year) {
+        // Match by ID if available (checking for null/undefined explicitly), otherwise fallback to month/year matching
+        const isMatch = (schedule.id != null) ? 
+          (s.id === schedule.id) : 
+          (s.month === schedule.month && s.year === schedule.year);
+          
+        if (isMatch) {
+          console.log(`[Budget] MATCHED schedule for update:`, {
+            scheduleId: s.id,
+            scheduleMonth: s.month,
+            scheduleYear: s.year,
+            paymentDate: payFormData.datePaid,
+            amount: parseFloat(payFormData.amount),
+            matchedBy: (schedule.id != null) ? 'ID' : 'month/year'
+          });
           return { 
             ...s, 
             amountPaid: parseFloat(payFormData.amount), 
@@ -787,8 +834,49 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
         return s;
       });
       
+      console.log('[Budget] All updated schedules:', updatedSchedules.map(s => ({
+        id: s.id,
+        month: s.month,
+        year: s.year,
+        amountPaid: s.amountPaid,
+        datePaid: s.datePaid
+      })));
+      
       console.log('[Budget] Updating biller with new schedule');
       await onUpdateBiller({ ...biller, schedules: updatedSchedules });
+      
+      // FIX: Update linked installment's paidAmount if this biller is linked to an installment
+      if (biller.category.startsWith('Loans') && installments && installments.length > 0) {
+        const linkedInstallment = installments.find(inst => inst.billerId === biller.id);
+        if (linkedInstallment && onUpdateInstallment) {
+          console.log('[Budget] Found linked installment, updating paidAmount');
+          const updatedInstallment: Installment = {
+            ...linkedInstallment,
+            paidAmount: linkedInstallment.paidAmount + parseFloat(payFormData.amount)
+          };
+          await onUpdateInstallment(updatedInstallment);
+          console.log('[Budget] Installment paidAmount updated successfully');
+        }
+      }
+      
+      // FIX: Update budget setup status to reflect payment activity
+      const existingSetup = savedSetups.find(s => 
+        s.month === schedule.month && s.timing === selectedTiming
+      );
+      if (existingSetup) {
+        console.log('[Budget] Updating budget setup status after payment');
+        const updatedSetup: SavedBudgetSetup = {
+          ...existingSetup,
+          status: BUDGET_SETUP_STATUS.ACTIVE // Mark as Active when payments are being made
+        };
+        await updateBudgetSetupFrontend(updatedSetup);
+        console.log('[Budget] Budget setup status updated to Active');
+        
+        // Reload setups to refresh UI
+        if (onReloadSetups) {
+          await onReloadSetups();
+        }
+      }
       
       // Reload transactions to update paid status
       await reloadTransactions();
@@ -898,7 +986,7 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                         <td className="p-8"><span className="text-[10px] font-black text-gray-500 bg-gray-100/80 px-4 py-1.5 rounded-full uppercase tracking-widest">{setup.timing}</span></td>
                         <td className="p-8"><span className="text-base font-black text-gray-900 tracking-tight">{formatCurrency(setup.totalAmount)}</span></td>
                         <td className="p-8">
-                          <span className={`text-[10px] font-black uppercase tracking-[0.15em] px-4 py-1.5 rounded-full ${setup.status === 'Active' ? 'bg-green-100 text-green-700' : 'bg-blue-100 text-blue-700'}`}>
+                          <span className={`text-[10px] font-black uppercase tracking-[0.15em] px-4 py-1.5 rounded-full ${setup.status === BUDGET_SETUP_STATUS.ACTIVE ? 'bg-green-100 text-green-700' : 'bg-blue-100 text-blue-700'}`}>
                             {setup.status}
                           </span>
                         </td>
@@ -942,8 +1030,22 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
 
   const categorySummary = categories.map((cat) => {
     const items = setupData[cat.name] || [];
-    const total = items.filter(i => i.included).reduce((sum, item) => sum + (parseFloat(item.amount) || 0), 0);
-    return { category: cat.name, total };
+    const itemsTotal = items.filter(i => i.included).reduce((sum, item) => sum + (parseFloat(item.amount) || 0), 0);
+    
+    // FIX: Include installments for Loans category (same logic as Setup view)
+    let installmentsTotal = 0;
+    if (cat.name === 'Loans') {
+      installmentsTotal = installments
+        .filter(inst => {
+          const timingMatch = !inst.timing || inst.timing === selectedTiming;
+          const dateMatch = shouldShowInstallment(inst, selectedMonth);
+          const notExcluded = !excludedInstallmentIds.has(inst.id);
+          return timingMatch && dateMatch && notExcluded;
+        })
+        .reduce((s, inst) => s + inst.monthlyAmount, 0);
+    }
+    
+    return { category: cat.name, total: itemsTotal + installmentsTotal };
   });
   const grandTotal = categorySummary.reduce((sum, cat) => sum + cat.total, 0);
 
@@ -1230,9 +1332,39 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                       if (isBiller) {
                         linkedBiller = billers.find(b => b.id === item.id);
                         schedule = linkedBiller?.schedules.find(s => s.month === selectedMonth);
-                        // Check both biller schedule and transaction matching
-                        isPaid = !!schedule?.amountPaid || 
-                                 checkIfPaidByTransaction(item.name, item.amount, selectedMonth);
+                        
+                        console.log(`[Budget] Checking payment for ${item.name} in ${selectedMonth}:`, {
+                          foundSchedule: !!schedule,
+                          scheduleMonth: schedule?.month,
+                          selectedMonth: selectedMonth,
+                          scheduleAmountPaid: schedule?.amountPaid,
+                          scheduleYear: schedule?.year,
+                          allSchedules: linkedBiller?.schedules.map(s => ({
+                            month: s.month,
+                            year: s.year,
+                            amountPaid: s.amountPaid
+                          }))
+                        });
+                        
+                        // FIX: For billers with schedules, ONLY use schedule.amountPaid
+                        // This prevents double-counting when transactions match multiple months via grace period
+                        if (schedule) {
+                          isPaid = !!schedule.amountPaid;
+                          if (schedule.amountPaid) {
+                            console.log(`[Budget] Item ${item.name} in ${selectedMonth}: PAID via schedule.amountPaid`, {
+                              month: schedule.month,
+                              year: schedule.year,
+                              amountPaid: schedule.amountPaid,
+                              datePaid: schedule.datePaid
+                            });
+                          }
+                        } else {
+                          // Fallback to transaction matching if no schedule found
+                          isPaid = checkIfPaidByTransaction(item.name, item.amount, selectedMonth);
+                          if (isPaid) {
+                            console.log(`[Budget] Item ${item.name} in ${selectedMonth}: PAID via transaction matching (no schedule)`);
+                          }
+                        }
                       } else {
                         // For non-biller items (like Purchases), only check transactions
                         isPaid = checkIfPaidByTransaction(item.name, item.amount, selectedMonth);
@@ -1315,12 +1447,43 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                         {relevantInstallments.map((installment) => {
                           const account = accounts.find(a => a.id === installment.accountId);
                           const isIncluded = !excludedInstallmentIds.has(installment.id);
-                          // Check payment status using transaction matching (simplified for now)
-                          const isPaid = checkIfPaidByTransaction(
-                            installment.name, 
-                            installment.monthlyAmount, 
-                            selectedMonth
-                          );
+                          
+                          // Calculate payment status based on cumulative paid amount (like in Installments.tsx view modal)
+                          let isPaid = false;
+                          
+                          if (installment.startDate) {
+                            try {
+                              // Parse start date (format: YYYY-MM)
+                              const [startYear, startMonthNum] = installment.startDate.split('-').map(Number);
+                              const startMonthIndex = startMonthNum - 1; // Convert to 0-based index
+                              
+                              // Get current month index
+                              const currentYear = new Date().getFullYear();
+                              const selectedMonthIndex = MONTHS.indexOf(selectedMonth);
+                              
+                              // Calculate months passed (accounting for years)
+                              const monthsPassed = (currentYear - startYear) * 12 + (selectedMonthIndex - startMonthIndex);
+                              
+                              if (monthsPassed >= 0) {
+                                // Check if this month's installment is paid based on cumulative amount
+                                const expectedPaidByThisMonth = (monthsPassed + 1) * installment.monthlyAmount;
+                                isPaid = installment.paidAmount >= expectedPaidByThisMonth;
+                                
+                                console.log('[Budget] Installment payment check:', {
+                                  name: installment.name,
+                                  selectedMonth,
+                                  monthsPassed,
+                                  expectedPaidByThisMonth,
+                                  actualPaidAmount: installment.paidAmount,
+                                  isPaid
+                                });
+                              }
+                            } catch (error) {
+                              console.error('[Budget] Error calculating installment payment status:', error);
+                              // Fallback to unpaid if calculation fails
+                              isPaid = false;
+                            }
+                          }
                           
                           return (
                             <tr key={`installment-${installment.id}`} className={`${isIncluded ? 'bg-blue-50/30' : 'bg-gray-50 opacity-60'}`}>
@@ -1546,9 +1709,14 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                           if (isBiller) {
                             linkedBiller = billers.find(b => b.id === item.id);
                             schedule = linkedBiller?.schedules.find(s => s.month === selectedMonth);
-                            // Check both biller schedule and transaction matching
-                            isPaid = !!schedule?.amountPaid || 
-                                     checkIfPaidByTransaction(item.name, item.amount, selectedMonth);
+                            // FIX: For billers with schedules, ONLY use schedule.amountPaid
+                            // This prevents double-counting when transactions match multiple months via grace period
+                            if (schedule) {
+                              isPaid = !!schedule.amountPaid;
+                            } else {
+                              // Fallback to transaction matching if no schedule found
+                              isPaid = checkIfPaidByTransaction(item.name, item.amount, selectedMonth);
+                            }
                           } else {
                             // For non-biller items, only check transactions
                             isPaid = checkIfPaidByTransaction(item.name, item.amount, selectedMonth);

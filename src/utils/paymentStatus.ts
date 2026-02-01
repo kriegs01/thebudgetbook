@@ -20,6 +20,7 @@ import type { Installment, Account } from '../../types';
 // Configuration constants for transaction matching
 export const TRANSACTION_AMOUNT_TOLERANCE = 1; // ±1 peso tolerance for rounding differences
 export const TRANSACTION_MIN_NAME_LENGTH = 3; // Minimum length for partial name matching
+export const TRANSACTION_DATE_GRACE_DAYS = 7; // Allow transactions up to N days after budget month ends (for late payments)
 
 /**
  * PROTOTYPE: Transaction matching result
@@ -98,14 +99,39 @@ export const checkPaymentStatus = (
     const amountMatch = Math.abs(tx.amount - amount) <= TRANSACTION_AMOUNT_TOLERANCE;
     if (!amountMatch) return false;
     
-    // Check date match (same month and year, or previous year for year-end carryover)
+    // Check date match with grace period for late payments
+    // Allow:
+    // 1. Transactions in the same month and year
+    // 2. Transactions in December of previous year (for January budgets)
+    // 3. Transactions within TRANSACTION_DATE_GRACE_DAYS after month ends
     const txDate = new Date(tx.date);
     const txMonth = txDate.getMonth();
     const txYear = txDate.getFullYear();
     
-    // Allow previous year matching only for January looking at December transactions
-    const dateMatch = (txMonth === monthIndex && txYear === year) ||
-                     (monthIndex === 0 && txMonth === 11 && txYear === year - 1); // Jan looking at Dec of prev year
+    let dateMatch = false;
+    
+    // Same month and year
+    if (txMonth === monthIndex && txYear === year) {
+      dateMatch = true;
+    }
+    // December of previous year for January budgets
+    else if (monthIndex === 0 && txMonth === 11 && txYear === year - 1) {
+      dateMatch = true;
+    }
+    // Within grace period after month ends (next month only, within first N days)
+    else if (txMonth === (monthIndex + 1) % 12) {
+      const budgetMonthEnd = new Date(year, monthIndex + 1, 0); // Last day of budget month
+      const daysDifference = Math.floor((txDate.getTime() - budgetMonthEnd.getTime()) / (1000 * 60 * 60 * 24));
+      
+      // Ensure transaction is after month end and within grace period
+      if (daysDifference > 0 && daysDifference <= TRANSACTION_DATE_GRACE_DAYS) {
+        // Handle year transition for December -> January
+        const expectedYear = monthIndex === 11 ? year + 1 : year;
+        if (txYear === expectedYear) {
+          dateMatch = true;
+        }
+      }
+    }
 
     return dateMatch;
   });
