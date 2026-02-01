@@ -809,8 +809,8 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
       
       // Update the biller's payment schedule using schedule ID for exact matching
       const updatedSchedules = biller.schedules.map(s => {
-        // Match by ID if available, otherwise fallback to month/year matching
-        const isMatch = schedule.id ? 
+        // Match by ID if available (checking for null/undefined explicitly), otherwise fallback to month/year matching
+        const isMatch = (schedule.id != null) ? 
           (s.id === schedule.id) : 
           (s.month === schedule.month && s.year === schedule.year);
           
@@ -821,7 +821,7 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
             scheduleYear: s.year,
             paymentDate: payFormData.datePaid,
             amount: parseFloat(payFormData.amount),
-            matchedBy: schedule.id ? 'ID' : 'month/year'
+            matchedBy: (schedule.id != null) ? 'ID' : 'month/year'
           });
           return { 
             ...s, 

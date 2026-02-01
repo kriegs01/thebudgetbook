@@ -381,8 +381,8 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
     try {
       const { biller, schedule } = showPayModal;
       const updatedSchedules = biller.schedules.map(s => {
-        // Match by ID if available, otherwise fallback to month/year matching
-        const isMatch = schedule.id ? 
+        // Match by ID if available (checking for null/undefined explicitly), otherwise fallback to month/year matching
+        const isMatch = (schedule.id != null) ? 
           (s.id === schedule.id) : 
           (s.month === schedule.month && s.year === schedule.year);
           
