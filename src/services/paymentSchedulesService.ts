@@ -380,7 +380,7 @@ export const generateSchedulesForBiller = (
 
     schedules.push({
       biller_id: billerId,
-      installment_id: null,
+      installment_id: null, // Schedules for billers have no installment_id
       schedule_month: MONTHS_ORDERED[monthIndex],
       schedule_year: activationYear.toString(),
       expected_amount: expectedAmount,

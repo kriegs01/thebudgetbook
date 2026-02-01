@@ -901,7 +901,7 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
           parseFloat(payFormData.amount),
           payFormData.datePaid,
           payFormData.accountId || undefined,
-          payFormData.receipt || `${biller.name}_${schedule.month}`
+          payFormData.receipt || `${biller.name}_${dbSchedule.schedule_month}`
         );
         
         if (scheduleError) {
