@@ -92,8 +92,11 @@ schedules: [] // Empty, schedules created in payment_schedules table
 
 The service now:
 1. Creates the biller
-2. Generates 24 months of schedules from activation date
+2. Generates schedules from activation month through end of activation year (in chronological order)
 3. Batch inserts schedules into `payment_schedules` table
+4. Returns error if schedule creation fails
+
+**Note**: Schedules are only created for the activation year. For subsequent years, schedules should be created separately (e.g., at year rollover or on-demand).
 4. Returns error if schedule creation fails
 
 #### 4. Payment Marking (`pages/Billers.tsx`)
@@ -149,6 +152,50 @@ useEffect(() => {
   // Convert and display
 })}
 ```
+
+**Important**: Schedules are automatically sorted chronologically (by year, then month order) when fetched from the database. This ensures proper display order regardless of insertion order.
+
+### Schedule Generation and Ordering
+
+#### Generation Rules
+Schedules are generated **only from the activation month through December of the activation year**:
+```typescript
+// Example: Biller activated in February 2026
+// Generates: February, March, April, ..., December 2026
+// Does NOT generate: January 2027, February 2027, etc.
+
+const schedules = generateSchedulesForBiller(
+  billerId,
+  { month: 'February', year: '2026' },
+  undefined, // no deactivation
+  500 // expected amount
+);
+// Result: 11 schedules (Feb-Dec 2026)
+```
+
+#### Chronological Sorting
+Schedules are **always sorted by year first, then by month order** (not alphabetically):
+```typescript
+// Correct order: January, February, March, ..., December
+// NOT alphabetical: April, August, December, February, ...
+
+const MONTHS_ORDERED = [
+  'January', 'February', 'March', 'April', 'May', 'June',
+  'July', 'August', 'September', 'October', 'November', 'December'
+];
+
+// Sorting logic in sortSchedulesChronologically()
+schedules.sort((a, b) => {
+  if (a.schedule_year !== b.schedule_year) {
+    return Number(a.schedule_year) - Number(b.schedule_year);
+  }
+  return MONTHS_ORDERED.indexOf(a.schedule_month) - MONTHS_ORDERED.indexOf(b.schedule_month);
+});
+```
+
+This sorting is applied automatically in:
+- `getAllPaymentSchedules()` - when fetching all schedules
+- `getPaymentSchedulesByBillerId()` - when fetching biller-specific schedules
 
 ### Migration
 
@@ -213,7 +260,10 @@ const newBiller: Biller = {
 };
 
 await onAdd(newBiller);
-// System automatically creates payment schedules from Feb 2026 forward
+// System automatically creates payment schedules:
+// - February 2026, March 2026, April 2026, ..., December 2026
+// - Total: 11 schedules (from activation month through end of year)
+// - Schedules are always displayed in chronological order
 ```
 
 ### Marking a Payment
@@ -233,8 +283,9 @@ await markPaymentScheduleAsPaid(
 
 ### Querying Schedules
 ```typescript
-// Get all schedules for a biller
+// Get all schedules for a biller (automatically sorted chronologically)
 const { data } = await getPaymentSchedulesByBillerId(billerId);
+// Returns: [Feb 2026, Mar 2026, Apr 2026, ..., Dec 2026] in that order
 
 // Get schedules for a specific month
 const { data } = await getPaymentSchedulesByMonthYear('February', '2026');
@@ -242,6 +293,8 @@ const { data } = await getPaymentSchedulesByMonthYear('February', '2026');
 // Get a specific schedule
 const { data } = await getPaymentScheduleById(scheduleId);
 ```
+
+**Note**: All query functions return schedules sorted chronologically (year first, then month order), so you never need to manually sort them.
 
 ## Migration Checklist
 
