@@ -810,6 +810,14 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
       // Update the biller's payment schedule
       const updatedSchedules = biller.schedules.map(s => {
         if (s.month === schedule.month && s.year === schedule.year) {
+          console.log(`[Budget] MATCHED schedule for update:`, {
+            scheduleMonth: s.month,
+            scheduleYear: s.year,
+            targetMonth: schedule.month,
+            targetYear: schedule.year,
+            paymentDate: payFormData.datePaid,
+            amount: parseFloat(payFormData.amount)
+          });
           return { 
             ...s, 
             amountPaid: parseFloat(payFormData.amount), 
@@ -818,8 +826,24 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
             accountId: payFormData.accountId 
           };
         }
+        // Log schedules that are NOT being updated
+        if (s.amountPaid) {
+          console.log(`[Budget] Schedule NOT matched (but has amountPaid):`, {
+            scheduleMonth: s.month,
+            scheduleYear: s.year,
+            existingAmountPaid: s.amountPaid,
+            existingDatePaid: s.datePaid
+          });
+        }
         return s;
       });
+      
+      console.log('[Budget] All updated schedules:', updatedSchedules.map(s => ({
+        month: s.month,
+        year: s.year,
+        amountPaid: s.amountPaid,
+        datePaid: s.datePaid
+      })));
       
       console.log('[Budget] Updating biller with new schedule');
       await onUpdateBiller({ ...biller, schedules: updatedSchedules });
@@ -1315,9 +1339,20 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                         // This prevents double-counting when transactions match multiple months via grace period
                         if (schedule) {
                           isPaid = !!schedule.amountPaid;
+                          if (schedule.amountPaid) {
+                            console.log(`[Budget] Item ${item.name} in ${selectedMonth}: PAID via schedule.amountPaid`, {
+                              month: schedule.month,
+                              year: schedule.year,
+                              amountPaid: schedule.amountPaid,
+                              datePaid: schedule.datePaid
+                            });
+                          }
                         } else {
                           // Fallback to transaction matching if no schedule found
                           isPaid = checkIfPaidByTransaction(item.name, item.amount, selectedMonth);
+                          if (isPaid) {
+                            console.log(`[Budget] Item ${item.name} in ${selectedMonth}: PAID via transaction matching (no schedule)`);
+                          }
                         }
                       } else {
                         // For non-biller items (like Purchases), only check transactions
