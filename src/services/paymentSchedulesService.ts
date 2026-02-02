@@ -77,6 +77,33 @@ export const getPaymentSchedulesByBillerId = async (billerId: string) => {
 };
 
 /**
+ * Get payment schedules for a specific installment
+ * Returns schedules with joined installment data
+ */
+export const getPaymentSchedulesByInstallmentId = async (installmentId: string): Promise<{ data: PaymentScheduleWithDetails[] | null; error: any }> => {
+  try {
+    const { data, error } = await supabase
+      .from('payment_schedules')
+      .select(`
+        *,
+        installments (id, name, timing)
+      `)
+      .eq('installment_id', installmentId)
+      .order('schedule_year', { ascending: true });
+
+    if (error) throw error;
+    
+    // Sort client-side by month order (not alphabetically)
+    const sortedData = data ? sortSchedulesChronologically(data) : null;
+    
+    return { data: sortedData as PaymentScheduleWithDetails[], error: null };
+  } catch (error) {
+    console.error('Error fetching payment schedules for installment:', error);
+    return { data: null, error };
+  }
+};
+
+/**
  * Get a single payment schedule by ID
  */
 export const getPaymentScheduleById = async (id: string) => {

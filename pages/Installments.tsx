@@ -1,10 +1,11 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Installment, Account, ViewMode, Biller, Transaction } from '../types';
 import { Plus, LayoutGrid, List, Wallet, Trash2, X, Upload, AlertTriangle, Edit2, Eye, MoreVertical } from 'lucide-react';
-import { getPaymentSchedulesByMonthYear } from '../src/services/paymentSchedulesService';
+import { getPaymentSchedulesByMonthYear, getPaymentSchedulesByInstallmentId } from '../src/services/paymentSchedulesService';
 import { markPaymentScheduleAsPaid } from '../src/services/paymentSchedulesService';
 import { createTransaction } from '../src/services/transactionsService';
 import { MONTHS_ORDERED } from '../src/services/paymentSchedulesService';
+import type { PaymentScheduleWithDetails } from '../src/services/paymentSchedulesService';
 
 interface InstallmentsProps {
   installments: Installment[];
@@ -36,6 +37,10 @@ const Installments: React.FC<InstallmentsProps> = ({
   const [showViewModal, setShowViewModal] = useState<Installment | null>(null);
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // CRITICAL: Payment schedules state for transaction-based paid status
+  const [viewModalSchedules, setViewModalSchedules] = useState<PaymentScheduleWithDetails[]>([]);
+  const [viewModalSchedulesLoading, setViewModalSchedulesLoading] = useState(false);
 
   const [confirmModal, setConfirmModal] = useState<{
     show: boolean;
@@ -71,6 +76,63 @@ const Installments: React.FC<InstallmentsProps> = ({
       minimumFractionDigits: 2,
       maximumFractionDigits: 2 
     }).format(val);
+  };
+
+  /**
+   * CRITICAL: Load payment schedules for the installment being viewed
+   * This enables transaction-based paid status checking
+   */
+  const loadPaymentSchedulesForViewModal = useCallback(async () => {
+    if (!showViewModal || !showViewModal.id) return;
+    
+    console.log('[Installments] Loading payment schedules for installment:', showViewModal.id);
+    setViewModalSchedulesLoading(true);
+    
+    try {
+      const { data, error } = await getPaymentSchedulesByInstallmentId(showViewModal.id);
+      
+      if (error) {
+        console.error('[Installments] Error loading payment schedules:', error);
+        setViewModalSchedules([]);
+        return;
+      }
+      
+      if (data) {
+        console.log(`[Installments] Loaded ${data.length} payment schedules for installment`);
+        setViewModalSchedules(data);
+      } else {
+        console.log('[Installments] No payment schedules found for installment');
+        setViewModalSchedules([]);
+      }
+    } catch (err) {
+      console.error('[Installments] Exception loading payment schedules:', err);
+      setViewModalSchedules([]);
+    } finally {
+      setViewModalSchedulesLoading(false);
+    }
+  }, [showViewModal]);
+
+  /**
+   * Load payment schedules when view modal opens
+   */
+  useEffect(() => {
+    if (showViewModal) {
+      loadPaymentSchedulesForViewModal();
+    } else {
+      // Clear schedules when modal closes
+      setViewModalSchedules([]);
+    }
+  }, [showViewModal, loadPaymentSchedulesForViewModal]);
+
+  /**
+   * CRITICAL: Check if a schedule is paid by verifying transaction linkage.
+   * ONLY SOURCE OF TRUTH for paid status in installments.
+   * 
+   * @param scheduleId - The payment schedule ID to check
+   * @returns true if a transaction exists with payment_schedule_id matching scheduleId
+   */
+  const isSchedulePaidByTransaction = (scheduleId: string): boolean => {
+    return transactions.some(tx => tx.payment_schedule_id === scheduleId);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -263,6 +325,8 @@ const Installments: React.FC<InstallmentsProps> = ({
       // If view modal is open, refresh it with updated installment data
       if (showViewModal && showViewModal.id === updatedInstallment.id) {
         setShowViewModal(updatedInstallment);
+        // CRITICAL: Reload payment schedules to update paid status
+        await loadPaymentSchedulesForViewModal();
       }
     } catch (error) {
       console.error('[Installments] Failed to process payment:', error);
@@ -800,15 +864,28 @@ const Installments: React.FC<InstallmentsProps> = ({
             const year = startYear + Math.floor((startMonth - 1 + i) / 12);
             const monthName = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'][monthIndex];
             
+            // CRITICAL: Find payment schedule for this month/year to check transaction linkage
+            const scheduleId = viewModalSchedules.find(s => 
+              s.schedule_month === monthName && s.schedule_year === year.toString()
+            )?.id;
+            
             schedule.push({
               month: `${monthName} ${year}`,
               amount: monthlyAmount,
-              isPaid: (i + 1) * monthlyAmount <= showViewModal.paidAmount
+              scheduleId: scheduleId, // Store for reference
+              // CRITICAL: Use transaction linkage ONLY (no more paidAmount comparison)
+              isPaid: scheduleId ? isSchedulePaidByTransaction(scheduleId) : false
             });
           }
           
           return schedule;
         };
+        
+        // Calculate ACTUAL paid amount from transactions (not from paidAmount field)
+        const actualPaidAmount = viewModalSchedules.reduce((total, schedule) => {
+          const hasPaidTransaction = transactions.some(tx => tx.payment_schedule_id === schedule.id);
+          return hasPaidTransaction ? total + (schedule.expected_amount || 0) : total;
+        }, 0);
         
         const schedule = generateMonthlySchedule();
         
@@ -832,11 +909,13 @@ const Installments: React.FC<InstallmentsProps> = ({
                 </div>
                 <div>
                   <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Paid Amount</p>
-                  <p className="text-lg font-black text-green-600">{formatCurrency(showViewModal.paidAmount)}</p>
+                  {/* CRITICAL: Use actualPaidAmount from transactions, not paidAmount field */}
+                  <p className="text-lg font-black text-green-600">{formatCurrency(actualPaidAmount)}</p>
                 </div>
                 <div>
                   <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Remaining</p>
-                  <p className="text-lg font-black text-gray-900">{formatCurrency(showViewModal.totalAmount - showViewModal.paidAmount)}</p>
+                  {/* CRITICAL: Calculate remaining from actualPaidAmount */}
+                  <p className="text-lg font-black text-gray-900">{formatCurrency(showViewModal.totalAmount - actualPaidAmount)}</p>
                 </div>
               </div>
               
