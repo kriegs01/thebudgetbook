@@ -35,6 +35,17 @@ export const supabaseInstallmentToFrontend = (supabaseInstallment: SupabaseInsta
 };
 
 /**
+ * Sanitize UUID field - convert empty strings to null
+ * This prevents "invalid input syntax for type uuid" errors
+ */
+const sanitizeUUID = (value: string | undefined): string | null => {
+  if (!value || value.trim() === '') {
+    return null;
+  }
+  return value;
+};
+
+/**
  * Convert frontend Installment to Supabase installment type
  */
 export const frontendInstallmentToSupabase = (installment: Installment): Omit<SupabaseInstallment, 'id'> => {
@@ -48,13 +59,17 @@ export const frontendInstallmentToSupabase = (installment: Installment): Omit<Su
     startDateFormatted = `${installment.startDate}-01`;
   }
   
+  // CRITICAL: Sanitize account_id to prevent UUID syntax errors
+  // Empty strings cause "invalid input syntax for type uuid: ''" errors
+  const sanitizedAccountId = sanitizeUUID(installment.accountId);
+  
   return {
     name: installment.name,
     total_amount: installment.totalAmount,
     monthly_amount: installment.monthlyAmount,
     term_duration: termDurationNum,
     paid_amount: installment.paidAmount,
-    account_id: installment.accountId,
+    account_id: sanitizedAccountId, // Use sanitized value (null if empty)
     start_date: startDateFormatted,
     // PROTOTYPE: Include timing field if set
     timing: installment.timing || null,

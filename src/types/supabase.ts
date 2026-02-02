@@ -40,7 +40,7 @@ export interface SupabaseInstallment {
   monthly_amount: number; // numeric
   term_duration: number; // int
   paid_amount: number; // numeric
-  account_id: string; // uuid
+  account_id: string | null; // uuid, nullable - FIXED: Allow null to prevent UUID syntax errors
   start_date: string | null; // date, nullable
   timing: string | null; // PROTOTYPE: '1/2' or '2/2' - payment timing within month
 }
