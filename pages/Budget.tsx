@@ -964,6 +964,7 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
       console.log(`[Budget] Transaction ${isEditing ? 'updated' : 'created'} successfully with schedule linkage:`, transactionData);
       
       // Update the payment schedule directly in payment_schedules table
+      // Note: dbSchedule was already retrieved above before transaction creation
       console.log(`[Budget] Updating payment schedule:`, {
         scheduleId: dbSchedule.id,
         scheduleMonth: dbSchedule.schedule_month,
