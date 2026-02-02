@@ -531,6 +531,7 @@ const App: React.FC = () => {
                   onDelete={handleDeleteInstallment}
                   loading={installmentsLoading}
                   error={installmentsError}
+                  transactions={[]} // Transactions prop - can be populated later if needed for paid status
                 />
               } />
               <Route path="/accounts" element={

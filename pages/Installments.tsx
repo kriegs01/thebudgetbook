@@ -1,6 +1,10 @@
 import React, { useState } from 'react';
-import { Installment, Account, ViewMode, Biller } from '../types';
+import { Installment, Account, ViewMode, Biller, Transaction } from '../types';
 import { Plus, LayoutGrid, List, Wallet, Trash2, X, Upload, AlertTriangle, Edit2, Eye, MoreVertical } from 'lucide-react';
+import { getPaymentSchedulesByMonthYear } from '../src/services/paymentSchedulesService';
+import { markPaymentScheduleAsPaid } from '../src/services/paymentSchedulesService';
+import { createTransaction } from '../src/services/transactionsService';
+import { MONTHS_ORDERED } from '../src/services/paymentSchedulesService';
 
 interface InstallmentsProps {
   installments: Installment[];
@@ -11,9 +15,20 @@ interface InstallmentsProps {
   onDelete?: (id: string) => Promise<void>;
   loading?: boolean;
   error?: string | null;
+  transactions?: Transaction[]; // For checking paid status
 }
 
-const Installments: React.FC<InstallmentsProps> = ({ installments, accounts, billers = [], onAdd, onUpdate, onDelete, loading = false, error = null }) => {
+const Installments: React.FC<InstallmentsProps> = ({ 
+  installments, 
+  accounts, 
+  billers = [], 
+  onAdd, 
+  onUpdate, 
+  onDelete, 
+  loading = false, 
+  error = null,
+  transactions = [] 
+}) => {
   const [viewMode, setViewMode] = useState<ViewMode>('card');
   const [showModal, setShowModal] = useState(false);
   const [showPayModal, setShowPayModal] = useState<Installment | null>(null);
@@ -140,25 +155,111 @@ const Installments: React.FC<InstallmentsProps> = ({ installments, accounts, bil
     setIsSubmitting(true);
     try {
       const paymentAmount = parseFloat(payFormData.amount) || 0;
+      
+      console.log('[Installments] Processing payment:', {
+        installmentId: showPayModal.id,
+        installmentName: showPayModal.name,
+        paymentAmount: paymentAmount,
+        accountId: payFormData.accountId,
+        datePaid: payFormData.datePaid
+      });
+
+      // CRITICAL: Find the payment schedule for the current month
+      const currentDate = new Date(payFormData.datePaid);
+      const currentMonth = MONTHS_ORDERED[currentDate.getMonth()];
+      const currentYear = currentDate.getFullYear().toString();
+      
+      console.log('[Installments] Finding payment schedule for:', {
+        month: currentMonth,
+        year: currentYear,
+        installmentId: showPayModal.id
+      });
+      
+      // Get all schedules for this month/year
+      const { data: schedules, error: scheduleError } = await getPaymentSchedulesByMonthYear(
+        currentMonth,
+        currentYear
+      );
+      
+      if (scheduleError) {
+        console.error('[Installments] Error fetching payment schedules:', scheduleError);
+        throw new Error('Failed to find payment schedule. Please try again.');
+      }
+      
+      // Find the schedule for this installment
+      const paymentSchedule = schedules?.find(s => s.installment_id === showPayModal.id);
+      
+      if (!paymentSchedule) {
+        console.error('[Installments] Payment schedule not found for:', {
+          installmentId: showPayModal.id,
+          month: currentMonth,
+          year: currentYear
+        });
+        alert(`Payment schedule not found for ${currentMonth} ${currentYear}. The installment may not have schedules for this month. Please refresh the page or contact support.`);
+        setIsSubmitting(false);
+        return;
+      }
+      
+      console.log('[Installments] Found payment schedule:', paymentSchedule.id);
+      
+      // CRITICAL: Create transaction WITH payment_schedule_id linkage
+      const transactionData = {
+        name: `${showPayModal.name} - ${currentMonth} ${currentYear}`,
+        amount: paymentAmount,
+        date: payFormData.datePaid,
+        payment_method_id: payFormData.accountId,
+        type: 'expense' as const,
+        category: 'Installment Payment',
+        receipt: payFormData.receipt || null,
+        payment_schedule_id: paymentSchedule.id // CRITICAL: Link to payment schedule
+      };
+      
+      console.log('[Installments] Creating transaction with payment_schedule_id:', paymentSchedule.id);
+      
+      const { data: transaction, error: transactionError } = await createTransaction(transactionData);
+      
+      if (transactionError || !transaction) {
+        console.error('[Installments] Error creating transaction:', transactionError);
+        throw new Error('Failed to create transaction. Please try again.');
+      }
+      
+      console.log('[Installments] Transaction created successfully:', transaction.id);
+      
+      // Mark the payment schedule as paid
+      const { error: markPaidError } = await markPaymentScheduleAsPaid(
+        paymentSchedule.id,
+        paymentAmount,
+        payFormData.datePaid,
+        payFormData.accountId,
+        payFormData.receipt || undefined
+      );
+      
+      if (markPaidError) {
+        console.error('[Installments] Error marking schedule as paid:', markPaidError);
+        // Don't fail - transaction was created, just log the error
+        console.warn('[Installments] Schedule not marked as paid but transaction exists');
+      } else {
+        console.log('[Installments] Payment schedule marked as paid');
+      }
+      
+      // Update installment's total paidAmount
       const updatedInstallment: Installment = {
         ...showPayModal,
         paidAmount: showPayModal.paidAmount + paymentAmount
       };
 
-      console.log('[Installments] Processing payment:', {
-        installmentId: showPayModal.id,
-        installmentName: showPayModal.name,
-        previousPaidAmount: showPayModal.paidAmount,
-        paymentAmount: paymentAmount,
-        newPaidAmount: updatedInstallment.paidAmount
-      });
-
       await onUpdate?.(updatedInstallment);
       
-      console.log('[Installments] Payment recorded successfully');
+      console.log('[Installments] Payment processed successfully');
       
       // Close pay modal after successful payment
       setShowPayModal(null);
+      setPayFormData({
+        amount: '',
+        receipt: '',
+        datePaid: new Date().toISOString().split('T')[0],
+        accountId: accounts[0]?.id || ''
+      });
       
       // If view modal is open, refresh it with updated installment data
       if (showViewModal && showViewModal.id === updatedInstallment.id) {
@@ -166,7 +267,8 @@ const Installments: React.FC<InstallmentsProps> = ({ installments, accounts, bil
       }
     } catch (error) {
       console.error('[Installments] Failed to process payment:', error);
-      alert('Failed to process payment. Please try again.');
+      const errorMessage = error instanceof Error ? error.message : 'Failed to process payment. Please try again.';
+      alert(errorMessage);
     } finally {
       setIsSubmitting(false);
     }
