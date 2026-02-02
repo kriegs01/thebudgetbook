@@ -320,8 +320,9 @@ export const deletePaymentSchedulesByBillerId = async (billerId: string) => {
 
 /**
  * Month order for proper chronological sorting
+ * Exported for use in other services
  */
-const MONTHS_ORDERED = [
+export const MONTHS_ORDERED = [
   'January', 'February', 'March', 'April', 'May', 'June',
   'July', 'August', 'September', 'October', 'November', 'December'
 ];
@@ -391,5 +392,71 @@ export const generateSchedulesForBiller = (
     });
   }
 
+  return schedules;
+};
+
+/**
+ * Generate payment schedules for an installment based on start date and term duration
+ * Used when creating an installment
+ * 
+ * @param installmentId - The ID of the installment
+ * @param startDate - Start date in format "YYYY-MM" (e.g., "2026-03")
+ * @param termDuration - Term duration string (e.g., "12 months", "6 months")
+ * @param monthlyAmount - Monthly payment amount
+ * @returns Array of payment schedule objects ready for batch insert
+ */
+export const generateSchedulesForInstallment = (
+  installmentId: string,
+  startDate: string,
+  termDuration: string,
+  monthlyAmount: number
+): CreatePaymentScheduleInput[] => {
+  const schedules: CreatePaymentScheduleInput[] = [];
+  
+  // Parse start date (format: "YYYY-MM")
+  const [yearStr, monthStr] = startDate.split('-');
+  const startYear = parseInt(yearStr);
+  const startMonthNumber = parseInt(monthStr); // 1-12
+  
+  if (!startYear || !startMonthNumber || startMonthNumber < 1 || startMonthNumber > 12) {
+    console.error(`Invalid start date format: ${startDate}. Expected format: YYYY-MM`);
+    return schedules;
+  }
+  
+  const startMonthIndex = startMonthNumber - 1; // Convert to 0-11 for array indexing
+  
+  // Extract term duration number (e.g., "12 months" -> 12)
+  const termMatch = termDuration.match(/(\d+)/);
+  if (!termMatch) {
+    console.error(`Invalid term duration format: ${termDuration}`);
+    return schedules;
+  }
+  const term = parseInt(termMatch[1]);
+  
+  // Generate monthly schedules for the full term
+  let currentMonthIndex = startMonthIndex;
+  let currentYear = startYear;
+  
+  for (let i = 0; i < term; i++) {
+    schedules.push({
+      biller_id: null, // Schedules for installments have no biller_id
+      installment_id: installmentId,
+      schedule_month: MONTHS_ORDERED[currentMonthIndex],
+      schedule_year: currentYear.toString(),
+      expected_amount: monthlyAmount,
+      amount_paid: null,
+      receipt: null,
+      date_paid: null,
+      account_id: null,
+    });
+    
+    // Move to next month
+    currentMonthIndex++;
+    if (currentMonthIndex >= 12) {
+      currentMonthIndex = 0;
+      currentYear++;
+    }
+  }
+  
   return schedules;
 };

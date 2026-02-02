@@ -12,6 +12,7 @@ import type {
 } from '../types/supabase';
 import { supabaseInstallmentToFrontend, supabaseInstallmentsToFrontend, frontendInstallmentToSupabase } from '../utils/installmentsAdapter';
 import type { Installment } from '../../types';
+import { generateSchedulesForInstallment, createPaymentSchedulesBatch } from './paymentSchedulesService';
 
 /**
  * Get all installments
@@ -198,6 +199,7 @@ export const getInstallmentByIdFrontend = async (id: string): Promise<{ data: In
 
 /**
  * Create a new installment (accepts frontend Installment type)
+ * CRITICAL: This function now automatically generates payment schedules for the installment
  */
 export const createInstallmentFrontend = async (installment: Installment): Promise<{ data: Installment | null; error: any }> => {
   const supabaseInstallment = frontendInstallmentToSupabase(installment);
@@ -205,6 +207,59 @@ export const createInstallmentFrontend = async (installment: Installment): Promi
   if (error || !data) {
     return { data: null, error };
   }
+  
+  // CRITICAL: Generate payment schedules for the installment
+  console.log('Creating payment schedules for installment:', data.id);
+  
+  // Validate required fields
+  if (!data.start_date) {
+    console.error('Cannot generate schedules: start_date is missing');
+    return { 
+      data: null, 
+      error: new Error('Installment must have a start_date to generate payment schedules') 
+    };
+  }
+  
+  if (!data.term_duration) {
+    console.error('Cannot generate schedules: term_duration is missing');
+    return { 
+      data: null, 
+      error: new Error('Installment must have a term_duration to generate payment schedules') 
+    };
+  }
+  
+  // Generate schedules for the full term
+  const schedules = generateSchedulesForInstallment(
+    data.id,
+    data.start_date,
+    data.term_duration,
+    data.monthly_amount
+  );
+  
+  if (schedules.length === 0) {
+    console.error('No schedules generated for installment');
+    return { 
+      data: null, 
+      error: new Error('Failed to generate payment schedules. Check start_date and term_duration format.') 
+    };
+  }
+  
+  console.log(`Generated ${schedules.length} schedules for installment ${data.id}`);
+  
+  // Insert schedules in batch
+  const { error: schedulesError } = await createPaymentSchedulesBatch(schedules);
+  if (schedulesError) {
+    console.error('Error creating payment schedules:', schedulesError);
+    // Note: Installment was created, but schedules failed
+    // Return the installment anyway, but log the error
+    console.warn('Installment created but payment schedules failed. User may need to refresh or contact support.');
+    return { 
+      data: supabaseInstallmentToFrontend(data), 
+      error: new Error('Installment created but payment schedules failed. Please refresh the page.') 
+    };
+  }
+  
+  console.log('Successfully created installment with payment schedules');
   return { data: supabaseInstallmentToFrontend(data), error: null };
 };
 
