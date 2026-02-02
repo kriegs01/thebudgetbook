@@ -804,11 +804,14 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
     console.log(`[Budget] ${isEditing ? 'Updating' : 'Creating'} transaction in Supabase`);
     console.log('[Budget] Transaction data:', transactionFormData);
     
+    // NOTE: This handles general/manual transactions not linked to a payment schedule
+    // For payment schedule transactions, use handlePaySubmit which includes payment_schedule_id
     const transaction = {
       name: transactionFormData.name,
       date: new Date(transactionFormData.date).toISOString(),
       amount: parseFloat(transactionFormData.amount),
-      payment_method_id: transactionFormData.accountId
+      payment_method_id: transactionFormData.accountId,
+      payment_schedule_id: null // General transactions are not linked to schedules
     };
     
     try {
@@ -853,12 +856,31 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
       const { biller, schedule } = showPayModal;
       const isEditing = !!payFormData.transactionId;
       
-      console.log(`[Budget] ${isEditing ? 'Updating' : 'Creating'} transaction for payment`);
+      // CRITICAL: Get the payment schedule ID from the database BEFORE creating transaction
+      // This ensures the transaction is properly linked to the schedule it's paying
+      const dbSchedule = findScheduleForBiller(biller.id);
+      
+      if (!dbSchedule) {
+        console.error('[Budget] No payment schedule found for biller:', biller.id);
+        alert('Payment schedule not found. Please refresh the page and try again.');
+        return;
+      }
+      
+      console.log(`[Budget] ${isEditing ? 'Updating' : 'Creating'} transaction for payment`, {
+        scheduleId: dbSchedule.id,
+        billerId: biller.id,
+        month: dbSchedule.schedule_month,
+        year: dbSchedule.schedule_year
+      });
+      
+      // CRITICAL: Always include payment_schedule_id to link transaction to schedule
+      // This enables accurate paid status tracking without fuzzy matching
       const transaction = {
         name: `${biller.name} - ${schedule.month} ${schedule.year}`,
         date: new Date(payFormData.datePaid).toISOString(),
         amount: parseFloat(payFormData.amount),
-        payment_method_id: payFormData.accountId
+        payment_method_id: payFormData.accountId,
+        payment_schedule_id: dbSchedule.id // <-- Link to payment schedule (REQUIRED)
       };
       
       let transactionData, transactionError;
@@ -880,49 +902,42 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
         return;
       }
       
-      console.log(`[Budget] Transaction ${isEditing ? 'updated' : 'created'} successfully:`, transactionData);
+      console.log(`[Budget] Transaction ${isEditing ? 'updated' : 'created'} successfully with schedule linkage:`, transactionData);
       
       // Update the payment schedule directly in payment_schedules table
-      // Find the schedule from our loaded schedules
-      const dbSchedule = findScheduleForBiller(biller.id);
+      console.log(`[Budget] Updating payment schedule:`, {
+        scheduleId: dbSchedule.id,
+        scheduleMonth: dbSchedule.schedule_month,
+        scheduleYear: dbSchedule.schedule_year,
+        paymentDate: payFormData.datePaid,
+        amount: parseFloat(payFormData.amount)
+      });
       
-      if (dbSchedule) {
-        console.log(`[Budget] Updating payment schedule:`, {
-          scheduleId: dbSchedule.id,
-          scheduleMonth: dbSchedule.schedule_month,
-          scheduleYear: dbSchedule.schedule_year,
-          paymentDate: payFormData.datePaid,
-          amount: parseFloat(payFormData.amount)
-        });
-        
-        // Mark the schedule as paid using the payment schedules service
-        const { error: scheduleError } = await markPaymentScheduleAsPaid(
-          dbSchedule.id,
-          parseFloat(payFormData.amount),
-          payFormData.datePaid,
-          payFormData.accountId || undefined,
-          payFormData.receipt || `${biller.name}_${dbSchedule.schedule_month}`
-        );
-        
-        if (scheduleError) {
-          console.error('[Budget] Failed to update payment schedule:', scheduleError);
-          alert('Payment transaction created but failed to update schedule. Please refresh the page.');
-        } else {
-          console.log('[Budget] Payment schedule updated successfully');
-          
-          // Reload payment schedules to reflect the update
-          const currentYear = new Date().getFullYear().toString();
-          const { data } = await getPaymentSchedulesForBudget(
-            selectedMonth,
-            currentYear,
-            selectedTiming
-          );
-          if (data) {
-            setPaymentSchedules(data);
-          }
-        }
+      // Mark the schedule as paid using the payment schedules service
+      const { error: scheduleError } = await markPaymentScheduleAsPaid(
+        dbSchedule.id,
+        parseFloat(payFormData.amount),
+        payFormData.datePaid,
+        payFormData.accountId || undefined,
+        payFormData.receipt || `${biller.name}_${dbSchedule.schedule_month}`
+      );
+      
+      if (scheduleError) {
+        console.error('[Budget] Failed to update payment schedule:', scheduleError);
+        alert('Payment transaction created but failed to update schedule. Please refresh the page.');
       } else {
-        console.warn('[Budget] No payment schedule found for biller:', biller.id);
+        console.log('[Budget] Payment schedule updated successfully');
+        
+        // Reload payment schedules to reflect the update
+        const currentYear = new Date().getFullYear().toString();
+        const { data } = await getPaymentSchedulesForBudget(
+          selectedMonth,
+          currentYear,
+          selectedTiming
+        );
+        if (data) {
+          setPaymentSchedules(data);
+        }
       }
       
       console.log('[Budget] Payment marking completed');

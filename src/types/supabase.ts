@@ -58,6 +58,7 @@ export interface SupabaseTransaction {
   date: string; // timestamp
   amount: number; // numeric
   payment_method_id: string; // uuid
+  payment_schedule_id: string | null; // uuid, foreign key to payment_schedules (nullable for backward compatibility)
 }
 
 export interface SupabaseBudgetSetup {

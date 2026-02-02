@@ -84,11 +84,14 @@ const TransactionsPage: React.FC = () => {
     if (!form.name || !form.date || !form.amount || !form.paymentMethodId) return;
     
     try {
+      // NOTE: Manual transactions created here are not linked to payment schedules
+      // For payment schedule transactions, use the Pay flow in Budget/Billers pages
       const transaction = {
         name: form.name,
         date: new Date(form.date).toISOString(),
         amount: parseFloat(form.amount),
-        payment_method_id: form.paymentMethodId
+        payment_method_id: form.paymentMethodId,
+        payment_schedule_id: null // Manual transactions are not linked to schedules
       };
       
       const { data, error } = await createTransaction(transaction);
