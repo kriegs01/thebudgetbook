@@ -118,11 +118,28 @@ For detailed setup instructions, see [SUPABASE_SETUP.md](SUPABASE_SETUP.md).
 - Enable user authentication
 - Monitor database usage and performance
 
+## Known Good Paid Status Baseline
+
+⚠️ **IMPORTANT**: When working on payment-related features, please reference the [Known Good Baseline](KNOWN_GOOD_BASELINE.md).
+
+**Current Baseline Commit**: `e6b0cfe` (February 2, 2026)  
+**Status**: ✅ Verified Working
+
+This baseline represents stable, reliable implementation of pure transaction-based paid status logic. All payment work should be based on or after this commit.
+
+**Key Rule**: Transaction linkage is the ONLY source of truth for paid status.
+
+See [KNOWN_GOOD_BASELINE.md](KNOWN_GOOD_BASELINE.md) for:
+- Complete commit details
+- Code patterns to follow
+- Testing checklist
+- Rollback instructions
+
 ## Contributing
 
-1. Create a feature branch
+1. Create a feature branch (from baseline if working on payments)
 2. Make your changes
-3. Test thoroughly (especially Supabase integration)
+3. Test thoroughly (especially Supabase integration and payment flows)
 4. Submit a pull request
 
 ## Security Notes
