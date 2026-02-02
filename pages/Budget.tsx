@@ -465,37 +465,33 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
   }, [transactions]);
 
   /**
-   * Check if an item/biller is paid - combines direct linkage with fallbacks
+   * Check if an item/biller is paid - ONLY uses transaction linkage
+   * This eliminates ghost paid states from stale amountPaid fields
    * Priority:
-   * 1. Direct linkage via payment_schedule_id (most accurate)
-   * 2. Manual override via schedule.amountPaid (backward compatibility)
-   * 3. Fuzzy matching via checkIfPaidByTransaction (fallback for legacy/unlinked)
+   * 1. PRIMARY: Direct linkage via payment_schedule_id (most accurate)
+   * 2. FALLBACK: Fuzzy matching via checkIfPaidByTransaction (legacy/unlinked)
+   * 
+   * NOTE: amountPaid field is DEPRECATED and no longer used for paid status
    * 
    * @param scheduleId - Optional payment schedule ID for direct linkage check
    * @param itemName - Item name for fuzzy matching fallback
    * @param itemAmount - Item amount for fuzzy matching fallback
    * @param month - Month for fuzzy matching fallback
-   * @param scheduleAmountPaid - Optional manual override amount
-   * @returns true if paid by any method
+   * @returns true if paid by transaction linkage only
    */
   const isItemPaid = useCallback((
     scheduleId: string | undefined,
     itemName: string,
     itemAmount: string | number,
-    month: string,
-    scheduleAmountPaid?: number
+    month: string
   ): boolean => {
     // 1. PRIMARY: Check direct linkage (most accurate)
     if (scheduleId && isSchedulePaidByLink(scheduleId)) {
       return true;
     }
     
-    // 2. SECONDARY: Check manual override (backward compatibility)
-    if (scheduleAmountPaid && scheduleAmountPaid > 0) {
-      return true;
-    }
-    
-    // 3. FALLBACK: Check fuzzy matching (for legacy/unlinked transactions)
+    // 2. FALLBACK: Check fuzzy matching (for legacy/unlinked transactions)
+    // NOTE: Manual override via amountPaid is DEPRECATED and removed
     return checkIfPaidByTransaction(itemName, itemAmount, month);
   }, [isSchedulePaidByLink, checkIfPaidByTransaction]);
 
@@ -1503,23 +1499,20 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                           }))
                         });
                         
-                        // CRITICAL: Check paid status using priority order:
-                        // 1. Direct linkage (payment_schedule_id) - most accurate
-                        // 2. Manual override (schedule.amountPaid) - backward compatibility
-                        // 3. Fuzzy matching - fallback for legacy transactions
+                        // CRITICAL: Check paid status using ONLY transaction linkage
+                        // This eliminates ghost paid states from stale amountPaid fields
+                        // NOTE: Manual override (schedule.amountPaid) is DEPRECATED
                         const dbSchedule = findScheduleForBiller(linkedBiller.id);
                         isPaid = isItemPaid(
                           dbSchedule?.id,
                           item.name,
                           item.amount,
-                          selectedMonth,
-                          schedule?.amountPaid
+                          selectedMonth
                         );
                         
                         if (isPaid) {
                           console.log(`[Budget] Item ${item.name} in ${selectedMonth}: PAID`, {
                             hasLinkedTransaction: dbSchedule?.id && isSchedulePaidByLink(dbSchedule.id),
-                            hasManualOverride: !!schedule?.amountPaid,
                             scheduleId: dbSchedule?.id
                           });
                         }
@@ -1868,17 +1861,15 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                             linkedBiller = billers.find(b => b.id === item.id);
                             schedule = linkedBiller?.schedules.find(s => s.month === selectedMonth);
                             
-                            // CRITICAL: Check paid status using priority order:
-                            // 1. Direct linkage (payment_schedule_id) - most accurate
-                            // 2. Manual override (schedule.amountPaid) - backward compatibility  
-                            // 3. Fuzzy matching - fallback for legacy transactions
+                            // CRITICAL: Check paid status using ONLY transaction linkage
+                            // This eliminates ghost paid states from stale amountPaid fields
+                            // NOTE: Manual override (schedule.amountPaid) is DEPRECATED
                             const dbSchedule = findScheduleForBiller(linkedBiller.id);
                             isPaid = isItemPaid(
                               dbSchedule?.id,
                               item.name,
                               item.amount,
-                              selectedMonth,
-                              schedule?.amountPaid
+                              selectedMonth
                             );
                           } else {
                             // For non-biller items, check transactions only

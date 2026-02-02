@@ -733,22 +733,23 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
                       transactions
                     );
                     
-                    // CRITICAL: Check paid status using priority order:
-                    // 1. Direct linkage (payment_schedule_id) - most accurate
-                    // 2. Manual override (schedule.amount_paid) - backward compatibility
-                    // 3. Fuzzy matching - fallback for legacy transactions
+                    // CRITICAL: Check paid status using ONLY transaction linkage
+                    // This eliminates ghost paid states when transactions are deleted
+                    // 1. PRIMARY: Direct linkage (payment_schedule_id) - ONLY source of truth
+                    // 2. FALLBACK: Fuzzy matching - for legacy transactions without linkage (optional)
+                    // NOTE: amountPaid field is DEPRECATED and should NOT be used for paid status
                     const isPaidByLink = isSchedulePaidByLink(sched.id);
-                    const isPaidByManual = !!sched.amount_paid;
-                    const isPaidByFuzzy = !isPaidByLink && !isPaidByManual && checkIfPaidByTransaction(
+                    const isPaidByFuzzy = !isPaidByLink && checkIfPaidByTransaction(
                       detailedBiller.name,
                       calculatedAmount,
                       sched.schedule_month,
                       sched.schedule_year
                     );
                     
-                    const isPaid = isPaidByLink || isPaidByManual || isPaidByFuzzy;
+                    // ONLY use transaction-based checks (no amountPaid field)
+                    const isPaid = isPaidByLink || isPaidByFuzzy;
                     
-                    // Get actual paid amount (from linked transaction, schedule, or fuzzy match)
+                    // Get actual paid amount (from linked transaction or fuzzy match)
                     let displayAmount = calculatedAmount; // Use calculated amount
                     if (isPaid) {
                       if (isPaidByLink) {
@@ -768,10 +769,8 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
                         if (matchingTx) {
                           displayAmount = matchingTx.amount;
                         }
-                      } else if (isPaidByManual && sched.amount_paid) {
-                        // Use manual override amount
-                        displayAmount = sched.amount_paid;
                       }
+                      // NOTE: amountPaid field is DEPRECATED - do not use for display amount
                     }
                     
                     // ENHANCEMENT: Get display label with cycle date range if linked account
