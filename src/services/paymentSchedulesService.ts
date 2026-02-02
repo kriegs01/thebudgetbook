@@ -400,27 +400,30 @@ export const generateSchedulesForBiller = (
  * Used when creating an installment
  * 
  * @param installmentId - The ID of the installment
- * @param startDate - Start date in format "YYYY-MM" (e.g., "2026-03") - MUST be a string
- * @param termDuration - Term duration string (e.g., "12 months", "6 months") - MUST be a string
+ * @param startDate - Start date in format "YYYY-MM" (e.g., "2026-03")
+ * @param termDuration - Term duration as number (e.g., 12) or string (e.g., "12 months", "12")
  * @param monthlyAmount - Monthly payment amount
  * @returns Array of payment schedule objects ready for batch insert
+ * 
+ * @example
+ * // With number (database format)
+ * generateSchedulesForInstallment('id', '2026-03', 12, 500)
+ * 
+ * @example
+ * // With string
+ * generateSchedulesForInstallment('id', '2026-03', '12 months', 500)
  */
 export const generateSchedulesForInstallment = (
   installmentId: string,
   startDate: string,
-  termDuration: string,
+  termDuration: string | number,
   monthlyAmount: number
 ): CreatePaymentScheduleInput[] => {
   const schedules: CreatePaymentScheduleInput[] = [];
   
-  // DEFENSIVE: Validate that inputs are strings before using string methods
+  // DEFENSIVE: Validate that startDate is a string before using string methods
   if (typeof startDate !== 'string') {
     console.error('[generateSchedulesForInstallment] startDate must be a string, received:', typeof startDate, startDate);
-    return schedules;
-  }
-  
-  if (typeof termDuration !== 'string') {
-    console.error('[generateSchedulesForInstallment] termDuration must be a string, received:', typeof termDuration, termDuration);
     return schedules;
   }
   
@@ -436,21 +439,35 @@ export const generateSchedulesForInstallment = (
   
   const startMonthIndex = startMonthNumber - 1; // Convert to 0-11 for array indexing
   
-  // DEFENSIVE: Extract term duration number (e.g., "12 months" -> 12)
-  // Check type before calling .match() to prevent "match is not a function" error
-  let termMatch: RegExpMatchArray | null = null;
-  if (typeof termDuration === 'string') {
-    termMatch = termDuration.match(/(\d+)/);
+  // DEFENSIVE: Convert termDuration to number, handling both string and number inputs
+  // Accepts:
+  //   - number: 12 (from database)
+  //   - string: "12" or "12 months" (from forms or legacy code)
+  let term: number;
+  
+  if (typeof termDuration === 'number') {
+    // Direct number input (database format)
+    term = termDuration;
+    console.log(`[generateSchedulesForInstallment] Using term duration as number: ${term}`);
+  } else if (typeof termDuration === 'string') {
+    // String input - extract number (e.g., "12 months" -> 12, "12" -> 12)
+    const termMatch = termDuration.match(/(\d+)/);
+    if (!termMatch) {
+      console.error(`[generateSchedulesForInstallment] Invalid term duration format: ${termDuration}. Expected number or string like "12 months"`);
+      return schedules;
+    }
+    term = parseInt(termMatch[1], 10);
+    console.log(`[generateSchedulesForInstallment] Parsed term duration from string "${termDuration}": ${term}`);
   } else {
-    console.error('[generateSchedulesForInstallment] termDuration is not a string, cannot parse:', typeof termDuration, termDuration);
+    console.error('[generateSchedulesForInstallment] termDuration must be a number or string, received:', typeof termDuration, termDuration);
     return schedules;
   }
   
-  if (!termMatch) {
-    console.error(`[generateSchedulesForInstallment] Invalid term duration format: ${termDuration}. Expected format like "12 months"`);
+  // Validate the parsed term is a positive integer
+  if (isNaN(term) || term <= 0 || !Number.isInteger(term)) {
+    console.error(`[generateSchedulesForInstallment] Invalid term duration value: ${term}. Must be a positive integer.`);
     return schedules;
   }
-  const term = parseInt(termMatch[1]);
   
   // Generate monthly schedules for the full term
   let currentMonthIndex = startMonthIndex;
