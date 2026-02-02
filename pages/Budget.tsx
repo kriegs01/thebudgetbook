@@ -1616,16 +1616,24 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                               const monthsPassed = (currentYear - startYear) * 12 + (selectedMonthIndex - startMonthIndex);
                               
                               if (monthsPassed >= 0) {
-                                // Check if this month's installment is paid based on cumulative amount
-                                const expectedPaidByThisMonth = (monthsPassed + 1) * installment.monthlyAmount;
-                                isPaid = installment.paidAmount >= expectedPaidByThisMonth;
+                                // CRITICAL: Check if this month's installment is paid using TRANSACTION LINKAGE
+                                // Find payment schedules for this installment and month
+                                const installmentSchedules = paymentSchedules.filter(ps => 
+                                  ps.installment_id === installment.id && 
+                                  ps.schedule_month === selectedMonth && 
+                                  ps.schedule_year === currentYear.toString()
+                                );
+                                
+                                // Check if any schedule has a linked transaction
+                                isPaid = installmentSchedules.some(schedule => 
+                                  transactions.some(tx => tx.payment_schedule_id === schedule.id)
+                                );
                                 
                                 console.log('[Budget] Installment payment check:', {
                                   name: installment.name,
                                   selectedMonth,
                                   monthsPassed,
-                                  expectedPaidByThisMonth,
-                                  actualPaidAmount: installment.paidAmount,
+                                  schedulesFound: installmentSchedules.length,
                                   isPaid
                                 });
                               }

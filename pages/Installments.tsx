@@ -178,43 +178,31 @@ const Installments: React.FC<InstallmentsProps> = ({
   };
 
   /**
-   * CRITICAL: Calculate actual paid amount using HYBRID approach.
+   * CRITICAL: Calculate actual paid amount using PURE transaction linkage.
    * 
-   * Priority:
-   * 1. Use transaction linkage if schedules are loaded (most accurate)
-   * 2. Fall back to paidAmount field for backward compatibility
-   * 3. Return the MAXIMUM of both to never show incorrect 0
+   * This is the SINGLE SOURCE OF TRUTH - uses ONLY transaction linkage.
+   * No fallbacks to paidAmount field to prevent ghost paid states.
    * 
    * @param installmentId - The installment ID to calculate paid amount for
-   * @param fallbackPaidAmount - The paidAmount field from installment (fallback)
-   * @returns The total paid amount
+   * @returns The total paid amount from linked transactions ONLY
    */
-  const calculatePaidAmountFromTransactions = useCallback((installmentId: string, fallbackPaidAmount: number = 0): number => {
+  const calculatePaidAmountFromTransactions = useCallback((installmentId: string): number => {
     // Get all schedules for this installment
     const installmentSchedules = allInstallmentSchedules.filter(
       schedule => schedule.installment_id === installmentId
     );
     
-    // Calculate from transaction linkage if schedules are loaded
-    let linkedAmount = 0;
-    if (installmentSchedules.length > 0) {
-      linkedAmount = installmentSchedules.reduce((total, schedule) => {
-        const hasPaidTransaction = transactions.some(tx => tx.payment_schedule_id === schedule.id);
-        return hasPaidTransaction ? total + (schedule.expected_amount || 0) : total;
-      }, 0);
+    // Calculate ONLY from transaction linkage (no fallbacks)
+    const paidAmount = installmentSchedules.reduce((total, schedule) => {
+      const hasPaidTransaction = transactions.some(tx => tx.payment_schedule_id === schedule.id);
+      return hasPaidTransaction ? total + (schedule.expected_amount || 0) : total;
+    }, 0);
+    
+    if (paidAmount > 0) {
+      console.log(`[Installments] Calculated paid amount from linked transactions: ${paidAmount}`);
     }
     
-    // HYBRID APPROACH: Use the maximum of linked amount and fallback
-    // This ensures we never show 0 when there are actual payments
-    const finalAmount = Math.max(linkedAmount, fallbackPaidAmount || 0);
-    
-    if (linkedAmount > 0 && linkedAmount !== fallbackPaidAmount) {
-      console.log(`[Installments] Using linked transactions: ${linkedAmount} (fallback was ${fallbackPaidAmount})`);
-    } else if (fallbackPaidAmount > 0 && linkedAmount === 0) {
-      console.log(`[Installments] Using fallback paidAmount: ${fallbackPaidAmount} (no linked transactions found)`);
-    }
-    
-    return finalAmount;
+    return paidAmount;
   }, [allInstallmentSchedules, transactions]);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -454,9 +442,9 @@ const Installments: React.FC<InstallmentsProps> = ({
   };
 
   const renderCard = (item: Installment) => {
-    // CRITICAL: Calculate paid amount using HYBRID approach
-    // Prioritizes transaction linkage but falls back to paidAmount field
-    const paidFromTransactions = calculatePaidAmountFromTransactions(item.id, item.paidAmount);
+    // CRITICAL: Calculate paid amount from transactions (SINGLE SOURCE OF TRUTH)
+    // Uses ONLY transaction linkage (no fallback to paidAmount)
+    const paidFromTransactions = calculatePaidAmountFromTransactions(item.id);
     const progress = (paidFromTransactions / item.totalAmount) * 100;
     const remaining = item.totalAmount - paidFromTransactions;
     const account = accounts.find(a => a.id === item.accountId);
@@ -565,9 +553,9 @@ const Installments: React.FC<InstallmentsProps> = ({
   };
 
   const renderListItem = (item: Installment) => {
-    // CRITICAL: Calculate paid amount using HYBRID approach
-    // Prioritizes transaction linkage but falls back to paidAmount field
-    const paidFromTransactions = calculatePaidAmountFromTransactions(item.id, item.paidAmount);
+    // CRITICAL: Calculate paid amount from transactions (SINGLE SOURCE OF TRUTH)
+    // Uses ONLY transaction linkage (no fallback to paidAmount)
+    const paidFromTransactions = calculatePaidAmountFromTransactions(item.id);
     const progress = (paidFromTransactions / item.totalAmount) * 100;
     const account = accounts.find(a => a.id === item.accountId);
 
