@@ -1434,7 +1434,7 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                         
                         // Allow manual override via schedule.amountPaid for backward compatibility
                         // This handles legacy data or manual payment entries
-                        const isPaidViaSchedule = schedule?.amountPaid ? true : false;
+                        const isPaidViaSchedule = !!schedule?.amountPaid;
                         
                         // Paid if EITHER transaction exists OR manual override is set
                         isPaid = isPaidViaTransaction || isPaidViaSchedule;
@@ -1798,7 +1798,7 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                             const isPaidViaTransaction = checkIfPaidByTransaction(item.name, item.amount, selectedMonth);
                             
                             // Allow manual override via schedule.amountPaid for backward compatibility
-                            const isPaidViaSchedule = schedule?.amountPaid ? true : false;
+                            const isPaidViaSchedule = !!schedule?.amountPaid;
                             
                             // Paid if EITHER transaction exists OR manual override is set
                             isPaid = isPaidViaTransaction || isPaidViaSchedule;
