@@ -203,24 +203,23 @@ const Installments: React.FC<InstallmentsProps> = ({
       console.log('[Installments] Found payment schedule:', paymentSchedule.id);
       
       // CRITICAL: Create transaction WITH payment_schedule_id linkage
+      // IMPORTANT: Only include fields that exist in the database schema
       const transactionData = {
         name: `${showPayModal.name} - ${currentMonth} ${currentYear}`,
         amount: paymentAmount,
         date: payFormData.datePaid,
         payment_method_id: payFormData.accountId,
-        type: 'expense' as const,
-        category: 'Installment Payment',
-        receipt: payFormData.receipt || null,
         payment_schedule_id: paymentSchedule.id // CRITICAL: Link to payment schedule
       };
       
-      console.log('[Installments] Creating transaction with payment_schedule_id:', paymentSchedule.id);
+      console.log('[Installments] Creating transaction with payload:', JSON.stringify(transactionData, null, 2));
       
       const { data: transaction, error: transactionError } = await createTransaction(transactionData);
       
       if (transactionError || !transaction) {
         console.error('[Installments] Error creating transaction:', transactionError);
-        throw new Error('Failed to create transaction. Please try again.');
+        console.error('[Installments] Transaction payload was:', JSON.stringify(transactionData, null, 2));
+        throw new Error(`Failed to create transaction: ${transactionError?.message || 'Unknown error'}. Please try again.`);
       }
       
       console.log('[Installments] Transaction created successfully:', transaction.id);

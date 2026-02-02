@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Biller, Account, PaymentSchedule, BudgetCategory, Installment } from '../types';
 import { Plus, Calendar, Bell, ChevronDown, ChevronRight, Upload, CheckCircle2, X, ArrowLeft, Power, PowerOff, MoreVertical, Edit2, Eye, Trash2, AlertTriangle } from 'lucide-react';
-import { getAllTransactions } from '../src/services/transactionsService';
+import { getAllTransactions, createTransaction } from '../src/services/transactionsService';
 import type { SupabaseTransaction, SupabasePaymentSchedule } from '../src/types/supabase';
 import { 
   getPaymentSchedulesByBillerId, 
@@ -16,6 +16,7 @@ import {
 } from '../src/utils/linkedAccountUtils';
 // Import schedule ID generator for consistent ID creation
 import { generateScheduleId } from '../src/utils/billersAdapter';
+
 
 
 interface BillersProps {
@@ -436,6 +437,16 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
     try {
       const { biller, schedule } = showPayModal;
       
+      console.log('[Billers] Processing payment:', {
+        billerId: biller.id,
+        billerName: biller.name,
+        month: schedule.month,
+        year: schedule.year,
+        amount: payFormData.amount,
+        accountId: payFormData.accountId,
+        datePaid: payFormData.datePaid
+      });
+      
       // Find the payment schedule in the database using biller ID, month, and year
       const billerSchedules = paymentSchedules[biller.id] || [];
       const dbSchedule = billerSchedules.find(
@@ -445,11 +456,38 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
       if (!dbSchedule) {
         console.error('[Billers] Payment schedule not found in database');
         alert('Payment schedule not found in database. The schedule may not have been created yet. Please refresh the page and try again, or contact support if this issue persists.');
+        setIsSubmitting(false);
         return;
       }
       
+      console.log('[Billers] Found payment schedule:', dbSchedule.id);
+      
+      // CRITICAL: Create transaction WITH payment_schedule_id linkage
+      // IMPORTANT: Only include fields that exist in the database schema
+      const transactionData = {
+        name: `${biller.name} - ${schedule.month} ${schedule.year}`,
+        amount: parseFloat(payFormData.amount),
+        date: payFormData.datePaid,
+        payment_method_id: payFormData.accountId,
+        payment_schedule_id: dbSchedule.id // CRITICAL: Link to payment schedule
+      };
+      
+      console.log('[Billers] Creating transaction with payload:', JSON.stringify(transactionData, null, 2));
+      
+      const { data: transaction, error: transactionError } = await createTransaction(transactionData);
+      
+      if (transactionError || !transaction) {
+        console.error('[Billers] Error creating transaction:', transactionError);
+        console.error('[Billers] Transaction payload was:', JSON.stringify(transactionData, null, 2));
+        alert(`Failed to create transaction: ${transactionError?.message || 'Unknown error'}. Please check your connection and try again.`);
+        setIsSubmitting(false);
+        return;
+      }
+      
+      console.log('[Billers] Transaction created successfully:', transaction.id);
+      
       // Mark the payment schedule as paid in the database
-      const { data, error } = await markPaymentScheduleAsPaid(
+      const { error: markPaidError } = await markPaymentScheduleAsPaid(
         dbSchedule.id,
         parseFloat(payFormData.amount),
         payFormData.datePaid,
@@ -457,19 +495,25 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
         payFormData.receipt || `${biller.name}_${schedule.month}`
       );
       
-      if (error) {
-        console.error('[Billers] Error marking payment schedule as paid:', error);
-        alert(`Failed to update payment schedule in database: ${error.message || 'Unknown error'}. Please check your connection and try again.`);
-        return;
+      if (markPaidError) {
+        console.error('[Billers] Error marking payment schedule as paid:', markPaidError);
+        // Don't fail completely - transaction was created, just warn
+        console.warn('[Billers] Schedule not marked as paid but transaction exists');
+      } else {
+        console.log('[Billers] Payment schedule marked as paid');
       }
       
       // Reload payment schedules for this biller to reflect the update
       await loadPaymentSchedulesForBiller(biller.id);
       
+      // Reload transactions to update paid status indicators
+      await loadTransactions();
+      
       // Only close modal on success
       setShowPayModal(null);
     } catch (error) {
-      console.error('Failed to update payment:', error);
+      console.error('[Billers] Failed to process payment:', error);
+      alert(`Failed to process payment: ${error instanceof Error ? error.message : 'Unknown error'}. Please try again.`);
       // Keep modal open so user can retry
     } finally {
       setIsSubmitting(false);
