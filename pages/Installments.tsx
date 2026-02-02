@@ -41,6 +41,10 @@ const Installments: React.FC<InstallmentsProps> = ({
   // CRITICAL: Payment schedules state for transaction-based paid status
   const [viewModalSchedules, setViewModalSchedules] = useState<PaymentScheduleWithDetails[]>([]);
   const [viewModalSchedulesLoading, setViewModalSchedulesLoading] = useState(false);
+  
+  // CRITICAL: All payment schedules for calculating progress bars
+  const [allInstallmentSchedules, setAllInstallmentSchedules] = useState<PaymentScheduleWithDetails[]>([]);
+  const [allSchedulesLoading, setAllSchedulesLoading] = useState(false);
 
   const [confirmModal, setConfirmModal] = useState<{
     show: boolean;
@@ -125,6 +129,44 @@ const Installments: React.FC<InstallmentsProps> = ({
   }, [showViewModal, loadPaymentSchedulesForViewModal]);
 
   /**
+   * CRITICAL: Load all payment schedules for all installments
+   * This enables transaction-based progress calculation
+   */
+  const loadAllInstallmentSchedules = useCallback(async () => {
+    console.log('[Installments] Loading all payment schedules for all installments');
+    setAllSchedulesLoading(true);
+    
+    try {
+      // Load schedules for each installment
+      const allSchedules: PaymentScheduleWithDetails[] = [];
+      
+      for (const installment of installments) {
+        if (installment.id) {
+          const { data, error } = await getPaymentSchedulesByInstallmentId(installment.id);
+          if (data && !error) {
+            allSchedules.push(...data);
+          }
+        }
+      }
+      
+      console.log(`[Installments] Loaded ${allSchedules.length} payment schedules total`);
+      setAllInstallmentSchedules(allSchedules);
+    } catch (err) {
+      console.error('[Installments] Exception loading all payment schedules:', err);
+      setAllInstallmentSchedules([]);
+    } finally {
+      setAllSchedulesLoading(false);
+    }
+  }, [installments]);
+
+  /**
+   * Load all payment schedules on mount and when installments change
+   */
+  useEffect(() => {
+    loadAllInstallmentSchedules();
+  }, [loadAllInstallmentSchedules]);
+
+  /**
    * CRITICAL: Check if a schedule is paid by verifying transaction linkage.
    * ONLY SOURCE OF TRUTH for paid status in installments.
    * 
@@ -134,6 +176,28 @@ const Installments: React.FC<InstallmentsProps> = ({
   const isSchedulePaidByTransaction = (scheduleId: string): boolean => {
     return transactions.some(tx => tx.payment_schedule_id === scheduleId);
   };
+
+  /**
+   * CRITICAL: Calculate actual paid amount from transactions for an installment.
+   * This is the SINGLE SOURCE OF TRUTH for progress bars.
+   * 
+   * @param installmentId - The installment ID to calculate paid amount for
+   * @returns The total paid amount based on linked transactions
+   */
+  const calculatePaidAmountFromTransactions = useCallback((installmentId: string): number => {
+    // Get all schedules for this installment
+    const installmentSchedules = allInstallmentSchedules.filter(
+      schedule => schedule.installment_id === installmentId
+    );
+    
+    // Sum up amounts for schedules that have linked transactions
+    const paidAmount = installmentSchedules.reduce((total, schedule) => {
+      const hasPaidTransaction = transactions.some(tx => tx.payment_schedule_id === schedule.id);
+      return hasPaidTransaction ? total + (schedule.expected_amount || 0) : total;
+    }, 0);
+    
+    return paidAmount;
+  }, [allInstallmentSchedules, transactions]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -313,6 +377,9 @@ const Installments: React.FC<InstallmentsProps> = ({
       
       console.log('[Installments] Payment processed successfully');
       
+      // CRITICAL: Reload all installment schedules to update progress bars
+      await loadAllInstallmentSchedules();
+      
       // Close pay modal after successful payment
       setShowPayModal(null);
       setPayFormData({
@@ -369,8 +436,11 @@ const Installments: React.FC<InstallmentsProps> = ({
   };
 
   const renderCard = (item: Installment) => {
-    const progress = (item.paidAmount / item.totalAmount) * 100;
-    const remaining = item.totalAmount - item.paidAmount;
+    // CRITICAL: Calculate paid amount from transactions (SINGLE SOURCE OF TRUTH)
+    // This replaces the stale paidAmount field
+    const paidFromTransactions = calculatePaidAmountFromTransactions(item.id);
+    const progress = (paidFromTransactions / item.totalAmount) * 100;
+    const remaining = item.totalAmount - paidFromTransactions;
     const account = accounts.find(a => a.id === item.accountId);
 
     return (
@@ -438,7 +508,7 @@ const Installments: React.FC<InstallmentsProps> = ({
 
         <div className="space-y-2 mb-6">
           <div className="flex justify-between text-[10px] font-black uppercase tracking-widest">
-            <span className="text-indigo-600">Paid: {formatCurrency(item.paidAmount)}</span>
+            <span className="text-indigo-600">Paid: {formatCurrency(paidFromTransactions)}</span>
             <span className="text-gray-400">Bal: {formatCurrency(remaining)}</span>
           </div>
           <div className="h-2.5 w-full bg-gray-100 rounded-full overflow-hidden">
@@ -477,7 +547,10 @@ const Installments: React.FC<InstallmentsProps> = ({
   };
 
   const renderListItem = (item: Installment) => {
-    const progress = (item.paidAmount / item.totalAmount) * 100;
+    // CRITICAL: Calculate paid amount from transactions (SINGLE SOURCE OF TRUTH)
+    // This replaces the stale paidAmount field
+    const paidFromTransactions = calculatePaidAmountFromTransactions(item.id);
+    const progress = (paidFromTransactions / item.totalAmount) * 100;
     const account = accounts.find(a => a.id === item.accountId);
 
     return (
