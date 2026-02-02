@@ -1428,24 +1428,26 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                           }))
                         });
                         
-                        // FIX: For billers with schedules, ONLY use schedule.amountPaid
-                        // This prevents double-counting when transactions match multiple months via grace period
-                        if (schedule) {
-                          isPaid = !!schedule.amountPaid;
-                          if (schedule.amountPaid) {
-                            console.log(`[Budget] Item ${item.name} in ${selectedMonth}: PAID via schedule.amountPaid`, {
-                              month: schedule.month,
-                              year: schedule.year,
-                              amountPaid: schedule.amountPaid,
-                              datePaid: schedule.datePaid
-                            });
-                          }
-                        } else {
-                          // Fallback to transaction matching if no schedule found
-                          isPaid = checkIfPaidByTransaction(item.name, item.amount, selectedMonth);
-                          if (isPaid) {
-                            console.log(`[Budget] Item ${item.name} in ${selectedMonth}: PAID via transaction matching (no schedule)`);
-                          }
+                        // CHECK TRANSACTIONS FIRST - primary source of truth
+                        // Transaction-based payment status is accurate and reflects actual payments
+                        const isPaidViaTransaction = checkIfPaidByTransaction(item.name, item.amount, selectedMonth);
+                        
+                        // Allow manual override via schedule.amountPaid for backward compatibility
+                        // This handles legacy data or manual payment entries
+                        const isPaidViaSchedule = schedule?.amountPaid ? true : false;
+                        
+                        // Paid if EITHER transaction exists OR manual override is set
+                        isPaid = isPaidViaTransaction || isPaidViaSchedule;
+                        
+                        if (isPaid) {
+                          console.log(`[Budget] Item ${item.name} in ${selectedMonth}: PAID`, {
+                            viaTransaction: isPaidViaTransaction,
+                            viaSchedule: isPaidViaSchedule,
+                            month: schedule?.month,
+                            year: schedule?.year,
+                            amountPaid: schedule?.amountPaid,
+                            datePaid: schedule?.datePaid
+                          });
                         }
                       } else {
                         // For non-biller items (like Purchases), only check transactions
@@ -1791,14 +1793,15 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                           if (isBiller) {
                             linkedBiller = billers.find(b => b.id === item.id);
                             schedule = linkedBiller?.schedules.find(s => s.month === selectedMonth);
-                            // FIX: For billers with schedules, ONLY use schedule.amountPaid
-                            // This prevents double-counting when transactions match multiple months via grace period
-                            if (schedule) {
-                              isPaid = !!schedule.amountPaid;
-                            } else {
-                              // Fallback to transaction matching if no schedule found
-                              isPaid = checkIfPaidByTransaction(item.name, item.amount, selectedMonth);
-                            }
+                            
+                            // CHECK TRANSACTIONS FIRST - primary source of truth
+                            const isPaidViaTransaction = checkIfPaidByTransaction(item.name, item.amount, selectedMonth);
+                            
+                            // Allow manual override via schedule.amountPaid for backward compatibility
+                            const isPaidViaSchedule = schedule?.amountPaid ? true : false;
+                            
+                            // Paid if EITHER transaction exists OR manual override is set
+                            isPaid = isPaidViaTransaction || isPaidViaSchedule;
                           } else {
                             // For non-biller items, only check transactions
                             isPaid = checkIfPaidByTransaction(item.name, item.amount, selectedMonth);
