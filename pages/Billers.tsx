@@ -226,6 +226,30 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
   }, [transactions]);
 
   /**
+   * CRITICAL: Check if a payment schedule is paid by direct transaction linkage
+   * This is the PRIMARY method for determining paid status (accurate, no fuzzy matching needed)
+   * 
+   * @param scheduleId - The ID of the payment schedule
+   * @returns true if a transaction with payment_schedule_id === scheduleId exists
+   */
+  const isSchedulePaidByLink = useCallback((scheduleId: string): boolean => {
+    const linkedTransaction = transactions.find(tx => tx.payment_schedule_id === scheduleId);
+    
+    if (linkedTransaction) {
+      console.log(`[Billers] ✓ Found linked transaction for schedule ${scheduleId}:`, {
+        txId: linkedTransaction.id,
+        txName: linkedTransaction.name,
+        txAmount: linkedTransaction.amount,
+        txDate: linkedTransaction.date
+      });
+      return true;
+    }
+    
+    return false;
+  }, [transactions]);
+
+
+  /**
    * Get the matching transaction for a biller schedule
    * Returns the transaction object if found, null otherwise
    */
@@ -660,33 +684,43 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
                       transactions
                     );
                     
-                    // PRIMARY CHECK: Transaction-based payment (accurate and reflects DB state)
-                    const isPaidViaTransaction = checkIfPaidByTransaction(
+                    // CRITICAL: Check paid status using priority order:
+                    // 1. Direct linkage (payment_schedule_id) - most accurate
+                    // 2. Manual override (schedule.amount_paid) - backward compatibility
+                    // 3. Fuzzy matching - fallback for legacy transactions
+                    const isPaidByLink = isSchedulePaidByLink(sched.id);
+                    const isPaidByManual = !!sched.amount_paid;
+                    const isPaidByFuzzy = !isPaidByLink && !isPaidByManual && checkIfPaidByTransaction(
                       detailedBiller.name,
-                      calculatedAmount, // Use calculated amount for matching
+                      calculatedAmount,
                       sched.schedule_month,
                       sched.schedule_year
                     );
                     
-                    // SECONDARY CHECK: Manual override via schedule.amount_paid (for backward compatibility)
-                    const isPaidViaSchedule = !!sched.amount_paid;
+                    const isPaid = isPaidByLink || isPaidByManual || isPaidByFuzzy;
                     
-                    // Payment is confirmed if EITHER a transaction exists OR manual override is set
-                    const isPaid = isPaidViaTransaction || isPaidViaSchedule;
-                    
-                    // Get actual paid amount (from schedule or matching transaction)
+                    // Get actual paid amount (from linked transaction, schedule, or fuzzy match)
                     let displayAmount = calculatedAmount; // Use calculated amount
                     if (isPaid) {
-                      // Prefer transaction amount (more accurate) over schedule amount_paid
-                      const matchingTx = getMatchingTransaction(
-                        detailedBiller.name,
-                        calculatedAmount, // Use calculated amount for matching
-                        sched.schedule_month,
-                        sched.schedule_year
-                      );
-                      if (matchingTx) {
-                        displayAmount = matchingTx.amount;
-                      } else if (isPaidViaSchedule && sched.amount_paid) {
+                      if (isPaidByLink) {
+                        // Get amount from linked transaction (most accurate)
+                        const linkedTx = transactions.find(tx => tx.payment_schedule_id === sched.id);
+                        if (linkedTx) {
+                          displayAmount = linkedTx.amount;
+                        }
+                      } else if (isPaidByFuzzy) {
+                        // Get amount from fuzzy matched transaction
+                        const matchingTx = getMatchingTransaction(
+                          detailedBiller.name,
+                          calculatedAmount,
+                          sched.schedule_month,
+                          sched.schedule_year
+                        );
+                        if (matchingTx) {
+                          displayAmount = matchingTx.amount;
+                        }
+                      } else if (isPaidByManual && sched.amount_paid) {
+                        // Use manual override amount
                         displayAmount = sched.amount_paid;
                       }
                     }

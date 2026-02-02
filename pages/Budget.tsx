@@ -442,6 +442,65 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
   }, [transactions]);
 
   /**
+   * CRITICAL: Check if a payment schedule is paid by direct transaction linkage
+   * This is the PRIMARY method for determining paid status (accurate, no fuzzy matching needed)
+   * 
+   * @param scheduleId - The ID of the payment schedule
+   * @returns true if a transaction with payment_schedule_id === scheduleId exists
+   */
+  const isSchedulePaidByLink = useCallback((scheduleId: string): boolean => {
+    const linkedTransaction = transactions.find(tx => tx.payment_schedule_id === scheduleId);
+    
+    if (linkedTransaction) {
+      console.log(`[Budget] ✓ Found linked transaction for schedule ${scheduleId}:`, {
+        txId: linkedTransaction.id,
+        txName: linkedTransaction.name,
+        txAmount: linkedTransaction.amount,
+        txDate: linkedTransaction.date
+      });
+      return true;
+    }
+    
+    return false;
+  }, [transactions]);
+
+  /**
+   * Check if an item/biller is paid - combines direct linkage with fallbacks
+   * Priority:
+   * 1. Direct linkage via payment_schedule_id (most accurate)
+   * 2. Manual override via schedule.amountPaid (backward compatibility)
+   * 3. Fuzzy matching via checkIfPaidByTransaction (fallback for legacy/unlinked)
+   * 
+   * @param scheduleId - Optional payment schedule ID for direct linkage check
+   * @param itemName - Item name for fuzzy matching fallback
+   * @param itemAmount - Item amount for fuzzy matching fallback
+   * @param month - Month for fuzzy matching fallback
+   * @param scheduleAmountPaid - Optional manual override amount
+   * @returns true if paid by any method
+   */
+  const isItemPaid = useCallback((
+    scheduleId: string | undefined,
+    itemName: string,
+    itemAmount: string | number,
+    month: string,
+    scheduleAmountPaid?: number
+  ): boolean => {
+    // 1. PRIMARY: Check direct linkage (most accurate)
+    if (scheduleId && isSchedulePaidByLink(scheduleId)) {
+      return true;
+    }
+    
+    // 2. SECONDARY: Check manual override (backward compatibility)
+    if (scheduleAmountPaid && scheduleAmountPaid > 0) {
+      return true;
+    }
+    
+    // 3. FALLBACK: Check fuzzy matching (for legacy/unlinked transactions)
+    return checkIfPaidByTransaction(itemName, itemAmount, month);
+  }, [isSchedulePaidByLink, checkIfPaidByTransaction]);
+
+
+  /**
    * QA: Find existing transaction for an item
    * Fix for Issue: Transaction editing from Pay modal
    */
@@ -1443,29 +1502,28 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                           }))
                         });
                         
-                        // CHECK TRANSACTIONS FIRST - primary source of truth
-                        // Transaction-based payment status is accurate and reflects actual payments
-                        const isPaidViaTransaction = checkIfPaidByTransaction(item.name, item.amount, selectedMonth);
-                        
-                        // Allow manual override via schedule.amountPaid for backward compatibility
-                        // This handles legacy data or manual payment entries
-                        const isPaidViaSchedule = !!schedule?.amountPaid;
-                        
-                        // Paid if EITHER transaction exists OR manual override is set
-                        isPaid = isPaidViaTransaction || isPaidViaSchedule;
+                        // CRITICAL: Check paid status using priority order:
+                        // 1. Direct linkage (payment_schedule_id) - most accurate
+                        // 2. Manual override (schedule.amountPaid) - backward compatibility
+                        // 3. Fuzzy matching - fallback for legacy transactions
+                        const dbSchedule = findScheduleForBiller(linkedBiller.id);
+                        isPaid = isItemPaid(
+                          dbSchedule?.id,
+                          item.name,
+                          item.amount,
+                          selectedMonth,
+                          schedule?.amountPaid
+                        );
                         
                         if (isPaid) {
                           console.log(`[Budget] Item ${item.name} in ${selectedMonth}: PAID`, {
-                            viaTransaction: isPaidViaTransaction,
-                            viaSchedule: isPaidViaSchedule,
-                            month: schedule?.month,
-                            year: schedule?.year,
-                            amountPaid: schedule?.amountPaid,
-                            datePaid: schedule?.datePaid
+                            hasLinkedTransaction: dbSchedule?.id && isSchedulePaidByLink(dbSchedule.id),
+                            hasManualOverride: !!schedule?.amountPaid,
+                            scheduleId: dbSchedule?.id
                           });
                         }
                       } else {
-                        // For non-biller items (like Purchases), only check transactions
+                        // For non-biller items (like Purchases), check transactions only
                         isPaid = checkIfPaidByTransaction(item.name, item.amount, selectedMonth);
                       }
                       return (
@@ -1809,16 +1867,20 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                             linkedBiller = billers.find(b => b.id === item.id);
                             schedule = linkedBiller?.schedules.find(s => s.month === selectedMonth);
                             
-                            // CHECK TRANSACTIONS FIRST - primary source of truth
-                            const isPaidViaTransaction = checkIfPaidByTransaction(item.name, item.amount, selectedMonth);
-                            
-                            // Allow manual override via schedule.amountPaid for backward compatibility
-                            const isPaidViaSchedule = !!schedule?.amountPaid;
-                            
-                            // Paid if EITHER transaction exists OR manual override is set
-                            isPaid = isPaidViaTransaction || isPaidViaSchedule;
+                            // CRITICAL: Check paid status using priority order:
+                            // 1. Direct linkage (payment_schedule_id) - most accurate
+                            // 2. Manual override (schedule.amountPaid) - backward compatibility  
+                            // 3. Fuzzy matching - fallback for legacy transactions
+                            const dbSchedule = findScheduleForBiller(linkedBiller.id);
+                            isPaid = isItemPaid(
+                              dbSchedule?.id,
+                              item.name,
+                              item.amount,
+                              selectedMonth,
+                              schedule?.amountPaid
+                            );
                           } else {
-                            // For non-biller items, only check transactions
+                            // For non-biller items, check transactions only
                             isPaid = checkIfPaidByTransaction(item.name, item.amount, selectedMonth);
                           }
                           return (
