@@ -111,33 +111,38 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
     accountId: accounts[0]?.id || ''
   });
 
-  // Load transactions for payment status matching
-  useEffect(() => {
-    const loadTransactions = async () => {
-      try {
-        const { data, error } = await getAllTransactions();
-        if (error) {
-          console.error('[Billers] Failed to load transactions:', error);
-        } else if (data) {
-          // Filter to last 24 months for performance
-          const twoYearsAgo = new Date();
-          twoYearsAgo.setFullYear(twoYearsAgo.getFullYear() - 2);
-          
-          const recentTransactions = data.filter(tx => {
-            const txDate = new Date(tx.date);
-            return txDate >= twoYearsAgo;
-          });
-          
-          setTransactions(recentTransactions);
-          console.log('[Billers] Loaded transactions:', recentTransactions.length, 'of', data.length);
-        }
-      } catch (error) {
-        console.error('[Billers] Error loading transactions:', error);
+  /**
+   * Load transactions for payment status matching
+   * CRITICAL: This function must be accessible throughout the component
+   * to reload transactions after payment operations
+   */
+  const loadTransactions = useCallback(async () => {
+    try {
+      const { data, error } = await getAllTransactions();
+      if (error) {
+        console.error('[Billers] Failed to load transactions:', error);
+      } else if (data) {
+        // Filter to last 24 months for performance
+        const twoYearsAgo = new Date();
+        twoYearsAgo.setFullYear(twoYearsAgo.getFullYear() - 2);
+        
+        const recentTransactions = data.filter(tx => {
+          const txDate = new Date(tx.date);
+          return txDate >= twoYearsAgo;
+        });
+        
+        setTransactions(recentTransactions);
+        console.log('[Billers] Loaded transactions:', recentTransactions.length, 'of', data.length);
       }
-    };
+    } catch (error) {
+      console.error('[Billers] Error loading transactions:', error);
+    }
+  }, []); // No dependencies needed
 
+  // Load transactions on mount
+  useEffect(() => {
     loadTransactions();
-  }, []); // Load once on mount
+  }, [loadTransactions]); // Depend on loadTransactions callback
 
   /**
    * Load payment schedules for a specific biller
