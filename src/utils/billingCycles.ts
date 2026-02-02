@@ -31,7 +31,7 @@ export interface BillingCycleWithTransactions extends BillingCycle {
  * 
  * ENHANCEMENT: Extracted from statement.tsx to enable reuse in Billers
  * 
- * @param billingDate - The billing date in "YYYY-MM-DD" format or day number (e.g., "15", "15th")
+ * @param billingDate - The billing date in "YYYY-MM-DD" format or day number (e.g., "15", "15th") - MUST be a string
  * @param numberOfCycles - Number of cycles to generate (default: 6)
  * @param onlyCurrentYear - If true, only show cycles from current year onwards (default: false)
  * @returns Array of billing cycles with start/end dates
@@ -43,6 +43,12 @@ export const calculateBillingCycles = (
 ): BillingCycle[] => {
   const cycles: BillingCycle[] = [];
   
+  // DEFENSIVE: Validate that billingDate is a string before using string methods
+  if (typeof billingDate !== 'string') {
+    console.error('[calculateBillingCycles] billingDate must be a string, received:', typeof billingDate, billingDate);
+    return cycles;
+  }
+  
   // Parse billing date - expect format "YYYY-MM-DD"
   let billingDay: number;
   
@@ -51,9 +57,20 @@ export const calculateBillingCycles = (
     const date = new Date(billingDate);
     billingDay = date.getDate();
   } else {
-    // Fallback: try to extract numeric day (e.g., "15th" -> 15)
-    const match = billingDate.match(/\d+/);
-    if (!match) return cycles; // Invalid format
+    // DEFENSIVE: Fallback: try to extract numeric day (e.g., "15th" -> 15)
+    // Check type before calling .match() to prevent "match is not a function" error
+    let match: RegExpMatchArray | null = null;
+    if (typeof billingDate === 'string') {
+      match = billingDate.match(/\d+/);
+    } else {
+      console.error('[calculateBillingCycles] billingDate is not a string for regex match:', typeof billingDate, billingDate);
+      return cycles;
+    }
+    
+    if (!match) {
+      console.error('[calculateBillingCycles] Invalid billing date format:', billingDate);
+      return cycles; // Invalid format
+    }
     billingDay = parseInt(match[0], 10);
   }
   

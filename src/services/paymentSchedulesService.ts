@@ -400,8 +400,8 @@ export const generateSchedulesForBiller = (
  * Used when creating an installment
  * 
  * @param installmentId - The ID of the installment
- * @param startDate - Start date in format "YYYY-MM" (e.g., "2026-03")
- * @param termDuration - Term duration string (e.g., "12 months", "6 months")
+ * @param startDate - Start date in format "YYYY-MM" (e.g., "2026-03") - MUST be a string
+ * @param termDuration - Term duration string (e.g., "12 months", "6 months") - MUST be a string
  * @param monthlyAmount - Monthly payment amount
  * @returns Array of payment schedule objects ready for batch insert
  */
@@ -413,22 +413,41 @@ export const generateSchedulesForInstallment = (
 ): CreatePaymentScheduleInput[] => {
   const schedules: CreatePaymentScheduleInput[] = [];
   
+  // DEFENSIVE: Validate that inputs are strings before using string methods
+  if (typeof startDate !== 'string') {
+    console.error('[generateSchedulesForInstallment] startDate must be a string, received:', typeof startDate, startDate);
+    return schedules;
+  }
+  
+  if (typeof termDuration !== 'string') {
+    console.error('[generateSchedulesForInstallment] termDuration must be a string, received:', typeof termDuration, termDuration);
+    return schedules;
+  }
+  
   // Parse start date (format: "YYYY-MM")
   const [yearStr, monthStr] = startDate.split('-');
   const startYear = parseInt(yearStr);
   const startMonthNumber = parseInt(monthStr); // 1-12
   
   if (!startYear || !startMonthNumber || startMonthNumber < 1 || startMonthNumber > 12) {
-    console.error(`Invalid start date format: ${startDate}. Expected format: YYYY-MM`);
+    console.error(`[generateSchedulesForInstallment] Invalid start date format: ${startDate}. Expected format: YYYY-MM`);
     return schedules;
   }
   
   const startMonthIndex = startMonthNumber - 1; // Convert to 0-11 for array indexing
   
-  // Extract term duration number (e.g., "12 months" -> 12)
-  const termMatch = termDuration.match(/(\d+)/);
+  // DEFENSIVE: Extract term duration number (e.g., "12 months" -> 12)
+  // Check type before calling .match() to prevent "match is not a function" error
+  let termMatch: RegExpMatchArray | null = null;
+  if (typeof termDuration === 'string') {
+    termMatch = termDuration.match(/(\d+)/);
+  } else {
+    console.error('[generateSchedulesForInstallment] termDuration is not a string, cannot parse:', typeof termDuration, termDuration);
+    return schedules;
+  }
+  
   if (!termMatch) {
-    console.error(`Invalid term duration format: ${termDuration}`);
+    console.error(`[generateSchedulesForInstallment] Invalid term duration format: ${termDuration}. Expected format like "12 months"`);
     return schedules;
   }
   const term = parseInt(termMatch[1]);

@@ -153,7 +153,7 @@ export const checkPaymentStatus = (
  * Generates billing cycle date ranges based on the account's billing date.
  * Used for grouping credit card transactions by statement period.
  * 
- * @param billingDate - Billing date string (YYYY-MM-DD format)
+ * @param billingDate - Billing date string (YYYY-MM-DD format) - MUST be a string
  * @param numberOfCycles - Number of cycles to generate (default: 6)
  * @returns Array of billing cycle objects with start/end dates
  */
@@ -163,6 +163,12 @@ export const calculateBillingCycles = (
 ): { startDate: Date; endDate: Date; label: string }[] => {
   const cycles: { startDate: Date; endDate: Date; label: string }[] = [];
   
+  // DEFENSIVE: Validate that billingDate is a string before using string methods
+  if (typeof billingDate !== 'string') {
+    console.error('[calculateBillingCycles] billingDate must be a string, received:', typeof billingDate, billingDate);
+    return cycles;
+  }
+  
   // Parse billing date
   let billingDay: number;
   
@@ -170,8 +176,19 @@ export const calculateBillingCycles = (
     const date = new Date(billingDate);
     billingDay = date.getDate();
   } else {
-    const match = billingDate.match(/\d+/);
-    if (!match) return cycles;
+    // DEFENSIVE: Check type before calling .match() to prevent "match is not a function" error
+    let match: RegExpMatchArray | null = null;
+    if (typeof billingDate === 'string') {
+      match = billingDate.match(/\d+/);
+    } else {
+      console.error('[calculateBillingCycles] billingDate is not a string for regex match:', typeof billingDate, billingDate);
+      return cycles;
+    }
+    
+    if (!match) {
+      console.error('[calculateBillingCycles] Invalid billing date format:', billingDate);
+      return cycles;
+    }
     billingDay = parseInt(match[0], 10);
   }
   
