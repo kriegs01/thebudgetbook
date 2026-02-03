@@ -3,6 +3,7 @@ import { Biller, Account, PaymentSchedule, BudgetCategory, Installment } from '.
 import { Plus, Calendar, Bell, ChevronDown, ChevronRight, Upload, CheckCircle2, X, ArrowLeft, Power, PowerOff, MoreVertical, Edit2, Eye, Trash2, AlertTriangle } from 'lucide-react';
 import { getAllTransactions } from '../src/services/transactionsService';
 import type { SupabaseTransaction } from '../src/types/supabase';
+import { markPaymentScheduleAsPaid as markBillerPaymentAsPaid } from '../src/services/billerPaymentSchedulesService';
 // ENHANCEMENT: Import linked account utilities for billing cycle-based amount calculation
 import { 
   getScheduleExpectedAmount, 
@@ -292,7 +293,8 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
           id: generateScheduleId(month, '2026'), 
           month, 
           year: '2026', 
-          expectedAmount: expected 
+          expectedAmount: expected,
+          paid: false // REFACTOR: Explicit paid status for new schedules
         })),
         linkedAccountId: addFormData.linkedAccountId || undefined // ENHANCEMENT: Support linked credit accounts
       };
