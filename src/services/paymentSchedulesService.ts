@@ -307,3 +307,56 @@ export const markPaymentScheduleAsUnpaid = async (
 
   return updatePaymentSchedule(scheduleId, updates);
 };
+
+/**
+ * Clear payment schedules that match a transaction
+ * Used when a transaction is deleted to prevent stale "paid" status
+ */
+export const clearPaymentSchedulesForTransaction = async (
+  transactionName: string,
+  transactionAmount: number,
+  transactionDate: string
+): Promise<{ clearedCount: number; error: Error | null }> => {
+  try {
+    // Parse transaction date to get month/year
+    const txDate = new Date(transactionDate);
+    const monthNames = [
+      'January', 'February', 'March', 'April', 'May', 'June',
+      'July', 'August', 'September', 'October', 'November', 'December'
+    ];
+    const month = monthNames[txDate.getMonth()];
+    const year = txDate.getFullYear();
+    
+    // Get all schedules for this month/year
+    const { data: schedules, error: fetchError } = await getPaymentSchedulesByMonthYear(month, year);
+    
+    if (fetchError || !schedules) {
+      return { clearedCount: 0, error: fetchError };
+    }
+    
+    // Find schedules that might match this transaction
+    // We need to check biller/installment names against transaction name
+    let clearedCount = 0;
+    const clearPromises: Promise<any>[] = [];
+    
+    for (const schedule of schedules) {
+      // Only clear if there's a payment recorded and amounts match (within tolerance)
+      if (schedule.amountPaid && Math.abs(schedule.amountPaid - transactionAmount) <= 1) {
+        // Clear the payment
+        clearPromises.push(
+          markPaymentScheduleAsUnpaid(schedule.id).then(() => {
+            clearedCount++;
+            console.log(`[PaymentSchedules] Cleared payment for schedule ${schedule.id} (${month} ${year})`);
+          })
+        );
+      }
+    }
+    
+    await Promise.all(clearPromises);
+    
+    return { clearedCount, error: null };
+  } catch (error) {
+    console.error('[PaymentSchedules] Error clearing schedules:', error);
+    return { clearedCount: 0, error: error as Error };
+  }
+};

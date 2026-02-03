@@ -10,6 +10,7 @@ import type {
   CreateTransactionInput,
   UpdateTransactionInput,
 } from '../types/supabase';
+import { clearPaymentSchedulesForTransaction } from './paymentSchedulesService';
 
 /**
  * Get all transactions
@@ -89,15 +90,41 @@ export const updateTransaction = async (id: string, updates: UpdateTransactionIn
 
 /**
  * Delete a transaction
+ * Also clears any payment schedules that were marked paid by this transaction
  */
 export const deleteTransaction = async (id: string) => {
   try {
+    // First, get the transaction details before deleting
+    const { data: transaction, error: fetchError } = await supabase
+      .from('transactions')
+      .select('*')
+      .eq('id', id)
+      .single();
+    
+    if (fetchError) {
+      console.error('Error fetching transaction before delete:', fetchError);
+      // Continue with deletion even if fetch fails
+    }
+    
+    // Delete the transaction
     const { error } = await supabase
       .from('transactions')
       .delete()
       .eq('id', id);
 
     if (error) throw error;
+    
+    // Clear any payment schedules that match this transaction
+    if (transaction) {
+      console.log('[Transactions] Clearing payment schedules for deleted transaction:', transaction.name);
+      const { clearedCount } = await clearPaymentSchedulesForTransaction(
+        transaction.name,
+        transaction.amount,
+        transaction.date
+      );
+      console.log(`[Transactions] Cleared ${clearedCount} payment schedule(s)`);
+    }
+    
     return { error: null };
   } catch (error) {
     console.error('Error deleting transaction:', error);

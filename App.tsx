@@ -7,6 +7,7 @@ import { getAllAccountsFrontend, createAccountFrontend, updateAccountFrontend, d
 import { getAllInstallmentsFrontend, createInstallmentFrontend, updateInstallmentFrontend, deleteInstallmentFrontend } from './src/services/installmentsService';
 import { getAllSavingsFrontend, createSavingsFrontend, updateSavingsFrontend, deleteSavingsFrontend } from './src/services/savingsService';
 import { getAllBudgetSetupsFrontend, deleteBudgetSetupFrontend } from './src/services/budgetSetupsService';
+import { upsertPaymentSchedule } from './src/services/paymentSchedulesService';
 import type { Biller, Account, Installment, SavingsJar } from './types';
 
 // Pages
@@ -22,6 +23,8 @@ import Savings from './pages/Savings';
 import SettingsPage from './pages/Settings';
 import TrashPage from './pages/Trash';
 import SupabaseDemo from './pages/SupabaseDemo';
+
+const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 
 // Helper function to convert UI Account to Supabase format
 const accountToSupabase = (account: Account) => ({
@@ -305,7 +308,48 @@ const App: React.FC = () => {
     if (error) {
       console.error('Error creating biller:', error);
       alert('Failed to create biller. Please try again.');
-    } else {
+      return;
+    }
+    
+    if (data) {
+      // Generate payment schedules for the next 12 months
+      console.log('[App] Creating payment schedules for new biller:', data.id);
+      const currentDate = new Date();
+      const activationMonth = MONTHS.indexOf(newBiller.activationDate.month);
+      const activationYear = parseInt(newBiller.activationDate.year, 10);
+      
+      // Start from activation month and create 12 schedules
+      const schedulePromises = [];
+      for (let i = 0; i < 12; i++) {
+        const monthIndex = (activationMonth + i) % 12;
+        const yearOffset = Math.floor((activationMonth + i) / 12);
+        const scheduleYear = activationYear + yearOffset;
+        const scheduleMonth = MONTHS[monthIndex];
+        
+        schedulePromises.push(
+          upsertPaymentSchedule({
+            month: scheduleMonth,
+            year: scheduleYear,
+            expected_amount: newBiller.expectedAmount,
+            amount_paid: 0,
+            date_paid: null,
+            account_id: null,
+            receipt: null,
+            biller_id: data.id,
+            installment_id: null
+          })
+        );
+      }
+      
+      try {
+        await Promise.all(schedulePromises);
+        console.log('[App] Successfully created 12 payment schedules for new biller');
+      } catch (scheduleError) {
+        console.error('[App] Error creating payment schedules:', scheduleError);
+        // Don't fail the biller creation if schedules fail
+        alert('Biller created but failed to create payment schedules. You can add them manually.');
+      }
+      
       // Reload billers to get fresh data from Supabase
       await reloadBillers();
     }

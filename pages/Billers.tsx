@@ -669,31 +669,30 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
                           transactions
                         );
                         
-                        // Check if paid via payment schedule OR via transaction matching
-                        const isPaidViaSchedule = !!sched.amountPaid && sched.amountPaid > 0;
+                        // Payment status is determined ONLY by transaction matching
+                        // This prevents stale "paid" status when transactions are deleted
                         const isPaidViaTransaction = checkIfPaidByTransaction(
                           detailedBiller.name,
-                          calculatedAmount, // Use calculated amount for matching
+                          calculatedAmount,
                           sched.month,
                           sched.year
                         );
-                        const isPaid = isPaidViaSchedule || isPaidViaTransaction;
                         
-                        // Get actual paid amount (from schedule or matching transaction)
-                        let displayAmount = calculatedAmount; // Use calculated amount
+                        // Note: We keep amountPaid in the schedule for record-keeping,
+                        // but payment status is determined solely by transaction existence
+                        const isPaid = isPaidViaTransaction;
+                        
+                        // Get actual paid amount from matching transaction
+                        let displayAmount = calculatedAmount;
                         if (isPaid) {
-                          if (isPaidViaSchedule && sched.amountPaid) {
-                            displayAmount = sched.amountPaid;
-                          } else {
-                            const matchingTx = getMatchingTransaction(
-                              detailedBiller.name,
-                              calculatedAmount, // Use calculated amount for matching
-                              sched.month,
-                              sched.year
-                            );
-                            if (matchingTx) {
-                              displayAmount = matchingTx.amount;
-                            }
+                          const matchingTx = getMatchingTransaction(
+                            detailedBiller.name,
+                            calculatedAmount,
+                            sched.month,
+                            sched.year
+                          );
+                          if (matchingTx) {
+                            displayAmount = matchingTx.amount;
                           }
                         }
                         
