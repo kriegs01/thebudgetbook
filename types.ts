@@ -32,9 +32,42 @@ export interface PaymentSchedule {
   year: string;
   expectedAmount: number;
   amountPaid?: number;
+  paid: boolean; // REFACTOR: Explicit paid status field
   receipt?: string;
   datePaid?: string;
   accountId?: string;
+}
+
+export interface BillerPaymentSchedule {
+  id: string;
+  billerId: string;
+  month: string;
+  year: string;
+  expectedAmount: number;
+  amountPaid?: number;
+  paid: boolean;
+  datePaid?: string;
+  receipt?: string;
+  accountId?: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface InstallmentPaymentSchedule {
+  id: string;
+  installmentId: string;
+  paymentNumber: number;
+  month: string;
+  year: string;
+  expectedAmount: number;
+  amountPaid?: number;
+  paid: boolean;
+  datePaid?: string;
+  receipt?: string;
+  accountId?: string;
+  dueDate?: string;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface Biller {

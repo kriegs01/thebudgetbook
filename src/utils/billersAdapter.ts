@@ -22,13 +22,21 @@ export const generateScheduleId = (month: string, year: string): string => {
  * Ensures all schedules have unique IDs for payment tracking
  */
 export const supabaseBillerToFrontend = (supabaseBiller: SupabaseBiller): Biller => {
-  // Ensure all schedules have IDs (migration for existing data)
+  // Ensure all schedules have IDs and paid status (migration for existing data)
   const schedules = (supabaseBiller.schedules || []).map(schedule => {
     if (!schedule.id) {
       // Generate ID for schedules that don't have one
       return {
         ...schedule,
-        id: generateScheduleId(schedule.month, schedule.year)
+        id: generateScheduleId(schedule.month, schedule.year),
+        paid: schedule.amountPaid && schedule.amountPaid > 0 ? true : false, // REFACTOR: Infer paid status from amountPaid for legacy data
+      };
+    }
+    // Ensure paid field exists
+    if (schedule.paid === undefined) {
+      return {
+        ...schedule,
+        paid: schedule.amountPaid && schedule.amountPaid > 0 ? true : false, // REFACTOR: Infer paid status from amountPaid for legacy data
       };
     }
     return schedule;

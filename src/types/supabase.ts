@@ -73,6 +73,38 @@ export interface SupabaseBudgetSetup {
   created_at: string; // timestamptz
 }
 
+export interface SupabaseBillerPaymentSchedule {
+  id: string; // uuid
+  biller_id: string; // uuid
+  month: string;
+  year: string;
+  expected_amount: number; // numeric
+  amount_paid: number | null; // numeric, nullable
+  paid: boolean;
+  date_paid: string | null; // date, nullable
+  receipt: string | null; // text, nullable
+  account_id: string | null; // uuid, nullable
+  created_at: string; // timestamptz
+  updated_at: string; // timestamptz
+}
+
+export interface SupabaseInstallmentPaymentSchedule {
+  id: string; // uuid
+  installment_id: string; // uuid
+  payment_number: number; // integer
+  month: string;
+  year: string;
+  expected_amount: number; // numeric
+  amount_paid: number | null; // numeric, nullable
+  paid: boolean;
+  date_paid: string | null; // date, nullable
+  receipt: string | null; // text, nullable
+  account_id: string | null; // uuid, nullable
+  due_date: string | null; // date, nullable
+  created_at: string; // timestamptz
+  updated_at: string; // timestamptz
+}
+
 // Input types for creating new records (without id and timestamps)
 
 export type CreateAccountInput = Omit<SupabaseAccount, 'id' | 'created_at'>;
@@ -92,6 +124,12 @@ export type UpdateTransactionInput = Partial<CreateTransactionInput>;
 
 export type CreateBudgetSetupInput = Omit<SupabaseBudgetSetup, 'id' | 'created_at'>;
 export type UpdateBudgetSetupInput = Partial<CreateBudgetSetupInput>;
+
+export type CreateBillerPaymentScheduleInput = Omit<SupabaseBillerPaymentSchedule, 'id' | 'created_at' | 'updated_at'>;
+export type UpdateBillerPaymentScheduleInput = Partial<CreateBillerPaymentScheduleInput>;
+
+export type CreateInstallmentPaymentScheduleInput = Omit<SupabaseInstallmentPaymentSchedule, 'id' | 'created_at' | 'updated_at'>;
+export type UpdateInstallmentPaymentScheduleInput = Partial<CreateInstallmentPaymentScheduleInput>;
 
 // Database Response Types (for better type safety with Supabase responses)
 
