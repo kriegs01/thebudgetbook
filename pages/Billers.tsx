@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Biller, Account, PaymentSchedule, BudgetCategory, Installment } from '../types';
 import { Plus, Calendar, Bell, ChevronDown, ChevronRight, Upload, CheckCircle2, X, ArrowLeft, Power, PowerOff, MoreVertical, Edit2, Eye, Trash2, AlertTriangle } from 'lucide-react';
-import { getAllTransactions } from '../src/services/transactionsService';
+import { getAllTransactions, createTransaction } from '../src/services/transactionsService';
 import type { SupabaseTransaction } from '../src/types/supabase';
 import { markPaymentScheduleAsPaid as markBillerPaymentAsPaid } from '../src/services/billerPaymentSchedulesService';
 // ENHANCEMENT: Import linked account utilities for billing cycle-based amount calculation
@@ -382,6 +382,29 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
     setIsSubmitting(true);
     try {
       const { biller, schedule } = showPayModal;
+      const paymentAmount = parseFloat(payFormData.amount);
+      
+      // BUGFIX: Create transaction record for the payment
+      try {
+        const transactionData = {
+          name: biller.name,
+          date: payFormData.datePaid,
+          amount: paymentAmount,
+          payment_method_id: payFormData.accountId,
+        };
+        
+        const { error: txError } = await createTransaction(transactionData);
+        if (txError) {
+          console.error('[Billers] Failed to create transaction:', txError);
+          throw new Error('Failed to create transaction record');
+        }
+        console.log('[Billers] Transaction created successfully');
+      } catch (txError) {
+        console.error('[Billers] Error creating transaction:', txError);
+        alert('Failed to create transaction record. Please try again.');
+        setIsSubmitting(false);
+        return; // Don't proceed if transaction creation fails
+      }
       
       // REFACTOR: Update payment schedule using the new explicit paid status
       // Try to update in the payment schedules table first
@@ -389,14 +412,14 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
         try {
           const { error: schedError } = await markBillerPaymentAsPaid(
             schedule.id,
-            parseFloat(payFormData.amount),
+            paymentAmount,
             payFormData.datePaid,
             payFormData.accountId,
             payFormData.receipt || `${biller.name}_${schedule.month}`
           );
           
           if (schedError) {
-            console.warn('Failed to update payment schedule in new table, falling back to legacy JSONB update:', schedError);
+            console.warn('[Billers] Failed to update payment schedule in new table, falling back to legacy JSONB update:', schedError);
             throw schedError;
           }
           
@@ -408,8 +431,8 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
             if (s.id === schedule.id) {
               return { 
                 ...s, 
-                amountPaid: parseFloat(payFormData.amount), 
-                paid: true, // REFACTOR: Explicit paid status
+                amountPaid: paymentAmount, 
+                paid: true,
                 receipt: payFormData.receipt || `${biller.name}_${schedule.month}`, 
                 datePaid: payFormData.datePaid, 
                 accountId: payFormData.accountId 
@@ -420,7 +443,7 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
           await onUpdate({ ...biller, schedules: updatedSchedules });
         } catch (error) {
           // Fall back to legacy JSONB update if new table update fails
-          console.warn('Falling back to legacy JSONB schedules update');
+          console.warn('[Billers] Falling back to legacy JSONB schedules update');
           const updatedSchedules = biller.schedules.map(s => {
             const isMatch = (schedule.id != null) ? 
               (s.id === schedule.id) : 
@@ -429,8 +452,8 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
             if (isMatch) {
               return { 
                 ...s, 
-                amountPaid: parseFloat(payFormData.amount), 
-                paid: true, // REFACTOR: Explicit paid status
+                amountPaid: paymentAmount, 
+                paid: true,
                 receipt: payFormData.receipt || `${biller.name}_${schedule.month}`, 
                 datePaid: payFormData.datePaid, 
                 accountId: payFormData.accountId 
@@ -447,7 +470,7 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
           if (isMatch) {
             return { 
               ...s, 
-              amountPaid: parseFloat(payFormData.amount), 
+              amountPaid: paymentAmount, 
               paid: true, // REFACTOR: Explicit paid status
               receipt: payFormData.receipt || `${biller.name}_${schedule.month}`, 
               datePaid: payFormData.datePaid, 

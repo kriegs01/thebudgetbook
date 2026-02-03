@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Installment, Account, ViewMode, Biller } from '../types';
 import { Plus, LayoutGrid, List, Wallet, Trash2, X, Upload, AlertTriangle, Edit2, Eye, MoreVertical } from 'lucide-react';
 import { markPaymentScheduleAsPaid as markInstallmentPaymentAsPaid, getNextUnpaidPayment } from '../src/services/installmentPaymentSchedulesService';
+import { createTransaction } from '../src/services/transactionsService';
 
 interface InstallmentsProps {
   installments: Installment[];
@@ -141,24 +142,65 @@ const Installments: React.FC<InstallmentsProps> = ({ installments, accounts, bil
     setIsSubmitting(true);
     try {
       const paymentAmount = parseFloat(payFormData.amount) || 0;
-      const updatedInstallment: Installment = {
+      
+      // BUGFIX: Create transaction record for the payment
+      try {
+        const transactionData = {
+          name: showPayModal.name,
+          date: payFormData.datePaid,
+          amount: paymentAmount,
+          payment_method_id: payFormData.accountId,
+        };
+        
+        const { error: txError } = await createTransaction(transactionData);
+        if (txError) {
+          console.error('[Installments] Failed to create transaction:', txError);
+          throw new Error('Failed to create transaction record');
+        }
+        console.log('[Installments] Transaction created successfully');
+      } catch (txError) {
+        console.error('[Installments] Error creating transaction:', txError);
+        alert('Failed to create transaction record. Please try again.');
+        setIsSubmitting(false);
+        return; // Don't proceed if transaction creation fails
+      }
+      
+      // REFACTOR: Try to mark the next unpaid payment schedule as paid
+      try {
+        const { data: nextPayment, error: fetchError } = await getNextUnpaidPayment(showPayModal.id);
+        
+        if (nextPayment && !fetchError) {
+          // Mark this specific payment as paid in the payment schedules table
+          const { error: updateError } = await markInstallmentPaymentAsPaid(
+            nextPayment.id,
+            paymentAmount,
+            payFormData.datePaid,
+            payFormData.accountId,
+            payFormData.receipt
+          );
+          
+          if (updateError) {
+            console.warn('[Installments] Failed to mark payment schedule as paid, falling back to legacy update:', updateError);
+            throw updateError;
+          }
+          
+          console.log('[Installments] Payment marked as paid in payment schedules table');
+        } else {
+          console.warn('[Installments] No unpaid payment schedule found, using legacy paidAmount update');
+        }
+      } catch (schedError) {
+        console.warn('[Installments] Payment schedules table not available, using legacy paidAmount update:', schedError);
+      }
+      
+      // Always update the installment's paidAmount for backward compatibility
+      const updatedInstallment = {
         ...showPayModal,
         paidAmount: showPayModal.paidAmount + paymentAmount
       };
-
-      console.log('[Installments] Processing payment:', {
-        installmentId: showPayModal.id,
-        installmentName: showPayModal.name,
-        previousPaidAmount: showPayModal.paidAmount,
-        paymentAmount: paymentAmount,
-        newPaidAmount: updatedInstallment.paidAmount
-      });
-
+      
       await onUpdate?.(updatedInstallment);
-      
+
       console.log('[Installments] Payment recorded successfully');
-      
-      // Close pay modal after successful payment
       setShowPayModal(null);
       
       // If view modal is open, refresh it with updated installment data
@@ -166,8 +208,8 @@ const Installments: React.FC<InstallmentsProps> = ({ installments, accounts, bil
         setShowViewModal(updatedInstallment);
       }
     } catch (error) {
-      console.error('[Installments] Failed to process payment:', error);
-      alert('Failed to process payment. Please try again.');
+      console.error('[Installments] Failed to record payment:', error);
+      alert('Failed to record payment. Please try again.');
     } finally {
       setIsSubmitting(false);
     }
