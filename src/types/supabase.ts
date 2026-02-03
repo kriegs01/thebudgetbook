@@ -74,8 +74,8 @@ export interface SupabaseBudgetSetup {
 
 export interface SupabasePaymentSchedule {
   id: string; // uuid
-  month: string;
-  year: number; // int
+  schedule_month: string;
+  schedule_year: number; // int
   expected_amount: number; // numeric
   amount_paid: number; // numeric, default 0
   receipt: string | null; // text, nullable

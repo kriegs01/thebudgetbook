@@ -328,8 +328,8 @@ const App: React.FC = () => {
         
         schedulePromises.push(
           upsertPaymentSchedule({
-            month: scheduleMonth,
-            year: scheduleYear,
+            schedule_month: scheduleMonth,
+            schedule_year: scheduleYear,
             expected_amount: newBiller.expectedAmount,
             amount_paid: 0,
             date_paid: null,
@@ -439,8 +439,8 @@ const App: React.FC = () => {
           
           schedulePromises.push(
             upsertPaymentSchedule({
-              month: scheduleMonth,
-              year: scheduleYear,
+              schedule_month: scheduleMonth,
+              schedule_year: scheduleYear,
               expected_amount: newInstallment.monthlyAmount,
               amount_paid: 0,
               date_paid: null,
