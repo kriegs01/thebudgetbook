@@ -2,6 +2,7 @@
  * Installments Service
  * 
  * Provides CRUD operations for the installments table in Supabase.
+ * Also manages monthly payment schedules for installments.
  */
 
 import { supabase } from '../utils/supabaseClient';
@@ -12,6 +13,8 @@ import type {
 } from '../types/supabase';
 import { supabaseInstallmentToFrontend, supabaseInstallmentsToFrontend, frontendInstallmentToSupabase } from '../utils/installmentsAdapter';
 import type { Installment } from '../../types';
+import { generateInstallmentPaymentSchedules } from '../utils/paymentSchedulesGenerator';
+import { createPaymentSchedulesBulk, deletePaymentSchedulesBySource } from './paymentSchedulesService';
 
 /**
  * Get all installments
@@ -198,6 +201,7 @@ export const getInstallmentByIdFrontend = async (id: string): Promise<{ data: In
 
 /**
  * Create a new installment (accepts frontend Installment type)
+ * Also creates monthly payment schedules in the payment schedules table
  */
 export const createInstallmentFrontend = async (installment: Installment): Promise<{ data: Installment | null; error: any }> => {
   const supabaseInstallment = frontendInstallmentToSupabase(installment);
@@ -205,7 +209,20 @@ export const createInstallmentFrontend = async (installment: Installment): Promi
   if (error || !data) {
     return { data: null, error };
   }
-  return { data: supabaseInstallmentToFrontend(data), error: null };
+  
+  // Generate and create payment schedules for the installment
+  const convertedInstallment = supabaseInstallmentToFrontend(data);
+  const schedules = generateInstallmentPaymentSchedules(convertedInstallment);
+  
+  if (schedules.length > 0) {
+    const { error: schedulesError } = await createPaymentSchedulesBulk(schedules);
+    if (schedulesError) {
+      console.error('Error creating payment schedules for installment:', schedulesError);
+      // Don't fail the entire operation, just log the error
+    }
+  }
+  
+  return { data: convertedInstallment, error: null };
 };
 
 /**
@@ -221,8 +238,15 @@ export const updateInstallmentFrontend = async (installment: Installment): Promi
 };
 
 /**
- * Delete an installment
+ * Delete an installment and its payment schedules
  */
 export const deleteInstallmentFrontend = async (id: string): Promise<{ error: any }> => {
+  // First, delete all payment schedules for this installment
+  const { error: schedulesError } = await deletePaymentSchedulesBySource('installment', id);
+  if (schedulesError) {
+    console.error('Error deleting payment schedules for installment:', schedulesError);
+    // Continue with deleting the installment anyway
+  }
+  
   return await deleteInstallment(id);
 };
