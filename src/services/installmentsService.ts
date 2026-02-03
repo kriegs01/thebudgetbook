@@ -59,6 +59,24 @@ export const getInstallmentById = async (id: string) => {
 export const createInstallment = async (installment: CreateInstallmentInput) => {
   try {
     console.log('Creating installment with data:', installment);
+    
+    // Validate required fields before sending to Supabase
+    if (!installment.name || installment.name.trim() === '') {
+      throw new Error('Installment name is required');
+    }
+    if (!installment.account_id || installment.account_id.trim() === '') {
+      throw new Error('Account ID is required');
+    }
+    if (installment.total_amount <= 0) {
+      throw new Error('Total amount must be greater than 0');
+    }
+    if (installment.monthly_amount <= 0) {
+      throw new Error('Monthly amount must be greater than 0');
+    }
+    if (installment.term_duration <= 0) {
+      throw new Error('Term duration must be greater than 0');
+    }
+    
     const { data, error } = await supabase
       .from('installments')
       .insert([installment])
@@ -67,6 +85,7 @@ export const createInstallment = async (installment: CreateInstallmentInput) => 
 
     if (error) {
       console.error('Supabase error creating installment:', error);
+      console.error('Error details:', JSON.stringify(error, null, 2));
       // PROTOTYPE: Provide helpful error message for missing timing column
       if (error.message && error.message.includes('timing') && error.code === '42703') {
         console.error('Missing timing column. Please run the database migration:');

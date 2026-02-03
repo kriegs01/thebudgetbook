@@ -48,6 +48,11 @@ export const frontendInstallmentToSupabase = (installment: Installment): Omit<Su
     startDateFormatted = `${installment.startDate}-01`;
   }
   
+  // Validate account_id - must be a valid UUID or empty string will cause 400 error
+  if (!installment.accountId || installment.accountId.trim() === '') {
+    throw new Error('Account ID is required. Please select an account for this installment.');
+  }
+  
   return {
     name: installment.name,
     total_amount: installment.totalAmount,
