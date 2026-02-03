@@ -669,13 +669,13 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
                           transactions
                         );
                         
-                        // Payment status is determined ONLY by transaction matching
-                        // This prevents stale "paid" status when transactions are deleted
-                        // 
-                        // Note: amountPaid is kept in the schedule for record-keeping and audit purposes.
-                        // It gets populated when markPaymentScheduleAsPaid() is called.
-                        // When a transaction is deleted, clearPaymentSchedulesForTransaction() 
-                        // automatically clears amountPaid to maintain consistency.
+                        // UNIFIED PAYMENT STATUS CALCULATION
+                        // A schedule is "paid" if EITHER:
+                        // 1. amountPaid is set (manual payment recorded), OR
+                        // 2. A matching transaction exists
+                        // This ensures status is correct whether payment was recorded 
+                        // in payment_schedules or via transaction
+                        const isPaidViaSchedule = !!(sched.amountPaid && sched.amountPaid > 0);
                         const isPaidViaTransaction = checkIfPaidByTransaction(
                           detailedBiller.name,
                           calculatedAmount,
@@ -683,19 +683,25 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
                           sched.year
                         );
                         
-                        const isPaid = isPaidViaTransaction;
+                        const isPaid = isPaidViaSchedule || isPaidViaTransaction;
                         
-                        // Get actual paid amount from matching transaction
+                        // Get actual paid amount from schedule or matching transaction
                         let displayAmount = calculatedAmount;
                         if (isPaid) {
-                          const matchingTx = getMatchingTransaction(
-                            detailedBiller.name,
-                            calculatedAmount,
-                            sched.month,
-                            sched.year
-                          );
-                          if (matchingTx) {
-                            displayAmount = matchingTx.amount;
+                          // Prefer amountPaid from schedule if set
+                          if (isPaidViaSchedule && sched.amountPaid) {
+                            displayAmount = sched.amountPaid;
+                          } else {
+                            // Otherwise get from matching transaction
+                            const matchingTx = getMatchingTransaction(
+                              detailedBiller.name,
+                              calculatedAmount,
+                              sched.month,
+                              sched.year
+                            );
+                            if (matchingTx) {
+                              displayAmount = matchingTx.amount;
+                            }
                           }
                         }
                         

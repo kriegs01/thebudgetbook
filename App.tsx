@@ -414,7 +414,53 @@ const App: React.FC = () => {
     if (error) {
       console.error('Error creating installment:', error);
       alert('Failed to create installment. Please try again.');
-    } else {
+      return;
+    }
+    
+    if (data) {
+      // Generate payment schedules for installment term duration
+      console.log('[App] Creating payment schedules for new installment:', data.id);
+      
+      // Parse term duration (e.g., "12 months" -> 12)
+      const termMatch = newInstallment.termDuration.match(/\d+/);
+      const termMonths = termMatch ? parseInt(termMatch[0], 10) : 0;
+      
+      if (termMonths > 0 && newInstallment.startDate) {
+        // Parse start date (YYYY-MM format)
+        const [startYear, startMonth] = newInstallment.startDate.split('-').map(num => parseInt(num, 10));
+        const startMonthIndex = startMonth - 1; // Convert to 0-based
+        
+        const schedulePromises = [];
+        for (let i = 0; i < termMonths; i++) {
+          const monthIndex = (startMonthIndex + i) % 12;
+          const yearOffset = Math.floor((startMonthIndex + i) / 12);
+          const scheduleYear = startYear + yearOffset;
+          const scheduleMonth = MONTHS[monthIndex];
+          
+          schedulePromises.push(
+            upsertPaymentSchedule({
+              month: scheduleMonth,
+              year: scheduleYear,
+              expected_amount: newInstallment.monthlyAmount,
+              amount_paid: 0,
+              date_paid: null,
+              account_id: null,
+              receipt: null,
+              biller_id: null,
+              installment_id: data.id
+            })
+          );
+        }
+        
+        try {
+          await Promise.all(schedulePromises);
+          console.log(`[App] Successfully created ${termMonths} payment schedules for new installment`);
+        } catch (scheduleError) {
+          console.error('[App] Error creating installment payment schedules:', scheduleError);
+          alert('Installment created successfully, but there was an issue creating payment schedules. Please contact support if the issue persists.');
+        }
+      }
+      
       await reloadInstallments();
     }
   };
