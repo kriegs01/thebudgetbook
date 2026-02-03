@@ -51,6 +51,7 @@ export const createPaymentSchedulesBulk = async (schedules: CreateMonthlyPayment
 
 /**
  * Get all payment schedules for a specific source (biller or installment)
+ * Results are sorted chronologically by year and month
  */
 export const getPaymentSchedulesBySource = async (sourceType: 'biller' | 'installment', sourceId: string) => {
   try {
@@ -59,11 +60,20 @@ export const getPaymentSchedulesBySource = async (sourceType: 'biller' | 'instal
       .select('*')
       .eq('source_type', sourceType)
       .eq('source_id', sourceId)
-      .order('year', { ascending: true })
-      .order('month', { ascending: true });
+      .order('year', { ascending: true });
 
     if (error) throw error;
-    return { data, error: null };
+    
+    // Sort by month chronologically (month names are stored as text)
+    const MONTH_ORDER = ['January', 'February', 'March', 'April', 'May', 'June',
+                         'July', 'August', 'September', 'October', 'November', 'December'];
+    
+    const sortedData = data?.sort((a, b) => {
+      if (a.year !== b.year) return a.year - b.year;
+      return MONTH_ORDER.indexOf(a.month) - MONTH_ORDER.indexOf(b.month);
+    }) || [];
+    
+    return { data: sortedData, error: null };
   } catch (error) {
     console.error('Error fetching payment schedules by source:', error);
     return { data: null, error };
@@ -148,6 +158,7 @@ export const deletePaymentSchedule = async (id: string) => {
 
 /**
  * Get payment schedules by status
+ * Results are sorted chronologically by year and month
  */
 export const getPaymentSchedulesByStatus = async (status: 'pending' | 'paid' | 'partial' | 'overdue') => {
   try {
@@ -155,11 +166,20 @@ export const getPaymentSchedulesByStatus = async (status: 'pending' | 'paid' | '
       .from('monthly_payment_schedules')
       .select('*')
       .eq('status', status)
-      .order('year', { ascending: true })
-      .order('month', { ascending: true });
+      .order('year', { ascending: true });
 
     if (error) throw error;
-    return { data, error: null };
+    
+    // Sort by month chronologically
+    const MONTH_ORDER = ['January', 'February', 'March', 'April', 'May', 'June',
+                         'July', 'August', 'September', 'October', 'November', 'December'];
+    
+    const sortedData = data?.sort((a, b) => {
+      if (a.year !== b.year) return a.year - b.year;
+      return MONTH_ORDER.indexOf(a.month) - MONTH_ORDER.indexOf(b.month);
+    }) || [];
+    
+    return { data: sortedData, error: null };
   } catch (error) {
     console.error('Error fetching payment schedules by status:', error);
     return { data: null, error };
