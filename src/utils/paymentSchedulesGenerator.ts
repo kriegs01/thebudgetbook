@@ -32,7 +32,8 @@ export const generateBillerPaymentSchedules = (
     // Check if month is within active period
     const isActive = i >= activationMonth && i <= deactivationMonth;
     
-    if (isActive || biller.status === 'active') {
+    // Only create schedules for active months AND when biller is active
+    if (isActive && biller.status === 'active') {
       schedules.push({
         source_type: 'biller',
         source_id: biller.id,
@@ -165,11 +166,13 @@ export const updateInstallmentPaymentSchedules = (
 
 /**
  * Calculate payment status based on amount paid and expected amount
+ * Note: 'overdue' status should be determined by the application logic
+ * by comparing the current date with the payment due date
  */
 export const calculatePaymentStatus = (
   amountPaid: number,
   expectedAmount: number
-): 'pending' | 'paid' | 'partial' | 'overdue' => {
+): 'pending' | 'paid' | 'partial' => {
   if (amountPaid === 0) {
     return 'pending';
   } else if (amountPaid >= expectedAmount) {
@@ -177,4 +180,40 @@ export const calculatePaymentStatus = (
   } else {
     return 'partial';
   }
+};
+
+/**
+ * Check if a payment schedule is overdue
+ * A schedule is overdue if:
+ * 1. It's not fully paid (amount_paid < expected_amount)
+ * 2. The due date has passed
+ */
+export const isScheduleOverdue = (
+  schedule: {
+    month: string;
+    year: number;
+    amount_paid: number;
+    expected_amount: number;
+  },
+  dueDay: number = 15 // Default due day of month
+): boolean => {
+  // If fully paid, it's not overdue
+  if (schedule.amount_paid >= schedule.expected_amount) {
+    return false;
+  }
+
+  const monthIndex = MONTHS.indexOf(schedule.month);
+  if (monthIndex === -1) {
+    return false;
+  }
+
+  // Create due date for this schedule
+  const dueDate = new Date(schedule.year, monthIndex, dueDay);
+  const today = new Date();
+
+  // Remove time component for fair comparison
+  dueDate.setHours(0, 0, 0, 0);
+  today.setHours(0, 0, 0, 0);
+
+  return today > dueDate;
 };

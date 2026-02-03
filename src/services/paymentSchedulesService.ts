@@ -213,6 +213,7 @@ export const recordPayment = async (
     } else if (totalPaid > 0) {
       status = 'partial';
     }
+    // Note: Overdue status should be set separately based on due date comparison
 
     const { data, error } = await supabase
       .from('monthly_payment_schedules')
@@ -232,5 +233,63 @@ export const recordPayment = async (
   } catch (error) {
     console.error('Error recording payment:', error);
     return { data: null, error };
+  }
+};
+
+/**
+ * Mark schedules as overdue based on current date and due day
+ * This should be called periodically (e.g., daily cron job) to update statuses
+ */
+export const markOverdueSchedules = async (dueDay: number = 15) => {
+  try {
+    const today = new Date();
+    const currentYear = today.getFullYear();
+    const currentMonth = today.getMonth();
+    
+    // Get all pending or partial schedules
+    const { data: schedules, error: fetchError } = await supabase
+      .from('monthly_payment_schedules')
+      .select('*')
+      .in('status', ['pending', 'partial']);
+
+    if (fetchError) throw fetchError;
+    if (!schedules || schedules.length === 0) return { updated: 0, error: null };
+
+    const MONTHS = [
+      'January', 'February', 'March', 'April', 'May', 'June',
+      'July', 'August', 'September', 'October', 'November', 'December'
+    ];
+
+    // Filter schedules that are overdue
+    const overdueScheduleIds: string[] = [];
+    for (const schedule of schedules) {
+      const monthIndex = MONTHS.indexOf(schedule.month);
+      if (monthIndex === -1) continue;
+
+      const dueDate = new Date(schedule.year, monthIndex, dueDay);
+      dueDate.setHours(0, 0, 0, 0);
+      
+      const todayMidnight = new Date(today);
+      todayMidnight.setHours(0, 0, 0, 0);
+
+      if (todayMidnight > dueDate && schedule.amount_paid < schedule.expected_amount) {
+        overdueScheduleIds.push(schedule.id);
+      }
+    }
+
+    // Update overdue schedules
+    if (overdueScheduleIds.length > 0) {
+      const { error: updateError } = await supabase
+        .from('monthly_payment_schedules')
+        .update({ status: 'overdue' })
+        .in('id', overdueScheduleIds);
+
+      if (updateError) throw updateError;
+    }
+
+    return { updated: overdueScheduleIds.length, error: null };
+  } catch (error) {
+    console.error('Error marking overdue schedules:', error);
+    return { updated: 0, error };
   }
 };

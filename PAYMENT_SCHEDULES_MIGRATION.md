@@ -9,6 +9,10 @@ This migration introduces a new `monthly_payment_schedules` table in Supabase to
 - **Enhanced Pay flow logic** with better payment status tracking
 - **Flexible payment tracking** per month/year for both billers and installments
 
+## ⚠️ Security Notice
+
+**IMPORTANT**: The default migration includes a permissive RLS policy suitable for development/testing only. Before deploying to production, you **MUST** implement proper authentication-based Row Level Security policies. See the migration file comments for examples of production-ready policies.
+
 ## Migration Steps
 
 ### 1. Run the SQL Migration

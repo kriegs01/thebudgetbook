@@ -84,7 +84,24 @@ EXECUTE FUNCTION update_monthly_payment_schedules_updated_at();
 ALTER TABLE monthly_payment_schedules ENABLE ROW LEVEL SECURITY;
 
 -- Create policy for public access (adjust based on your auth needs)
--- WARNING: This policy allows anyone to read/write. 
--- In production, restrict based on user authentication!
+-- ⚠️ SECURITY WARNING: This policy allows unrestricted read/write access!
+-- This is suitable for development/testing ONLY.
+-- 
+-- For PRODUCTION, you MUST implement proper authentication-based policies.
+-- Example production policies:
+--
+-- 1. User-based access (if you have user authentication):
+--    CREATE POLICY "Users can manage their own schedules" ON monthly_payment_schedules
+--    FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
+--
+-- 2. Organization-based access (if you have multi-tenancy):
+--    CREATE POLICY "Users can access org schedules" ON monthly_payment_schedules
+--    FOR ALL USING (org_id IN (SELECT org_id FROM user_organizations WHERE user_id = auth.uid()));
+--
+-- 3. Role-based access:
+--    CREATE POLICY "Admins can manage all schedules" ON monthly_payment_schedules
+--    FOR ALL USING (auth.jwt() ->> 'role' = 'admin');
+--
+-- Remove or replace this policy before deploying to production!
 CREATE POLICY "Enable all for monthly_payment_schedules" ON monthly_payment_schedules 
 FOR ALL USING (true) WITH CHECK (true);
