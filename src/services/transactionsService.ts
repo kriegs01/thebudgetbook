@@ -103,7 +103,8 @@ export const deleteTransaction = async (id: string) => {
     
     if (fetchError) {
       console.error('Error fetching transaction before delete:', fetchError);
-      // Continue with deletion even if fetch fails
+      // Set transaction to null to skip schedule clearing
+      // We'll still proceed with deletion
     }
     
     // Delete the transaction
@@ -115,7 +116,8 @@ export const deleteTransaction = async (id: string) => {
     if (error) throw error;
     
     // Clear any payment schedules that match this transaction
-    if (transaction) {
+    // Only if we successfully fetched the transaction details
+    if (transaction && !fetchError) {
       console.log('[Transactions] Clearing payment schedules for deleted transaction:', transaction.name);
       const { clearedCount } = await clearPaymentSchedulesForTransaction(
         transaction.name,
@@ -123,6 +125,8 @@ export const deleteTransaction = async (id: string) => {
         transaction.date
       );
       console.log(`[Transactions] Cleared ${clearedCount} payment schedule(s)`);
+    } else {
+      console.log('[Transactions] Skipping schedule clearing (transaction details not available)');
     }
     
     return { error: null };

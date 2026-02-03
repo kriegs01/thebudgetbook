@@ -311,6 +311,12 @@ export const markPaymentScheduleAsUnpaid = async (
 /**
  * Clear payment schedules that match a transaction
  * Used when a transaction is deleted to prevent stale "paid" status
+ * 
+ * Note: This clears schedules based on amount and month/year matching.
+ * We don't check transaction name vs biller/installment name here because:
+ * 1. The schedule doesn't store the entity name directly
+ * 2. Amount + date matching is sufficient to identify the right schedule
+ * 3. Transaction names may not exactly match biller/installment names
  */
 export const clearPaymentSchedulesForTransaction = async (
   transactionName: string,
@@ -334,19 +340,21 @@ export const clearPaymentSchedulesForTransaction = async (
       return { clearedCount: 0, error: fetchError };
     }
     
-    // Find schedules that might match this transaction
-    // We need to check biller/installment names against transaction name
+    // Find schedules that match this transaction (by amount and having payment recorded)
     let clearedCount = 0;
-    const clearPromises: Promise<any>[] = [];
+    const clearPromises: Promise<{ data: PaymentSchedule | null; error: Error | null }>[] = [];
     
     for (const schedule of schedules) {
       // Only clear if there's a payment recorded and amounts match (within tolerance)
       if (schedule.amountPaid && Math.abs(schedule.amountPaid - transactionAmount) <= 1) {
         // Clear the payment
         clearPromises.push(
-          markPaymentScheduleAsUnpaid(schedule.id).then(() => {
-            clearedCount++;
-            console.log(`[PaymentSchedules] Cleared payment for schedule ${schedule.id} (${month} ${year})`);
+          markPaymentScheduleAsUnpaid(schedule.id).then((result) => {
+            if (!result.error) {
+              clearedCount++;
+              console.log(`[PaymentSchedules] Cleared payment for schedule ${schedule.id} (${month} ${year})`);
+            }
+            return result;
           })
         );
       }

@@ -671,6 +671,11 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
                         
                         // Payment status is determined ONLY by transaction matching
                         // This prevents stale "paid" status when transactions are deleted
+                        // 
+                        // Note: amountPaid is kept in the schedule for record-keeping and audit purposes.
+                        // It gets populated when markPaymentScheduleAsPaid() is called.
+                        // When a transaction is deleted, clearPaymentSchedulesForTransaction() 
+                        // automatically clears amountPaid to maintain consistency.
                         const isPaidViaTransaction = checkIfPaidByTransaction(
                           detailedBiller.name,
                           calculatedAmount,
@@ -678,8 +683,6 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
                           sched.year
                         );
                         
-                        // Note: We keep amountPaid in the schedule for record-keeping,
-                        // but payment status is determined solely by transaction existence
                         const isPaid = isPaidViaTransaction;
                         
                         // Get actual paid amount from matching transaction

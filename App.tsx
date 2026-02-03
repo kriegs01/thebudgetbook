@@ -346,8 +346,8 @@ const App: React.FC = () => {
         console.log('[App] Successfully created 12 payment schedules for new biller');
       } catch (scheduleError) {
         console.error('[App] Error creating payment schedules:', scheduleError);
-        // Don't fail the biller creation if schedules fail
-        alert('Biller created but failed to create payment schedules. You can add them manually.');
+        // Don't fail the biller creation if schedules fail - they can be viewed/managed later
+        alert('Biller created successfully, but there was an issue creating payment schedules. Please contact support if the issue persists.');
       }
       
       // Reload billers to get fresh data from Supabase
