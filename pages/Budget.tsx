@@ -1357,39 +1357,17 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                       
                       if (isBiller) {
                         linkedBiller = billers.find(b => b.id === item.id);
-                        schedule = linkedBiller?.schedules.find(s => s.month === selectedMonth);
                         
-                        console.log(`[Budget] Checking payment for ${item.name} in ${selectedMonth}:`, {
-                          foundSchedule: !!schedule,
-                          scheduleMonth: schedule?.month,
-                          selectedMonth: selectedMonth,
-                          scheduleAmountPaid: schedule?.amountPaid,
-                          scheduleYear: schedule?.year,
-                          allSchedules: linkedBiller?.schedules.map(s => ({
-                            month: s.month,
-                            year: s.year,
-                            amountPaid: s.amountPaid
-                          }))
-                        });
+                        // TODO: Load schedule from payment_schedules table
+                        // For now, fall back to transaction matching since schedules are migrating to separate table
+                        schedule = undefined;
                         
-                        // FIX: For billers with schedules, ONLY use schedule.amountPaid
-                        // This prevents double-counting when transactions match multiple months via grace period
-                        if (schedule) {
-                          isPaid = !!schedule.amountPaid;
-                          if (schedule.amountPaid) {
-                            console.log(`[Budget] Item ${item.name} in ${selectedMonth}: PAID via schedule.amountPaid`, {
-                              month: schedule.month,
-                              year: schedule.year,
-                              amountPaid: schedule.amountPaid,
-                              datePaid: schedule.datePaid
-                            });
-                          }
-                        } else {
-                          // Fallback to transaction matching if no schedule found
-                          isPaid = checkIfPaidByTransaction(item.name, item.amount, selectedMonth);
-                          if (isPaid) {
-                            console.log(`[Budget] Item ${item.name} in ${selectedMonth}: PAID via transaction matching (no schedule)`);
-                          }
+                        // Use transaction matching as primary payment check
+                        // This works for both old schedules and new payment_schedules table
+                        isPaid = checkIfPaidByTransaction(item.name, item.amount, selectedMonth);
+                        
+                        if (isPaid) {
+                          console.log(`[Budget] Item ${item.name} in ${selectedMonth}: PAID via transaction matching`);
                         }
                       } else {
                         // For non-biller items (like Purchases), only check transactions
@@ -1734,15 +1712,19 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                           
                           if (isBiller) {
                             linkedBiller = billers.find(b => b.id === item.id);
-                            schedule = linkedBiller?.schedules.find(s => s.month === selectedMonth);
-                            // FIX: For billers with schedules, ONLY use schedule.amountPaid
-                            // This prevents double-counting when transactions match multiple months via grace period
-                            if (schedule) {
-                              isPaid = !!schedule.amountPaid;
-                            } else {
-                              // Fallback to transaction matching if no schedule found
-                              isPaid = checkIfPaidByTransaction(item.name, item.amount, selectedMonth);
-                            }
+                            
+                            // TODO: Load schedule from payment_schedules table
+                            // For now, create a temporary schedule object for the pay modal
+                            schedule = linkedBiller ? {
+                              id: '', // Will be created when payment is made
+                              month: selectedMonth,
+                              year: new Date().getFullYear().toString(),
+                              expectedAmount: linkedBiller.expectedAmount,
+                              billerId: linkedBiller.id
+                            } : undefined;
+                            
+                            // Use transaction matching for payment status
+                            isPaid = checkIfPaidByTransaction(item.name, item.amount, selectedMonth);
                           } else {
                             // For non-biller items, only check transactions
                             isPaid = checkIfPaidByTransaction(item.name, item.amount, selectedMonth);
