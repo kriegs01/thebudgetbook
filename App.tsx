@@ -619,6 +619,7 @@ const App: React.FC = () => {
                   onAdd={handleAddInstallment}
                   onUpdate={handleUpdateInstallment}
                   onDelete={handleDeleteInstallment}
+                  onReload={reloadInstallments}
                   loading={installmentsLoading}
                   error={installmentsError}
                 />

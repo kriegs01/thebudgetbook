@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Installment, Account, ViewMode, Biller } from '../types';
 import { Plus, LayoutGrid, List, Wallet, Trash2, X, Upload, AlertTriangle, Edit2, Eye, MoreVertical } from 'lucide-react';
 import { createTransaction } from '../src/services/transactionsService';
+import { getAllInstallmentsFrontend } from '../src/services/installmentsService';
 
 interface InstallmentsProps {
   installments: Installment[];
@@ -12,9 +13,10 @@ interface InstallmentsProps {
   onDelete?: (id: string) => Promise<void>;
   loading?: boolean;
   error?: string | null;
+  onReload?: () => Promise<void>;
 }
 
-const Installments: React.FC<InstallmentsProps> = ({ installments, accounts, billers = [], onAdd, onUpdate, onDelete, loading = false, error = null }) => {
+const Installments: React.FC<InstallmentsProps> = ({ installments, accounts, billers = [], onAdd, onUpdate, onDelete, loading = false, error = null, onReload }) => {
   const [viewMode, setViewMode] = useState<ViewMode>('card');
   const [showModal, setShowModal] = useState(false);
   const [showPayModal, setShowPayModal] = useState<Installment | null>(null);
@@ -22,6 +24,7 @@ const Installments: React.FC<InstallmentsProps> = ({ installments, accounts, bil
   const [showViewModal, setShowViewModal] = useState<Installment | null>(null);
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [localInstallments, setLocalInstallments] = useState<Installment[]>(installments);
 
   const [confirmModal, setConfirmModal] = useState<{
     show: boolean;
@@ -34,6 +37,50 @@ const Installments: React.FC<InstallmentsProps> = ({ installments, accounts, bil
     message: '',
     onConfirm: () => {},
   });
+  
+  // Sync local installments with props
+  useEffect(() => {
+    setLocalInstallments(installments);
+  }, [installments]);
+  
+  // Reload installments when page becomes visible (after transaction deletion)
+  const reloadInstallments = useCallback(async () => {
+    console.log('[Installments] Reloading installments data');
+    if (onReload) {
+      await onReload();
+    } else {
+      // Fallback: fetch directly if onReload not provided
+      const { data, error } = await getAllInstallmentsFrontend();
+      if (!error && data) {
+        setLocalInstallments(data);
+        
+        // If viewing a specific installment, update it with fresh data
+        if (showViewModal) {
+          const updatedInstallment = data.find(i => i.id === showViewModal.id);
+          if (updatedInstallment) {
+            console.log('[Installments] Updating viewModal with fresh data');
+            setShowViewModal(updatedInstallment);
+          }
+        }
+      }
+    }
+  }, [onReload, showViewModal]);
+  
+  // Listen for page visibility changes to reload data
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (!document.hidden) {
+        console.log('[Installments] Page visible - reloading installments');
+        reloadInstallments();
+      }
+    };
+    
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [reloadInstallments]);
   
   const [formData, setFormData] = useState({ 
     name: '', totalAmount: '', monthlyAmount: '', termDuration: '', paidAmount: '', accountId: accounts[0]?.id || '', startDate: '', billerId: '', timing: '1/2' as '1/2' | '2/2'
@@ -467,8 +514,8 @@ const Installments: React.FC<InstallmentsProps> = ({ installments, accounts, bil
       </div>
 
       <div className={viewMode === 'card' ? "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6" : "space-y-4"}>
-        {installments.length > 0 ? (
-          installments.map(item => viewMode === 'card' ? renderCard(item) : renderListItem(item))
+        {localInstallments.length > 0 ? (
+          localInstallments.map(item => viewMode === 'card' ? renderCard(item) : renderListItem(item))
         ) : (
           <div className="col-span-full p-24 text-center">
             <p className="text-gray-400 font-black uppercase tracking-widest text-sm">No installments being tracked</p>
