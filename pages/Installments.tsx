@@ -87,8 +87,10 @@ const Installments: React.FC<InstallmentsProps> = ({ installments, accounts, bil
       const errorMessage = error instanceof Error ? error.message : String(error);
       if (errorMessage.includes('Database migration required')) {
         alert('⚠️ Database Setup Required\n\nThe timing feature requires a database update. Please run the migration in Supabase.\n\nSee HOW_TO_ADD_TIMING_COLUMN.md for step-by-step instructions.');
+      } else if (errorMessage.includes('Account ID is required')) {
+        alert('⚠️ Account Required\n\nPlease create an account first before adding installments.');
       } else {
-        alert('Failed to add installment. Please try again.');
+        alert(`Failed to add installment: ${errorMessage}\n\nPlease check your input and try again.`);
       }
     } finally {
       setIsSubmitting(false);
@@ -517,11 +519,17 @@ const Installments: React.FC<InstallmentsProps> = ({ installments, accounts, bil
               </div>
               <div>
                 <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Billing Account</label>
-                <select value={formData.accountId} onChange={(e) => setFormData({...formData, accountId: e.target.value})} className="w-full bg-gray-50 border-transparent rounded-2xl p-4 outline-none focus:ring-2 focus:ring-indigo-500 font-bold appearance-none">
-                   {accounts.map(acc => (
-                    <option key={acc.id} value={acc.id}>{acc.bank} - {acc.classification}</option>
-                  ))}
-                </select>
+                {accounts.length === 0 ? (
+                  <div className="w-full bg-red-50 border-2 border-red-200 rounded-2xl p-4">
+                    <p className="text-red-600 font-bold text-sm">⚠️ No accounts available. Please create an account first.</p>
+                  </div>
+                ) : (
+                  <select value={formData.accountId} onChange={(e) => setFormData({...formData, accountId: e.target.value})} className="w-full bg-gray-50 border-transparent rounded-2xl p-4 outline-none focus:ring-2 focus:ring-indigo-500 font-bold appearance-none">
+                    {accounts.map(acc => (
+                      <option key={acc.id} value={acc.id}>{acc.bank} - {acc.classification}</option>
+                    ))}
+                  </select>
+                )}
               </div>
               {billers.filter(b => b.category.startsWith('Loans')).length > 0 && (
                 <div>
@@ -539,7 +547,13 @@ const Installments: React.FC<InstallmentsProps> = ({ installments, accounts, bil
                   setShowModal(false);
                   setFormData({ name: '', totalAmount: '', monthlyAmount: '', termDuration: '', paidAmount: '', accountId: accounts[0]?.id || '', startDate: '', billerId: '', timing: '1/2' });
                 }} className="flex-1 bg-gray-100 py-4 rounded-2xl font-black uppercase tracking-widest text-xs text-gray-500">Cancel</button>
-                <button type="submit" className="flex-1 bg-indigo-600 text-white py-4 rounded-2xl font-black uppercase tracking-widest text-xs hover:bg-indigo-700 transition-all shadow-xl">Start Tracking</button>
+                <button 
+                  type="submit" 
+                  disabled={accounts.length === 0 || isSubmitting}
+                  className="flex-1 bg-indigo-600 text-white py-4 rounded-2xl font-black uppercase tracking-widest text-xs hover:bg-indigo-700 transition-all shadow-xl disabled:bg-gray-300 disabled:cursor-not-allowed"
+                >
+                  {isSubmitting ? 'Saving...' : 'Start Tracking'}
+                </button>
               </div>
             </form>
           </div>
