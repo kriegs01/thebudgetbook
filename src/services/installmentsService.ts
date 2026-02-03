@@ -198,6 +198,7 @@ export const getInstallmentByIdFrontend = async (id: string): Promise<{ data: In
 
 /**
  * Create a new installment (accepts frontend Installment type)
+ * Automatically generates payment schedules in the new payment schedules table
  */
 export const createInstallmentFrontend = async (installment: Installment): Promise<{ data: Installment | null; error: any }> => {
   const supabaseInstallment = frontendInstallmentToSupabase(installment);
@@ -205,11 +206,75 @@ export const createInstallmentFrontend = async (installment: Installment): Promi
   if (error || !data) {
     return { data: null, error };
   }
-  return { data: supabaseInstallmentToFrontend(data), error: null };
+  
+  const createdInstallment = supabaseInstallmentToFrontend(data);
+  
+  // Generate payment schedules if start_date is provided
+  if (data.start_date) {
+    try {
+      await generatePaymentSchedulesForInstallment(data);
+    } catch (schedError) {
+      console.warn('Failed to generate payment schedules for new installment:', schedError);
+      // Don't fail the installment creation if schedule generation fails
+    }
+  }
+  
+  return { data: createdInstallment, error: null };
+};
+
+/**
+ * Helper function to generate payment schedules for an installment
+ */
+const generatePaymentSchedulesForInstallment = async (installment: any) => {
+  if (!installment.start_date) {
+    return;
+  }
+  
+  const termMonths = parseInt(installment.term_duration.toString().replace(/\D/g, ''), 10) || 0;
+  const startDate = new Date(installment.start_date);
+  const monthNames = [
+    'January', 'February', 'March', 'April', 'May', 'June',
+    'July', 'August', 'September', 'October', 'November', 'December'
+  ];
+  
+  const schedules = [];
+  for (let i = 0; i < termMonths; i++) {
+    const paymentDate = new Date(startDate);
+    paymentDate.setMonth(paymentDate.getMonth() + i);
+    
+    // Calculate if this payment should be marked as paid based on paid_amount
+    const paymentsMade = Math.floor(installment.paid_amount / installment.monthly_amount);
+    const isPaid = (i + 1) <= paymentsMade;
+    
+    schedules.push({
+      installment_id: installment.id,
+      payment_number: i + 1,
+      month: monthNames[paymentDate.getMonth()],
+      year: paymentDate.getFullYear().toString(),
+      expected_amount: installment.monthly_amount,
+      amount_paid: isPaid ? installment.monthly_amount : null,
+      paid: isPaid,
+      date_paid: isPaid ? paymentDate.toISOString().split('T')[0] : null,
+      account_id: installment.account_id,
+      due_date: paymentDate.toISOString().split('T')[0],
+    });
+  }
+  
+  if (schedules.length > 0) {
+    const { error } = await supabase
+      .from('installment_payment_schedules')
+      .insert(schedules);
+    
+    if (error) {
+      console.error('Error creating payment schedules:', error);
+      throw error;
+    }
+  }
 };
 
 /**
  * Update an existing installment (accepts frontend Installment type)
+ * Updates payment schedules if paid_amount changes
  */
 export const updateInstallmentFrontend = async (installment: Installment): Promise<{ data: Installment | null; error: any }> => {
   const supabaseInstallment = frontendInstallmentToSupabase(installment);
@@ -217,7 +282,29 @@ export const updateInstallmentFrontend = async (installment: Installment): Promi
   if (error || !data) {
     return { data: null, error };
   }
-  return { data: supabaseInstallmentToFrontend(data), error: null };
+  
+  const updatedInstallment = supabaseInstallmentToFrontend(data);
+  
+  // If start_date is set and no schedules exist yet, generate them
+  if (data.start_date) {
+    try {
+      // Check if schedules exist
+      const { data: existingSchedules } = await supabase
+        .from('installment_payment_schedules')
+        .select('id')
+        .eq('installment_id', installment.id)
+        .limit(1);
+      
+      if (!existingSchedules || existingSchedules.length === 0) {
+        // No schedules exist, generate them
+        await generatePaymentSchedulesForInstallment(data);
+      }
+    } catch (schedError) {
+      console.warn('Failed to check/generate payment schedules:', schedError);
+    }
+  }
+  
+  return { data: updatedInstallment, error: null };
 };
 
 /**

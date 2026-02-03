@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Installment, Account, ViewMode, Biller } from '../types';
 import { Plus, LayoutGrid, List, Wallet, Trash2, X, Upload, AlertTriangle, Edit2, Eye, MoreVertical } from 'lucide-react';
+import { markPaymentScheduleAsPaid as markInstallmentPaymentAsPaid, getNextUnpaidPayment } from '../src/services/installmentPaymentSchedulesService';
 
 interface InstallmentsProps {
   installments: Installment[];

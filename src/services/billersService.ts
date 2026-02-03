@@ -151,24 +151,102 @@ export const getBillersByCategory = async (category: string) => {
 
 /**
  * Get all billers (returns frontend Biller types)
+ * Also fetches payment schedules from the new payment schedules table
  */
 export const getAllBillersFrontend = async (): Promise<{ data: Biller[] | null; error: any }> => {
   const { data, error } = await getAllBillers();
   if (error || !data) {
     return { data: null, error };
   }
-  return { data: supabaseBillersToFrontend(data), error: null };
+  
+  // Convert to frontend types
+  const billers = supabaseBillersToFrontend(data);
+  
+  // For each biller, try to fetch payment schedules from the new table
+  // If schedules exist in the new table, use them; otherwise fall back to JSONB schedules
+  try {
+    const { data: allSchedules } = await supabase
+      .from('biller_payment_schedules')
+      .select('*');
+    
+    if (allSchedules && allSchedules.length > 0) {
+      // Group schedules by biller_id
+      const schedulesByBiller = new Map<string, any[]>();
+      allSchedules.forEach(schedule => {
+        if (!schedulesByBiller.has(schedule.biller_id)) {
+          schedulesByBiller.set(schedule.biller_id, []);
+        }
+        schedulesByBiller.get(schedule.biller_id)!.push({
+          id: schedule.id,
+          month: schedule.month,
+          year: schedule.year,
+          expectedAmount: schedule.expected_amount,
+          amountPaid: schedule.amount_paid || undefined,
+          paid: schedule.paid,
+          datePaid: schedule.date_paid || undefined,
+          receipt: schedule.receipt || undefined,
+          accountId: schedule.account_id || undefined,
+        });
+      });
+      
+      // Merge schedules into billers
+      billers.forEach(biller => {
+        const newSchedules = schedulesByBiller.get(biller.id);
+        if (newSchedules && newSchedules.length > 0) {
+          // Use new schedules if available
+          biller.schedules = newSchedules;
+        }
+        // Otherwise keep JSONB schedules from adapter
+      });
+    }
+  } catch (schedError) {
+    console.warn('Could not fetch payment schedules from new table, using legacy JSONB schedules:', schedError);
+  }
+  
+  return { data: billers, error: null };
 };
 
 /**
  * Get a single biller by ID (returns frontend Biller type)
+ * Also fetches payment schedules from the new payment schedules table
  */
 export const getBillerByIdFrontend = async (id: string): Promise<{ data: Biller | null; error: any }> => {
   const { data, error } = await getBillerById(id);
   if (error || !data) {
     return { data: null, error };
   }
-  return { data: supabaseBillerToFrontend(data), error: null };
+  
+  // Convert to frontend type
+  const biller = supabaseBillerToFrontend(data);
+  
+  // Try to fetch payment schedules from the new table
+  try {
+    const { data: schedules } = await supabase
+      .from('biller_payment_schedules')
+      .select('*')
+      .eq('biller_id', id)
+      .order('year', { ascending: true })
+      .order('month', { ascending: true });
+    
+    if (schedules && schedules.length > 0) {
+      // Use new schedules
+      biller.schedules = schedules.map(schedule => ({
+        id: schedule.id,
+        month: schedule.month,
+        year: schedule.year,
+        expectedAmount: schedule.expected_amount,
+        amountPaid: schedule.amount_paid || undefined,
+        paid: schedule.paid,
+        datePaid: schedule.date_paid || undefined,
+        receipt: schedule.receipt || undefined,
+        accountId: schedule.account_id || undefined,
+      }));
+    }
+  } catch (schedError) {
+    console.warn('Could not fetch payment schedules from new table, using legacy JSONB schedules:', schedError);
+  }
+  
+  return { data: biller, error: null };
 };
 
 /**

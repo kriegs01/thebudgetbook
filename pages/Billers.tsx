@@ -380,18 +380,82 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
     setIsSubmitting(true);
     try {
       const { biller, schedule } = showPayModal;
-      const updatedSchedules = biller.schedules.map(s => {
-        // Match by ID if available (checking for null/undefined explicitly), otherwise fallback to month/year matching
-        const isMatch = (schedule.id != null) ? 
-          (s.id === schedule.id) : 
-          (s.month === schedule.month && s.year === schedule.year);
+      
+      // REFACTOR: Update payment schedule using the new explicit paid status
+      // Try to update in the payment schedules table first
+      if (schedule.id) {
+        try {
+          const { error: schedError } = await markBillerPaymentAsPaid(
+            schedule.id,
+            parseFloat(payFormData.amount),
+            payFormData.datePaid,
+            payFormData.accountId,
+            payFormData.receipt || `${biller.name}_${schedule.month}`
+          );
           
-        if (isMatch) {
-          return { ...s, amountPaid: parseFloat(payFormData.amount), receipt: payFormData.receipt || `${biller.name}_${schedule.month}`, datePaid: payFormData.datePaid, accountId: payFormData.accountId };
+          if (schedError) {
+            console.warn('Failed to update payment schedule in new table, falling back to legacy JSONB update:', schedError);
+            throw schedError;
+          }
+          
+          // Successfully updated in new table
+          console.log('[Billers] Payment marked as paid in payment schedules table');
+          
+          // Also update the legacy JSONB schedules for backward compatibility
+          const updatedSchedules = biller.schedules.map(s => {
+            if (s.id === schedule.id) {
+              return { 
+                ...s, 
+                amountPaid: parseFloat(payFormData.amount), 
+                paid: true, // REFACTOR: Explicit paid status
+                receipt: payFormData.receipt || `${biller.name}_${schedule.month}`, 
+                datePaid: payFormData.datePaid, 
+                accountId: payFormData.accountId 
+              };
+            }
+            return s;
+          });
+          await onUpdate({ ...biller, schedules: updatedSchedules });
+        } catch (error) {
+          // Fall back to legacy JSONB update if new table update fails
+          console.warn('Falling back to legacy JSONB schedules update');
+          const updatedSchedules = biller.schedules.map(s => {
+            const isMatch = (schedule.id != null) ? 
+              (s.id === schedule.id) : 
+              (s.month === schedule.month && s.year === schedule.year);
+              
+            if (isMatch) {
+              return { 
+                ...s, 
+                amountPaid: parseFloat(payFormData.amount), 
+                paid: true, // REFACTOR: Explicit paid status
+                receipt: payFormData.receipt || `${biller.name}_${schedule.month}`, 
+                datePaid: payFormData.datePaid, 
+                accountId: payFormData.accountId 
+              };
+            }
+            return s;
+          });
+          await onUpdate({ ...biller, schedules: updatedSchedules });
         }
-        return s;
-      });
-      await onUpdate({ ...biller, schedules: updatedSchedules });
+      } else {
+        // No schedule ID, fall back to legacy JSONB update
+        const updatedSchedules = biller.schedules.map(s => {
+          const isMatch = (s.month === schedule.month && s.year === schedule.year);
+          if (isMatch) {
+            return { 
+              ...s, 
+              amountPaid: parseFloat(payFormData.amount), 
+              paid: true, // REFACTOR: Explicit paid status
+              receipt: payFormData.receipt || `${biller.name}_${schedule.month}`, 
+              datePaid: payFormData.datePaid, 
+              accountId: payFormData.accountId 
+            };
+          }
+          return s;
+        });
+        await onUpdate({ ...biller, schedules: updatedSchedules });
+      }
       
       // Only close modal on success
       setShowPayModal(null);
@@ -599,8 +663,8 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
                       transactions
                     );
                     
-                    // Check if paid via biller schedule OR via transaction matching
-                    const isPaidViaSchedule = !!sched.amountPaid;
+                    // REFACTOR: Check if paid using explicit paid field first, then fall back to legacy logic
+                    const isPaidViaSchedule = sched.paid !== undefined ? sched.paid : !!sched.amountPaid;
                     const isPaidViaTransaction = checkIfPaidByTransaction(
                       detailedBiller.name,
                       calculatedAmount, // Use calculated amount for matching
