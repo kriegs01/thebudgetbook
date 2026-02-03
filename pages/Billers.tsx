@@ -114,32 +114,63 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
   });
 
   // Load transactions for payment status matching
+  const loadTransactions = useCallback(async () => {
+    try {
+      const { data, error } = await getAllTransactions();
+      if (error) {
+        console.error('[Billers] Failed to load transactions:', error);
+      } else if (data) {
+        // Filter to last 24 months for performance
+        const twoYearsAgo = new Date();
+        twoYearsAgo.setFullYear(twoYearsAgo.getFullYear() - 2);
+        
+        const recentTransactions = data.filter(tx => {
+          const txDate = new Date(tx.date);
+          return txDate >= twoYearsAgo;
+        });
+        
+        setTransactions(recentTransactions);
+        console.log('[Billers] Loaded transactions:', recentTransactions.length, 'of', data.length);
+      }
+    } catch (error) {
+      console.error('[Billers] Error loading transactions:', error);
+    }
+  }, []);
+
+  // Load transactions on mount
   useEffect(() => {
-    const loadTransactions = async () => {
-      try {
-        const { data, error } = await getAllTransactions();
-        if (error) {
-          console.error('[Billers] Failed to load transactions:', error);
-        } else if (data) {
-          // Filter to last 24 months for performance
-          const twoYearsAgo = new Date();
-          twoYearsAgo.setFullYear(twoYearsAgo.getFullYear() - 2);
-          
-          const recentTransactions = data.filter(tx => {
-            const txDate = new Date(tx.date);
-            return txDate >= twoYearsAgo;
+    loadTransactions();
+  }, [loadTransactions]);
+
+  // CRITICAL FIX: Reload transactions when page becomes visible
+  // This ensures payment status updates immediately after transaction deletion
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (!document.hidden) {
+        console.log('[Billers] Page visible - reloading transactions');
+        loadTransactions();
+        // Also reload schedules if viewing a detailed biller
+        if (detailedBillerId) {
+          setSchedulesLoading(true);
+          getPaymentSchedulesByBillerId(detailedBillerId).then(({ data, error }) => {
+            if (!error && data) {
+              setBillerSchedules(prev => ({
+                ...prev,
+                [detailedBillerId]: data
+              }));
+            }
+            setSchedulesLoading(false);
           });
-          
-          setTransactions(recentTransactions);
-          console.log('[Billers] Loaded transactions:', recentTransactions.length, 'of', data.length);
         }
-      } catch (error) {
-        console.error('[Billers] Error loading transactions:', error);
       }
     };
 
-    loadTransactions();
-  }, []); // Load once on mount
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [loadTransactions, detailedBillerId]);
 
   // Load payment schedules when a biller is opened for detailed view
   useEffect(() => {
