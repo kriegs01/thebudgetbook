@@ -21,8 +21,8 @@ export const supabasePaymentScheduleToFrontend = (
 ): PaymentSchedule => {
   return {
     id: supabaseSchedule.id,
-    month: supabaseSchedule.schedule_month,
-    year: supabaseSchedule.schedule_year.toString(),
+    month: supabaseSchedule.month,
+    year: supabaseSchedule.year.toString(),
     expectedAmount: supabaseSchedule.expected_amount,
     amountPaid: supabaseSchedule.amount_paid || undefined,
     receipt: supabaseSchedule.receipt || undefined,
@@ -40,8 +40,8 @@ export const frontendPaymentScheduleToSupabase = (
   schedule: Partial<PaymentSchedule>
 ): Partial<CreatePaymentScheduleInput> => {
   return {
-    schedule_month: schedule.month,
-    schedule_year: schedule.year ? parseInt(schedule.year, 10) : undefined,
+    month: schedule.month,
+    year: schedule.year ? parseInt(schedule.year, 10) : undefined,
     expected_amount: schedule.expectedAmount,
     amount_paid: schedule.amountPaid || 0,
     receipt: schedule.receipt || null,
@@ -108,8 +108,8 @@ export const getPaymentSchedulesByMonthYear = async (
   const { data, error } = await supabase
     .from('payment_schedules')
     .select('*')
-    .eq('schedule_month', month)
-    .eq('schedule_year', year);
+    .eq('month', month)
+    .eq('year', year);
 
   if (error) {
     return { data: null, error: new Error(error.message) };
@@ -133,8 +133,8 @@ export const getPaymentScheduleByBillerMonthYear = async (
     .from('payment_schedules')
     .select('*')
     .eq('biller_id', billerId)
-    .eq('schedule_month', month)
-    .eq('schedule_year', year)
+    .eq('month', month)
+    .eq('year', year)
     .single();
 
   if (error) {
@@ -163,8 +163,8 @@ export const getPaymentScheduleByInstallmentMonthYear = async (
     .from('payment_schedules')
     .select('*')
     .eq('installment_id', installmentId)
-    .eq('schedule_month', month)
-    .eq('schedule_year', year)
+    .eq('month', month)
+    .eq('year', year)
     .single();
 
   if (error) {
@@ -247,7 +247,7 @@ export const deletePaymentSchedule = async (
 
 /**
  * Create or update a payment schedule (upsert)
- * Uses schedule_month, schedule_year, and either biller_id or installment_id as unique constraint
+ * Uses month, year, and either biller_id or installment_id as unique constraint
  */
 export const upsertPaymentSchedule = async (
   schedule: CreatePaymentScheduleInput
@@ -256,8 +256,8 @@ export const upsertPaymentSchedule = async (
     .from('payment_schedules')
     .upsert(schedule, {
       onConflict: schedule.biller_id 
-        ? 'biller_id,schedule_month,schedule_year' 
-        : 'installment_id,schedule_month,schedule_year',
+        ? 'biller_id,month,year' 
+        : 'installment_id,month,year',
     })
     .select()
     .single();
