@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Installment, Account, ViewMode, Biller } from '../types';
 import { Plus, LayoutGrid, List, Wallet, Trash2, X, Upload, AlertTriangle, Edit2, Eye, MoreVertical } from 'lucide-react';
+import { createTransaction } from '../src/services/transactionsService';
 
 interface InstallmentsProps {
   installments: Installment[];
@@ -140,18 +141,39 @@ const Installments: React.FC<InstallmentsProps> = ({ installments, accounts, bil
     setIsSubmitting(true);
     try {
       const paymentAmount = parseFloat(payFormData.amount) || 0;
-      const updatedInstallment: Installment = {
-        ...showPayModal,
-        paidAmount: showPayModal.paidAmount + paymentAmount
-      };
-
+      
       console.log('[Installments] Processing payment:', {
         installmentId: showPayModal.id,
         installmentName: showPayModal.name,
         previousPaidAmount: showPayModal.paidAmount,
-        paymentAmount: paymentAmount,
-        newPaidAmount: updatedInstallment.paidAmount
+        paymentAmount: paymentAmount
       });
+
+      // CRITICAL: Always create a transaction for accounting purposes
+      console.log('[Installments] Creating transaction for payment');
+      const transaction = {
+        name: `${showPayModal.name} - Installment Payment`,
+        date: new Date(payFormData.datePaid).toISOString(),
+        amount: paymentAmount,
+        payment_method_id: payFormData.accountId
+      };
+      
+      const { data: transactionData, error: transactionError } = await createTransaction(transaction);
+      
+      if (transactionError) {
+        console.error('[Installments] Failed to create transaction:', transactionError);
+        alert('Failed to create transaction. Payment not recorded.');
+        setIsSubmitting(false);
+        return;
+      }
+      
+      console.log('[Installments] Transaction created successfully:', transactionData);
+      
+      // Update installment with new paid amount
+      const updatedInstallment: Installment = {
+        ...showPayModal,
+        paidAmount: showPayModal.paidAmount + paymentAmount
+      };
 
       await onUpdate?.(updatedInstallment);
       

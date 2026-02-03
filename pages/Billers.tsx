@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Biller, Account, PaymentSchedule, BudgetCategory, Installment } from '../types';
 import { Plus, Calendar, Bell, ChevronDown, ChevronRight, Upload, CheckCircle2, X, ArrowLeft, Power, PowerOff, MoreVertical, Edit2, Eye, Trash2, AlertTriangle } from 'lucide-react';
-import { getAllTransactions } from '../src/services/transactionsService';
+import { getAllTransactions, createTransaction } from '../src/services/transactionsService';
 import type { SupabaseTransaction } from '../src/types/supabase';
 // ENHANCEMENT: Import linked account utilities for billing cycle-based amount calculation
 import { 
@@ -431,6 +431,26 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
       const accountId = payFormData.accountId;
       const receipt = payFormData.receipt || `${biller.name}_${schedule.month}`;
       
+      // CRITICAL: Always create a transaction for accounting purposes
+      console.log('[Billers] Creating transaction for payment');
+      const transaction = {
+        name: `${biller.name} - ${schedule.month} ${schedule.year}`,
+        date: new Date(datePaid).toISOString(),
+        amount: amountPaid,
+        payment_method_id: accountId
+      };
+      
+      const { data: transactionData, error: transactionError } = await createTransaction(transaction);
+      
+      if (transactionError) {
+        console.error('[Billers] Failed to create transaction:', transactionError);
+        alert('Failed to create transaction. Payment not recorded.');
+        setIsSubmitting(false);
+        return;
+      }
+      
+      console.log('[Billers] Transaction created successfully:', transactionData);
+      
       // Update payment schedule in the database
       const { data, error } = await markPaymentScheduleAsPaid(
         schedule.id,
@@ -443,6 +463,12 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
       if (error) {
         console.error('[Billers] Failed to mark payment:', error);
         throw error;
+      }
+      
+      // Reload transactions to update payment status
+      const { data: updatedTransactions } = await getAllTransactions();
+      if (updatedTransactions) {
+        setTransactions(updatedTransactions);
       }
       
       // Update local state to reflect the change
@@ -462,6 +488,7 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
       setShowPayModal(null);
     } catch (error) {
       console.error('Failed to update payment:', error);
+      alert('Failed to save payment. Please try again.');
       // Keep modal open so user can retry
     } finally {
       setIsSubmitting(false);
@@ -705,12 +732,8 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
                         );
                         
                         // UNIFIED PAYMENT STATUS CALCULATION
-                        // A schedule is "paid" if EITHER:
-                        // 1. amountPaid is set (manual payment recorded), OR
-                        // 2. A matching transaction exists
-                        // This ensures status is correct whether payment was recorded 
-                        // in payment_schedules or via transaction
-                        const isPaidViaSchedule = !!(sched.amountPaid && sched.amountPaid > 0);
+                        // CRITICAL: Payment status ONLY determined by transaction existence
+                        // This ensures proper accounting - manual marking is admin override only
                         const isPaidViaTransaction = checkIfPaidByTransaction(
                           detailedBiller.name,
                           calculatedAmount,
@@ -718,19 +741,20 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
                           sched.year
                         );
                         
-                        const isPaid = isPaidViaSchedule || isPaidViaTransaction;
+                        // Check if there's a manual payment override (amountPaid set without transaction)
+                        const hasManualOverride = !!(sched.amountPaid && sched.amountPaid > 0);
+                        const isManualPayment = hasManualOverride && !isPaidViaTransaction;
                         
-                        // Determine if this is a manual payment (no matching transaction)
-                        const isManualPayment = isPaidViaSchedule && !isPaidViaTransaction;
+                        // Payment is considered paid if:
+                        // 1. Transaction exists (normal case), OR
+                        // 2. Manual override is set (admin override - with warning)
+                        const isPaid = isPaidViaTransaction || isManualPayment;
                         
-                        // Get actual paid amount from schedule or matching transaction
+                        // Get actual paid amount from transaction or manual override
                         let displayAmount = calculatedAmount;
                         if (isPaid) {
-                          // Prefer amountPaid from schedule if set
-                          if (isPaidViaSchedule && sched.amountPaid) {
-                            displayAmount = sched.amountPaid;
-                          } else {
-                            // Otherwise get from matching transaction
+                          if (isPaidViaTransaction) {
+                            // Get from matching transaction (primary source)
                             const matchingTx = getMatchingTransaction(
                               detailedBiller.name,
                               calculatedAmount,
@@ -740,6 +764,9 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
                             if (matchingTx) {
                               displayAmount = matchingTx.amount;
                             }
+                          } else if (isManualPayment && sched.amountPaid) {
+                            // Use manual override amount (with warning)
+                            displayAmount = sched.amountPaid;
                           }
                         }
                         
@@ -761,9 +788,9 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
                                   </span>
                                 )}
                                 {isManualPayment && (
-                                  <span className="text-[10px] text-amber-600 font-medium mt-1 flex items-center gap-1">
-                                    <span className="inline-block w-1.5 h-1.5 rounded-full bg-amber-600" aria-hidden="true"></span>
-                                    Manually marked paid
+                                  <span className="text-[10px] text-red-600 font-bold mt-1 flex items-center gap-1 bg-red-50 px-2 py-0.5 rounded">
+                                    <AlertTriangle className="w-3 h-3" />
+                                    ADMIN OVERRIDE - No Transaction
                                   </span>
                                 )}
                               </div>
