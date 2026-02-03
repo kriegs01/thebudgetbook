@@ -230,7 +230,7 @@ const generatePaymentSchedulesForInstallment = async (installment: any) => {
     return;
   }
   
-  const termMonths = parseInt(installment.term_duration.toString().replace(/\D/g, ''), 10) || 0;
+  const termDurationInMonths = parseInt(installment.term_duration.toString().replace(/\D/g, ''), 10) || 0;
   const startDate = new Date(installment.start_date);
   const monthNames = [
     'January', 'February', 'March', 'April', 'May', 'June',
@@ -238,7 +238,7 @@ const generatePaymentSchedulesForInstallment = async (installment: any) => {
   ];
   
   const schedules = [];
-  for (let i = 0; i < termMonths; i++) {
+  for (let i = 0; i < termDurationInMonths; i++) {
     const paymentDate = new Date(startDate);
     paymentDate.setMonth(paymentDate.getMonth() + i);
     

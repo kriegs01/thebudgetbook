@@ -9,11 +9,13 @@ CREATE OR REPLACE FUNCTION generate_installment_payment_schedules()
 RETURNS void AS $$
 DECLARE
   inst_record RECORD;
-  term_months INTEGER;
+  termDurationInMonths INTEGER;
   start_year INTEGER;
   start_month INTEGER;
   payment_num INTEGER;
   payment_date DATE;
+  is_paid BOOLEAN;
+  payments_made INTEGER;
   month_names TEXT[] := ARRAY['January', 'February', 'March', 'April', 'May', 'June', 
                                'July', 'August', 'September', 'October', 'November', 'December'];
 BEGIN
@@ -23,36 +25,31 @@ BEGIN
     FROM installments
     WHERE start_date IS NOT NULL
   LOOP
-    -- Extract term duration (assumes format like "12 months" or just "12")
-    term_months := (regexp_replace(inst_record.term_duration::TEXT, '[^0-9]', '', 'g'))::INTEGER;
+    // Extract term duration (assumes format like "12 months" or just "12")
+    termDurationInMonths := (regexp_replace(inst_record.term_duration::TEXT, '[^0-9]', '', 'g'))::INTEGER;
     
     -- Parse start date (YYYY-MM format)
     start_year := EXTRACT(YEAR FROM inst_record.start_date::DATE);
     start_month := EXTRACT(MONTH FROM inst_record.start_date::DATE);
     
     -- Generate payment schedule for each month
-    FOR payment_num IN 1..term_months LOOP
+    FOR payment_num IN 1..termDurationInMonths LOOP
       -- Calculate payment date
       payment_date := (inst_record.start_date::DATE + INTERVAL '1 month' * (payment_num - 1));
       
       -- Calculate if this payment should be marked as paid based on paid_amount
       -- Assume payments are made sequentially from the first payment
-      DECLARE
-        is_paid BOOLEAN;
-        payments_made INTEGER;
-      BEGIN
-        -- Calculate how many full payments have been made
-        IF inst_record.paid_amount >= inst_record.monthly_amount THEN
-          payments_made := FLOOR(inst_record.paid_amount / inst_record.monthly_amount);
-        ELSE
-          payments_made := 0;
-        END IF;
-        
-        -- Mark as paid if this payment number is within the paid count
-        is_paid := payment_num <= payments_made;
-        
-        -- Insert payment schedule
-        INSERT INTO installment_payment_schedules (
+      IF inst_record.paid_amount >= inst_record.monthly_amount THEN
+        payments_made := FLOOR(inst_record.paid_amount / inst_record.monthly_amount);
+      ELSE
+        payments_made := 0;
+      END IF;
+      
+      -- Mark as paid if this payment number is within the paid count
+      is_paid := payment_num <= payments_made;
+      
+      -- Insert payment schedule
+      INSERT INTO installment_payment_schedules (
           installment_id,
           payment_number,
           month,
@@ -79,7 +76,6 @@ BEGIN
           NOW()
         )
         ON CONFLICT (installment_id, payment_number) DO NOTHING;
-      END;
     END LOOP;
   END LOOP;
 END;

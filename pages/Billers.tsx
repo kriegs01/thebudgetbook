@@ -294,7 +294,7 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
           month, 
           year: '2026', 
           expectedAmount: expected,
-          paid: false // REFACTOR: Explicit paid status for new schedules
+          paid: false
         })),
         linkedAccountId: addFormData.linkedAccountId || undefined // ENHANCEMENT: Support linked credit accounts
       };

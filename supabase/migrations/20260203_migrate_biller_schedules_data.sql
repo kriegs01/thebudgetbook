@@ -23,7 +23,7 @@ SELECT
   COALESCE((sched->>'expectedAmount')::NUMERIC, b.expected_amount) AS expected_amount,
   (sched->>'amountPaid')::NUMERIC AS amount_paid,
   CASE 
-    WHEN (sched->>'amountPaid') IS NOT NULL AND (sched->>'amountPaid')::NUMERIC > 0 
+    WHEN COALESCE((sched->>'amountPaid')::NUMERIC, 0) > 0 
     THEN TRUE 
     ELSE FALSE 
   END AS paid,
