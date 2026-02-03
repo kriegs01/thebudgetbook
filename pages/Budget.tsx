@@ -7,6 +7,13 @@ import { createTransaction, getAllTransactions, updateTransaction } from '../src
 import type { SupabaseTransaction } from '../src/types/supabase';
 import { getInstallmentPaymentSchedule, aggregateCreditCardPurchases } from '../src/utils/paymentStatus'; // PROTOTYPE: Import payment status utilities
 import { getScheduleExpectedAmount } from '../src/utils/linkedAccountUtils'; // ENHANCEMENT: Import for linked account amount calculation
+// Import payment schedules service functions
+import {
+  getPaymentSchedulesByBillerId,
+  getPaymentScheduleByBillerMonthYear,
+  upsertPaymentSchedule,
+  markPaymentScheduleAsPaid
+} from '../src/services/paymentSchedulesService';
 
 interface BudgetProps {
   items: BudgetItem[];
@@ -53,6 +60,9 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
   
   // PROTOTYPE: Track excluded installments (by default all are included)
   const [excludedInstallmentIds, setExcludedInstallmentIds] = useState<Set<string>>(new Set());
+
+  // Payment schedules cache - loaded per biller as needed
+  const [billerSchedulesCache, setBillerSchedulesCache] = useState<Record<string, PaymentSchedule[]>>({});
 
   // Month Summary State - stored in Supabase with setup data
   const [projectedSalary, setProjectedSalary] = useState<string>('11000');
@@ -172,7 +182,8 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
           );
 
           // Remove billers that don't match the current timing
-          // ENHANCEMENT: Also update amounts for existing billers (in case of linked account changes)
+          // NOTE: For now, use biller.expectedAmount as default since schedules are being migrated
+          // to payment_schedules table. In the future, we should load schedules separately.
           const filteredExisting = newData[cat.name].filter(item => {
             if (item.isBiller) {
               const biller = billers.find(b => b.id === item.id);
@@ -180,23 +191,15 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
             }
             return true; // Keep non-biller items
           }).map(item => {
-            // ENHANCEMENT: Update amount for existing biller items
+            // For biller items, use the expected amount from the biller
+            // Future enhancement: Load schedule and use calculated amount
             if (item.isBiller) {
               const biller = billers.find(b => b.id === item.id);
               if (biller) {
-                const schedule = biller.schedules.find(s => s.month === selectedMonth);
-                if (schedule) {
-                  const { amount: calculatedAmount } = getScheduleExpectedAmount(
-                    biller,
-                    schedule,
-                    accounts,
-                    transactions
-                  );
-                  return {
-                    ...item,
-                    amount: calculatedAmount.toString()
-                  };
-                }
+                return {
+                  ...item,
+                  amount: biller.expectedAmount.toString()
+                };
               }
             }
             return item;
@@ -206,18 +209,9 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
           const newItems = matchingBillers
             .filter(b => !existingIds.has(b.id))
             .map(b => {
-              const schedule = b.schedules.find(s => s.month === selectedMonth);
-              
-              // ENHANCEMENT: For linked billers, calculate amount from transactions
-              let amount: number;
-              if (schedule) {
-                const { amount: calculatedAmount } = getScheduleExpectedAmount(
-                  b,
-                  schedule,
-                  accounts,
-                  transactions
-                );
-                amount = calculatedAmount;
+              // Use the biller's expected amount as default
+              // Future enhancement: Load schedule and use calculated amount
+              const amount = b.expectedAmount;
               } else {
                 amount = b.expectedAmount;
               }
@@ -807,43 +801,75 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
       
       console.log(`[Budget] Transaction ${isEditing ? 'updated' : 'created'} successfully:`, transactionData);
       
-      // Update the biller's payment schedule using schedule ID for exact matching
-      const updatedSchedules = biller.schedules.map(s => {
-        // Match by ID if available (checking for null/undefined explicitly), otherwise fallback to month/year matching
-        const isMatch = (schedule.id != null) ? 
-          (s.id === schedule.id) : 
-          (s.month === schedule.month && s.year === schedule.year);
-          
-        if (isMatch) {
-          console.log(`[Budget] MATCHED schedule for update:`, {
-            scheduleId: s.id,
-            scheduleMonth: s.month,
-            scheduleYear: s.year,
-            paymentDate: payFormData.datePaid,
-            amount: parseFloat(payFormData.amount),
-            matchedBy: (schedule.id != null) ? 'ID' : 'month/year'
-          });
-          return { 
-            ...s, 
-            amountPaid: parseFloat(payFormData.amount), 
-            receipt: payFormData.receipt || `${biller.name}_${schedule.month}`, 
-            datePaid: payFormData.datePaid, 
-            accountId: payFormData.accountId 
-          };
+      // Update the payment schedule in payment_schedules table
+      // First, get or create the schedule for this biller/month/year
+      const currentYear = new Date().getFullYear();
+      const scheduleYear = parseInt(schedule.year) || currentYear;
+      
+      // Try to find existing schedule or use the one from modal
+      let scheduleToUpdate = schedule;
+      if (!scheduleToUpdate.id) {
+        // Load schedule from database
+        const { data: existingSchedule } = await getPaymentScheduleByBillerMonthYear(
+          biller.id,
+          schedule.month,
+          scheduleYear
+        );
+        if (existingSchedule) {
+          scheduleToUpdate = existingSchedule;
         }
-        return s;
+      }
+      
+      const amountPaid = parseFloat(payFormData.amount);
+      const receipt = payFormData.receipt || `${biller.name}_${schedule.month}`;
+      const datePaid = payFormData.datePaid;
+      const accountId = payFormData.accountId;
+      
+      // If schedule exists (has ID), update it. Otherwise, create/upsert it.
+      if (scheduleToUpdate.id) {
+        // Update existing schedule
+        const { error: scheduleError } = await markPaymentScheduleAsPaid(
+          scheduleToUpdate.id,
+          amountPaid,
+          datePaid,
+          accountId,
+          receipt
+        );
+        
+        if (scheduleError) {
+          console.error('[Budget] Failed to update payment schedule:', scheduleError);
+          // Continue anyway - transaction is saved
+        } else {
+          console.log('[Budget] Payment schedule updated successfully');
+        }
+      } else {
+        // Create new schedule
+        const { error: scheduleError } = await upsertPaymentSchedule({
+          month: schedule.month,
+          year: scheduleYear,
+          expected_amount: biller.expectedAmount,
+          amount_paid: amountPaid,
+          date_paid: datePaid,
+          account_id: accountId,
+          receipt: receipt,
+          biller_id: biller.id,
+          installment_id: null
+        });
+        
+        if (scheduleError) {
+          console.error('[Budget] Failed to create payment schedule:', scheduleError);
+          // Continue anyway - transaction is saved
+        } else {
+          console.log('[Budget] Payment schedule created successfully');
+        }
+      }
+      
+      // Clear cache for this biller so it reloads
+      setBillerSchedulesCache(prev => {
+        const newCache = { ...prev };
+        delete newCache[biller.id];
+        return newCache;
       });
-      
-      console.log('[Budget] All updated schedules:', updatedSchedules.map(s => ({
-        id: s.id,
-        month: s.month,
-        year: s.year,
-        amountPaid: s.amountPaid,
-        datePaid: s.datePaid
-      })));
-      
-      console.log('[Budget] Updating biller with new schedule');
-      await onUpdateBiller({ ...biller, schedules: updatedSchedules });
       
       // FIX: Update linked installment's paidAmount if this biller is linked to an installment
       if (biller.category.startsWith('Loans') && installments && installments.length > 0) {
