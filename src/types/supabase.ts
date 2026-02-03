@@ -29,7 +29,6 @@ export interface SupabaseBiller {
   activation_date: any; // jsonb
   deactivation_c: any | null; // jsonb, nullable (note: field name is 'deactivation_c')
   status: string;
-  schedules: any; // jsonb
   linked_account_id: string | null; // uuid, nullable - ENHANCEMENT: Links Loans-category billers to credit accounts
 }
 
@@ -73,6 +72,21 @@ export interface SupabaseBudgetSetup {
   created_at: string; // timestamptz
 }
 
+export interface SupabasePaymentSchedule {
+  id: string; // uuid
+  month: string;
+  year: number; // int
+  expected_amount: number; // numeric
+  amount_paid: number; // numeric, default 0
+  receipt: string | null; // text, nullable
+  date_paid: string | null; // date, nullable
+  account_id: string | null; // uuid, nullable
+  biller_id: string | null; // uuid, nullable
+  installment_id: string | null; // uuid, nullable
+  created_at: string; // timestamptz
+  updated_at: string; // timestamptz
+}
+
 // Input types for creating new records (without id and timestamps)
 
 export type CreateAccountInput = Omit<SupabaseAccount, 'id' | 'created_at'>;
@@ -92,6 +106,9 @@ export type UpdateTransactionInput = Partial<CreateTransactionInput>;
 
 export type CreateBudgetSetupInput = Omit<SupabaseBudgetSetup, 'id' | 'created_at'>;
 export type UpdateBudgetSetupInput = Partial<CreateBudgetSetupInput>;
+
+export type CreatePaymentScheduleInput = Omit<SupabasePaymentSchedule, 'id' | 'created_at' | 'updated_at'>;
+export type UpdatePaymentScheduleInput = Partial<CreatePaymentScheduleInput>;
 
 // Database Response Types (for better type safety with Supabase responses)
 

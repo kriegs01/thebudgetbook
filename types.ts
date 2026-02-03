@@ -35,6 +35,8 @@ export interface PaymentSchedule {
   receipt?: string;
   datePaid?: string;
   accountId?: string;
+  billerId?: string; // Foreign key to biller
+  installmentId?: string; // Foreign key to installment
 }
 
 export interface Biller {
@@ -54,7 +56,6 @@ export interface Biller {
     year: string;
   };
   status: 'active' | 'inactive';
-  schedules: PaymentSchedule[];
   linkedAccountId?: string; // ENHANCEMENT: Links Loans-category billers to credit accounts for dynamic amount calculation
 }
 

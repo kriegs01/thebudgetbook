@@ -2,38 +2,17 @@
  * Billers Adapter
  * 
  * Converts between Supabase database schema and frontend types for billers.
+ * Note: Payment schedules are now stored in the payment_schedules table,
+ * not as embedded arrays in billers.
  */
 
 import type { SupabaseBiller } from '../types/supabase';
 import type { Biller } from '../../types';
 
 /**
- * Generate a unique ID for a payment schedule
- * Uses month and year for deterministic prefix to aid debugging
- */
-export const generateScheduleId = (month: string, year: string): string => {
-  const randomPart = Math.random().toString(36).substr(2, 9);
-  const timestamp = Date.now().toString(36);
-  return `${month.substr(0, 3).toLowerCase()}-${year}-${randomPart}-${timestamp}`;
-};
-
-/**
  * Convert Supabase biller to frontend Biller type
- * Ensures all schedules have unique IDs for payment tracking
  */
 export const supabaseBillerToFrontend = (supabaseBiller: SupabaseBiller): Biller => {
-  // Ensure all schedules have IDs (migration for existing data)
-  const schedules = (supabaseBiller.schedules || []).map(schedule => {
-    if (!schedule.id) {
-      // Generate ID for schedules that don't have one
-      return {
-        ...schedule,
-        id: generateScheduleId(schedule.month, schedule.year)
-      };
-    }
-    return schedule;
-  });
-  
   return {
     id: supabaseBiller.id,
     name: supabaseBiller.name,
@@ -44,8 +23,7 @@ export const supabaseBillerToFrontend = (supabaseBiller: SupabaseBiller): Biller
     activationDate: supabaseBiller.activation_date,
     deactivationDate: supabaseBiller.deactivation_c || undefined,
     status: supabaseBiller.status as 'active' | 'inactive',
-    schedules: schedules,
-    linkedAccountId: supabaseBiller.linked_account_id || undefined // ENHANCEMENT: Support linked credit accounts
+    linkedAccountId: supabaseBiller.linked_account_id || undefined
   };
 };
 
@@ -62,8 +40,7 @@ export const frontendBillerToSupabase = (biller: Biller): Omit<SupabaseBiller, '
     activation_date: biller.activationDate,
     deactivation_c: biller.deactivationDate || null,
     status: biller.status,
-    schedules: biller.schedules,
-    linked_account_id: biller.linkedAccountId || null // ENHANCEMENT: Support linked credit accounts
+    linked_account_id: biller.linkedAccountId || null
   };
 };
 
