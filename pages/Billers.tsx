@@ -15,7 +15,8 @@ import {
   getPaymentSchedulesByBillerId,
   createPaymentSchedule,
   upsertPaymentSchedule,
-  markPaymentScheduleAsPaid
+  markPaymentScheduleAsPaid,
+  markPaymentScheduleAsUnpaid
 } from '../src/services/paymentSchedulesService';
 
 
@@ -467,6 +468,40 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
     }
   };
 
+  const handleClearManualPayment = async (scheduleId: string) => {
+    if (!detailedBillerId) return;
+    
+    try {
+      console.log('[Billers] Clearing manual payment for schedule:', scheduleId);
+      
+      const { error } = await markPaymentScheduleAsUnpaid(scheduleId);
+      
+      if (error) {
+        console.error('[Billers] Failed to clear payment:', error);
+        alert('Failed to clear payment. Please try again.');
+        return;
+      }
+      
+      // Update local state to reflect the change
+      setBillerSchedules(prev => {
+        const schedules = prev[detailedBillerId] || [];
+        return {
+          ...prev,
+          [detailedBillerId]: schedules.map(s => 
+            s.id === scheduleId 
+              ? { ...s, amountPaid: undefined, datePaid: undefined, accountId: undefined, receipt: undefined }
+              : s
+          )
+        };
+      });
+      
+      console.log('[Billers] Payment cleared successfully');
+    } catch (error) {
+      console.error('Error clearing payment:', error);
+      alert('Failed to clear payment. Please try again.');
+    }
+  };
+
   const handleDeleteTrigger = (id: string, name: string) => {
     setConfirmModal({
       show: true,
@@ -685,6 +720,9 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
                         
                         const isPaid = isPaidViaSchedule || isPaidViaTransaction;
                         
+                        // Determine if this is a manual payment (no matching transaction)
+                        const isManualPayment = isPaidViaSchedule && !isPaidViaTransaction;
+                        
                         // Get actual paid amount from schedule or matching transaction
                         let displayAmount = calculatedAmount;
                         if (isPaid) {
@@ -722,10 +760,43 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
                                     From linked account
                                   </span>
                                 )}
+                                {isManualPayment && (
+                                  <span className="text-[10px] text-amber-600 font-medium mt-1 flex items-center gap-1">
+                                    <span className="inline-block w-1.5 h-1.5 rounded-full bg-amber-600" aria-hidden="true"></span>
+                                    Manually marked paid
+                                  </span>
+                                )}
                               </div>
                             </td>
                             <td className="p-4 font-medium text-gray-600">{formatCurrency(displayAmount)}</td>
-                            <td className="p-4 text-center">{!isPaid ? <button onClick={() => { setShowPayModal({ biller: detailedBiller, schedule: sched }); setPayFormData({ ...payFormData, amount: displayAmount.toString(), receipt: '' }); }} className="bg-indigo-600 text-white px-6 py-2 rounded-xl font-bold hover:bg-indigo-700 text-xs transition-all">Pay</button> : <span role="status" className="flex items-center justify-center text-green-600"><CheckCircle2 className="w-5 h-5" aria-label="Payment completed" title="Paid" /></span>}</td>
+                            <td className="p-4 text-center">
+                              {!isPaid ? (
+                                <button 
+                                  onClick={() => { 
+                                    setShowPayModal({ biller: detailedBiller, schedule: sched }); 
+                                    setPayFormData({ ...payFormData, amount: displayAmount.toString(), receipt: '' }); 
+                                  }} 
+                                  className="bg-indigo-600 text-white px-6 py-2 rounded-xl font-bold hover:bg-indigo-700 text-xs transition-all"
+                                >
+                                  Pay
+                                </button>
+                              ) : (
+                                <div className="flex items-center justify-center gap-2">
+                                  <span role="status" className="flex items-center justify-center text-green-600">
+                                    <CheckCircle2 className="w-5 h-5" aria-label="Payment completed" title="Paid" />
+                                  </span>
+                                  {isManualPayment && sched.id && (
+                                    <button
+                                      onClick={() => handleClearManualPayment(sched.id)}
+                                      className="text-xs text-amber-600 hover:text-amber-700 underline"
+                                      title="Clear manual payment"
+                                    >
+                                      Clear
+                                    </button>
+                                  )}
+                                </div>
+                              )}
+                            </td>
                           </tr>
                         );
                       })
