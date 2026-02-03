@@ -70,7 +70,9 @@ Execute migrations in order:
 \i supabase/migrations/20260203_remove_schedules_from_billers.sql
 ```
 
-**⚠️ Important**: Test data migration thoroughly before running step 3!
+**⚠️ Important Security Note**: The default RLS policy in the migration allows unrestricted access for development. **You MUST replace this with proper authentication-based policies before deploying to production!**
+
+**⚠️ Important**: Test data migration thoroughly before running step 3! Check migration logs for any skipped or failed records.
 
 ### 2. Deploy Code Changes
 

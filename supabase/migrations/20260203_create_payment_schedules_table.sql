@@ -63,8 +63,17 @@ ON payment_schedules(installment_id, month, year) WHERE installment_id IS NOT NU
 ALTER TABLE payment_schedules ENABLE ROW LEVEL SECURITY;
 
 -- Create policy for public access (adjust based on your auth needs)
--- WARNING: This policy allows anyone to read/write. 
--- In production, restrict based on user authentication!
+-- ⚠️ WARNING: This policy allows unrestricted access to all users!
+-- This is suitable for development/testing but MUST be replaced with proper
+-- authentication-based policies before deploying to production.
+-- 
+-- Example production policy (requires authentication):
+-- CREATE POLICY "Users can only access their own payment schedules"
+-- ON payment_schedules FOR ALL
+-- USING (auth.uid() = user_id) -- Replace with your user identification logic
+-- WITH CHECK (auth.uid() = user_id);
+--
+-- For now, using permissive policy for development:
 CREATE POLICY "Enable all for payment_schedules" 
 ON payment_schedules FOR ALL USING (true) WITH CHECK (true);
 

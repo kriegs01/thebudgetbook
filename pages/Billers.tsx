@@ -421,6 +421,7 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
       // Ensure schedule has an ID (from payment_schedules table)
       if (!schedule.id) {
         console.error('[Billers] Cannot mark payment - schedule has no ID');
+        setIsSubmitting(false);
         return;
       }
       

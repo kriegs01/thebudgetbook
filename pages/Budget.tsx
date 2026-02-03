@@ -804,7 +804,7 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
       // Update the payment schedule in payment_schedules table
       // First, get or create the schedule for this biller/month/year
       const currentYear = new Date().getFullYear();
-      const scheduleYear = parseInt(schedule.year) || currentYear;
+      const scheduleYear = parseInt(schedule.year, 10) || currentYear;
       
       // Try to find existing schedule or use the one from modal
       let scheduleToUpdate = schedule;
