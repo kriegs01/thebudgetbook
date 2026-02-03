@@ -56,7 +56,7 @@ const billerToSupabase = (biller: Biller) => ({
   activation_date: biller.activationDate,
   deactivation_c: biller.deactivationDate ?? null,
   status: biller.status,
-  schedules: biller.schedules,
+  linked_account_id: biller.linkedAccountId ?? null,
 });
 
 // Helper function to convert Supabase Biller to UI format
@@ -70,7 +70,7 @@ const supabaseToBiller = (supabaseBiller: any): Biller => ({
   activationDate: supabaseBiller.activation_date,
   deactivationDate: supabaseBiller.deactivation_c,
   status: supabaseBiller.status,
-  schedules: supabaseBiller.schedules,
+  linkedAccountId: supabaseBiller.linked_account_id,
 });
 
 // Helper function to convert UI Installment to Supabase format
