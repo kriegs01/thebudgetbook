@@ -212,9 +212,6 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
               // Use the biller's expected amount as default
               // Future enhancement: Load schedule and use calculated amount
               const amount = b.expectedAmount;
-              } else {
-                amount = b.expectedAmount;
-              }
               
               return {
                 id: b.id,

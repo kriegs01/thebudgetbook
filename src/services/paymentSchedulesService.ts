@@ -5,7 +5,7 @@
  * This is the single source of truth for payment schedules for both billers and installments.
  */
 
-import { supabase } from '../config/supabaseClient';
+import { supabase } from '../utils/supabaseClient';
 import type { 
   SupabasePaymentSchedule, 
   CreatePaymentScheduleInput, 
