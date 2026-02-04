@@ -86,12 +86,34 @@ export const createInstallment = async (installment: CreateInstallmentInput) => 
     if (error) {
       console.error('Supabase error creating installment:', error);
       console.error('Error details:', JSON.stringify(error, null, 2));
-      // PROTOTYPE: Provide helpful error message for missing timing column
-      if (error.message && error.message.includes('timing') && error.code === '42703') {
+      
+      // Handle missing start_date column (PGRST204 error)
+      if (error.code === 'PGRST204' && error.message && error.message.includes('start_date')) {
+        console.warn('start_date column not found in database. Retrying without start_date...');
+        // Retry without start_date column
+        const { start_date, ...installmentWithoutStartDate } = installment as any;
+        const { data: retryData, error: retryError } = await supabase
+          .from('installments')
+          .insert([installmentWithoutStartDate])
+          .select()
+          .single();
+        
+        if (retryError) {
+          console.error('Retry failed:', retryError);
+          throw new Error('Database migration required: The start_date column needs to be added to the installments table. Please run the migration in ADD_START_DATE_COLUMN.sql or see TROUBLESHOOTING_INSTALLMENTS.md for instructions.');
+        }
+        
+        console.log('✓ Installment created successfully (without start_date). Consider running the database migration to enable start date functionality.');
+        return { data: retryData, error: null };
+      }
+      
+      // Handle missing timing column
+      if (error.code === 'PGRST204' && error.message && error.message.includes('timing')) {
         console.error('Missing timing column. Please run the database migration:');
         console.error('See HOW_TO_ADD_TIMING_COLUMN.md for instructions');
         throw new Error('Database migration required: The timing column needs to be added to the installments table. Please contact your administrator or check HOW_TO_ADD_TIMING_COLUMN.md');
       }
+      
       throw error;
     }
     return { data, error: null };
@@ -114,12 +136,36 @@ export const updateInstallment = async (id: string, updates: UpdateInstallmentIn
       .single();
 
     if (error) {
-      // PROTOTYPE: Provide helpful error message for missing timing column
-      if (error.message && error.message.includes('timing') && error.code === '42703') {
+      console.error('Supabase error updating installment:', error);
+      
+      // Handle missing start_date column (PGRST204 error)
+      if (error.code === 'PGRST204' && error.message && error.message.includes('start_date')) {
+        console.warn('start_date column not found in database. Retrying without start_date...');
+        // Retry without start_date column
+        const { start_date, ...updatesWithoutStartDate } = updates as any;
+        const { data: retryData, error: retryError } = await supabase
+          .from('installments')
+          .update(updatesWithoutStartDate)
+          .eq('id', id)
+          .select()
+          .single();
+        
+        if (retryError) {
+          console.error('Retry failed:', retryError);
+          throw new Error('Database migration required: The start_date column needs to be added to the installments table. Please run the migration in ADD_START_DATE_COLUMN.sql or see TROUBLESHOOTING_INSTALLMENTS.md for instructions.');
+        }
+        
+        console.log('✓ Installment updated successfully (without start_date). Consider running the database migration to enable start date functionality.');
+        return { data: retryData, error: null };
+      }
+      
+      // Handle missing timing column (PGRST204 error)
+      if (error.code === 'PGRST204' && error.message && error.message.includes('timing')) {
         console.error('Missing timing column. Please run the database migration:');
         console.error('See HOW_TO_ADD_TIMING_COLUMN.md for instructions');
         throw new Error('Database migration required: The timing column needs to be added to the installments table. Please contact your administrator or check HOW_TO_ADD_TIMING_COLUMN.md');
       }
+      
       throw error;
     }
     return { data, error: null };
