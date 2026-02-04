@@ -11,6 +11,8 @@ import type {
   UpdateAccountInput,
 } from '../types/supabase';
 import { supabaseAccountToFrontend, supabaseAccountsToFrontend, frontendAccountToSupabase } from '../utils/accountsAdapter';
+import { calculateAccountBalance } from '../utils/accountBalanceCalculator';
+import { getAllTransactions } from './transactionsService';
 import type { Account } from '../../types';
 
 /**
@@ -211,11 +213,7 @@ export const deleteAccountFrontend = async (id: string): Promise<{ error: any }>
  */
 export const getAllAccountsWithCalculatedBalances = async (): Promise<{ data: Account[] | null; error: any }> => {
   try {
-    // Import the balance calculator and transaction service
-    const { calculateAccountBalance } = await import('../utils/accountBalanceCalculator');
-    const { getAllTransactions } = await import('./transactionsService');
-
-    // Fetch accounts and transactions
+    // Fetch accounts and transactions in parallel
     const [accountsResult, transactionsResult] = await Promise.all([
       getAllAccountsFrontend(),
       getAllTransactions()
@@ -234,9 +232,43 @@ export const getAllAccountsWithCalculatedBalances = async (): Promise<{ data: Ac
     const accounts = accountsResult.data || [];
     const transactions = transactionsResult.data || [];
 
-    // Calculate balances for each account
+    // Optimize: Group transactions by account_id first (O(n) instead of O(n*m))
+    const transactionsByAccount = new Map<string, typeof transactions>();
+    for (const tx of transactions) {
+      if (tx.payment_method_id) {
+        if (!transactionsByAccount.has(tx.payment_method_id)) {
+          transactionsByAccount.set(tx.payment_method_id, []);
+        }
+        transactionsByAccount.get(tx.payment_method_id)!.push(tx);
+      }
+    }
+
+    // Calculate balances for each account using pre-grouped transactions
     const accountsWithCalculatedBalances = accounts.map(account => {
-      const calculatedBalance = calculateAccountBalance(account, transactions);
+      const accountTransactions = transactionsByAccount.get(account.id) || [];
+      
+      // Sort transactions by date (oldest first)
+      const sortedTransactions = [...accountTransactions].sort((a, b) => 
+        new Date(a.date).getTime() - new Date(b.date).getTime()
+      );
+      
+      // Calculate balance based on account type
+      let calculatedBalance = account.balance; // Start with initial balance
+      
+      if (account.type === 'Debit') {
+        // For debit accounts: subtract transaction amounts
+        calculatedBalance = sortedTransactions.reduce(
+          (balance, tx) => balance - tx.amount,
+          account.balance
+        );
+      } else if (account.type === 'Credit') {
+        // For credit accounts: add transaction amounts (increases usage/debt)
+        calculatedBalance = sortedTransactions.reduce(
+          (balance, tx) => balance + tx.amount,
+          account.balance
+        );
+      }
+      
       return {
         ...account,
         balance: calculatedBalance
