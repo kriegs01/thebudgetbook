@@ -10,6 +10,7 @@ import { getAllBudgetSetupsFrontend, deleteBudgetSetupFrontend } from './src/ser
 import { getPaymentSchedulesBySource } from './src/services/paymentSchedulesService';
 import { getAllTransactions, createPaymentScheduleTransaction } from './src/services/transactionsService';
 import { recordPayment } from './src/services/paymentSchedulesService';
+import { supabase } from './src/utils/supabaseClient';
 import type { Biller, Account, Installment, SavingsJar, Transaction } from './types';
 import type { SupabaseTransaction } from './src/types/supabase';
 
@@ -341,6 +342,42 @@ const App: React.FC = () => {
       setBudgetSetupsError(null);
     }
   };
+
+  // Real-time subscription for transaction changes
+  // This enables instant balance updates when transactions are created/deleted
+  useEffect(() => {
+    console.log('[App] Setting up real-time subscription for transactions');
+    
+    // Create a channel for listening to transactions table changes
+    const channel = supabase
+      .channel('transactions-realtime')
+      .on(
+        'postgres_changes',
+        {
+          event: '*', // Listen to all events (INSERT, UPDATE, DELETE)
+          schema: 'public',
+          table: 'transactions'
+        },
+        (payload) => {
+          console.log('[App] Transaction changed via real-time:', payload.eventType, payload);
+          
+          // Reload accounts to recalculate balances in real-time
+          reloadAccounts();
+          
+          // Also reload transactions list if needed
+          reloadTransactions();
+        }
+      )
+      .subscribe((status) => {
+        console.log('[App] Real-time subscription status:', status);
+      });
+
+    // Cleanup subscription when component unmounts
+    return () => {
+      console.log('[App] Cleaning up real-time subscription');
+      supabase.removeChannel(channel);
+    };
+  }, []); // Empty dependency array - only set up once
 
   const handleAddBiller = async (newBiller: Biller) => {
     const { data, error } = await createBillerFrontend(newBiller);
