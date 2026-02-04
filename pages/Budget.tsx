@@ -1580,10 +1580,23 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                           const account = accounts.find(a => a.id === installment.accountId);
                           const isIncluded = !excludedInstallmentIds.has(installment.id);
                           
-                          // Calculate payment status based on cumulative paid amount (like in Installments.tsx view modal)
+                          // REFACTOR: Use payment schedule for accurate status
                           let isPaid = false;
+                          const installmentSchedule = getPaymentSchedule('installment', installment.id);
                           
-                          if (installment.startDate) {
+                          if (installmentSchedule) {
+                            // Use payment schedule status
+                            isPaid = checkIfPaidBySchedule('installment', installment.id);
+                            console.log('[Budget] Installment payment check via schedule:', {
+                              name: installment.name,
+                              selectedMonth,
+                              scheduleId: installmentSchedule.id,
+                              status: installmentSchedule.status,
+                              amountPaid: installmentSchedule.amount_paid,
+                              isPaid
+                            });
+                          } else if (installment.startDate) {
+                            // Fallback to cumulative calculation if no schedule found
                             try {
                               // Parse start date (format: YYYY-MM)
                               const [startYear, startMonthNum] = installment.startDate.split('-').map(Number);
@@ -1601,7 +1614,7 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                                 const expectedPaidByThisMonth = (monthsPassed + 1) * installment.monthlyAmount;
                                 isPaid = installment.paidAmount >= expectedPaidByThisMonth;
                                 
-                                console.log('[Budget] Installment payment check:', {
+                                console.log('[Budget] Installment payment check (fallback):', {
                                   name: installment.name,
                                   selectedMonth,
                                   monthsPassed,
