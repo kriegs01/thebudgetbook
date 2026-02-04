@@ -496,17 +496,34 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
   };
 
   // Get payment schedule with database status
-  const getScheduleWithStatus = (sched: PaymentSchedule, biller: Biller) => {
+  const getScheduleWithStatus = (sched: PaymentSchedule, biller: Biller, scheduleIndex: number) => {
     // Try to find matching payment schedule from database
-    const dbSchedule = paymentSchedules.find(ps => 
+    // First try exact month/year match
+    let dbSchedule = paymentSchedules.find(ps => 
       ps.month === sched.month && ps.year === sched.year
     );
+
+    // If no match, try matching by payment_number as fallback
+    // This helps when month names don't match exactly
+    if (!dbSchedule && scheduleIndex >= 0) {
+      dbSchedule = paymentSchedules.find(ps => 
+        ps.payment_number === scheduleIndex + 1 && ps.year === sched.year
+      );
+      if (dbSchedule) {
+        console.log('[Billers] Matched schedule by payment_number:', {
+          scheduleIndex: scheduleIndex + 1,
+          month: dbSchedule.month,
+          year: dbSchedule.year
+        });
+      }
+    }
 
     if (dbSchedule) {
       // Use database status
       console.log('[Billers] Using database status for schedule:', {
         month: sched.month,
         year: sched.year,
+        paymentNumber: dbSchedule.payment_number,
         status: dbSchedule.status,
         amountPaid: dbSchedule.amount_paid,
         scheduleId: dbSchedule.id
@@ -525,7 +542,8 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
     console.log('[Billers] No DB schedule found for:', {
       month: sched.month,
       year: sched.year,
-      availableSchedules: paymentSchedules.map(ps => `${ps.month} ${ps.year}`).join(', '),
+      scheduleIndex: scheduleIndex + 1,
+      availableSchedules: paymentSchedules.map(ps => `${ps.month} ${ps.year} (payment_number: ${ps.payment_number})`).join(', '),
       totalSchedules: paymentSchedules.length
     });
     const isPaidViaSchedule = !!sched.amountPaid;
@@ -723,7 +741,7 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
                   <thead><tr className="bg-gray-50 border-b border-gray-100"><th className="p-4 text-xs font-bold text-gray-400 uppercase">Month</th><th className="p-4 text-xs font-bold text-gray-400 uppercase">Amount</th><th className="p-4 text-xs font-bold text-gray-400 uppercase text-center">Action</th></tr></thead>
                   <tbody className="divide-y divide-gray-50">{detailedBiller.schedules.map((sched, idx) => {
                     // Get schedule with database status
-                    const schedWithStatus = getScheduleWithStatus(sched, detailedBiller);
+                    const schedWithStatus = getScheduleWithStatus(sched, detailedBiller, idx);
                     
                     // ENHANCEMENT: Calculate amount from linked account if applicable
                     const { amount: calculatedAmount, isFromLinkedAccount } = getScheduleExpectedAmount(

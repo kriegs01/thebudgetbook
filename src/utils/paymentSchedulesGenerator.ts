@@ -39,7 +39,7 @@ export const generateBillerPaymentSchedules = (
         source_id: biller.id,
         month: MONTHS[i],
         year: year,
-        payment_number: null, // Billers don't use payment numbers
+        payment_number: i + 1, // Month sequence number (1-12) for proper tracking
         expected_amount: biller.expectedAmount,
         amount_paid: 0,
         receipt: null,
