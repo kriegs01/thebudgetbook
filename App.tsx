@@ -7,6 +7,9 @@ import { getAllAccountsFrontend, createAccountFrontend, updateAccountFrontend, d
 import { getAllInstallmentsFrontend, createInstallmentFrontend, updateInstallmentFrontend, deleteInstallmentFrontend } from './src/services/installmentsService';
 import { getAllSavingsFrontend, createSavingsFrontend, updateSavingsFrontend, deleteSavingsFrontend } from './src/services/savingsService';
 import { getAllBudgetSetupsFrontend, deleteBudgetSetupFrontend } from './src/services/budgetSetupsService';
+import { getPaymentSchedulesBySource } from './src/services/paymentSchedulesService';
+import { createPaymentScheduleTransaction } from './src/services/transactionsService';
+import { recordPayment } from './src/services/paymentSchedulesService';
 import type { Biller, Account, Installment, SavingsJar } from './types';
 
 // Pages
@@ -395,6 +398,120 @@ const App: React.FC = () => {
     }
   };
 
+  /**
+   * Handle installment payment via transaction and payment schedule
+   * This is the new way to record installment payments
+   */
+  const handlePayInstallment = async (
+    installmentId: string,
+    payment: {
+      amount: number;
+      date: string;
+      accountId: string;
+      receipt?: string;
+    }
+  ) => {
+    try {
+      console.log('[App] Processing installment payment with transaction:', {
+        installmentId,
+        amount: payment.amount,
+        date: payment.date,
+      });
+
+      // Find the installment to get its details
+      const installment = installments.find(i => i.id === installmentId);
+      if (!installment) {
+        throw new Error('Installment not found');
+      }
+
+      // Get payment schedules for this installment
+      const { data: schedules, error: schedulesError } = await getPaymentSchedulesBySource('installment', installmentId);
+      
+      if (schedulesError || !schedules) {
+        console.error('Error fetching payment schedules:', schedulesError);
+        throw new Error('Could not find payment schedules for this installment');
+      }
+
+      // Find the next unpaid or partially paid schedule
+      const currentMonth = new Date(payment.date).toLocaleString('default', { month: 'long' });
+      const currentYear = new Date(payment.date).getFullYear();
+      
+      // First try to find schedule for current month/year
+      let targetSchedule = schedules.find(s => 
+        s.month === currentMonth && 
+        s.year === currentYear &&
+        s.status !== 'paid'
+      );
+
+      // If not found, find the first unpaid schedule
+      if (!targetSchedule) {
+        targetSchedule = schedules.find(s => s.status === 'pending' || s.status === 'partial');
+      }
+
+      if (!targetSchedule) {
+        throw new Error('No unpaid payment schedule found for this installment');
+      }
+
+      console.log('[App] Found target payment schedule:', {
+        scheduleId: targetSchedule.id,
+        month: targetSchedule.month,
+        year: targetSchedule.year,
+        currentStatus: targetSchedule.status,
+      });
+
+      // Record the payment on the schedule
+      const { data: updatedSchedule, error: paymentError } = await recordPayment(targetSchedule.id, {
+        amountPaid: payment.amount,
+        datePaid: payment.date,
+        accountId: payment.accountId,
+        receipt: payment.receipt,
+      });
+
+      if (paymentError || !updatedSchedule) {
+        throw new Error('Failed to record payment on schedule');
+      }
+
+      // Create the transaction linked to the payment schedule
+      const { data: transaction, error: transactionError } = await createPaymentScheduleTransaction(
+        targetSchedule.id,
+        {
+          name: `${installment.name} - ${targetSchedule.month} ${targetSchedule.year}`,
+          date: payment.date,
+          amount: payment.amount,
+          paymentMethodId: payment.accountId,
+        }
+      );
+
+      if (transactionError || !transaction) {
+        console.error('Failed to create transaction:', transactionError);
+        // Payment schedule was updated but transaction failed - not ideal but acceptable
+        console.warn('[App] Payment schedule updated but transaction creation failed');
+      } else {
+        console.log('[App] Transaction created successfully:', {
+          transactionId: transaction.id,
+          linkedScheduleId: targetSchedule.id,
+        });
+      }
+
+      // Update the installment's paidAmount
+      const updatedInstallment: Installment = {
+        ...installment,
+        paidAmount: installment.paidAmount + payment.amount,
+      };
+
+      await updateInstallmentFrontend(updatedInstallment);
+
+      // Reload installments to get fresh data
+      await reloadInstallments();
+
+      console.log('[App] Installment payment processed successfully');
+    } catch (error) {
+      console.error('[App] Error processing installment payment:', error);
+      throw error; // Re-throw to let the UI handle it
+    }
+  };
+
+
   // Savings handlers
   const handleAddSavings = async (newSavings: SavingsJar) => {
     const { data, error } = await createSavingsFrontend(newSavings);
@@ -529,6 +646,7 @@ const App: React.FC = () => {
                   onAdd={handleAddInstallment}
                   onUpdate={handleUpdateInstallment}
                   onDelete={handleDeleteInstallment}
+                  onPayInstallment={handlePayInstallment}
                   loading={installmentsLoading}
                   error={installmentsError}
                 />

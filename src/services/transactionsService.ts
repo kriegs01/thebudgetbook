@@ -169,3 +169,144 @@ export const getTransactionTotal = async (startDate?: string, endDate?: string) 
     return { data: null, error };
   }
 };
+
+/**
+ * Create a transaction for a payment schedule payment
+ * This links the transaction to a payment schedule and updates the schedule status
+ */
+export const createPaymentScheduleTransaction = async (
+  scheduleId: string,
+  transaction: {
+    name: string;
+    date: string;
+    amount: number;
+    paymentMethodId: string;
+  }
+) => {
+  try {
+    // Create the transaction with payment_schedule_id
+    const transactionData: CreateTransactionInput = {
+      name: transaction.name,
+      date: transaction.date,
+      amount: transaction.amount,
+      payment_method_id: transaction.paymentMethodId,
+      payment_schedule_id: scheduleId,
+    };
+
+    const { data, error } = await supabase
+      .from('transactions')
+      .insert([transactionData])
+      .select()
+      .single();
+
+    if (error) throw error;
+    
+    console.log('[Transactions] Created payment schedule transaction:', {
+      transactionId: data.id,
+      scheduleId,
+      amount: transaction.amount,
+    });
+
+    return { data, error: null };
+  } catch (error) {
+    console.error('Error creating payment schedule transaction:', error);
+    return { data: null, error };
+  }
+};
+
+/**
+ * Get transactions for a specific payment schedule
+ */
+export const getTransactionsByPaymentSchedule = async (scheduleId: string) => {
+  try {
+    const { data, error } = await supabase
+      .from('transactions')
+      .select('*')
+      .eq('payment_schedule_id', scheduleId)
+      .order('date', { ascending: false });
+
+    if (error) throw error;
+    return { data, error: null };
+  } catch (error) {
+    console.error('Error fetching transactions by payment schedule:', error);
+    return { data: null, error };
+  }
+};
+
+/**
+ * Delete a transaction and revert payment schedule status if linked
+ * This is the key function that handles the requirement of reverting payment status
+ */
+export const deleteTransactionAndRevertSchedule = async (transactionId: string) => {
+  try {
+    // First, get the transaction to check if it has a payment_schedule_id
+    const { data: transaction, error: fetchError } = await getTransactionById(transactionId);
+    
+    if (fetchError || !transaction) {
+      throw new Error('Transaction not found');
+    }
+
+    // If transaction is linked to a payment schedule, we need to revert the payment
+    if (transaction.payment_schedule_id) {
+      console.log('[Transactions] Reverting payment schedule for transaction deletion:', {
+        transactionId,
+        scheduleId: transaction.payment_schedule_id,
+        amount: transaction.amount,
+      });
+
+      // Import payment schedule service functions (we'll need to update this)
+      // Get the current schedule
+      const { data: schedule, error: scheduleError } = await supabase
+        .from('monthly_payment_schedules')
+        .select('*')
+        .eq('id', transaction.payment_schedule_id)
+        .single();
+
+      if (!scheduleError && schedule) {
+        // Calculate new amount_paid after removing this transaction
+        const newAmountPaid = Math.max(0, (schedule.amount_paid || 0) - transaction.amount);
+        
+        // Determine new status
+        let newStatus: 'pending' | 'paid' | 'partial' | 'overdue' = 'pending';
+        if (newAmountPaid >= schedule.expected_amount) {
+          newStatus = 'paid';
+        } else if (newAmountPaid > 0) {
+          newStatus = 'partial';
+        }
+
+        // Update the payment schedule
+        await supabase
+          .from('monthly_payment_schedules')
+          .update({
+            amount_paid: newAmountPaid,
+            status: newStatus,
+            // If amount is now 0, clear payment details
+            ...(newAmountPaid === 0 ? {
+              date_paid: null,
+              receipt: null,
+              account_id: null,
+            } : {}),
+          })
+          .eq('id', transaction.payment_schedule_id);
+
+        console.log('[Transactions] Payment schedule reverted:', {
+          scheduleId: transaction.payment_schedule_id,
+          oldAmount: schedule.amount_paid,
+          newAmount: newAmountPaid,
+          newStatus,
+        });
+      }
+    }
+
+    // Now delete the transaction
+    const { error: deleteError } = await deleteTransaction(transactionId);
+    
+    if (deleteError) throw deleteError;
+
+    console.log('[Transactions] Transaction deleted successfully:', transactionId);
+    return { error: null };
+  } catch (error) {
+    console.error('Error deleting transaction and reverting schedule:', error);
+    return { error };
+  }
+};

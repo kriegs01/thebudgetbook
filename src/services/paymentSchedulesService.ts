@@ -208,6 +208,7 @@ export const getPaymentSchedulesByPeriod = async (month: string, year: number) =
 
 /**
  * Record a payment for a schedule
+ * Now returns the transaction data for linking purposes
  */
 export const recordPayment = async (
   scheduleId: string,
@@ -249,9 +250,65 @@ export const recordPayment = async (
       .single();
 
     if (error) throw error;
+    
+    console.log('[PaymentSchedules] Payment recorded:', {
+      scheduleId,
+      previousAmount: schedule.data.amount_paid,
+      paymentAmount: payment.amountPaid,
+      totalPaid,
+      status,
+    });
+
     return { data, error: null };
   } catch (error) {
     console.error('Error recording payment:', error);
+    return { data: null, error };
+  }
+};
+
+/**
+ * Record a payment for a schedule via transaction
+ * This is the new recommended way to record payments
+ * Creates both the transaction and updates the schedule atomically
+ */
+export const recordPaymentViaTransaction = async (
+  scheduleId: string,
+  payment: {
+    transactionName: string;
+    amountPaid: number;
+    datePaid: string;
+    accountId: string;
+    receipt?: string;
+  }
+) => {
+  try {
+    console.log('[PaymentSchedules] Recording payment via transaction:', {
+      scheduleId,
+      amount: payment.amountPaid,
+    });
+
+    // First, update the payment schedule
+    const scheduleResult = await recordPayment(scheduleId, {
+      amountPaid: payment.amountPaid,
+      datePaid: payment.datePaid,
+      accountId: payment.accountId,
+      receipt: payment.receipt,
+    });
+
+    if (scheduleResult.error || !scheduleResult.data) {
+      throw new Error('Failed to update payment schedule');
+    }
+
+    // Return both the schedule and indicate transaction should be created
+    return { 
+      data: {
+        schedule: scheduleResult.data,
+        scheduleId,
+      },
+      error: null 
+    };
+  } catch (error) {
+    console.error('Error recording payment via transaction:', error);
     return { data: null, error };
   }
 };

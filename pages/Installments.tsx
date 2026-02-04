@@ -9,11 +9,17 @@ interface InstallmentsProps {
   onAdd: (i: Installment) => Promise<void>;
   onUpdate?: (i: Installment) => Promise<void>;
   onDelete?: (id: string) => Promise<void>;
+  onPayInstallment?: (installmentId: string, payment: {
+    amount: number;
+    date: string;
+    accountId: string;
+    receipt?: string;
+  }) => Promise<void>;
   loading?: boolean;
   error?: string | null;
 }
 
-const Installments: React.FC<InstallmentsProps> = ({ installments, accounts, billers = [], onAdd, onUpdate, onDelete, loading = false, error = null }) => {
+const Installments: React.FC<InstallmentsProps> = ({ installments, accounts, billers = [], onAdd, onUpdate, onDelete, onPayInstallment, loading = false, error = null }) => {
   const [viewMode, setViewMode] = useState<ViewMode>('card');
   const [showModal, setShowModal] = useState(false);
   const [showPayModal, setShowPayModal] = useState<Installment | null>(null);
@@ -142,29 +148,46 @@ const Installments: React.FC<InstallmentsProps> = ({ installments, accounts, bil
     setIsSubmitting(true);
     try {
       const paymentAmount = parseFloat(payFormData.amount) || 0;
-      const updatedInstallment: Installment = {
-        ...showPayModal,
-        paidAmount: showPayModal.paidAmount + paymentAmount
-      };
 
       console.log('[Installments] Processing payment:', {
         installmentId: showPayModal.id,
         installmentName: showPayModal.name,
         previousPaidAmount: showPayModal.paidAmount,
         paymentAmount: paymentAmount,
-        newPaidAmount: updatedInstallment.paidAmount
+        newPaidAmount: showPayModal.paidAmount + paymentAmount
       });
 
-      await onUpdate?.(updatedInstallment);
+      // Use the new payment handler if provided, otherwise fall back to direct update
+      if (onPayInstallment) {
+        await onPayInstallment(showPayModal.id, {
+          amount: paymentAmount,
+          date: payFormData.datePaid,
+          accountId: payFormData.accountId,
+          receipt: payFormData.receipt || undefined,
+        });
+      } else {
+        // Fallback to old method
+        const updatedInstallment: Installment = {
+          ...showPayModal,
+          paidAmount: showPayModal.paidAmount + paymentAmount
+        };
+        await onUpdate?.(updatedInstallment);
+      }
       
       console.log('[Installments] Payment recorded successfully');
       
       // Close pay modal after successful payment
       setShowPayModal(null);
+      setPayFormData({
+        amount: '',
+        receipt: '',
+        datePaid: new Date().toISOString().split('T')[0],
+        accountId: accounts[0]?.id || ''
+      });
       
-      // If view modal is open, refresh it with updated installment data
-      if (showViewModal && showViewModal.id === updatedInstallment.id) {
-        setShowViewModal(updatedInstallment);
+      // If view modal is open, we'll need to refresh - let parent handle this
+      if (showViewModal && showViewModal.id === showPayModal.id) {
+        setShowViewModal(null);
       }
     } catch (error) {
       console.error('[Installments] Failed to process payment:', error);
