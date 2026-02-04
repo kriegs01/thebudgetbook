@@ -3,25 +3,21 @@
  * 
  * Provides CRUD operations for the transactions table in Supabase.
  * 
- * IMPORTANT: Account Balance Updates
- * ------------------------------------
- * This service automatically updates account balances when transactions are created or deleted.
+ * IMPORTANT: Account Balance Calculation
+ * ---------------------------------------
+ * Account balances are NOT updated when transactions are created or deleted.
+ * Instead, balances are calculated dynamically from the transactions table.
  * 
- * Current Implementation:
- * - Balance updates are performed as separate operations after transaction creation/deletion
- * - This is NOT atomic and may be subject to race conditions in high-concurrency scenarios
+ * Implementation:
+ * - The balance field in the accounts table represents the INITIAL balance
+ * - Current balance = initial balance ± all transactions for that account
+ * - Use accountBalanceCalculator utility to calculate current balances
  * 
- * Known Limitations:
- * 1. Race Conditions: If multiple transactions are created/deleted simultaneously for the same 
- *    account, balance updates may be lost or calculated incorrectly.
- * 2. Partial Failures: If a transaction is created but balance update fails, the system will 
- *    be in an inconsistent state (transaction exists but balance is wrong).
- * 
- * Future Improvements:
- * - Use PostgreSQL RPC functions to perform atomic balance updates (e.g., increment/decrement)
- * - Implement database transactions to ensure atomicity of transaction creation + balance update
- * - Add optimistic locking with version fields to detect and handle concurrent modifications
- * - Consider implementing a reconciliation job to detect and fix balance inconsistencies
+ * Benefits:
+ * - No race conditions - balance is calculated, not stored
+ * - No partial failure issues - transactions are source of truth
+ * - Always consistent - balance is derived from transactions
+ * - Easy to audit and recalculate
  */
 
 import { supabase } from '../utils/supabaseClient';
@@ -30,90 +26,6 @@ import type {
   CreateTransactionInput,
   UpdateTransactionInput,
 } from '../types/supabase';
-
-/**
- * Helper function to calculate new account balance after a transaction
- * @param accountType - 'Debit' or 'Credit'
- * @param currentBalance - Current account balance
- * @param transactionAmount - Transaction amount
- * @param isReversal - Whether this is reversing a transaction (for deletions)
- * @returns New calculated balance
- */
-const calculateNewBalance = (
-  accountType: string,
-  currentBalance: number,
-  transactionAmount: number,
-  isReversal: boolean = false
-): number => {
-  if (accountType === 'Debit') {
-    // For Debit accounts: spending decreases balance, reversal increases
-    return isReversal 
-      ? currentBalance + transactionAmount 
-      : currentBalance - transactionAmount;
-  } else {
-    // For Credit accounts: spending increases balance (debt), reversal decreases
-    return isReversal
-      ? currentBalance - transactionAmount
-      : currentBalance + transactionAmount;
-  }
-};
-
-/**
- * Helper function to update account balance
- * Note: This operation is not atomic and may be subject to race conditions
- * in high-concurrency scenarios. For production use, consider using
- * PostgreSQL's atomic increment/decrement or RPC functions.
- */
-const updateAccountBalance = async (
-  accountId: string,
-  transactionAmount: number,
-  isReversal: boolean = false
-): Promise<{ success: boolean; error?: any }> => {
-  try {
-    // Get the account to check its type
-    const { data: account, error: accountError } = await supabase
-      .from('accounts')
-      .select('type, balance')
-      .eq('id', accountId)
-      .single();
-
-    if (accountError || !account) {
-      console.error('[Transactions] Failed to fetch account:', accountError);
-      return { success: false, error: accountError };
-    }
-
-    // Calculate new balance
-    const newBalance = calculateNewBalance(
-      account.type,
-      account.balance,
-      transactionAmount,
-      isReversal
-    );
-
-    // Update the account balance
-    const { error: updateError } = await supabase
-      .from('accounts')
-      .update({ balance: newBalance })
-      .eq('id', accountId);
-
-    if (updateError) {
-      console.error('[Transactions] Failed to update account balance:', updateError);
-      return { success: false, error: updateError };
-    }
-
-    console.log('[Transactions] Account balance updated successfully:', {
-      accountId,
-      oldBalance: account.balance,
-      newBalance,
-      isReversal,
-    });
-
-    return { success: true };
-  } catch (error) {
-    console.error('[Transactions] Error updating account balance:', error);
-    return { success: false, error };
-  }
-};
 
 /**
  * Get all transactions
@@ -154,11 +66,10 @@ export const getTransactionById = async (id: string) => {
 
 /**
  * Create a new transaction
- * Also updates the account balance based on the transaction amount
+ * Note: Account balances are calculated dynamically from transactions, not updated here
  */
 export const createTransaction = async (transaction: CreateTransactionInput) => {
   try {
-    // First, create the transaction
     const { data, error } = await supabase
       .from('transactions')
       .insert([transaction])
@@ -166,34 +77,6 @@ export const createTransaction = async (transaction: CreateTransactionInput) => 
       .single();
 
     if (error) throw error;
-
-    // Then update the account balance if payment_method_id is provided
-    if (transaction.payment_method_id && transaction.amount) {
-      console.log('[Transactions] Updating account balance for transaction:', {
-        accountId: transaction.payment_method_id,
-        amount: transaction.amount,
-      });
-
-      const { success, error: balanceError } = await updateAccountBalance(
-        transaction.payment_method_id,
-        transaction.amount,
-        false
-      );
-
-      if (!success) {
-        // Balance update failed - transaction exists but balance is inconsistent
-        console.error('[Transactions] Transaction created but balance update failed:', {
-          transactionId: data.id,
-          error: balanceError,
-        });
-        // Return error to notify caller of partial failure
-        return { 
-          data, 
-          error: new Error('Transaction created but account balance update failed. Please refresh the page.') 
-        };
-      }
-    }
-
     return { data, error: null };
   } catch (error) {
     console.error('Error creating transaction:', error);
@@ -306,7 +189,8 @@ export const getTransactionTotal = async (startDate?: string, endDate?: string) 
 
 /**
  * Create a transaction for a payment schedule payment
- * This links the transaction to a payment schedule and updates the schedule status and account balance
+ * This links the transaction to a payment schedule
+ * Note: Account balances are calculated dynamically from transactions, not updated here
  */
 export const createPaymentScheduleTransaction = async (
   scheduleId: string,
@@ -341,33 +225,6 @@ export const createPaymentScheduleTransaction = async (
       amount: transaction.amount,
     });
 
-    // Update the account balance if payment_method_id is provided
-    if (transaction.paymentMethodId && transaction.amount) {
-      console.log('[Transactions] Updating account balance for payment schedule transaction:', {
-        accountId: transaction.paymentMethodId,
-        amount: transaction.amount,
-      });
-
-      const { success, error: balanceError } = await updateAccountBalance(
-        transaction.paymentMethodId,
-        transaction.amount,
-        false
-      );
-
-      if (!success) {
-        // Balance update failed - transaction exists but balance is inconsistent
-        console.error('[Transactions] Payment schedule transaction created but balance update failed:', {
-          transactionId: data.id,
-          error: balanceError,
-        });
-        // Return error to notify caller of partial failure
-        return { 
-          data, 
-          error: new Error('Transaction created but account balance update failed. Please refresh the page.') 
-        };
-      }
-    }
-
     return { data, error: null };
   } catch (error) {
     console.error('Error creating payment schedule transaction:', error);
@@ -396,7 +253,7 @@ export const getTransactionsByPaymentSchedule = async (scheduleId: string) => {
 
 /**
  * Delete a transaction and revert payment schedule status if linked
- * This is the key function that handles the requirement of reverting payment status
+ * Note: Account balances are calculated dynamically from transactions, so no balance reversion needed
  */
 export const deleteTransactionAndRevertSchedule = async (transactionId: string) => {
   try {
@@ -407,27 +264,6 @@ export const deleteTransactionAndRevertSchedule = async (transactionId: string) 
       throw new Error('Transaction not found');
     }
 
-    // Revert account balance if payment_method_id is provided
-    if (transaction.payment_method_id && transaction.amount) {
-      console.log('[Transactions] Reverting account balance for transaction deletion:', {
-        accountId: transaction.payment_method_id,
-        amount: transaction.amount,
-      });
-
-      const { success, error: balanceError } = await updateAccountBalance(
-        transaction.payment_method_id,
-        transaction.amount,
-        true // isReversal = true
-      );
-
-      if (!success) {
-        // Balance reversion failed
-        console.error('[Transactions] Failed to revert account balance:', balanceError);
-        // Return error instead of silently continuing
-        return { error: new Error('Failed to revert account balance. Please try again.') };
-      }
-    }
-
     // If transaction is linked to a payment schedule, we need to revert the payment
     if (transaction.payment_schedule_id) {
       console.log('[Transactions] Reverting payment schedule for transaction deletion:', {
@@ -436,7 +272,6 @@ export const deleteTransactionAndRevertSchedule = async (transactionId: string) 
         amount: transaction.amount,
       });
 
-      // Import payment schedule service functions (we'll need to update this)
       // Get the current schedule
       const { data: schedule, error: scheduleError } = await supabase
         .from('monthly_payment_schedules')

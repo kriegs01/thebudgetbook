@@ -3,7 +3,7 @@ import { Menu, ChevronLeft } from 'lucide-react';
 import { BrowserRouter, Routes, Route, NavLink } from 'react-router-dom';
 import { NAV_ITEMS, INITIAL_BUDGET, DEFAULT_SETUP, INITIAL_CATEGORIES } from './constants';
 import { getAllBillersFrontend, createBillerFrontend, updateBillerFrontend, deleteBillerFrontend } from './src/services/billersService';
-import { getAllAccountsFrontend, createAccountFrontend, updateAccountFrontend, deleteAccountFrontend } from './src/services/accountsService';
+import { getAllAccountsWithCalculatedBalances, createAccountFrontend, updateAccountFrontend, deleteAccountFrontend } from './src/services/accountsService';
 import { getAllInstallmentsFrontend, createInstallmentFrontend, updateInstallmentFrontend, deleteInstallmentFrontend } from './src/services/installmentsService';
 import { getAllSavingsFrontend, createSavingsFrontend, updateSavingsFrontend, deleteSavingsFrontend } from './src/services/savingsService';
 import { getAllBudgetSetupsFrontend, deleteBudgetSetupFrontend } from './src/services/budgetSetupsService';
@@ -188,7 +188,7 @@ const App: React.FC = () => {
       setAccountsLoading(true);
       setAccountsError(null);
       
-      const { data, error } = await getAllAccountsFrontend();
+      const { data, error } = await getAllAccountsWithCalculatedBalances();
       
       if (error) {
         console.error('Error loading accounts:', error);

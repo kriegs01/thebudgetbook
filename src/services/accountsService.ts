@@ -201,3 +201,52 @@ export const updateAccountFrontend = async (account: Account): Promise<{ data: A
 export const deleteAccountFrontend = async (id: string): Promise<{ error: any }> => {
   return await deleteAccount(id);
 };
+
+/**
+ * Get all accounts with calculated balances from transactions
+ * This function fetches accounts and transactions, then calculates the current balance
+ * for each account based on its initial balance and all transactions
+ * 
+ * @returns Accounts with calculated balances
+ */
+export const getAllAccountsWithCalculatedBalances = async (): Promise<{ data: Account[] | null; error: any }> => {
+  try {
+    // Import the balance calculator and transaction service
+    const { calculateAccountBalance } = await import('../utils/accountBalanceCalculator');
+    const { getAllTransactions } = await import('./transactionsService');
+
+    // Fetch accounts and transactions
+    const [accountsResult, transactionsResult] = await Promise.all([
+      getAllAccountsFrontend(),
+      getAllTransactions()
+    ]);
+
+    if (accountsResult.error) {
+      return { data: null, error: accountsResult.error };
+    }
+
+    if (transactionsResult.error) {
+      console.error('[Accounts] Failed to fetch transactions for balance calculation:', transactionsResult.error);
+      // Return accounts with their stored balance if transactions can't be fetched
+      return accountsResult;
+    }
+
+    const accounts = accountsResult.data || [];
+    const transactions = transactionsResult.data || [];
+
+    // Calculate balances for each account
+    const accountsWithCalculatedBalances = accounts.map(account => {
+      const calculatedBalance = calculateAccountBalance(account, transactions);
+      return {
+        ...account,
+        balance: calculatedBalance
+      };
+    });
+
+    return { data: accountsWithCalculatedBalances, error: null };
+  } catch (error) {
+    console.error('[Accounts] Error calculating account balances:', error);
+    // Fallback to regular accounts if calculation fails
+    return await getAllAccountsFrontend();
+  }
+};
