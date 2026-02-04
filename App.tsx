@@ -289,7 +289,7 @@ const App: React.FC = () => {
   };
 
   const reloadAccounts = async () => {
-    const { data, error } = await getAllAccountsFrontend();
+    const { data, error } = await getAllAccountsWithCalculatedBalances();
     if (error) {
       console.error('Error reloading accounts:', error);
       setAccountsError('Failed to reload accounts from database');
