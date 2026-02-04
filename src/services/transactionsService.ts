@@ -12,6 +12,90 @@ import type {
 } from '../types/supabase';
 
 /**
+ * Helper function to calculate new account balance after a transaction
+ * @param accountType - 'Debit' or 'Credit'
+ * @param currentBalance - Current account balance
+ * @param transactionAmount - Transaction amount
+ * @param isReversal - Whether this is reversing a transaction (for deletions)
+ * @returns New calculated balance
+ */
+const calculateNewBalance = (
+  accountType: string,
+  currentBalance: number,
+  transactionAmount: number,
+  isReversal: boolean = false
+): number => {
+  if (accountType === 'Debit') {
+    // For Debit accounts: spending decreases balance, reversal increases
+    return isReversal 
+      ? currentBalance + transactionAmount 
+      : currentBalance - transactionAmount;
+  } else {
+    // For Credit accounts: spending increases balance (debt), reversal decreases
+    return isReversal
+      ? currentBalance - transactionAmount
+      : currentBalance + transactionAmount;
+  }
+};
+
+/**
+ * Helper function to update account balance
+ * Note: This operation is not atomic and may be subject to race conditions
+ * in high-concurrency scenarios. For production use, consider using
+ * PostgreSQL's atomic increment/decrement or RPC functions.
+ */
+const updateAccountBalance = async (
+  accountId: string,
+  transactionAmount: number,
+  isReversal: boolean = false
+): Promise<{ success: boolean; error?: any }> => {
+  try {
+    // Get the account to check its type
+    const { data: account, error: accountError } = await supabase
+      .from('accounts')
+      .select('type, balance')
+      .eq('id', accountId)
+      .single();
+
+    if (accountError || !account) {
+      console.error('[Transactions] Failed to fetch account:', accountError);
+      return { success: false, error: accountError };
+    }
+
+    // Calculate new balance
+    const newBalance = calculateNewBalance(
+      account.type,
+      account.balance,
+      transactionAmount,
+      isReversal
+    );
+
+    // Update the account balance
+    const { error: updateError } = await supabase
+      .from('accounts')
+      .update({ balance: newBalance })
+      .eq('id', accountId);
+
+    if (updateError) {
+      console.error('[Transactions] Failed to update account balance:', updateError);
+      return { success: false, error: updateError };
+    }
+
+    console.log('[Transactions] Account balance updated successfully:', {
+      accountId,
+      oldBalance: account.balance,
+      newBalance,
+      isReversal,
+    });
+
+    return { success: true };
+  } catch (error) {
+    console.error('[Transactions] Error updating account balance:', error);
+    return { success: false, error };
+  }
+};
+
+/**
  * Get all transactions
  */
 export const getAllTransactions = async () => {
@@ -70,42 +154,23 @@ export const createTransaction = async (transaction: CreateTransactionInput) => 
         amount: transaction.amount,
       });
 
-      // Get the account to check its type
-      const { data: account, error: accountError } = await supabase
-        .from('accounts')
-        .select('type, balance')
-        .eq('id', transaction.payment_method_id)
-        .single();
+      const { success, error: balanceError } = await updateAccountBalance(
+        transaction.payment_method_id,
+        transaction.amount,
+        false
+      );
 
-      if (!accountError && account) {
-        // Calculate new balance based on account type
-        // For Debit accounts: spending (positive amount) decreases balance
-        // For Credit accounts: spending (positive amount) increases balance (debt increases)
-        let newBalance: number;
-        if (account.type === 'Debit') {
-          newBalance = account.balance - transaction.amount;
-        } else {
-          // Credit account
-          newBalance = account.balance + transaction.amount;
-        }
-
-        // Update the account balance
-        const { error: updateError } = await supabase
-          .from('accounts')
-          .update({ balance: newBalance })
-          .eq('id', transaction.payment_method_id);
-
-        if (updateError) {
-          console.error('[Transactions] Failed to update account balance:', updateError);
-          // Note: Transaction is already created, but balance update failed
-          // In a production system, you might want to implement a rollback mechanism
-        } else {
-          console.log('[Transactions] Account balance updated successfully:', {
-            accountId: transaction.payment_method_id,
-            oldBalance: account.balance,
-            newBalance,
-          });
-        }
+      if (!success) {
+        // Balance update failed - transaction exists but balance is inconsistent
+        console.error('[Transactions] Transaction created but balance update failed:', {
+          transactionId: data.id,
+          error: balanceError,
+        });
+        // Return error to notify caller of partial failure
+        return { 
+          data, 
+          error: new Error('Transaction created but account balance update failed. Please refresh the page.') 
+        };
       }
     }
 
@@ -263,40 +328,23 @@ export const createPaymentScheduleTransaction = async (
         amount: transaction.amount,
       });
 
-      // Get the account to check its type
-      const { data: account, error: accountError } = await supabase
-        .from('accounts')
-        .select('type, balance')
-        .eq('id', transaction.paymentMethodId)
-        .single();
+      const { success, error: balanceError } = await updateAccountBalance(
+        transaction.paymentMethodId,
+        transaction.amount,
+        false
+      );
 
-      if (!accountError && account) {
-        // Calculate new balance based on account type
-        // For Debit accounts: spending (positive amount) decreases balance
-        // For Credit accounts: spending (positive amount) increases balance (debt increases)
-        let newBalance: number;
-        if (account.type === 'Debit') {
-          newBalance = account.balance - transaction.amount;
-        } else {
-          // Credit account
-          newBalance = account.balance + transaction.amount;
-        }
-
-        // Update the account balance
-        const { error: updateError } = await supabase
-          .from('accounts')
-          .update({ balance: newBalance })
-          .eq('id', transaction.paymentMethodId);
-
-        if (updateError) {
-          console.error('[Transactions] Failed to update account balance for payment schedule transaction:', updateError);
-        } else {
-          console.log('[Transactions] Account balance updated successfully for payment schedule transaction:', {
-            accountId: transaction.paymentMethodId,
-            oldBalance: account.balance,
-            newBalance,
-          });
-        }
+      if (!success) {
+        // Balance update failed - transaction exists but balance is inconsistent
+        console.error('[Transactions] Payment schedule transaction created but balance update failed:', {
+          transactionId: data.id,
+          error: balanceError,
+        });
+        // Return error to notify caller of partial failure
+        return { 
+          data, 
+          error: new Error('Transaction created but account balance update failed. Please refresh the page.') 
+        };
       }
     }
 
@@ -346,40 +394,17 @@ export const deleteTransactionAndRevertSchedule = async (transactionId: string) 
         amount: transaction.amount,
       });
 
-      // Get the account to check its type
-      const { data: account, error: accountError } = await supabase
-        .from('accounts')
-        .select('type, balance')
-        .eq('id', transaction.payment_method_id)
-        .single();
+      const { success, error: balanceError } = await updateAccountBalance(
+        transaction.payment_method_id,
+        transaction.amount,
+        true // isReversal = true
+      );
 
-      if (!accountError && account) {
-        // Calculate new balance (reverse the original operation)
-        // For Debit accounts: restore the amount (add back)
-        // For Credit accounts: reduce the balance (subtract debt)
-        let newBalance: number;
-        if (account.type === 'Debit') {
-          newBalance = account.balance + transaction.amount;
-        } else {
-          // Credit account
-          newBalance = account.balance - transaction.amount;
-        }
-
-        // Update the account balance
-        const { error: updateError } = await supabase
-          .from('accounts')
-          .update({ balance: newBalance })
-          .eq('id', transaction.payment_method_id);
-
-        if (updateError) {
-          console.error('[Transactions] Failed to revert account balance:', updateError);
-        } else {
-          console.log('[Transactions] Account balance reverted successfully:', {
-            accountId: transaction.payment_method_id,
-            oldBalance: account.balance,
-            newBalance,
-          });
-        }
+      if (!success) {
+        // Balance reversion failed
+        console.error('[Transactions] Failed to revert account balance:', balanceError);
+        // Return error instead of silently continuing
+        return { error: new Error('Failed to revert account balance. Please try again.') };
       }
     }
 
