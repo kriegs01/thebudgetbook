@@ -709,14 +709,14 @@ const App: React.FC = () => {
             <div className="p-4 border-t border-gray-100">
               {isSidebarOpen ? (
                 <div className="flex items-center space-x-3 p-2 bg-gray-50 rounded-xl">
-                  <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 font-bold">JD</div>
+                  <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 font-bold">JM</div>
                   <div className="flex-1 overflow-hidden">
-                    <p className="text-sm font-semibold text-gray-900 truncate">John Doe</p>
-                    <p className="text-xs text-gray-500 truncate">john@budgetbook.com</p>
+                    <p className="text-sm font-semibold text-gray-900 truncate">JM Alacapa</p>
+                    <p className="text-xs text-gray-500 truncate">alacapa47@gmail.com</p>
                   </div>
                 </div>
               ) : (
-                <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 font-bold mx-auto">JD</div>
+                <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 font-bold mx-auto">JM</div>
               )}
             </div>
           </div>
