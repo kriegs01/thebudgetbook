@@ -631,7 +631,7 @@ const App: React.FC = () => {
           name: `${biller.name} - ${targetSchedule.month} ${targetSchedule.year}`,
           date: payment.date,
           amount: payment.amount,
-          payment_method_id: payment.accountId,
+          paymentMethodId: payment.accountId,
         }
       );
 
