@@ -8,9 +8,10 @@ import { getAllInstallmentsFrontend, createInstallmentFrontend, updateInstallmen
 import { getAllSavingsFrontend, createSavingsFrontend, updateSavingsFrontend, deleteSavingsFrontend } from './src/services/savingsService';
 import { getAllBudgetSetupsFrontend, deleteBudgetSetupFrontend } from './src/services/budgetSetupsService';
 import { getPaymentSchedulesBySource } from './src/services/paymentSchedulesService';
-import { createPaymentScheduleTransaction } from './src/services/transactionsService';
+import { getAllTransactions, createPaymentScheduleTransaction } from './src/services/transactionsService';
 import { recordPayment } from './src/services/paymentSchedulesService';
-import type { Biller, Account, Installment, SavingsJar } from './types';
+import type { Biller, Account, Installment, SavingsJar, Transaction } from './types';
+import type { SupabaseTransaction } from './src/types/supabase';
 
 // Pages
 import Dashboard from './pages/Dashboard';
@@ -127,6 +128,15 @@ const supabaseToSavings = (supabaseSavings: any): SavingsJar => ({
   currentBalance: supabaseSavings.current_balance,
 });
 
+// Helper function to convert Supabase Transaction to UI format
+const formatTransaction = (supabaseTransaction: SupabaseTransaction): Transaction => ({
+  id: supabaseTransaction.id,
+  name: supabaseTransaction.name,
+  date: supabaseTransaction.date,
+  amount: supabaseTransaction.amount,
+  paymentMethodId: supabaseTransaction.payment_method_id,
+});
+
 const App: React.FC = () => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [accounts, setAccounts] = useState<Account[]>([]);
@@ -142,6 +152,8 @@ const App: React.FC = () => {
   const [savings, setSavings] = useState<SavingsJar[]>([]);
   const [savingsLoading, setSavingsLoading] = useState(true);
   const [savingsError, setSavingsError] = useState<string | null>(null);
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [transactionsLoading, setTransactionsLoading] = useState(true);
   const [currency, setCurrency] = useState('PHP');
   const [categories, setCategories] = useState(INITIAL_CATEGORIES);
   
@@ -239,12 +251,29 @@ const App: React.FC = () => {
       
       setBudgetSetupsLoading(false);
     };
+
+    const fetchTransactions = async () => {
+      setTransactionsLoading(true);
+      
+      const { data, error } = await getAllTransactions();
+      
+      if (error) {
+        console.error('Error loading transactions:', error);
+        setTransactions([]);
+      } else {
+        const formattedTransactions = (data || []).map(formatTransaction);
+        setTransactions(formattedTransactions);
+      }
+      
+      setTransactionsLoading(false);
+    };
     
     fetchBillers();
     fetchAccounts();
     fetchInstallments();
     fetchSavings();
     fetchBudgetSetups();
+    fetchTransactions();
   }, []);
 
   // Reload functions for each entity
@@ -289,6 +318,16 @@ const App: React.FC = () => {
     } else {
       setSavings(data || []);
       setSavingsError(null);
+    }
+  };
+
+  const reloadTransactions = async () => {
+    const { data, error } = await getAllTransactions();
+    if (error) {
+      console.error('Error reloading transactions:', error);
+    } else {
+      const formattedTransactions = (data || []).map(formatTransaction);
+      setTransactions(formattedTransactions);
     }
   };
 
@@ -501,8 +540,9 @@ const App: React.FC = () => {
 
       await updateInstallmentFrontend(updatedInstallment);
 
-      // Reload installments to get fresh data
+      // Reload installments and transactions to get fresh data
       await reloadInstallments();
+      await reloadTransactions();
 
       console.log('[App] Installment payment processed successfully');
     } catch (error) {
@@ -622,8 +662,9 @@ const App: React.FC = () => {
 
       await handleUpdateBiller(updatedBiller);
 
-      console.log('[App] Payment processed successfully, reloading billers');
+      console.log('[App] Payment processed successfully, reloading billers and transactions');
       await reloadBillers();
+      await reloadTransactions();
     } catch (err) {
       console.error('[App] Error processing biller payment:', err);
       throw err;
@@ -632,11 +673,12 @@ const App: React.FC = () => {
 
   /**
    * Handle transaction deletion with payment schedule reversion
-   * This triggers a reload of installments to reflect status changes in UI
+   * This triggers a reload of installments and transactions to reflect status changes in UI
    */
   const handleTransactionDeleted = async () => {
-    console.log('[App] Transaction deleted, reloading installments to reflect status changes');
+    console.log('[App] Transaction deleted, reloading installments and transactions to reflect changes');
     await reloadInstallments();
+    await reloadTransactions();
   };
 
 
@@ -724,7 +766,7 @@ const App: React.FC = () => {
         <main className={`flex-1 bg-gray-50 transition-all duration-300 ease-in-out ${isSidebarOpen ? 'ml-64' : 'ml-20'} min-h-screen flex flex-col`}> 
           <div className="p-8 w-full flex-1 overflow-auto">
             <Routes>
-              <Route path="/" element={<Dashboard accounts={accounts} budget={budgetItems} installments={installments} />} />
+              <Route path="/" element={<Dashboard accounts={accounts} budget={budgetItems} installments={installments} transactions={transactions} />} />
               <Route path="/budget" element={
                 <Budget
                   items={budgetItems} 
