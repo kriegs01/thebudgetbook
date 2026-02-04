@@ -4,13 +4,22 @@ import { Account, BudgetItem, Installment } from '../types';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, PieChart, Pie } from 'recharts';
 import { TrendingUp, TrendingDown, Landmark, ArrowUpRight, CreditCard, Wallet } from 'lucide-react';
 
+interface Transaction {
+  id: string;
+  name: string;
+  date: string;
+  amount: number;
+  paymentMethodId: string;
+}
+
 interface DashboardProps {
   accounts: Account[];
   budget: BudgetItem[];
   installments: Installment[];
+  transactions?: Transaction[];
 }
 
-const Dashboard: React.FC<DashboardProps> = ({ accounts, budget, installments }) => {
+const Dashboard: React.FC<DashboardProps> = ({ accounts, budget, installments, transactions = [] }) => {
   const totalBalance = accounts.reduce((acc, a) => acc + (a.type === 'Debit' ? a.balance : -a.balance), 0);
   const monthlySpending = budget.reduce((acc, b) => acc + b.amount, 0);
   const totalDebt = accounts.filter(a => a.type === 'Credit').reduce((acc, a) => acc + a.balance, 0);
@@ -262,20 +271,28 @@ const Dashboard: React.FC<DashboardProps> = ({ accounts, budget, installments })
           <button className="text-blue-600 text-sm font-medium hover:underline">View All</button>
         </div>
         <div className="divide-y divide-gray-50">
-          {budget.slice(0, 5).map((item) => (
-            <div key={item.id} className="p-4 flex items-center justify-between hover:bg-gray-50 transition-colors">
-              <div className="flex items-center space-x-4">
-                <div className="w-10 h-10 rounded-full bg-blue-50 flex items-center justify-center text-blue-600">
-                  <ArrowUpRight className="w-5 h-5" />
+          {transactions.slice(0, 5).map((transaction) => {
+            const account = accounts.find(a => a.id === transaction.paymentMethodId);
+            return (
+              <div key={transaction.id} className="p-4 flex items-center justify-between hover:bg-gray-50 transition-colors">
+                <div className="flex items-center space-x-4">
+                  <div className="w-10 h-10 rounded-full bg-blue-50 flex items-center justify-center text-blue-600">
+                    <ArrowUpRight className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <p className="font-semibold text-gray-900">{transaction.name}</p>
+                    <p className="text-xs text-gray-500">{new Date(transaction.date).toLocaleDateString()} • {account?.bank || 'Unknown Account'}</p>
+                  </div>
                 </div>
-                <div>
-                  <p className="font-semibold text-gray-900">{item.name}</p>
-                  <p className="text-xs text-gray-500">{item.date} • {item.category}</p>
-                </div>
+                <p className="font-bold text-gray-900">-{formatCurrency(transaction.amount)}</p>
               </div>
-              <p className="font-bold text-gray-900">-{formatCurrency(item.amount)}</p>
+            );
+          })}
+          {transactions.length === 0 && (
+            <div className="p-8 text-center text-gray-400">
+              No transactions yet. Start recording your expenses!
             </div>
-          ))}
+          )}
         </div>
       </div>
     </div>
