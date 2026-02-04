@@ -1254,12 +1254,12 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
             <button onClick={() => setShowPayModal(null)} className="absolute right-6 top-6 p-2 hover:bg-gray-100 rounded-full transition-colors"><X className="w-6 h-6 text-gray-400" /></button>
             <h2 className="text-2xl font-black text-gray-900 mb-2">Pay {showPayModal.biller.name}</h2>
             <form onSubmit={handlePaySubmit} className="space-y-6 pt-4">
-              <div><label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Amount Paid</label><div className="relative"><span className="absolute left-4 top-1/2 -translate-y-1/2 font-bold text-gray-400">₱</span><input required type="number" value={payFormData.amount} onChange={(e) => setPayFormData({...payFormData, amount: e.target.value})} className="w-full bg-gray-50 border-transparent rounded-2xl p-4 pl-8 outline-none text-xl font-black focus:ring-2 focus:ring-indigo-500" /></div></div>
+              <div><label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Amount Paid</label><div className="relative"><span className="absolute left-4 top-1/2 -translate-y-1/2 font-bold text-gray-400">₱</span><input required type="number" value={payFormData.amount} onChange={(e) => setPayFormData(prev => ({...prev, amount: e.target.value}))} className="w-full bg-gray-50 border-transparent rounded-2xl p-4 pl-8 outline-none text-xl font-black focus:ring-2 focus:ring-indigo-500" /></div></div>
               
               <div>
                 <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Receipt Upload</label>
                 <div className="relative">
-                  <input type="file" className="absolute inset-0 opacity-0 cursor-pointer" onChange={(e) => setPayFormData({...payFormData, receipt: e.target.files?.[0]?.name || ''})} />
+                  <input type="file" className="absolute inset-0 opacity-0 cursor-pointer" onChange={(e) => setPayFormData(prev => ({...prev, receipt: e.target.files?.[0]?.name || ''}))} />
                   <div className="w-full bg-gray-50 border-2 border-dashed border-gray-200 rounded-2xl p-6 text-center text-sm text-gray-500 hover:border-indigo-300 hover:bg-indigo-50 transition-all flex flex-col items-center">
                     <Upload className="w-8 h-8 mb-2 text-indigo-400" />
                     <span className="font-bold">{payFormData.receipt || 'Click or drag to upload receipt'}</span>
@@ -1268,8 +1268,8 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
               </div>
 
               <div className="grid grid-cols-2 gap-4">
-                <div><label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Date Paid</label><input required type="date" value={payFormData.datePaid} onChange={(e) => setPayFormData({...payFormData, datePaid: e.target.value})} className="w-full bg-gray-50 border-transparent rounded-2xl p-4 outline-none font-bold text-sm" /></div>
-                <div><label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Account</label><select value={payFormData.accountId} onChange={(e) => setPayFormData({...payFormData, accountId: e.target.value})} className="w-full bg-gray-50 border-transparent rounded-2xl p-4 outline-none font-bold text-sm appearance-none">{accounts.map(acc => <option key={acc.id} value={acc.id}>{acc.bank} ({acc.classification})</option>)}</select></div>
+                <div><label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Date Paid</label><input required type="date" value={payFormData.datePaid} onChange={(e) => setPayFormData(prev => ({...prev, datePaid: e.target.value}))} className="w-full bg-gray-50 border-transparent rounded-2xl p-4 outline-none font-bold text-sm" /></div>
+                <div><label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Payment Method</label><select value={payFormData.accountId} onChange={(e) => setPayFormData(prev => ({...prev, accountId: e.target.value}))} className="w-full bg-gray-50 border-transparent rounded-2xl p-4 outline-none font-bold text-sm appearance-none">{accounts.map(acc => <option key={acc.id} value={acc.id}>{acc.bank} ({acc.classification})</option>)}</select></div>
               </div>
               <div className="flex space-x-4 pt-4"><button type="button" onClick={() => setShowPayModal(null)} className="flex-1 bg-gray-100 py-4 rounded-2xl font-bold text-gray-500">Cancel</button><button type="submit" className="flex-1 bg-green-600 text-white py-4 rounded-2xl font-bold hover:bg-green-700 shadow-xl">Submit Payment</button></div>
             </form>
