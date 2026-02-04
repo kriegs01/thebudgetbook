@@ -169,7 +169,8 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
     name: '',
     date: new Date().toISOString().split('T')[0],
     amount: '',
-    accountId: accounts[0]?.id || ''
+    accountId: accounts[0]?.id || '',
+    paymentScheduleId: '' // FIX: Add payment schedule ID for linking installment payments
   });
   
   const [transactionFormData, setTransactionFormData] = useState(getDefaultTransactionFormData());
@@ -807,38 +808,89 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
     e.preventDefault();
     
     const isEditing = !!transactionFormData.id;
+    const paymentScheduleId = transactionFormData.paymentScheduleId;
+    
     console.log(`[Budget] ${isEditing ? 'Updating' : 'Creating'} transaction in Supabase`);
     console.log('[Budget] Transaction data:', transactionFormData);
-    
-    const transaction = {
-      name: transactionFormData.name,
-      date: new Date(transactionFormData.date).toISOString(),
-      amount: parseFloat(transactionFormData.amount),
-      payment_method_id: transactionFormData.accountId
-    };
+    console.log('[Budget] Payment schedule ID:', paymentScheduleId);
     
     try {
-      let result;
+      let transactionData, transactionError;
+      
       if (isEditing) {
         // Update existing transaction
-        result = await updateTransaction(transactionFormData.id, transaction);
+        const transaction = {
+          name: transactionFormData.name,
+          date: new Date(transactionFormData.date).toISOString(),
+          amount: parseFloat(transactionFormData.amount),
+          payment_method_id: transactionFormData.accountId
+        };
+        const result = await updateTransaction(transactionFormData.id, transaction);
+        transactionData = result.data;
+        transactionError = result.error;
+      } else if (paymentScheduleId) {
+        // FIX: Create transaction linked to payment schedule (for installments)
+        console.log('[Budget] Creating transaction with payment schedule link');
+        const result = await createPaymentScheduleTransaction(
+          paymentScheduleId,
+          {
+            name: transactionFormData.name,
+            date: new Date(transactionFormData.date).toISOString(),
+            amount: parseFloat(transactionFormData.amount),
+            paymentMethodId: transactionFormData.accountId
+          }
+        );
+        transactionData = result.data;
+        transactionError = result.error;
+        
+        // FIX: Update payment schedule status
+        if (!transactionError && transactionData) {
+          console.log('[Budget] Updating payment schedule status');
+          const { error: scheduleError } = await recordPaymentViaTransaction(
+            paymentScheduleId,
+            {
+              transactionName: transactionFormData.name,
+              amountPaid: parseFloat(transactionFormData.amount),
+              datePaid: transactionFormData.date,
+              accountId: transactionFormData.accountId,
+              receipt: undefined
+            }
+          );
+          
+          if (scheduleError) {
+            console.error('[Budget] Failed to update payment schedule:', scheduleError);
+          } else {
+            console.log('[Budget] Payment schedule updated successfully');
+          }
+        }
       } else {
-        // Create new transaction
-        result = await createTransaction(transaction);
+        // Create new transaction without schedule link (for purchases)
+        const transaction = {
+          name: transactionFormData.name,
+          date: new Date(transactionFormData.date).toISOString(),
+          amount: parseFloat(transactionFormData.amount),
+          payment_method_id: transactionFormData.accountId
+        };
+        const result = await createTransaction(transaction);
+        transactionData = result.data;
+        transactionError = result.error;
       }
       
-      const { data, error } = result;
-      
-      if (error) {
-        console.error(`[Budget] Failed to ${isEditing ? 'update' : 'save'} transaction:`, error);
+      if (transactionError) {
+        console.error(`[Budget] Failed to ${isEditing ? 'update' : 'save'} transaction:`, transactionError);
         alert(`Failed to ${isEditing ? 'update' : 'save'} transaction. Please try again.`);
         return;
       }
       
-      console.log(`[Budget] Transaction ${isEditing ? 'updated' : 'saved'} successfully:`, data);
+      console.log(`[Budget] Transaction ${isEditing ? 'updated' : 'saved'} successfully:`, transactionData);
       
       // Reload transactions to update paid status
       await reloadTransactions();
+      
+      // FIX: Reload payment schedules if a schedule was updated
+      if (paymentScheduleId) {
+        await reloadPaymentSchedules();
+      }
       
       // Close the modal and reset form to defaults
       setShowTransactionModal(false);
@@ -1558,10 +1610,12 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                                   <button 
                                     onClick={() => {
                                       setTransactionFormData({
+                                        id: '',
                                         name: item.name,
                                         date: new Date().toISOString().split('T')[0],
                                         amount: item.amount,
-                                        accountId: item.accountId || accounts[0]?.id || ''
+                                        accountId: item.accountId || accounts[0]?.id || '',
+                                        paymentScheduleId: '' // No schedule for regular purchases
                                       });
                                       setShowTransactionModal(true);
                                     }}
@@ -1669,11 +1723,14 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                                   ) : (
                                     <button 
                                       onClick={() => {
+                                        // FIX: Include payment schedule ID for proper linking
                                         setTransactionFormData({
+                                          id: '',
                                           name: `${installment.name} - ${selectedMonth} ${new Date().getFullYear()}`,
                                           date: new Date().toISOString().split('T')[0],
                                           amount: installment.monthlyAmount.toString(),
-                                          accountId: installment.accountId || accounts[0]?.id || ''
+                                          accountId: installment.accountId || accounts[0]?.id || '',
+                                          paymentScheduleId: installmentSchedule?.id || '' // FIX: Pass schedule ID
                                         });
                                         setShowTransactionModal(true);
                                       }}
@@ -1803,7 +1860,8 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                                   name: tx.name,
                                   date: dateStr,
                                   amount: tx.amount.toString(),
-                                  accountId: tx.payment_method_id
+                                  accountId: tx.payment_method_id,
+                                  paymentScheduleId: tx.payment_schedule_id || '' // FIX: Preserve schedule ID when editing
                                 });
                                 setShowTransactionModal(true);
                               }}
