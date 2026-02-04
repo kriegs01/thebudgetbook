@@ -47,6 +47,7 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
   const [view, setView] = useState<'summary' | 'setup'>('summary');
   const [selectedMonth, setSelectedMonth] = useState(MONTHS[new Date().getMonth()]);
   const [selectedTiming, setSelectedTiming] = useState<'1/2' | '2/2'>('1/2');
+  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear()); // REFACTOR: Track budget year for accurate payment schedule loading
 
   // Categorized Setup State
   const [setupData, setSetupData] = useState<{ [key: string]: CategorizedSetupItem[] }>({});
@@ -121,14 +122,14 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
   useEffect(() => {
     const loadPaymentSchedules = async () => {
       try {
-        const currentYear = new Date().getFullYear();
-        const { data, error } = await getPaymentSchedulesByPeriod(selectedMonth, currentYear);
+        // REVIEW FIX: Use selectedYear instead of current year to handle historical/future budgets
+        const { data, error } = await getPaymentSchedulesByPeriod(selectedMonth, selectedYear);
         
         if (error) {
           console.error('[Budget] Failed to load payment schedules:', error);
         } else if (data) {
           setPaymentSchedules(data);
-          console.log('[Budget] Loaded payment schedules for', selectedMonth, currentYear, ':', data.length, 'schedules');
+          console.log('[Budget] Loaded payment schedules for', selectedMonth, selectedYear, ':', data.length, 'schedules');
         }
       } catch (error) {
         console.error('[Budget] Error loading payment schedules:', error);
@@ -136,7 +137,7 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
     };
     
     loadPaymentSchedules();
-  }, [selectedMonth]); // Reload when month changes
+  }, [selectedMonth, selectedYear]); // REVIEW FIX: Reload when month or year changes
 
   // Autosave State
   const [autoSaveStatus, setAutoSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
@@ -144,11 +145,10 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
   const lastSavedDataRef = useRef<string>('');
 
   // Modal States
-  // REFACTOR: Update to support payment schedule ID for accurate tracking
+  // REFACTOR: Use schedule.id for payment schedule linking (removed redundant paymentScheduleId field)
   const [showPayModal, setShowPayModal] = useState<{ 
     biller: Biller, 
-    schedule: PaymentSchedule,
-    paymentScheduleId?: string // REFACTOR: Add payment schedule ID for linking transactions
+    schedule: PaymentSchedule // schedule.id contains the payment schedule ID for linking
   } | null>(null);
   // QA: Add transactionId to support editing from Pay modal
   const [payFormData, setPayFormData] = useState({
@@ -322,6 +322,7 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
   /**
    * REFACTOR: Check if an item is paid using payment schedules
    * This is the new approach that uses payment_schedule_id for accurate status
+   * REVIEW FIX: Consider partial payments as "paid" for UI display purposes
    */
   const checkIfPaidBySchedule = useCallback((
     sourceType: 'biller' | 'installment',
@@ -330,9 +331,11 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
     const schedule = getPaymentSchedule(sourceType, sourceId);
     if (!schedule) return false;
     
-    // Consider paid if amount_paid is greater than 0
-    // Status field also tracks 'paid', 'partial', 'pending', 'overdue'
-    return schedule.amount_paid > 0 && schedule.status === 'paid';
+    // Consider paid if:
+    // 1. Status is 'paid' (fully paid)
+    // 2. Status is 'partial' and amount_paid > 0 (partial payment made)
+    // This provides better UX by showing progress on payments
+    return schedule.amount_paid > 0 && (schedule.status === 'paid' || schedule.status === 'partial');
   }, [getPaymentSchedule]);
 
   /**
@@ -488,8 +491,8 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
    */
   const reloadPaymentSchedules = useCallback(async () => {
     try {
-      const currentYear = new Date().getFullYear();
-      const { data, error } = await getPaymentSchedulesByPeriod(selectedMonth, currentYear);
+      // REVIEW FIX: Use selectedYear to match the loadPaymentSchedules logic
+      const { data, error } = await getPaymentSchedulesByPeriod(selectedMonth, selectedYear);
       if (error) {
         console.error('[Budget] Failed to reload payment schedules:', error);
       } else if (data) {
@@ -499,7 +502,7 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
     } catch (error) {
       console.error('[Budget] Error reloading payment schedules:', error);
     }
-  }, [selectedMonth]);
+  }, [selectedMonth, selectedYear]);
 
   /**
    * Auto-save budget setup with debouncing
@@ -852,8 +855,9 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
     if (!showPayModal) return;
     
     try {
-      const { biller, schedule, paymentScheduleId } = showPayModal;
+      const { biller, schedule } = showPayModal;
       const isEditing = !!payFormData.transactionId;
+      const paymentScheduleId = schedule.id; // Use schedule.id for payment schedule linking
       
       console.log(`[Budget] ${isEditing ? 'Updating' : 'Creating'} transaction for payment`);
       
@@ -872,6 +876,7 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
         transactionError = result.error;
       } else if (paymentScheduleId) {
         // REFACTOR: Create new transaction linked to payment schedule
+        // This is the primary path for recording payments from Budget Setup
         const result = await createPaymentScheduleTransaction(
           paymentScheduleId,
           {
@@ -884,8 +889,11 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
         transactionData = result.data;
         transactionError = result.error;
       } else {
-        // Fallback: Create transaction without payment schedule link
+        // REVIEW FIX: Fallback path for schedules without IDs
+        // This should rarely happen as all schedules in monthly_payment_schedules have UUIDs
+        // If this path executes, it indicates missing schedule generation or data migration issue
         console.warn('[Budget] No payment schedule ID available, creating transaction without link');
+        console.warn('[Budget] This may indicate schedules were not generated for this biller');
         const transaction = {
           name: `${biller.name} - ${schedule.month} ${schedule.year}`,
           date: new Date(payFormData.datePaid).toISOString(),
@@ -1506,7 +1514,7 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                                         // REFACTOR: Use payment schedule from monthly_payment_schedules table
                                         // Create a compatible schedule object for the modal
                                         const scheduleForModal: PaymentSchedule = {
-                                          id: paymentSchedule.id,
+                                          id: paymentSchedule.id, // schedule.id will be used for payment linking
                                           month: paymentSchedule.month,
                                           year: paymentSchedule.year.toString(),
                                           expectedAmount: paymentSchedule.expected_amount,
@@ -1516,13 +1524,16 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                                           accountId: paymentSchedule.account_id || undefined
                                         };
                                         
-                                        // Check for existing transaction linked to this schedule
-                                        const existingTx = transactions.find(tx => tx.payment_schedule_id === paymentSchedule.id);
+                                        // REVIEW FIX: Find latest transaction if multiple exist
+                                        // Sort by date descending to get the most recent transaction
+                                        const linkedTransactions = transactions
+                                          .filter(tx => tx.payment_schedule_id === paymentSchedule.id)
+                                          .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+                                        const existingTx = linkedTransactions[0]; // Get latest transaction
                                         
                                         setShowPayModal({
                                           biller: linkedBiller, 
-                                          schedule: scheduleForModal,
-                                          paymentScheduleId: paymentSchedule.id
+                                          schedule: scheduleForModal // schedule.id is included here
                                         }); 
                                         setPayFormData({
                                           transactionId: existingTx?.id || '',
