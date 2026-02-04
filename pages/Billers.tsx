@@ -143,6 +143,7 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
   }, []); // Load once on mount
 
   // Load payment schedules when viewing biller details
+  // Also reload when billers change (e.g., after payment) to get updated status
   useEffect(() => {
     const loadPaymentSchedules = async () => {
       if (detailedBillerId) {
@@ -174,7 +175,7 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
     };
 
     loadPaymentSchedules();
-  }, [detailedBillerId]);
+  }, [detailedBillerId, billers]);
 
   /**
    * Check if a biller schedule is paid by matching transactions
