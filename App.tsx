@@ -510,6 +510,126 @@ const App: React.FC = () => {
       throw error; // Re-throw to let the UI handle it
     }
   };
+
+  /**
+   * Handle biller payment via transaction and payment schedule
+   * This is the new way to record biller payments
+   */
+  const handlePayBiller = async (
+    billerId: string,
+    payment: {
+      amount: number;
+      date: string;
+      accountId: string;
+      receipt?: string;
+    }
+  ) => {
+    try {
+      console.log('[App] Processing biller payment with transaction:', {
+        billerId,
+        amount: payment.amount,
+        date: payment.date,
+      });
+
+      // Find the biller to get its details
+      const biller = billers.find(b => b.id === billerId);
+      if (!biller) {
+        throw new Error('Biller not found');
+      }
+
+      // Get payment schedules for this biller
+      const { data: schedules, error: schedulesError } = await getPaymentSchedulesBySource('biller', billerId);
+      
+      if (schedulesError || !schedules) {
+        console.error('Error fetching payment schedules:', schedulesError);
+        throw new Error('Could not find payment schedules for this biller');
+      }
+
+      // Find the next unpaid or partially paid schedule
+      const currentMonth = new Date(payment.date).toLocaleString('default', { month: 'long' });
+      const currentYear = new Date(payment.date).getFullYear();
+      
+      // First try to find schedule for current month/year
+      let targetSchedule = schedules.find(s => 
+        s.month === currentMonth && 
+        s.year === currentYear &&
+        s.status !== 'paid'
+      );
+
+      // If not found, find the first unpaid schedule
+      if (!targetSchedule) {
+        targetSchedule = schedules.find(s => s.status === 'pending' || s.status === 'partial');
+      }
+
+      if (!targetSchedule) {
+        throw new Error('No unpaid payment schedule found for this biller');
+      }
+
+      console.log('[App] Found target payment schedule:', {
+        scheduleId: targetSchedule.id,
+        month: targetSchedule.month,
+        year: targetSchedule.year,
+        currentStatus: targetSchedule.status,
+      });
+
+      // Record the payment on the schedule
+      const { data: updatedSchedule, error: paymentError } = await recordPayment(targetSchedule.id, {
+        amountPaid: payment.amount,
+        datePaid: payment.date,
+        accountId: payment.accountId,
+        receipt: payment.receipt,
+      });
+
+      if (paymentError || !updatedSchedule) {
+        throw new Error('Failed to record payment on schedule');
+      }
+
+      // Create the transaction linked to the payment schedule
+      const { data: transaction, error: transactionError } = await createPaymentScheduleTransaction(
+        targetSchedule.id,
+        {
+          name: `${biller.name} - ${targetSchedule.month} ${targetSchedule.year}`,
+          date: payment.date,
+          amount: payment.amount,
+          payment_method_id: payment.accountId,
+        }
+      );
+
+      if (transactionError || !transaction) {
+        console.error('Error creating transaction:', transactionError);
+        throw new Error('Failed to create transaction');
+      }
+
+      console.log('[App] Transaction created successfully:', transaction.id);
+
+      // Update biller's payment tracking in the old schedules array (for backward compatibility)
+      // This updates the biller object stored in the billers table
+      const updatedBiller = {
+        ...biller,
+        schedules: biller.schedules.map(s => {
+          if (s.month === targetSchedule.month && s.year === targetSchedule.year) {
+            return {
+              ...s,
+              amountPaid: payment.amount,
+              datePaid: payment.date,
+              accountId: payment.accountId,
+              receipt: payment.receipt,
+            };
+          }
+          return s;
+        }),
+      };
+
+      await handleUpdateBiller(updatedBiller);
+
+      console.log('[App] Payment processed successfully, reloading billers');
+      await reloadBillers();
+    } catch (err) {
+      console.error('[App] Error processing biller payment:', err);
+      throw err;
+    }
+  };
+
   /**
    * Handle transaction deletion with payment schedule reversion
    * This triggers a reload of installments to reflect status changes in UI
@@ -642,6 +762,7 @@ const App: React.FC = () => {
                   categories={categories}
                   onUpdate={handleUpdateBiller}
                   onDelete={handleDeleteBiller}
+                  onPayBiller={handlePayBiller}
                   loading={billersLoading}
                   error={billersError}
                 />

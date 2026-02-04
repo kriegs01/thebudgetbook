@@ -2,7 +2,8 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { Biller, Account, PaymentSchedule, BudgetCategory, Installment } from '../types';
 import { Plus, Calendar, Bell, ChevronDown, ChevronRight, Upload, CheckCircle2, X, ArrowLeft, Power, PowerOff, MoreVertical, Edit2, Eye, Trash2, AlertTriangle } from 'lucide-react';
 import { getAllTransactions } from '../src/services/transactionsService';
-import type { SupabaseTransaction } from '../src/types/supabase';
+import { getPaymentSchedulesBySource } from '../src/services/paymentSchedulesService';
+import type { SupabaseTransaction, SupabaseMonthlyPaymentSchedule } from '../src/types/supabase';
 // ENHANCEMENT: Import linked account utilities for billing cycle-based amount calculation
 import { 
   getScheduleExpectedAmount, 
@@ -22,6 +23,12 @@ interface BillersProps {
   categories: BudgetCategory[];
   onUpdate: (b: Biller) => Promise<void>;
   onDelete?: (id: string) => Promise<void>;
+  onPayBiller?: (billerId: string, payment: {
+    amount: number;
+    date: string;
+    accountId: string;
+    receipt?: string;
+  }) => Promise<void>;
   loading?: boolean;
   error?: string | null;
 }
@@ -44,7 +51,7 @@ const calculateStatus = (deactivationDate?: { month: string; year: string }): 'a
   return deactivationDate ? 'inactive' : 'active';
 };
 
-const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, accounts, categories, onUpdate, onDelete, loading = false, error = null }) => {
+const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, accounts, categories, onUpdate, onDelete, onPayBiller, loading = false, error = null }) => {
   const [showAddModal, setShowAddModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState<Biller | null>(null);
   const [showPayModal, setShowPayModal] = useState<{ biller: Biller, schedule: PaymentSchedule } | null>(null);
@@ -57,6 +64,10 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
 
   // Transactions state for payment status matching
   const [transactions, setTransactions] = useState<SupabaseTransaction[]>([]);
+
+  // Payment schedules state for database-driven status display
+  const [paymentSchedules, setPaymentSchedules] = useState<SupabaseMonthlyPaymentSchedule[]>([]);
+  const [loadingSchedules, setLoadingSchedules] = useState(false);
 
   const [confirmModal, setConfirmModal] = useState<{
     show: boolean;
@@ -130,6 +141,40 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
 
     loadTransactions();
   }, []); // Load once on mount
+
+  // Load payment schedules when viewing biller details
+  useEffect(() => {
+    const loadPaymentSchedules = async () => {
+      if (detailedBillerId) {
+        setLoadingSchedules(true);
+        console.log('[Billers] Loading payment schedules for biller:', detailedBillerId);
+        
+        try {
+          const { data, error } = await getPaymentSchedulesBySource('biller', detailedBillerId);
+          
+          if (error) {
+            console.error('[Billers] Error loading payment schedules:', error);
+            setPaymentSchedules([]);
+          } else if (data) {
+            console.log('[Billers] Loaded payment schedules:', data.length, 'schedules');
+            setPaymentSchedules(data);
+          } else {
+            setPaymentSchedules([]);
+          }
+        } catch (err) {
+          console.error('[Billers] Exception loading payment schedules:', err);
+          setPaymentSchedules([]);
+        } finally {
+          setLoadingSchedules(false);
+        }
+      } else {
+        // Clear schedules when not viewing details
+        setPaymentSchedules([]);
+      }
+    };
+
+    loadPaymentSchedules();
+  }, [detailedBillerId]);
 
   /**
    * Check if a biller schedule is paid by matching transactions
@@ -380,24 +425,47 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
     setIsSubmitting(true);
     try {
       const { biller, schedule } = showPayModal;
-      const updatedSchedules = biller.schedules.map(s => {
-        // Match by ID if available (checking for null/undefined explicitly), otherwise fallback to month/year matching
-        const isMatch = (schedule.id != null) ? 
-          (s.id === schedule.id) : 
-          (s.month === schedule.month && s.year === schedule.year);
-          
-        if (isMatch) {
-          return { ...s, amountPaid: parseFloat(payFormData.amount), receipt: payFormData.receipt || `${biller.name}_${schedule.month}`, datePaid: payFormData.datePaid, accountId: payFormData.accountId };
-        }
-        return s;
-      });
-      await onUpdate({ ...biller, schedules: updatedSchedules });
-      
-      // Only close modal on success
-      setShowPayModal(null);
+
+      // Use new payment handler if available
+      if (onPayBiller) {
+        console.log('[Billers] Using new transaction-based payment handler');
+        await onPayBiller(biller.id, {
+          amount: parseFloat(payFormData.amount),
+          date: payFormData.datePaid,
+          accountId: payFormData.accountId,
+          receipt: payFormData.receipt || undefined,
+        });
+        
+        // Close modal and clear form
+        setShowPayModal(null);
+        setPayFormData({
+          amount: '',
+          receipt: '',
+          datePaid: new Date().toISOString().split('T')[0],
+          accountId: accounts[0]?.id || ''
+        });
+      } else {
+        // Fallback to old method (direct schedule update)
+        console.log('[Billers] Using fallback direct schedule update');
+        const updatedSchedules = biller.schedules.map(s => {
+          // Match by ID if available (checking for null/undefined explicitly), otherwise fallback to month/year matching
+          const isMatch = (schedule.id != null) ? 
+            (s.id === schedule.id) : 
+            (s.month === schedule.month && s.year === schedule.year);
+            
+          if (isMatch) {
+            return { ...s, amountPaid: parseFloat(payFormData.amount), receipt: payFormData.receipt || `${biller.name}_${schedule.month}`, datePaid: payFormData.datePaid, accountId: payFormData.accountId };
+          }
+          return s;
+        });
+        await onUpdate({ ...biller, schedules: updatedSchedules });
+        
+        // Only close modal on success
+        setShowPayModal(null);
+      }
     } catch (error) {
-      console.error('Failed to update payment:', error);
-      // Keep modal open so user can retry
+      console.error('[Billers] Failed to update payment:', error);
+      alert('Failed to process payment. Please try again.');
     } finally {
       setIsSubmitting(false);
     }
