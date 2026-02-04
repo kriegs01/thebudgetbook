@@ -510,6 +510,14 @@ const App: React.FC = () => {
       throw error; // Re-throw to let the UI handle it
     }
   };
+  /**
+   * Handle transaction deletion with payment schedule reversion
+   * This triggers a reload of installments to reflect status changes in UI
+   */
+  const handleTransactionDeleted = async () => {
+    console.log('[App] Transaction deleted, reloading installments to reflect status changes');
+    await reloadInstallments();
+  };
 
 
   // Savings handlers
@@ -701,7 +709,7 @@ const App: React.FC = () => {
                 />
               } />
               <Route path="/transactions" element={
-                <TransactionsPage />
+                <TransactionsPage onTransactionDeleted={handleTransactionDeleted} />
               } />
               <Route path="/supabase-demo" element={
                 <SupabaseDemo />
