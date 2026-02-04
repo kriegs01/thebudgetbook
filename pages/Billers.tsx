@@ -739,94 +739,223 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
               <div className="overflow-x-auto">
                 <table className="w-full text-left">
                   <thead><tr className="bg-gray-50 border-b border-gray-100"><th className="p-4 text-xs font-bold text-gray-400 uppercase">Month</th><th className="p-4 text-xs font-bold text-gray-400 uppercase">Amount</th><th className="p-4 text-xs font-bold text-gray-400 uppercase text-center">Action</th></tr></thead>
-                  <tbody className="divide-y divide-gray-50">{detailedBiller.schedules.map((sched, idx) => {
-                    // Get schedule with database status
-                    const schedWithStatus = getScheduleWithStatus(sched, detailedBiller, idx);
-                    
-                    // ENHANCEMENT: Calculate amount from linked account if applicable
-                    const { amount: calculatedAmount, isFromLinkedAccount } = getScheduleExpectedAmount(
-                      detailedBiller,
-                      sched,
-                      accounts,
-                      transactions
-                    );
-                    
-                    const isPaid = schedWithStatus.isPaid;
-                    const isPartial = schedWithStatus.isPartial;
-                    
-                    // Get actual paid amount
-                    let displayAmount = calculatedAmount; // Use calculated amount as base
-                    if (isPaid && schedWithStatus.amountPaid > 0) {
-                      displayAmount = schedWithStatus.amountPaid;
-                    } else if (!isPaid && !isPartial) {
-                      // For unpaid, keep calculated amount
-                      displayAmount = calculatedAmount;
-                    }
-                    
-                    // ENHANCEMENT: Get display label with cycle date range if linked account
-                    const linkedAccount = shouldUseLinkedAccount(detailedBiller) 
-                      ? getLinkedAccount(detailedBiller, accounts) 
-                      : null;
-                    const displayLabel = getScheduleDisplayLabel(sched, linkedAccount);
-                    
-                    return (
-                      <tr key={idx} className={`${
-                        isPaid ? 'bg-green-50' : 
-                        isPartial ? 'bg-yellow-50' : 
-                        'hover:bg-gray-50/50'
-                      } transition-colors`}>
-                        <td className="p-4">
-                          <div className="flex flex-col">
-                            <span className="font-bold text-gray-900">{displayLabel}</span>
-                            {isFromLinkedAccount && (
-                              <span className="text-[10px] text-purple-600 font-medium mt-1 flex items-center gap-1">
-                                <span className="inline-block w-1.5 h-1.5 rounded-full bg-purple-600" aria-hidden="true"></span>
-                                From linked account
-                              </span>
-                            )}
-                            {isPartial && schedWithStatus.amountPaid > 0 && (
-                              <span className="text-xs text-gray-500 mt-1">
-                                Paid: {formatCurrency(schedWithStatus.amountPaid)} of {formatCurrency(calculatedAmount)}
-                              </span>
-                            )}
-                          </div>
-                        </td>
-                        <td className="p-4 font-medium text-gray-600">{formatCurrency(displayAmount)}</td>
-                        <td className="p-4 text-center">
-                          {isPaid ? (
-                            <span role="status" className="flex items-center justify-center text-green-600">
-                              <CheckCircle2 className="w-5 h-5" aria-label="Payment completed" title="Paid" />
-                            </span>
-                          ) : isPartial ? (
-                            <div className="flex flex-col items-center space-y-1">
-                              <span className="px-3 py-1 bg-yellow-500 text-white rounded-lg font-bold text-xs">
-                                Partial
-                              </span>
-                              <button 
-                                onClick={() => { 
-                                  setShowPayModal({ biller: detailedBiller, schedule: sched }); 
-                                  setPayFormData({ ...payFormData, amount: (calculatedAmount - schedWithStatus.amountPaid).toString(), receipt: '' }); 
-                                }} 
-                                className="bg-indigo-600 text-white px-4 py-1 rounded-lg font-bold hover:bg-indigo-700 text-xs transition-all"
-                              >
-                                Pay Remaining
-                              </button>
-                            </div>
-                          ) : (
-                            <button 
-                              onClick={() => { 
-                                setShowPayModal({ biller: detailedBiller, schedule: sched }); 
-                                setPayFormData({ ...payFormData, amount: displayAmount.toString(), receipt: '' }); 
-                              }} 
-                              className="bg-indigo-600 text-white px-6 py-2 rounded-xl font-bold hover:bg-indigo-700 text-xs transition-all"
-                            >
-                              Pay
-                            </button>
-                          )}
-                        </td>
-                      </tr>
-                    );
-                  })}</tbody>
+                  <tbody className="divide-y divide-gray-50">{paymentSchedules.length > 0 ? (
+                    // PRIMARY: Display database payment schedules directly (source of truth)
+                    (() => {
+                      console.log('[Billers] Displaying database payment schedules (sorted chronologically)');
+                      
+                      // Helper function to get month order for sorting
+                      const getMonthOrder = (month: string): number => {
+                        const monthOrder: { [key: string]: number } = {
+                          'January': 1, 'February': 2, 'March': 3, 'April': 4,
+                          'May': 5, 'June': 6, 'July': 7, 'August': 8,
+                          'September': 9, 'October': 10, 'November': 11, 'December': 12
+                        };
+                        return monthOrder[month] || 999;
+                      };
+                      
+                      // Sort schedules chronologically
+                      const sortedSchedules = [...paymentSchedules].sort((a, b) => {
+                        // First sort by year
+                        if (a.year !== b.year) {
+                          return a.year - b.year;
+                        }
+                        // Then sort by month
+                        return getMonthOrder(a.month) - getMonthOrder(b.month);
+                      });
+                      
+                      return sortedSchedules.map((schedule, idx) => {
+                        // Convert database schedule to legacy format for compatibility with existing functions
+                        const legacySched: PaymentSchedule = {
+                          id: schedule.id,
+                          month: schedule.month,
+                          year: schedule.year.toString(),
+                          expectedAmount: schedule.expected_amount,
+                          amountPaid: schedule.amount_paid,
+                          receipt: schedule.receipt || undefined,
+                          datePaid: schedule.date_paid || undefined,
+                          accountId: schedule.account_id || undefined,
+                        };
+                        
+                        // ENHANCEMENT: Calculate amount from linked account if applicable
+                        const { amount: calculatedAmount, isFromLinkedAccount } = getScheduleExpectedAmount(
+                          detailedBiller,
+                          legacySched,
+                          accounts,
+                          transactions
+                        );
+                        
+                        const isPaid = schedule.status === 'paid';
+                        const isPartial = schedule.status === 'partial';
+                        
+                        // Get actual paid amount
+                        let displayAmount = calculatedAmount; // Use calculated amount as base
+                        if (isPaid && schedule.amount_paid > 0) {
+                          displayAmount = schedule.amount_paid;
+                        } else if (!isPaid && !isPartial) {
+                          // For unpaid, keep calculated amount
+                          displayAmount = calculatedAmount;
+                        }
+                        
+                        // ENHANCEMENT: Get display label with cycle date range if linked account
+                        const linkedAccount = shouldUseLinkedAccount(detailedBiller) 
+                          ? getLinkedAccount(detailedBiller, accounts) 
+                          : null;
+                        const displayLabel = getScheduleDisplayLabel(legacySched, linkedAccount);
+                        
+                        return (
+                          <tr key={schedule.id} className={`${
+                            isPaid ? 'bg-green-50' : 
+                            isPartial ? 'bg-yellow-50' : 
+                            'hover:bg-gray-50/50'
+                          } transition-colors`}>
+                            <td className="p-4">
+                              <div className="flex flex-col">
+                                <span className="font-bold text-gray-900">{displayLabel}</span>
+                                {isFromLinkedAccount && (
+                                  <span className="text-[10px] text-purple-600 font-medium mt-1 flex items-center gap-1">
+                                    <span className="inline-block w-1.5 h-1.5 rounded-full bg-purple-600" aria-hidden="true"></span>
+                                    From linked account
+                                  </span>
+                                )}
+                                {isPartial && schedule.amount_paid > 0 && (
+                                  <span className="text-xs text-gray-500 mt-1">
+                                    Paid: {formatCurrency(schedule.amount_paid)} of {formatCurrency(calculatedAmount)}
+                                  </span>
+                                )}
+                              </div>
+                            </td>
+                            <td className="p-4 font-medium text-gray-600">{formatCurrency(displayAmount)}</td>
+                            <td className="p-4 text-center">
+                              {isPaid ? (
+                                <span role="status" className="flex items-center justify-center text-green-600">
+                                  <CheckCircle2 className="w-5 h-5" aria-label="Payment completed" title="Paid" />
+                                </span>
+                              ) : isPartial ? (
+                                <div className="flex flex-col items-center space-y-1">
+                                  <span className="px-3 py-1 bg-yellow-500 text-white rounded-lg font-bold text-xs">
+                                    Partial
+                                  </span>
+                                  <button 
+                                    onClick={() => { 
+                                      setShowPayModal({ biller: detailedBiller, schedule: legacySched }); 
+                                      setPayFormData({ ...payFormData, amount: (calculatedAmount - schedule.amount_paid).toString(), receipt: '' }); 
+                                    }} 
+                                    className="bg-indigo-600 text-white px-4 py-1 rounded-lg font-bold hover:bg-indigo-700 text-xs transition-all"
+                                  >
+                                    Pay Remaining
+                                  </button>
+                                </div>
+                              ) : (
+                                <button 
+                                  onClick={() => { 
+                                    setShowPayModal({ biller: detailedBiller, schedule: legacySched }); 
+                                    setPayFormData({ ...payFormData, amount: displayAmount.toString(), receipt: '' }); 
+                                  }} 
+                                  className="bg-indigo-600 text-white px-6 py-2 rounded-xl font-bold hover:bg-indigo-700 text-xs transition-all"
+                                >
+                                  Pay
+                                </button>
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      });
+                    })()
+                  ) : (
+                    // FALLBACK: Use legacy schedules array for backward compatibility
+                    (() => {
+                      console.log('[Billers] No payment schedules in database, using legacy schedules array (fallback)');
+                      return detailedBiller.schedules.map((sched, idx) => {
+                        // Get schedule with database status
+                        const schedWithStatus = getScheduleWithStatus(sched, detailedBiller, idx);
+                        
+                        // ENHANCEMENT: Calculate amount from linked account if applicable
+                        const { amount: calculatedAmount, isFromLinkedAccount } = getScheduleExpectedAmount(
+                          detailedBiller,
+                          sched,
+                          accounts,
+                          transactions
+                        );
+                        
+                        const isPaid = schedWithStatus.isPaid;
+                        const isPartial = schedWithStatus.isPartial;
+                        
+                        // Get actual paid amount
+                        let displayAmount = calculatedAmount; // Use calculated amount as base
+                        if (isPaid && schedWithStatus.amountPaid > 0) {
+                          displayAmount = schedWithStatus.amountPaid;
+                        } else if (!isPaid && !isPartial) {
+                          // For unpaid, keep calculated amount
+                          displayAmount = calculatedAmount;
+                        }
+                        
+                        // ENHANCEMENT: Get display label with cycle date range if linked account
+                        const linkedAccount = shouldUseLinkedAccount(detailedBiller) 
+                          ? getLinkedAccount(detailedBiller, accounts) 
+                          : null;
+                        const displayLabel = getScheduleDisplayLabel(sched, linkedAccount);
+                        
+                        return (
+                          <tr key={idx} className={`${
+                            isPaid ? 'bg-green-50' : 
+                            isPartial ? 'bg-yellow-50' : 
+                            'hover:bg-gray-50/50'
+                          } transition-colors`}>
+                            <td className="p-4">
+                              <div className="flex flex-col">
+                                <span className="font-bold text-gray-900">{displayLabel}</span>
+                                {isFromLinkedAccount && (
+                                  <span className="text-[10px] text-purple-600 font-medium mt-1 flex items-center gap-1">
+                                    <span className="inline-block w-1.5 h-1.5 rounded-full bg-purple-600" aria-hidden="true"></span>
+                                    From linked account
+                                  </span>
+                                )}
+                                {isPartial && schedWithStatus.amountPaid > 0 && (
+                                  <span className="text-xs text-gray-500 mt-1">
+                                    Paid: {formatCurrency(schedWithStatus.amountPaid)} of {formatCurrency(calculatedAmount)}
+                                  </span>
+                                )}
+                              </div>
+                            </td>
+                            <td className="p-4 font-medium text-gray-600">{formatCurrency(displayAmount)}</td>
+                            <td className="p-4 text-center">
+                              {isPaid ? (
+                                <span role="status" className="flex items-center justify-center text-green-600">
+                                  <CheckCircle2 className="w-5 h-5" aria-label="Payment completed" title="Paid" />
+                                </span>
+                              ) : isPartial ? (
+                                <div className="flex flex-col items-center space-y-1">
+                                  <span className="px-3 py-1 bg-yellow-500 text-white rounded-lg font-bold text-xs">
+                                    Partial
+                                  </span>
+                                  <button 
+                                    onClick={() => { 
+                                      setShowPayModal({ biller: detailedBiller, schedule: sched }); 
+                                      setPayFormData({ ...payFormData, amount: (calculatedAmount - schedWithStatus.amountPaid).toString(), receipt: '' }); 
+                                    }} 
+                                    className="bg-indigo-600 text-white px-4 py-1 rounded-lg font-bold hover:bg-indigo-700 text-xs transition-all"
+                                  >
+                                    Pay Remaining
+                                  </button>
+                                </div>
+                              ) : (
+                                <button 
+                                  onClick={() => { 
+                                    setShowPayModal({ biller: detailedBiller, schedule: sched }); 
+                                    setPayFormData({ ...payFormData, amount: displayAmount.toString(), receipt: '' }); 
+                                  }} 
+                                  className="bg-indigo-600 text-white px-6 py-2 rounded-xl font-bold hover:bg-indigo-700 text-xs transition-all"
+                                >
+                                  Pay
+                                </button>
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      });
+                    })()
+                  )}</tbody>
                 </table>
               </div>
             </div>
