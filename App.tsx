@@ -673,12 +673,22 @@ const App: React.FC = () => {
 
   /**
    * Handle transaction deletion with payment schedule reversion
-   * This triggers a reload of installments and transactions to reflect status changes in UI
+   * This triggers a reload of accounts, installments and transactions to reflect status changes in UI
    */
   const handleTransactionDeleted = async () => {
-    console.log('[App] Transaction deleted, reloading installments and transactions to reflect changes');
+    console.log('[App] Transaction deleted, reloading accounts, installments and transactions to reflect changes');
+    await fetchAccounts(); // Reload accounts to recalculate balances
     await reloadInstallments();
     await reloadTransactions();
+  };
+
+  /**
+   * Handle transaction creation
+   * This triggers a reload of accounts to recalculate balances
+   */
+  const handleTransactionCreated = async () => {
+    console.log('[App] Transaction created, reloading accounts to recalculate balances');
+    await fetchAccounts(); // Reload accounts to recalculate balances
   };
 
 
@@ -872,7 +882,10 @@ const App: React.FC = () => {
                 />
               } />
               <Route path="/transactions" element={
-                <TransactionsPage onTransactionDeleted={handleTransactionDeleted} />
+                <TransactionsPage 
+                  onTransactionDeleted={handleTransactionDeleted}
+                  onTransactionCreated={handleTransactionCreated}
+                />
               } />
               <Route path="/supabase-demo" element={
                 <SupabaseDemo />

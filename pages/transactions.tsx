@@ -23,9 +23,10 @@ const formatCurrency = (val: number) =>
 
 interface TransactionsPageProps {
   onTransactionDeleted?: () => void;
+  onTransactionCreated?: () => void;
 }
 
-const TransactionsPage: React.FC<TransactionsPageProps> = ({ onTransactionDeleted }) => {
+const TransactionsPage: React.FC<TransactionsPageProps> = ({ onTransactionDeleted, onTransactionCreated }) => {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [accounts, setAccounts] = useState<AccountOption[]>([]);
   const [showForm, setShowForm] = useState(false);
@@ -107,6 +108,12 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ onTransactionDelete
       
       // Reload transactions to get fresh data
       await loadData();
+      
+      // Notify parent if callback provided (for refreshing related data like account balances)
+      if (onTransactionCreated) {
+        console.log('[Transactions Page] Notifying parent of transaction creation');
+        onTransactionCreated();
+      }
       
       setShowForm(false);
       setForm({ name: '', date: todayIso(), amount: '', paymentMethodId: accounts[0]?.id ?? '' });
