@@ -10,7 +10,8 @@ import { getAllBudgetSetupsFrontend, deleteBudgetSetupFrontend } from './src/ser
 import { getPaymentSchedulesBySource } from './src/services/paymentSchedulesService';
 import { getAllTransactions, createPaymentScheduleTransaction } from './src/services/transactionsService';
 import { recordPayment } from './src/services/paymentSchedulesService';
-import type { Biller, Account, Installment, SavingsJar } from './types';
+import type { Biller, Account, Installment, SavingsJar, Transaction } from './types';
+import type { SupabaseTransaction } from './src/types/supabase';
 
 // Pages
 import Dashboard from './pages/Dashboard';
@@ -127,6 +128,15 @@ const supabaseToSavings = (supabaseSavings: any): SavingsJar => ({
   currentBalance: supabaseSavings.current_balance,
 });
 
+// Helper function to convert Supabase Transaction to UI format
+const formatTransaction = (supabaseTransaction: SupabaseTransaction): Transaction => ({
+  id: supabaseTransaction.id,
+  name: supabaseTransaction.name,
+  date: supabaseTransaction.date,
+  amount: supabaseTransaction.amount,
+  paymentMethodId: supabaseTransaction.payment_method_id,
+});
+
 const App: React.FC = () => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [accounts, setAccounts] = useState<Account[]>([]);
@@ -142,7 +152,7 @@ const App: React.FC = () => {
   const [savings, setSavings] = useState<SavingsJar[]>([]);
   const [savingsLoading, setSavingsLoading] = useState(true);
   const [savingsError, setSavingsError] = useState<string | null>(null);
-  const [transactions, setTransactions] = useState<any[]>([]);
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [transactionsLoading, setTransactionsLoading] = useState(true);
   const [currency, setCurrency] = useState('PHP');
   const [categories, setCategories] = useState(INITIAL_CATEGORIES);
@@ -251,14 +261,7 @@ const App: React.FC = () => {
         console.error('Error loading transactions:', error);
         setTransactions([]);
       } else {
-        // Convert to the format expected by Dashboard
-        const formattedTransactions = (data || []).map(t => ({
-          id: t.id,
-          name: t.name,
-          date: t.date,
-          amount: t.amount,
-          paymentMethodId: t.payment_method_id,
-        }));
+        const formattedTransactions = (data || []).map(formatTransaction);
         setTransactions(formattedTransactions);
       }
       
@@ -323,13 +326,7 @@ const App: React.FC = () => {
     if (error) {
       console.error('Error reloading transactions:', error);
     } else {
-      const formattedTransactions = (data || []).map(t => ({
-        id: t.id,
-        name: t.name,
-        date: t.date,
-        amount: t.amount,
-        paymentMethodId: t.payment_method_id,
-      }));
+      const formattedTransactions = (data || []).map(formatTransaction);
       setTransactions(formattedTransactions);
     }
   };

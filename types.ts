@@ -78,6 +78,14 @@ export interface SavingsJar {
   currentBalance: number;
 }
 
+export interface Transaction {
+  id: string;
+  name: string;
+  date: string;
+  amount: number;
+  paymentMethodId: string;
+}
+
 export interface CategorizedSetupItem {
   id: string;
   name: string;

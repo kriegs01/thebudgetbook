@@ -1,16 +1,8 @@
 
 import React from 'react';
-import { Account, BudgetItem, Installment } from '../types';
+import { Account, BudgetItem, Installment, Transaction } from '../types';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, PieChart, Pie } from 'recharts';
 import { TrendingUp, TrendingDown, Landmark, ArrowUpRight, CreditCard, Wallet } from 'lucide-react';
-
-interface Transaction {
-  id: string;
-  name: string;
-  date: string;
-  amount: number;
-  paymentMethodId: string;
-}
 
 interface DashboardProps {
   accounts: Account[];
