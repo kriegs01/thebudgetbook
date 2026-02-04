@@ -143,39 +143,40 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
   }, []); // Load once on mount
 
   // Load payment schedules when viewing biller details
+  // Load payment schedules function (extracted for reuse)
+  const loadPaymentSchedules = useCallback(async () => {
+    if (detailedBillerId) {
+      setLoadingSchedules(true);
+      console.log('[Billers] Loading payment schedules for biller:', detailedBillerId);
+      
+      try {
+        const { data, error } = await getPaymentSchedulesBySource('biller', detailedBillerId);
+        
+        if (error) {
+          console.error('[Billers] Error loading payment schedules:', error);
+          setPaymentSchedules([]);
+        } else if (data) {
+          console.log('[Billers] Loaded payment schedules:', data.length, 'schedules');
+          setPaymentSchedules(data);
+        } else {
+          setPaymentSchedules([]);
+        }
+      } catch (err) {
+        console.error('[Billers] Exception loading payment schedules:', err);
+        setPaymentSchedules([]);
+      } finally {
+        setLoadingSchedules(false);
+      }
+    } else {
+      // Clear schedules when not viewing details
+      setPaymentSchedules([]);
+    }
+  }, [detailedBillerId]);
+
   // Also reload when billers change (e.g., after payment) to get updated status
   useEffect(() => {
-    const loadPaymentSchedules = async () => {
-      if (detailedBillerId) {
-        setLoadingSchedules(true);
-        console.log('[Billers] Loading payment schedules for biller:', detailedBillerId);
-        
-        try {
-          const { data, error } = await getPaymentSchedulesBySource('biller', detailedBillerId);
-          
-          if (error) {
-            console.error('[Billers] Error loading payment schedules:', error);
-            setPaymentSchedules([]);
-          } else if (data) {
-            console.log('[Billers] Loaded payment schedules:', data.length, 'schedules');
-            setPaymentSchedules(data);
-          } else {
-            setPaymentSchedules([]);
-          }
-        } catch (err) {
-          console.error('[Billers] Exception loading payment schedules:', err);
-          setPaymentSchedules([]);
-        } finally {
-          setLoadingSchedules(false);
-        }
-      } else {
-        // Clear schedules when not viewing details
-        setPaymentSchedules([]);
-      }
-    };
-
     loadPaymentSchedules();
-  }, [detailedBillerId, billers]);
+  }, [detailedBillerId, billers, loadPaymentSchedules]);
 
   /**
    * Check if a biller schedule is paid by matching transactions
@@ -445,6 +446,10 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
           datePaid: new Date().toISOString().split('T')[0],
           accountId: accounts[0]?.id || ''
         });
+
+        // Explicitly reload payment schedules to reflect the new payment status
+        console.log('[Billers] Payment successful, reloading payment schedules');
+        await loadPaymentSchedules();
       } else {
         // Fallback to old method (direct schedule update)
         console.log('[Billers] Using fallback direct schedule update');
@@ -499,7 +504,13 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
 
     if (dbSchedule) {
       // Use database status
-      console.log('[Billers] Using database status for schedule:', sched.month, sched.year, '=', dbSchedule.status);
+      console.log('[Billers] Using database status for schedule:', {
+        month: sched.month,
+        year: sched.year,
+        status: dbSchedule.status,
+        amountPaid: dbSchedule.amount_paid,
+        scheduleId: dbSchedule.id
+      });
       return {
         ...sched,
         isPaid: dbSchedule.status === 'paid',
@@ -511,7 +522,12 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
     }
 
     // Fallback to calculated status if no DB schedule
-    console.log('[Billers] No DB schedule found, using fallback calculation for:', sched.month, sched.year);
+    console.log('[Billers] No DB schedule found for:', {
+      month: sched.month,
+      year: sched.year,
+      availableSchedules: paymentSchedules.map(ps => `${ps.month} ${ps.year}`).join(', '),
+      totalSchedules: paymentSchedules.length
+    });
     const isPaidViaSchedule = !!sched.amountPaid;
     const calculatedAmount = getScheduleExpectedAmount(
       biller,
