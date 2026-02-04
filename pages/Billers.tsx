@@ -489,6 +489,52 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
     return new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(val);
   };
 
+  // Get payment schedule with database status
+  const getScheduleWithStatus = (sched: PaymentSchedule, biller: Biller) => {
+    // Try to find matching payment schedule from database
+    const dbSchedule = paymentSchedules.find(ps => 
+      ps.month === sched.month && ps.year === sched.year
+    );
+
+    if (dbSchedule) {
+      // Use database status
+      console.log('[Billers] Using database status for schedule:', sched.month, sched.year, '=', dbSchedule.status);
+      return {
+        ...sched,
+        isPaid: dbSchedule.status === 'paid',
+        isPartial: dbSchedule.status === 'partial',
+        amountPaid: dbSchedule.amount_paid,
+        status: dbSchedule.status,
+        scheduleId: dbSchedule.id
+      };
+    }
+
+    // Fallback to calculated status if no DB schedule
+    console.log('[Billers] No DB schedule found, using fallback calculation for:', sched.month, sched.year);
+    const isPaidViaSchedule = !!sched.amountPaid;
+    const calculatedAmount = getScheduleExpectedAmount(
+      biller,
+      sched,
+      accounts,
+      transactions
+    ).amount;
+    
+    const isPaidViaTransaction = checkIfPaidByTransaction(
+      biller.name,
+      calculatedAmount,
+      sched.month,
+      sched.year
+    );
+
+    return {
+      ...sched,
+      isPaid: isPaidViaSchedule || isPaidViaTransaction,
+      isPartial: false,
+      amountPaid: sched.amountPaid || 0,
+      status: (isPaidViaSchedule || isPaidViaTransaction) ? 'paid' : 'pending'
+    };
+  };
+
   const activeBillers = billers.filter(b => b.status === 'active');
   const inactiveBillers = billers.filter(b => b.status === 'inactive');
   const detailedBiller = billers.find(b => b.id === detailedBillerId);
@@ -659,6 +705,9 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
                 <table className="w-full text-left">
                   <thead><tr className="bg-gray-50 border-b border-gray-100"><th className="p-4 text-xs font-bold text-gray-400 uppercase">Month</th><th className="p-4 text-xs font-bold text-gray-400 uppercase">Amount</th><th className="p-4 text-xs font-bold text-gray-400 uppercase text-center">Action</th></tr></thead>
                   <tbody className="divide-y divide-gray-50">{detailedBiller.schedules.map((sched, idx) => {
+                    // Get schedule with database status
+                    const schedWithStatus = getScheduleWithStatus(sched, detailedBiller);
+                    
                     // ENHANCEMENT: Calculate amount from linked account if applicable
                     const { amount: calculatedAmount, isFromLinkedAccount } = getScheduleExpectedAmount(
                       detailedBiller,
@@ -667,32 +716,16 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
                       transactions
                     );
                     
-                    // Check if paid via biller schedule OR via transaction matching
-                    const isPaidViaSchedule = !!sched.amountPaid;
-                    const isPaidViaTransaction = checkIfPaidByTransaction(
-                      detailedBiller.name,
-                      calculatedAmount, // Use calculated amount for matching
-                      sched.month,
-                      sched.year
-                    );
-                    const isPaid = isPaidViaSchedule || isPaidViaTransaction;
+                    const isPaid = schedWithStatus.isPaid;
+                    const isPartial = schedWithStatus.isPartial;
                     
-                    // Get actual paid amount (from schedule or matching transaction)
-                    let displayAmount = calculatedAmount; // Use calculated amount
-                    if (isPaid) {
-                      if (isPaidViaSchedule && sched.amountPaid) {
-                        displayAmount = sched.amountPaid;
-                      } else {
-                        const matchingTx = getMatchingTransaction(
-                          detailedBiller.name,
-                          calculatedAmount, // Use calculated amount for matching
-                          sched.month,
-                          sched.year
-                        );
-                        if (matchingTx) {
-                          displayAmount = matchingTx.amount;
-                        }
-                      }
+                    // Get actual paid amount
+                    let displayAmount = calculatedAmount; // Use calculated amount as base
+                    if (isPaid && schedWithStatus.amountPaid > 0) {
+                      displayAmount = schedWithStatus.amountPaid;
+                    } else if (!isPaid && !isPartial) {
+                      // For unpaid, keep calculated amount
+                      displayAmount = calculatedAmount;
                     }
                     
                     // ENHANCEMENT: Get display label with cycle date range if linked account
@@ -702,7 +735,11 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
                     const displayLabel = getScheduleDisplayLabel(sched, linkedAccount);
                     
                     return (
-                      <tr key={idx} className={`${isPaid ? 'bg-green-50' : 'hover:bg-gray-50/50'} transition-colors`}>
+                      <tr key={idx} className={`${
+                        isPaid ? 'bg-green-50' : 
+                        isPartial ? 'bg-yellow-50' : 
+                        'hover:bg-gray-50/50'
+                      } transition-colors`}>
                         <td className="p-4">
                           <div className="flex flex-col">
                             <span className="font-bold text-gray-900">{displayLabel}</span>
@@ -712,10 +749,46 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
                                 From linked account
                               </span>
                             )}
+                            {isPartial && schedWithStatus.amountPaid > 0 && (
+                              <span className="text-xs text-gray-500 mt-1">
+                                Paid: {formatCurrency(schedWithStatus.amountPaid)} of {formatCurrency(calculatedAmount)}
+                              </span>
+                            )}
                           </div>
                         </td>
                         <td className="p-4 font-medium text-gray-600">{formatCurrency(displayAmount)}</td>
-                        <td className="p-4 text-center">{!isPaid ? <button onClick={() => { setShowPayModal({ biller: detailedBiller, schedule: sched }); setPayFormData({ ...payFormData, amount: displayAmount.toString(), receipt: '' }); }} className="bg-indigo-600 text-white px-6 py-2 rounded-xl font-bold hover:bg-indigo-700 text-xs transition-all">Pay</button> : <span role="status" className="flex items-center justify-center text-green-600"><CheckCircle2 className="w-5 h-5" aria-label="Payment completed" title="Paid" /></span>}</td>
+                        <td className="p-4 text-center">
+                          {isPaid ? (
+                            <span role="status" className="flex items-center justify-center text-green-600">
+                              <CheckCircle2 className="w-5 h-5" aria-label="Payment completed" title="Paid" />
+                            </span>
+                          ) : isPartial ? (
+                            <div className="flex flex-col items-center space-y-1">
+                              <span className="px-3 py-1 bg-yellow-500 text-white rounded-lg font-bold text-xs">
+                                Partial
+                              </span>
+                              <button 
+                                onClick={() => { 
+                                  setShowPayModal({ biller: detailedBiller, schedule: sched }); 
+                                  setPayFormData({ ...payFormData, amount: (calculatedAmount - schedWithStatus.amountPaid).toString(), receipt: '' }); 
+                                }} 
+                                className="bg-indigo-600 text-white px-4 py-1 rounded-lg font-bold hover:bg-indigo-700 text-xs transition-all"
+                              >
+                                Pay Remaining
+                              </button>
+                            </div>
+                          ) : (
+                            <button 
+                              onClick={() => { 
+                                setShowPayModal({ biller: detailedBiller, schedule: sched }); 
+                                setPayFormData({ ...payFormData, amount: displayAmount.toString(), receipt: '' }); 
+                              }} 
+                              className="bg-indigo-600 text-white px-6 py-2 rounded-xl font-bold hover:bg-indigo-700 text-xs transition-all"
+                            >
+                              Pay
+                            </button>
+                          )}
+                        </td>
                       </tr>
                     );
                   })}</tbody>
