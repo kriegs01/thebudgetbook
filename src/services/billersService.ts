@@ -2,6 +2,7 @@
  * Billers Service
  * 
  * Provides CRUD operations for the billers table in Supabase.
+ * Also manages monthly payment schedules for billers.
  */
 
 import { supabase } from '../utils/supabaseClient';
@@ -12,6 +13,8 @@ import type {
 } from '../types/supabase';
 import { supabaseBillerToFrontend, supabaseBillersToFrontend, frontendBillerToSupabase } from '../utils/billersAdapter';
 import type { Biller } from '../../types';
+import { generateBillerPaymentSchedules } from '../utils/paymentSchedulesGenerator';
+import { createPaymentSchedulesBulk, deletePaymentSchedulesBySource } from './paymentSchedulesService';
 
 /**
  * Get all billers
@@ -173,6 +176,7 @@ export const getBillerByIdFrontend = async (id: string): Promise<{ data: Biller 
 
 /**
  * Create a new biller (accepts frontend Biller type)
+ * Also creates monthly payment schedules in the payment schedules table
  */
 export const createBillerFrontend = async (biller: Biller): Promise<{ data: Biller | null; error: any }> => {
   const supabaseBiller = frontendBillerToSupabase(biller);
@@ -180,7 +184,20 @@ export const createBillerFrontend = async (biller: Biller): Promise<{ data: Bill
   if (error || !data) {
     return { data: null, error };
   }
-  return { data: supabaseBillerToFrontend(data), error: null };
+  
+  // Generate and create payment schedules for the biller
+  const convertedBiller = supabaseBillerToFrontend(data);
+  const schedules = generateBillerPaymentSchedules(convertedBiller, 2026);
+  
+  if (schedules.length > 0) {
+    const { error: schedulesError } = await createPaymentSchedulesBulk(schedules);
+    if (schedulesError) {
+      console.error('Error creating payment schedules for biller:', schedulesError);
+      // Don't fail the entire operation, just log the error
+    }
+  }
+  
+  return { data: convertedBiller, error: null };
 };
 
 /**
@@ -196,8 +213,15 @@ export const updateBillerFrontend = async (biller: Biller): Promise<{ data: Bill
 };
 
 /**
- * Delete a biller
+ * Delete a biller and its payment schedules
  */
 export const deleteBillerFrontend = async (id: string): Promise<{ error: any }> => {
+  // First, delete all payment schedules for this biller
+  const { error: schedulesError } = await deletePaymentSchedulesBySource('biller', id);
+  if (schedulesError) {
+    console.error('Error deleting payment schedules for biller:', schedulesError);
+    // Continue with deleting the biller anyway
+  }
+  
   return await deleteBiller(id);
 };

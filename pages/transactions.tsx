@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { Plus, ArrowLeft } from 'lucide-react';
-import { getAllTransactions, createTransaction, deleteTransaction } from '../src/services/transactionsService';
+import { getAllTransactions, createTransaction, deleteTransactionAndRevertSchedule } from '../src/services/transactionsService';
 import { getAllAccountsFrontend } from '../src/services/accountsService';
 
 type Transaction = {
@@ -21,7 +21,11 @@ const todayIso = () => {
 const formatCurrency = (val: number) =>
   new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP', minimumFractionDigits: 2 }).format(val);
 
-const TransactionsPage: React.FC = () => {
+interface TransactionsPageProps {
+  onTransactionDeleted?: () => void;
+}
+
+const TransactionsPage: React.FC<TransactionsPageProps> = ({ onTransactionDeleted }) => {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [accounts, setAccounts] = useState<AccountOption[]>([]);
   const [showForm, setShowForm] = useState(false);
@@ -114,7 +118,8 @@ const TransactionsPage: React.FC = () => {
 
   const removeTx = async (id: string) => {
     try {
-      const { error } = await deleteTransaction(id);
+      console.log('[Transactions Page] Deleting transaction with reversion:', id);
+      const { error } = await deleteTransactionAndRevertSchedule(id);
       
       if (error) {
         console.error('Error deleting transaction:', error);
@@ -122,8 +127,15 @@ const TransactionsPage: React.FC = () => {
         return;
       }
       
+      console.log('[Transactions Page] Transaction deleted successfully');
       // Reload transactions after deletion
       await loadData();
+      
+      // Notify parent if callback provided (for refreshing related data)
+      if (onTransactionDeleted) {
+        console.log('[Transactions Page] Notifying parent of transaction deletion');
+        onTransactionDeleted();
+      }
     } catch (error) {
       console.error('Error deleting transaction:', error);
       alert('Failed to delete transaction. Please try again.');

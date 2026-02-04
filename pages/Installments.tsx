@@ -1,6 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Installment, Account, ViewMode, Biller } from '../types';
 import { Plus, LayoutGrid, List, Wallet, Trash2, X, Upload, AlertTriangle, Edit2, Eye, MoreVertical } from 'lucide-react';
+import { getPaymentSchedulesBySource } from '../src/services/paymentSchedulesService';
+import type { SupabaseMonthlyPaymentSchedule } from '../src/types/supabase';
 
 interface InstallmentsProps {
   installments: Installment[];
@@ -9,11 +11,17 @@ interface InstallmentsProps {
   onAdd: (i: Installment) => Promise<void>;
   onUpdate?: (i: Installment) => Promise<void>;
   onDelete?: (id: string) => Promise<void>;
+  onPayInstallment?: (installmentId: string, payment: {
+    amount: number;
+    date: string;
+    accountId: string;
+    receipt?: string;
+  }) => Promise<void>;
   loading?: boolean;
   error?: string | null;
 }
 
-const Installments: React.FC<InstallmentsProps> = ({ installments, accounts, billers = [], onAdd, onUpdate, onDelete, loading = false, error = null }) => {
+const Installments: React.FC<InstallmentsProps> = ({ installments, accounts, billers = [], onAdd, onUpdate, onDelete, onPayInstallment, loading = false, error = null }) => {
   const [viewMode, setViewMode] = useState<ViewMode>('card');
   const [showModal, setShowModal] = useState(false);
   const [showPayModal, setShowPayModal] = useState<Installment | null>(null);
@@ -21,6 +29,10 @@ const Installments: React.FC<InstallmentsProps> = ({ installments, accounts, bil
   const [showViewModal, setShowViewModal] = useState<Installment | null>(null);
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [paymentSchedules, setPaymentSchedules] = useState<SupabaseMonthlyPaymentSchedule[]>([]);
+  const [loadingSchedules, setLoadingSchedules] = useState(false);
+  // Store total paid amounts from database for each installment
+  const [dbPaidAmounts, setDbPaidAmounts] = useState<Map<string, number>>(new Map());
 
   const [confirmModal, setConfirmModal] = useState<{
     show: boolean;
@@ -87,8 +99,10 @@ const Installments: React.FC<InstallmentsProps> = ({ installments, accounts, bil
       const errorMessage = error instanceof Error ? error.message : String(error);
       if (errorMessage.includes('Database migration required')) {
         alert('⚠️ Database Setup Required\n\nThe timing feature requires a database update. Please run the migration in Supabase.\n\nSee HOW_TO_ADD_TIMING_COLUMN.md for step-by-step instructions.');
+      } else if (errorMessage.includes('Account ID is required')) {
+        alert('⚠️ Account Required\n\nPlease create an account first before adding installments.');
       } else {
-        alert('Failed to add installment. Please try again.');
+        alert(`Failed to add installment: ${errorMessage}\n\nPlease check your input and try again.`);
       }
     } finally {
       setIsSubmitting(false);
@@ -140,29 +154,46 @@ const Installments: React.FC<InstallmentsProps> = ({ installments, accounts, bil
     setIsSubmitting(true);
     try {
       const paymentAmount = parseFloat(payFormData.amount) || 0;
-      const updatedInstallment: Installment = {
-        ...showPayModal,
-        paidAmount: showPayModal.paidAmount + paymentAmount
-      };
 
       console.log('[Installments] Processing payment:', {
         installmentId: showPayModal.id,
         installmentName: showPayModal.name,
         previousPaidAmount: showPayModal.paidAmount,
         paymentAmount: paymentAmount,
-        newPaidAmount: updatedInstallment.paidAmount
+        newPaidAmount: showPayModal.paidAmount + paymentAmount
       });
 
-      await onUpdate?.(updatedInstallment);
+      // Use the new payment handler if provided, otherwise fall back to direct update
+      if (onPayInstallment) {
+        await onPayInstallment(showPayModal.id, {
+          amount: paymentAmount,
+          date: payFormData.datePaid,
+          accountId: payFormData.accountId,
+          receipt: payFormData.receipt || undefined,
+        });
+      } else {
+        // Fallback to old method
+        const updatedInstallment: Installment = {
+          ...showPayModal,
+          paidAmount: showPayModal.paidAmount + paymentAmount
+        };
+        await onUpdate?.(updatedInstallment);
+      }
       
       console.log('[Installments] Payment recorded successfully');
       
       // Close pay modal after successful payment
       setShowPayModal(null);
+      setPayFormData({
+        amount: '',
+        receipt: '',
+        datePaid: new Date().toISOString().split('T')[0],
+        accountId: accounts[0]?.id || ''
+      });
       
-      // If view modal is open, refresh it with updated installment data
-      if (showViewModal && showViewModal.id === updatedInstallment.id) {
-        setShowViewModal(updatedInstallment);
+      // If view modal is open, we'll need to refresh - let parent handle this
+      if (showViewModal && showViewModal.id === showPayModal.id) {
+        setShowViewModal(null);
       }
     } catch (error) {
       console.error('[Installments] Failed to process payment:', error);
@@ -203,9 +234,81 @@ const Installments: React.FC<InstallmentsProps> = ({ installments, accounts, bil
     setOpenMenuId(null);
   };
 
+  // Load total paid amounts from payment schedules for all installments
+  useEffect(() => {
+    const loadAllPaidAmounts = async () => {
+      console.log('[Installments] Loading paid amounts from database for all installments');
+      const paidAmountsMap = new Map<string, number>();
+      
+      // Fetch payment schedules for each installment and sum the amount_paid
+      const promises = installments.map(async (installment) => {
+        try {
+          const { data, error } = await getPaymentSchedulesBySource('installment', installment.id);
+          
+          if (!error && data) {
+            // Sum up all amount_paid values from payment schedules
+            const totalPaid = data.reduce((sum, schedule) => sum + (schedule.amount_paid || 0), 0);
+            paidAmountsMap.set(installment.id, totalPaid);
+            console.log(`[Installments] Calculated paid amount for ${installment.name}: ${totalPaid}`);
+          } else {
+            // If no schedules or error, use 0
+            paidAmountsMap.set(installment.id, 0);
+          }
+        } catch (err) {
+          console.error(`[Installments] Error loading schedules for ${installment.id}:`, err);
+          paidAmountsMap.set(installment.id, 0);
+        }
+      });
+      
+      await Promise.all(promises);
+      setDbPaidAmounts(paidAmountsMap);
+      console.log('[Installments] Finished loading all paid amounts from database');
+    };
+    
+    if (installments.length > 0) {
+      loadAllPaidAmounts();
+    }
+  }, [installments]);
+
+  // Load payment schedules when view modal is opened
+  useEffect(() => {
+    const loadPaymentSchedules = async () => {
+      if (showViewModal) {
+        setLoadingSchedules(true);
+        console.log('[Installments] Loading payment schedules for installment:', showViewModal.id);
+        
+        try {
+          const { data, error } = await getPaymentSchedulesBySource('installment', showViewModal.id);
+          
+          if (error) {
+            console.error('[Installments] Error loading payment schedules:', error);
+            setPaymentSchedules([]);
+          } else if (data) {
+            console.log('[Installments] Loaded payment schedules:', data.length, 'schedules');
+            setPaymentSchedules(data);
+          } else {
+            setPaymentSchedules([]);
+          }
+        } catch (err) {
+          console.error('[Installments] Exception loading payment schedules:', err);
+          setPaymentSchedules([]);
+        } finally {
+          setLoadingSchedules(false);
+        }
+      } else {
+        // Clear schedules when modal is closed
+        setPaymentSchedules([]);
+      }
+    };
+
+    loadPaymentSchedules();
+  }, [showViewModal]);
+
   const renderCard = (item: Installment) => {
-    const progress = (item.paidAmount / item.totalAmount) * 100;
-    const remaining = item.totalAmount - item.paidAmount;
+    // Use database paid amount if available, otherwise fall back to item.paidAmount
+    const paidAmount = dbPaidAmounts.get(item.id) ?? item.paidAmount;
+    const progress = (paidAmount / item.totalAmount) * 100;
+    const remaining = item.totalAmount - paidAmount;
     const account = accounts.find(a => a.id === item.accountId);
 
     return (
@@ -273,7 +376,7 @@ const Installments: React.FC<InstallmentsProps> = ({ installments, accounts, bil
 
         <div className="space-y-2 mb-6">
           <div className="flex justify-between text-[10px] font-black uppercase tracking-widest">
-            <span className="text-indigo-600">Paid: {formatCurrency(item.paidAmount)}</span>
+            <span className="text-indigo-600">Paid: {formatCurrency(paidAmount)}</span>
             <span className="text-gray-400">Bal: {formatCurrency(remaining)}</span>
           </div>
           <div className="h-2.5 w-full bg-gray-100 rounded-full overflow-hidden">
@@ -312,7 +415,9 @@ const Installments: React.FC<InstallmentsProps> = ({ installments, accounts, bil
   };
 
   const renderListItem = (item: Installment) => {
-    const progress = (item.paidAmount / item.totalAmount) * 100;
+    // Use database paid amount if available, otherwise fall back to item.paidAmount
+    const paidAmount = dbPaidAmounts.get(item.id) ?? item.paidAmount;
+    const progress = (paidAmount / item.totalAmount) * 100;
     const account = accounts.find(a => a.id === item.accountId);
 
     return (
@@ -517,11 +622,17 @@ const Installments: React.FC<InstallmentsProps> = ({ installments, accounts, bil
               </div>
               <div>
                 <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Billing Account</label>
-                <select value={formData.accountId} onChange={(e) => setFormData({...formData, accountId: e.target.value})} className="w-full bg-gray-50 border-transparent rounded-2xl p-4 outline-none focus:ring-2 focus:ring-indigo-500 font-bold appearance-none">
-                   {accounts.map(acc => (
-                    <option key={acc.id} value={acc.id}>{acc.bank} - {acc.classification}</option>
-                  ))}
-                </select>
+                {accounts.length === 0 ? (
+                  <div className="w-full bg-red-50 border-2 border-red-200 rounded-2xl p-4">
+                    <p className="text-red-600 font-bold text-sm">⚠️ No accounts available. Please create an account first.</p>
+                  </div>
+                ) : (
+                  <select value={formData.accountId} onChange={(e) => setFormData({...formData, accountId: e.target.value})} className="w-full bg-gray-50 border-transparent rounded-2xl p-4 outline-none focus:ring-2 focus:ring-indigo-500 font-bold appearance-none">
+                    {accounts.map(acc => (
+                      <option key={acc.id} value={acc.id}>{acc.bank} - {acc.classification}</option>
+                    ))}
+                  </select>
+                )}
               </div>
               {billers.filter(b => b.category.startsWith('Loans')).length > 0 && (
                 <div>
@@ -539,7 +650,13 @@ const Installments: React.FC<InstallmentsProps> = ({ installments, accounts, bil
                   setShowModal(false);
                   setFormData({ name: '', totalAmount: '', monthlyAmount: '', termDuration: '', paidAmount: '', accountId: accounts[0]?.id || '', startDate: '', billerId: '', timing: '1/2' });
                 }} className="flex-1 bg-gray-100 py-4 rounded-2xl font-black uppercase tracking-widest text-xs text-gray-500">Cancel</button>
-                <button type="submit" className="flex-1 bg-indigo-600 text-white py-4 rounded-2xl font-black uppercase tracking-widest text-xs hover:bg-indigo-700 transition-all shadow-xl">Start Tracking</button>
+                <button 
+                  type="submit" 
+                  disabled={accounts.length === 0 || isSubmitting}
+                  className="flex-1 bg-indigo-600 text-white py-4 rounded-2xl font-black uppercase tracking-widest text-xs hover:bg-indigo-700 transition-all shadow-xl disabled:bg-gray-300 disabled:cursor-not-allowed"
+                >
+                  {isSubmitting ? 'Saving...' : 'Start Tracking'}
+                </button>
               </div>
             </form>
           </div>
@@ -688,7 +805,23 @@ const Installments: React.FC<InstallmentsProps> = ({ installments, accounts, bil
       {showViewModal && (() => {
         const generateMonthlySchedule = () => {
           if (!showViewModal.startDate) return [];
-          
+
+          // Use actual payment schedules from database if available
+          if (paymentSchedules.length > 0) {
+            console.log('[Installments] Using database payment schedules for display');
+            return paymentSchedules.map(schedule => ({
+              month: `${schedule.month} ${schedule.year}`,
+              amount: schedule.expected_amount,
+              isPaid: schedule.status === 'paid',
+              isPartial: schedule.status === 'partial',
+              amountPaid: schedule.amount_paid,
+              status: schedule.status,
+              scheduleId: schedule.id
+            }));
+          }
+
+          // Fallback to calculated schedule if no payment schedules exist
+          console.log('[Installments] No payment schedules found, using calculated schedule (fallback)');
           const [startYear, startMonth] = showViewModal.startDate.split('-').map(Number);
           const termMonths = parseInt(showViewModal.termDuration) || 12;
           const monthlyAmount = showViewModal.monthlyAmount;
@@ -702,7 +835,10 @@ const Installments: React.FC<InstallmentsProps> = ({ installments, accounts, bil
             schedule.push({
               month: `${monthName} ${year}`,
               amount: monthlyAmount,
-              isPaid: (i + 1) * monthlyAmount <= showViewModal.paidAmount
+              isPaid: (i + 1) * monthlyAmount <= showViewModal.paidAmount,
+              isPartial: false,
+              amountPaid: 0,
+              status: (i + 1) * monthlyAmount <= showViewModal.paidAmount ? 'paid' : 'pending'
             });
           }
           
@@ -731,23 +867,43 @@ const Installments: React.FC<InstallmentsProps> = ({ installments, accounts, bil
                 </div>
                 <div>
                   <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Paid Amount</p>
-                  <p className="text-lg font-black text-green-600">{formatCurrency(showViewModal.paidAmount)}</p>
+                  <p className="text-lg font-black text-green-600">{formatCurrency(dbPaidAmounts.get(showViewModal.id) ?? showViewModal.paidAmount)}</p>
                 </div>
                 <div>
                   <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Remaining</p>
-                  <p className="text-lg font-black text-gray-900">{formatCurrency(showViewModal.totalAmount - showViewModal.paidAmount)}</p>
+                  <p className="text-lg font-black text-gray-900">{formatCurrency(showViewModal.totalAmount - (dbPaidAmounts.get(showViewModal.id) ?? showViewModal.paidAmount))}</p>
                 </div>
               </div>
               
-              {schedule.length > 0 ? (
+              {loadingSchedules ? (
+                <div className="text-center py-8">
+                  <p className="text-gray-500">Loading payment schedules...</p>
+                </div>
+              ) : schedule.length > 0 ? (
                 <div className="space-y-2">
                   <h3 className="text-sm font-black text-gray-400 uppercase tracking-widest mb-4">Payment Schedule</h3>
                   {schedule.map((item, index) => (
-                    <div key={index} className={`flex items-center justify-between p-4 rounded-xl border transition-all ${item.isPaid ? 'bg-green-50 border-green-200' : 'bg-white border-gray-100 hover:bg-gray-50'}`}>
+                    <div key={index} className={`flex items-center justify-between p-4 rounded-xl border transition-all ${
+                      item.isPaid 
+                        ? 'bg-green-50 border-green-200' 
+                        : item.isPartial 
+                          ? 'bg-yellow-50 border-yellow-200'
+                          : 'bg-white border-gray-100 hover:bg-gray-50'
+                    }`}>
                       <div className="flex items-center space-x-4">
-                        <span className={`text-sm font-black ${item.isPaid ? 'text-green-600' : 'text-gray-900'}`}>{item.month}</span>
+                        <span className={`text-sm font-black ${
+                          item.isPaid ? 'text-green-600' : item.isPartial ? 'text-yellow-600' : 'text-gray-900'
+                        }`}>{item.month}</span>
                         {item.isPaid && (
                           <span className="text-[10px] font-bold px-2 py-0.5 bg-green-100 text-green-700 rounded uppercase">Paid</span>
+                        )}
+                        {item.isPartial && (
+                          <span className="text-[10px] font-bold px-2 py-0.5 bg-yellow-100 text-yellow-700 rounded uppercase">Partial</span>
+                        )}
+                        {item.isPartial && item.amountPaid > 0 && (
+                          <span className="text-xs text-gray-500">
+                            ({formatCurrency(item.amountPaid)} of {formatCurrency(item.amount)})
+                          </span>
                         )}
                       </div>
                       <div className="flex items-center space-x-4">

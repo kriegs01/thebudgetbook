@@ -2,6 +2,7 @@
  * Installments Service
  * 
  * Provides CRUD operations for the installments table in Supabase.
+ * Also manages monthly payment schedules for installments.
  */
 
 import { supabase } from '../utils/supabaseClient';
@@ -12,6 +13,8 @@ import type {
 } from '../types/supabase';
 import { supabaseInstallmentToFrontend, supabaseInstallmentsToFrontend, frontendInstallmentToSupabase } from '../utils/installmentsAdapter';
 import type { Installment } from '../../types';
+import { generateInstallmentPaymentSchedules } from '../utils/paymentSchedulesGenerator';
+import { createPaymentSchedulesBulk, deletePaymentSchedulesBySource } from './paymentSchedulesService';
 
 /**
  * Get all installments
@@ -56,6 +59,24 @@ export const getInstallmentById = async (id: string) => {
 export const createInstallment = async (installment: CreateInstallmentInput) => {
   try {
     console.log('Creating installment with data:', installment);
+    
+    // Validate required fields before sending to Supabase
+    if (!installment.name || installment.name.trim() === '') {
+      throw new Error('Installment name is required');
+    }
+    if (!installment.account_id || installment.account_id.trim() === '') {
+      throw new Error('Account ID is required');
+    }
+    if (installment.total_amount <= 0) {
+      throw new Error('Total amount must be greater than 0');
+    }
+    if (installment.monthly_amount <= 0) {
+      throw new Error('Monthly amount must be greater than 0');
+    }
+    if (installment.term_duration <= 0) {
+      throw new Error('Term duration must be greater than 0');
+    }
+    
     const { data, error } = await supabase
       .from('installments')
       .insert([installment])
@@ -64,12 +85,35 @@ export const createInstallment = async (installment: CreateInstallmentInput) => 
 
     if (error) {
       console.error('Supabase error creating installment:', error);
-      // PROTOTYPE: Provide helpful error message for missing timing column
-      if (error.message && error.message.includes('timing') && error.code === '42703') {
+      console.error('Error details:', JSON.stringify(error, null, 2));
+      
+      // Handle missing start_date column (PGRST204 error)
+      if (error.code === 'PGRST204' && error.message && error.message.includes('start_date')) {
+        console.warn('start_date column not found in database. Retrying without start_date...');
+        // Retry without start_date column
+        const { start_date, ...installmentWithoutStartDate } = installment as any;
+        const { data: retryData, error: retryError } = await supabase
+          .from('installments')
+          .insert([installmentWithoutStartDate])
+          .select()
+          .single();
+        
+        if (retryError) {
+          console.error('Retry failed:', retryError);
+          throw new Error('Database migration required: The start_date column needs to be added to the installments table. Please run the migration in ADD_START_DATE_COLUMN.sql or see TROUBLESHOOTING_INSTALLMENTS.md for instructions.');
+        }
+        
+        console.log('✓ Installment created successfully (without start_date). Consider running the database migration to enable start date functionality.');
+        return { data: retryData, error: null };
+      }
+      
+      // Handle missing timing column
+      if (error.code === 'PGRST204' && error.message && error.message.includes('timing')) {
         console.error('Missing timing column. Please run the database migration:');
         console.error('See HOW_TO_ADD_TIMING_COLUMN.md for instructions');
         throw new Error('Database migration required: The timing column needs to be added to the installments table. Please contact your administrator or check HOW_TO_ADD_TIMING_COLUMN.md');
       }
+      
       throw error;
     }
     return { data, error: null };
@@ -92,12 +136,36 @@ export const updateInstallment = async (id: string, updates: UpdateInstallmentIn
       .single();
 
     if (error) {
-      // PROTOTYPE: Provide helpful error message for missing timing column
-      if (error.message && error.message.includes('timing') && error.code === '42703') {
+      console.error('Supabase error updating installment:', error);
+      
+      // Handle missing start_date column (PGRST204 error)
+      if (error.code === 'PGRST204' && error.message && error.message.includes('start_date')) {
+        console.warn('start_date column not found in database. Retrying without start_date...');
+        // Retry without start_date column
+        const { start_date, ...updatesWithoutStartDate } = updates as any;
+        const { data: retryData, error: retryError } = await supabase
+          .from('installments')
+          .update(updatesWithoutStartDate)
+          .eq('id', id)
+          .select()
+          .single();
+        
+        if (retryError) {
+          console.error('Retry failed:', retryError);
+          throw new Error('Database migration required: The start_date column needs to be added to the installments table. Please run the migration in ADD_START_DATE_COLUMN.sql or see TROUBLESHOOTING_INSTALLMENTS.md for instructions.');
+        }
+        
+        console.log('✓ Installment updated successfully (without start_date). Consider running the database migration to enable start date functionality.');
+        return { data: retryData, error: null };
+      }
+      
+      // Handle missing timing column (PGRST204 error)
+      if (error.code === 'PGRST204' && error.message && error.message.includes('timing')) {
         console.error('Missing timing column. Please run the database migration:');
         console.error('See HOW_TO_ADD_TIMING_COLUMN.md for instructions');
         throw new Error('Database migration required: The timing column needs to be added to the installments table. Please contact your administrator or check HOW_TO_ADD_TIMING_COLUMN.md');
       }
+      
       throw error;
     }
     return { data, error: null };
@@ -198,6 +266,7 @@ export const getInstallmentByIdFrontend = async (id: string): Promise<{ data: In
 
 /**
  * Create a new installment (accepts frontend Installment type)
+ * Also creates monthly payment schedules in the payment schedules table
  */
 export const createInstallmentFrontend = async (installment: Installment): Promise<{ data: Installment | null; error: any }> => {
   const supabaseInstallment = frontendInstallmentToSupabase(installment);
@@ -205,7 +274,20 @@ export const createInstallmentFrontend = async (installment: Installment): Promi
   if (error || !data) {
     return { data: null, error };
   }
-  return { data: supabaseInstallmentToFrontend(data), error: null };
+  
+  // Generate and create payment schedules for the installment
+  const convertedInstallment = supabaseInstallmentToFrontend(data);
+  const schedules = generateInstallmentPaymentSchedules(convertedInstallment);
+  
+  if (schedules.length > 0) {
+    const { error: schedulesError } = await createPaymentSchedulesBulk(schedules);
+    if (schedulesError) {
+      console.error('Error creating payment schedules for installment:', schedulesError);
+      // Don't fail the entire operation, just log the error
+    }
+  }
+  
+  return { data: convertedInstallment, error: null };
 };
 
 /**
@@ -221,8 +303,15 @@ export const updateInstallmentFrontend = async (installment: Installment): Promi
 };
 
 /**
- * Delete an installment
+ * Delete an installment and its payment schedules
  */
 export const deleteInstallmentFrontend = async (id: string): Promise<{ error: any }> => {
+  // First, delete all payment schedules for this installment
+  const { error: schedulesError } = await deletePaymentSchedulesBySource('installment', id);
+  if (schedulesError) {
+    console.error('Error deleting payment schedules for installment:', schedulesError);
+    // Continue with deleting the installment anyway
+  }
+  
   return await deleteInstallment(id);
 };
