@@ -2,6 +2,26 @@
  * Transactions Service
  * 
  * Provides CRUD operations for the transactions table in Supabase.
+ * 
+ * IMPORTANT: Account Balance Updates
+ * ------------------------------------
+ * This service automatically updates account balances when transactions are created or deleted.
+ * 
+ * Current Implementation:
+ * - Balance updates are performed as separate operations after transaction creation/deletion
+ * - This is NOT atomic and may be subject to race conditions in high-concurrency scenarios
+ * 
+ * Known Limitations:
+ * 1. Race Conditions: If multiple transactions are created/deleted simultaneously for the same 
+ *    account, balance updates may be lost or calculated incorrectly.
+ * 2. Partial Failures: If a transaction is created but balance update fails, the system will 
+ *    be in an inconsistent state (transaction exists but balance is wrong).
+ * 
+ * Future Improvements:
+ * - Use PostgreSQL RPC functions to perform atomic balance updates (e.g., increment/decrement)
+ * - Implement database transactions to ensure atomicity of transaction creation + balance update
+ * - Add optimistic locking with version fields to detect and handle concurrent modifications
+ * - Consider implementing a reconciliation job to detect and fix balance inconsistencies
  */
 
 import { supabase } from '../utils/supabaseClient';
