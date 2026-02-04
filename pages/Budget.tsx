@@ -3,10 +3,11 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { BudgetItem, Account, Biller, PaymentSchedule, CategorizedSetupItem, SavedBudgetSetup, BudgetCategory, Installment } from '../types';
 import { Plus, Check, ChevronDown, Trash2, Save, FileText, ArrowRight, Upload, CheckCircle2, X, AlertTriangle } from 'lucide-react';
 import { createBudgetSetupFrontend, updateBudgetSetupFrontend } from '../src/services/budgetSetupsService';
-import { createTransaction, getAllTransactions, updateTransaction } from '../src/services/transactionsService';
-import type { SupabaseTransaction } from '../src/types/supabase';
+import { createTransaction, getAllTransactions, updateTransaction, createPaymentScheduleTransaction } from '../src/services/transactionsService';
+import type { SupabaseTransaction, SupabaseMonthlyPaymentSchedule } from '../src/types/supabase';
 import { getInstallmentPaymentSchedule, aggregateCreditCardPurchases } from '../src/utils/paymentStatus'; // PROTOTYPE: Import payment status utilities
 import { getScheduleExpectedAmount } from '../src/utils/linkedAccountUtils'; // ENHANCEMENT: Import for linked account amount calculation
+import { getPaymentSchedulesByPeriod, recordPaymentViaTransaction } from '../src/services/paymentSchedulesService';
 
 interface BudgetProps {
   items: BudgetItem[];
@@ -60,6 +61,9 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
 
   // Transactions state - used for matching payments
   const [transactions, setTransactions] = useState<SupabaseTransaction[]>([]);
+  
+  // REFACTOR: Payment schedules state - source of truth for payment status
+  const [paymentSchedules, setPaymentSchedules] = useState<SupabaseMonthlyPaymentSchedule[]>([]);
 
   // Load from saved setup when month/timing changes
   useEffect(() => {
@@ -111,6 +115,28 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
 
     loadTransactions();
   }, []); // Load once on mount, reload happens after creating transactions
+  
+  // REFACTOR: Load payment schedules for the selected month
+  // This provides accurate payment status from the monthly_payment_schedules table
+  useEffect(() => {
+    const loadPaymentSchedules = async () => {
+      try {
+        const currentYear = new Date().getFullYear();
+        const { data, error } = await getPaymentSchedulesByPeriod(selectedMonth, currentYear);
+        
+        if (error) {
+          console.error('[Budget] Failed to load payment schedules:', error);
+        } else if (data) {
+          setPaymentSchedules(data);
+          console.log('[Budget] Loaded payment schedules for', selectedMonth, currentYear, ':', data.length, 'schedules');
+        }
+      } catch (error) {
+        console.error('[Budget] Error loading payment schedules:', error);
+      }
+    };
+    
+    loadPaymentSchedules();
+  }, [selectedMonth]); // Reload when month changes
 
   // Autosave State
   const [autoSaveStatus, setAutoSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
@@ -118,7 +144,12 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
   const lastSavedDataRef = useRef<string>('');
 
   // Modal States
-  const [showPayModal, setShowPayModal] = useState<{ biller: Biller, schedule: PaymentSchedule } | null>(null);
+  // REFACTOR: Update to support payment schedule ID for accurate tracking
+  const [showPayModal, setShowPayModal] = useState<{ 
+    biller: Biller, 
+    schedule: PaymentSchedule,
+    paymentScheduleId?: string // REFACTOR: Add payment schedule ID for linking transactions
+  } | null>(null);
   // QA: Add transactionId to support editing from Pay modal
   const [payFormData, setPayFormData] = useState({
     transactionId: '', // Empty for new, set for editing
@@ -276,6 +307,35 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
   }, []); // MONTHS is a constant, no need to include in deps
 
   /**
+   * REFACTOR: Get payment schedule for a biller or installment
+   * Uses the monthly_payment_schedules table as the source of truth
+   */
+  const getPaymentSchedule = useCallback((
+    sourceType: 'biller' | 'installment',
+    sourceId: string
+  ): SupabaseMonthlyPaymentSchedule | undefined => {
+    return paymentSchedules.find(
+      schedule => schedule.source_type === sourceType && schedule.source_id === sourceId
+    );
+  }, [paymentSchedules]);
+  
+  /**
+   * REFACTOR: Check if an item is paid using payment schedules
+   * This is the new approach that uses payment_schedule_id for accurate status
+   */
+  const checkIfPaidBySchedule = useCallback((
+    sourceType: 'biller' | 'installment',
+    sourceId: string
+  ): boolean => {
+    const schedule = getPaymentSchedule(sourceType, sourceId);
+    if (!schedule) return false;
+    
+    // Consider paid if amount_paid is greater than 0
+    // Status field also tracks 'paid', 'partial', 'pending', 'overdue'
+    return schedule.amount_paid > 0 && schedule.status === 'paid';
+  }, [getPaymentSchedule]);
+
+  /**
    * Check if an item is paid by matching transactions
    * Matches by name (with minimum length), amount (within tolerance), and date (within month/year)
    */
@@ -422,6 +482,24 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
       console.error('[Budget] Error reloading transactions:', error);
     }
   }, []);
+
+  /**
+   * REFACTOR: Reload payment schedules from Supabase
+   */
+  const reloadPaymentSchedules = useCallback(async () => {
+    try {
+      const currentYear = new Date().getFullYear();
+      const { data, error } = await getPaymentSchedulesByPeriod(selectedMonth, currentYear);
+      if (error) {
+        console.error('[Budget] Failed to reload payment schedules:', error);
+      } else if (data) {
+        setPaymentSchedules(data);
+        console.log('[Budget] Reloaded payment schedules:', data.length);
+      }
+    } catch (error) {
+      console.error('[Budget] Error reloading payment schedules:', error);
+    }
+  }, [selectedMonth]);
 
   /**
    * Auto-save budget setup with debouncing
@@ -768,32 +846,52 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
     }
   };
 
-  // QA: Handle Pay modal submission - supports create and update
-  // Fix for Issue: Transaction editing from Pay modal
+  // REFACTOR: Handle Pay modal submission - uses payment schedules
   const handlePaySubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!showPayModal) return;
     
     try {
-      const { biller, schedule } = showPayModal;
+      const { biller, schedule, paymentScheduleId } = showPayModal;
       const isEditing = !!payFormData.transactionId;
       
       console.log(`[Budget] ${isEditing ? 'Updating' : 'Creating'} transaction for payment`);
-      const transaction = {
-        name: `${biller.name} - ${schedule.month} ${schedule.year}`,
-        date: new Date(payFormData.datePaid).toISOString(),
-        amount: parseFloat(payFormData.amount),
-        payment_method_id: payFormData.accountId
-      };
       
       let transactionData, transactionError;
+      
       if (isEditing) {
         // Update existing transaction
+        const transaction = {
+          name: `${biller.name} - ${schedule.month} ${schedule.year}`,
+          date: new Date(payFormData.datePaid).toISOString(),
+          amount: parseFloat(payFormData.amount),
+          payment_method_id: payFormData.accountId
+        };
         const result = await updateTransaction(payFormData.transactionId, transaction);
         transactionData = result.data;
         transactionError = result.error;
+      } else if (paymentScheduleId) {
+        // REFACTOR: Create new transaction linked to payment schedule
+        const result = await createPaymentScheduleTransaction(
+          paymentScheduleId,
+          {
+            name: `${biller.name} - ${schedule.month} ${schedule.year}`,
+            date: new Date(payFormData.datePaid).toISOString(),
+            amount: parseFloat(payFormData.amount),
+            paymentMethodId: payFormData.accountId
+          }
+        );
+        transactionData = result.data;
+        transactionError = result.error;
       } else {
-        // Create new transaction
+        // Fallback: Create transaction without payment schedule link
+        console.warn('[Budget] No payment schedule ID available, creating transaction without link');
+        const transaction = {
+          name: `${biller.name} - ${schedule.month} ${schedule.year}`,
+          date: new Date(payFormData.datePaid).toISOString(),
+          amount: parseFloat(payFormData.amount),
+          payment_method_id: payFormData.accountId
+        };
         const result = await createTransaction(transaction);
         transactionData = result.data;
         transactionError = result.error;
@@ -807,7 +905,30 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
       
       console.log(`[Budget] Transaction ${isEditing ? 'updated' : 'created'} successfully:`, transactionData);
       
+      // REFACTOR: Update payment schedule in monthly_payment_schedules table
+      if (paymentScheduleId) {
+        console.log('[Budget] Recording payment in payment schedule');
+        const { error: scheduleError } = await recordPaymentViaTransaction(
+          paymentScheduleId,
+          {
+            transactionName: `${biller.name} - ${schedule.month} ${schedule.year}`,
+            amountPaid: parseFloat(payFormData.amount),
+            datePaid: payFormData.datePaid,
+            accountId: payFormData.accountId,
+            receipt: payFormData.receipt || undefined
+          }
+        );
+        
+        if (scheduleError) {
+          console.error('[Budget] Failed to update payment schedule:', scheduleError);
+          // Continue anyway - transaction was created successfully
+        } else {
+          console.log('[Budget] Payment schedule updated successfully');
+        }
+      }
+      
       // Update the biller's payment schedule using schedule ID for exact matching
+      // BACKWARD COMPATIBILITY: Still update Biller.schedules JSONB for older code
       const updatedSchedules = biller.schedules.map(s => {
         // Match by ID if available (checking for null/undefined explicitly), otherwise fallback to month/year matching
         const isMatch = (schedule.id != null) ? 
@@ -878,8 +999,11 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
         }
       }
       
-      // Reload transactions to update paid status
+      // Reload transactions and payment schedules to update paid status
       await reloadTransactions();
+      
+      // REFACTOR: Reload payment schedules to reflect the updated status
+      await reloadPaymentSchedules();
       
       // Explicitly reload billers to ensure UI updates
       if (onReloadBillers) {
@@ -1326,43 +1450,38 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                   </thead>
                   <tbody className="divide-y divide-gray-50">
                     {items.length > 0 ? items.map((item) => {
-                      let isPaid = false, linkedBiller, schedule;
+                      let isPaid = false, linkedBiller, paymentSchedule;
                       const isBiller = item.isBiller || billers.some(b => b.id === item.id);
                       
                       if (isBiller) {
                         linkedBiller = billers.find(b => b.id === item.id);
-                        schedule = linkedBiller?.schedules.find(s => s.month === selectedMonth);
+                        
+                        // REFACTOR: Use payment schedule from monthly_payment_schedules table
+                        paymentSchedule = getPaymentSchedule('biller', item.id);
                         
                         console.log(`[Budget] Checking payment for ${item.name} in ${selectedMonth}:`, {
-                          foundSchedule: !!schedule,
-                          scheduleMonth: schedule?.month,
-                          selectedMonth: selectedMonth,
-                          scheduleAmountPaid: schedule?.amountPaid,
-                          scheduleYear: schedule?.year,
-                          allSchedules: linkedBiller?.schedules.map(s => ({
-                            month: s.month,
-                            year: s.year,
-                            amountPaid: s.amountPaid
-                          }))
+                          foundPaymentSchedule: !!paymentSchedule,
+                          scheduleId: paymentSchedule?.id,
+                          scheduleStatus: paymentSchedule?.status,
+                          amountPaid: paymentSchedule?.amount_paid,
+                          expectedAmount: paymentSchedule?.expected_amount
                         });
                         
-                        // FIX: For billers with schedules, ONLY use schedule.amountPaid
-                        // This prevents double-counting when transactions match multiple months via grace period
-                        if (schedule) {
-                          isPaid = !!schedule.amountPaid;
-                          if (schedule.amountPaid) {
-                            console.log(`[Budget] Item ${item.name} in ${selectedMonth}: PAID via schedule.amountPaid`, {
-                              month: schedule.month,
-                              year: schedule.year,
-                              amountPaid: schedule.amountPaid,
-                              datePaid: schedule.datePaid
+                        // REFACTOR: Use payment schedule status for accurate payment tracking
+                        if (paymentSchedule) {
+                          isPaid = checkIfPaidBySchedule('biller', item.id);
+                          if (isPaid) {
+                            console.log(`[Budget] Item ${item.name} in ${selectedMonth}: PAID via payment schedule`, {
+                              scheduleId: paymentSchedule.id,
+                              amountPaid: paymentSchedule.amount_paid,
+                              datePaid: paymentSchedule.date_paid
                             });
                           }
                         } else {
                           // Fallback to transaction matching if no schedule found
                           isPaid = checkIfPaidByTransaction(item.name, item.amount, selectedMonth);
                           if (isPaid) {
-                            console.log(`[Budget] Item ${item.name} in ${selectedMonth}: PAID via transaction matching (no schedule)`);
+                            console.log(`[Budget] Item ${item.name} in ${selectedMonth}: PAID via transaction matching (no payment schedule)`);
                           }
                         }
                       } else {
@@ -1383,18 +1502,31 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                                 ) : (
                                   <button 
                                     onClick={() => { 
-                                      if(linkedBiller && schedule) {
-                                        // QA: Check for existing transaction to enable editing
-                                        const existingTx = findExistingTransaction(
-                                          linkedBiller.name,
-                                          schedule.expectedAmount,
-                                          selectedMonth
-                                        );
+                                      if(linkedBiller && paymentSchedule) {
+                                        // REFACTOR: Use payment schedule from monthly_payment_schedules table
+                                        // Create a compatible schedule object for the modal
+                                        const scheduleForModal: PaymentSchedule = {
+                                          id: paymentSchedule.id,
+                                          month: paymentSchedule.month,
+                                          year: paymentSchedule.year.toString(),
+                                          expectedAmount: paymentSchedule.expected_amount,
+                                          amountPaid: paymentSchedule.amount_paid,
+                                          datePaid: paymentSchedule.date_paid || undefined,
+                                          receipt: paymentSchedule.receipt || undefined,
+                                          accountId: paymentSchedule.account_id || undefined
+                                        };
                                         
-                                        setShowPayModal({biller: linkedBiller, schedule}); 
+                                        // Check for existing transaction linked to this schedule
+                                        const existingTx = transactions.find(tx => tx.payment_schedule_id === paymentSchedule.id);
+                                        
+                                        setShowPayModal({
+                                          biller: linkedBiller, 
+                                          schedule: scheduleForModal,
+                                          paymentScheduleId: paymentSchedule.id
+                                        }); 
                                         setPayFormData({
                                           transactionId: existingTx?.id || '',
-                                          amount: existingTx?.amount.toString() || schedule.expectedAmount.toString(),
+                                          amount: existingTx?.amount.toString() || paymentSchedule.expected_amount.toString(),
                                           receipt: existingTx ? 'Receipt on file' : '',
                                           datePaid: existingTx ? new Date(existingTx.date).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
                                           accountId: existingTx?.payment_method_id || payFormData.accountId
