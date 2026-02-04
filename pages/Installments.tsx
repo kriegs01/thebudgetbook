@@ -31,6 +31,8 @@ const Installments: React.FC<InstallmentsProps> = ({ installments, accounts, bil
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [paymentSchedules, setPaymentSchedules] = useState<SupabaseMonthlyPaymentSchedule[]>([]);
   const [loadingSchedules, setLoadingSchedules] = useState(false);
+  // Store total paid amounts from database for each installment
+  const [dbPaidAmounts, setDbPaidAmounts] = useState<Map<string, number>>(new Map());
 
   const [confirmModal, setConfirmModal] = useState<{
     show: boolean;
@@ -232,6 +234,42 @@ const Installments: React.FC<InstallmentsProps> = ({ installments, accounts, bil
     setOpenMenuId(null);
   };
 
+  // Load total paid amounts from payment schedules for all installments
+  useEffect(() => {
+    const loadAllPaidAmounts = async () => {
+      console.log('[Installments] Loading paid amounts from database for all installments');
+      const paidAmountsMap = new Map<string, number>();
+      
+      // Fetch payment schedules for each installment and sum the amount_paid
+      const promises = installments.map(async (installment) => {
+        try {
+          const { data, error } = await getPaymentSchedulesBySource('installment', installment.id);
+          
+          if (!error && data) {
+            // Sum up all amount_paid values from payment schedules
+            const totalPaid = data.reduce((sum, schedule) => sum + (schedule.amount_paid || 0), 0);
+            paidAmountsMap.set(installment.id, totalPaid);
+            console.log(`[Installments] Calculated paid amount for ${installment.name}: ${totalPaid}`);
+          } else {
+            // If no schedules or error, use 0
+            paidAmountsMap.set(installment.id, 0);
+          }
+        } catch (err) {
+          console.error(`[Installments] Error loading schedules for ${installment.id}:`, err);
+          paidAmountsMap.set(installment.id, 0);
+        }
+      });
+      
+      await Promise.all(promises);
+      setDbPaidAmounts(paidAmountsMap);
+      console.log('[Installments] Finished loading all paid amounts from database');
+    };
+    
+    if (installments.length > 0) {
+      loadAllPaidAmounts();
+    }
+  }, [installments]);
+
   // Load payment schedules when view modal is opened
   useEffect(() => {
     const loadPaymentSchedules = async () => {
@@ -267,8 +305,10 @@ const Installments: React.FC<InstallmentsProps> = ({ installments, accounts, bil
   }, [showViewModal]);
 
   const renderCard = (item: Installment) => {
-    const progress = (item.paidAmount / item.totalAmount) * 100;
-    const remaining = item.totalAmount - item.paidAmount;
+    // Use database paid amount if available, otherwise fall back to item.paidAmount
+    const paidAmount = dbPaidAmounts.get(item.id) ?? item.paidAmount;
+    const progress = (paidAmount / item.totalAmount) * 100;
+    const remaining = item.totalAmount - paidAmount;
     const account = accounts.find(a => a.id === item.accountId);
 
     return (
@@ -336,7 +376,7 @@ const Installments: React.FC<InstallmentsProps> = ({ installments, accounts, bil
 
         <div className="space-y-2 mb-6">
           <div className="flex justify-between text-[10px] font-black uppercase tracking-widest">
-            <span className="text-indigo-600">Paid: {formatCurrency(item.paidAmount)}</span>
+            <span className="text-indigo-600">Paid: {formatCurrency(paidAmount)}</span>
             <span className="text-gray-400">Bal: {formatCurrency(remaining)}</span>
           </div>
           <div className="h-2.5 w-full bg-gray-100 rounded-full overflow-hidden">
@@ -375,7 +415,9 @@ const Installments: React.FC<InstallmentsProps> = ({ installments, accounts, bil
   };
 
   const renderListItem = (item: Installment) => {
-    const progress = (item.paidAmount / item.totalAmount) * 100;
+    // Use database paid amount if available, otherwise fall back to item.paidAmount
+    const paidAmount = dbPaidAmounts.get(item.id) ?? item.paidAmount;
+    const progress = (paidAmount / item.totalAmount) * 100;
     const account = accounts.find(a => a.id === item.accountId);
 
     return (
@@ -825,11 +867,11 @@ const Installments: React.FC<InstallmentsProps> = ({ installments, accounts, bil
                 </div>
                 <div>
                   <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Paid Amount</p>
-                  <p className="text-lg font-black text-green-600">{formatCurrency(showViewModal.paidAmount)}</p>
+                  <p className="text-lg font-black text-green-600">{formatCurrency(dbPaidAmounts.get(showViewModal.id) ?? showViewModal.paidAmount)}</p>
                 </div>
                 <div>
                   <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Remaining</p>
-                  <p className="text-lg font-black text-gray-900">{formatCurrency(showViewModal.totalAmount - showViewModal.paidAmount)}</p>
+                  <p className="text-lg font-black text-gray-900">{formatCurrency(showViewModal.totalAmount - (dbPaidAmounts.get(showViewModal.id) ?? showViewModal.paidAmount))}</p>
                 </div>
               </div>
               
