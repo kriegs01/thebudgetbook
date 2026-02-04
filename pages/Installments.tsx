@@ -1,6 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Installment, Account, ViewMode, Biller } from '../types';
 import { Plus, LayoutGrid, List, Wallet, Trash2, X, Upload, AlertTriangle, Edit2, Eye, MoreVertical } from 'lucide-react';
+import { getPaymentSchedulesBySource } from '../src/services/paymentSchedulesService';
+import type { SupabaseMonthlyPaymentSchedule } from '../src/types/supabase';
 
 interface InstallmentsProps {
   installments: Installment[];
@@ -27,6 +29,8 @@ const Installments: React.FC<InstallmentsProps> = ({ installments, accounts, bil
   const [showViewModal, setShowViewModal] = useState<Installment | null>(null);
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [paymentSchedules, setPaymentSchedules] = useState<SupabaseMonthlyPaymentSchedule[]>([]);
+  const [loadingSchedules, setLoadingSchedules] = useState(false);
 
   const [confirmModal, setConfirmModal] = useState<{
     show: boolean;
@@ -227,6 +231,40 @@ const Installments: React.FC<InstallmentsProps> = ({ installments, accounts, bil
     setShowEditModal(item);
     setOpenMenuId(null);
   };
+
+  // Load payment schedules when view modal is opened
+  useEffect(() => {
+    const loadPaymentSchedules = async () => {
+      if (showViewModal) {
+        setLoadingSchedules(true);
+        console.log('[Installments] Loading payment schedules for installment:', showViewModal.id);
+        
+        try {
+          const { data, error } = await getPaymentSchedulesBySource('installment', showViewModal.id);
+          
+          if (error) {
+            console.error('[Installments] Error loading payment schedules:', error);
+            setPaymentSchedules([]);
+          } else if (data) {
+            console.log('[Installments] Loaded payment schedules:', data.length, 'schedules');
+            setPaymentSchedules(data);
+          } else {
+            setPaymentSchedules([]);
+          }
+        } catch (err) {
+          console.error('[Installments] Exception loading payment schedules:', err);
+          setPaymentSchedules([]);
+        } finally {
+          setLoadingSchedules(false);
+        }
+      } else {
+        // Clear schedules when modal is closed
+        setPaymentSchedules([]);
+      }
+    };
+
+    loadPaymentSchedules();
+  }, [showViewModal]);
 
   const renderCard = (item: Installment) => {
     const progress = (item.paidAmount / item.totalAmount) * 100;
@@ -725,7 +763,23 @@ const Installments: React.FC<InstallmentsProps> = ({ installments, accounts, bil
       {showViewModal && (() => {
         const generateMonthlySchedule = () => {
           if (!showViewModal.startDate) return [];
-          
+
+          // Use actual payment schedules from database if available
+          if (paymentSchedules.length > 0) {
+            console.log('[Installments] Using database payment schedules for display');
+            return paymentSchedules.map(schedule => ({
+              month: `${schedule.month} ${schedule.year}`,
+              amount: schedule.expected_amount,
+              isPaid: schedule.status === 'paid',
+              isPartial: schedule.status === 'partial',
+              amountPaid: schedule.amount_paid,
+              status: schedule.status,
+              scheduleId: schedule.id
+            }));
+          }
+
+          // Fallback to calculated schedule if no payment schedules exist
+          console.log('[Installments] No payment schedules found, using calculated schedule (fallback)');
           const [startYear, startMonth] = showViewModal.startDate.split('-').map(Number);
           const termMonths = parseInt(showViewModal.termDuration) || 12;
           const monthlyAmount = showViewModal.monthlyAmount;
@@ -739,7 +793,10 @@ const Installments: React.FC<InstallmentsProps> = ({ installments, accounts, bil
             schedule.push({
               month: `${monthName} ${year}`,
               amount: monthlyAmount,
-              isPaid: (i + 1) * monthlyAmount <= showViewModal.paidAmount
+              isPaid: (i + 1) * monthlyAmount <= showViewModal.paidAmount,
+              isPartial: false,
+              amountPaid: 0,
+              status: (i + 1) * monthlyAmount <= showViewModal.paidAmount ? 'paid' : 'pending'
             });
           }
           
@@ -776,15 +833,35 @@ const Installments: React.FC<InstallmentsProps> = ({ installments, accounts, bil
                 </div>
               </div>
               
-              {schedule.length > 0 ? (
+              {loadingSchedules ? (
+                <div className="text-center py-8">
+                  <p className="text-gray-500">Loading payment schedules...</p>
+                </div>
+              ) : schedule.length > 0 ? (
                 <div className="space-y-2">
                   <h3 className="text-sm font-black text-gray-400 uppercase tracking-widest mb-4">Payment Schedule</h3>
                   {schedule.map((item, index) => (
-                    <div key={index} className={`flex items-center justify-between p-4 rounded-xl border transition-all ${item.isPaid ? 'bg-green-50 border-green-200' : 'bg-white border-gray-100 hover:bg-gray-50'}`}>
+                    <div key={index} className={`flex items-center justify-between p-4 rounded-xl border transition-all ${
+                      item.isPaid 
+                        ? 'bg-green-50 border-green-200' 
+                        : item.isPartial 
+                          ? 'bg-yellow-50 border-yellow-200'
+                          : 'bg-white border-gray-100 hover:bg-gray-50'
+                    }`}>
                       <div className="flex items-center space-x-4">
-                        <span className={`text-sm font-black ${item.isPaid ? 'text-green-600' : 'text-gray-900'}`}>{item.month}</span>
+                        <span className={`text-sm font-black ${
+                          item.isPaid ? 'text-green-600' : item.isPartial ? 'text-yellow-600' : 'text-gray-900'
+                        }`}>{item.month}</span>
                         {item.isPaid && (
                           <span className="text-[10px] font-bold px-2 py-0.5 bg-green-100 text-green-700 rounded uppercase">Paid</span>
+                        )}
+                        {item.isPartial && (
+                          <span className="text-[10px] font-bold px-2 py-0.5 bg-yellow-100 text-yellow-700 rounded uppercase">Partial</span>
+                        )}
+                        {item.isPartial && item.amountPaid > 0 && (
+                          <span className="text-xs text-gray-500">
+                            ({formatCurrency(item.amountPaid)} of {formatCurrency(item.amount)})
+                          </span>
                         )}
                       </div>
                       <div className="flex items-center space-x-4">
