@@ -164,7 +164,7 @@ const AccountFilteredTransactions: React.FC<AccountFilteredTransactionsProps> = 
       const { error } = await createTransaction({
         name: withdrawForm.forWhat,
         date: withdrawForm.date,
-        amount: parseFloat(withdrawForm.amount),
+        amount: -Math.abs(parseFloat(withdrawForm.amount)), // Negative for debit
         payment_method_id: accountId,
         transaction_type: 'withdraw',
         notes: null,
@@ -224,7 +224,7 @@ const AccountFilteredTransactions: React.FC<AccountFilteredTransactionsProps> = 
       const { error } = await createTransaction({
         name: `Loan: ${loanForm.what}`,
         date: loanForm.date,
-        amount: parseFloat(loanForm.amount),
+        amount: -Math.abs(parseFloat(loanForm.amount)), // Negative for money lent out
         payment_method_id: accountId,
         transaction_type: 'loan',
         notes: loanForm.what,
@@ -428,7 +428,7 @@ const AccountFilteredTransactions: React.FC<AccountFilteredTransactionsProps> = 
                         </td>
                         {account?.type === 'Debit' && (
                           <td className="px-4 py-3">
-                            {tx.transaction_type === 'loan' && loanTx && loanTx.remainingBalance && loanTx.remainingBalance > 0 && (
+                            {tx.transaction_type === 'loan' && loanTx && (loanTx.remainingBalance ?? 0) > 0 && (
                               <button
                                 onClick={() => openLoanPaymentModal(loanTx)}
                                 className="px-3 py-1 bg-purple-500 hover:bg-purple-600 text-white text-xs font-bold rounded-lg transition-colors"

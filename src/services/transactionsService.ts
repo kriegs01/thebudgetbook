@@ -339,13 +339,13 @@ export const createTransfer = async (
   date: string
 ) => {
   try {
-    // Create the outgoing transaction (negative)
+    // Create the outgoing transaction (negative - money leaving)
     const { data: outgoingTx, error: outgoingError } = await supabase
       .from('transactions')
       .insert([{
         name: 'Transfer Out',
         date,
-        amount: amount,
+        amount: -Math.abs(amount), // Negative for source account
         payment_method_id: sourceAccountId,
         transaction_type: 'transfer',
         notes: `Transfer to another account`
@@ -355,13 +355,13 @@ export const createTransfer = async (
 
     if (outgoingError) throw outgoingError;
 
-    // Create the incoming transaction (positive)
+    // Create the incoming transaction (positive - money arriving)
     const { data: incomingTx, error: incomingError } = await supabase
       .from('transactions')
       .insert([{
         name: 'Transfer In',
         date,
-        amount: amount, // Positive for receiving account
+        amount: Math.abs(amount), // Positive for receiving account
         payment_method_id: destinationAccountId,
         transaction_type: 'transfer',
         notes: `Transfer from another account`,
