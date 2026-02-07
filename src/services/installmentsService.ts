@@ -5,7 +5,7 @@
  * Also manages monthly payment schedules for installments.
  */
 
-import { supabase } from '../utils/supabaseClient';
+import { supabase, getTableName } from '../utils/supabaseClient';
 import type {
   SupabaseInstallment,
   CreateInstallmentInput,
@@ -22,7 +22,7 @@ import { createPaymentSchedulesBulk, deletePaymentSchedulesBySource } from './pa
 export const getAllInstallments = async () => {
   try {
     const { data, error } = await supabase
-      .from('installments')
+      .from(getTableName('installments'))
       .select('*')
       .order('name', { ascending: true });
 
@@ -40,7 +40,7 @@ export const getAllInstallments = async () => {
 export const getInstallmentById = async (id: string) => {
   try {
     const { data, error } = await supabase
-      .from('installments')
+      .from(getTableName('installments'))
       .select('*')
       .eq('id', id)
       .single();
@@ -78,7 +78,7 @@ export const createInstallment = async (installment: CreateInstallmentInput) => 
     }
     
     const { data, error } = await supabase
-      .from('installments')
+      .from(getTableName('installments'))
       .insert([installment])
       .select()
       .single();
@@ -93,7 +93,7 @@ export const createInstallment = async (installment: CreateInstallmentInput) => 
         // Retry without start_date column
         const { start_date, ...installmentWithoutStartDate } = installment as any;
         const { data: retryData, error: retryError } = await supabase
-          .from('installments')
+          .from(getTableName('installments'))
           .insert([installmentWithoutStartDate])
           .select()
           .single();
@@ -129,7 +129,7 @@ export const createInstallment = async (installment: CreateInstallmentInput) => 
 export const updateInstallment = async (id: string, updates: UpdateInstallmentInput) => {
   try {
     const { data, error } = await supabase
-      .from('installments')
+      .from(getTableName('installments'))
       .update(updates)
       .eq('id', id)
       .select()
@@ -144,7 +144,7 @@ export const updateInstallment = async (id: string, updates: UpdateInstallmentIn
         // Retry without start_date column
         const { start_date, ...updatesWithoutStartDate } = updates as any;
         const { data: retryData, error: retryError } = await supabase
-          .from('installments')
+          .from(getTableName('installments'))
           .update(updatesWithoutStartDate)
           .eq('id', id)
           .select()
@@ -181,7 +181,7 @@ export const updateInstallment = async (id: string, updates: UpdateInstallmentIn
 export const deleteInstallment = async (id: string) => {
   try {
     const { error } = await supabase
-      .from('installments')
+      .from(getTableName('installments'))
       .delete()
       .eq('id', id);
 
@@ -199,7 +199,7 @@ export const deleteInstallment = async (id: string) => {
 export const getInstallmentsByAccount = async (accountId: string) => {
   try {
     const { data, error } = await supabase
-      .from('installments')
+      .from(getTableName('installments'))
       .select('*')
       .eq('account_id', accountId)
       .order('name', { ascending: true });
@@ -220,7 +220,7 @@ export const getInstallmentsByAccount = async (accountId: string) => {
 export const getActiveInstallments = async () => {
   try {
     const { data, error } = await supabase
-      .from('installments')
+      .from(getTableName('installments'))
       .select('*')
       .order('name', { ascending: true });
 

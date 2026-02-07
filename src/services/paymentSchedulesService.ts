@@ -5,7 +5,7 @@
  * This service manages individual payment schedules for billers and installments.
  */
 
-import { supabase } from '../utils/supabaseClient';
+import { supabase, getTableName } from '../utils/supabaseClient';
 import type {
   SupabaseMonthlyPaymentSchedule,
   CreateMonthlyPaymentScheduleInput,
@@ -18,7 +18,7 @@ import type {
 export const createPaymentSchedule = async (schedule: CreateMonthlyPaymentScheduleInput) => {
   try {
     const { data, error } = await supabase
-      .from('monthly_payment_schedules')
+      .from(getTableName('monthly_payment_schedules'))
       .insert([schedule])
       .select()
       .single();
@@ -37,7 +37,7 @@ export const createPaymentSchedule = async (schedule: CreateMonthlyPaymentSchedu
 export const createPaymentSchedulesBulk = async (schedules: CreateMonthlyPaymentScheduleInput[]) => {
   try {
     const { data, error } = await supabase
-      .from('monthly_payment_schedules')
+      .from(getTableName('monthly_payment_schedules'))
       .insert(schedules)
       .select();
 
@@ -56,7 +56,7 @@ export const createPaymentSchedulesBulk = async (schedules: CreateMonthlyPayment
 export const getPaymentSchedulesBySource = async (sourceType: 'biller' | 'installment', sourceId: string) => {
   try {
     const { data, error } = await supabase
-      .from('monthly_payment_schedules')
+      .from(getTableName('monthly_payment_schedules'))
       .select('*')
       .eq('source_type', sourceType)
       .eq('source_id', sourceId)
@@ -86,7 +86,7 @@ export const getPaymentSchedulesBySource = async (sourceType: 'biller' | 'instal
 export const getPaymentScheduleById = async (id: string) => {
   try {
     const { data, error } = await supabase
-      .from('monthly_payment_schedules')
+      .from(getTableName('monthly_payment_schedules'))
       .select('*')
       .eq('id', id)
       .single();
@@ -105,7 +105,7 @@ export const getPaymentScheduleById = async (id: string) => {
 export const updatePaymentSchedule = async (id: string, updates: UpdateMonthlyPaymentScheduleInput) => {
   try {
     const { data, error } = await supabase
-      .from('monthly_payment_schedules')
+      .from(getTableName('monthly_payment_schedules'))
       .update(updates)
       .eq('id', id)
       .select()
@@ -125,7 +125,7 @@ export const updatePaymentSchedule = async (id: string, updates: UpdateMonthlyPa
 export const deletePaymentSchedulesBySource = async (sourceType: 'biller' | 'installment', sourceId: string) => {
   try {
     const { error } = await supabase
-      .from('monthly_payment_schedules')
+      .from(getTableName('monthly_payment_schedules'))
       .delete()
       .eq('source_type', sourceType)
       .eq('source_id', sourceId);
@@ -144,7 +144,7 @@ export const deletePaymentSchedulesBySource = async (sourceType: 'biller' | 'ins
 export const deletePaymentSchedule = async (id: string) => {
   try {
     const { error } = await supabase
-      .from('monthly_payment_schedules')
+      .from(getTableName('monthly_payment_schedules'))
       .delete()
       .eq('id', id);
 
@@ -163,7 +163,7 @@ export const deletePaymentSchedule = async (id: string) => {
 export const getPaymentSchedulesByStatus = async (status: 'pending' | 'paid' | 'partial' | 'overdue') => {
   try {
     const { data, error } = await supabase
-      .from('monthly_payment_schedules')
+      .from(getTableName('monthly_payment_schedules'))
       .select('*')
       .eq('status', status)
       .order('year', { ascending: true });
@@ -192,7 +192,7 @@ export const getPaymentSchedulesByStatus = async (status: 'pending' | 'paid' | '
 export const getPaymentSchedulesByPeriod = async (month: string, year: number) => {
   try {
     const { data, error } = await supabase
-      .from('monthly_payment_schedules')
+      .from(getTableName('monthly_payment_schedules'))
       .select('*')
       .eq('month', month)
       .eq('year', year)
@@ -237,7 +237,7 @@ export const recordPayment = async (
     // Note: Overdue status should be set separately based on due date comparison
 
     const { data, error } = await supabase
-      .from('monthly_payment_schedules')
+      .from(getTableName('monthly_payment_schedules'))
       .update({
         amount_paid: totalPaid,
         date_paid: payment.datePaid,
@@ -325,7 +325,7 @@ export const markOverdueSchedules = async (dueDay: number = 15) => {
     
     // Get all pending or partial schedules
     const { data: schedules, error: fetchError } = await supabase
-      .from('monthly_payment_schedules')
+      .from(getTableName('monthly_payment_schedules'))
       .select('*')
       .in('status', ['pending', 'partial']);
 
@@ -357,7 +357,7 @@ export const markOverdueSchedules = async (dueDay: number = 15) => {
     // Update overdue schedules
     if (overdueScheduleIds.length > 0) {
       const { error: updateError } = await supabase
-        .from('monthly_payment_schedules')
+        .from(getTableName('monthly_payment_schedules'))
         .update({ status: 'overdue' })
         .in('id', overdueScheduleIds);
 

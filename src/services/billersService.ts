@@ -5,7 +5,7 @@
  * Also manages monthly payment schedules for billers.
  */
 
-import { supabase } from '../utils/supabaseClient';
+import { supabase, getTableName } from '../utils/supabaseClient';
 import type {
   SupabaseBiller,
   CreateBillerInput,
@@ -22,7 +22,7 @@ import { createPaymentSchedulesBulk, deletePaymentSchedulesBySource } from './pa
 export const getAllBillers = async () => {
   try {
     const { data, error } = await supabase
-      .from('billers')
+      .from(getTableName('billers'))
       .select('*')
       .order('name', { ascending: true });
 
@@ -40,7 +40,7 @@ export const getAllBillers = async () => {
 export const getBillerById = async (id: string) => {
   try {
     const { data, error } = await supabase
-      .from('billers')
+      .from(getTableName('billers'))
       .select('*')
       .eq('id', id)
       .single();
@@ -59,7 +59,7 @@ export const getBillerById = async (id: string) => {
 export const createBiller = async (biller: CreateBillerInput) => {
   try {
     const { data, error } = await supabase
-      .from('billers')
+      .from(getTableName('billers'))
       .insert([biller])
       .select()
       .single();
@@ -78,7 +78,7 @@ export const createBiller = async (biller: CreateBillerInput) => {
 export const updateBiller = async (id: string, updates: UpdateBillerInput) => {
   try {
     const { data, error } = await supabase
-      .from('billers')
+      .from(getTableName('billers'))
       .update(updates)
       .eq('id', id)
       .select()
@@ -98,7 +98,7 @@ export const updateBiller = async (id: string, updates: UpdateBillerInput) => {
 export const deleteBiller = async (id: string) => {
   try {
     const { error } = await supabase
-      .from('billers')
+      .from(getTableName('billers'))
       .delete()
       .eq('id', id);
 
@@ -116,7 +116,7 @@ export const deleteBiller = async (id: string) => {
 export const getBillersByStatus = async (status: string) => {
   try {
     const { data, error } = await supabase
-      .from('billers')
+      .from(getTableName('billers'))
       .select('*')
       .eq('status', status)
       .order('name', { ascending: true });
@@ -135,7 +135,7 @@ export const getBillersByStatus = async (status: string) => {
 export const getBillersByCategory = async (category: string) => {
   try {
     const { data, error } = await supabase
-      .from('billers')
+      .from(getTableName('billers'))
       .select('*')
       .eq('category', category)
       .order('name', { ascending: true });
