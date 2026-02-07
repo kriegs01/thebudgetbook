@@ -1,8 +1,10 @@
 import React, { useState } from 'react';
-import { ChevronDown, ChevronRight, Hash, Globe, Bell, Lock, Trash2, AlertTriangle, RotateCcw, Plus, X, Database, Copy } from 'lucide-react';
+import { ChevronDown, ChevronRight, Hash, Globe, Bell, Lock, Trash2, AlertTriangle, RotateCcw, Plus, X, Database, Copy, Shield } from 'lucide-react';
 import { BudgetCategory } from '../types';
 import { useTestEnvironment } from '../src/contexts/TestEnvironmentContext';
 import { supabase } from '../src/utils/supabaseClient';
+import { SecuritySettings } from '../src/components/settings/SecuritySettings';
+import { PinProtectedAction } from '../src/components/PinProtectedAction';
 
 interface SettingsProps {
   currency: string;
@@ -261,6 +263,12 @@ const Settings: React.FC<SettingsProps> = ({ currency, setCurrency, categories, 
       )
     },
     {
+      id: 'security',
+      label: 'Security',
+      icon: <Shield className="w-5 h-5" />,
+      content: <SecuritySettings />
+    },
+    {
       id: 'test-environment',
       label: 'Test Environment',
       icon: <Database className="w-5 h-5" />,
@@ -304,23 +312,35 @@ const Settings: React.FC<SettingsProps> = ({ currency, setCurrency, categories, 
           </div>
 
           <div className="space-y-3">
-            <button
-              onClick={copyProductionToTest}
-              disabled={isCopying}
-              className="w-full flex items-center justify-center space-x-3 p-4 bg-blue-600 text-white rounded-2xl font-bold text-sm hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+            <PinProtectedAction
+              featureId="test_environment"
+              onVerified={copyProductionToTest}
+              actionLabel="Copy Production to Test"
             >
-              <Copy className="w-5 h-5" />
-              <span>{isCopying ? 'Copying...' : 'Copy Production to Test'}</span>
-            </button>
+              <button
+                onClick={(e) => e.preventDefault()}
+                disabled={isCopying}
+                className="w-full flex items-center justify-center space-x-3 p-4 bg-blue-600 text-white rounded-2xl font-bold text-sm hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+              >
+                <Copy className="w-5 h-5" />
+                <span>{isCopying ? 'Copying...' : '🔒 Copy Production to Test'}</span>
+              </button>
+            </PinProtectedAction>
 
-            <button
-              onClick={clearTestData}
-              disabled={isClearing}
-              className="w-full flex items-center justify-center space-x-3 p-4 bg-red-600 text-white rounded-2xl font-bold text-sm hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+            <PinProtectedAction
+              featureId="test_environment"
+              onVerified={clearTestData}
+              actionLabel="Clear Test Data"
             >
-              <Trash2 className="w-5 h-5" />
-              <span>{isClearing ? 'Clearing...' : 'Clear Test Data'}</span>
-            </button>
+              <button
+                onClick={(e) => e.preventDefault()}
+                disabled={isClearing}
+                className="w-full flex items-center justify-center space-x-3 p-4 bg-red-600 text-white rounded-2xl font-bold text-sm hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+              >
+                <Trash2 className="w-5 h-5" />
+                <span>{isClearing ? 'Clearing...' : '🔒 Clear Test Data'}</span>
+              </button>
+            </PinProtectedAction>
           </div>
         </div>
       )
@@ -377,13 +397,19 @@ const Settings: React.FC<SettingsProps> = ({ currency, setCurrency, categories, 
               <h4 className="text-red-700 font-black uppercase text-sm mb-2">Reset All Data</h4>
               <p className="text-red-600/70 text-xs mb-6 font-medium">Wipe all entries on all pages. Your app will return to an empty state.</p>
             </div>
-            <button 
-              onClick={onResetAll}
-              className="flex items-center justify-center space-x-3 w-full py-4 bg-red-600 text-white rounded-2xl font-black uppercase tracking-widest text-[10px] hover:bg-red-700 transition-all shadow-xl shadow-red-100"
+            <PinProtectedAction
+              featureId="danger_zone"
+              onVerified={onResetAll || (() => {})}
+              actionLabel="Reset All Data"
             >
-              <RotateCcw className="w-5 h-5" />
-              <span>Reset Everything</span>
-            </button>
+              <button 
+                onClick={(e) => e.preventDefault()}
+                className="flex items-center justify-center space-x-3 w-full py-4 bg-red-600 text-white rounded-2xl font-black uppercase tracking-widest text-[10px] hover:bg-red-700 transition-all shadow-xl shadow-red-100"
+              >
+                <RotateCcw className="w-5 h-5" />
+                <span>🔒 Reset Everything</span>
+              </button>
+            </PinProtectedAction>
           </div>
         </div>
       </div>
