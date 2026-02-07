@@ -327,3 +327,104 @@ export const deleteTransactionAndRevertSchedule = async (transactionId: string) 
     return { error };
   }
 };
+
+/**
+ * Create a transfer between two accounts
+ * Creates two linked transactions: negative on source, positive on destination
+ */
+export const createTransfer = async (
+  sourceAccountId: string,
+  destinationAccountId: string,
+  amount: number,
+  date: string
+) => {
+  try {
+    // Create the outgoing transaction (negative)
+    const { data: outgoingTx, error: outgoingError } = await supabase
+      .from('transactions')
+      .insert([{
+        name: 'Transfer Out',
+        date,
+        amount: amount,
+        payment_method_id: sourceAccountId,
+        transaction_type: 'transfer',
+        notes: `Transfer to another account`
+      }])
+      .select()
+      .single();
+
+    if (outgoingError) throw outgoingError;
+
+    // Create the incoming transaction (positive)
+    const { data: incomingTx, error: incomingError } = await supabase
+      .from('transactions')
+      .insert([{
+        name: 'Transfer In',
+        date,
+        amount: amount, // Positive for receiving account
+        payment_method_id: destinationAccountId,
+        transaction_type: 'transfer',
+        notes: `Transfer from another account`,
+        related_transaction_id: outgoingTx.id
+      }])
+      .select()
+      .single();
+
+    if (incomingError) throw incomingError;
+
+    // Link the outgoing transaction to the incoming one
+    await supabase
+      .from('transactions')
+      .update({ related_transaction_id: incomingTx.id })
+      .eq('id', outgoingTx.id);
+
+    return { data: { outgoing: outgoingTx, incoming: incomingTx }, error: null };
+  } catch (error) {
+    console.error('Error creating transfer:', error);
+    return { data: null, error };
+  }
+};
+
+/**
+ * Get loan transactions with their payment history
+ */
+export const getLoanTransactionsWithPayments = async (accountId: string) => {
+  try {
+    // Get all loan transactions for this account
+    const { data: loans, error: loansError } = await supabase
+      .from('transactions')
+      .select('*')
+      .eq('payment_method_id', accountId)
+      .eq('transaction_type', 'loan')
+      .order('date', { ascending: false });
+
+    if (loansError) throw loansError;
+
+    // For each loan, get its payments
+    const loansWithPayments = await Promise.all(
+      (loans || []).map(async (loan) => {
+        const { data: payments, error: paymentsError } = await supabase
+          .from('transactions')
+          .select('*')
+          .eq('related_transaction_id', loan.id)
+          .eq('transaction_type', 'loan_payment')
+          .order('date', { ascending: true });
+
+        const totalPaid = (payments || []).reduce((sum, p) => sum + p.amount, 0);
+        const remainingBalance = Math.abs(loan.amount) - totalPaid;
+
+        return {
+          ...loan,
+          payments: payments || [],
+          totalPaid,
+          remainingBalance
+        };
+      })
+    );
+
+    return { data: loansWithPayments, error: null };
+  } catch (error) {
+    console.error('Error fetching loan transactions:', error);
+    return { data: null, error };
+  }
+};
