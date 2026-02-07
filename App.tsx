@@ -3,13 +3,14 @@ import { Menu, ChevronLeft } from 'lucide-react';
 import { BrowserRouter, Routes, Route, NavLink } from 'react-router-dom';
 import { NAV_ITEMS, INITIAL_BUDGET, DEFAULT_SETUP, INITIAL_CATEGORIES } from './constants';
 import { getAllBillersFrontend, createBillerFrontend, updateBillerFrontend, deleteBillerFrontend } from './src/services/billersService';
-import { getAllAccountsFrontend, createAccountFrontend, updateAccountFrontend, deleteAccountFrontend } from './src/services/accountsService';
+import { getAllAccountsWithCalculatedBalances, createAccountFrontend, updateAccountFrontend, deleteAccountFrontend } from './src/services/accountsService';
 import { getAllInstallmentsFrontend, createInstallmentFrontend, updateInstallmentFrontend, deleteInstallmentFrontend } from './src/services/installmentsService';
 import { getAllSavingsFrontend, createSavingsFrontend, updateSavingsFrontend, deleteSavingsFrontend } from './src/services/savingsService';
 import { getAllBudgetSetupsFrontend, deleteBudgetSetupFrontend } from './src/services/budgetSetupsService';
 import { getPaymentSchedulesBySource } from './src/services/paymentSchedulesService';
 import { getAllTransactions, createPaymentScheduleTransaction } from './src/services/transactionsService';
 import { recordPayment } from './src/services/paymentSchedulesService';
+import { supabase } from './src/utils/supabaseClient';
 import type { Biller, Account, Installment, SavingsJar, Transaction } from './types';
 import type { SupabaseTransaction } from './src/types/supabase';
 
@@ -188,7 +189,7 @@ const App: React.FC = () => {
       setAccountsLoading(true);
       setAccountsError(null);
       
-      const { data, error } = await getAllAccountsFrontend();
+      const { data, error } = await getAllAccountsWithCalculatedBalances();
       
       if (error) {
         console.error('Error loading accounts:', error);
@@ -289,7 +290,7 @@ const App: React.FC = () => {
   };
 
   const reloadAccounts = async () => {
-    const { data, error } = await getAllAccountsFrontend();
+    const { data, error } = await getAllAccountsWithCalculatedBalances();
     if (error) {
       console.error('Error reloading accounts:', error);
       setAccountsError('Failed to reload accounts from database');
@@ -341,6 +342,42 @@ const App: React.FC = () => {
       setBudgetSetupsError(null);
     }
   };
+
+  // Real-time subscription for transaction changes
+  // This enables instant balance updates when transactions are created/deleted
+  useEffect(() => {
+    console.log('[App] Setting up real-time subscription for transactions');
+    
+    // Create a channel for listening to transactions table changes
+    const channel = supabase
+      .channel('transactions-realtime')
+      .on(
+        'postgres_changes',
+        {
+          event: '*', // Listen to all events (INSERT, UPDATE, DELETE)
+          schema: 'public',
+          table: 'transactions'
+        },
+        (payload) => {
+          console.log('[App] Transaction changed via real-time:', payload.eventType, payload);
+          
+          // Reload accounts to recalculate balances in real-time
+          reloadAccounts();
+          
+          // Also reload transactions list if needed
+          reloadTransactions();
+        }
+      )
+      .subscribe((status) => {
+        console.log('[App] Real-time subscription status:', status);
+      });
+
+    // Cleanup subscription when component unmounts
+    return () => {
+      console.log('[App] Cleaning up real-time subscription');
+      supabase.removeChannel(channel);
+    };
+  }, []); // Empty dependency array - only set up once
 
   const handleAddBiller = async (newBiller: Biller) => {
     const { data, error } = await createBillerFrontend(newBiller);
@@ -673,12 +710,22 @@ const App: React.FC = () => {
 
   /**
    * Handle transaction deletion with payment schedule reversion
-   * This triggers a reload of installments and transactions to reflect status changes in UI
+   * This triggers a reload of accounts, installments and transactions to reflect status changes in UI
    */
   const handleTransactionDeleted = async () => {
-    console.log('[App] Transaction deleted, reloading installments and transactions to reflect changes');
+    console.log('[App] Transaction deleted, reloading accounts, installments and transactions to reflect changes');
+    await fetchAccounts(); // Reload accounts to recalculate balances
     await reloadInstallments();
     await reloadTransactions();
+  };
+
+  /**
+   * Handle transaction creation
+   * This triggers a reload of accounts to recalculate balances
+   */
+  const handleTransactionCreated = async () => {
+    console.log('[App] Transaction created, reloading accounts to recalculate balances');
+    await fetchAccounts(); // Reload accounts to recalculate balances
   };
 
 
@@ -872,7 +919,10 @@ const App: React.FC = () => {
                 />
               } />
               <Route path="/transactions" element={
-                <TransactionsPage onTransactionDeleted={handleTransactionDeleted} />
+                <TransactionsPage 
+                  onTransactionDeleted={handleTransactionDeleted}
+                  onTransactionCreated={handleTransactionCreated}
+                />
               } />
               <Route path="/supabase-demo" element={
                 <SupabaseDemo />

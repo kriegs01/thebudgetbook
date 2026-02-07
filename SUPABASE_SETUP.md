@@ -149,14 +149,43 @@ CREATE POLICY "Enable all for transactions" ON transactions FOR ALL USING (true)
 CREATE POLICY "Enable all for budget_setups" ON budget_setups FOR ALL USING (true) WITH CHECK (true);
 ```
 
-### Step 5: Install Dependencies
+### Step 5: Enable Real-time for Transactions (IMPORTANT!)
+
+For instant balance updates to work, you need to enable Supabase Real-time for the transactions table:
+
+**Option A: Using Supabase Dashboard (Recommended)**
+1. Go to your Supabase project
+2. Navigate to **Database** → **Replication**
+3. Find the `transactions` table in the list
+4. Toggle the **Real-time** switch to **ON**
+
+**Option B: Using SQL**
+Run the migration file in the SQL Editor:
+```sql
+-- Enable real-time for transactions table
+ALTER TABLE transactions REPLICA IDENTITY FULL;
+ALTER PUBLICATION supabase_realtime ADD TABLE transactions;
+```
+
+Or run the complete migration file: `supabase/migrations/20260204_enable_realtime_transactions.sql`
+
+**Verify Real-time Setup:**
+```sql
+-- Check if transactions is in the publication
+SELECT * FROM pg_publication_tables WHERE pubname = 'supabase_realtime';
+
+-- Check REPLICA IDENTITY (should be 'f' for FULL)
+SELECT relreplident FROM pg_class WHERE relname = 'transactions';
+```
+
+### Step 6: Install Dependencies
 
 If not already installed:
 ```bash
 npm install @supabase/supabase-js
 ```
 
-### Step 6: Start the Application
+### Step 7: Start the Application
 
 ```bash
 npm run dev
@@ -465,6 +494,34 @@ function AccountsList() {
 ```typescript
 import type { SupabaseAccount } from '../src/types/supabase';
 ```
+
+#### "Real-time balance updates not working" or "Still need to refresh"
+
+**Problem**: Balance changes don't appear automatically after creating/deleting transactions.
+
+**Solution**: Enable Supabase Real-time for the transactions table (see Step 5 above).
+
+**Verify Real-time is working:**
+1. Open browser console (F12)
+2. Look for these logs:
+   ```
+   [App] Setting up real-time subscription for transactions
+   [App] Real-time subscription status: SUBSCRIBED
+   ```
+3. Create a transaction and check for:
+   ```
+   [App] Transaction changed via real-time: INSERT
+   ```
+
+**If you see "CHANNEL_ERROR" or no subscription logs:**
+- Go to Supabase Dashboard → Database → Replication
+- Ensure `transactions` table has Real-time enabled (toggle ON)
+- Run the migration: `supabase/migrations/20260204_enable_realtime_transactions.sql`
+
+**If real-time connects but balances don't update:**
+- Check browser console for errors
+- Verify RLS policies allow reading from transactions table
+- Ensure WebSocket connections aren't blocked by firewall/proxy
 
 ### Getting Help
 

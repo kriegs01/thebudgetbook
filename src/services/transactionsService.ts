@@ -2,6 +2,22 @@
  * Transactions Service
  * 
  * Provides CRUD operations for the transactions table in Supabase.
+ * 
+ * IMPORTANT: Account Balance Calculation
+ * ---------------------------------------
+ * Account balances are NOT updated when transactions are created or deleted.
+ * Instead, balances are calculated dynamically from the transactions table.
+ * 
+ * Implementation:
+ * - The balance field in the accounts table represents the INITIAL balance
+ * - Current balance = initial balance ± all transactions for that account
+ * - Use accountBalanceCalculator utility to calculate current balances
+ * 
+ * Benefits:
+ * - No race conditions - balance is calculated, not stored
+ * - No partial failure issues - transactions are source of truth
+ * - Always consistent - balance is derived from transactions
+ * - Easy to audit and recalculate
  */
 
 import { supabase } from '../utils/supabaseClient';
@@ -50,6 +66,7 @@ export const getTransactionById = async (id: string) => {
 
 /**
  * Create a new transaction
+ * Note: Account balances are calculated dynamically from transactions, not updated here
  */
 export const createTransaction = async (transaction: CreateTransactionInput) => {
   try {
@@ -172,7 +189,8 @@ export const getTransactionTotal = async (startDate?: string, endDate?: string) 
 
 /**
  * Create a transaction for a payment schedule payment
- * This links the transaction to a payment schedule and updates the schedule status
+ * This links the transaction to a payment schedule
+ * Note: Account balances are calculated dynamically from transactions, not updated here
  */
 export const createPaymentScheduleTransaction = async (
   scheduleId: string,
@@ -235,7 +253,7 @@ export const getTransactionsByPaymentSchedule = async (scheduleId: string) => {
 
 /**
  * Delete a transaction and revert payment schedule status if linked
- * This is the key function that handles the requirement of reverting payment status
+ * Note: Account balances are calculated dynamically from transactions, so no balance reversion needed
  */
 export const deleteTransactionAndRevertSchedule = async (transactionId: string) => {
   try {
@@ -254,7 +272,6 @@ export const deleteTransactionAndRevertSchedule = async (transactionId: string) 
         amount: transaction.amount,
       });
 
-      // Import payment schedule service functions (we'll need to update this)
       // Get the current schedule
       const { data: schedule, error: scheduleError } = await supabase
         .from('monthly_payment_schedules')
