@@ -18,7 +18,7 @@ export const SetPinModal: React.FC<SetPinModalProps> = ({ show, onClose, onSucce
 
   if (!show) return null;
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
 
@@ -41,7 +41,7 @@ export const SetPinModal: React.FC<SetPinModalProps> = ({ show, onClose, onSucce
         return;
       }
 
-      if (setPin(pin)) {
+      if (await setPin(pin)) {
         onSuccess();
         handleClose();
       } else {

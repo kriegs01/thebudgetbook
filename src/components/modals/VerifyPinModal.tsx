@@ -15,12 +15,14 @@ export const VerifyPinModal: React.FC<VerifyPinModalProps> = ({
   onVerified, 
   actionLabel = 'Protected Action' 
 }) => {
-  const { verifyPin, getRemainingAttempts, isLockedOut, getLockoutTimeRemaining } = usePinProtection();
+  const { verifyPin, getRemainingAttempts, isLockedOut, getLockoutTimeRemaining, getSettings } = usePinProtection();
   const [pin, setPin] = useState('');
   const [showPin, setShowPin] = useState(false);
   const [error, setError] = useState('');
   const [shake, setShake] = useState(false);
   const [lockoutTime, setLockoutTime] = useState(0);
+  
+  const settings = getSettings();
 
   useEffect(() => {
     if (isLockedOut()) {
@@ -39,7 +41,7 @@ export const VerifyPinModal: React.FC<VerifyPinModalProps> = ({
 
   if (!show) return null;
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
 
@@ -57,7 +59,7 @@ export const VerifyPinModal: React.FC<VerifyPinModalProps> = ({
       return;
     }
 
-    if (verifyPin(pin)) {
+    if (await verifyPin(pin)) {
       onVerified();
       handleClose();
     } else {
@@ -181,7 +183,7 @@ export const VerifyPinModal: React.FC<VerifyPinModalProps> = ({
               </div>
             )}
 
-            {!isLockedOut() && getRemainingAttempts() < 3 && !error && (
+            {!isLockedOut() && getRemainingAttempts() < settings.max_attempts && !error && (
               <div className="bg-orange-50 border border-orange-200 rounded-xl p-4">
                 <p className="text-xs text-orange-600 font-bold text-center">
                   ⚠️ {getRemainingAttempts()} attempt{getRemainingAttempts() === 1 ? '' : 's'} remaining

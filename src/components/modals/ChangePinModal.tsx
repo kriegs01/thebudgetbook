@@ -19,7 +19,7 @@ export const ChangePinModal: React.FC<ChangePinModalProps> = ({ show, onClose, o
 
   if (!show) return null;
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
 
@@ -52,7 +52,7 @@ export const ChangePinModal: React.FC<ChangePinModalProps> = ({ show, onClose, o
         return;
       }
 
-      if (changePin(currentPin, newPin)) {
+      if (await changePin(currentPin, newPin)) {
         onSuccess();
         handleClose();
       } else {

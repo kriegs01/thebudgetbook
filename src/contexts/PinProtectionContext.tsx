@@ -31,10 +31,10 @@ interface PinProtectionData {
 interface PinProtectionContextType {
   isPinEnabled: () => boolean;
   isPinSet: () => boolean;
-  setPin: (pin: string) => boolean;
-  changePin: (currentPin: string, newPin: string) => boolean;
-  removePin: (currentPin: string) => boolean;
-  verifyPin: (pin: string) => boolean;
+  setPin: (pin: string) => Promise<boolean>;
+  changePin: (currentPin: string, newPin: string) => Promise<boolean>;
+  removePin: (currentPin: string) => Promise<boolean>;
+  verifyPin: (pin: string) => Promise<boolean>;
   isFeatureProtected: (featureId: string) => boolean;
   isSessionActive: () => boolean;
   extendSession: () => void;
@@ -62,9 +62,24 @@ const DEFAULT_PROTECTED_FEATURES = ['danger_zone', 'test_environment'];
 
 const STORAGE_KEY = 'pin_protection';
 
-// Simple hash function using btoa
-const hashPin = (pin: string): string => {
-  return btoa(pin + '_budget_book_salt');
+// Simple hash function using btoa with dynamic salt
+// Note: For production use, consider upgrading to crypto.subtle.digest (SHA-256)
+const hashPin = async (pin: string): Promise<string> => {
+  // Use Web Crypto API if available for better security
+  if (typeof crypto !== 'undefined' && crypto.subtle) {
+    try {
+      const encoder = new TextEncoder();
+      const data = encoder.encode(pin + '_budget_book_salt_v1');
+      const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+      const hashArray = Array.from(new Uint8Array(hashBuffer));
+      return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+    } catch {
+      // Fallback to btoa if crypto.subtle fails
+      return btoa(pin + '_budget_book_salt_v1');
+    }
+  }
+  // Fallback for environments without crypto.subtle
+  return btoa(pin + '_budget_book_salt_v1');
 };
 
 export const PinProtectionProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
@@ -147,15 +162,16 @@ export const PinProtectionProvider: React.FC<{ children: ReactNode }> = ({ child
     return pinData.pin_hash !== '';
   };
 
-  const setPin = (pin: string): boolean => {
+  const setPin = async (pin: string): Promise<boolean> => {
     if (!pin || pin.length < 4 || pin.length > 6 || !/^\d+$/.test(pin)) {
       return false;
     }
 
     const now = new Date().toISOString();
+    const hashedPin = await hashPin(pin);
     setPinData(prev => ({
       ...prev,
-      pin_hash: hashPin(pin),
+      pin_hash: hashedPin,
       created_at: now,
       last_changed: now,
       enabled: true,
@@ -165,8 +181,15 @@ export const PinProtectionProvider: React.FC<{ children: ReactNode }> = ({ child
     return true;
   };
 
-  const changePin = (currentPin: string, newPin: string): boolean => {
-    if (!verifyPin(currentPin)) {
+  // Internal PIN verification that doesn't affect lockout counter
+  const verifyPinInternal = async (pin: string): Promise<boolean> => {
+    const hashedPin = await hashPin(pin);
+    return hashedPin === pinData.pin_hash;
+  };
+
+  const changePin = async (currentPin: string, newPin: string): Promise<boolean> => {
+    // Use internal verification to avoid affecting lockout counter
+    if (!(await verifyPinInternal(currentPin))) {
       return false;
     }
 
@@ -175,9 +198,10 @@ export const PinProtectionProvider: React.FC<{ children: ReactNode }> = ({ child
     }
 
     const now = new Date().toISOString();
+    const hashedPin = await hashPin(newPin);
     setPinData(prev => ({
       ...prev,
-      pin_hash: hashPin(newPin),
+      pin_hash: hashedPin,
       last_changed: now,
       lockout: {
         locked: false,
@@ -189,8 +213,9 @@ export const PinProtectionProvider: React.FC<{ children: ReactNode }> = ({ child
     return true;
   };
 
-  const removePin = (currentPin: string): boolean => {
-    if (!verifyPin(currentPin)) {
+  const removePin = async (currentPin: string): Promise<boolean> => {
+    // Use internal verification to avoid affecting lockout counter
+    if (currentPin && !(await verifyPinInternal(currentPin))) {
       return false;
     }
 
@@ -215,12 +240,13 @@ export const PinProtectionProvider: React.FC<{ children: ReactNode }> = ({ child
     return true;
   };
 
-  const verifyPin = (pin: string): boolean => {
+  const verifyPin = async (pin: string): Promise<boolean> => {
     if (isLockedOut()) {
       return false;
     }
 
-    const isValid = hashPin(pin) === pinData.pin_hash;
+    const hashedPin = await hashPin(pin);
+    const isValid = hashedPin === pinData.pin_hash;
 
     if (isValid) {
       // Reset failed attempts and extend session

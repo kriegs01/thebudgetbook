@@ -22,6 +22,7 @@ export const SecuritySettings: React.FC = () => {
   const [showChangePinModal, setShowChangePinModal] = useState(false);
   const [showRemovePinModal, setShowRemovePinModal] = useState(false);
   const [confirmRemove, setConfirmRemove] = useState(false);
+  const [verifiedForRemoval, setVerifiedForRemoval] = useState(false);
 
   const settings = getSettings();
   const protectedFeatures = getProtectedFeatures();
@@ -50,14 +51,18 @@ export const SecuritySettings: React.FC = () => {
   };
 
   const handleRemovePinVerified = () => {
+    setVerifiedForRemoval(true);
     setConfirmRemove(true);
     setShowRemovePinModal(false);
   };
 
-  const confirmRemovePin = () => {
-    // The removePin will be called with empty string since we already verified
-    // This is handled by the modal
-    setConfirmRemove(false);
+  const confirmRemovePin = async () => {
+    if (verifiedForRemoval) {
+      // PIN already verified, pass empty string to bypass internal check
+      await removePin('');
+      setConfirmRemove(false);
+      setVerifiedForRemoval(false);
+    }
   };
 
   const formatDate = (dateString: string | null) => {
@@ -315,15 +320,17 @@ export const SecuritySettings: React.FC = () => {
             <div className="flex flex-col w-full space-y-3">
               <button
                 onClick={() => {
-                  removePin('');
-                  setConfirmRemove(false);
+                  confirmRemovePin();
                 }}
                 className="w-full bg-red-600 text-white py-4 rounded-2xl font-black uppercase tracking-widest text-[10px] hover:bg-red-700 transition-all shadow-lg shadow-red-100"
               >
                 Remove PIN
               </button>
               <button
-                onClick={() => setConfirmRemove(false)}
+                onClick={() => {
+                  setConfirmRemove(false);
+                  setVerifiedForRemoval(false);
+                }}
                 className="w-full bg-gray-100 text-gray-500 py-4 rounded-2xl font-black uppercase tracking-widest text-[10px] hover:bg-gray-200 transition-all"
               >
                 Cancel

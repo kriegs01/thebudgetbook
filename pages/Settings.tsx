@@ -399,7 +399,7 @@ const Settings: React.FC<SettingsProps> = ({ currency, setCurrency, categories, 
             </div>
             <PinProtectedAction
               featureId="danger_zone"
-              onVerified={onResetAll || (() => {})}
+              onVerified={onResetAll ? onResetAll : () => console.warn('onResetAll not provided to Settings component')}
               actionLabel="Reset All Data"
             >
               <button 
