@@ -4,7 +4,7 @@
  * Provides CRUD operations for the accounts table in Supabase.
  */
 
-import { supabase } from '../utils/supabaseClient';
+import { supabase, getTableName } from '../utils/supabaseClient';
 import type {
   SupabaseAccount,
   CreateAccountInput,
@@ -21,7 +21,7 @@ import type { Account } from '../../types';
 export const getAllAccounts = async () => {
   try {
     const { data, error } = await supabase
-      .from('accounts')
+      .from(getTableName('accounts'))
       .select('*')
       .order('created_at', { ascending: false });
 
@@ -39,7 +39,7 @@ export const getAllAccounts = async () => {
 export const getAccountById = async (id: string) => {
   try {
     const { data, error } = await supabase
-      .from('accounts')
+      .from(getTableName('accounts'))
       .select('*')
       .eq('id', id)
       .single();
@@ -58,7 +58,7 @@ export const getAccountById = async (id: string) => {
 export const createAccount = async (account: CreateAccountInput) => {
   try {
     const { data, error } = await supabase
-      .from('accounts')
+      .from(getTableName('accounts'))
       .insert([account])
       .select()
       .single();
@@ -77,7 +77,7 @@ export const createAccount = async (account: CreateAccountInput) => {
 export const updateAccount = async (id: string, updates: UpdateAccountInput) => {
   try {
     const { data, error } = await supabase
-      .from('accounts')
+      .from(getTableName('accounts'))
       .update(updates)
       .eq('id', id)
       .select()
@@ -97,7 +97,7 @@ export const updateAccount = async (id: string, updates: UpdateAccountInput) => 
 export const deleteAccount = async (id: string) => {
   try {
     const { error } = await supabase
-      .from('accounts')
+      .from(getTableName('accounts'))
       .delete()
       .eq('id', id);
 
@@ -115,7 +115,7 @@ export const deleteAccount = async (id: string) => {
 export const getAccountsByType = async (type: string) => {
   try {
     const { data, error } = await supabase
-      .from('accounts')
+      .from(getTableName('accounts'))
       .select('*')
       .eq('type', type)
       .order('created_at', { ascending: false });
@@ -134,7 +134,7 @@ export const getAccountsByType = async (type: string) => {
 export const getAccountsByClassification = async (classification: string) => {
   try {
     const { data, error } = await supabase
-      .from('accounts')
+      .from(getTableName('accounts'))
       .select('*')
       .eq('classification', classification)
       .order('created_at', { ascending: false });

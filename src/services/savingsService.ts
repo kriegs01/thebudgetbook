@@ -4,7 +4,7 @@
  * Provides CRUD operations for the savings table in Supabase.
  */
 
-import { supabase } from '../utils/supabaseClient';
+import { supabase, getTableName } from '../utils/supabaseClient';
 import type {
   SupabaseSavings,
   CreateSavingsInput,
@@ -19,7 +19,7 @@ import type { SavingsJar } from '../../types';
 export const getAllSavings = async () => {
   try {
     const { data, error } = await supabase
-      .from('savings')
+      .from(getTableName('savings'))
       .select('*')
       .order('name', { ascending: true });
 
@@ -37,7 +37,7 @@ export const getAllSavings = async () => {
 export const getSavingsById = async (id: string) => {
   try {
     const { data, error } = await supabase
-      .from('savings')
+      .from(getTableName('savings'))
       .select('*')
       .eq('id', id)
       .single();
@@ -56,7 +56,7 @@ export const getSavingsById = async (id: string) => {
 export const createSavings = async (savings: CreateSavingsInput) => {
   try {
     const { data, error } = await supabase
-      .from('savings')
+      .from(getTableName('savings'))
       .insert([savings])
       .select()
       .single();
@@ -75,7 +75,7 @@ export const createSavings = async (savings: CreateSavingsInput) => {
 export const updateSavings = async (id: string, updates: UpdateSavingsInput) => {
   try {
     const { data, error } = await supabase
-      .from('savings')
+      .from(getTableName('savings'))
       .update(updates)
       .eq('id', id)
       .select()
@@ -95,7 +95,7 @@ export const updateSavings = async (id: string, updates: UpdateSavingsInput) => 
 export const deleteSavings = async (id: string) => {
   try {
     const { error } = await supabase
-      .from('savings')
+      .from(getTableName('savings'))
       .delete()
       .eq('id', id);
 
@@ -113,7 +113,7 @@ export const deleteSavings = async (id: string) => {
 export const getSavingsByAccount = async (accountId: string) => {
   try {
     const { data, error } = await supabase
-      .from('savings')
+      .from(getTableName('savings'))
       .select('*')
       .eq('account_id', accountId)
       .order('name', { ascending: true });
@@ -132,7 +132,7 @@ export const getSavingsByAccount = async (accountId: string) => {
 export const getTotalSavingsBalance = async () => {
   try {
     const { data, error } = await supabase
-      .from('savings')
+      .from(getTableName('savings'))
       .select('current_balance');
 
     if (error) throw error;

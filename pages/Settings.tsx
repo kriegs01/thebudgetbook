@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
-import { ChevronDown, ChevronRight, Hash, Globe, Bell, Lock, Trash2, AlertTriangle, RotateCcw, Plus, X } from 'lucide-react';
+import { ChevronDown, ChevronRight, Hash, Globe, Bell, Lock, Trash2, AlertTriangle, RotateCcw, Plus, X, Database, Copy } from 'lucide-react';
 import { BudgetCategory } from '../types';
+import { useTestEnvironment } from '../src/contexts/TestEnvironmentContext';
+import { supabase } from '../src/utils/supabaseClient';
 
 interface SettingsProps {
   currency: string;
@@ -11,10 +13,15 @@ interface SettingsProps {
 }
 
 const Settings: React.FC<SettingsProps> = ({ currency, setCurrency, categories, setCategories, onResetAll }) => {
-  const [openSection, setOpenSection] = useState<string | null>('categories');
+  const [openSection, setOpenSection] = useState<string | null>(null);
   const [newCatName, setNewCatName] = useState('');
   const [showAddCat, setShowAddCat] = useState(false);
   const [newSubcatNames, setNewSubcatNames] = useState<{ [id: string]: string }>({});
+
+  // Test Environment state
+  const { isTestMode, setTestMode } = useTestEnvironment();
+  const [isCopying, setIsCopying] = useState(false);
+  const [isClearing, setIsClearing] = useState(false);
 
   const [confirmModal, setConfirmModal] = useState<{
     show: boolean;
@@ -73,6 +80,88 @@ const Settings: React.FC<SettingsProps> = ({ currency, setCurrency, categories, 
         setConfirmModal(p => ({ ...p, show: false }));
       }
     });
+  };
+
+  // Function to copy production data to test tables
+  const copyProductionToTest = async () => {
+    if (!confirm('This will replace all test data with current production data. Continue?')) {
+      return;
+    }
+
+    setIsCopying(true);
+    try {
+      const tables = ['accounts', 'billers', 'installments', 'savings', 'transactions', 'budget_setups', 'monthly_payment_schedules'];
+      
+      for (const table of tables) {
+        // Get all data from production table
+        const { data: prodData, error: fetchError } = await supabase
+          .from(table)
+          .select('*');
+
+        if (fetchError) {
+          console.error(`Error fetching ${table}:`, fetchError);
+          continue;
+        }
+
+        // Clear test table
+        const { error: deleteError } = await supabase
+          .from(`${table}_test`)
+          .delete()
+          .gte('created_at', '1970-01-01'); // Delete all records
+
+        if (deleteError) {
+          console.error(`Error clearing ${table}_test:`, deleteError);
+        }
+
+        // Insert production data into test table
+        if (prodData && prodData.length > 0) {
+          const { error: insertError } = await supabase
+            .from(`${table}_test`)
+            .insert(prodData);
+
+          if (insertError) {
+            console.error(`Error inserting into ${table}_test:`, insertError);
+          }
+        }
+      }
+
+      alert('Successfully copied production data to test environment!');
+    } catch (error) {
+      console.error('Error copying data:', error);
+      alert('Failed to copy data. Check console for details.');
+    } finally {
+      setIsCopying(false);
+    }
+  };
+
+  // Function to clear test data
+  const clearTestData = async () => {
+    if (!confirm('This will permanently delete all test environment data. Continue?')) {
+      return;
+    }
+
+    setIsClearing(true);
+    try {
+      const tables = ['transactions_test', 'savings_test', 'installments_test', 'billers_test', 'budget_setups_test', 'monthly_payment_schedules_test', 'accounts_test'];
+      
+      for (const table of tables) {
+        const { error } = await supabase
+          .from(table)
+          .delete()
+          .gte('created_at', '1970-01-01'); // Delete all records
+
+        if (error) {
+          console.error(`Error clearing ${table}:`, error);
+        }
+      }
+
+      alert('Test data cleared successfully!');
+    } catch (error) {
+      console.error('Error clearing test data:', error);
+      alert('Failed to clear test data. Check console for details.');
+    } finally {
+      setIsClearing(false);
+    }
   };
 
   const sections = [
@@ -167,6 +256,71 @@ const Settings: React.FC<SettingsProps> = ({ currency, setCurrency, categories, 
               <option value="GBP">GBP - British Pound (£)</option>
               <option value="JPY">JPY - Japanese Yen (¥)</option>
             </select>
+          </div>
+        </div>
+      )
+    },
+    {
+      id: 'test-environment',
+      label: 'Test Environment',
+      icon: <Database className="w-5 h-5" />,
+      content: (
+        <div className="space-y-6 pt-2">
+          <div className="bg-blue-50 border border-blue-200 rounded-2xl p-6">
+            <div className="flex items-start space-x-3">
+              <AlertTriangle className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />
+              <div>
+                <h4 className="text-sm font-bold text-blue-900 mb-1">About Test Environment</h4>
+                <p className="text-xs text-blue-700 leading-relaxed">
+                  Test mode uses separate database tables (_test suffix) so you can safely experiment 
+                  with new features without affecting your production data. Changes in test mode will 
+                  not impact your actual financial records.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div className="flex items-center justify-between p-6 bg-gray-50 rounded-2xl border border-gray-200">
+            <div>
+              <h4 className="font-black text-sm text-gray-900 uppercase mb-1">Test Mode</h4>
+              <p className="text-xs text-gray-500">
+                Current Environment: <span className={`font-bold ${isTestMode ? 'text-orange-600' : 'text-green-600'}`}>
+                  {isTestMode ? 'TEST' : 'PRODUCTION'}
+                </span>
+              </p>
+            </div>
+            <button
+              onClick={() => setTestMode(!isTestMode)}
+              className={`relative inline-flex h-8 w-16 items-center rounded-full transition-colors ${
+                isTestMode ? 'bg-orange-500' : 'bg-gray-300'
+              }`}
+            >
+              <span
+                className={`inline-block h-6 w-6 transform rounded-full bg-white transition-transform ${
+                  isTestMode ? 'translate-x-9' : 'translate-x-1'
+                }`}
+              />
+            </button>
+          </div>
+
+          <div className="space-y-3">
+            <button
+              onClick={copyProductionToTest}
+              disabled={isCopying}
+              className="w-full flex items-center justify-center space-x-3 p-4 bg-blue-600 text-white rounded-2xl font-bold text-sm hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+            >
+              <Copy className="w-5 h-5" />
+              <span>{isCopying ? 'Copying...' : 'Copy Production to Test'}</span>
+            </button>
+
+            <button
+              onClick={clearTestData}
+              disabled={isClearing}
+              className="w-full flex items-center justify-center space-x-3 p-4 bg-red-600 text-white rounded-2xl font-bold text-sm hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+            >
+              <Trash2 className="w-5 h-5" />
+              <span>{isClearing ? 'Clearing...' : 'Clear Test Data'}</span>
+            </button>
           </div>
         </div>
       )

@@ -20,7 +20,7 @@
  * - Easy to audit and recalculate
  */
 
-import { supabase } from '../utils/supabaseClient';
+import { supabase, getTableName } from '../utils/supabaseClient';
 import type {
   SupabaseTransaction,
   CreateTransactionInput,
@@ -33,7 +33,7 @@ import type {
 export const getAllTransactions = async () => {
   try {
     const { data, error } = await supabase
-      .from('transactions')
+      .from(getTableName('transactions'))
       .select('*')
       .order('date', { ascending: false })
       .order('id', { ascending: false }); // Secondary sort for deterministic ordering
@@ -52,7 +52,7 @@ export const getAllTransactions = async () => {
 export const getTransactionById = async (id: string) => {
   try {
     const { data, error } = await supabase
-      .from('transactions')
+      .from(getTableName('transactions'))
       .select('*')
       .eq('id', id)
       .single();
@@ -72,7 +72,7 @@ export const getTransactionById = async (id: string) => {
 export const createTransaction = async (transaction: CreateTransactionInput) => {
   try {
     const { data, error } = await supabase
-      .from('transactions')
+      .from(getTableName('transactions'))
       .insert([transaction])
       .select()
       .single();
@@ -91,7 +91,7 @@ export const createTransaction = async (transaction: CreateTransactionInput) => 
 export const updateTransaction = async (id: string, updates: UpdateTransactionInput) => {
   try {
     const { data, error } = await supabase
-      .from('transactions')
+      .from(getTableName('transactions'))
       .update(updates)
       .eq('id', id)
       .select()
@@ -111,7 +111,7 @@ export const updateTransaction = async (id: string, updates: UpdateTransactionIn
 export const deleteTransaction = async (id: string) => {
   try {
     const { error } = await supabase
-      .from('transactions')
+      .from(getTableName('transactions'))
       .delete()
       .eq('id', id);
 
@@ -129,7 +129,7 @@ export const deleteTransaction = async (id: string) => {
 export const getTransactionsByPaymentMethod = async (paymentMethodId: string) => {
   try {
     const { data, error } = await supabase
-      .from('transactions')
+      .from(getTableName('transactions'))
       .select('*')
       .eq('payment_method_id', paymentMethodId)
       .order('date', { ascending: false });
@@ -148,7 +148,7 @@ export const getTransactionsByPaymentMethod = async (paymentMethodId: string) =>
 export const getTransactionsByDateRange = async (startDate: string, endDate: string) => {
   try {
     const { data, error } = await supabase
-      .from('transactions')
+      .from(getTableName('transactions'))
       .select('*')
       .gte('date', startDate)
       .lte('date', endDate)
@@ -167,7 +167,7 @@ export const getTransactionsByDateRange = async (startDate: string, endDate: str
  */
 export const getTransactionTotal = async (startDate?: string, endDate?: string) => {
   try {
-    let query = supabase.from('transactions').select('amount');
+    let query = supabase.from(getTableName('transactions')).select('amount');
     
     if (startDate) {
       query = query.gte('date', startDate);
@@ -213,7 +213,7 @@ export const createPaymentScheduleTransaction = async (
     };
 
     const { data, error } = await supabase
-      .from('transactions')
+      .from(getTableName('transactions'))
       .insert([transactionData])
       .select()
       .single();
@@ -239,7 +239,7 @@ export const createPaymentScheduleTransaction = async (
 export const getTransactionsByPaymentSchedule = async (scheduleId: string) => {
   try {
     const { data, error } = await supabase
-      .from('transactions')
+      .from(getTableName('transactions'))
       .select('*')
       .eq('payment_schedule_id', scheduleId)
       .order('date', { ascending: false });
@@ -275,7 +275,7 @@ export const deleteTransactionAndRevertSchedule = async (transactionId: string) 
 
       // Get the current schedule
       const { data: schedule, error: scheduleError } = await supabase
-        .from('monthly_payment_schedules')
+        .from(getTableName('monthly_payment_schedules'))
         .select('*')
         .eq('id', transaction.payment_schedule_id)
         .single();
@@ -294,7 +294,7 @@ export const deleteTransactionAndRevertSchedule = async (transactionId: string) 
 
         // Update the payment schedule
         await supabase
-          .from('monthly_payment_schedules')
+          .from(getTableName('monthly_payment_schedules'))
           .update({
             amount_paid: newAmountPaid,
             status: newStatus,
@@ -342,7 +342,7 @@ export const createTransfer = async (
   try {
     // Create the outgoing transaction (positive - money leaving)
     const { data: outgoingTx, error: outgoingError } = await supabase
-      .from('transactions')
+      .from(getTableName('transactions'))
       .insert([{
         name: 'Transfer Out',
         date,
@@ -358,7 +358,7 @@ export const createTransfer = async (
 
     // Create the incoming transaction (negative - money arriving)
     const { data: incomingTx, error: incomingError } = await supabase
-      .from('transactions')
+      .from(getTableName('transactions'))
       .insert([{
         name: 'Transfer In',
         date,
@@ -375,7 +375,7 @@ export const createTransfer = async (
 
     // Link the outgoing transaction to the incoming one
     await supabase
-      .from('transactions')
+      .from(getTableName('transactions'))
       .update({ related_transaction_id: incomingTx.id })
       .eq('id', outgoingTx.id);
 
@@ -393,7 +393,7 @@ export const getLoanTransactionsWithPayments = async (accountId: string) => {
   try {
     // Get all loan transactions for this account
     const { data: loans, error: loansError } = await supabase
-      .from('transactions')
+      .from(getTableName('transactions'))
       .select('*')
       .eq('payment_method_id', accountId)
       .eq('transaction_type', 'loan')
@@ -405,7 +405,7 @@ export const getLoanTransactionsWithPayments = async (accountId: string) => {
     const loansWithPayments = await Promise.all(
       (loans || []).map(async (loan) => {
         const { data: payments, error: paymentsError } = await supabase
-          .from('transactions')
+          .from(getTableName('transactions'))
           .select('*')
           .eq('related_transaction_id', loan.id)
           .eq('transaction_type', 'loan_payment')

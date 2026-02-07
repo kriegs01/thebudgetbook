@@ -30,3 +30,13 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
     autoRefreshToken: true,
   }
 });
+
+/**
+ * Get the table name based on test environment setting
+ * @param {string} baseTableName - The base table name (e.g., 'accounts')
+ * @returns {string} - The table name with _test suffix if in test mode
+ */
+export const getTableName = (baseTableName) => {
+  const isTestMode = typeof window !== 'undefined' && localStorage.getItem('test_environment_enabled') === 'true';
+  return isTestMode ? `${baseTableName}_test` : baseTableName;
+};

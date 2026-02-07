@@ -14,6 +14,10 @@ import { supabase } from './src/utils/supabaseClient';
 import type { Biller, Account, Installment, SavingsJar, Transaction } from './types';
 import type { SupabaseTransaction } from './src/types/supabase';
 
+// Context
+import { TestEnvironmentProvider } from './src/contexts/TestEnvironmentContext';
+import { TestModeBanner } from './src/components/TestModeBanner';
+
 // Pages
 import Dashboard from './pages/Dashboard';
 import Budget from './pages/Budget';
@@ -766,8 +770,10 @@ const App: React.FC = () => {
   };
 
   return (
-    <BrowserRouter>
-      <div className="flex min-h-screen bg-gray-50 w-full">
+    <TestEnvironmentProvider>
+      <TestModeBanner sidebarOpen={isSidebarOpen} />
+      <BrowserRouter>
+        <div className="flex min-h-screen bg-gray-50 w-full">
         <aside className={`fixed inset-y-0 left-0 z-50 bg-white border-r border-gray-200 transition-all duration-300 ease-in-out ${isSidebarOpen ? 'w-64' : 'w-20'}`}> 
           <div className="flex flex-col h-full">
             <div className="flex items-center justify-between h-16 px-4 border-b border-gray-100">
@@ -933,6 +939,7 @@ const App: React.FC = () => {
         </main>
       </div>
     </BrowserRouter>
+    </TestEnvironmentProvider>
   );
 };
 

@@ -16,7 +16,7 @@
  * are not lost when the browser is closed or cleared.
  */
 
-import { supabase } from '../utils/supabaseClient';
+import { supabase, getTableName } from '../utils/supabaseClient';
 import type {
   SupabaseBudgetSetup,
   CreateBudgetSetupInput,
@@ -124,7 +124,7 @@ const frontendBudgetSetupToSupabase = (setup: Partial<SavedBudgetSetup>): Partia
 export const getAllBudgetSetups = async () => {
   try {
     const { data, error } = await supabase
-      .from('budget_setups')
+      .from(getTableName('budget_setups'))
       .select('*')
       .order('created_at', { ascending: false });
 
@@ -142,7 +142,7 @@ export const getAllBudgetSetups = async () => {
 export const getBudgetSetupById = async (id: string) => {
   try {
     const { data, error } = await supabase
-      .from('budget_setups')
+      .from(getTableName('budget_setups'))
       .select('*')
       .eq('id', id)
       .single();
@@ -161,7 +161,7 @@ export const getBudgetSetupById = async (id: string) => {
 export const getBudgetSetupsByMonthAndTiming = async (month: string, timing: string) => {
   try {
     const { data, error } = await supabase
-      .from('budget_setups')
+      .from(getTableName('budget_setups'))
       .select('*')
       .eq('month', month)
       .eq('timing', timing)
@@ -191,7 +191,7 @@ export const createBudgetSetup = async (setup: CreateBudgetSetupInput) => {
     }, null, 2));
     
     const { data, error } = await supabase
-      .from('budget_setups')
+      .from(getTableName('budget_setups'))
       .insert([setup])
       .select()
       .single();
@@ -232,7 +232,7 @@ export const updateBudgetSetup = async (id: string, updates: UpdateBudgetSetupIn
     }, null, 2));
     
     const { data, error } = await supabase
-      .from('budget_setups')
+      .from(getTableName('budget_setups'))
       .update(updates)
       .eq('id', id)
       .select()
@@ -264,7 +264,7 @@ export const updateBudgetSetup = async (id: string, updates: UpdateBudgetSetupIn
 export const deleteBudgetSetup = async (id: string) => {
   try {
     const { error } = await supabase
-      .from('budget_setups')
+      .from(getTableName('budget_setups'))
       .delete()
       .eq('id', id);
 
