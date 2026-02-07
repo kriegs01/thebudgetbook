@@ -410,7 +410,9 @@ export const getLoanTransactionsWithPayments = async (accountId: string) => {
           .eq('transaction_type', 'loan_payment')
           .order('date', { ascending: true });
 
-        const totalPaid = (payments || []).reduce((sum, p) => sum + p.amount, 0);
+        // Loan payments are stored as negative amounts (they increase balance)
+        // Use Math.abs to get the actual payment amount
+        const totalPaid = (payments || []).reduce((sum, p) => sum + Math.abs(p.amount), 0);
         const remainingBalance = Math.abs(loan.amount) - totalPaid;
 
         return {
