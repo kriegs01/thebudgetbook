@@ -11,7 +11,22 @@ interface ProjectionsProps {
 }
 
 const Projections: React.FC<ProjectionsProps> = ({ accounts, budget, installments, transactions = [] }) => {
-  const [surplusMonths, setSurplusMonths] = useState<3 | 6>(3);
+  // Get current date in YYYY-MM format
+  const getCurrentMonth = () => {
+    const today = new Date();
+    return `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`;
+  };
+
+  // Get date one month after given date
+  const getNextMonth = (dateStr: string) => {
+    const [year, month] = dateStr.split('-').map(Number);
+    const date = new Date(year, month - 1); // month is 0-indexed
+    date.setMonth(date.getMonth() + 1);
+    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+  };
+
+  const [startDate, setStartDate] = useState<string>(getCurrentMonth());
+  const [endDate, setEndDate] = useState<string>(getNextMonth(getCurrentMonth()));
   const [expandedLoanId, setExpandedLoanId] = useState<string | null>(null);
 
   const formatCurrency = (val: number) => {
@@ -29,22 +44,37 @@ const Projections: React.FC<ProjectionsProps> = ({ accounts, budget, installment
       acc + (a.type === 'Debit' ? a.balance : -a.balance), 0);
   };
 
-  // Calculate surplus projections
-  const calculateSurplusProjection = (months: number) => {
+  // Calculate surplus projections based on date range
+  const calculateSurplusProjection = (startDateStr: string, endDateStr: string) => {
     // 1. Calculate current total balance from all accounts
     const totalBalance = calculateTotalBalance(accounts);
     
     // 2. Calculate average monthly spending from budget items
     const monthlySpending = budget.reduce((acc, b) => acc + b.amount, 0);
     
-    // 3. Project future months
-    const projections = [];
-    const today = new Date();
+    // 3. Parse start and end dates
+    const [startYear, startMonth] = startDateStr.split('-').map(Number);
+    const [endYear, endMonth] = endDateStr.split('-').map(Number);
     
-    for (let i = 1; i <= months; i++) {
-      const futureDate = new Date(today);
-      futureDate.setMonth(today.getMonth() + i);
-      const monthName = futureDate.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+    const startDateObj = new Date(startYear, startMonth - 1, 1);
+    const endDateObj = new Date(endYear, endMonth - 1, 1);
+    
+    // Calculate number of months between start and end
+    const monthsDiff = (endYear - startYear) * 12 + (endMonth - startMonth);
+    
+    // If end date is before start date, return empty array
+    if (monthsDiff < 0) {
+      return [];
+    }
+    
+    // 4. Project months including the start month (current month)
+    const projections = [];
+    
+    // Include current month (i = 0)
+    for (let i = 0; i <= monthsDiff; i++) {
+      const projectedDate = new Date(startDateObj);
+      projectedDate.setMonth(startDateObj.getMonth() + i);
+      const monthName = projectedDate.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
       const projectedBalance = totalBalance - (monthlySpending * i);
       
       projections.push({
@@ -91,7 +121,7 @@ const Projections: React.FC<ProjectionsProps> = ({ accounts, budget, installment
     return projections;
   };
 
-  const surplusProjections = calculateSurplusProjection(surplusMonths);
+  const surplusProjections = calculateSurplusProjection(startDate, endDate);
   const totalBalance = calculateTotalBalance(accounts);
   const monthlySpending = budget.reduce((acc, b) => acc + b.amount, 0);
   const projectedBalance = surplusProjections[surplusProjections.length - 1]?.balance || 0;
@@ -110,19 +140,43 @@ const Projections: React.FC<ProjectionsProps> = ({ accounts, budget, installment
 
       {/* Surplus Projections Section */}
       <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-        <div className="p-6 border-b border-gray-100 flex items-center justify-between">
-          <div className="flex items-center space-x-2">
-            <TrendingUp className="w-5 h-5 text-blue-600" />
-            <h3 className="text-lg font-bold">Surplus Projections</h3>
+        <div className="p-6 border-b border-gray-100">
+          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+            <div className="flex items-center space-x-2">
+              <TrendingUp className="w-5 h-5 text-blue-600" />
+              <h3 className="text-lg font-bold">Surplus Projections</h3>
+            </div>
+            <div className="flex flex-col sm:flex-row gap-3">
+              <div className="flex flex-col">
+                <label htmlFor="startDate" className="text-xs text-gray-600 mb-1">Start Date</label>
+                <input
+                  id="startDate"
+                  type="month"
+                  value={startDate}
+                  onChange={(e) => {
+                    const newStartDate = e.target.value;
+                    setStartDate(newStartDate);
+                    // If end date is before new start date, update end date to next month
+                    if (endDate < newStartDate) {
+                      setEndDate(getNextMonth(newStartDate));
+                    }
+                  }}
+                  className="bg-gray-50 border border-gray-200 rounded-lg text-sm p-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                />
+              </div>
+              <div className="flex flex-col">
+                <label htmlFor="endDate" className="text-xs text-gray-600 mb-1">End Date</label>
+                <input
+                  id="endDate"
+                  type="month"
+                  value={endDate}
+                  onChange={(e) => setEndDate(e.target.value)}
+                  min={startDate}
+                  className="bg-gray-50 border border-gray-200 rounded-lg text-sm p-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                />
+              </div>
+            </div>
           </div>
-          <select 
-            value={surplusMonths}
-            onChange={(e) => setSurplusMonths(Number(e.target.value) as 3 | 6)}
-            className="bg-gray-50 border-none rounded-lg text-sm p-2 focus:ring-2 focus:ring-blue-500"
-          >
-            <option value={3}>3 months</option>
-            <option value={6}>6 months</option>
-          </select>
         </div>
 
         {/* Summary Cards */}
