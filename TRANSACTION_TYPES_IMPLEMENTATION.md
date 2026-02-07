@@ -83,16 +83,16 @@ Current Balance = Initial Balance - Sum(All Transaction Amounts)
 ```
 
 Therefore:
-- **Negative amounts** = Money leaving (Withdraw, Loan, Transfer Out)
-- **Positive amounts** = Money coming in (Cash In, Loan Payment, Transfer In)
+- **Positive amounts** = Money leaving (Withdraw, Loan, Transfer Out, Regular Payments)
+- **Negative amounts** = Money coming in (Cash In, Loan Payment, Transfer In)
 
 ### Implementation:
-- ✅ Withdraw: `amount = -Math.abs(inputAmount)`
-- ✅ Loan: `amount = -Math.abs(inputAmount)`
-- ✅ Transfer Out: `amount = -Math.abs(inputAmount)`
-- ✅ Transfer In: `amount = Math.abs(inputAmount)`
-- ✅ Cash In: `amount = Math.abs(inputAmount)` (stored as positive)
-- ✅ Loan Payment: `amount = Math.abs(inputAmount)` (stored as positive)
+- ✅ Withdraw: `amount = Math.abs(inputAmount)` (positive - money out)
+- ✅ Loan: `amount = Math.abs(inputAmount)` (positive - money out)
+- ✅ Transfer Out: `amount = Math.abs(inputAmount)` (positive - money out)
+- ✅ Transfer In: `amount = -Math.abs(inputAmount)` (negative - money in)
+- ✅ Cash In: `amount = -Math.abs(inputAmount)` (negative - money in)
+- ✅ Loan Payment: `amount = -Math.abs(inputAmount)` (negative - money in)
 
 ## Testing Checklist
 
