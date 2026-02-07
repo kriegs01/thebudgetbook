@@ -330,7 +330,7 @@ export const deleteTransactionAndRevertSchedule = async (transactionId: string) 
 
 /**
  * Create a transfer between two accounts
- * Creates two linked transactions: negative on source, positive on destination
+ * Creates two linked transactions: positive on source (out), negative on destination (in)
  */
 export const createTransfer = async (
   sourceAccountId: string,
@@ -339,13 +339,13 @@ export const createTransfer = async (
   date: string
 ) => {
   try {
-    // Create the outgoing transaction (negative - money leaving)
+    // Create the outgoing transaction (positive - money leaving)
     const { data: outgoingTx, error: outgoingError } = await supabase
       .from('transactions')
       .insert([{
         name: 'Transfer Out',
         date,
-        amount: -Math.abs(amount), // Negative for source account
+        amount: Math.abs(amount), // Positive for source account (money out)
         payment_method_id: sourceAccountId,
         transaction_type: 'transfer',
         notes: `Transfer to another account`
@@ -355,13 +355,13 @@ export const createTransfer = async (
 
     if (outgoingError) throw outgoingError;
 
-    // Create the incoming transaction (positive - money arriving)
+    // Create the incoming transaction (negative - money arriving)
     const { data: incomingTx, error: incomingError } = await supabase
       .from('transactions')
       .insert([{
         name: 'Transfer In',
         date,
-        amount: Math.abs(amount), // Positive for receiving account
+        amount: -Math.abs(amount), // Negative for receiving account (money in)
         payment_method_id: destinationAccountId,
         transaction_type: 'transfer',
         notes: `Transfer from another account`,

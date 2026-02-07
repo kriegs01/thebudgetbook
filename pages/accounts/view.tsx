@@ -164,7 +164,7 @@ const AccountFilteredTransactions: React.FC<AccountFilteredTransactionsProps> = 
       const { error } = await createTransaction({
         name: withdrawForm.forWhat,
         date: withdrawForm.date,
-        amount: -Math.abs(parseFloat(withdrawForm.amount)), // Negative for debit
+        amount: Math.abs(parseFloat(withdrawForm.amount)), // Positive - money going out
         payment_method_id: accountId,
         transaction_type: 'withdraw',
         notes: null,
@@ -224,7 +224,7 @@ const AccountFilteredTransactions: React.FC<AccountFilteredTransactionsProps> = 
       const { error } = await createTransaction({
         name: `Loan: ${loanForm.what}`,
         date: loanForm.date,
-        amount: -Math.abs(parseFloat(loanForm.amount)), // Negative for money lent out
+        amount: Math.abs(parseFloat(loanForm.amount)), // Positive - money going out (lent)
         payment_method_id: accountId,
         transaction_type: 'loan',
         notes: loanForm.what,
@@ -256,7 +256,7 @@ const AccountFilteredTransactions: React.FC<AccountFilteredTransactionsProps> = 
       const { error } = await createTransaction({
         name: 'Cash In',
         date: cashInForm.date,
-        amount: parseFloat(cashInForm.amount),
+        amount: -Math.abs(parseFloat(cashInForm.amount)), // Negative - money coming in
         payment_method_id: accountId,
         transaction_type: 'cash_in',
         notes: cashInForm.notes || null,
@@ -288,7 +288,7 @@ const AccountFilteredTransactions: React.FC<AccountFilteredTransactionsProps> = 
       const { error } = await createTransaction({
         name: 'Loan Payment Received',
         date: loanPaymentForm.date,
-        amount: parseFloat(loanPaymentForm.amount),
+        amount: -Math.abs(parseFloat(loanPaymentForm.amount)), // Negative - money coming in
         payment_method_id: accountId,
         transaction_type: 'loan_payment',
         notes: `Payment for: ${selectedLoan.name}`,
