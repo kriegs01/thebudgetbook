@@ -16,6 +16,7 @@ import type { SupabaseTransaction } from './src/types/supabase';
 
 // Context
 import { TestEnvironmentProvider } from './src/contexts/TestEnvironmentContext';
+import { PinProtectionProvider } from './src/contexts/PinProtectionContext';
 import { TestModeBanner } from './src/components/TestModeBanner';
 
 // Pages
@@ -771,8 +772,9 @@ const App: React.FC = () => {
 
   return (
     <TestEnvironmentProvider>
-      <TestModeBanner sidebarOpen={isSidebarOpen} />
-      <BrowserRouter>
+      <PinProtectionProvider>
+        <TestModeBanner sidebarOpen={isSidebarOpen} />
+        <BrowserRouter>
         <div className="flex min-h-screen bg-gray-50 w-full">
         <aside className={`fixed inset-y-0 left-0 z-50 bg-white border-r border-gray-200 transition-all duration-300 ease-in-out ${isSidebarOpen ? 'w-64' : 'w-20'}`}> 
           <div className="flex flex-col h-full">
@@ -939,6 +941,7 @@ const App: React.FC = () => {
         </main>
       </div>
     </BrowserRouter>
+    </PinProtectionProvider>
     </TestEnvironmentProvider>
   );
 };
