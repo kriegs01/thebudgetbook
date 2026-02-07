@@ -104,10 +104,14 @@ const Settings: React.FC<SettingsProps> = ({ currency, setCurrency, categories, 
         }
 
         // Clear test table
-        await supabase
+        const { error: deleteError } = await supabase
           .from(`${table}_test`)
           .delete()
-          .neq('id', '00000000-0000-0000-0000-000000000000'); // Delete all
+          .gte('created_at', '1970-01-01'); // Delete all records
+
+        if (deleteError) {
+          console.error(`Error clearing ${table}_test:`, deleteError);
+        }
 
         // Insert production data into test table
         if (prodData && prodData.length > 0) {
@@ -144,7 +148,7 @@ const Settings: React.FC<SettingsProps> = ({ currency, setCurrency, categories, 
         const { error } = await supabase
           .from(table)
           .delete()
-          .neq('id', '00000000-0000-0000-0000-000000000000'); // Delete all
+          .gte('created_at', '1970-01-01'); // Delete all records
 
         if (error) {
           console.error(`Error clearing ${table}:`, error);
