@@ -23,11 +23,16 @@ const Projections: React.FC<ProjectionsProps> = ({ accounts, budget, installment
     }).format(val);
   };
 
+  // Helper function to calculate total balance
+  const calculateTotalBalance = (accounts: Account[]) => {
+    return accounts.reduce((acc, a) => 
+      acc + (a.type === 'Debit' ? a.balance : -a.balance), 0);
+  };
+
   // Calculate surplus projections
   const calculateSurplusProjection = (months: number) => {
     // 1. Calculate current total balance from all accounts
-    const totalBalance = accounts.reduce((acc, a) => 
-      acc + (a.type === 'Debit' ? a.balance : -a.balance), 0);
+    const totalBalance = calculateTotalBalance(accounts);
     
     // 2. Calculate average monthly spending from budget items
     const monthlySpending = budget.reduce((acc, b) => acc + b.amount, 0);
@@ -56,6 +61,12 @@ const Projections: React.FC<ProjectionsProps> = ({ accounts, budget, installment
   const calculateLoanProjection = (installment: Installment) => {
     const paidAmount = installment.paidAmount;
     const remaining = installment.totalAmount - paidAmount;
+    
+    // Handle edge case where monthlyAmount is 0 or very small
+    if (installment.monthlyAmount <= 0) {
+      return [];
+    }
+    
     const monthsRemaining = Math.ceil(remaining / installment.monthlyAmount);
     
     // Generate month-by-month projection
@@ -73,8 +84,7 @@ const Projections: React.FC<ProjectionsProps> = ({ accounts, budget, installment
       projections.push({
         month: projectedDate.toLocaleDateString('en-US', { month: 'short', year: 'numeric' }),
         payment: payment,
-        balance: Math.max(0, currentBalance),
-        percentComplete: ((paidAmount + (installment.monthlyAmount * (i + 1))) / installment.totalAmount) * 100
+        balance: Math.max(0, currentBalance)
       });
     }
     
@@ -82,7 +92,7 @@ const Projections: React.FC<ProjectionsProps> = ({ accounts, budget, installment
   };
 
   const surplusProjections = calculateSurplusProjection(surplusMonths);
-  const totalBalance = accounts.reduce((acc, a) => acc + (a.type === 'Debit' ? a.balance : -a.balance), 0);
+  const totalBalance = calculateTotalBalance(accounts);
   const monthlySpending = budget.reduce((acc, b) => acc + b.amount, 0);
   const projectedBalance = surplusProjections[surplusProjections.length - 1]?.balance || 0;
   const isDeficit = projectedBalance < 0;
