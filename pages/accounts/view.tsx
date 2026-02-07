@@ -422,8 +422,8 @@ const AccountFilteredTransactions: React.FC<AccountFilteredTransactionsProps> = 
                         <td className="px-4 py-3">{getTransactionTypeBadge(tx.transaction_type)}</td>
                         <td className="px-4 py-3"><div className="text-sm text-gray-500">{new Date(tx.date).toLocaleDateString()}</div></td>
                         <td className="px-4 py-3">
-                          <div className={`text-sm font-semibold ${tx.amount < 0 ? 'text-red-600' : 'text-green-600'}`}>
-                            {formatCurrency(tx.amount)}
+                          <div className={`text-sm font-semibold ${tx.amount > 0 ? 'text-red-600' : 'text-green-600'}`}>
+                            {formatCurrency(-tx.amount)}
                           </div>
                         </td>
                         {account?.type === 'Debit' && (
