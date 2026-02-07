@@ -112,3 +112,57 @@ This fix matches the existing convention used by regular payment transactions in
 **Status**: ✅ Fixed and Verified  
 **Build**: ✅ Successful  
 **Commit**: c3a057c
+
+---
+
+## Update: Display Sign Fix (February 7, 2026)
+
+After the storage fix, user requested proper display signs:
+- Withdrawals, Loans, Transfers (source) should **display** as NEGATIVE (red)
+- Cash In, Loan Payments, Transfers (receiving) should **display** as POSITIVE (green)
+
+### Display Layer Fix
+
+Changed transaction display in `pages/accounts/view.tsx`:
+
+**Before:**
+```typescript
+<div className={`text-sm font-semibold ${tx.amount < 0 ? 'text-red-600' : 'text-green-600'}`}>
+  {formatCurrency(tx.amount)}
+</div>
+```
+
+**After:**
+```typescript
+<div className={`text-sm font-semibold ${tx.amount > 0 ? 'text-red-600' : 'text-green-600'}`}>
+  {formatCurrency(-tx.amount)}
+</div>
+```
+
+### Complete Solution
+
+**Database Storage** (for balance calculation: `balance - tx.amount`):
+- Money OUT → Stored as POSITIVE
+- Money IN → Stored as NEGATIVE
+
+**Display Layer**:
+- Flip the sign: `formatCurrency(-tx.amount)`
+- Red (negative) for money out (DB positive)
+- Green (positive) for money in (DB negative)
+
+### Final Result
+
+| Transaction Type | DB Storage | Display | Color | Balance |
+|-----------------|-----------|---------|-------|---------|
+| Withdraw $1000 | +1000 | -$1,000 | Red ✅ | Decreases ✅ |
+| Cash In $1000 | -1000 | +$1,000 | Green ✅ | Increases ✅ |
+| Transfer Out $1000 | +1000 | -$1,000 | Red ✅ | Decreases ✅ |
+| Transfer In $1000 | -1000 | +$1,000 | Green ✅ | Increases ✅ |
+| Loan $1000 | +1000 | -$1,000 | Red ✅ | Decreases ✅ |
+| Loan Payment $1000 | -1000 | +$1,000 | Green ✅ | Increases ✅ |
+
+---
+
+**Final Status**: ✅ Complete
+**Storage Fix**: Commit c3a057c
+**Display Fix**: Commit e0e0d34
