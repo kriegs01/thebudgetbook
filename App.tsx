@@ -771,7 +771,7 @@ const App: React.FC = () => {
 
   return (
     <TestEnvironmentProvider>
-      <TestModeBanner />
+      <TestModeBanner sidebarOpen={isSidebarOpen} />
       <BrowserRouter>
         <div className="flex min-h-screen bg-gray-50 w-full">
         <aside className={`fixed inset-y-0 left-0 z-50 bg-white border-r border-gray-200 transition-all duration-300 ease-in-out ${isSidebarOpen ? 'w-64' : 'w-20'}`}> 
