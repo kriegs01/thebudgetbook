@@ -96,7 +96,9 @@ const AccountFilteredTransactions: React.FC<AccountFilteredTransactionsProps> = 
       setTransactions(filtered);
 
       // Load loan transactions with payments
-      if (account?.type === 'Debit') {
+      // Find the account from props to ensure we have the latest account type
+      const currentAccount = accounts.find(a => a.id === accountId);
+      if (currentAccount?.type === 'Debit') {
         const { data: loansData } = await getLoanTransactionsWithPayments(accountId);
         if (loansData) {
           const loansWithMeta = loansData.map(loan => ({
