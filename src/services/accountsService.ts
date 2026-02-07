@@ -247,10 +247,15 @@ export const getAllAccountsWithCalculatedBalances = async (): Promise<{ data: Ac
     const accountsWithCalculatedBalances = accounts.map(account => {
       const accountTransactions = transactionsByAccount.get(account.id) || [];
       
-      // Sort transactions by date (oldest first)
-      const sortedTransactions = [...accountTransactions].sort((a, b) => 
-        new Date(a.date).getTime() - new Date(b.date).getTime()
-      );
+      // Sort transactions by date (oldest first), then by ID for consistent ordering
+      const sortedTransactions = [...accountTransactions].sort((a, b) => {
+        const dateCompare = new Date(a.date).getTime() - new Date(b.date).getTime();
+        // If dates are equal, sort by ID for deterministic ordering
+        if (dateCompare === 0) {
+          return a.id.localeCompare(b.id);
+        }
+        return dateCompare;
+      });
       
       // Calculate balance based on account type
       let calculatedBalance = account.balance; // Start with initial balance

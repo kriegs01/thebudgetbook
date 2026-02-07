@@ -885,7 +885,7 @@ const App: React.FC = () => {
                   error={accountsError}
                 />
               } />
-              <Route path="/accounts/view" element={<AccountFilteredTransactions accounts={accounts} />} />
+              <Route path="/accounts/view" element={<AccountFilteredTransactions accounts={accounts} onTransactionCreated={reloadAccounts} />} />
               <Route path="/accounts/statement" element={<StatementPage accounts={accounts} />} />
               <Route path="/savings" element={
                 <Savings

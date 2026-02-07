@@ -191,7 +191,7 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ onTransactionDelete
                         <tr key={tx.id} className="border-t border-gray-100">
                           <td className="px-4 py-3"><div className="text-sm font-medium text-gray-900">{tx.name}</div></td>
                           <td className="px-4 py-3"><div className="text-sm text-gray-500">{new Date(tx.date).toLocaleDateString()}</div></td>
-                          <td className="px-4 py-3"><div className={`text-sm font-semibold ${tx.amount < 0 ? 'text-red-600' : 'text-green-600'}`}>{formatCurrency(tx.amount)}</div></td>
+                          <td className="px-4 py-3"><div className={`text-sm font-semibold ${tx.amount > 0 ? 'text-red-600' : 'text-green-600'}`}>{formatCurrency(-tx.amount)}</div></td>
                           <td className="px-4 py-3"><div className="text-sm text-gray-700">{pm ? pm.bank : tx.paymentMethodId}</div></td>
                           <td className="px-4 py-3 text-right">
                             <button onClick={() => removeTx(tx.id)} className="text-sm text-red-600">Delete</button>
