@@ -35,7 +35,8 @@ export const getAllTransactions = async () => {
     const { data, error } = await supabase
       .from('transactions')
       .select('*')
-      .order('date', { ascending: false });
+      .order('date', { ascending: false })
+      .order('id', { ascending: false }); // Secondary sort for deterministic ordering
 
     if (error) throw error;
     return { data, error: null };
