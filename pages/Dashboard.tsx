@@ -346,6 +346,7 @@ const Dashboard: React.FC<DashboardProps> = ({ accounts, budget, installments, t
                     tickLine={false}
                     tick={{fill: '#94a3b8', fontSize: 12}}
                     tickFormatter={(value) => formatCurrency(value)}
+                    domain={[0, 'dataMax + 15%']}
                   />
                   <Tooltip 
                     formatter={(value: number) => formatCurrency(value)}
