@@ -119,8 +119,8 @@ const Projections: React.FC<ProjectionsProps> = ({ budgetSetups }) => {
       // setups from ANY year with the same month name. This is acceptable for typical use cases
       // where users view projections within a single year, but may need enhancement for
       // multi-year projections. To fix this, SavedBudgetSetup type would need to include a year field.
-      const setup1_2 = budgetSetups.find(s => s.month === month && s.timing === '1/2');
-      const setup2_2 = budgetSetups.find(s => s.month === month && s.timing === '2/2');
+      const setup1_2 = budgetSetups.find(s => s.month === month && s.timing === '1/2'); // Matches by month name only
+      const setup2_2 = budgetSetups.find(s => s.month === month && s.timing === '2/2'); // Matches by month name only
       
       // Process 1/2 timing
       if (setup1_2) {
@@ -218,15 +218,19 @@ const Projections: React.FC<ProjectionsProps> = ({ budgetSetups }) => {
   }, [monthlyAverages]);
 
   const bestMonth = useMemo(() => {
-    return monthlyAverages.length > 0
-      ? monthlyAverages.reduce((best, m) => m.remaining > best.remaining ? m : best)
-      : null;
+    if (monthlyAverages.length === 0) return null;
+    return monthlyAverages.reduce((best, m) => 
+      m.remaining > best.remaining ? m : best, 
+      monthlyAverages[0]
+    );
   }, [monthlyAverages]);
 
   const worstMonth = useMemo(() => {
-    return monthlyAverages.length > 0
-      ? monthlyAverages.reduce((worst, m) => m.remaining < worst.remaining ? m : worst)
-      : null;
+    if (monthlyAverages.length === 0) return null;
+    return monthlyAverages.reduce((worst, m) => 
+      m.remaining < worst.remaining ? m : worst, 
+      monthlyAverages[0]
+    );
   }, [monthlyAverages]);
 
   // Get color based on value
