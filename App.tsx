@@ -912,6 +912,7 @@ const App: React.FC = () => {
                   budget={budgetItems}
                   installments={installments}
                   transactions={transactions}
+                  budgetSetups={budgetSetups}
                 />
               } />
               <Route path="/settings" element={

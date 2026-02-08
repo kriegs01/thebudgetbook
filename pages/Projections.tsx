@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Account, BudgetItem, Installment, Transaction } from '../types';
+import { Account, BudgetItem, Installment, Transaction, SavedBudgetSetup } from '../types';
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 import { TrendingUp, TrendingDown, DollarSign, Calendar, ChevronDown, ChevronUp, AlertCircle } from 'lucide-react';
 
@@ -8,9 +8,10 @@ interface ProjectionsProps {
   budget: BudgetItem[];
   installments: Installment[];
   transactions?: Transaction[];
+  budgetSetups?: SavedBudgetSetup[];
 }
 
-const Projections: React.FC<ProjectionsProps> = ({ accounts, budget, installments, transactions = [] }) => {
+const Projections: React.FC<ProjectionsProps> = ({ accounts, budget, installments, transactions = [], budgetSetups = [] }) => {
   // Get current date in YYYY-MM format
   const getCurrentMonth = () => {
     const today = new Date();
@@ -44,13 +45,46 @@ const Projections: React.FC<ProjectionsProps> = ({ accounts, budget, installment
       acc + (a.type === 'Debit' ? a.balance : -a.balance), 0);
   };
 
+  // Helper function to calculate monthly remaining amount (income - spending)
+  const calculateMonthlyRemaining = () => {
+    // Calculate total monthly spending from budget items
+    const monthlySpending = budget.reduce((acc, b) => acc + b.amount, 0);
+
+    // Try to get salary from the most recent budget setup
+    // Look for setups from the current month or the most recent month
+    const sortedSetups = [...budgetSetups].sort((a, b) => {
+      // Sort by year and month, most recent first
+      const aDate = new Date(`${a.month} 1, 2024`);
+      const bDate = new Date(`${b.month} 1, 2024`);
+      return bDate.getTime() - aDate.getTime();
+    });
+
+    let monthlyIncome = 0;
+    if (sortedSetups.length > 0) {
+      const latestSetup = sortedSetups[0];
+      // Use actual salary if available, otherwise use projected salary
+      const actualSalary = latestSetup.data._actualSalary;
+      const projectedSalary = latestSetup.data._projectedSalary;
+      
+      if (actualSalary && actualSalary.trim() !== '') {
+        monthlyIncome = parseFloat(actualSalary) || 0;
+      } else if (projectedSalary && projectedSalary.trim() !== '') {
+        monthlyIncome = parseFloat(projectedSalary) || 0;
+      }
+    }
+
+    // Monthly remaining = income - spending
+    // Positive = surplus, Negative = deficit
+    return monthlyIncome - monthlySpending;
+  };
+
   // Calculate surplus projections based on date range
   const calculateSurplusProjection = (startDateStr: string, endDateStr: string) => {
     // 1. Calculate current total balance from all accounts
     const totalBalance = calculateTotalBalance(accounts);
     
-    // 2. Calculate average monthly spending from budget items
-    const monthlySpending = budget.reduce((acc, b) => acc + b.amount, 0);
+    // 2. Calculate monthly remaining amount (income - spending)
+    const monthlyRemaining = calculateMonthlyRemaining();
     
     // 3. Parse start and end dates
     const [startYear, startMonth] = startDateStr.split('-').map(Number);
@@ -75,12 +109,14 @@ const Projections: React.FC<ProjectionsProps> = ({ accounts, budget, installment
       const projectedDate = new Date(startDateObj);
       projectedDate.setMonth(startDateObj.getMonth() + i);
       const monthName = projectedDate.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
-      const projectedBalance = totalBalance - (monthlySpending * i);
+      // Use monthly remaining to calculate projection
+      // Positive remaining = balance increases, Negative = balance decreases
+      const projectedBalance = totalBalance + (monthlyRemaining * i);
       
       projections.push({
         month: monthName,
         balance: projectedBalance,
-        spending: monthlySpending
+        remaining: monthlyRemaining
       });
     }
     
@@ -123,7 +159,7 @@ const Projections: React.FC<ProjectionsProps> = ({ accounts, budget, installment
 
   const surplusProjections = calculateSurplusProjection(startDate, endDate);
   const totalBalance = calculateTotalBalance(accounts);
-  const monthlySpending = budget.reduce((acc, b) => acc + b.amount, 0);
+  const monthlyRemaining = calculateMonthlyRemaining();
   const projectedBalance = surplusProjections[surplusProjections.length - 1]?.balance || 0;
   const isDeficit = projectedBalance < 0;
 
@@ -206,19 +242,24 @@ const Projections: React.FC<ProjectionsProps> = ({ accounts, budget, installment
 
             <div className="bg-white p-4 rounded-xl shadow-sm">
               <div className="flex items-center justify-between mb-2">
-                <span className="text-sm text-gray-600">Monthly Spending</span>
+                <span className="text-sm text-gray-600">Monthly Remaining</span>
                 <Calendar className="w-4 h-4 text-purple-600" />
               </div>
-              <p className="text-xl font-bold text-gray-900">{formatCurrency(monthlySpending)}</p>
+              <p className={`text-xl font-bold ${monthlyRemaining >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                {formatCurrency(monthlyRemaining)}
+              </p>
+              <p className="text-xs text-gray-500 mt-1">
+                {monthlyRemaining >= 0 ? 'Surplus per month' : 'Deficit per month'}
+              </p>
             </div>
 
             <div className="bg-white p-4 rounded-xl shadow-sm">
               <div className="flex items-center justify-between mb-2">
                 <span className="text-sm text-gray-600">Status</span>
-                <AlertCircle className={`w-4 h-4 ${isDeficit ? 'text-red-600' : projectedBalance < monthlySpending ? 'text-yellow-600' : 'text-green-600'}`} />
+                <AlertCircle className={`w-4 h-4 ${isDeficit ? 'text-red-600' : monthlyRemaining <= 0 ? 'text-yellow-600' : 'text-green-600'}`} />
               </div>
-              <p className={`text-lg font-bold ${isDeficit ? 'text-red-600' : projectedBalance < monthlySpending ? 'text-yellow-600' : 'text-green-600'}`}>
-                {isDeficit ? 'Deficit' : projectedBalance < monthlySpending ? 'Low' : 'Surplus'}
+              <p className={`text-lg font-bold ${isDeficit ? 'text-red-600' : monthlyRemaining <= 0 ? 'text-yellow-600' : 'text-green-600'}`}>
+                {isDeficit ? 'Deficit' : monthlyRemaining <= 0 ? 'Break-even' : 'Surplus'}
               </p>
             </div>
           </div>
