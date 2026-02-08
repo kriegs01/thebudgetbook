@@ -256,10 +256,10 @@ const Projections: React.FC<ProjectionsProps> = ({ accounts, budget, installment
             <div className="bg-white p-4 rounded-xl shadow-sm">
               <div className="flex items-center justify-between mb-2">
                 <span className="text-sm text-gray-600">Status</span>
-                <AlertCircle className={`w-4 h-4 ${isDeficit ? 'text-red-600' : monthlyRemaining <= 0 ? 'text-yellow-600' : 'text-green-600'}`} />
+                <AlertCircle className={`w-4 h-4 ${isDeficit ? 'text-red-600' : monthlyRemaining < 0 ? 'text-red-600' : monthlyRemaining === 0 ? 'text-yellow-600' : 'text-green-600'}`} />
               </div>
-              <p className={`text-lg font-bold ${isDeficit ? 'text-red-600' : monthlyRemaining <= 0 ? 'text-yellow-600' : 'text-green-600'}`}>
-                {isDeficit ? 'Deficit' : monthlyRemaining <= 0 ? 'Break-even' : 'Surplus'}
+              <p className={`text-lg font-bold ${isDeficit ? 'text-red-600' : monthlyRemaining < 0 ? 'text-red-600' : monthlyRemaining === 0 ? 'text-yellow-600' : 'text-green-600'}`}>
+                {isDeficit ? 'Deficit' : monthlyRemaining < 0 ? 'Deficit' : monthlyRemaining === 0 ? 'Break-even' : 'Surplus'}
               </p>
             </div>
           </div>
