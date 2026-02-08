@@ -28,24 +28,30 @@ interface MonthlyAverage {
 
 const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 const PROJECTION_MONTHS = 6; // Number of months to project ahead by default
+const LOCALE = 'en-PH'; // Consistent locale for formatting
 
 const Projections: React.FC<ProjectionsProps> = ({ budgetSetups }) => {
   const currentDate = new Date();
   const currentYear = currentDate.getFullYear();
   const currentMonth = currentDate.getMonth(); // 0-indexed (0 = January)
   
+  // Helper function to format month for input (YYYY-MM format)
+  const formatMonthForInput = (year: number, monthIndex: number): string => {
+    return `${year}-${String(monthIndex + 1).padStart(2, '0')}`;
+  };
+  
   // Default to current month, project 6 months ahead
   const totalMonths = currentMonth + PROJECTION_MONTHS; // 0-indexed calculation
   const endYear = currentYear + Math.floor(totalMonths / 12);
-  const endMonth = (totalMonths % 12) + 1; // Convert to 1-12 range for input value
+  const endMonthIndex = totalMonths % 12; // 0-indexed
   
-  const [startDate, setStartDate] = useState(`${currentYear}-${String(currentMonth + 1).padStart(2, '0')}`);
-  const [endDate, setEndDate] = useState(`${endYear}-${String(endMonth).padStart(2, '0')}`);
+  const [startDate, setStartDate] = useState(formatMonthForInput(currentYear, currentMonth));
+  const [endDate, setEndDate] = useState(formatMonthForInput(endYear, endMonthIndex));
   const [viewMode, setViewMode] = useState<'period' | 'monthly'>('period');
 
   // Helper function to format currency
   const formatCurrency = (val: number) => {
-    return new Intl.NumberFormat('en-PH', {
+    return new Intl.NumberFormat(LOCALE, {
       style: 'currency',
       currency: 'PHP',
       minimumFractionDigits: 2,
@@ -105,7 +111,7 @@ const Projections: React.FC<ProjectionsProps> = ({ budgetSetups }) => {
       const projectedDate = new Date(startYear, startMonth - 1 + i, 1);
       const month = MONTHS[projectedDate.getMonth()];
       const year = projectedDate.getFullYear();
-      const monthShort = projectedDate.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+      const monthShort = projectedDate.toLocaleDateString(LOCALE, { month: 'short', year: 'numeric' });
       
       // Find budget setups for this month and year
       // NOTE: Current limitation - SavedBudgetSetup only stores month name (e.g., "January")
