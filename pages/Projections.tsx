@@ -46,96 +46,140 @@ const Projections: React.FC<ProjectionsProps> = ({ accounts, budget, installment
       acc + (a.type === 'Debit' ? a.balance : -a.balance), 0);
   };
 
-  // Helper function to calculate monthly remaining amount (income - spending)
-  const calculateMonthlyRemaining = () => {
-    // Default base salary
-    const DEFAULT_SALARY = 11000;
-    
-    // Calculate total monthly spending from multiple sources
-    
-    // 1. Budget items
-    const budgetSpending = budget.reduce((acc, b) => acc + b.amount, 0);
-    
-    // 2. Active billers - sum up expectedAmount for active billers
-    const billerSpending = billers
-      .filter(b => b.status === 'active')
-      .reduce((acc, b) => acc + b.expectedAmount, 0);
-    
-    // 3. Active installments - sum up monthlyAmount for installments with remaining balance
-    const installmentSpending = installments
-      .filter(i => i.paidAmount < i.totalAmount)
-      .reduce((acc, i) => acc + i.monthlyAmount, 0);
-    
-    const totalMonthlySpending = budgetSpending + billerSpending + installmentSpending;
-
-    // Try to get salary from the most recent budget setup
-    // Look for setups from the current month or the most recent month
-    const sortedSetups = [...budgetSetups].sort((a, b) => {
-      // Sort by year and month, most recent first
-      const aDate = new Date(`${a.month} 1, 2024`);
-      const bDate = new Date(`${b.month} 1, 2024`);
-      return bDate.getTime() - aDate.getTime();
-    });
-
-    let monthlyIncome = DEFAULT_SALARY; // Start with default
-    if (sortedSetups.length > 0) {
-      const latestSetup = sortedSetups[0];
-      // Use actual salary if available, otherwise use projected salary, otherwise default
-      const actualSalary = latestSetup.data._actualSalary;
-      const projectedSalary = latestSetup.data._projectedSalary;
-      
-      if (actualSalary && actualSalary.trim() !== '') {
-        monthlyIncome = parseFloat(actualSalary) || DEFAULT_SALARY;
-      } else if (projectedSalary && projectedSalary.trim() !== '') {
-        monthlyIncome = parseFloat(projectedSalary) || DEFAULT_SALARY;
-      }
-    }
-
-    // Monthly remaining = income - spending
-    // Positive = surplus, Negative = deficit
-    return monthlyIncome - totalMonthlySpending;
+  // Helper function to get month name from YYYY-MM format
+  const getMonthName = (dateStr: string) => {
+    const [year, month] = dateStr.split('-').map(Number);
+    const date = new Date(year, month - 1, 1);
+    return date.toLocaleDateString('en-US', { month: 'long' });
   };
 
-  // Calculate surplus projections based on date range
+  // Helper function to calculate spending from a budget setup
+  const calculateSetupSpending = (setup: SavedBudgetSetup) => {
+    let totalSpending = 0;
+    
+    // Sum up all items in the setup that are included
+    Object.keys(setup.data).forEach(category => {
+      if (category.startsWith('_')) return; // Skip metadata fields like _projectedSalary
+      
+      const items = setup.data[category];
+      if (Array.isArray(items)) {
+        items.forEach(item => {
+          if (item.included) {
+            const amount = parseFloat(item.amount) || 0;
+            totalSpending += amount;
+          }
+        });
+      }
+    });
+    
+    return totalSpending;
+  };
+
+  // Helper function to get income from a budget setup
+  const getSetupIncome = (setup: SavedBudgetSetup) => {
+    const DEFAULT_SALARY = 11000;
+    const actualSalary = setup.data._actualSalary;
+    const projectedSalary = setup.data._projectedSalary;
+    
+    if (actualSalary && actualSalary.trim() !== '') {
+      return parseFloat(actualSalary) || DEFAULT_SALARY;
+    } else if (projectedSalary && projectedSalary.trim() !== '') {
+      return parseFloat(projectedSalary) || DEFAULT_SALARY;
+    }
+    
+    return DEFAULT_SALARY;
+  };
+
+  // Calculate surplus projections based on budget setups
   const calculateSurplusProjection = (startDateStr: string, endDateStr: string) => {
     // 1. Calculate current total balance from all accounts
     const totalBalance = calculateTotalBalance(accounts);
     
-    // 2. Calculate monthly remaining amount (income - spending)
-    const monthlyRemaining = calculateMonthlyRemaining();
-    
-    // 3. Parse start and end dates
+    // 2. Parse start and end dates
     const [startYear, startMonth] = startDateStr.split('-').map(Number);
     const [endYear, endMonth] = endDateStr.split('-').map(Number);
     
-    const startDateObj = new Date(startYear, startMonth - 1, 1);
-    const endDateObj = new Date(endYear, endMonth - 1, 1);
-    
-    // Calculate number of months between start and end
-    const monthsDiff = (endYear - startYear) * 12 + (endMonth - startMonth);
-    
     // If end date is before start date, return empty array
+    const monthsDiff = (endYear - startYear) * 12 + (endMonth - startMonth);
     if (monthsDiff < 0) {
       return [];
     }
     
-    // 4. Project months including the start month (current month)
+    // 3. Build projections based on budget setups for each timing period
     const projections = [];
+    let runningBalance = totalBalance;
+    const DEFAULT_SALARY = 11000; // Default for periods without budget setups
     
-    // Include current month (i = 0)
+    // Iterate through each month in the range
     for (let i = 0; i <= monthsDiff; i++) {
-      const projectedDate = new Date(startDateObj);
-      projectedDate.setMonth(startDateObj.getMonth() + i);
-      const monthName = projectedDate.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
-      // Use monthly remaining to calculate projection
-      // Positive remaining = balance increases, Negative = balance decreases
-      const projectedBalance = totalBalance + (monthlyRemaining * i);
+      const projectedDate = new Date(startYear, startMonth - 1 + i, 1);
+      const year = projectedDate.getFullYear();
+      const month = projectedDate.toLocaleDateString('en-US', { month: 'long' });
+      const monthShort = projectedDate.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
       
-      projections.push({
-        month: monthName,
-        balance: projectedBalance,
-        remaining: monthlyRemaining
-      });
+      // Check for budget setups for this month
+      const setup1_2 = budgetSetups.find(s => s.month === month && s.timing === '1/2');
+      const setup2_2 = budgetSetups.find(s => s.month === month && s.timing === '2/2');
+      
+      // Process 1/2 timing
+      if (setup1_2) {
+        const income = getSetupIncome(setup1_2);
+        const spending = calculateSetupSpending(setup1_2);
+        const remaining = income - spending;
+        runningBalance += remaining;
+        
+        projections.push({
+          month: `${monthShort} - 1/2`,
+          balance: runningBalance,
+          remaining: remaining,
+          income: income,
+          spending: spending
+        });
+      } else {
+        // No setup for 1/2, use default
+        const income = DEFAULT_SALARY;
+        const spending = 0; // No spending data
+        const remaining = income - spending;
+        runningBalance += remaining;
+        
+        projections.push({
+          month: `${monthShort} - 1/2`,
+          balance: runningBalance,
+          remaining: remaining,
+          income: income,
+          spending: spending
+        });
+      }
+      
+      // Process 2/2 timing
+      if (setup2_2) {
+        const income = getSetupIncome(setup2_2);
+        const spending = calculateSetupSpending(setup2_2);
+        const remaining = income - spending;
+        runningBalance += remaining;
+        
+        projections.push({
+          month: `${monthShort} - 2/2`,
+          balance: runningBalance,
+          remaining: remaining,
+          income: income,
+          spending: spending
+        });
+      } else {
+        // No setup for 2/2, use default
+        const income = DEFAULT_SALARY;
+        const spending = 0; // No spending data
+        const remaining = income - spending;
+        runningBalance += remaining;
+        
+        projections.push({
+          month: `${monthShort} - 2/2`,
+          balance: runningBalance,
+          remaining: remaining,
+          income: income,
+          spending: spending
+        });
+      }
     }
     
     return projections;
@@ -177,9 +221,31 @@ const Projections: React.FC<ProjectionsProps> = ({ accounts, budget, installment
 
   const surplusProjections = calculateSurplusProjection(startDate, endDate);
   const totalBalance = calculateTotalBalance(accounts);
-  const monthlyRemaining = calculateMonthlyRemaining();
   const projectedBalance = surplusProjections[surplusProjections.length - 1]?.balance || 0;
   const isDeficit = projectedBalance < 0;
+  
+  // Calculate average remaining across all projections for display
+  const avgRemaining = surplusProjections.length > 0
+    ? surplusProjections.reduce((acc, p) => acc + p.remaining, 0) / surplusProjections.length
+    : 0;
+  
+  // Helper to determine status
+  const getStatus = () => {
+    if (isDeficit) return 'Deficit';
+    if (avgRemaining < 0) return 'Deficit';
+    if (avgRemaining === 0) return 'Break-even';
+    return 'Surplus';
+  };
+  
+  // Helper to get status color
+  const getStatusColor = () => {
+    if (isDeficit || avgRemaining < 0) return 'text-red-600';
+    if (avgRemaining === 0) return 'text-yellow-600';
+    return 'text-green-600';
+  };
+  
+  const status = getStatus();
+  const statusColor = getStatusColor();
 
   // Filter active installments (those with remaining balance)
   const activeInstallments = installments.filter(i => i.paidAmount < i.totalAmount);
@@ -260,24 +326,24 @@ const Projections: React.FC<ProjectionsProps> = ({ accounts, budget, installment
 
             <div className="bg-white p-4 rounded-xl shadow-sm">
               <div className="flex items-center justify-between mb-2">
-                <span className="text-sm text-gray-600">Monthly Remaining</span>
+                <span className="text-sm text-gray-600">Avg Period Remaining</span>
                 <Calendar className="w-4 h-4 text-purple-600" />
               </div>
-              <p className={`text-xl font-bold ${monthlyRemaining >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                {formatCurrency(monthlyRemaining)}
+              <p className={`text-xl font-bold ${avgRemaining >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                {formatCurrency(avgRemaining)}
               </p>
               <p className="text-xs text-gray-500 mt-1">
-                {monthlyRemaining >= 0 ? 'Surplus per month' : 'Deficit per month'}
+                {avgRemaining >= 0 ? 'Surplus per period' : 'Deficit per period'}
               </p>
             </div>
 
             <div className="bg-white p-4 rounded-xl shadow-sm">
               <div className="flex items-center justify-between mb-2">
                 <span className="text-sm text-gray-600">Status</span>
-                <AlertCircle className={`w-4 h-4 ${isDeficit ? 'text-red-600' : monthlyRemaining < 0 ? 'text-red-600' : monthlyRemaining === 0 ? 'text-yellow-600' : 'text-green-600'}`} />
+                <AlertCircle className={`w-4 h-4 ${statusColor}`} />
               </div>
-              <p className={`text-lg font-bold ${isDeficit ? 'text-red-600' : monthlyRemaining < 0 ? 'text-red-600' : monthlyRemaining === 0 ? 'text-yellow-600' : 'text-green-600'}`}>
-                {isDeficit ? 'Deficit' : monthlyRemaining < 0 ? 'Deficit' : monthlyRemaining === 0 ? 'Break-even' : 'Surplus'}
+              <p className={`text-lg font-bold ${statusColor}`}>
+                {status}
               </p>
             </div>
           </div>
