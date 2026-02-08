@@ -58,7 +58,7 @@ const Installments: React.FC<InstallmentsProps> = ({ installments, accounts, bil
     amount: '',
     receipt: '',
     datePaid: new Date().toISOString().split('T')[0],
-    accountId: accounts[0]?.id || ''
+    accountId: accounts.filter(acc => acc.classification !== 'Credit Card' && acc.type !== 'Credit')[0]?.id || ''
   });
 
   const formatCurrency = (val: number) => {
@@ -402,7 +402,12 @@ const Installments: React.FC<InstallmentsProps> = ({ installments, accounts, bil
             <button 
               onClick={() => {
                 setShowPayModal(item);
-                setPayFormData({ ...payFormData, amount: item.monthlyAmount.toString() });
+                setPayFormData({ 
+                  amount: item.monthlyAmount.toString(),
+                  receipt: '',
+                  datePaid: new Date().toISOString().split('T')[0],
+                  accountId: accounts.filter(acc => acc.classification !== 'Credit Card' && acc.type !== 'Credit')[0]?.id || ''
+                });
               }}
               className="bg-indigo-600 text-white px-5 py-2 rounded-xl text-xs font-black uppercase tracking-widest hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-100"
             >
@@ -455,7 +460,12 @@ const Installments: React.FC<InstallmentsProps> = ({ installments, accounts, bil
             <button 
               onClick={() => {
                 setShowPayModal(item);
-                setPayFormData({ ...payFormData, amount: item.monthlyAmount.toString() });
+                setPayFormData({ 
+                  amount: item.monthlyAmount.toString(),
+                  receipt: '',
+                  datePaid: new Date().toISOString().split('T')[0],
+                  accountId: accounts.filter(acc => acc.classification !== 'Credit Card' && acc.type !== 'Credit')[0]?.id || ''
+                });
               }}
               className="bg-indigo-600 text-white px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest hover:bg-indigo-700 transition-all"
             >
@@ -913,7 +923,12 @@ const Installments: React.FC<InstallmentsProps> = ({ installments, accounts, bil
                             onClick={() => {
                               setShowViewModal(null);
                               setShowPayModal(showViewModal);
-                              setPayFormData({ ...payFormData, amount: showViewModal.monthlyAmount.toString() });
+                              setPayFormData({ 
+                                amount: showViewModal.monthlyAmount.toString(),
+                                receipt: '',
+                                datePaid: new Date().toISOString().split('T')[0],
+                                accountId: accounts.filter(acc => acc.classification !== 'Credit Card' && acc.type !== 'Credit')[0]?.id || ''
+                              });
                             }}
                             className="bg-indigo-600 text-white px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest hover:bg-indigo-700 transition-all"
                           >
