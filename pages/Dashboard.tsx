@@ -1,7 +1,7 @@
 
 import React, { useState } from 'react';
 import { Account, BudgetItem, Installment, Transaction, SavedBudgetSetup } from '../types';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, PieChart, Pie, Legend } from 'recharts';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, PieChart, Pie, Legend, LabelList } from 'recharts';
 import { TrendingUp, TrendingDown, Landmark, ArrowUpRight, CreditCard, Wallet, Calendar } from 'lucide-react';
 
 interface DashboardProps {
@@ -80,10 +80,13 @@ const Dashboard: React.FC<DashboardProps> = ({ accounts, budget, installments, t
   };
 
   // Helper: Get income from setup
+  // Priority: _actualSalary (if entered) > _projectedSalary > 0
+  // When actual salary is received, it will automatically replace the projected salary
   const getSetupIncome = (setup: SavedBudgetSetup) => {
     const actualSalary = setup.data._actualSalary;
     const projectedSalary = setup.data._projectedSalary;
     
+    // Prioritize actual salary over projected
     if (actualSalary && actualSalary.trim() !== '') {
       return parseFloat(actualSalary) || 0;
     } else if (projectedSalary && projectedSalary.trim() !== '') {
@@ -325,7 +328,7 @@ const Dashboard: React.FC<DashboardProps> = ({ accounts, budget, installments, t
 
         {/* Chart */}
         <div className="p-6">
-          <div className="h-64">
+          <div className="h-80">
             {periodProjections.length > 0 ? (
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={periodProjections}>
@@ -335,9 +338,8 @@ const Dashboard: React.FC<DashboardProps> = ({ accounts, budget, installments, t
                     axisLine={false}
                     tickLine={false}
                     tick={{fill: '#94a3b8', fontSize: 11}}
-                    angle={-45}
-                    textAnchor="end"
-                    height={80}
+                    angle={0}
+                    height={40}
                   />
                   <YAxis 
                     axisLine={false}
@@ -355,19 +357,40 @@ const Dashboard: React.FC<DashboardProps> = ({ accounts, budget, installments, t
                     fill="#10B981" 
                     name="Total Budget (Income)"
                     radius={[4, 4, 0, 0]}
-                  />
+                  >
+                    <LabelList 
+                      dataKey="income" 
+                      position="top" 
+                      formatter={(value: number) => formatCurrency(value)}
+                      style={{ fill: '#059669', fontSize: '10px', fontWeight: 'bold' }}
+                    />
+                  </Bar>
                   <Bar 
                     dataKey="totalBudget" 
                     fill="#F59E0B" 
                     name="Allocated Budget"
                     radius={[4, 4, 0, 0]}
-                  />
+                  >
+                    <LabelList 
+                      dataKey="totalBudget" 
+                      position="top" 
+                      formatter={(value: number) => formatCurrency(value)}
+                      style={{ fill: '#D97706', fontSize: '10px', fontWeight: 'bold' }}
+                    />
+                  </Bar>
                   <Bar 
                     dataKey="remaining" 
                     fill="#3B82F6" 
                     name="Remaining"
                     radius={[4, 4, 0, 0]}
-                  />
+                  >
+                    <LabelList 
+                      dataKey="remaining" 
+                      position="top" 
+                      formatter={(value: number) => formatCurrency(value)}
+                      style={{ fill: '#2563EB', fontSize: '10px', fontWeight: 'bold' }}
+                    />
+                  </Bar>
                 </BarChart>
               </ResponsiveContainer>
             ) : (
