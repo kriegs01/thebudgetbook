@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Installment, Account, ViewMode, Biller } from '../types';
 import { Plus, LayoutGrid, List, Wallet, Trash2, X, Upload, AlertTriangle, Edit2, Eye, MoreVertical } from 'lucide-react';
 import { getPaymentSchedulesBySource } from '../src/services/paymentSchedulesService';
@@ -22,6 +22,11 @@ interface InstallmentsProps {
 }
 
 const Installments: React.FC<InstallmentsProps> = ({ installments, accounts, billers = [], onAdd, onUpdate, onDelete, onPayInstallment, loading = false, error = null }) => {
+  // Memoized first non-credit account ID to avoid redundant filtering
+  const defaultNonCreditAccountId = useMemo(() => {
+    return accounts.filter(acc => acc.classification !== 'Credit Card' && acc.type !== 'Credit')[0]?.id || '';
+  }, [accounts]);
+
   const [viewMode, setViewMode] = useState<ViewMode>('card');
   const [showModal, setShowModal] = useState(false);
   const [showPayModal, setShowPayModal] = useState<Installment | null>(null);
@@ -58,7 +63,7 @@ const Installments: React.FC<InstallmentsProps> = ({ installments, accounts, bil
     amount: '',
     receipt: '',
     datePaid: new Date().toISOString().split('T')[0],
-    accountId: accounts[0]?.id || ''
+    accountId: defaultNonCreditAccountId
   });
 
   const formatCurrency = (val: number) => {
@@ -402,7 +407,12 @@ const Installments: React.FC<InstallmentsProps> = ({ installments, accounts, bil
             <button 
               onClick={() => {
                 setShowPayModal(item);
-                setPayFormData({ ...payFormData, amount: item.monthlyAmount.toString() });
+                setPayFormData({ 
+                  amount: item.monthlyAmount.toString(),
+                  receipt: '',
+                  datePaid: new Date().toISOString().split('T')[0],
+                  accountId: defaultNonCreditAccountId
+                });
               }}
               className="bg-indigo-600 text-white px-5 py-2 rounded-xl text-xs font-black uppercase tracking-widest hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-100"
             >
@@ -455,7 +465,12 @@ const Installments: React.FC<InstallmentsProps> = ({ installments, accounts, bil
             <button 
               onClick={() => {
                 setShowPayModal(item);
-                setPayFormData({ ...payFormData, amount: item.monthlyAmount.toString() });
+                setPayFormData({ 
+                  amount: item.monthlyAmount.toString(),
+                  receipt: '',
+                  datePaid: new Date().toISOString().split('T')[0],
+                  accountId: defaultNonCreditAccountId
+                });
               }}
               className="bg-indigo-600 text-white px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest hover:bg-indigo-700 transition-all"
             >
@@ -913,7 +928,12 @@ const Installments: React.FC<InstallmentsProps> = ({ installments, accounts, bil
                             onClick={() => {
                               setShowViewModal(null);
                               setShowPayModal(showViewModal);
-                              setPayFormData({ ...payFormData, amount: showViewModal.monthlyAmount.toString() });
+                              setPayFormData({ 
+                                amount: showViewModal.monthlyAmount.toString(),
+                                receipt: '',
+                                datePaid: new Date().toISOString().split('T')[0],
+                                accountId: defaultNonCreditAccountId
+                              });
                             }}
                             className="bg-indigo-600 text-white px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest hover:bg-indigo-700 transition-all"
                           >

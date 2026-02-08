@@ -719,7 +719,7 @@ const App: React.FC = () => {
    */
   const handleTransactionDeleted = async () => {
     console.log('[App] Transaction deleted, reloading accounts, installments and transactions to reflect changes');
-    await fetchAccounts(); // Reload accounts to recalculate balances
+    await reloadAccounts(); // Reload accounts to recalculate balances
     await reloadInstallments();
     await reloadTransactions();
   };
@@ -730,7 +730,7 @@ const App: React.FC = () => {
    */
   const handleTransactionCreated = async () => {
     console.log('[App] Transaction created, reloading accounts to recalculate balances');
-    await fetchAccounts(); // Reload accounts to recalculate balances
+    await reloadAccounts(); // Reload accounts to recalculate balances
   };
 
 
