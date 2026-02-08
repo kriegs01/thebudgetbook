@@ -105,10 +105,9 @@ const Projections: React.FC<ProjectionsProps> = ({ accounts, budget, installment
       return [];
     }
     
-    // 3. Build projections based on budget setups for each timing period
+    // 3. Build projections ONLY for budget setups that exist (are "open")
     const projections = [];
     let runningBalance = totalBalance;
-    const DEFAULT_SALARY = 11000; // Default for periods without budget setups
     
     // Iterate through each month in the range
     for (let i = 0; i <= monthsDiff; i++) {
@@ -121,25 +120,11 @@ const Projections: React.FC<ProjectionsProps> = ({ accounts, budget, installment
       const setup1_2 = budgetSetups.find(s => s.month === month && s.timing === '1/2');
       const setup2_2 = budgetSetups.find(s => s.month === month && s.timing === '2/2');
       
-      // Process 1/2 timing
+      // Process 1/2 timing ONLY if setup exists
       if (setup1_2) {
         const income = getSetupIncome(setup1_2);
         const spending = calculateSetupSpending(setup1_2);
-        const remaining = income - spending;
-        runningBalance += remaining;
-        
-        projections.push({
-          month: `${monthShort} - 1/2`,
-          balance: runningBalance,
-          remaining: remaining,
-          income: income,
-          spending: spending
-        });
-      } else {
-        // No setup for 1/2, use default
-        const income = DEFAULT_SALARY;
-        const spending = 0; // No spending data
-        const remaining = income - spending;
+        const remaining = income - spending; // Projected salary - total expenses
         runningBalance += remaining;
         
         projections.push({
@@ -151,25 +136,11 @@ const Projections: React.FC<ProjectionsProps> = ({ accounts, budget, installment
         });
       }
       
-      // Process 2/2 timing
+      // Process 2/2 timing ONLY if setup exists
       if (setup2_2) {
         const income = getSetupIncome(setup2_2);
         const spending = calculateSetupSpending(setup2_2);
-        const remaining = income - spending;
-        runningBalance += remaining;
-        
-        projections.push({
-          month: `${monthShort} - 2/2`,
-          balance: runningBalance,
-          remaining: remaining,
-          income: income,
-          spending: spending
-        });
-      } else {
-        // No setup for 2/2, use default
-        const income = DEFAULT_SALARY;
-        const spending = 0; // No spending data
-        const remaining = income - spending;
+        const remaining = income - spending; // Projected salary - total expenses
         runningBalance += remaining;
         
         projections.push({
@@ -351,40 +322,49 @@ const Projections: React.FC<ProjectionsProps> = ({ accounts, budget, installment
 
         {/* Line Chart */}
         <div className="p-6">
-          <div className="h-80">
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={surplusProjections}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                <XAxis 
-                  dataKey="month" 
-                  axisLine={false} 
-                  tickLine={false} 
-                  tick={{fill: '#94a3b8', fontSize: 12}} 
-                  dy={10} 
-                />
-                <YAxis 
-                  axisLine={false} 
-                  tickLine={false} 
-                  tick={{fill: '#94a3b8', fontSize: 12}}
-                  tickFormatter={(value) => formatCurrency(value)}
-                />
-                <Tooltip 
-                  formatter={(value: number) => formatCurrency(value)}
-                  contentStyle={{borderRadius: '12px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)'}}
-                />
-                <Legend />
-                <Line 
-                  type="monotone" 
-                  dataKey="balance" 
-                  stroke="#3B82F6" 
-                  strokeWidth={3}
-                  name="Projected Balance"
-                  dot={{ fill: '#3B82F6', r: 5 }}
-                  activeDot={{ r: 8 }}
-                />
-              </LineChart>
-            </ResponsiveContainer>
-          </div>
+          {surplusProjections.length === 0 ? (
+            <div className="h-80 flex items-center justify-center">
+              <div className="text-center text-gray-400">
+                <p className="text-lg font-semibold mb-2">No Budget Setups Found</p>
+                <p className="text-sm">Create budget setups in the Budget page to see projections here.</p>
+              </div>
+            </div>
+          ) : (
+            <div className="h-80">
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={surplusProjections}>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                  <XAxis 
+                    dataKey="month" 
+                    axisLine={false} 
+                    tickLine={false} 
+                    tick={{fill: '#94a3b8', fontSize: 12}} 
+                    dy={10} 
+                  />
+                  <YAxis 
+                    axisLine={false} 
+                    tickLine={false} 
+                    tick={{fill: '#94a3b8', fontSize: 12}}
+                    tickFormatter={(value) => formatCurrency(value)}
+                  />
+                  <Tooltip 
+                    formatter={(value: number) => formatCurrency(value)}
+                    contentStyle={{borderRadius: '12px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)'}}
+                  />
+                  <Legend />
+                  <Line 
+                    type="monotone" 
+                    dataKey="balance" 
+                    stroke="#3B82F6" 
+                    strokeWidth={3}
+                    name="Projected Balance"
+                    dot={{ fill: '#3B82F6', r: 5 }}
+                    activeDot={{ r: 8 }}
+                  />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+          )}
         </div>
       </div>
 
