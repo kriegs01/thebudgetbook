@@ -821,7 +821,7 @@ const App: React.FC = () => {
         <main className={`flex-1 bg-gray-50 transition-all duration-300 ease-in-out ${isSidebarOpen ? 'ml-64' : 'ml-20'} min-h-screen flex flex-col`}> 
           <div className="p-8 w-full flex-1 overflow-auto">
             <Routes>
-              <Route path="/" element={<Dashboard accounts={accounts} budget={budgetItems} installments={installments} transactions={transactions} />} />
+              <Route path="/" element={<Dashboard accounts={accounts} budget={budgetItems} installments={installments} transactions={transactions} budgetSetups={budgetSetups} />} />
               <Route path="/budget" element={
                 <Budget
                   items={budgetItems} 
