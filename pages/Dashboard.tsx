@@ -74,11 +74,6 @@ const Dashboard: React.FC<DashboardProps> = ({ accounts, budget, installments, t
     return acc;
   }, []);
 
-  // Helper: Get total budget from setup (use totalAmount field which is pre-calculated)
-  const getSetupTotalBudget = (setup: SavedBudgetSetup) => {
-    return setup.totalAmount || 0;
-  };
-
   // Helper: Get income from setup
   // Priority: _actualSalary (if entered) > _projectedSalary > 0
   // When actual salary is received, it will automatically replace the projected salary
@@ -93,6 +88,13 @@ const Dashboard: React.FC<DashboardProps> = ({ accounts, budget, installments, t
       return parseFloat(projectedSalary) || 0;
     }
     return 0;
+  };
+
+  // Helper: Get total budget from setup
+  // Uses the totalAmount field which equals grandTotal from Budget page calculation
+  // This field includes all budget items AND installments (after the installments fix)
+  const getSetupTotalBudget = (setup: SavedBudgetSetup): number => {
+    return setup.totalAmount || 0;
   };
 
   // Main calculation: Get period projections
