@@ -164,6 +164,11 @@ const Dashboard: React.FC<DashboardProps> = ({ accounts, budget, installments, t
   const periodProjections = calculatePeriodProjections();
   const monthlyAverages = calculateMonthlyAverages(periodProjections);
 
+  // Debug logging in development only
+  if (import.meta.env.DEV && periodProjections.length > 0) {
+    console.log('[Dashboard] Budget Projections Data:', periodProjections);
+  }
+
   // Statistics for cards
   const avgPeriodRemaining = periodProjections.length > 0
     ? periodProjections.reduce((sum, p) => sum + p.remaining, 0) / periodProjections.length
