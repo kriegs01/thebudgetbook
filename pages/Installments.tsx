@@ -61,6 +61,11 @@ const Installments: React.FC<InstallmentsProps> = ({ installments, accounts, bil
     accountId: accounts.filter(acc => acc.classification !== 'Credit Card' && acc.type !== 'Credit')[0]?.id || ''
   });
 
+  // Helper function to get first non-credit account ID
+  const getDefaultNonCreditAccountId = () => {
+    return accounts.filter(acc => acc.classification !== 'Credit Card' && acc.type !== 'Credit')[0]?.id || '';
+  };
+
   const formatCurrency = (val: number) => {
     return new Intl.NumberFormat('en-PH', { 
       style: 'currency', 
@@ -406,7 +411,7 @@ const Installments: React.FC<InstallmentsProps> = ({ installments, accounts, bil
                   amount: item.monthlyAmount.toString(),
                   receipt: '',
                   datePaid: new Date().toISOString().split('T')[0],
-                  accountId: accounts.filter(acc => acc.classification !== 'Credit Card' && acc.type !== 'Credit')[0]?.id || ''
+                  accountId: getDefaultNonCreditAccountId()
                 });
               }}
               className="bg-indigo-600 text-white px-5 py-2 rounded-xl text-xs font-black uppercase tracking-widest hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-100"
@@ -464,7 +469,7 @@ const Installments: React.FC<InstallmentsProps> = ({ installments, accounts, bil
                   amount: item.monthlyAmount.toString(),
                   receipt: '',
                   datePaid: new Date().toISOString().split('T')[0],
-                  accountId: accounts.filter(acc => acc.classification !== 'Credit Card' && acc.type !== 'Credit')[0]?.id || ''
+                  accountId: getDefaultNonCreditAccountId()
                 });
               }}
               className="bg-indigo-600 text-white px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest hover:bg-indigo-700 transition-all"
@@ -927,7 +932,7 @@ const Installments: React.FC<InstallmentsProps> = ({ installments, accounts, bil
                                 amount: showViewModal.monthlyAmount.toString(),
                                 receipt: '',
                                 datePaid: new Date().toISOString().split('T')[0],
-                                accountId: accounts.filter(acc => acc.classification !== 'Credit Card' && acc.type !== 'Credit')[0]?.id || ''
+                                accountId: getDefaultNonCreditAccountId()
                               });
                             }}
                             className="bg-indigo-600 text-white px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest hover:bg-indigo-700 transition-all"
