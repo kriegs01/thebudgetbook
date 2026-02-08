@@ -1,11 +1,11 @@
 import React, { useState, useMemo } from 'react';
-import { SavedBudgetSetup, Account } from '../types';
+import { Link } from 'react-router-dom';
+import { SavedBudgetSetup } from '../types';
 import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { TrendingUp, TrendingDown, Calendar } from 'lucide-react';
 
 interface ProjectionsProps {
   budgetSetups: SavedBudgetSetup[];
-  accounts: Account[];
 }
 
 interface PeriodProjection {
@@ -29,15 +29,15 @@ interface MonthlyAverage {
 const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 const PROJECTION_MONTHS = 6; // Number of months to project ahead by default
 
-const Projections: React.FC<ProjectionsProps> = ({ budgetSetups, accounts }) => {
+const Projections: React.FC<ProjectionsProps> = ({ budgetSetups }) => {
   const currentDate = new Date();
   const currentYear = currentDate.getFullYear();
-  const currentMonth = currentDate.getMonth();
+  const currentMonth = currentDate.getMonth(); // 0-indexed (0 = January)
   
   // Default to current month, project 6 months ahead
-  const endMonthCalc = currentMonth + PROJECTION_MONTHS + 1; // +1 for current month format (1-12 vs 0-11)
-  const endYear = currentYear + Math.floor(endMonthCalc / 12);
-  const endMonth = ((endMonthCalc - 1) % 12) + 1; // Convert to 1-12 range
+  const totalMonths = currentMonth + PROJECTION_MONTHS; // 0-indexed calculation
+  const endYear = currentYear + Math.floor(totalMonths / 12);
+  const endMonth = (totalMonths % 12) + 1; // Convert to 1-12 range for input value
   
   const [startDate, setStartDate] = useState(`${currentYear}-${String(currentMonth + 1).padStart(2, '0')}`);
   const [endDate, setEndDate] = useState(`${endYear}-${String(endMonth).padStart(2, '0')}`);
@@ -411,12 +411,12 @@ const Projections: React.FC<ProjectionsProps> = ({ budgetSetups, accounts }) => 
               <p className="text-sm text-gray-400 mb-4">
                 Create budget setups in the Budget page to see projections
               </p>
-              <a 
-                href="/budget" 
+              <Link 
+                to="/budget" 
                 className="inline-block text-blue-600 hover:text-blue-700 underline font-medium"
               >
                 Go to Budget Page
-              </a>
+              </Link>
             </div>
           )}
         </div>

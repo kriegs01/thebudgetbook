@@ -909,7 +909,6 @@ const App: React.FC = () => {
               <Route path="/projections" element={
                 <Projections
                   budgetSetups={savedSetups}
-                  accounts={accounts}
                 />
               } />
               <Route path="/settings" element={
