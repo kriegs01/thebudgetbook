@@ -27,6 +27,7 @@ interface MonthlyAverage {
 }
 
 const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+const PROJECTION_MONTHS = 6; // Number of months to project ahead by default
 
 const Projections: React.FC<ProjectionsProps> = ({ budgetSetups, accounts }) => {
   const currentDate = new Date();
@@ -34,9 +35,9 @@ const Projections: React.FC<ProjectionsProps> = ({ budgetSetups, accounts }) => 
   const currentMonth = currentDate.getMonth();
   
   // Default to current month, project 6 months ahead
-  const endMonthCalc = currentMonth + 7; // +1 for current month format, +6 for projection
+  const endMonthCalc = currentMonth + PROJECTION_MONTHS + 1; // +1 for current month format (1-12 vs 0-11)
   const endYear = currentYear + Math.floor(endMonthCalc / 12);
-  const endMonth = (endMonthCalc % 12) || 12;
+  const endMonth = ((endMonthCalc - 1) % 12) + 1; // Convert to 1-12 range
   
   const [startDate, setStartDate] = useState(`${currentYear}-${String(currentMonth + 1).padStart(2, '0')}`);
   const [endDate, setEndDate] = useState(`${endYear}-${String(endMonth).padStart(2, '0')}`);
@@ -107,8 +108,11 @@ const Projections: React.FC<ProjectionsProps> = ({ budgetSetups, accounts }) => 
       const monthShort = projectedDate.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
       
       // Find budget setups for this month and year
-      // Note: SavedBudgetSetup.month is the full month name (e.g., "January")
-      // We need to match both month name and year (if available in the future)
+      // NOTE: Current limitation - SavedBudgetSetup only stores month name (e.g., "January")
+      // without year information. This means projections spanning multiple years will match
+      // setups from ANY year with the same month name. This is acceptable for typical use cases
+      // where users view projections within a single year, but may need enhancement for
+      // multi-year projections. To fix this, SavedBudgetSetup type would need to include a year field.
       const setup1_2 = budgetSetups.find(s => s.month === month && s.timing === '1/2');
       const setup2_2 = budgetSetups.find(s => s.month === month && s.timing === '2/2');
       
@@ -156,10 +160,12 @@ const Projections: React.FC<ProjectionsProps> = ({ budgetSetups, accounts }) => 
     const monthGroups = new Map<string, PeriodProjection[]>();
     
     periodProjections.forEach(period => {
-      if (!monthGroups.has(period.monthYear)) {
-        monthGroups.set(period.monthYear, []);
+      const group = monthGroups.get(period.monthYear);
+      if (group) {
+        group.push(period);
+      } else {
+        monthGroups.set(period.monthYear, [period]);
       }
-      monthGroups.get(period.monthYear)!.push(period);
     });
     
     // Calculate averages
