@@ -16,7 +16,7 @@ interface PeriodProjection {
   period: string;
   monthYear: string;
   income: number;
-  spending: number;
+  totalBudget: number;  // Total allocated budget (spending)
   remaining: number;
 }
 
@@ -74,21 +74,9 @@ const Dashboard: React.FC<DashboardProps> = ({ accounts, budget, installments, t
     return acc;
   }, []);
 
-  // Helper: Calculate spending from a budget setup
-  const calculateSetupSpending = (setup: SavedBudgetSetup) => {
-    let totalSpending = 0;
-    Object.keys(setup.data).forEach(category => {
-      if (category.startsWith('_')) return; // Skip metadata
-      const items = setup.data[category];
-      if (Array.isArray(items)) {
-        items.forEach(item => {
-          if (item.included) {
-            totalSpending += parseFloat(item.amount) || 0;
-          }
-        });
-      }
-    });
-    return totalSpending;
+  // Helper: Get total budget from setup (use totalAmount field which is pre-calculated)
+  const getSetupTotalBudget = (setup: SavedBudgetSetup) => {
+    return setup.totalAmount || 0;
   };
 
   // Helper: Get income from setup
@@ -124,25 +112,25 @@ const Dashboard: React.FC<DashboardProps> = ({ accounts, budget, installments, t
       
       if (setup1_2) {
         const income = getSetupIncome(setup1_2);
-        const spending = calculateSetupSpending(setup1_2);
+        const totalBudget = getSetupTotalBudget(setup1_2);
         projections.push({
           period: `${monthShort} - 1/2`,
           monthYear: monthShort,
           income,
-          spending,
-          remaining: income - spending
+          totalBudget,
+          remaining: income - totalBudget
         });
       }
       
       if (setup2_2) {
         const income = getSetupIncome(setup2_2);
-        const spending = calculateSetupSpending(setup2_2);
+        const totalBudget = getSetupTotalBudget(setup2_2);
         projections.push({
           period: `${monthShort} - 2/2`,
           monthYear: monthShort,
           income,
-          spending,
-          remaining: income - spending
+          totalBudget,
+          remaining: income - totalBudget
         });
       }
     }
@@ -357,6 +345,18 @@ const Dashboard: React.FC<DashboardProps> = ({ accounts, budget, installments, t
                     contentStyle={{borderRadius: '12px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)'}}
                   />
                   <Legend />
+                  <Bar 
+                    dataKey="income" 
+                    fill="#10B981" 
+                    name="Total Budget (Income)"
+                    radius={[4, 4, 0, 0]}
+                  />
+                  <Bar 
+                    dataKey="totalBudget" 
+                    fill="#F59E0B" 
+                    name="Allocated Budget"
+                    radius={[4, 4, 0, 0]}
+                  />
                   <Bar 
                     dataKey="remaining" 
                     fill="#3B82F6" 
