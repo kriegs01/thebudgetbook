@@ -362,7 +362,7 @@ const Dashboard: React.FC<DashboardProps> = ({ accounts, budget, installments, t
                       dataKey="income" 
                       position="top" 
                       formatter={(value: number) => formatCurrency(value)}
-                      style={{ fill: '#059669', fontSize: '10px', fontWeight: 'bold' }}
+                      style={{ fill: '#059669', fontSize: '11px', fontWeight: 'bold' }}
                     />
                   </Bar>
                   <Bar 
@@ -375,7 +375,7 @@ const Dashboard: React.FC<DashboardProps> = ({ accounts, budget, installments, t
                       dataKey="totalBudget" 
                       position="top" 
                       formatter={(value: number) => formatCurrency(value)}
-                      style={{ fill: '#D97706', fontSize: '10px', fontWeight: 'bold' }}
+                      style={{ fill: '#D97706', fontSize: '11px', fontWeight: 'bold' }}
                     />
                   </Bar>
                   <Bar 
@@ -388,7 +388,7 @@ const Dashboard: React.FC<DashboardProps> = ({ accounts, budget, installments, t
                       dataKey="remaining" 
                       position="top" 
                       formatter={(value: number) => formatCurrency(value)}
-                      style={{ fill: '#2563EB', fontSize: '10px', fontWeight: 'bold' }}
+                      style={{ fill: '#2563EB', fontSize: '11px', fontWeight: 'bold' }}
                     />
                   </Bar>
                 </BarChart>
