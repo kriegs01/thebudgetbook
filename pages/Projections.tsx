@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Account, BudgetItem, Installment, Transaction, SavedBudgetSetup } from '../types';
+import { Account, BudgetItem, Installment, Transaction, SavedBudgetSetup, Biller } from '../types';
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 import { TrendingUp, TrendingDown, DollarSign, Calendar, ChevronDown, ChevronUp, AlertCircle } from 'lucide-react';
 
@@ -9,9 +9,10 @@ interface ProjectionsProps {
   installments: Installment[];
   transactions?: Transaction[];
   budgetSetups?: SavedBudgetSetup[];
+  billers?: Biller[];
 }
 
-const Projections: React.FC<ProjectionsProps> = ({ accounts, budget, installments, transactions = [], budgetSetups = [] }) => {
+const Projections: React.FC<ProjectionsProps> = ({ accounts, budget, installments, transactions = [], budgetSetups = [], billers = [] }) => {
   // Get current date in YYYY-MM format
   const getCurrentMonth = () => {
     const today = new Date();
@@ -47,8 +48,25 @@ const Projections: React.FC<ProjectionsProps> = ({ accounts, budget, installment
 
   // Helper function to calculate monthly remaining amount (income - spending)
   const calculateMonthlyRemaining = () => {
-    // Calculate total monthly spending from budget items
-    const monthlySpending = budget.reduce((acc, b) => acc + b.amount, 0);
+    // Default base salary
+    const DEFAULT_SALARY = 11000;
+    
+    // Calculate total monthly spending from multiple sources
+    
+    // 1. Budget items
+    const budgetSpending = budget.reduce((acc, b) => acc + b.amount, 0);
+    
+    // 2. Active billers - sum up expectedAmount for active billers
+    const billerSpending = billers
+      .filter(b => b.status === 'active')
+      .reduce((acc, b) => acc + b.expectedAmount, 0);
+    
+    // 3. Active installments - sum up monthlyAmount for installments with remaining balance
+    const installmentSpending = installments
+      .filter(i => i.paidAmount < i.totalAmount)
+      .reduce((acc, i) => acc + i.monthlyAmount, 0);
+    
+    const totalMonthlySpending = budgetSpending + billerSpending + installmentSpending;
 
     // Try to get salary from the most recent budget setup
     // Look for setups from the current month or the most recent month
@@ -59,23 +77,23 @@ const Projections: React.FC<ProjectionsProps> = ({ accounts, budget, installment
       return bDate.getTime() - aDate.getTime();
     });
 
-    let monthlyIncome = 0;
+    let monthlyIncome = DEFAULT_SALARY; // Start with default
     if (sortedSetups.length > 0) {
       const latestSetup = sortedSetups[0];
-      // Use actual salary if available, otherwise use projected salary
+      // Use actual salary if available, otherwise use projected salary, otherwise default
       const actualSalary = latestSetup.data._actualSalary;
       const projectedSalary = latestSetup.data._projectedSalary;
       
       if (actualSalary && actualSalary.trim() !== '') {
-        monthlyIncome = parseFloat(actualSalary) || 0;
+        monthlyIncome = parseFloat(actualSalary) || DEFAULT_SALARY;
       } else if (projectedSalary && projectedSalary.trim() !== '') {
-        monthlyIncome = parseFloat(projectedSalary) || 0;
+        monthlyIncome = parseFloat(projectedSalary) || DEFAULT_SALARY;
       }
     }
 
     // Monthly remaining = income - spending
     // Positive = surplus, Negative = deficit
-    return monthlyIncome - monthlySpending;
+    return monthlyIncome - totalMonthlySpending;
   };
 
   // Calculate surplus projections based on date range

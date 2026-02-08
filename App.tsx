@@ -913,6 +913,7 @@ const App: React.FC = () => {
                   installments={installments}
                   transactions={transactions}
                   budgetSetups={budgetSetups}
+                  billers={billers}
                 />
               } />
               <Route path="/settings" element={
