@@ -331,7 +331,7 @@ const Dashboard: React.FC<DashboardProps> = ({ accounts, budget, installments, t
           <div className="h-80">
             {periodProjections.length > 0 ? (
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={periodProjections}>
+                <BarChart data={periodProjections} margin={{ top: 20, right: 10, left: 0, bottom: 0 }}>
                   <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
                   <XAxis 
                     dataKey="period" 
@@ -346,7 +346,7 @@ const Dashboard: React.FC<DashboardProps> = ({ accounts, budget, installments, t
                     tickLine={false}
                     tick={{fill: '#94a3b8', fontSize: 12}}
                     tickFormatter={(value) => formatCurrency(value)}
-                    domain={[0, 'dataMax + 15%']}
+                    domain={[0, 'dataMax + 25%']}
                   />
                   <Tooltip 
                     formatter={(value: number) => formatCurrency(value)}
