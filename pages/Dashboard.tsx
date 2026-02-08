@@ -1,17 +1,34 @@
 
-import React from 'react';
-import { Account, BudgetItem, Installment, Transaction } from '../types';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, PieChart, Pie } from 'recharts';
-import { TrendingUp, TrendingDown, Landmark, ArrowUpRight, CreditCard, Wallet } from 'lucide-react';
+import React, { useState } from 'react';
+import { Account, BudgetItem, Installment, Transaction, SavedBudgetSetup } from '../types';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, PieChart, Pie, Legend } from 'recharts';
+import { TrendingUp, TrendingDown, Landmark, ArrowUpRight, CreditCard, Wallet, Calendar } from 'lucide-react';
 
 interface DashboardProps {
   accounts: Account[];
   budget: BudgetItem[];
   installments: Installment[];
   transactions?: Transaction[];
+  budgetSetups?: SavedBudgetSetup[];
 }
 
-const Dashboard: React.FC<DashboardProps> = ({ accounts, budget, installments, transactions = [] }) => {
+const Dashboard: React.FC<DashboardProps> = ({ accounts, budget, installments, transactions = [], budgetSetups = [] }) => {
+  // NEW: State for date range
+  const getCurrentMonth = () => {
+    const today = new Date();
+    return `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`;
+  };
+
+  const getNextMonth = (dateStr: string) => {
+    const [year, month] = dateStr.split('-').map(Number);
+    const date = new Date(year, month - 1);
+    date.setMonth(date.getMonth() + 1);
+    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+  };
+
+  const [startDate, setStartDate] = useState<string>(getCurrentMonth());
+  const [endDate, setEndDate] = useState<string>(getNextMonth(getCurrentMonth()));
+
   const totalBalance = accounts.reduce((acc, a) => acc + (a.type === 'Debit' ? a.balance : -a.balance), 0);
   const monthlySpending = budget.reduce((acc, b) => acc + b.amount, 0);
   const totalDebt = accounts.filter(a => a.type === 'Credit').reduce((acc, a) => acc + a.balance, 0);
@@ -43,6 +60,125 @@ const Dashboard: React.FC<DashboardProps> = ({ accounts, budget, installments, t
     else acc.push({ name: item.category, value: item.amount });
     return acc;
   }, []);
+
+  // Helper: Calculate spending from a budget setup
+  const calculateSetupSpending = (setup: SavedBudgetSetup) => {
+    let totalSpending = 0;
+    Object.keys(setup.data).forEach(category => {
+      if (category.startsWith('_')) return; // Skip metadata
+      const items = setup.data[category];
+      if (Array.isArray(items)) {
+        items.forEach(item => {
+          if (item.included) {
+            totalSpending += parseFloat(item.amount) || 0;
+          }
+        });
+      }
+    });
+    return totalSpending;
+  };
+
+  // Helper: Get income from setup
+  const getSetupIncome = (setup: SavedBudgetSetup) => {
+    const actualSalary = setup.data._actualSalary;
+    const projectedSalary = setup.data._projectedSalary;
+    
+    if (actualSalary && actualSalary.trim() !== '') {
+      return parseFloat(actualSalary) || 0;
+    } else if (projectedSalary && projectedSalary.trim() !== '') {
+      return parseFloat(projectedSalary) || 0;
+    }
+    return 0;
+  };
+
+  // Main calculation: Get period projections
+  const calculatePeriodProjections = () => {
+    const [startYear, startMonth] = startDate.split('-').map(Number);
+    const [endYear, endMonth] = endDate.split('-').map(Number);
+    const monthsDiff = (endYear - startYear) * 12 + (endMonth - startMonth);
+    
+    if (monthsDiff < 0) return [];
+    
+    const projections = [];
+    
+    for (let i = 0; i <= monthsDiff; i++) {
+      const projectedDate = new Date(startYear, startMonth - 1 + i, 1);
+      const month = projectedDate.toLocaleDateString('en-US', { month: 'long' });
+      const monthShort = projectedDate.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+      
+      const setup1_2 = budgetSetups.find(s => s.month === month && s.timing === '1/2');
+      const setup2_2 = budgetSetups.find(s => s.month === month && s.timing === '2/2');
+      
+      if (setup1_2) {
+        const income = getSetupIncome(setup1_2);
+        const spending = calculateSetupSpending(setup1_2);
+        projections.push({
+          period: `${monthShort} - 1/2`,
+          monthYear: monthShort,
+          income,
+          spending,
+          remaining: income - spending
+        });
+      }
+      
+      if (setup2_2) {
+        const income = getSetupIncome(setup2_2);
+        const spending = calculateSetupSpending(setup2_2);
+        projections.push({
+          period: `${monthShort} - 2/2`,
+          monthYear: monthShort,
+          income,
+          spending,
+          remaining: income - spending
+        });
+      }
+    }
+    
+    return projections;
+  };
+
+  // Calculate monthly averages
+  const calculateMonthlyAverages = (periodProjections: any[]) => {
+    const monthGroups = new Map();
+    
+    periodProjections.forEach(p => {
+      if (!monthGroups.has(p.monthYear)) {
+        monthGroups.set(p.monthYear, []);
+      }
+      monthGroups.get(p.monthYear).push(p);
+    });
+    
+    const averages: any[] = [];
+    monthGroups.forEach((periods, monthYear) => {
+      const avgRemaining = periods.reduce((sum: number, p: any) => sum + p.remaining, 0) / periods.length;
+      averages.push({
+        month: monthYear,
+        avgRemaining
+      });
+    });
+    
+    return averages;
+  };
+
+  const periodProjections = calculatePeriodProjections();
+  const monthlyAverages = calculateMonthlyAverages(periodProjections);
+
+  // Statistics for cards
+  const avgPeriodRemaining = periodProjections.length > 0
+    ? periodProjections.reduce((sum, p) => sum + p.remaining, 0) / periodProjections.length
+    : 0;
+
+  const avgMonthlyRemaining = monthlyAverages.length > 0
+    ? monthlyAverages.reduce((sum, m) => sum + m.avgRemaining, 0) / monthlyAverages.length
+    : 0;
+
+  const bestMonth = monthlyAverages.length > 0
+    ? monthlyAverages.reduce((best, m) => m.avgRemaining > best.avgRemaining ? m : best)
+    : null;
+
+  const worstMonth = monthlyAverages.length > 0
+    ? monthlyAverages.reduce((worst, m) => m.avgRemaining < worst.avgRemaining ? m : worst)
+    : null;
 
   // Calculate credit account utilization
   const creditAccounts = accounts.filter(a => a.type === 'Credit');
@@ -88,6 +224,143 @@ const Dashboard: React.FC<DashboardProps> = ({ accounts, budget, installments, t
           </div>
           <h3 className="text-gray-500 text-sm font-medium">Credit Utilization</h3>
           <p className="text-2xl font-bold mt-1">{formatCurrency(totalDebt)}</p>
+        </div>
+      </div>
+
+      {/* Budget Projections Section */}
+      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+        <div className="p-6 border-b border-gray-100">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-2">
+              <TrendingUp className="w-5 h-5 text-blue-600" />
+              <h3 className="text-lg font-bold">Budget Projections</h3>
+            </div>
+            {/* Date range selector */}
+            <div className="flex gap-2">
+              <input 
+                type="month" 
+                value={startDate}
+                onChange={(e) => setStartDate(e.target.value)}
+                className="text-sm border rounded-lg px-3 py-1"
+              />
+              <span className="self-center text-gray-500">to</span>
+              <input 
+                type="month" 
+                value={endDate}
+                onChange={(e) => setEndDate(e.target.value)}
+                className="text-sm border rounded-lg px-3 py-1"
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* Summary Cards */}
+        <div className="p-6 bg-gray-50 border-b border-gray-100">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            {/* Card 1: Avg Period Remaining */}
+            <div className="bg-white p-4 rounded-xl shadow-sm">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-xs text-gray-600 font-medium">Avg Period</span>
+                <Calendar className="w-4 h-4 text-blue-600" />
+              </div>
+              <p className={`text-lg font-bold ${avgPeriodRemaining >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                {formatCurrency(avgPeriodRemaining)}
+              </p>
+              <p className="text-[10px] text-gray-500 mt-1">Per timing period</p>
+            </div>
+
+            {/* Card 2: Monthly Average */}
+            <div className="bg-white p-4 rounded-xl shadow-sm">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-xs text-gray-600 font-medium">Monthly Avg</span>
+                <TrendingUp className="w-4 h-4 text-purple-600" />
+              </div>
+              <p className={`text-lg font-bold ${avgMonthlyRemaining >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                {formatCurrency(avgMonthlyRemaining)}
+              </p>
+              <p className="text-[10px] text-gray-500 mt-1">Per month</p>
+            </div>
+
+            {/* Card 3: Best Month */}
+            <div className="bg-white p-4 rounded-xl shadow-sm">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-xs text-gray-600 font-medium">Best Month</span>
+                <TrendingUp className="w-4 h-4 text-green-600" />
+              </div>
+              {bestMonth ? (
+                <>
+                  <p className="text-lg font-bold text-green-600">{formatCurrency(bestMonth.avgRemaining)}</p>
+                  <p className="text-[10px] text-gray-500 mt-1">{bestMonth.month}</p>
+                </>
+              ) : (
+                <p className="text-sm text-gray-400">No data</p>
+              )}
+            </div>
+
+            {/* Card 4: Worst Month */}
+            <div className="bg-white p-4 rounded-xl shadow-sm">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-xs text-gray-600 font-medium">Worst Month</span>
+                <TrendingDown className="w-4 h-4 text-red-600" />
+              </div>
+              {worstMonth ? (
+                <>
+                  <p className={`text-lg font-bold ${worstMonth.avgRemaining >= 0 ? 'text-yellow-600' : 'text-red-600'}`}>
+                    {formatCurrency(worstMonth.avgRemaining)}
+                  </p>
+                  <p className="text-[10px] text-gray-500 mt-1">{worstMonth.month}</p>
+                </>
+              ) : (
+                <p className="text-sm text-gray-400">No data</p>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Chart */}
+        <div className="p-6">
+          <div className="h-64">
+            {periodProjections.length > 0 ? (
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={periodProjections}>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                  <XAxis 
+                    dataKey="period" 
+                    axisLine={false}
+                    tickLine={false}
+                    tick={{fill: '#94a3b8', fontSize: 11}}
+                    angle={-45}
+                    textAnchor="end"
+                    height={80}
+                  />
+                  <YAxis 
+                    axisLine={false}
+                    tickLine={false}
+                    tick={{fill: '#94a3b8', fontSize: 12}}
+                    tickFormatter={(value) => formatCurrency(value)}
+                  />
+                  <Tooltip 
+                    formatter={(value: number) => formatCurrency(value)}
+                    contentStyle={{borderRadius: '12px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)'}}
+                  />
+                  <Legend />
+                  <Bar 
+                    dataKey="remaining" 
+                    fill="#3B82F6" 
+                    name="Remaining"
+                    radius={[4, 4, 0, 0]}
+                  />
+                </BarChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="flex items-center justify-center h-full text-center">
+                <div>
+                  <p className="text-gray-500 mb-2">No budget setups found</p>
+                  <p className="text-sm text-gray-400">Create budget setups to see projections</p>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
