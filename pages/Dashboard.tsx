@@ -12,6 +12,19 @@ interface DashboardProps {
   budgetSetups?: SavedBudgetSetup[];
 }
 
+interface PeriodProjection {
+  period: string;
+  monthYear: string;
+  income: number;
+  spending: number;
+  remaining: number;
+}
+
+interface MonthlyAverage {
+  month: string;
+  avgRemaining: number;
+}
+
 const Dashboard: React.FC<DashboardProps> = ({ accounts, budget, installments, transactions = [], budgetSetups = [] }) => {
   // NEW: State for date range
   const getCurrentMonth = () => {
@@ -92,14 +105,14 @@ const Dashboard: React.FC<DashboardProps> = ({ accounts, budget, installments, t
   };
 
   // Main calculation: Get period projections
-  const calculatePeriodProjections = () => {
+  const calculatePeriodProjections = (): PeriodProjection[] => {
     const [startYear, startMonth] = startDate.split('-').map(Number);
     const [endYear, endMonth] = endDate.split('-').map(Number);
     const monthsDiff = (endYear - startYear) * 12 + (endMonth - startMonth);
     
     if (monthsDiff < 0) return [];
     
-    const projections = [];
+    const projections: PeriodProjection[] = [];
     
     for (let i = 0; i <= monthsDiff; i++) {
       const projectedDate = new Date(startYear, startMonth - 1 + i, 1);
@@ -138,19 +151,19 @@ const Dashboard: React.FC<DashboardProps> = ({ accounts, budget, installments, t
   };
 
   // Calculate monthly averages
-  const calculateMonthlyAverages = (periodProjections: any[]) => {
-    const monthGroups = new Map();
+  const calculateMonthlyAverages = (periodProjections: PeriodProjection[]): MonthlyAverage[] => {
+    const monthGroups = new Map<string, PeriodProjection[]>();
     
     periodProjections.forEach(p => {
       if (!monthGroups.has(p.monthYear)) {
         monthGroups.set(p.monthYear, []);
       }
-      monthGroups.get(p.monthYear).push(p);
+      monthGroups.get(p.monthYear)!.push(p);
     });
     
-    const averages: any[] = [];
+    const averages: MonthlyAverage[] = [];
     monthGroups.forEach((periods, monthYear) => {
-      const avgRemaining = periods.reduce((sum: number, p: any) => sum + p.remaining, 0) / periods.length;
+      const avgRemaining = periods.reduce((sum, p) => sum + p.remaining, 0) / periods.length;
       averages.push({
         month: monthYear,
         avgRemaining
