@@ -527,8 +527,8 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
       return;
     }
     
-    // Calculate total amount
-    let total = 0;
+    // Calculate total for regular items
+    let regularItemsTotal = 0;
     Object.values(setupData)
       .filter((value): value is CategorizedSetupItem[] => Array.isArray(value))
       .forEach(catItems => {
@@ -536,11 +536,24 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
           if (item.included) {
             const amount = parseFloat(item.amount);
             if (!isNaN(amount)) {
-              total += amount;
+              regularItemsTotal += amount;
             }
           }
         });
       });
+
+    // Calculate installments total (same logic as categorySummary)
+    const installmentsTotal = installments
+      .filter(inst => {
+        const timingMatch = !inst.timing || inst.timing === selectedTiming;
+        const dateMatch = shouldShowInstallment(inst, selectedMonth);
+        const notExcluded = !excludedInstallmentIds.has(inst.id);
+        return timingMatch && dateMatch && notExcluded;
+      })
+      .reduce((sum, inst) => sum + inst.monthlyAmount, 0);
+
+    // Grand total includes both regular items AND installments
+    const total = regularItemsTotal + installmentsTotal;
 
     const existingSetup = savedSetups.find(s => s.month === selectedMonth && s.timing === selectedTiming);
     
@@ -696,7 +709,8 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
     console.log('[Budget] Current setupData type:', typeof setupData);
     console.log('[Budget] Current setupData keys:', Object.keys(setupData));
     
-    let total = 0;
+    // Calculate total for regular items
+    let regularItemsTotal = 0;
     // Filter out non-array values (like _projectedSalary, _actualSalary) before iterating
     Object.values(setupData)
       .filter((value): value is CategorizedSetupItem[] => Array.isArray(value))
@@ -707,13 +721,28 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
             if (isNaN(amount)) {
               console.warn(`[Budget] Invalid amount for item "${item.name}": "${item.amount}"`);
             } else {
-              total += amount;
+              regularItemsTotal += amount;
             }
           }
         });
       });
 
-    console.log('[Budget] Calculated total amount:', total);
+    // Calculate installments total (same logic as categorySummary)
+    const installmentsTotal = installments
+      .filter(inst => {
+        const timingMatch = !inst.timing || inst.timing === selectedTiming;
+        const dateMatch = shouldShowInstallment(inst, selectedMonth);
+        const notExcluded = !excludedInstallmentIds.has(inst.id);
+        return timingMatch && dateMatch && notExcluded;
+      })
+      .reduce((sum, inst) => sum + inst.monthlyAmount, 0);
+
+    // Grand total includes both regular items AND installments
+    const total = regularItemsTotal + installmentsTotal;
+
+    console.log('[Budget] Regular items total:', regularItemsTotal);
+    console.log('[Budget] Installments total:', installmentsTotal);
+    console.log('[Budget] Grand total amount:', total);
 
     const existingSetup = savedSetups.find(s => s.month === selectedMonth && s.timing === selectedTiming);
     console.log('[Budget] Existing setup found:', !!existingSetup);
