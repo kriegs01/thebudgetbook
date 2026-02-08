@@ -34,8 +34,12 @@ const Projections: React.FC<ProjectionsProps> = ({ budgetSetups, accounts }) => 
   const currentMonth = currentDate.getMonth();
   
   // Default to current month, project 6 months ahead
+  const endMonthCalc = currentMonth + 7; // +1 for current month format, +6 for projection
+  const endYear = currentYear + Math.floor(endMonthCalc / 12);
+  const endMonth = (endMonthCalc % 12) || 12;
+  
   const [startDate, setStartDate] = useState(`${currentYear}-${String(currentMonth + 1).padStart(2, '0')}`);
-  const [endDate, setEndDate] = useState(`${currentYear}-${String(Math.min(currentMonth + 7, 12)).padStart(2, '0')}`);
+  const [endDate, setEndDate] = useState(`${endYear}-${String(endMonth).padStart(2, '0')}`);
   const [viewMode, setViewMode] = useState<'period' | 'monthly'>('period');
 
   // Helper function to format currency
@@ -102,7 +106,9 @@ const Projections: React.FC<ProjectionsProps> = ({ budgetSetups, accounts }) => 
       const year = projectedDate.getFullYear();
       const monthShort = projectedDate.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
       
-      // Find budget setups for this month
+      // Find budget setups for this month and year
+      // Note: SavedBudgetSetup.month is the full month name (e.g., "January")
+      // We need to match both month name and year (if available in the future)
       const setup1_2 = budgetSetups.find(s => s.month === month && s.timing === '1/2');
       const setup2_2 = budgetSetups.find(s => s.month === month && s.timing === '2/2');
       
@@ -415,7 +421,7 @@ const Projections: React.FC<ProjectionsProps> = ({ budgetSetups, accounts }) => 
           <div className="p-8 text-center bg-gray-50 rounded-lg">
             <p className="text-gray-500">Loan projections feature coming soon</p>
             <p className="text-sm text-gray-400 mt-2">
-              Track your loan payments and projection over time
+              Track your loan payments and projections over time
             </p>
           </div>
         </div>
