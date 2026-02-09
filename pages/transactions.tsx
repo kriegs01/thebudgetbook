@@ -2,6 +2,7 @@ import React, { useEffect, useState, useCallback } from 'react';
 import { Plus, ArrowLeft } from 'lucide-react';
 import { getAllTransactions, createTransaction, deleteTransactionAndRevertSchedule } from '../src/services/transactionsService';
 import { getAllAccountsFrontend } from '../src/services/accountsService';
+import { combineDateWithCurrentTime, getTodayIso } from '../src/utils/dateUtils';
 
 type Transaction = {
   id: string;
@@ -13,10 +14,8 @@ type Transaction = {
 
 type AccountOption = { id: string; bank: string };
 
-const todayIso = () => {
-  const d = new Date();
-  return d.toISOString().slice(0, 10);
-};
+// Use the utility function from dateUtils
+const todayIso = getTodayIso;
 
 const formatCurrency = (val: number) =>
   new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP', minimumFractionDigits: 2 }).format(val);
@@ -91,7 +90,7 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ onTransactionDelete
     try {
       const transaction = {
         name: form.name,
-        date: new Date(form.date).toISOString(),
+        date: combineDateWithCurrentTime(form.date),
         amount: parseFloat(form.amount),
         payment_method_id: form.paymentMethodId
       };
@@ -190,7 +189,10 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ onTransactionDelete
                       return (
                         <tr key={tx.id} className="border-t border-gray-100">
                           <td className="px-4 py-3"><div className="text-sm font-medium text-gray-900">{tx.name}</div></td>
-                          <td className="px-4 py-3"><div className="text-sm text-gray-500">{new Date(tx.date).toLocaleDateString()}</div></td>
+                          <td className="px-4 py-3">
+                            <div className="text-sm text-gray-900">{new Date(tx.date).toLocaleDateString()}</div>
+                            <div className="text-xs text-gray-400">{new Date(tx.date).toLocaleTimeString()}</div>
+                          </td>
                           <td className="px-4 py-3"><div className={`text-sm font-semibold ${tx.amount > 0 ? 'text-red-600' : 'text-green-600'}`}>{formatCurrency(-tx.amount)}</div></td>
                           <td className="px-4 py-3"><div className="text-sm text-gray-700">{pm ? pm.bank : tx.paymentMethodId}</div></td>
                           <td className="px-4 py-3 text-right">

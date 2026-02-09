@@ -4,6 +4,7 @@ import { useSearchParams, Link } from 'react-router-dom';
 import { Account } from '../../types';
 import { getAllTransactions, createTransaction, createTransfer, getLoanTransactionsWithPayments } from '../../src/services/transactionsService';
 import { getAllAccountsFrontend } from '../../src/services/accountsService';
+import { combineDateWithCurrentTime } from '../../src/utils/dateUtils';
 
 type Transaction = {
   id: string;
@@ -165,7 +166,7 @@ const AccountFilteredTransactions: React.FC<AccountFilteredTransactionsProps> = 
     try {
       const { error } = await createTransaction({
         name: withdrawForm.forWhat,
-        date: withdrawForm.date,
+        date: combineDateWithCurrentTime(withdrawForm.date),
         amount: Math.abs(parseFloat(withdrawForm.amount)), // Positive - money going out
         payment_method_id: accountId,
         transaction_type: 'withdraw',
@@ -199,7 +200,7 @@ const AccountFilteredTransactions: React.FC<AccountFilteredTransactionsProps> = 
         accountId,
         transferForm.receivingAccountId,
         parseFloat(transferForm.amount),
-        transferForm.date
+        combineDateWithCurrentTime(transferForm.date)
       );
 
       if (error) throw error;
@@ -225,7 +226,7 @@ const AccountFilteredTransactions: React.FC<AccountFilteredTransactionsProps> = 
     try {
       const { error } = await createTransaction({
         name: `Loan: ${loanForm.what}`,
-        date: loanForm.date,
+        date: combineDateWithCurrentTime(loanForm.date),
         amount: Math.abs(parseFloat(loanForm.amount)), // Positive - money going out (lent)
         payment_method_id: accountId,
         transaction_type: 'loan',
@@ -257,7 +258,7 @@ const AccountFilteredTransactions: React.FC<AccountFilteredTransactionsProps> = 
     try {
       const { error } = await createTransaction({
         name: 'Cash In',
-        date: cashInForm.date,
+        date: combineDateWithCurrentTime(cashInForm.date),
         amount: -Math.abs(parseFloat(cashInForm.amount)), // Negative - money coming in
         payment_method_id: accountId,
         transaction_type: 'cash_in',
@@ -289,7 +290,7 @@ const AccountFilteredTransactions: React.FC<AccountFilteredTransactionsProps> = 
     try {
       const { error } = await createTransaction({
         name: 'Loan Payment Received',
-        date: loanPaymentForm.date,
+        date: combineDateWithCurrentTime(loanPaymentForm.date),
         amount: -Math.abs(parseFloat(loanPaymentForm.amount)), // Negative - money coming in
         payment_method_id: accountId,
         transaction_type: 'loan_payment',
