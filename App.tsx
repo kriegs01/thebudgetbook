@@ -11,6 +11,7 @@ import { getPaymentSchedulesBySource } from './src/services/paymentSchedulesServ
 import { getAllTransactions, createPaymentScheduleTransaction } from './src/services/transactionsService';
 import { recordPayment } from './src/services/paymentSchedulesService';
 import { supabase } from './src/utils/supabaseClient';
+import { combineDateWithCurrentTime } from './src/utils/dateUtils';
 import type { Biller, Account, Installment, SavingsJar, Transaction } from './types';
 import type { SupabaseTransaction } from './src/types/supabase';
 
@@ -557,7 +558,7 @@ const App: React.FC = () => {
         targetSchedule.id,
         {
           name: `${installment.name} - ${targetSchedule.month} ${targetSchedule.year}`,
-          date: payment.date,
+          date: combineDateWithCurrentTime(payment.date),
           amount: payment.amount,
           paymentMethodId: payment.accountId,
         }
@@ -671,7 +672,7 @@ const App: React.FC = () => {
         targetSchedule.id,
         {
           name: `${biller.name} - ${targetSchedule.month} ${targetSchedule.year}`,
-          date: payment.date,
+          date: combineDateWithCurrentTime(payment.date),
           amount: payment.amount,
           paymentMethodId: payment.accountId,
         }

@@ -8,6 +8,7 @@ import type { SupabaseTransaction, SupabaseMonthlyPaymentSchedule } from '../src
 import { getInstallmentPaymentSchedule, aggregateCreditCardPurchases } from '../src/utils/paymentStatus'; // PROTOTYPE: Import payment status utilities
 import { getScheduleExpectedAmount } from '../src/utils/linkedAccountUtils'; // ENHANCEMENT: Import for linked account amount calculation
 import { getPaymentSchedulesByPeriod, recordPaymentViaTransaction } from '../src/services/paymentSchedulesService';
+import { combineDateWithCurrentTime } from '../src/utils/dateUtils';
 
 interface BudgetProps {
   items: BudgetItem[];
@@ -850,7 +851,7 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
         // Update existing transaction
         const transaction = {
           name: transactionFormData.name,
-          date: new Date(transactionFormData.date).toISOString(),
+          date: combineDateWithCurrentTime(transactionFormData.date),
           amount: parseFloat(transactionFormData.amount),
           payment_method_id: transactionFormData.accountId
         };
@@ -864,7 +865,7 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
           paymentScheduleId,
           {
             name: transactionFormData.name,
-            date: new Date(transactionFormData.date).toISOString(),
+            date: combineDateWithCurrentTime(transactionFormData.date),
             amount: parseFloat(transactionFormData.amount),
             paymentMethodId: transactionFormData.accountId
           }
@@ -896,7 +897,7 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
         // Create new transaction without schedule link (for purchases)
         const transaction = {
           name: transactionFormData.name,
-          date: new Date(transactionFormData.date).toISOString(),
+          date: combineDateWithCurrentTime(transactionFormData.date),
           amount: parseFloat(transactionFormData.amount),
           payment_method_id: transactionFormData.accountId
         };
@@ -948,7 +949,7 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
         // Update existing transaction
         const transaction = {
           name: `${biller.name} - ${schedule.month} ${schedule.year}`,
-          date: new Date(payFormData.datePaid).toISOString(),
+          date: combineDateWithCurrentTime(payFormData.datePaid),
           amount: parseFloat(payFormData.amount),
           payment_method_id: payFormData.accountId
         };
@@ -962,7 +963,7 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
           paymentScheduleId,
           {
             name: `${biller.name} - ${schedule.month} ${schedule.year}`,
-            date: new Date(payFormData.datePaid).toISOString(),
+            date: combineDateWithCurrentTime(payFormData.datePaid),
             amount: parseFloat(payFormData.amount),
             paymentMethodId: payFormData.accountId
           }
@@ -977,7 +978,7 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
         console.warn('[Budget] This may indicate schedules were not generated for this biller');
         const transaction = {
           name: `${biller.name} - ${schedule.month} ${schedule.year}`,
-          date: new Date(payFormData.datePaid).toISOString(),
+          date: combineDateWithCurrentTime(payFormData.datePaid),
           amount: parseFloat(payFormData.amount),
           payment_method_id: payFormData.accountId
         };

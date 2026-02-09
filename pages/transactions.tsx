@@ -2,6 +2,7 @@ import React, { useEffect, useState, useCallback } from 'react';
 import { Plus, ArrowLeft } from 'lucide-react';
 import { getAllTransactions, createTransaction, deleteTransactionAndRevertSchedule } from '../src/services/transactionsService';
 import { getAllAccountsFrontend } from '../src/services/accountsService';
+import { combineDateWithCurrentTime, getTodayIso } from '../src/utils/dateUtils';
 
 type Transaction = {
   id: string;
@@ -13,10 +14,8 @@ type Transaction = {
 
 type AccountOption = { id: string; bank: string };
 
-const todayIso = () => {
-  const d = new Date();
-  return d.toISOString().slice(0, 10);
-};
+// Use the utility function from dateUtils
+const todayIso = getTodayIso;
 
 const formatCurrency = (val: number) =>
   new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP', minimumFractionDigits: 2 }).format(val);
@@ -91,7 +90,7 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ onTransactionDelete
     try {
       const transaction = {
         name: form.name,
-        date: new Date(form.date).toISOString(),
+        date: combineDateWithCurrentTime(form.date),
         amount: parseFloat(form.amount),
         payment_method_id: form.paymentMethodId
       };
