@@ -7,6 +7,15 @@
 
 // Database Tables Types
 
+export interface SupabaseUserProfile {
+  id: string; // uuid
+  user_id: string; // uuid, references auth.users(id)
+  first_name: string;
+  last_name: string;
+  created_at: string; // timestamptz
+  updated_at: string; // timestamptz
+}
+
 export interface SupabaseAccount {
   id: string; // uuid
   bank: string;
@@ -123,6 +132,9 @@ export type UpdateBudgetSetupInput = Partial<CreateBudgetSetupInput>;
 
 export type CreateMonthlyPaymentScheduleInput = Omit<SupabaseMonthlyPaymentSchedule, 'id' | 'created_at' | 'updated_at' | 'user_id'>;
 export type UpdateMonthlyPaymentScheduleInput = Partial<CreateMonthlyPaymentScheduleInput>;
+
+export type CreateUserProfileInput = Omit<SupabaseUserProfile, 'id' | 'created_at' | 'updated_at'>;
+export type UpdateUserProfileInput = Partial<Omit<SupabaseUserProfile, 'id' | 'user_id' | 'created_at' | 'updated_at'>>;
 
 // Database Response Types (for better type safety with Supabase responses)
 

@@ -7,6 +7,8 @@ const Auth: React.FC = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [firstName, setFirstName] = useState('');
+  const [lastName, setLastName] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
@@ -39,9 +41,21 @@ const Auth: React.FC = () => {
       return;
     }
 
-    if (mode === 'signup' && password !== confirmPassword) {
-      setError('Passwords do not match');
-      return;
+    if (mode === 'signup') {
+      if (!firstName.trim()) {
+        setError('Please enter your first name');
+        return;
+      }
+
+      if (!lastName.trim()) {
+        setError('Please enter your last name');
+        return;
+      }
+
+      if (password !== confirmPassword) {
+        setError('Passwords do not match');
+        return;
+      }
     }
 
     setLoading(true);
@@ -53,7 +67,7 @@ const Auth: React.FC = () => {
           setError(error.message || 'Failed to sign in. Please check your credentials.');
         }
       } else {
-        const { error } = await signUp(email, password);
+        const { error } = await signUp(email, password, firstName, lastName);
         if (error) {
           setError(error.message || 'Failed to sign up. Please try again.');
         } else {
@@ -62,6 +76,8 @@ const Auth: React.FC = () => {
           setEmail('');
           setPassword('');
           setConfirmPassword('');
+          setFirstName('');
+          setLastName('');
         }
       }
     } catch (err: any) {
@@ -138,6 +154,44 @@ const Auth: React.FC = () => {
 
           {/* Form */}
           <form onSubmit={handleSubmit} className="space-y-4">
+            {/* First Name Field (only for signup) */}
+            {mode === 'signup' && (
+              <div>
+                <label htmlFor="firstName" className="block text-sm font-medium text-gray-700 mb-2">
+                  First Name
+                </label>
+                <input
+                  id="firstName"
+                  type="text"
+                  value={firstName}
+                  onChange={(e) => setFirstName(e.target.value)}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                  placeholder="John"
+                  required
+                  disabled={loading}
+                />
+              </div>
+            )}
+
+            {/* Last Name Field (only for signup) */}
+            {mode === 'signup' && (
+              <div>
+                <label htmlFor="lastName" className="block text-sm font-medium text-gray-700 mb-2">
+                  Last Name
+                </label>
+                <input
+                  id="lastName"
+                  type="text"
+                  value={lastName}
+                  onChange={(e) => setLastName(e.target.value)}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                  placeholder="Doe"
+                  required
+                  disabled={loading}
+                />
+              </div>
+            )}
+
             {/* Email Field */}
             <div>
               <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-2">

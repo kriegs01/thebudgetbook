@@ -1,8 +1,8 @@
-
 import React, { useState } from 'react';
 import { Account, BudgetItem, Installment, Transaction, SavedBudgetSetup } from '../types';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, PieChart, Pie, Legend, LabelList } from 'recharts';
 import { TrendingUp, TrendingDown, Landmark, ArrowUpRight, CreditCard, Wallet, Calendar } from 'lucide-react';
+import type { SupabaseUserProfile } from '../src/types/supabase';
 
 interface DashboardProps {
   accounts: Account[];
@@ -10,6 +10,7 @@ interface DashboardProps {
   installments: Installment[];
   transactions?: Transaction[];
   budgetSetups?: SavedBudgetSetup[];
+  userProfile?: SupabaseUserProfile | null;
 }
 
 interface PeriodProjection {
@@ -25,7 +26,7 @@ interface MonthlyAverage {
   avgRemaining: number;
 }
 
-const Dashboard: React.FC<DashboardProps> = ({ accounts, budget, installments, transactions = [], budgetSetups = [] }) => {
+const Dashboard: React.FC<DashboardProps> = ({ accounts, budget, installments, transactions = [], budgetSetups = [], userProfile }) => {
   // NEW: State for date range
   const getCurrentMonth = () => {
     const today = new Date();
@@ -199,7 +200,9 @@ const Dashboard: React.FC<DashboardProps> = ({ accounts, budget, installments, t
     <div className="space-y-8 animate-in fade-in duration-500">
       {/* Greeting Header */}
       <div className="mb-2">
-        <h1 className="text-3xl font-bold text-gray-900">Hello, JM!</h1>
+        <h1 className="text-3xl font-bold text-gray-900">
+          Hello, {userProfile?.first_name || 'there'}!
+        </h1>
       </div>
       
       {/* Top Cards */}

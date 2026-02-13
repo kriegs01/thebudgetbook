@@ -148,7 +148,7 @@ const formatTransaction = (supabaseTransaction: SupabaseTransaction): Transactio
 
 // Main App Content (Protected)
 const AppContent: React.FC = () => {
-  const { user, loading: authLoading, signOut } = useAuth();
+  const { user, userProfile, loading: authLoading, signOut } = useAuth();
 
   // Show auth page if not authenticated
   if (authLoading) {
@@ -167,10 +167,10 @@ const AppContent: React.FC = () => {
   }
 
   // User is authenticated, show main app
-  return <MainApp user={user} signOut={signOut} />;
+  return <MainApp user={user} userProfile={userProfile} signOut={signOut} />;
 };
 
-const MainApp: React.FC<{ user: any; signOut: () => Promise<void> }> = ({ user, signOut }) => {
+const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<void> }> = ({ user, userProfile, signOut }) => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [accountsLoading, setAccountsLoading] = useState(true);
@@ -835,10 +835,18 @@ const MainApp: React.FC<{ user: any; signOut: () => Promise<void> }> = ({ user, 
                 <div className="space-y-2">
                   <div className="flex items-center space-x-3 p-2 bg-gray-50 rounded-xl">
                     <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 font-bold">
-                      {user?.email?.charAt(0).toUpperCase() || 'U'}
+                      {userProfile ? 
+                        `${userProfile.first_name.charAt(0)}${userProfile.last_name.charAt(0)}`.toUpperCase() :
+                        user?.email?.charAt(0).toUpperCase() || 'U'
+                      }
                     </div>
                     <div className="flex-1 overflow-hidden">
-                      <p className="text-sm font-semibold text-gray-900 truncate">{user?.email?.split('@')[0] || 'User'}</p>
+                      <p className="text-sm font-semibold text-gray-900 truncate">
+                        {userProfile ? 
+                          `${userProfile.first_name} ${userProfile.last_name}` :
+                          user?.email?.split('@')[0] || 'User'
+                        }
+                      </p>
                       <p className="text-xs text-gray-500 truncate">{user?.email || ''}</p>
                     </div>
                   </div>
@@ -858,7 +866,10 @@ const MainApp: React.FC<{ user: any; signOut: () => Promise<void> }> = ({ user, 
               ) : (
                 <div className="space-y-2">
                   <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 font-bold mx-auto">
-                    {user?.email?.charAt(0).toUpperCase() || 'U'}
+                    {userProfile ? 
+                      `${userProfile.first_name.charAt(0)}${userProfile.last_name.charAt(0)}`.toUpperCase() :
+                      user?.email?.charAt(0).toUpperCase() || 'U'
+                    }
                   </div>
                   <button
                     onClick={async () => {
@@ -881,7 +892,7 @@ const MainApp: React.FC<{ user: any; signOut: () => Promise<void> }> = ({ user, 
         <main className={`flex-1 bg-gray-50 transition-all duration-300 ease-in-out ${isSidebarOpen ? 'ml-64' : 'ml-20'} min-h-screen flex flex-col`}> 
           <div className="p-8 w-full flex-1 overflow-auto">
             <Routes>
-              <Route path="/" element={<Dashboard accounts={accounts} budget={budgetItems} installments={installments} transactions={transactions} budgetSetups={budgetSetups} />} />
+              <Route path="/" element={<Dashboard accounts={accounts} budget={budgetItems} installments={installments} transactions={transactions} budgetSetups={budgetSetups} userProfile={userProfile} />} />
               <Route path="/budget" element={
                 <Budget
                   items={budgetItems} 
