@@ -51,18 +51,42 @@ export const createUserProfile = async (profile: CreateUserProfileInput) => {
 
 /**
  * Update user profile
+ * If profile doesn't exist, this will create it (for existing users who signed up before profile feature)
  */
 export const updateUserProfile = async (userId: string, updates: UpdateUserProfileInput) => {
   try {
-    const { data, error } = await supabase
+    // Validate that we have the required fields
+    if (!updates.first_name && !updates.last_name) {
+      throw new Error('At least first_name or last_name is required');
+    }
+
+    // First, try to update the existing profile
+    const { data, error, count } = await supabase
       .from('user_profiles')
       .update(updates)
       .eq('user_id', userId)
-      .select()
-      .single();
+      .select();
 
+    // If update failed with an error, throw it
     if (error) throw error;
-    return { data, error: null };
+
+    // If no rows were updated (profile doesn't exist), create it
+    if (!data || data.length === 0) {
+      console.log('[UserProfile] No profile found, creating new profile for user:', userId);
+      
+      // Create a new profile with the updates
+      // Use provided values or empty strings as fallback
+      const createResult = await createUserProfile({
+        user_id: userId,
+        first_name: updates.first_name || '',
+        last_name: updates.last_name || '',
+      });
+
+      return createResult;
+    }
+
+    // Return the first (and should be only) updated record
+    return { data: data[0], error: null };
   } catch (error) {
     console.error('Error updating user profile:', error);
     return { data: null, error };
