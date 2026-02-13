@@ -17,13 +17,17 @@ import { generateBillerPaymentSchedules } from '../utils/paymentSchedulesGenerat
 import { createPaymentSchedulesBulk, deletePaymentSchedulesBySource } from './paymentSchedulesService';
 
 /**
- * Get all billers
+ * Get all billers for the current user
  */
 export const getAllBillers = async () => {
   try {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error('Not authenticated');
+
     const { data, error } = await supabase
       .from(getTableName('billers'))
       .select('*')
+      .eq('user_id', user.id)
       .order('name', { ascending: true });
 
     if (error) throw error;
@@ -35,14 +39,18 @@ export const getAllBillers = async () => {
 };
 
 /**
- * Get a single biller by ID
+ * Get a single biller by ID for the current user
  */
 export const getBillerById = async (id: string) => {
   try {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error('Not authenticated');
+
     const { data, error } = await supabase
       .from(getTableName('billers'))
       .select('*')
       .eq('id', id)
+      .eq('user_id', user.id)
       .single();
 
     if (error) throw error;
@@ -54,13 +62,16 @@ export const getBillerById = async (id: string) => {
 };
 
 /**
- * Create a new biller
+ * Create a new biller for the current user
  */
 export const createBiller = async (biller: CreateBillerInput) => {
   try {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error('Not authenticated');
+
     const { data, error } = await supabase
       .from(getTableName('billers'))
-      .insert([biller])
+      .insert([{ ...biller, user_id: user.id }])
       .select()
       .single();
 
@@ -111,13 +122,17 @@ export const deleteBiller = async (id: string) => {
 };
 
 /**
- * Get billers by status (active/inactive)
+ * Get billers by status (active/inactive) for the current user
  */
 export const getBillersByStatus = async (status: string) => {
   try {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error('Not authenticated');
+
     const { data, error } = await supabase
       .from(getTableName('billers'))
       .select('*')
+      .eq('user_id', user.id)
       .eq('status', status)
       .order('name', { ascending: true });
 
@@ -130,13 +145,17 @@ export const getBillersByStatus = async (status: string) => {
 };
 
 /**
- * Get billers by category
+ * Get billers by category for the current user
  */
 export const getBillersByCategory = async (category: string) => {
   try {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error('Not authenticated');
+
     const { data, error } = await supabase
       .from(getTableName('billers'))
       .select('*')
+      .eq('user_id', user.id)
       .eq('category', category)
       .order('name', { ascending: true });
 

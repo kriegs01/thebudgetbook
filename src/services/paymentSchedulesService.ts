@@ -13,13 +13,16 @@ import type {
 } from '../types/supabase';
 
 /**
- * Create a new payment schedule
+ * Create a new payment schedule for the current user
  */
 export const createPaymentSchedule = async (schedule: CreateMonthlyPaymentScheduleInput) => {
   try {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error('Not authenticated');
+
     const { data, error } = await supabase
       .from(getTableName('monthly_payment_schedules'))
-      .insert([schedule])
+      .insert([{ ...schedule, user_id: user.id }])
       .select()
       .single();
 
@@ -32,13 +35,22 @@ export const createPaymentSchedule = async (schedule: CreateMonthlyPaymentSchedu
 };
 
 /**
- * Create multiple payment schedules in bulk
+ * Create multiple payment schedules in bulk for the current user
  */
 export const createPaymentSchedulesBulk = async (schedules: CreateMonthlyPaymentScheduleInput[]) => {
   try {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error('Not authenticated');
+
+    // Add user_id to all schedules
+    const schedulesWithUserId = schedules.map(schedule => ({
+      ...schedule,
+      user_id: user.id
+    }));
+
     const { data, error } = await supabase
       .from(getTableName('monthly_payment_schedules'))
-      .insert(schedules)
+      .insert(schedulesWithUserId)
       .select();
 
     if (error) throw error;
@@ -50,14 +62,18 @@ export const createPaymentSchedulesBulk = async (schedules: CreateMonthlyPayment
 };
 
 /**
- * Get all payment schedules for a specific source (biller or installment)
+ * Get all payment schedules for a specific source (biller or installment) for the current user
  * Results are sorted chronologically by year and month
  */
 export const getPaymentSchedulesBySource = async (sourceType: 'biller' | 'installment', sourceId: string) => {
   try {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error('Not authenticated');
+
     const { data, error } = await supabase
       .from(getTableName('monthly_payment_schedules'))
       .select('*')
+      .eq('user_id', user.id)
       .eq('source_type', sourceType)
       .eq('source_id', sourceId)
       .order('year', { ascending: true });
@@ -81,14 +97,18 @@ export const getPaymentSchedulesBySource = async (sourceType: 'biller' | 'instal
 };
 
 /**
- * Get a single payment schedule by ID
+ * Get a single payment schedule by ID for the current user
  */
 export const getPaymentScheduleById = async (id: string) => {
   try {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error('Not authenticated');
+
     const { data, error } = await supabase
       .from(getTableName('monthly_payment_schedules'))
       .select('*')
       .eq('id', id)
+      .eq('user_id', user.id)
       .single();
 
     if (error) throw error;
@@ -157,14 +177,18 @@ export const deletePaymentSchedule = async (id: string) => {
 };
 
 /**
- * Get payment schedules by status
+ * Get payment schedules by status for the current user
  * Results are sorted chronologically by year and month
  */
 export const getPaymentSchedulesByStatus = async (status: 'pending' | 'paid' | 'partial' | 'overdue') => {
   try {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error('Not authenticated');
+
     const { data, error } = await supabase
       .from(getTableName('monthly_payment_schedules'))
       .select('*')
+      .eq('user_id', user.id)
       .eq('status', status)
       .order('year', { ascending: true });
 
@@ -187,13 +211,17 @@ export const getPaymentSchedulesByStatus = async (status: 'pending' | 'paid' | '
 };
 
 /**
- * Get payment schedules for a specific period
+ * Get payment schedules for a specific period for the current user
  */
 export const getPaymentSchedulesByPeriod = async (month: string, year: number) => {
   try {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error('Not authenticated');
+
     const { data, error } = await supabase
       .from(getTableName('monthly_payment_schedules'))
       .select('*')
+      .eq('user_id', user.id)
       .eq('month', month)
       .eq('year', year)
       .order('source_type', { ascending: true });
@@ -314,19 +342,23 @@ export const recordPaymentViaTransaction = async (
 };
 
 /**
- * Mark schedules as overdue based on current date and due day
+ * Mark schedules as overdue based on current date and due day for the current user
  * This should be called periodically (e.g., daily cron job) to update statuses
  */
 export const markOverdueSchedules = async (dueDay: number = 15) => {
   try {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error('Not authenticated');
+
     const today = new Date();
     const currentYear = today.getFullYear();
     const currentMonth = today.getMonth();
     
-    // Get all pending or partial schedules
+    // Get all pending or partial schedules for the current user
     const { data: schedules, error: fetchError } = await supabase
       .from(getTableName('monthly_payment_schedules'))
       .select('*')
+      .eq('user_id', user.id)
       .in('status', ['pending', 'partial']);
 
     if (fetchError) throw fetchError;
@@ -359,6 +391,7 @@ export const markOverdueSchedules = async (dueDay: number = 15) => {
       const { error: updateError } = await supabase
         .from(getTableName('monthly_payment_schedules'))
         .update({ status: 'overdue' })
+        .eq('user_id', user.id)
         .in('id', overdueScheduleIds);
 
       if (updateError) throw updateError;

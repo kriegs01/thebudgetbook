@@ -17,13 +17,17 @@ import { generateInstallmentPaymentSchedules } from '../utils/paymentSchedulesGe
 import { createPaymentSchedulesBulk, deletePaymentSchedulesBySource } from './paymentSchedulesService';
 
 /**
- * Get all installments
+ * Get all installments for the current user
  */
 export const getAllInstallments = async () => {
   try {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error('Not authenticated');
+
     const { data, error } = await supabase
       .from(getTableName('installments'))
       .select('*')
+      .eq('user_id', user.id)
       .order('name', { ascending: true });
 
     if (error) throw error;
@@ -35,14 +39,18 @@ export const getAllInstallments = async () => {
 };
 
 /**
- * Get a single installment by ID
+ * Get a single installment by ID for the current user
  */
 export const getInstallmentById = async (id: string) => {
   try {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error('Not authenticated');
+
     const { data, error } = await supabase
       .from(getTableName('installments'))
       .select('*')
       .eq('id', id)
+      .eq('user_id', user.id)
       .single();
 
     if (error) throw error;
@@ -54,10 +62,13 @@ export const getInstallmentById = async (id: string) => {
 };
 
 /**
- * Create a new installment
+ * Create a new installment for the current user
  */
 export const createInstallment = async (installment: CreateInstallmentInput) => {
   try {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error('Not authenticated');
+
     console.log('Creating installment with data:', installment);
     
     // Validate required fields before sending to Supabase
@@ -79,7 +90,7 @@ export const createInstallment = async (installment: CreateInstallmentInput) => 
     
     const { data, error } = await supabase
       .from(getTableName('installments'))
-      .insert([installment])
+      .insert([{ ...installment, user_id: user.id }])
       .select()
       .single();
 
@@ -94,7 +105,7 @@ export const createInstallment = async (installment: CreateInstallmentInput) => 
         const { start_date, ...installmentWithoutStartDate } = installment as any;
         const { data: retryData, error: retryError } = await supabase
           .from(getTableName('installments'))
-          .insert([installmentWithoutStartDate])
+          .insert([{ ...installmentWithoutStartDate, user_id: user.id }])
           .select()
           .single();
         
@@ -194,13 +205,17 @@ export const deleteInstallment = async (id: string) => {
 };
 
 /**
- * Get installments by account ID
+ * Get installments by account ID for the current user
  */
 export const getInstallmentsByAccount = async (accountId: string) => {
   try {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error('Not authenticated');
+
     const { data, error } = await supabase
       .from(getTableName('installments'))
       .select('*')
+      .eq('user_id', user.id)
       .eq('account_id', accountId)
       .order('name', { ascending: true });
 
@@ -213,15 +228,19 @@ export const getInstallmentsByAccount = async (accountId: string) => {
 };
 
 /**
- * Get active installments (where paid_amount < total_amount)
+ * Get active installments for the current user (where paid_amount < total_amount)
  * Note: This fetches all installments and filters in-memory since Supabase
  * doesn't support direct column-to-column comparisons in the query builder.
  */
 export const getActiveInstallments = async () => {
   try {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error('Not authenticated');
+
     const { data, error } = await supabase
       .from(getTableName('installments'))
       .select('*')
+      .eq('user_id', user.id)
       .order('name', { ascending: true });
 
     if (error) throw error;

@@ -16,13 +16,17 @@ import { getAllTransactions } from './transactionsService';
 import type { Account } from '../../types';
 
 /**
- * Get all accounts
+ * Get all accounts for the current user
  */
 export const getAllAccounts = async () => {
   try {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error('Not authenticated');
+
     const { data, error } = await supabase
       .from(getTableName('accounts'))
       .select('*')
+      .eq('user_id', user.id)
       .order('created_at', { ascending: false });
 
     if (error) throw error;
@@ -34,14 +38,18 @@ export const getAllAccounts = async () => {
 };
 
 /**
- * Get a single account by ID
+ * Get a single account by ID for the current user
  */
 export const getAccountById = async (id: string) => {
   try {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error('Not authenticated');
+
     const { data, error } = await supabase
       .from(getTableName('accounts'))
       .select('*')
       .eq('id', id)
+      .eq('user_id', user.id)
       .single();
 
     if (error) throw error;
@@ -53,13 +61,16 @@ export const getAccountById = async (id: string) => {
 };
 
 /**
- * Create a new account
+ * Create a new account for the current user
  */
 export const createAccount = async (account: CreateAccountInput) => {
   try {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error('Not authenticated');
+
     const { data, error } = await supabase
       .from(getTableName('accounts'))
-      .insert([account])
+      .insert([{ ...account, user_id: user.id }])
       .select()
       .single();
 
@@ -110,13 +121,17 @@ export const deleteAccount = async (id: string) => {
 };
 
 /**
- * Get accounts by type (Debit/Credit)
+ * Get accounts by type (Debit/Credit) for the current user
  */
 export const getAccountsByType = async (type: string) => {
   try {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error('Not authenticated');
+
     const { data, error } = await supabase
       .from(getTableName('accounts'))
       .select('*')
+      .eq('user_id', user.id)
       .eq('type', type)
       .order('created_at', { ascending: false });
 
@@ -129,13 +144,17 @@ export const getAccountsByType = async (type: string) => {
 };
 
 /**
- * Get accounts by classification
+ * Get accounts by classification for the current user
  */
 export const getAccountsByClassification = async (classification: string) => {
   try {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error('Not authenticated');
+
     const { data, error } = await supabase
       .from(getTableName('accounts'))
       .select('*')
+      .eq('user_id', user.id)
       .eq('classification', classification)
       .order('created_at', { ascending: false });
 

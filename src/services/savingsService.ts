@@ -14,13 +14,17 @@ import { supabaseSavingsToFrontend, supabaseSavingsArrayToFrontend, frontendSavi
 import type { SavingsJar } from '../../types';
 
 /**
- * Get all savings jars
+ * Get all savings jars for the current user
  */
 export const getAllSavings = async () => {
   try {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error('Not authenticated');
+
     const { data, error } = await supabase
       .from(getTableName('savings'))
       .select('*')
+      .eq('user_id', user.id)
       .order('name', { ascending: true });
 
     if (error) throw error;
@@ -32,14 +36,18 @@ export const getAllSavings = async () => {
 };
 
 /**
- * Get a single savings jar by ID
+ * Get a single savings jar by ID for the current user
  */
 export const getSavingsById = async (id: string) => {
   try {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error('Not authenticated');
+
     const { data, error } = await supabase
       .from(getTableName('savings'))
       .select('*')
       .eq('id', id)
+      .eq('user_id', user.id)
       .single();
 
     if (error) throw error;
@@ -51,13 +59,16 @@ export const getSavingsById = async (id: string) => {
 };
 
 /**
- * Create a new savings jar
+ * Create a new savings jar for the current user
  */
 export const createSavings = async (savings: CreateSavingsInput) => {
   try {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error('Not authenticated');
+
     const { data, error } = await supabase
       .from(getTableName('savings'))
-      .insert([savings])
+      .insert([{ ...savings, user_id: user.id }])
       .select()
       .single();
 
@@ -108,13 +119,17 @@ export const deleteSavings = async (id: string) => {
 };
 
 /**
- * Get savings jars by account ID
+ * Get savings jars by account ID for the current user
  */
 export const getSavingsByAccount = async (accountId: string) => {
   try {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error('Not authenticated');
+
     const { data, error } = await supabase
       .from(getTableName('savings'))
       .select('*')
+      .eq('user_id', user.id)
       .eq('account_id', accountId)
       .order('name', { ascending: true });
 
@@ -127,13 +142,17 @@ export const getSavingsByAccount = async (accountId: string) => {
 };
 
 /**
- * Get total savings balance across all jars
+ * Get total savings balance across all jars for the current user
  */
 export const getTotalSavingsBalance = async () => {
   try {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error('Not authenticated');
+
     const { data, error } = await supabase
       .from(getTableName('savings'))
-      .select('current_balance');
+      .select('current_balance')
+      .eq('user_id', user.id);
 
     if (error) throw error;
     
