@@ -24,7 +24,7 @@ const UpdatePassword: React.FC = () => {
     });
   }, []);
 
-  const validatePassword = (password: string) => {
+  const hasMinimumLength = (password: string) => {
     return password.length >= 6;
   };
 
@@ -32,7 +32,7 @@ const UpdatePassword: React.FC = () => {
     e.preventDefault();
     setError('');
 
-    if (!validatePassword(password)) {
+    if (!hasMinimumLength(password)) {
       setError('Password must be at least 6 characters long');
       return;
     }

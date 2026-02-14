@@ -169,13 +169,11 @@ const AppContent: React.FC = () => {
   // Allow access to update-password page without authentication
   if (isUpdatePasswordPage) {
     return (
-      <BrowserRouter>
-        <Routes>
-          <Route path="/update-password" element={<UpdatePassword />} />
-          <Route path="/auth" element={<Auth />} />
-          <Route path="*" element={<Auth />} />
-        </Routes>
-      </BrowserRouter>
+      <Routes>
+        <Route path="/update-password" element={<UpdatePassword />} />
+        <Route path="/auth" element={<Auth />} />
+        <Route path="*" element={<Auth />} />
+      </Routes>
     );
   }
 
@@ -818,7 +816,6 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
     <TestEnvironmentProvider>
       <PinProtectionProvider>
         <TestModeBanner sidebarOpen={isSidebarOpen} />
-        <BrowserRouter>
         <div className="flex min-h-screen bg-gray-50 w-full">
         <aside className={`fixed inset-y-0 left-0 z-50 bg-white border-r border-gray-200 transition-all duration-300 ease-in-out ${isSidebarOpen ? 'w-64' : 'w-20'}`}> 
           <div className="flex flex-col h-full">
@@ -1028,7 +1025,6 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
           </div>
         </main>
       </div>
-    </BrowserRouter>
     </PinProtectionProvider>
     </TestEnvironmentProvider>
   );
@@ -1037,9 +1033,11 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
 // Main App component with Auth Provider
 const App: React.FC = () => {
   return (
-    <AuthProvider>
-      <AppContent />
-    </AuthProvider>
+    <BrowserRouter>
+      <AuthProvider>
+        <AppContent />
+      </AuthProvider>
+    </BrowserRouter>
   );
 };
 
