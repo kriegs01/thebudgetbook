@@ -10,6 +10,7 @@
  * - Improves page load performance by ~20-30x for authentication operations
  * - Maintains security through short cache duration and RLS policies
  * - Automatically clears on auth state changes (login/logout)
+ * - Handles concurrent requests with in-flight promise sharing
  */
 
 import { supabase } from './supabaseClient';
@@ -21,11 +22,13 @@ interface CachedAuth {
 }
 
 let authCache: CachedAuth | null = null;
+let pendingRequest: Promise<User> | null = null;
 const CACHE_DURATION = 5000; // 5 seconds
 
 /**
  * Get the authenticated user with caching
  * Returns cached user if still valid, otherwise fetches fresh data
+ * Handles concurrent requests by sharing the in-flight promise
  * @throws Error if user is not authenticated
  */
 export const getCachedUser = async (): Promise<User> => {
@@ -36,20 +39,35 @@ export const getCachedUser = async (): Promise<User> => {
     return authCache.user;
   }
   
-  // Fetch fresh user data
-  const { data: { user }, error } = await supabase.auth.getUser();
-  
-  if (error || !user) {
-    throw new Error('Not authenticated');
+  // If there's already a request in flight, wait for it
+  if (pendingRequest) {
+    return pendingRequest;
   }
   
-  // Update cache
-  authCache = {
-    user,
-    timestamp: now
-  };
+  // Create a new request and store it
+  pendingRequest = (async () => {
+    try {
+      // Fetch fresh user data
+      const { data: { user }, error } = await supabase.auth.getUser();
+      
+      if (error || !user) {
+        throw new Error('Not authenticated');
+      }
+      
+      // Update cache
+      authCache = {
+        user,
+        timestamp: Date.now()
+      };
+      
+      return user;
+    } finally {
+      // Clear the pending request when done
+      pendingRequest = null;
+    }
+  })();
   
-  return user;
+  return pendingRequest;
 };
 
 /**
@@ -58,4 +76,5 @@ export const getCachedUser = async (): Promise<User> => {
  */
 export const clearAuthCache = () => {
   authCache = null;
+  pendingRequest = null;
 };
