@@ -3,6 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import { Lock, AlertCircle, Loader, CheckCircle } from 'lucide-react';
 import { supabase } from '../src/utils/supabaseClient';
 
+const MIN_PASSWORD_LENGTH = 6;
+
 const UpdatePassword: React.FC = () => {
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -25,7 +27,7 @@ const UpdatePassword: React.FC = () => {
   }, []);
 
   const hasMinimumLength = (password: string) => {
-    return password.length >= 6;
+    return password.length >= MIN_PASSWORD_LENGTH;
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -33,7 +35,7 @@ const UpdatePassword: React.FC = () => {
     setError('');
 
     if (!hasMinimumLength(password)) {
-      setError('Password must be at least 6 characters long');
+      setError(`Password must be at least ${MIN_PASSWORD_LENGTH} characters long`);
       return;
     }
 
@@ -53,12 +55,16 @@ const UpdatePassword: React.FC = () => {
 
       setSuccess(true);
       
-      // Redirect to login after 2 seconds
-      setTimeout(() => {
+      // Redirect to login after 2 seconds (with cleanup)
+      const timeoutId = setTimeout(() => {
         navigate('/auth');
       }, 2000);
-    } catch (err: any) {
-      setError(err.message || 'Failed to update password. Please try again.');
+      
+      // Cleanup timeout if component unmounts
+      return () => clearTimeout(timeoutId);
+    } catch (err: unknown) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to update password. Please try again.';
+      setError(errorMessage);
     } finally {
       setLoading(false);
     }
@@ -165,7 +171,7 @@ const UpdatePassword: React.FC = () => {
                 />
               </div>
               <p className="mt-1 text-xs text-gray-500">
-                Must be at least 6 characters long
+                Must be at least {MIN_PASSWORD_LENGTH} characters long
               </p>
             </div>
 

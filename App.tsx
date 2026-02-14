@@ -154,8 +154,14 @@ const AppContent: React.FC = () => {
   // Check if we're on the update-password page (from email reset link)
   const isUpdatePasswordPage = window.location.pathname === '/update-password';
 
-  // Show auth page if not authenticated
-  if (authLoading && !isUpdatePasswordPage) {
+  // Allow access to update-password page without authentication
+  // Handle this before auth loading to avoid showing loading screen
+  if (isUpdatePasswordPage) {
+    return <UpdatePassword />;
+  }
+
+  // Show loading screen while checking authentication
+  if (authLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 via-white to-purple-50">
         <div className="text-center">
@@ -163,17 +169,6 @@ const AppContent: React.FC = () => {
           <p className="text-gray-600">Loading...</p>
         </div>
       </div>
-    );
-  }
-
-  // Allow access to update-password page without authentication
-  if (isUpdatePasswordPage) {
-    return (
-      <Routes>
-        <Route path="/update-password" element={<UpdatePassword />} />
-        <Route path="/auth" element={<Auth />} />
-        <Route path="*" element={<Auth />} />
-      </Routes>
     );
   }
 
