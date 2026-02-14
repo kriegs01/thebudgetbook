@@ -35,6 +35,7 @@ import SettingsPage from './pages/Settings';
 import TrashPage from './pages/Trash';
 import SupabaseDemo from './pages/SupabaseDemo';
 import Auth from './pages/Auth';
+import UpdatePassword from './pages/UpdatePassword';
 
 // Helper function to convert UI Account to Supabase format
 const accountToSupabase = (account: Account) => ({
@@ -149,8 +150,17 @@ const formatTransaction = (supabaseTransaction: SupabaseTransaction): Transactio
 // Main App Content (Protected)
 const AppContent: React.FC = () => {
   const { user, userProfile, loading: authLoading, signOut } = useAuth();
+  
+  // Check if we're on the update-password page (from email reset link)
+  const isUpdatePasswordPage = window.location.pathname === '/update-password';
 
-  // Show auth page if not authenticated
+  // Allow access to update-password page without authentication
+  // Handle this before auth loading to avoid showing loading screen
+  if (isUpdatePasswordPage) {
+    return <UpdatePassword />;
+  }
+
+  // Show loading screen while checking authentication
   if (authLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 via-white to-purple-50">
@@ -801,7 +811,6 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
     <TestEnvironmentProvider>
       <PinProtectionProvider>
         <TestModeBanner sidebarOpen={isSidebarOpen} />
-        <BrowserRouter>
         <div className="flex min-h-screen bg-gray-50 w-full">
         <aside className={`fixed inset-y-0 left-0 z-50 bg-white border-r border-gray-200 transition-all duration-300 ease-in-out ${isSidebarOpen ? 'w-64' : 'w-20'}`}> 
           <div className="flex flex-col h-full">
@@ -1011,7 +1020,6 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
           </div>
         </main>
       </div>
-    </BrowserRouter>
     </PinProtectionProvider>
     </TestEnvironmentProvider>
   );
@@ -1020,9 +1028,11 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
 // Main App component with Auth Provider
 const App: React.FC = () => {
   return (
-    <AuthProvider>
-      <AppContent />
-    </AuthProvider>
+    <BrowserRouter>
+      <AuthProvider>
+        <AppContent />
+      </AuthProvider>
+    </BrowserRouter>
   );
 };
 
