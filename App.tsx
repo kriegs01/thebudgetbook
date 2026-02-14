@@ -35,6 +35,7 @@ import SettingsPage from './pages/Settings';
 import TrashPage from './pages/Trash';
 import SupabaseDemo from './pages/SupabaseDemo';
 import Auth from './pages/Auth';
+import UpdatePassword from './pages/UpdatePassword';
 
 // Helper function to convert UI Account to Supabase format
 const accountToSupabase = (account: Account) => ({
@@ -149,9 +150,12 @@ const formatTransaction = (supabaseTransaction: SupabaseTransaction): Transactio
 // Main App Content (Protected)
 const AppContent: React.FC = () => {
   const { user, userProfile, loading: authLoading, signOut } = useAuth();
+  
+  // Check if we're on the update-password page (from email reset link)
+  const isUpdatePasswordPage = window.location.pathname === '/update-password';
 
   // Show auth page if not authenticated
-  if (authLoading) {
+  if (authLoading && !isUpdatePasswordPage) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 via-white to-purple-50">
         <div className="text-center">
@@ -159,6 +163,19 @@ const AppContent: React.FC = () => {
           <p className="text-gray-600">Loading...</p>
         </div>
       </div>
+    );
+  }
+
+  // Allow access to update-password page without authentication
+  if (isUpdatePasswordPage) {
+    return (
+      <BrowserRouter>
+        <Routes>
+          <Route path="/update-password" element={<UpdatePassword />} />
+          <Route path="/auth" element={<Auth />} />
+          <Route path="*" element={<Auth />} />
+        </Routes>
+      </BrowserRouter>
     );
   }
 
