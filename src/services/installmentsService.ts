@@ -15,14 +15,14 @@ import { supabaseInstallmentToFrontend, supabaseInstallmentsToFrontend, frontend
 import type { Installment } from '../../types';
 import { generateInstallmentPaymentSchedules } from '../utils/paymentSchedulesGenerator';
 import { createPaymentSchedulesBulk, deletePaymentSchedulesBySource } from './paymentSchedulesService';
+import { getCachedUser } from '../utils/authCache';
 
 /**
  * Get all installments for the current user
  */
 export const getAllInstallments = async () => {
   try {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) throw new Error('Not authenticated');
+    const user = await getCachedUser();
 
     const { data, error } = await supabase
       .from(getTableName('installments'))
@@ -43,8 +43,7 @@ export const getAllInstallments = async () => {
  */
 export const getInstallmentById = async (id: string) => {
   try {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) throw new Error('Not authenticated');
+    const user = await getCachedUser();
 
     const { data, error } = await supabase
       .from(getTableName('installments'))
@@ -66,8 +65,7 @@ export const getInstallmentById = async (id: string) => {
  */
 export const createInstallment = async (installment: CreateInstallmentInput) => {
   try {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) throw new Error('Not authenticated');
+    const user = await getCachedUser();
 
     console.log('Creating installment with data:', installment);
     
@@ -209,8 +207,7 @@ export const deleteInstallment = async (id: string) => {
  */
 export const getInstallmentsByAccount = async (accountId: string) => {
   try {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) throw new Error('Not authenticated');
+    const user = await getCachedUser();
 
     const { data, error } = await supabase
       .from(getTableName('installments'))
@@ -234,8 +231,7 @@ export const getInstallmentsByAccount = async (accountId: string) => {
  */
 export const getActiveInstallments = async () => {
   try {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) throw new Error('Not authenticated');
+    const user = await getCachedUser();
 
     const { data, error } = await supabase
       .from(getTableName('installments'))

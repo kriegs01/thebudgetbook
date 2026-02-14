@@ -15,14 +15,14 @@ import { supabaseBillerToFrontend, supabaseBillersToFrontend, frontendBillerToSu
 import type { Biller } from '../../types';
 import { generateBillerPaymentSchedules } from '../utils/paymentSchedulesGenerator';
 import { createPaymentSchedulesBulk, deletePaymentSchedulesBySource } from './paymentSchedulesService';
+import { getCachedUser } from '../utils/authCache';
 
 /**
  * Get all billers for the current user
  */
 export const getAllBillers = async () => {
   try {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) throw new Error('Not authenticated');
+    const user = await getCachedUser();
 
     const { data, error } = await supabase
       .from(getTableName('billers'))
@@ -43,8 +43,7 @@ export const getAllBillers = async () => {
  */
 export const getBillerById = async (id: string) => {
   try {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) throw new Error('Not authenticated');
+    const user = await getCachedUser();
 
     const { data, error } = await supabase
       .from(getTableName('billers'))
@@ -66,8 +65,7 @@ export const getBillerById = async (id: string) => {
  */
 export const createBiller = async (biller: CreateBillerInput) => {
   try {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) throw new Error('Not authenticated');
+    const user = await getCachedUser();
 
     const { data, error } = await supabase
       .from(getTableName('billers'))
@@ -126,8 +124,7 @@ export const deleteBiller = async (id: string) => {
  */
 export const getBillersByStatus = async (status: string) => {
   try {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) throw new Error('Not authenticated');
+    const user = await getCachedUser();
 
     const { data, error } = await supabase
       .from(getTableName('billers'))
@@ -149,8 +146,7 @@ export const getBillersByStatus = async (status: string) => {
  */
 export const getBillersByCategory = async (category: string) => {
   try {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) throw new Error('Not authenticated');
+    const user = await getCachedUser();
 
     const { data, error } = await supabase
       .from(getTableName('billers'))
