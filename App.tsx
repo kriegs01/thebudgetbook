@@ -18,6 +18,7 @@ import type { SupabaseTransaction } from './src/types/supabase';
 // Context
 import { TestEnvironmentProvider } from './src/contexts/TestEnvironmentContext';
 import { PinProtectionProvider } from './src/contexts/PinProtectionContext';
+import { AuthProvider, useAuth } from './src/contexts/AuthContext';
 import { TestModeBanner } from './src/components/TestModeBanner';
 
 // Pages
@@ -33,6 +34,7 @@ import Savings from './pages/Savings';
 import SettingsPage from './pages/Settings';
 import TrashPage from './pages/Trash';
 import SupabaseDemo from './pages/SupabaseDemo';
+import Auth from './pages/Auth';
 
 // Helper function to convert UI Account to Supabase format
 const accountToSupabase = (account: Account) => ({
@@ -144,7 +146,31 @@ const formatTransaction = (supabaseTransaction: SupabaseTransaction): Transactio
   paymentMethodId: supabaseTransaction.payment_method_id,
 });
 
-const App: React.FC = () => {
+// Main App Content (Protected)
+const AppContent: React.FC = () => {
+  const { user, userProfile, loading: authLoading, signOut } = useAuth();
+
+  // Show auth page if not authenticated
+  if (authLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 via-white to-purple-50">
+        <div className="text-center">
+          <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mb-4"></div>
+          <p className="text-gray-600">Loading...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return <Auth />;
+  }
+
+  // User is authenticated, show main app
+  return <MainApp user={user} userProfile={userProfile} signOut={signOut} />;
+};
+
+const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<void> }> = ({ user, userProfile, signOut }) => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [accountsLoading, setAccountsLoading] = useState(true);
@@ -806,15 +832,59 @@ const App: React.FC = () => {
             </nav>
             <div className="p-4 border-t border-gray-100">
               {isSidebarOpen ? (
-                <div className="flex items-center space-x-3 p-2 bg-gray-50 rounded-xl">
-                  <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 font-bold">JM</div>
-                  <div className="flex-1 overflow-hidden">
-                    <p className="text-sm font-semibold text-gray-900 truncate">JM Alacapa</p>
-                    <p className="text-xs text-gray-500 truncate">alacapa47@gmail.com</p>
+                <div className="space-y-2">
+                  <div className="flex items-center space-x-3 p-2 bg-gray-50 rounded-xl">
+                    <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 font-bold">
+                      {userProfile ? 
+                        `${userProfile.first_name.charAt(0)}${userProfile.last_name.charAt(0)}`.toUpperCase() :
+                        user?.email?.charAt(0).toUpperCase() || 'U'
+                      }
+                    </div>
+                    <div className="flex-1 overflow-hidden">
+                      <p className="text-sm font-semibold text-gray-900 truncate">
+                        {userProfile ? 
+                          `${userProfile.first_name} ${userProfile.last_name}` :
+                          user?.email?.split('@')[0] || 'User'
+                        }
+                      </p>
+                      <p className="text-xs text-gray-500 truncate">{user?.email || ''}</p>
+                    </div>
                   </div>
+                  <button
+                    onClick={async () => {
+                      try {
+                        await signOut();
+                      } catch (error) {
+                        console.error('Logout error:', error);
+                      }
+                    }}
+                    className="w-full py-2 px-3 text-sm text-red-600 hover:bg-red-50 rounded-lg transition-all"
+                  >
+                    Logout
+                  </button>
                 </div>
               ) : (
-                <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 font-bold mx-auto">JM</div>
+                <div className="space-y-2">
+                  <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 font-bold mx-auto">
+                    {userProfile ? 
+                      `${userProfile.first_name.charAt(0)}${userProfile.last_name.charAt(0)}`.toUpperCase() :
+                      user?.email?.charAt(0).toUpperCase() || 'U'
+                    }
+                  </div>
+                  <button
+                    onClick={async () => {
+                      try {
+                        await signOut();
+                      } catch (error) {
+                        console.error('Logout error:', error);
+                      }
+                    }}
+                    className="w-full py-1 text-xs text-red-600 hover:bg-red-50 rounded-lg transition-all"
+                    title="Logout"
+                  >
+                    Exit
+                  </button>
+                </div>
               )}
             </div>
           </div>
@@ -822,7 +892,7 @@ const App: React.FC = () => {
         <main className={`flex-1 bg-gray-50 transition-all duration-300 ease-in-out ${isSidebarOpen ? 'ml-64' : 'ml-20'} min-h-screen flex flex-col`}> 
           <div className="p-8 w-full flex-1 overflow-auto">
             <Routes>
-              <Route path="/" element={<Dashboard accounts={accounts} budget={budgetItems} installments={installments} transactions={transactions} budgetSetups={budgetSetups} />} />
+              <Route path="/" element={<Dashboard accounts={accounts} budget={budgetItems} installments={installments} transactions={transactions} budgetSetups={budgetSetups} userProfile={userProfile} />} />
               <Route path="/budget" element={
                 <Budget
                   items={budgetItems} 
@@ -944,6 +1014,15 @@ const App: React.FC = () => {
     </BrowserRouter>
     </PinProtectionProvider>
     </TestEnvironmentProvider>
+  );
+};
+
+// Main App component with Auth Provider
+const App: React.FC = () => {
+  return (
+    <AuthProvider>
+      <AppContent />
+    </AuthProvider>
   );
 };
 

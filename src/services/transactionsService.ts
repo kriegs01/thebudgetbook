@@ -28,13 +28,17 @@ import type {
 } from '../types/supabase';
 
 /**
- * Get all transactions
+ * Get all transactions for the current user
  */
 export const getAllTransactions = async () => {
   try {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error('Not authenticated');
+
     const { data, error } = await supabase
       .from(getTableName('transactions'))
       .select('*')
+      .eq('user_id', user.id)
       .order('date', { ascending: false })
       .order('id', { ascending: false }); // Secondary sort for deterministic ordering
 
@@ -47,14 +51,18 @@ export const getAllTransactions = async () => {
 };
 
 /**
- * Get a single transaction by ID
+ * Get a single transaction by ID for the current user
  */
 export const getTransactionById = async (id: string) => {
   try {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error('Not authenticated');
+
     const { data, error } = await supabase
       .from(getTableName('transactions'))
       .select('*')
       .eq('id', id)
+      .eq('user_id', user.id)
       .single();
 
     if (error) throw error;
@@ -66,14 +74,17 @@ export const getTransactionById = async (id: string) => {
 };
 
 /**
- * Create a new transaction
+ * Create a new transaction for the current user
  * Note: Account balances are calculated dynamically from transactions, not updated here
  */
 export const createTransaction = async (transaction: CreateTransactionInput) => {
   try {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error('Not authenticated');
+
     const { data, error } = await supabase
       .from(getTableName('transactions'))
-      .insert([transaction])
+      .insert([{ ...transaction, user_id: user.id }])
       .select()
       .single();
 
@@ -124,13 +135,17 @@ export const deleteTransaction = async (id: string) => {
 };
 
 /**
- * Get transactions by payment method
+ * Get transactions by payment method for the current user
  */
 export const getTransactionsByPaymentMethod = async (paymentMethodId: string) => {
   try {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error('Not authenticated');
+
     const { data, error } = await supabase
       .from(getTableName('transactions'))
       .select('*')
+      .eq('user_id', user.id)
       .eq('payment_method_id', paymentMethodId)
       .order('date', { ascending: false });
 
@@ -143,13 +158,17 @@ export const getTransactionsByPaymentMethod = async (paymentMethodId: string) =>
 };
 
 /**
- * Get transactions within a date range
+ * Get transactions within a date range for the current user
  */
 export const getTransactionsByDateRange = async (startDate: string, endDate: string) => {
   try {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error('Not authenticated');
+
     const { data, error } = await supabase
       .from(getTableName('transactions'))
       .select('*')
+      .eq('user_id', user.id)
       .gte('date', startDate)
       .lte('date', endDate)
       .order('date', { ascending: false });
@@ -163,11 +182,15 @@ export const getTransactionsByDateRange = async (startDate: string, endDate: str
 };
 
 /**
- * Get transaction total for a specific period
+ * Get transaction total for a specific period for the current user
  */
 export const getTransactionTotal = async (startDate?: string, endDate?: string) => {
   try {
-    let query = supabase.from(getTableName('transactions')).select('amount');
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error('Not authenticated');
+
+    let query = supabase.from(getTableName('transactions')).select('amount')
+      .eq('user_id', user.id);
     
     if (startDate) {
       query = query.gte('date', startDate);
@@ -189,7 +212,7 @@ export const getTransactionTotal = async (startDate?: string, endDate?: string) 
 };
 
 /**
- * Create a transaction for a payment schedule payment
+ * Create a transaction for a payment schedule payment for the current user
  * This links the transaction to a payment schedule
  * Note: Account balances are calculated dynamically from transactions, not updated here
  */
@@ -203,6 +226,9 @@ export const createPaymentScheduleTransaction = async (
   }
 ) => {
   try {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error('Not authenticated');
+
     // Create the transaction with payment_schedule_id
     const transactionData: CreateTransactionInput = {
       name: transaction.name,
@@ -214,7 +240,7 @@ export const createPaymentScheduleTransaction = async (
 
     const { data, error } = await supabase
       .from(getTableName('transactions'))
-      .insert([transactionData])
+      .insert([{ ...transactionData, user_id: user.id }])
       .select()
       .single();
 
@@ -234,13 +260,17 @@ export const createPaymentScheduleTransaction = async (
 };
 
 /**
- * Get transactions for a specific payment schedule
+ * Get transactions for a specific payment schedule for the current user
  */
 export const getTransactionsByPaymentSchedule = async (scheduleId: string) => {
   try {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error('Not authenticated');
+
     const { data, error } = await supabase
       .from(getTableName('transactions'))
       .select('*')
+      .eq('user_id', user.id)
       .eq('payment_schedule_id', scheduleId)
       .order('date', { ascending: false });
 
@@ -387,14 +417,18 @@ export const createTransfer = async (
 };
 
 /**
- * Get loan transactions with their payment history
+ * Get loan transactions with their payment history for the current user
  */
 export const getLoanTransactionsWithPayments = async (accountId: string) => {
   try {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error('Not authenticated');
+
     // Get all loan transactions for this account
     const { data: loans, error: loansError } = await supabase
       .from(getTableName('transactions'))
       .select('*')
+      .eq('user_id', user.id)
       .eq('payment_method_id', accountId)
       .eq('transaction_type', 'loan')
       .order('date', { ascending: false });
@@ -407,6 +441,7 @@ export const getLoanTransactionsWithPayments = async (accountId: string) => {
         const { data: payments, error: paymentsError } = await supabase
           .from(getTableName('transactions'))
           .select('*')
+          .eq('user_id', user.id)
           .eq('related_transaction_id', loan.id)
           .eq('transaction_type', 'loan_payment')
           .order('date', { ascending: true });

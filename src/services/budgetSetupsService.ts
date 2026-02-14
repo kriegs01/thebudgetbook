@@ -119,13 +119,17 @@ const frontendBudgetSetupToSupabase = (setup: Partial<SavedBudgetSetup>): Partia
 };
 
 /**
- * Get all budget setups
+ * Get all budget setups for the current user
  */
 export const getAllBudgetSetups = async () => {
   try {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error('Not authenticated');
+
     const { data, error } = await supabase
       .from(getTableName('budget_setups'))
       .select('*')
+      .eq('user_id', user.id)
       .order('created_at', { ascending: false });
 
     if (error) throw error;
@@ -137,14 +141,18 @@ export const getAllBudgetSetups = async () => {
 };
 
 /**
- * Get a single budget setup by ID
+ * Get a single budget setup by ID for the current user
  */
 export const getBudgetSetupById = async (id: string) => {
   try {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error('Not authenticated');
+
     const { data, error } = await supabase
       .from(getTableName('budget_setups'))
       .select('*')
       .eq('id', id)
+      .eq('user_id', user.id)
       .single();
 
     if (error) throw error;
@@ -156,13 +164,17 @@ export const getBudgetSetupById = async (id: string) => {
 };
 
 /**
- * Get budget setups by month and timing
+ * Get budget setups by month and timing for the current user
  */
 export const getBudgetSetupsByMonthAndTiming = async (month: string, timing: string) => {
   try {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error('Not authenticated');
+
     const { data, error } = await supabase
       .from(getTableName('budget_setups'))
       .select('*')
+      .eq('user_id', user.id)
       .eq('month', month)
       .eq('timing', timing)
       .order('created_at', { ascending: false });
@@ -176,10 +188,13 @@ export const getBudgetSetupsByMonthAndTiming = async (month: string, timing: str
 };
 
 /**
- * Create a new budget setup
+ * Create a new budget setup for the current user
  */
 export const createBudgetSetup = async (setup: CreateBudgetSetupInput) => {
   try {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error('Not authenticated');
+
     console.log('[budgetSetupsService] Creating budget setup');
     console.log('[budgetSetupsService] Setup payload:', JSON.stringify({
       month: setup.month,
@@ -192,7 +207,7 @@ export const createBudgetSetup = async (setup: CreateBudgetSetupInput) => {
     
     const { data, error } = await supabase
       .from(getTableName('budget_setups'))
-      .insert([setup])
+      .insert([{ ...setup, user_id: user.id }])
       .select()
       .single();
 

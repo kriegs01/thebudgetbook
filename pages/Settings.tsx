@@ -1,10 +1,12 @@
 import React, { useState } from 'react';
-import { ChevronDown, ChevronRight, Hash, Globe, Bell, Lock, Trash2, AlertTriangle, RotateCcw, Plus, X, Database, Copy, Shield } from 'lucide-react';
+import { ChevronDown, ChevronRight, Hash, Globe, Bell, Lock, Trash2, AlertTriangle, RotateCcw, Plus, X, Database, Copy, Shield, User, Mail, Key } from 'lucide-react';
 import { BudgetCategory } from '../types';
 import { useTestEnvironment } from '../src/contexts/TestEnvironmentContext';
+import { useAuth } from '../src/contexts/AuthContext';
 import { supabase } from '../src/utils/supabaseClient';
 import { SecuritySettings } from '../src/components/settings/SecuritySettings';
 import { PinProtectedAction } from '../src/components/PinProtectedAction';
+import { updateUserEmail, updateUserPassword } from '../src/services/userProfileService';
 
 interface SettingsProps {
   currency: string;
@@ -19,6 +21,20 @@ const Settings: React.FC<SettingsProps> = ({ currency, setCurrency, categories, 
   const [newCatName, setNewCatName] = useState('');
   const [showAddCat, setShowAddCat] = useState(false);
   const [newSubcatNames, setNewSubcatNames] = useState<{ [id: string]: string }>({});
+
+  // Auth context
+  const { userProfile, updateProfile, refreshProfile, user } = useAuth();
+
+  // Account management state
+  const [editFirstName, setEditFirstName] = useState('');
+  const [editLastName, setEditLastName] = useState('');
+  const [newEmail, setNewEmail] = useState('');
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [updateMessage, setUpdateMessage] = useState('');
+  const [updateError, setUpdateError] = useState('');
+  const [isUpdating, setIsUpdating] = useState(false);
 
   // Test Environment state
   const { isTestMode, setTestMode } = useTestEnvironment();
@@ -166,7 +182,248 @@ const Settings: React.FC<SettingsProps> = ({ currency, setCurrency, categories, 
     }
   };
 
+  // Account management handlers
+  const handleUpdateName = async () => {
+    if (!editFirstName.trim() || !editLastName.trim()) {
+      setUpdateError('First and last name are required');
+      return;
+    }
+
+    setIsUpdating(true);
+    setUpdateError('');
+    setUpdateMessage('');
+
+    try {
+      const { error } = await updateProfile(editFirstName, editLastName);
+      if (error) throw error;
+
+      setUpdateMessage('Name updated successfully!');
+      setEditFirstName('');
+      setEditLastName('');
+      setTimeout(() => setUpdateMessage(''), 3000);
+    } catch (error: any) {
+      setUpdateError(error.message || 'Failed to update name');
+    } finally {
+      setIsUpdating(false);
+    }
+  };
+
+  const handleUpdateEmail = async () => {
+    if (!newEmail.trim()) {
+      setUpdateError('Email is required');
+      return;
+    }
+
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(newEmail)) {
+      setUpdateError('Please enter a valid email address');
+      return;
+    }
+
+    setIsUpdating(true);
+    setUpdateError('');
+    setUpdateMessage('');
+
+    try {
+      const { error } = await updateUserEmail(newEmail);
+      if (error) throw error;
+
+      setUpdateMessage('Email update sent! Please check your new email to confirm.');
+      setNewEmail('');
+      setTimeout(() => setUpdateMessage(''), 5000);
+    } catch (error: any) {
+      setUpdateError(error.message || 'Failed to update email');
+    } finally {
+      setIsUpdating(false);
+    }
+  };
+
+  const handleUpdatePassword = async () => {
+    if (!newPassword || !confirmPassword) {
+      setUpdateError('Please enter and confirm your new password');
+      return;
+    }
+
+    if (newPassword.length < 6) {
+      setUpdateError('Password must be at least 6 characters');
+      return;
+    }
+
+    if (newPassword !== confirmPassword) {
+      setUpdateError('Passwords do not match');
+      return;
+    }
+
+    setIsUpdating(true);
+    setUpdateError('');
+    setUpdateMessage('');
+
+    try {
+      const { error } = await updateUserPassword(newPassword);
+      if (error) throw error;
+
+      setUpdateMessage('Password updated successfully!');
+      setCurrentPassword('');
+      setNewPassword('');
+      setConfirmPassword('');
+      setTimeout(() => setUpdateMessage(''), 3000);
+    } catch (error: any) {
+      setUpdateError(error.message || 'Failed to update password');
+    } finally {
+      setIsUpdating(false);
+    }
+  };
+
   const sections = [
+    {
+      id: 'account',
+      label: 'Account',
+      icon: <User className="w-5 h-5" />,
+      content: (
+        <div className="space-y-6 pt-2">
+          {/* User Info Display */}
+          <div className="flex items-center space-x-4 p-6 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-2xl border border-blue-100">
+            <div className="w-16 h-16 rounded-full bg-blue-500 flex items-center justify-center text-white text-2xl font-bold">
+              {userProfile ? 
+                `${userProfile.first_name.charAt(0)}${userProfile.last_name.charAt(0)}`.toUpperCase() :
+                user?.email?.charAt(0).toUpperCase() || 'U'
+              }
+            </div>
+            <div className="flex-1">
+              <h3 className="text-lg font-bold text-gray-900">
+                {userProfile ? `${userProfile.first_name} ${userProfile.last_name}` : 'User'}
+              </h3>
+              <p className="text-sm text-gray-600">{user?.email || ''}</p>
+            </div>
+          </div>
+
+          {/* Messages */}
+          {updateMessage && (
+            <div className="p-4 bg-green-50 border border-green-200 rounded-xl">
+              <p className="text-sm text-green-800">{updateMessage}</p>
+            </div>
+          )}
+          {updateError && (
+            <div className="p-4 bg-red-50 border border-red-200 rounded-xl">
+              <p className="text-sm text-red-800">{updateError}</p>
+            </div>
+          )}
+
+          {/* Update Name */}
+          <div className="p-6 bg-white rounded-2xl border border-gray-200 space-y-4">
+            <div className="flex items-center space-x-2 mb-4">
+              <User className="w-5 h-5 text-gray-600" />
+              <h4 className="text-sm font-bold text-gray-900 uppercase">Update Name</h4>
+            </div>
+            
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-2">First Name</label>
+                <input
+                  type="text"
+                  value={editFirstName}
+                  onChange={(e) => setEditFirstName(e.target.value)}
+                  placeholder={userProfile?.first_name || 'First Name'}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-2">Last Name</label>
+                <input
+                  type="text"
+                  value={editLastName}
+                  onChange={(e) => setEditLastName(e.target.value)}
+                  placeholder={userProfile?.last_name || 'Last Name'}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+              </div>
+            </div>
+
+            <button
+              onClick={handleUpdateName}
+              disabled={isUpdating || (!editFirstName && !editLastName)}
+              className="w-full px-4 py-3 bg-blue-600 text-white rounded-xl font-medium hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+            >
+              {isUpdating ? 'Updating...' : 'Update Name'}
+            </button>
+          </div>
+
+          {/* Update Email */}
+          <div className="p-6 bg-white rounded-2xl border border-gray-200 space-y-4">
+            <div className="flex items-center space-x-2 mb-4">
+              <Mail className="w-5 h-5 text-gray-600" />
+              <h4 className="text-sm font-bold text-gray-900 uppercase">Update Email</h4>
+            </div>
+
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-2">New Email Address</label>
+              <input
+                type="email"
+                value={newEmail}
+                onChange={(e) => setNewEmail(e.target.value)}
+                placeholder={user?.email || 'new@email.com'}
+                className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              />
+              <p className="text-xs text-gray-500 mt-2">
+                You'll receive a confirmation link at your new email address
+              </p>
+            </div>
+
+            <button
+              onClick={handleUpdateEmail}
+              disabled={isUpdating || !newEmail}
+              className="w-full px-4 py-3 bg-blue-600 text-white rounded-xl font-medium hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+            >
+              {isUpdating ? 'Updating...' : 'Update Email'}
+            </button>
+          </div>
+
+          {/* Update Password */}
+          <div className="p-6 bg-white rounded-2xl border border-gray-200 space-y-4">
+            <div className="flex items-center space-x-2 mb-4">
+              <Key className="w-5 h-5 text-gray-600" />
+              <h4 className="text-sm font-bold text-gray-900 uppercase">Change Password</h4>
+            </div>
+
+            <div className="space-y-3">
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-2">New Password</label>
+                <input
+                  type="password"
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  placeholder="••••••••"
+                  className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-2">Confirm New Password</label>
+                <input
+                  type="password"
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  placeholder="••••••••"
+                  className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+              </div>
+
+              <p className="text-xs text-gray-500">
+                Password must be at least 6 characters long
+              </p>
+            </div>
+
+            <button
+              onClick={handleUpdatePassword}
+              disabled={isUpdating || !newPassword || !confirmPassword}
+              className="w-full px-4 py-3 bg-blue-600 text-white rounded-xl font-medium hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+            >
+              {isUpdating ? 'Updating...' : 'Change Password'}
+            </button>
+          </div>
+        </div>
+      )
+    },
     { 
       id: 'categories', 
       label: 'Budget Categories', 

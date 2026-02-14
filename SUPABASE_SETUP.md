@@ -6,10 +6,11 @@ This document provides comprehensive instructions for setting up and using Supab
 1. [Overview](#overview)
 2. [Environment Setup](#environment-setup)
 3. [Database Schema](#database-schema)
-4. [Service Layer](#service-layer)
-5. [Usage Examples](#usage-examples)
-6. [Safety and Best Practices](#safety-and-best-practices)
-7. [Troubleshooting](#troubleshooting)
+4. [User Authentication](#user-authentication)
+5. [Service Layer](#service-layer)
+6. [Usage Examples](#usage-examples)
+7. [Safety and Best Practices](#safety-and-best-practices)
+8. [Troubleshooting](#troubleshooting)
 
 ## Overview
 
@@ -18,6 +19,8 @@ The Budget Book application now supports Supabase as a backend database. This in
 - **Type-safe database operations** using TypeScript interfaces
 - **Reusable service layer** with CRUD operations for all entities
 - **Environment-based configuration** for secure credential management
+- **User authentication** with email/password sign-up and login
+- **Row Level Security (RLS)** for data privacy and multi-user support
 - **Real-time data synchronization** capabilities (optional)
 
 ## Environment Setup
@@ -268,6 +271,149 @@ Visit the Supabase Demo page to test the integration!
 
 **Constraints:**
 - A unique constraint on (month, timing) ensures only one setup exists per month/timing combination
+
+## User Authentication
+
+Budget Book now includes secure user authentication to ensure your financial data is private and accessible only to you.
+
+### Setting Up Authentication
+
+#### Step 1: Enable Email Authentication in Supabase
+
+1. Go to your Supabase project dashboard
+2. Navigate to **Authentication** → **Providers**
+3. Make sure **Email** provider is enabled
+4. Configure email templates if desired (optional)
+
+#### Step 2: Run the Authentication Migration
+
+Run the authentication migration SQL file in your Supabase SQL Editor:
+
+```bash
+# The migration file is located at:
+supabase/migrations/20260213_add_user_authentication.sql
+```
+
+This migration will:
+- Add `user_id` columns to all tables (accounts, billers, installments, savings, transactions, budget_setups, monthly_payment_schedules)
+- Update Row Level Security (RLS) policies to ensure users can only access their own data
+- Create indexes for performance optimization
+- Set up foreign key relationships with the auth.users table
+
+#### Step 3: Automatic Data Migration
+
+**Important:** When you first log in after enabling authentication, the application will automatically migrate any existing data (with `user_id = NULL`) to your account. This ensures you don't lose any existing budget data.
+
+The migration runs automatically in the background when:
+- A new user signs up
+- An existing user logs in for the first time after the authentication update
+
+You'll see console logs confirming the migration:
+```
+[Auth] Starting data migration for user: <user-id>
+[Auth] Migrated X records in accounts
+[Auth] Migrated X records in billers
+...
+[Auth] Data migration completed successfully
+```
+
+### How Authentication Works
+
+#### Sign Up
+1. Users create an account with email and password
+2. Password must be at least 6 characters long
+3. Email verification may be required (depending on your Supabase settings)
+4. All future data is automatically linked to the user's account
+
+#### Sign In
+1. Users enter their email and password
+2. Session is persisted across page refreshes
+3. Auto-refresh token keeps users logged in
+4. Failed attempts show clear error messages
+
+#### Sign Out
+1. Click the "Logout" button in the sidebar
+2. Session is cleared from local storage
+3. User is redirected to the login page
+4. All data remains secure in the database
+
+### Data Privacy and Security
+
+#### Row Level Security (RLS)
+All tables now have RLS policies that ensure:
+- Users can only read their own data
+- Users can only create/update/delete their own data
+- No cross-user data access is possible
+
+Example policy:
+```sql
+CREATE POLICY "Users can manage their own accounts" 
+ON accounts FOR ALL 
+USING (auth.uid() = user_id) 
+WITH CHECK (auth.uid() = user_id);
+```
+
+#### Service Layer Protection
+All service functions now include:
+- Authentication checks before database operations
+- Automatic user_id filtering on queries
+- Automatic user_id injection on inserts
+
+Example from accountsService.ts:
+```typescript
+export const getAllAccounts = async () => {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error('Not authenticated');
+  
+  return supabase
+    .from('accounts')
+    .select('*')
+    .eq('user_id', user.id)
+    .order('created_at', { ascending: false });
+};
+```
+
+### Testing Authentication
+
+1. **First User**: Sign up with your email and password
+   - Existing data will be automatically migrated to your account
+   - You'll have full access to all features
+
+2. **Additional Users**: Create additional test accounts
+   - Each user will have an isolated data space
+   - Users cannot see each other's data
+
+3. **Session Persistence**: Refresh the page
+   - You should remain logged in
+   - Data should load instantly
+
+### Troubleshooting Authentication
+
+#### Cannot Sign Up
+- **Issue**: "User already registered" error
+- **Solution**: Try signing in instead, or use a different email
+
+#### Cannot Sign In
+- **Issue**: "Invalid login credentials"
+- **Solution**: Check your email and password are correct
+- **Solution**: If you forgot your password, check Supabase's password reset flow
+
+#### Not Authenticated Errors
+- **Issue**: "Not authenticated" errors in console
+- **Solution**: Make sure you're logged in
+- **Solution**: Try logging out and back in
+- **Solution**: Clear browser cache and cookies
+
+#### Data Not Showing After Login
+- **Issue**: Old data isn't visible after migration
+- **Solution**: Check browser console for migration logs
+- **Solution**: Verify RLS policies are correctly set up
+- **Solution**: Run the migration SQL manually if needed
+
+#### Session Expired
+- **Issue**: Automatically logged out
+- **Solution**: This is normal after long periods of inactivity
+- **Solution**: Simply log back in to resume
 
 ## Service Layer
 
