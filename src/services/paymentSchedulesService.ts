@@ -11,14 +11,14 @@ import type {
   CreateMonthlyPaymentScheduleInput,
   UpdateMonthlyPaymentScheduleInput,
 } from '../types/supabase';
+import { getCachedUser } from '../utils/authCache';
 
 /**
  * Create a new payment schedule for the current user
  */
 export const createPaymentSchedule = async (schedule: CreateMonthlyPaymentScheduleInput) => {
   try {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) throw new Error('Not authenticated');
+    const user = await getCachedUser();
 
     const { data, error } = await supabase
       .from(getTableName('monthly_payment_schedules'))
@@ -39,8 +39,7 @@ export const createPaymentSchedule = async (schedule: CreateMonthlyPaymentSchedu
  */
 export const createPaymentSchedulesBulk = async (schedules: CreateMonthlyPaymentScheduleInput[]) => {
   try {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) throw new Error('Not authenticated');
+    const user = await getCachedUser();
 
     // Add user_id to all schedules
     const schedulesWithUserId = schedules.map(schedule => ({
@@ -67,8 +66,7 @@ export const createPaymentSchedulesBulk = async (schedules: CreateMonthlyPayment
  */
 export const getPaymentSchedulesBySource = async (sourceType: 'biller' | 'installment', sourceId: string) => {
   try {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) throw new Error('Not authenticated');
+    const user = await getCachedUser();
 
     const { data, error } = await supabase
       .from(getTableName('monthly_payment_schedules'))
@@ -101,8 +99,7 @@ export const getPaymentSchedulesBySource = async (sourceType: 'biller' | 'instal
  */
 export const getPaymentScheduleById = async (id: string) => {
   try {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) throw new Error('Not authenticated');
+    const user = await getCachedUser();
 
     const { data, error } = await supabase
       .from(getTableName('monthly_payment_schedules'))
@@ -182,8 +179,7 @@ export const deletePaymentSchedule = async (id: string) => {
  */
 export const getPaymentSchedulesByStatus = async (status: 'pending' | 'paid' | 'partial' | 'overdue') => {
   try {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) throw new Error('Not authenticated');
+    const user = await getCachedUser();
 
     const { data, error } = await supabase
       .from(getTableName('monthly_payment_schedules'))
@@ -215,8 +211,7 @@ export const getPaymentSchedulesByStatus = async (status: 'pending' | 'paid' | '
  */
 export const getPaymentSchedulesByPeriod = async (month: string, year: number) => {
   try {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) throw new Error('Not authenticated');
+    const user = await getCachedUser();
 
     const { data, error } = await supabase
       .from(getTableName('monthly_payment_schedules'))
@@ -347,8 +342,7 @@ export const recordPaymentViaTransaction = async (
  */
 export const markOverdueSchedules = async (dueDay: number = 15) => {
   try {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) throw new Error('Not authenticated');
+    const user = await getCachedUser();
 
     const today = new Date();
     const currentYear = today.getFullYear();

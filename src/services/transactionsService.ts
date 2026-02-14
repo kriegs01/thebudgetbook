@@ -26,14 +26,14 @@ import type {
   CreateTransactionInput,
   UpdateTransactionInput,
 } from '../types/supabase';
+import { getCachedUser } from '../utils/authCache';
 
 /**
  * Get all transactions for the current user
  */
 export const getAllTransactions = async () => {
   try {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) throw new Error('Not authenticated');
+    const user = await getCachedUser();
 
     const { data, error } = await supabase
       .from(getTableName('transactions'))
@@ -55,8 +55,7 @@ export const getAllTransactions = async () => {
  */
 export const getTransactionById = async (id: string) => {
   try {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) throw new Error('Not authenticated');
+    const user = await getCachedUser();
 
     const { data, error } = await supabase
       .from(getTableName('transactions'))
@@ -79,8 +78,7 @@ export const getTransactionById = async (id: string) => {
  */
 export const createTransaction = async (transaction: CreateTransactionInput) => {
   try {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) throw new Error('Not authenticated');
+    const user = await getCachedUser();
 
     const { data, error } = await supabase
       .from(getTableName('transactions'))
@@ -139,8 +137,7 @@ export const deleteTransaction = async (id: string) => {
  */
 export const getTransactionsByPaymentMethod = async (paymentMethodId: string) => {
   try {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) throw new Error('Not authenticated');
+    const user = await getCachedUser();
 
     const { data, error } = await supabase
       .from(getTableName('transactions'))
@@ -162,8 +159,7 @@ export const getTransactionsByPaymentMethod = async (paymentMethodId: string) =>
  */
 export const getTransactionsByDateRange = async (startDate: string, endDate: string) => {
   try {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) throw new Error('Not authenticated');
+    const user = await getCachedUser();
 
     const { data, error } = await supabase
       .from(getTableName('transactions'))
@@ -186,8 +182,7 @@ export const getTransactionsByDateRange = async (startDate: string, endDate: str
  */
 export const getTransactionTotal = async (startDate?: string, endDate?: string) => {
   try {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) throw new Error('Not authenticated');
+    const user = await getCachedUser();
 
     let query = supabase.from(getTableName('transactions')).select('amount')
       .eq('user_id', user.id);
@@ -226,8 +221,7 @@ export const createPaymentScheduleTransaction = async (
   }
 ) => {
   try {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) throw new Error('Not authenticated');
+    const user = await getCachedUser();
 
     // Create the transaction with payment_schedule_id
     const transactionData: CreateTransactionInput = {
@@ -264,8 +258,7 @@ export const createPaymentScheduleTransaction = async (
  */
 export const getTransactionsByPaymentSchedule = async (scheduleId: string) => {
   try {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) throw new Error('Not authenticated');
+    const user = await getCachedUser();
 
     const { data, error } = await supabase
       .from(getTableName('transactions'))
@@ -421,8 +414,7 @@ export const createTransfer = async (
  */
 export const getLoanTransactionsWithPayments = async (accountId: string) => {
   try {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) throw new Error('Not authenticated');
+    const user = await getCachedUser();
 
     // Get all loan transactions for this account
     const { data: loans, error: loansError } = await supabase

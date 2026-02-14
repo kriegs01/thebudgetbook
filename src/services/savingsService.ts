@@ -12,14 +12,14 @@ import type {
 } from '../types/supabase';
 import { supabaseSavingsToFrontend, supabaseSavingsArrayToFrontend, frontendSavingsToSupabase } from '../utils/savingsAdapter';
 import type { SavingsJar } from '../../types';
+import { getCachedUser } from '../utils/authCache';
 
 /**
  * Get all savings jars for the current user
  */
 export const getAllSavings = async () => {
   try {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) throw new Error('Not authenticated');
+    const user = await getCachedUser();
 
     const { data, error } = await supabase
       .from(getTableName('savings'))
@@ -40,8 +40,7 @@ export const getAllSavings = async () => {
  */
 export const getSavingsById = async (id: string) => {
   try {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) throw new Error('Not authenticated');
+    const user = await getCachedUser();
 
     const { data, error } = await supabase
       .from(getTableName('savings'))
@@ -63,8 +62,7 @@ export const getSavingsById = async (id: string) => {
  */
 export const createSavings = async (savings: CreateSavingsInput) => {
   try {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) throw new Error('Not authenticated');
+    const user = await getCachedUser();
 
     const { data, error } = await supabase
       .from(getTableName('savings'))
@@ -123,8 +121,7 @@ export const deleteSavings = async (id: string) => {
  */
 export const getSavingsByAccount = async (accountId: string) => {
   try {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) throw new Error('Not authenticated');
+    const user = await getCachedUser();
 
     const { data, error } = await supabase
       .from(getTableName('savings'))
@@ -146,8 +143,7 @@ export const getSavingsByAccount = async (accountId: string) => {
  */
 export const getTotalSavingsBalance = async () => {
   try {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) throw new Error('Not authenticated');
+    const user = await getCachedUser();
 
     const { data, error } = await supabase
       .from(getTableName('savings'))
