@@ -31,6 +31,7 @@ import Accounts from './pages/Accounts';
 import AccountFilteredTransactions from './pages/accounts/view';
 import StatementPage from './pages/accounts/statement';
 import Savings from './pages/Savings';
+import Projections from './pages/Projections';
 import SettingsPage from './pages/Settings';
 import TrashPage from './pages/Trash';
 import SupabaseDemo from './pages/SupabaseDemo';
@@ -974,6 +975,11 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
                   onDelete={handleDeleteSavings}
                   loading={savingsLoading}
                   error={savingsError}
+                />
+              } />
+              <Route path="/projections" element={
+                <Projections
+                  budgetSetups={savedSetups}
                 />
               } />
               <Route path="/settings" element={
