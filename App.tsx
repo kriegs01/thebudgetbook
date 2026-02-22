@@ -35,6 +35,7 @@ import SettingsPage from './pages/Settings';
 import TrashPage from './pages/Trash';
 import SupabaseDemo from './pages/SupabaseDemo';
 import Auth from './pages/Auth';
+import UpdatePassword from './pages/update-password';
 
 // Helper function to convert UI Account to Supabase format
 const accountToSupabase = (account: Account) => ({
@@ -1006,6 +1007,7 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
               <Route path="/supabase-demo" element={
                 <SupabaseDemo />
               } />
+              <Route path="/update-password" element={<UpdatePassword />} />
               {/* Add additional routes/pages as needed */}
             </Routes>
           </div>
