@@ -23,6 +23,7 @@ import type {
   UpdateBudgetSetupInput,
 } from '../types/supabase';
 import type { SavedBudgetSetup } from '../../types';
+import { getCachedUser } from '../utils/authCache';
 
 /**
  * Convert Supabase budget setup to frontend format
@@ -123,8 +124,7 @@ const frontendBudgetSetupToSupabase = (setup: Partial<SavedBudgetSetup>): Partia
  */
 export const getAllBudgetSetups = async () => {
   try {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) throw new Error('Not authenticated');
+    const user = await getCachedUser();
 
     const { data, error } = await supabase
       .from(getTableName('budget_setups'))
@@ -145,8 +145,7 @@ export const getAllBudgetSetups = async () => {
  */
 export const getBudgetSetupById = async (id: string) => {
   try {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) throw new Error('Not authenticated');
+    const user = await getCachedUser();
 
     const { data, error } = await supabase
       .from(getTableName('budget_setups'))
@@ -168,8 +167,7 @@ export const getBudgetSetupById = async (id: string) => {
  */
 export const getBudgetSetupsByMonthAndTiming = async (month: string, timing: string) => {
   try {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) throw new Error('Not authenticated');
+    const user = await getCachedUser();
 
     const { data, error } = await supabase
       .from(getTableName('budget_setups'))
@@ -192,8 +190,7 @@ export const getBudgetSetupsByMonthAndTiming = async (month: string, timing: str
  */
 export const createBudgetSetup = async (setup: CreateBudgetSetupInput) => {
   try {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) throw new Error('Not authenticated');
+    const user = await getCachedUser();
 
     console.log('[budgetSetupsService] Creating budget setup');
     console.log('[budgetSetupsService] Setup payload:', JSON.stringify({

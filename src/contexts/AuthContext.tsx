@@ -3,6 +3,7 @@ import { supabase } from '../utils/supabaseClient';
 import type { User, Session } from '@supabase/supabase-js';
 import type { SupabaseUserProfile } from '../types/supabase';
 import { getUserProfile, createUserProfile, updateUserProfile } from '../services/userProfileService';
+import { clearAuthCache } from '../utils/authCache';
 
 interface AuthContextType {
   user: User | null;
@@ -102,6 +103,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (_event, session) => {
         console.log('[Auth] State changed:', _event);
+        
+        // Clear auth cache on any auth state change
+        clearAuthCache();
+        
         setSession(session);
         setUser(session?.user ?? null);
         
