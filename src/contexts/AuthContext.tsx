@@ -146,7 +146,30 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
     );
 
-    return () => subscription.unsubscribe();
+    // Re-validate session when user returns to the tab after dormancy.
+    // After long inactivity the auth token lock may be orphaned, causing data
+    // loads to fail. Checking the session on visibility change ensures the user
+    // is redirected to login if their session has expired.
+    let mounted = true;
+    const handleVisibilityChange = async () => {
+      if (document.visibilityState === 'visible') {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (mounted && !session) {
+          clearAuthCache();
+          setSession(null);
+          setUser(null);
+          setUserProfile(null);
+        }
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      mounted = false;
+      subscription.unsubscribe();
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
   }, []);
 
   const signUp = async (email: string, password: string, firstName: string, lastName: string) => {
