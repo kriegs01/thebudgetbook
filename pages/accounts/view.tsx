@@ -2,8 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { ArrowLeft } from 'lucide-react';
 import { useSearchParams, Link } from 'react-router-dom';
 import { Account } from '../../types';
-import { getAllTransactions, createTransaction, createTransfer, getLoanTransactionsWithPayments } from '../../src/services/transactionsService';
-import { getAllAccountsFrontend } from '../../src/services/accountsService';
+import { getTransactionsByPaymentMethod, createTransaction, createTransfer, getLoanTransactionsWithPayments } from '../../src/services/transactionsService';
 import { combineDateWithCurrentTime } from '../../src/utils/dateUtils';
 
 type Transaction = {
@@ -55,6 +54,7 @@ const AccountFilteredTransactions: React.FC<AccountFilteredTransactionsProps> = 
   const [selectedLoan, setSelectedLoan] = useState<LoanTransaction | null>(null);
   
   // Loading states
+  const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
@@ -69,20 +69,15 @@ const AccountFilteredTransactions: React.FC<AccountFilteredTransactionsProps> = 
     if (typeof window === "undefined" || !accountId) return;
     
     try {
-      const { data: transactionsData, error: transactionsError } = await getAllTransactions();
+      const { data: transactionsData, error: transactionsError } = await getTransactionsByPaymentMethod(accountId);
       
       if (transactionsError) {
         console.error('Error loading transactions:', transactionsError);
-        return;
-      }
-      
-      if (!transactionsData) {
         setTransactions([]);
         return;
       }
       
-      // Convert Supabase transactions to local format
-      const allTx: Transaction[] = transactionsData.map(t => ({
+      const txList: Transaction[] = (transactionsData || []).map(t => ({
         id: t.id,
         name: t.name,
         date: t.date,
@@ -92,12 +87,9 @@ const AccountFilteredTransactions: React.FC<AccountFilteredTransactionsProps> = 
         notes: t.notes,
         related_transaction_id: t.related_transaction_id
       }));
-      
-      const filtered = allTx.filter(tx => tx.paymentMethodId === accountId);
-      setTransactions(filtered);
+      setTransactions(txList);
 
-      // Load loan transactions with payments
-      // Find the account from props to ensure we have the latest account type
+      // Load loan transactions with payments (only for debit accounts)
       const currentAccount = accounts.find(a => a.id === accountId);
       if (currentAccount?.type === 'Debit') {
         const { data: loansData } = await getLoanTransactionsWithPayments(accountId);
@@ -134,20 +126,22 @@ const AccountFilteredTransactions: React.FC<AccountFilteredTransactionsProps> = 
 
   useEffect(() => {
     const loadData = async () => {
-      if (accountId) {
-        const foundAccount = accounts.find(a => a.id === accountId);
-        if (foundAccount) {
-          setAccount(foundAccount);
+      setIsLoading(true);
+      try {
+        if (accountId) {
+          const foundAccount = accounts.find(a => a.id === accountId);
+          if (foundAccount) {
+            setAccount(foundAccount);
+          }
         }
-      }
 
-      // Load all accounts for transfer dropdown
-      const { data: accountsData } = await getAllAccountsFrontend();
-      if (accountsData) {
-        setAllAccounts(accountsData);
-      }
+        // Use accounts prop for transfer dropdown (already loaded from parent)
+        setAllAccounts(accounts);
 
-      await loadTransactions();
+        await loadTransactions();
+      } finally {
+        setIsLoading(false);
+      }
     };
     
     loadData();
@@ -403,6 +397,12 @@ const AccountFilteredTransactions: React.FC<AccountFilteredTransactionsProps> = 
             </div>
           </div>
           <div className="p-4">
+            {isLoading ? (
+              <div className="text-center py-8">
+                <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600 mb-2"></div>
+                <p className="text-sm text-gray-500">Loading transactions...</p>
+              </div>
+            ) : (
             <div className="w-full overflow-x-auto">
               <table className="min-w-full text-left">
                 <thead>
@@ -450,6 +450,7 @@ const AccountFilteredTransactions: React.FC<AccountFilteredTransactionsProps> = 
                 </tbody>
               </table>
             </div>
+            )}
           </div>
         </div>
       </div>
