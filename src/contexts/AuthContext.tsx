@@ -29,11 +29,32 @@ export const useAuth = () => {
 };
 
 /**
- * Migrate existing data (with null user_id) to the current user's account
- * This runs once after a user's first successful login
+ * CREATOR_USER_ID - The Supabase UUID of the original data creator.
+ * Set the VITE_CREATOR_USER_ID environment variable to the repo owner's Supabase UUID.
+ * Only this user will receive the legacy data migration on first login.
+ * All other users will be skipped to prevent unintended data assignment.
+ *
+ * TODO: Add VITE_CREATOR_USER_ID=<your-supabase-uuid> to your .env file.
+ */
+const CREATOR_USER_ID = import.meta.env.VITE_CREATOR_USER_ID ?? '';
+
+/**
+ * Migrate existing data (with null user_id) to the current user's account.
+ * This runs once after a user's first successful login.
+ *
+ * Security: Migration is restricted to the original data creator (CREATOR_USER_ID).
+ * Non-creator users are explicitly skipped to prevent accidental data assignment.
+ * The creator should replace CREATOR_USER_ID with their actual Supabase UUID.
  */
 async function migrateExistingData(userId: string) {
-  console.log('[Auth] Starting data migration for user:', userId);
+  // Only migrate legacy data for the original creator of this dataset.
+  // Other users must not receive legacy null-user_id records.
+  if (userId !== CREATOR_USER_ID) {
+    console.log('[Auth] Data migration not required for this user.');
+    return;
+  }
+
+  console.log('[Auth] Starting data migration for creator user:', userId);
 
   const tables = [
     'accounts',
@@ -125,7 +146,30 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
     );
 
-    return () => subscription.unsubscribe();
+    // Re-validate session when user returns to the tab after dormancy.
+    // After long inactivity the auth token lock may be orphaned, causing data
+    // loads to fail. Checking the session on visibility change ensures the user
+    // is redirected to login if their session has expired.
+    let mounted = true;
+    const handleVisibilityChange = async () => {
+      if (document.visibilityState === 'visible') {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (mounted && !session) {
+          clearAuthCache();
+          setSession(null);
+          setUser(null);
+          setUserProfile(null);
+        }
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      mounted = false;
+      subscription.unsubscribe();
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
   }, []);
 
   const signUp = async (email: string, password: string, firstName: string, lastName: string) => {
