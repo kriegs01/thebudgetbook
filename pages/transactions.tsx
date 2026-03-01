@@ -38,32 +38,31 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ onTransactionDelete
     paymentMethodId: ''
   });
 
-  // Load transactions and accounts from Supabase
+  // Load transactions and accounts from Supabase in parallel
   const loadData = useCallback(async () => {
     setIsLoading(true);
     try {
-      // Load accounts
-      const { data: accountsData, error: accountsError } = await getAllAccountsFrontend();
-      if (accountsError) {
-        console.error('Error loading accounts:', accountsError);
-      } else if (accountsData) {
-        const accountOptions = accountsData.map(a => ({ id: a.id, bank: a.bank }));
-        setAccounts(accountOptions);
+      const [accountsResult, transactionsResult] = await Promise.all([
+        getAllAccountsFrontend(),
+        getAllTransactions(),
+      ]);
+
+      if (accountsResult.error) {
+        console.error('Error loading accounts:', accountsResult.error);
+      } else if (accountsResult.data) {
+        setAccounts(accountsResult.data.map(a => ({ id: a.id, bank: a.bank })));
       }
 
-      // Load transactions
-      const { data: transactionsData, error: transactionsError } = await getAllTransactions();
-      if (transactionsError) {
-        console.error('Error loading transactions:', transactionsError);
-      } else if (transactionsData) {
-        const txList = transactionsData.map(t => ({
+      if (transactionsResult.error) {
+        console.error('Error loading transactions:', transactionsResult.error);
+      } else if (transactionsResult.data) {
+        setTransactions(transactionsResult.data.map(t => ({
           id: t.id,
           name: t.name,
           date: t.date,
           amount: t.amount,
           paymentMethodId: t.payment_method_id
-        }));
-        setTransactions(txList);
+        })));
       }
     } catch (error) {
       console.error('Error loading data:', error);

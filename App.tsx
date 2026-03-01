@@ -3,7 +3,7 @@ import { Menu, ChevronLeft } from 'lucide-react';
 import { BrowserRouter, Routes, Route, NavLink } from 'react-router-dom';
 import { NAV_ITEMS, INITIAL_BUDGET, DEFAULT_SETUP, INITIAL_CATEGORIES } from './constants';
 import { getAllBillersFrontend, createBillerFrontend, updateBillerFrontend, deleteBillerFrontend } from './src/services/billersService';
-import { getAllAccountsWithCalculatedBalances, createAccountFrontend, updateAccountFrontend, deleteAccountFrontend } from './src/services/accountsService';
+import { getAllAccountsWithCalculatedBalances, getAllAccountsFrontend, createAccountFrontend, updateAccountFrontend, deleteAccountFrontend } from './src/services/accountsService';
 import { getAllInstallmentsFrontend, createInstallmentFrontend, updateInstallmentFrontend, deleteInstallmentFrontend } from './src/services/installmentsService';
 import { getAllSavingsFrontend, createSavingsFrontend, updateSavingsFrontend, deleteSavingsFrontend } from './src/services/savingsService';
 import { getAllBudgetSetupsFrontend, deleteBudgetSetupFrontend } from './src/services/budgetSetupsService';
@@ -12,6 +12,7 @@ import { getAllTransactions, createPaymentScheduleTransaction } from './src/serv
 import { recordPayment } from './src/services/paymentSchedulesService';
 import { supabase } from './src/utils/supabaseClient';
 import { combineDateWithCurrentTime } from './src/utils/dateUtils';
+import { recalculateAllAccountBalances } from './src/utils/accountBalanceCalculator';
 import type { Biller, Account, Installment, SavingsJar, Transaction } from './types';
 import type { SupabaseTransaction } from './src/types/supabase';
 
@@ -218,20 +219,39 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
       setBillersLoading(false);
     };
 
-    const fetchAccounts = async () => {
+    const fetchAccountsAndTransactions = async () => {
       setAccountsLoading(true);
+      setTransactionsLoading(true);
       setAccountsError(null);
-      
-      const { data, error } = await getAllAccountsWithCalculatedBalances();
-      
-      if (error) {
-        console.error('Error loading accounts:', error);
+
+      // Fetch accounts and transactions in parallel - a single set of Supabase calls
+      const [accountsResult, transactionsResult] = await Promise.allSettled([
+        getAllAccountsFrontend(),
+        getAllTransactions(),
+      ]);
+
+      const accountsData = accountsResult.status === 'fulfilled' ? accountsResult.value : { data: null, error: accountsResult.reason };
+      const transactionsData = transactionsResult.status === 'fulfilled' ? transactionsResult.value : { data: null, error: transactionsResult.reason };
+
+      // Set transactions state
+      if (transactionsData.error) {
+        console.error('Error loading transactions:', transactionsData.error);
+        setTransactions([]);
+      } else {
+        setTransactions((transactionsData.data || []).map(formatTransaction));
+      }
+      setTransactionsLoading(false);
+
+      // Set accounts with calculated balances using the already-fetched transactions
+      if (accountsData.error) {
+        console.error('Error loading accounts:', accountsData.error);
         setAccountsError('Failed to load accounts from database');
         setAccounts([]);
       } else {
-        setAccounts(data || []);
+        const fetchedAccounts = accountsData.data || [];
+        const fetchedTransactions = transactionsData.data || [];
+        setAccounts(recalculateAllAccountBalances(fetchedAccounts, fetchedTransactions));
       }
-      
       setAccountsLoading(false);
     };
 
@@ -286,28 +306,11 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
       setBudgetSetupsLoading(false);
     };
 
-    const fetchTransactions = async () => {
-      setTransactionsLoading(true);
-      
-      const { data, error } = await getAllTransactions();
-      
-      if (error) {
-        console.error('Error loading transactions:', error);
-        setTransactions([]);
-      } else {
-        const formattedTransactions = (data || []).map(formatTransaction);
-        setTransactions(formattedTransactions);
-      }
-      
-      setTransactionsLoading(false);
-    };
-    
     fetchBillers();
-    fetchAccounts();
+    fetchAccountsAndTransactions();
     fetchInstallments();
     fetchSavings();
     fetchBudgetSetups();
-    fetchTransactions();
   }, []);
 
   // Reload functions for each entity
