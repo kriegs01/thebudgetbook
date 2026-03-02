@@ -107,6 +107,7 @@ export interface SavedBudgetSetup {
   data: { [key: string]: CategorizedSetupItem[] } & {
     _projectedSalary?: string;
     _actualSalary?: string;
+    _excludedInstallmentIds?: string[];
   };
 }
 
