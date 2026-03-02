@@ -82,10 +82,17 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
       } else {
         setActualSalary('');
       }
+      // Restore excluded installment IDs from persisted setup data
+      if (Array.isArray(existingSetup.data._excludedInstallmentIds)) {
+        setExcludedInstallmentIds(new Set(existingSetup.data._excludedInstallmentIds));
+      } else {
+        setExcludedInstallmentIds(new Set());
+      }
     } else {
       // Reset to defaults if no saved setup
       setProjectedSalary('11000');
       setActualSalary('');
+      setExcludedInstallmentIds(new Set());
     }
   }, [selectedMonth, selectedTiming, savedSetups]);
 
@@ -518,7 +525,8 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
     const dataToSave = {
       ...structuredClone(setupData),
       _projectedSalary: projectedSalary,
-      _actualSalary: actualSalary
+      _actualSalary: actualSalary,
+      _excludedInstallmentIds: [...excludedInstallmentIds]
     };
     
     // Check if data has actually changed
@@ -615,7 +623,7 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
       setAutoSaveStatus('error');
       setTimeout(() => setAutoSaveStatus('idle'), AUTO_SAVE_STATUS_TIMEOUT_MS);
     }
-  }, [view, setupData, projectedSalary, actualSalary, selectedMonth, selectedTiming, savedSetups, onReloadSetups]);
+  }, [view, setupData, projectedSalary, actualSalary, selectedMonth, selectedTiming, savedSetups, excludedInstallmentIds, onReloadSetups]);
 
   /**
    * Debounced auto-save trigger
@@ -633,12 +641,12 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
     }, AUTO_SAVE_DEBOUNCE_MS);
   }, [autoSave]);
 
-  // Trigger auto-save when setupData, projectedSalary, or actualSalary changes
+  // Trigger auto-save when setupData, projectedSalary, actualSalary, or excludedInstallmentIds changes
   useEffect(() => {
     if (view === 'setup') {
       triggerAutoSave();
     }
-  }, [setupData, projectedSalary, actualSalary, view, triggerAutoSave]);
+  }, [setupData, projectedSalary, actualSalary, excludedInstallmentIds, view, triggerAutoSave]);
 
   // Cleanup timeout on component unmount only
   useEffect(() => {
@@ -753,7 +761,8 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
     const dataToSave = {
       ...JSON.parse(JSON.stringify(setupData)),
       _projectedSalary: projectedSalary,
-      _actualSalary: actualSalary
+      _actualSalary: actualSalary,
+      _excludedInstallmentIds: [...excludedInstallmentIds]
     };
     
     console.log('[Budget] Data to save type:', typeof dataToSave);
@@ -1151,6 +1160,12 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
     
     setSetupData(loadedData);
     setRemovedIds(new Set());
+    // Restore excluded installment IDs from loaded setup data
+    if (Array.isArray(loadedData._excludedInstallmentIds)) {
+      setExcludedInstallmentIds(new Set(loadedData._excludedInstallmentIds));
+    } else {
+      setExcludedInstallmentIds(new Set());
+    }
     setSelectedMonth(setup.month);
     setSelectedTiming(setup.timing as '1/2' | '2/2');
     setView('setup');
