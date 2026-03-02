@@ -111,12 +111,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   useEffect(() => {
     // Check active session on mount
-    supabase.auth.getSession().then(async ({ data: { session } }) => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
       setUser(session?.user ?? null);
+      // Resolve loading as soon as session state is known, so an expired/pending
+      // token refresh cannot block the loading spinner indefinitely.
+      setLoading(false);
       if (session?.user) {
-        await loadUserProfile(session.user.id);
+        // Profile loading is non-blocking; loadUserProfile handles errors internally.
+        loadUserProfile(session.user.id);
       }
+    }).catch((error) => {
+      console.error('[Auth] Error checking session:', error);
       setLoading(false);
     });
 
@@ -130,14 +136,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         
         setSession(session);
         setUser(session?.user ?? null);
-        
+
+        // Resolve loading immediately so a slow/hanging profile fetch cannot
+        // keep the app stuck on the loading screen after an auth timeout.
+        setLoading(false);
+
         if (session?.user) {
-          await loadUserProfile(session.user.id);
+          // Profile loading is non-blocking; loadUserProfile handles errors internally.
+          loadUserProfile(session.user.id);
         } else {
           setUserProfile(null);
         }
-        
-        setLoading(false);
 
         // Migrate data on first sign in
         if (_event === 'SIGNED_IN' && session?.user) {
