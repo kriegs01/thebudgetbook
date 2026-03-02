@@ -634,6 +634,14 @@ function AccountsList() {
 
 **Solution**: Either disable RLS (not recommended) or create appropriate policies. See the schema setup section for example policies.
 
+#### RLS violation on transfer transactions (`42501: new row violates row-level security policy`)
+
+**Problem**: Creating a transfer between accounts fails with error code `42501`.
+
+**Cause**: The `createTransfer` service function was not setting `user_id` on the inserted transaction rows. Supabase RLS requires every insert to include `user_id` matching `auth.uid()`.
+
+**Solution**: The `createTransfer` function fetches the current authenticated user via `getCachedUser()` and sets `user_id: user.id` on both the outgoing and incoming transaction rows before inserting. Ensure you are logged in when performing transfers.
+
 #### TypeScript errors about types
 
 **Solution**: Make sure you're importing types from `src/types/supabase.ts`:

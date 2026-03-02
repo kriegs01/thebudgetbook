@@ -355,6 +355,8 @@ export const deleteTransactionAndRevertSchedule = async (transactionId: string) 
 /**
  * Create a transfer between two accounts
  * Creates two linked transactions: positive on source (out), negative on destination (in)
+ * Note: user_id must be set on both rows to satisfy Supabase Row Level Security (RLS) policies.
+ * RLS requires auth.uid() to match the user_id column on every insert.
  */
 export const createTransfer = async (
   sourceAccountId: string,
@@ -363,6 +365,9 @@ export const createTransfer = async (
   date: string
 ) => {
   try {
+    // Fetch the current authenticated user — required for RLS compliance on insert
+    const user = await getCachedUser();
+
     // Create the outgoing transaction (positive - money leaving)
     const { data: outgoingTx, error: outgoingError } = await supabase
       .from(getTableName('transactions'))
@@ -372,7 +377,8 @@ export const createTransfer = async (
         amount: Math.abs(amount), // Positive for source account (money out)
         payment_method_id: sourceAccountId,
         transaction_type: 'transfer',
-        notes: `Transfer to another account`
+        notes: `Transfer to another account`,
+        user_id: user.id // Required by RLS policy
       }])
       .select()
       .single();
@@ -389,7 +395,8 @@ export const createTransfer = async (
         payment_method_id: destinationAccountId,
         transaction_type: 'transfer',
         notes: `Transfer from another account`,
-        related_transaction_id: outgoingTx.id
+        related_transaction_id: outgoingTx.id,
+        user_id: user.id // Required by RLS policy
       }])
       .select()
       .single();
