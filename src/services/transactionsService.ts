@@ -427,30 +427,46 @@ export const getLoanTransactionsWithPayments = async (accountId: string) => {
 
     if (loansError) throw loansError;
 
-    // For each loan, get its payments
-    const loansWithPayments = await Promise.all(
-      (loans || []).map(async (loan) => {
-        const { data: payments, error: paymentsError } = await supabase
-          .from(getTableName('transactions'))
-          .select('*')
-          .eq('user_id', user.id)
-          .eq('related_transaction_id', loan.id)
-          .eq('transaction_type', 'loan_payment')
-          .order('date', { ascending: true });
+    // Early return if no loans
+    if (!loans || loans.length === 0) {
+      return { data: [], error: null };
+    }
 
-        // Loan payments are stored as negative amounts (they increase balance)
-        // Use Math.abs to get the actual payment amount
-        const totalPaid = (payments || []).reduce((sum, p) => sum + Math.abs(p.amount), 0);
-        const remainingBalance = Math.abs(loan.amount) - totalPaid;
+    // Batch-fetch ALL payments for all loans in a single query (avoids N+1)
+    const loanIds = loans.map(l => l.id);
+    const { data: allPayments, error: paymentsError } = await supabase
+      .from(getTableName('transactions'))
+      .select('*')
+      .eq('user_id', user.id)
+      .in('related_transaction_id', loanIds)
+      .eq('transaction_type', 'loan_payment')
+      .order('date', { ascending: true });
 
-        return {
-          ...loan,
-          payments: payments || [],
-          totalPaid,
-          remainingBalance
-        };
-      })
-    );
+    if (paymentsError) {
+      console.error('Error fetching loan payments:', paymentsError);
+    }
+
+    // Group payments by their parent loan id
+    const paymentsByLoanId = new Map<string, any[]>();
+    for (const payment of (allPayments || [])) {
+      if (payment.related_transaction_id) {
+        const existing = paymentsByLoanId.get(payment.related_transaction_id);
+        if (existing) {
+          existing.push(payment);
+        } else {
+          paymentsByLoanId.set(payment.related_transaction_id, [payment]);
+        }
+      }
+    }
+
+    const loansWithPayments = loans.map(loan => {
+      const payments = paymentsByLoanId.get(loan.id) || [];
+      // Loan payments are stored as negative amounts (they increase balance)
+      // Use Math.abs to get the actual payment amount
+      const totalPaid = payments.reduce((sum, p) => sum + Math.abs(p.amount), 0);
+      const remainingBalance = Math.abs(loan.amount) - totalPaid;
+      return { ...loan, payments, totalPaid, remainingBalance };
+    });
 
     return { data: loansWithPayments, error: null };
   } catch (error) {

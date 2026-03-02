@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { ArrowLeft, Calendar, CreditCard } from 'lucide-react';
 import { useSearchParams, Link } from 'react-router-dom';
 import { Account } from '../../types';
-import { getAllTransactions } from '../../src/services/transactionsService';
+import { getTransactionsByPaymentMethod } from '../../src/services/transactionsService';
 import type { SupabaseTransaction } from '../../src/types/supabase';
 import { calculateBillingCycles, formatDateRange } from '../../src/utils/billingCycles';
 
@@ -45,51 +45,59 @@ const StatementPage: React.FC<StatementPageProps> = ({ accounts }) => {
   const [account, setAccount] = useState<Account | null>(null);
   const [cycles, setCycles] = useState<BillingCycle[]>([]);
   const [selectedCycleIndex, setSelectedCycleIndex] = useState<number>(0);
+  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     const loadAccountAndTransactions = async () => {
-      if (!accountId) return;
-      
-      // Find the account
-      const acc = accounts.find(a => a.id === accountId);
-      if (!acc || acc.type !== 'Credit') return;
-      
-      setAccount(acc);
-      
-      // Get billing date
-      const billingDate = acc.billingDate;
-      if (!billingDate) {
-        // No billing date set, can't calculate cycles
+      if (!accountId) {
+        setIsLoading(false);
         return;
       }
       
-      // Calculate billing cycles - Generate both past and future cycles to show all transactions
-      const cycleData = calculateBillingCycles(billingDate, 12, false);
-      
-      // FIX: Load transactions from Supabase instead of localStorage
+      setIsLoading(true);
       try {
-        const { data: transactionsData, error: transactionsError } = await getAllTransactions();
-        
-        if (transactionsError) {
-          console.error('Error loading transactions:', transactionsError);
+        // Find the account
+        const acc = accounts.find(a => a.id === accountId);
+        if (!acc || acc.type !== 'Credit') {
+          // If accounts have loaded but this account is missing or not a credit account,
+          // stop loading. If accounts haven't loaded yet (empty array), the effect will
+          // re-run once the parent finishes loading, so keep the spinner up.
+          if (accounts.length > 0) {
+            setIsLoading(false);
+          }
           return;
         }
         
-        if (!transactionsData) {
-          setCycles([]);
+        setAccount(acc);
+        
+        // Get billing date
+        const billingDate = acc.billingDate;
+        if (!billingDate) {
+          // No billing date set, can't calculate cycles
+          setIsLoading(false);
+          return;
+        }
+        
+        // Calculate billing cycles - Generate both past and future cycles to show all transactions
+        const cycleData = calculateBillingCycles(billingDate, 12, false);
+        
+        // Load only this account's transactions from Supabase
+        const { data: transactionsData, error: transactionsError } = await getTransactionsByPaymentMethod(accountId);
+        
+        if (transactionsError) {
+          console.error('Error loading transactions:', transactionsError);
+          setIsLoading(false);
           return;
         }
         
         // Convert Supabase transactions to local format
-        const allTx: Transaction[] = transactionsData.map(t => ({
+        const accountTransactions: Transaction[] = (transactionsData || []).map(t => ({
           id: t.id,
           name: t.name,
           date: t.date,
           amount: t.amount,
           paymentMethodId: t.payment_method_id
         }));
-        
-        const accountTransactions = allTx.filter(tx => tx.paymentMethodId === accountId);
         
         // Group transactions by cycle
         const billingCycles: BillingCycle[] = cycleData.map((cycle, index) => {
@@ -108,11 +116,26 @@ const StatementPage: React.FC<StatementPageProps> = ({ accounts }) => {
         setCycles(billingCycles);
       } catch (error) {
         console.error('Error loading transactions:', error);
+      } finally {
+        setIsLoading(false);
       }
     };
     
     loadAccountAndTransactions();
   }, [accountId, accounts]);
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-gray-50 p-8">
+        <div className="max-w-4xl mx-auto flex items-center justify-center py-24">
+          <div className="text-center">
+            <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600 mb-4"></div>
+            <p className="text-gray-600 font-medium">Loading statement...</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   if (!accountId || !account) {
     return (
