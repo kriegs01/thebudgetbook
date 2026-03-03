@@ -240,6 +240,7 @@ export const recordPayment = async (
     datePaid: string;
     accountId?: string;
     receipt?: string;
+    expectedAmount?: number; // Optional override when DB expected_amount is 0 (e.g. Loans billers)
   }
 ) => {
   try {
@@ -252,9 +253,9 @@ export const recordPayment = async (
     const totalPaid = (schedule.data.amount_paid || 0) + payment.amountPaid;
     let status: 'pending' | 'paid' | 'partial' | 'overdue' = 'pending';
 
-    // When expected_amount is 0 (unset, e.g. Loans billers where it is optional),
-    // we cannot determine full payment — treat any positive amount as partial.
-    const expectedAmount = schedule.data.expected_amount;
+    // Use DB expected_amount when set; fall back to the caller-supplied value (e.g. for
+    // Loans billers where expected_amount is optional and defaults to 0 in the DB).
+    const expectedAmount = schedule.data.expected_amount || payment.expectedAmount || 0;
     if (expectedAmount > 0 && totalPaid >= expectedAmount) {
       status = 'paid';
     } else if (totalPaid > 0) {
@@ -305,6 +306,7 @@ export const recordPaymentViaTransaction = async (
     datePaid: string;
     accountId: string;
     receipt?: string;
+    expectedAmount?: number; // Optional override when DB expected_amount is 0 (e.g. Loans billers)
   }
 ) => {
   try {
@@ -319,6 +321,7 @@ export const recordPaymentViaTransaction = async (
       datePaid: payment.datePaid,
       accountId: payment.accountId,
       receipt: payment.receipt,
+      expectedAmount: payment.expectedAmount,
     });
 
     if (scheduleResult.error || !scheduleResult.data) {

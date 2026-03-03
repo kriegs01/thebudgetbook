@@ -1020,7 +1020,8 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
             amountPaid: parseFloat(payFormData.amount),
             datePaid: payFormData.datePaid,
             accountId: payFormData.accountId,
-            receipt: payFormData.receipt || undefined
+            receipt: payFormData.receipt || undefined,
+            expectedAmount: schedule.expectedAmount,
           }
         );
         

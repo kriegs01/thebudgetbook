@@ -636,6 +636,7 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
       accountId: string;
       receipt?: string;
       scheduleId?: string; // target schedule ID passed from the UI selection
+      expectedAmount?: number; // true expected amount when DB expected_amount is 0 (e.g. Loans billers)
     }
   ) => {
     try {
@@ -706,6 +707,7 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
         datePaid: payment.date,
         accountId: payment.accountId,
         receipt: payment.receipt,
+        expectedAmount: payment.expectedAmount,
       });
 
       if (paymentError || !updatedSchedule) {
