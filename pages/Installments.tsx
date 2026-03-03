@@ -407,8 +407,10 @@ const Installments: React.FC<InstallmentsProps> = ({ installments, accounts, bil
             <button 
               onClick={() => {
                 setShowPayModal(item);
+                // Autofill with remaining due for current period (monthly - already paid this period)
+                const currentPeriodPaid = item.monthlyAmount > 0 ? paidAmount % item.monthlyAmount : 0;
                 setPayFormData({ 
-                  amount: item.monthlyAmount.toString(),
+                  amount: Math.max(0, item.monthlyAmount - currentPeriodPaid).toString(),
                   receipt: '',
                   datePaid: new Date().toISOString().split('T')[0],
                   accountId: defaultNonCreditAccountId
@@ -465,8 +467,10 @@ const Installments: React.FC<InstallmentsProps> = ({ installments, accounts, bil
             <button 
               onClick={() => {
                 setShowPayModal(item);
+                // Autofill with remaining due for current period (monthly - already paid this period)
+                const currentPeriodPaid = item.monthlyAmount > 0 ? paidAmount % item.monthlyAmount : 0;
                 setPayFormData({ 
-                  amount: item.monthlyAmount.toString(),
+                  amount: Math.max(0, item.monthlyAmount - currentPeriodPaid).toString(),
                   receipt: '',
                   datePaid: new Date().toISOString().split('T')[0],
                   accountId: defaultNonCreditAccountId
@@ -928,8 +932,9 @@ const Installments: React.FC<InstallmentsProps> = ({ installments, accounts, bil
                             onClick={() => {
                               setShowViewModal(null);
                               setShowPayModal(showViewModal);
+                              // Autofill with remaining due for this schedule month (amount - already paid)
                               setPayFormData({ 
-                                amount: showViewModal.monthlyAmount.toString(),
+                                amount: Math.max(0, item.amount - item.amountPaid).toString(),
                                 receipt: '',
                                 datePaid: new Date().toISOString().split('T')[0],
                                 accountId: defaultNonCreditAccountId
