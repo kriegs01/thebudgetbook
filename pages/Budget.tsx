@@ -1645,13 +1645,16 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                                           biller: linkedBiller, 
                                           schedule: scheduleForModal // schedule.id is included here
                                         }); 
+                                        const today = new Date().toISOString().split('T')[0];
                                         setPayFormData({
-                                          transactionId: existingTx?.id || '',
+                                          // When partial, always create a NEW transaction for the remaining amount.
+                                          // Never reuse the existing partial transaction ID, which would overwrite it.
+                                          transactionId: isPartial ? '' : (existingTx?.id || ''),
                                           amount: isPartial
                                             ? Math.max(0, paymentSchedule.expected_amount - paymentSchedule.amount_paid).toString()
                                             : existingTx?.amount.toString() || paymentSchedule.expected_amount.toString(),
-                                          receipt: existingTx ? 'Receipt on file' : '',
-                                          datePaid: existingTx ? new Date(existingTx.date).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
+                                          receipt: (!isPartial && existingTx) ? 'Receipt on file' : '',
+                                          datePaid: (!isPartial && existingTx) ? new Date(existingTx.date).toISOString().split('T')[0] : today,
                                           accountId: existingTx?.payment_method_id || payFormData.accountId
                                         }); 
                                       } 
