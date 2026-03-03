@@ -28,6 +28,7 @@ interface BillersProps {
     date: string;
     accountId: string;
     receipt?: string;
+    scheduleId?: string; // target schedule ID so the correct month is always updated
   }) => Promise<void>;
   loading?: boolean;
   error?: string | null;
@@ -436,6 +437,7 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
           date: payFormData.datePaid,
           accountId: payFormData.accountId,
           receipt: payFormData.receipt || undefined,
+          scheduleId: schedule.id, // target the exact schedule the user selected
         });
         
         // Close modal and clear form

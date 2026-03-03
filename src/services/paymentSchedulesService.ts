@@ -251,8 +251,11 @@ export const recordPayment = async (
 
     const totalPaid = (schedule.data.amount_paid || 0) + payment.amountPaid;
     let status: 'pending' | 'paid' | 'partial' | 'overdue' = 'pending';
-    
-    if (totalPaid >= schedule.data.expected_amount) {
+
+    // When expected_amount is 0 (unset, e.g. Loans billers where it is optional),
+    // we cannot determine full payment — treat any positive amount as partial.
+    const expectedAmount = schedule.data.expected_amount;
+    if (expectedAmount > 0 && totalPaid >= expectedAmount) {
       status = 'paid';
     } else if (totalPaid > 0) {
       status = 'partial';

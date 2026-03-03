@@ -307,9 +307,12 @@ export const deleteTransactionAndRevertSchedule = async (transactionId: string) 
         // Calculate new amount_paid after removing this transaction
         const newAmountPaid = Math.max(0, (schedule.amount_paid || 0) - transaction.amount);
         
-        // Determine new status
+        // Determine new status.
+        // When expected_amount is 0 (unset, e.g. Loans billers), we cannot confirm full
+        // payment, so do not revert to 'paid' — use 'partial' while any amount remains.
+        // When expected_amount > 0, 'paid' is allowed only if the remaining total covers it.
         let newStatus: 'pending' | 'paid' | 'partial' | 'overdue' = 'pending';
-        if (newAmountPaid >= schedule.expected_amount) {
+        if (schedule.expected_amount > 0 && newAmountPaid >= schedule.expected_amount) {
           newStatus = 'paid';
         } else if (newAmountPaid > 0) {
           newStatus = 'partial';
