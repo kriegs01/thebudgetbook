@@ -1651,7 +1651,7 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                                           // Never reuse the existing partial transaction ID, which would overwrite it.
                                           transactionId: isPartial ? '' : (existingTx?.id || ''),
                                           amount: isPartial
-                                            ? Math.max(0, paymentSchedule.expected_amount - paymentSchedule.amount_paid).toString()
+                                            ? Math.max(0, parseFloat(item.amount) - paymentSchedule.amount_paid).toFixed(2)
                                             : existingTx?.amount.toString() || paymentSchedule.expected_amount.toString(),
                                           receipt: (!isPartial && existingTx) ? 'Receipt on file' : '',
                                           datePaid: (!isPartial && existingTx) ? new Date(existingTx.date).toISOString().split('T')[0] : today,

@@ -841,7 +841,7 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
                                   <button 
                                     onClick={() => { 
                                       setShowPayModal({ biller: detailedBiller, schedule: legacySched }); 
-                                      setPayFormData({ ...payFormData, amount: (calculatedAmount - schedule.amount_paid).toString(), receipt: '' }); 
+                                      setPayFormData({ ...payFormData, amount: (calculatedAmount - schedule.amount_paid).toFixed(2), receipt: '' }); 
                                     }} 
                                     className="bg-indigo-600 text-white px-4 py-1 rounded-lg font-bold hover:bg-indigo-700 text-xs transition-all"
                                   >
@@ -934,7 +934,7 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
                                   <button 
                                     onClick={() => { 
                                       setShowPayModal({ biller: detailedBiller, schedule: sched }); 
-                                      setPayFormData({ ...payFormData, amount: (calculatedAmount - schedWithStatus.amountPaid).toString(), receipt: '' }); 
+                                      setPayFormData({ ...payFormData, amount: (calculatedAmount - schedWithStatus.amountPaid).toFixed(2), receipt: '' }); 
                                     }} 
                                     className="bg-indigo-600 text-white px-4 py-1 rounded-lg font-bold hover:bg-indigo-700 text-xs transition-all"
                                   >
