@@ -14,7 +14,7 @@ import type {
 import { supabaseInstallmentToFrontend, supabaseInstallmentsToFrontend, frontendInstallmentToSupabase } from '../utils/installmentsAdapter';
 import type { Installment } from '../../types';
 import { generateInstallmentPaymentSchedules } from '../utils/paymentSchedulesGenerator';
-import { createPaymentSchedulesBulk, deletePaymentSchedulesBySource } from './paymentSchedulesService';
+import { createPaymentSchedulesBulk, deletePaymentSchedulesBySource, getPaymentSchedulesBySource } from './paymentSchedulesService';
 import { getCachedUser } from '../utils/authCache';
 
 /**
@@ -307,6 +307,7 @@ export const createInstallmentFrontend = async (installment: Installment): Promi
 
 /**
  * Update an existing installment (accepts frontend Installment type)
+ * Also updates all linked payment schedules' expected_amount to match the new monthly amount.
  */
 export const updateInstallmentFrontend = async (installment: Installment): Promise<{ data: Installment | null; error: any }> => {
   const supabaseInstallment = frontendInstallmentToSupabase(installment);
@@ -314,7 +315,71 @@ export const updateInstallmentFrontend = async (installment: Installment): Promi
   if (error || !data) {
     return { data: null, error };
   }
+
+  // Sync expected_amount on all linked payment schedules
+  const { error: schedulesError } = await supabase
+    .from(getTableName('monthly_payment_schedules'))
+    .update({ expected_amount: installment.monthlyAmount })
+    .eq('source_type', 'installment')
+    .eq('source_id', installment.id);
+  if (schedulesError) {
+    console.error('Error updating payment schedules expected amount:', schedulesError);
+    // Don't fail the overall operation, just log
+  }
+
   return { data: supabaseInstallmentToFrontend(data), error: null };
+};
+
+/**
+ * Check whether an installment has any recorded payments across its payment schedules.
+ */
+export const hasInstallmentPayments = async (installmentId: string): Promise<{ hasPayments: boolean; error: any }> => {
+  const { data: schedules, error } = await getPaymentSchedulesBySource('installment', installmentId);
+  if (error || !schedules) {
+    return { hasPayments: false, error };
+  }
+  const hasPayments = schedules.some(s => (s.amount_paid || 0) > 0 || (s.status && s.status !== 'pending'));
+  return { hasPayments, error: null };
+};
+
+/**
+ * Delete all transactions linked to an installment's payment schedules and reset those
+ * schedules back to a pending/unpaid state.  Called before changing the monthly amount
+ * when payments already exist, so data integrity is preserved.
+ */
+export const deleteAllInstallmentPaymentsAndResetSchedules = async (installmentId: string): Promise<{ error: any }> => {
+  try {
+    const { data: schedules, error: schedError } = await getPaymentSchedulesBySource('installment', installmentId);
+    if (schedError) throw schedError;
+    if (!schedules || schedules.length === 0) return { error: null };
+
+    // Bulk-delete all transactions that point at these schedules
+    const scheduleIds = schedules.map(s => s.id);
+    const { error: txError } = await supabase
+      .from(getTableName('transactions'))
+      .delete()
+      .in('payment_schedule_id', scheduleIds);
+    if (txError) throw txError;
+
+    // Reset every schedule for this installment to unpaid/pending
+    const { error: resetError } = await supabase
+      .from(getTableName('monthly_payment_schedules'))
+      .update({
+        amount_paid: 0,
+        status: 'pending',
+        date_paid: null,
+        receipt: null,
+        account_id: null,
+      })
+      .eq('source_type', 'installment')
+      .eq('source_id', installmentId);
+    if (resetError) throw resetError;
+
+    return { error: null };
+  } catch (error) {
+    console.error('Error deleting installment payments and resetting schedules:', error);
+    return { error };
+  }
 };
 
 /**
