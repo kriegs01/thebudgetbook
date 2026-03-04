@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { Plus, Info, Eye, ZoomIn, ZoomOut, Download, X } from 'lucide-react';
-import { getAllTransactions, createTransaction, updateTransaction, deleteTransactionAndRevertSchedule, uploadTransactionReceipt } from '../src/services/transactionsService';
+import { getAllTransactions, createTransaction, updateTransaction, deleteTransactionAndRevertSchedule, uploadTransactionReceipt, getReceiptSignedUrl } from '../src/services/transactionsService';
 import { getAllAccountsFrontend } from '../src/services/accountsService';
 import { combineDateWithCurrentTime, getTodayIso } from '../src/utils/dateUtils';
 
@@ -34,6 +34,9 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ onTransactionDelete
 
   // Transaction details modal
   const [selectedTx, setSelectedTx] = useState<Transaction | null>(null);
+  // Signed URL for displaying a receipt (generated fresh each time the modal opens)
+  // undefined = loading, null = error/no receipt, string = ready
+  const [receiptSignedUrl, setReceiptSignedUrl] = useState<string | null | undefined>(undefined);
   // Receipt preview modal
   const [previewReceiptUrl, setPreviewReceiptUrl] = useState<string | null>(null);
   const [zoom, setZoom] = useState(1);
@@ -92,6 +95,18 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ onTransactionDelete
     }
   }, [accounts, form.paymentMethodId]);
 
+  // Generate a fresh signed URL whenever the Transaction Details modal opens
+  useEffect(() => {
+    if (selectedTx?.receiptUrl) {
+      setReceiptSignedUrl(undefined); // reset to loading state
+      getReceiptSignedUrl(selectedTx.receiptUrl)
+        .then(url => setReceiptSignedUrl(url)) // null on internal error, string on success
+        .catch(() => setReceiptSignedUrl(null));
+    } else {
+      setReceiptSignedUrl(null);
+    }
+  }, [selectedTx]);
+
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!form.name || !form.date || !form.amount || !form.paymentMethodId) return;
@@ -116,12 +131,12 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ onTransactionDelete
 
       // Upload receipt if a file was selected
       if (receiptFile && data) {
-        const { url, error: uploadError } = await uploadTransactionReceipt(data.id, receiptFile);
+        const { path, error: uploadError } = await uploadTransactionReceipt(data.id, receiptFile);
         if (uploadError) {
           console.error('Error uploading receipt:', uploadError);
           alert('Transaction saved, but receipt upload failed. Please try again.');
-        } else if (url) {
-          await updateTransaction(data.id, { receipt_url: url });
+        } else if (path) {
+          await updateTransaction(data.id, { receipt_url: path });
         }
       }
       
@@ -368,21 +383,28 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ onTransactionDelete
               <div>
                 <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-3">Receipt</p>
                 {selectedTx.receiptUrl ? (
-                  <div className="flex items-center space-x-3">
-                    <img
-                      src={selectedTx.receiptUrl}
-                      alt="Receipt thumbnail"
-                      className="w-16 h-16 rounded-xl object-cover border border-gray-200"
-                    />
-                    <button
-                      onClick={() => { setZoom(1); setPreviewReceiptUrl(selectedTx.receiptUrl!); }}
-                      title="Preview receipt"
-                      className="flex items-center space-x-1 px-3 py-2 rounded-xl bg-indigo-50 text-indigo-600 hover:bg-indigo-100 transition-colors text-sm font-bold"
-                    >
-                      <Eye className="w-4 h-4" />
-                      <span>Preview</span>
-                    </button>
-                  </div>
+                  receiptSignedUrl === undefined ? (
+                    <div className="text-sm text-gray-400">Loading receipt…</div>
+                  ) : receiptSignedUrl ? (
+                    <div className="flex items-center space-x-3">
+                      <img
+                        src={receiptSignedUrl}
+                        alt="Receipt thumbnail"
+                        className="w-16 h-16 rounded-xl object-cover border border-gray-200"
+                        onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
+                      />
+                      <button
+                        onClick={() => { setZoom(1); setPreviewReceiptUrl(receiptSignedUrl); }}
+                        title="Preview receipt"
+                        className="flex items-center space-x-1 px-3 py-2 rounded-xl bg-indigo-50 text-indigo-600 hover:bg-indigo-100 transition-colors text-sm font-bold"
+                      >
+                        <Eye className="w-4 h-4" />
+                        <span>Preview</span>
+                      </button>
+                    </div>
+                  ) : (
+                    <p className="text-sm text-gray-400 italic">Could not load receipt preview.</p>
+                  )
                 ) : (
                   <p className="text-sm text-gray-400 italic">No receipt attached</p>
                 )}
