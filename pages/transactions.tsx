@@ -39,7 +39,7 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ onTransactionDelete
   const [receiptSignedUrl, setReceiptSignedUrl] = useState<string | null | undefined>(undefined);
   // Receipt preview modal
   const [previewReceiptUrl, setPreviewReceiptUrl] = useState<string | null>(null);
-  const [zoom, setZoom] = useState(1);
+  const [zoom, setZoom] = useState(0.5);
   // Receipt file for the add-transaction form
   const [receiptFile, setReceiptFile] = useState<File | null>(null);
 
@@ -394,7 +394,7 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ onTransactionDelete
                         onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
                       />
                       <button
-                        onClick={() => { setZoom(1); setPreviewReceiptUrl(receiptSignedUrl); }}
+                        onClick={() => { setZoom(0.5); setPreviewReceiptUrl(receiptSignedUrl); }}
                         title="Preview receipt"
                         className="flex items-center space-x-1 px-3 py-2 rounded-xl bg-indigo-50 text-indigo-600 hover:bg-indigo-100 transition-colors text-sm font-bold"
                       >
