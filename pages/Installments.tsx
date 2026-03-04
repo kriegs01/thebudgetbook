@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { Installment, Account, ViewMode, Biller } from '../types';
 import { Plus, LayoutGrid, List, Wallet, Trash2, X, Upload, AlertTriangle, Edit2, Eye, MoreVertical } from 'lucide-react';
 import { getPaymentSchedulesBySource } from '../src/services/paymentSchedulesService';
+import { hasInstallmentPayments, deleteAllInstallmentPaymentsAndResetSchedules } from '../src/services/installmentsService';
 import type { SupabaseMonthlyPaymentSchedule } from '../src/types/supabase';
 
 interface InstallmentsProps {
@@ -117,39 +118,76 @@ const Installments: React.FC<InstallmentsProps> = ({ installments, accounts, bil
   const handleEditSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!showEditModal || isSubmitting) return;
-    
-    setIsSubmitting(true);
-    try {
-      // QA: Format termDuration with " months" suffix for consistency
-      const termDurationFormatted = editFormData.termDuration ? `${editFormData.termDuration} months` : '12 months';
-      
-      const updatedInstallment: Installment = {
-        ...showEditModal,
-        name: editFormData.name,
-        totalAmount: parseFloat(editFormData.totalAmount),
-        monthlyAmount: parseFloat(editFormData.monthlyAmount),
-        termDuration: termDurationFormatted,
-        paidAmount: parseFloat(editFormData.paidAmount) || 0,
-        accountId: editFormData.accountId,
-        startDate: editFormData.startDate || undefined,
-        billerId: editFormData.billerId || undefined,
-        timing: editFormData.timing // PROTOTYPE: Include timing field
-      };
 
-      await onUpdate?.(updatedInstallment);
-      setShowEditModal(null);
-    } catch (error) {
-      console.error('Failed to update installment:', error);
-      // PROTOTYPE: Show helpful message if timing column is missing
-      const errorMessage = error instanceof Error ? error.message : String(error);
-      if (errorMessage.includes('Database migration required')) {
-        alert('⚠️ Database Setup Required\n\nThe timing feature requires a database update. Please run the migration in Supabase.\n\nSee HOW_TO_ADD_TIMING_COLUMN.md for step-by-step instructions.');
-      } else {
-        alert('Failed to update installment. Please try again.');
+    // QA: Format termDuration with " months" suffix for consistency
+    const termDurationFormatted = editFormData.termDuration ? `${editFormData.termDuration} months` : '12 months';
+    const newMonthlyAmount = parseFloat(editFormData.monthlyAmount);
+
+    const updatedInstallment: Installment = {
+      ...showEditModal,
+      name: editFormData.name,
+      totalAmount: parseFloat(editFormData.totalAmount),
+      monthlyAmount: newMonthlyAmount,
+      termDuration: termDurationFormatted,
+      paidAmount: parseFloat(editFormData.paidAmount) || 0,
+      accountId: editFormData.accountId,
+      startDate: editFormData.startDate || undefined,
+      billerId: editFormData.billerId || undefined,
+      timing: editFormData.timing // PROTOTYPE: Include timing field
+    };
+
+    const executeUpdate = async () => {
+      setIsSubmitting(true);
+      try {
+        await onUpdate?.(updatedInstallment);
+        setShowEditModal(null);
+      } catch (error) {
+        console.error('Failed to update installment:', error);
+        // PROTOTYPE: Show helpful message if timing column is missing
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        if (errorMessage.includes('Database migration required')) {
+          alert('⚠️ Database Setup Required\n\nThe timing feature requires a database update. Please run the migration in Supabase.\n\nSee HOW_TO_ADD_TIMING_COLUMN.md for step-by-step instructions.');
+        } else {
+          alert('Failed to update installment. Please try again.');
+        }
+      } finally {
+        setIsSubmitting(false);
       }
-    } finally {
-      setIsSubmitting(false);
+    };
+
+    // When monthly amount changes, check whether any payments already exist
+    if (newMonthlyAmount !== showEditModal.monthlyAmount) {
+      let hasPayments = false;
+      try {
+        const result = await hasInstallmentPayments(showEditModal.id);
+        if (result.error) {
+          console.error('Error checking installment payments:', result.error);
+        } else {
+          hasPayments = result.hasPayments;
+        }
+      } catch (err) {
+        console.error('Unexpected error checking installment payments:', err);
+      }
+      if (hasPayments) {
+        setConfirmModal({
+          show: true,
+          title: 'Update Monthly Amount',
+          message: 'To change the monthly amount, all payments for this installment must be deleted. Remove all payments and update, or cancel?',
+          onConfirm: async () => {
+            setConfirmModal(p => ({ ...p, show: false }));
+            const { error: deleteError } = await deleteAllInstallmentPaymentsAndResetSchedules(showEditModal.id);
+            if (deleteError) {
+              alert('Failed to delete existing payments. Please try again.');
+              return;
+            }
+            await executeUpdate();
+          }
+        });
+        return;
+      }
     }
+
+    await executeUpdate();
   };
 
   const handlePaySubmit = async (e: React.FormEvent) => {
