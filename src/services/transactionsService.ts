@@ -420,6 +420,63 @@ export const createTransfer = async (
 };
 
 /**
+ * Upload a receipt image to Supabase Storage and return the storage path.
+ * Files are stored under {userId}/{transactionId}/{timestamp}.{ext} in the
+ * "transaction-receipts" bucket. The path (not the full URL) is returned so
+ * that signed URLs can be generated at display time regardless of bucket visibility.
+ */
+export const uploadTransactionReceipt = async (
+  transactionId: string,
+  file: File
+): Promise<{ path: string | null; error: unknown }> => {
+  try {
+    const user = await getCachedUser();
+    const rawExt = (file.name.split('.').pop() ?? '').toLowerCase();
+    const allowedExtensions = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'pdf'];
+    const ext = allowedExtensions.includes(rawExt) ? rawExt : 'jpg';
+    const path = `${user.id}/${transactionId}/${Date.now()}.${ext}`;
+
+    const { error: uploadError } = await supabase.storage
+      .from('transaction-receipts')
+      .upload(path, file, { upsert: true });
+
+    if (uploadError) throw uploadError;
+
+    return { path, error: null };
+  } catch (error) {
+    console.error('Error uploading receipt:', error);
+    return { path: null, error };
+  }
+};
+
+/**
+ * Create a short-lived signed URL for displaying a stored receipt.
+ * Accepts either a storage path ("userId/txId/ts.jpg") or a legacy full
+ * public URL (https://...supabase.co/.../transaction-receipts/...).
+ * Signed URLs work regardless of whether the bucket is public or private.
+ */
+export const getReceiptSignedUrl = async (
+  receiptValue: string
+): Promise<string | null> => {
+  try {
+    // If the stored value is a full URL, extract the path after the bucket name
+    const marker = '/transaction-receipts/';
+    const idx = receiptValue.indexOf(marker);
+    const path = idx >= 0 ? receiptValue.slice(idx + marker.length) : receiptValue;
+
+    const { data, error } = await supabase.storage
+      .from('transaction-receipts')
+      .createSignedUrl(path, 3600); // 1 hour expiry
+
+    if (error) throw error;
+    return data.signedUrl;
+  } catch (error) {
+    console.error('Error creating receipt signed URL:', error);
+    return null;
+  }
+};
+
+/**
  * Get loan transactions with their payment history for the current user
  */
 export const getLoanTransactionsWithPayments = async (accountId: string) => {

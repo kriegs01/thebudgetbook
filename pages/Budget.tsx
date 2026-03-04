@@ -1,9 +1,9 @@
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { BudgetItem, Account, Biller, PaymentSchedule, CategorizedSetupItem, SavedBudgetSetup, BudgetCategory, Installment } from '../types';
-import { Plus, Check, ChevronDown, Trash2, Save, FileText, ArrowRight, Upload, CheckCircle2, X, AlertTriangle } from 'lucide-react';
+import { Plus, Check, ChevronDown, Trash2, Save, FileText, ArrowRight, Upload, CheckCircle2, X, AlertTriangle, Info, Eye, ZoomIn, ZoomOut, Download } from 'lucide-react';
 import { createBudgetSetupFrontend, updateBudgetSetupFrontend } from '../src/services/budgetSetupsService';
-import { createTransaction, getAllTransactions, updateTransaction, createPaymentScheduleTransaction } from '../src/services/transactionsService';
+import { createTransaction, getAllTransactions, updateTransaction, createPaymentScheduleTransaction, uploadTransactionReceipt, getTransactionsByPaymentSchedule, getReceiptSignedUrl } from '../src/services/transactionsService';
 import type { SupabaseTransaction, SupabaseMonthlyPaymentSchedule } from '../src/types/supabase';
 import { getInstallmentPaymentSchedule, aggregateCreditCardPurchases } from '../src/utils/paymentStatus'; // PROTOTYPE: Import payment status utilities
 import { getScheduleExpectedAmount } from '../src/utils/linkedAccountUtils'; // ENHANCEMENT: Import for linked account amount calculation
@@ -43,6 +43,14 @@ const AUTO_SAVE_STATUS_TIMEOUT_MS = 3000; // How long to show status messages
 const TRANSACTION_AMOUNT_TOLERANCE = 1; // ±1 peso tolerance for amount matching (accounts for rounding differences)
 const TRANSACTION_MIN_NAME_LENGTH = 3; // Minimum length for partial name matching to avoid false positives
 const TRANSACTION_DATE_GRACE_DAYS = 7; // Allow transactions up to N days after budget month ends (for late payments)
+
+// Schedule payments modal transaction type
+type BudgetScheduleTx = { id: string; name: string; amount: number; date: string; paymentMethodId: string; receiptUrl?: string | null };
+
+// Receipt preview zoom constants
+const ZOOM_INCREMENT = 0.25;
+const MIN_ZOOM = 0.25;
+const MAX_ZOOM = 4;
 
 const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSetups, setSavedSetups, onUpdateBiller, onMoveToTrash, onReloadSetups, onReloadBillers, onUpdateInstallment, installments = [] }) => {
   const [view, setView] = useState<'summary' | 'setup'>('summary');
@@ -166,6 +174,7 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
     datePaid: new Date().toISOString().split('T')[0],
     accountId: accounts[0]?.id || ''
   });
+  const [payReceiptFile, setPayReceiptFile] = useState<File | null>(null);
 
   // QA: Transaction form modal for Purchases (supports create and edit)
   // Fix for Issue #6: Enable transaction editing
@@ -194,6 +203,13 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
     message: '',
     onConfirm: () => {},
   });
+
+  // Schedule payments modal (consolidated payment records for a budget item)
+  const [schedulePaymentsModal, setSchedulePaymentsModal] = useState<{ label: string; transactions: BudgetScheduleTx[] } | null>(null);
+  const [loadingScheduleTx, setLoadingScheduleTx] = useState(false);
+  const [scheduleSignedUrls, setScheduleSignedUrls] = useState<Record<string, string | null>>({});
+  const [previewReceiptUrl, setPreviewReceiptUrl] = useState<string | null>(null);
+  const [zoom, setZoom] = useState(0.5);
 
   // Sync effect with Billers and Categories
   useEffect(() => {
@@ -518,6 +534,39 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
       console.error('[Budget] Error reloading payment schedules:', error);
     }
   }, [selectedMonth, selectedYear]);
+
+  /** Open the consolidated payment records modal for a payment schedule */
+  const openSchedulePaymentsModal = async (scheduleId: string, label: string) => {
+    setLoadingScheduleTx(true);
+    setScheduleSignedUrls({});
+    setSchedulePaymentsModal({ label, transactions: [] });
+    try {
+      const { data } = await getTransactionsByPaymentSchedule(scheduleId);
+      const txs: BudgetScheduleTx[] = (data || []).map((t: SupabaseTransaction) => ({
+        id: t.id, name: t.name, amount: t.amount, date: t.date, paymentMethodId: t.payment_method_id, receiptUrl: t.receipt_url ?? null
+      }));
+      setSchedulePaymentsModal({ label, transactions: txs });
+      const urls: Record<string, string | null> = {};
+      await Promise.all(txs.filter(tx => tx.receiptUrl).map(async tx => {
+        urls[tx.id] = await getReceiptSignedUrl(tx.receiptUrl as string).catch(() => null);
+      }));
+      setScheduleSignedUrls(urls);
+    } finally {
+      setLoadingScheduleTx(false);
+    }
+  };
+
+  /** Open the payment records modal for a non-schedule item (e.g. Purchases) */
+  const openDirectPaymentModal = (tx: SupabaseTransaction, label: string) => {
+    const txEntry: BudgetScheduleTx = { id: tx.id, name: tx.name, amount: tx.amount, date: tx.date, paymentMethodId: tx.payment_method_id, receiptUrl: tx.receipt_url ?? null };
+    setScheduleSignedUrls({});
+    setSchedulePaymentsModal({ label, transactions: [txEntry] });
+    if (tx.receipt_url) {
+      getReceiptSignedUrl(tx.receipt_url)
+        .then(url => setScheduleSignedUrls({ [tx.id]: url }))
+        .catch(() => setScheduleSignedUrls({ [tx.id]: null }));
+    }
+  };
 
   /**
    * Auto-save budget setup with debouncing
@@ -1010,6 +1059,19 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
       
       console.log(`[Budget] Transaction ${isEditing ? 'updated' : 'created'} successfully:`, transactionData);
       
+      // Upload receipt to storage if a file was selected
+      if (payReceiptFile && transactionData?.id) {
+        const { path, error: uploadError } = await uploadTransactionReceipt(transactionData.id, payReceiptFile);
+        if (uploadError || !path) {
+          console.error('[Budget] Receipt upload failed:', uploadError);
+          // Non-fatal: transaction was saved, just warn the user
+          alert('Payment saved, but receipt upload failed. You can re-attach it from the transaction details.');
+        } else {
+          await updateTransaction(transactionData.id, { receipt_url: path });
+          console.log('[Budget] Receipt uploaded and linked to transaction:', path);
+        }
+      }
+      
       // REFACTOR: Update payment schedule in monthly_payment_schedules table
       if (paymentScheduleId) {
         console.log('[Budget] Recording payment in payment schedule');
@@ -1128,6 +1190,7 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
         datePaid: new Date().toISOString().split('T')[0],
         accountId: accounts[0]?.id || ''
       });
+      setPayReceiptFile(null);
     } catch (error) {
       console.error('Failed to update payment:', error);
       alert('Failed to process payment. Please try again.');
@@ -1611,13 +1674,25 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                             <div className="flex items-center justify-center space-x-2">
                               {isBiller && (
                                 isPaid ? (
-                                  <CheckCircle2 className="w-4 h-4 text-green-500" aria-label="Payment completed" title="Paid" />
+                                  <>
+                                    <CheckCircle2 className="w-4 h-4 text-green-500" aria-label="Payment completed" title="Paid" />
+                                    {paymentSchedule && (
+                                      <button onClick={() => openSchedulePaymentsModal(paymentSchedule.id, `${item.name} - ${selectedMonth}`)} title="View payment records" className="text-gray-400 hover:text-indigo-600 transition-colors rounded-full p-1 hover:bg-indigo-50">
+                                        <Info className="w-3.5 h-3.5" />
+                                      </button>
+                                    )}
+                                  </>
                                 ) : (
                                   <>
                                     {isPartial && paymentSchedule && (
-                                      <span className="text-[9px] font-bold px-2 py-0.5 bg-yellow-100 text-yellow-700 rounded uppercase" title={`Paid ₱${paymentSchedule.amount_paid} of ₱${paymentSchedule.expected_amount}`}>
-                                        Partial
-                                      </span>
+                                      <>
+                                        <span className="text-[9px] font-bold px-2 py-0.5 bg-yellow-100 text-yellow-700 rounded uppercase" title={`Paid ₱${paymentSchedule.amount_paid} of ₱${paymentSchedule.expected_amount}`}>
+                                          Partial
+                                        </span>
+                                        <button onClick={() => openSchedulePaymentsModal(paymentSchedule.id, `${item.name} - ${selectedMonth}`)} title="View payment records" className="text-gray-400 hover:text-indigo-600 transition-colors rounded-full p-1 hover:bg-indigo-50">
+                                          <Info className="w-3.5 h-3.5" />
+                                        </button>
+                                      </>
                                     )}
                                   <button 
                                     onClick={() => { 
@@ -1670,7 +1745,10 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                               {/* Add Pay button or checkmark for Purchases category items that are not billers */}
                               {!isBiller && cat.name === 'Purchases' && item.name !== 'New Item' && parseFloat(item.amount) > 0 && (
                                 isPaid ? (
-                                  <CheckCircle2 className="w-4 h-4 text-green-500" aria-label="Payment completed" title="Paid" />
+                                  <>
+                                    <CheckCircle2 className="w-4 h-4 text-green-500" aria-label="Payment completed" title="Paid" />
+                                    <button onClick={() => { const tx = findExistingTransaction(item.name, item.amount, selectedMonth); if (tx) openDirectPaymentModal(tx, `${item.name} - ${selectedMonth}`); }} title="View payment records" className="text-gray-400 hover:text-indigo-600 transition-colors rounded-full p-1 hover:bg-indigo-50"><Info className="w-3.5 h-3.5" /></button>
+                                  </>
                                 ) : (
                                   <button 
                                     onClick={() => {
@@ -1762,6 +1840,18 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                             }
                           }
                           
+                          // Fallback transaction lookup for Info button when no payment schedule exists
+                          const fallbackInstallmentTx = !installmentSchedule && (isPaid || isPartial)
+                            ? findExistingTransaction(installment.name, installment.monthlyAmount, selectedMonth)
+                            : undefined;
+
+                          // Unified Info button click handler (schedule-based or fallback transaction)
+                          const installmentInfoClick = installmentSchedule
+                            ? () => openSchedulePaymentsModal(installmentSchedule.id, `${installment.name} - ${selectedMonth}`)
+                            : fallbackInstallmentTx
+                              ? () => openDirectPaymentModal(fallbackInstallmentTx, `${installment.name} - ${selectedMonth}`)
+                              : null;
+
                           return (
                             <tr key={`installment-${installment.id}`} className={`${isIncluded ? 'bg-blue-50/30' : 'bg-gray-50 opacity-60'}`}>
                               <td className="p-4 pl-10">
@@ -1786,13 +1876,29 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                               <td className="p-4 text-center">
                                 <div className="flex items-center justify-center space-x-2">
                                   {isPaid ? (
-                                    <CheckCircle2 className="w-4 h-4 text-green-500" aria-label="Payment completed" title="Paid" />
+                                    <>
+                                      <CheckCircle2 className="w-4 h-4 text-green-500" aria-label="Payment completed" title="Paid" />
+                                      {installmentInfoClick && (
+                                        <button onClick={installmentInfoClick} title="View payment records" className="text-gray-400 hover:text-indigo-600 transition-colors rounded-full p-1 hover:bg-indigo-50">
+                                          <Info className="w-3.5 h-3.5" />
+                                        </button>
+                                      )}
+                                    </>
                                   ) : (
                                     <>
-                                      {isPartial && installmentSchedule && (
-                                        <span className="text-[9px] font-bold px-2 py-0.5 bg-yellow-100 text-yellow-700 rounded uppercase" title={`Paid ₱${installmentSchedule.amount_paid} of ₱${installmentSchedule.expected_amount}`}>
-                                          Partial
-                                        </span>
+                                      {isPartial && (
+                                        <>
+                                          {installmentSchedule && (
+                                            <span className="text-[9px] font-bold px-2 py-0.5 bg-yellow-100 text-yellow-700 rounded uppercase" title={`Paid ₱${installmentSchedule.amount_paid} of ₱${installmentSchedule.expected_amount}`}>
+                                              Partial
+                                            </span>
+                                          )}
+                                          {installmentInfoClick && (
+                                            <button onClick={installmentInfoClick} title="View payment records" className="text-gray-400 hover:text-indigo-600 transition-colors rounded-full p-1 hover:bg-indigo-50">
+                                              <Info className="w-3.5 h-3.5" />
+                                            </button>
+                                          )}
+                                        </>
                                       )}
                                     <button 
                                       onClick={() => {
@@ -2021,7 +2127,14 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                                 <div className="flex items-center justify-center space-x-2">
                                   {isBiller && (
                                     isPaid ? (
-                                      <CheckCircle2 className="w-4 h-4 text-green-500" aria-label="Payment completed" title="Paid" />
+                                      <>
+                                        <CheckCircle2 className="w-4 h-4 text-green-500" aria-label="Payment completed" title="Paid" />
+                                        {schedule?.id && (
+                                          <button onClick={() => openSchedulePaymentsModal(schedule.id!, `${item.name} - ${selectedMonth}`)} title="View payment records" className="text-gray-400 hover:text-indigo-600 transition-colors rounded-full p-1 hover:bg-indigo-50">
+                                            <Info className="w-3.5 h-3.5" />
+                                          </button>
+                                        )}
+                                      </>
                                     ) : (
                                       <button 
                                         onClick={() => { 
@@ -2107,7 +2220,7 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
               <div>
                 <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Upload Receipt (Optional)</label>
                 <div className="relative">
-                  <input type="file" className="absolute inset-0 opacity-0 cursor-pointer" onChange={(e) => setPayFormData({...payFormData, receipt: e.target.files?.[0]?.name || ''})} />
+                  <input type="file" className="absolute inset-0 opacity-0 cursor-pointer" onChange={(e) => { const f = e.target.files?.[0] || null; setPayReceiptFile(f); setPayFormData({...payFormData, receipt: f?.name || ''}); }} />
                   <div className="w-full bg-gray-50 border-2 border-dashed border-gray-200 rounded-2xl p-6 text-center text-sm text-gray-500 hover:border-indigo-300 hover:bg-indigo-50 transition-all flex flex-col items-center">
                     <Upload className="w-8 h-8 mb-2 text-indigo-400" />
                     <span className="font-bold">{payFormData.receipt || 'Click or drag to upload receipt'}</span>
@@ -2203,6 +2316,84 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
       )}
 
       {confirmModal.show && <ConfirmDialog {...confirmModal} onClose={() => setConfirmModal(p => ({ ...p, show: false }))} />}
+
+      {/* Schedule Payments Modal */}
+      {schedulePaymentsModal && (
+        <div className="fixed inset-0 z-[150] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md" onClick={() => setSchedulePaymentsModal(null)}>
+          <div className="w-full max-w-lg bg-white rounded-3xl p-8 shadow-2xl relative max-h-[85vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+            <button onClick={() => setSchedulePaymentsModal(null)} className="absolute top-4 right-4 text-gray-400 hover:text-gray-700 p-2 rounded-full hover:bg-gray-100 transition-colors" aria-label="Close"><X className="w-5 h-5" /></button>
+            <h2 className="text-2xl font-black text-gray-900 mb-1">Payment Records</h2>
+            <p className="text-gray-500 text-sm mb-6">{schedulePaymentsModal.label}</p>
+            {loadingScheduleTx ? (
+              <div className="text-center py-8 text-gray-400">Loading...</div>
+            ) : schedulePaymentsModal.transactions.length === 0 ? (
+              <div className="text-center py-8 text-gray-400 italic">No payment records found.</div>
+            ) : (
+              <div className="space-y-4">
+                {schedulePaymentsModal.transactions.map(tx => {
+                  const pmName = accounts.find(a => a.id === tx.paymentMethodId)?.bank || tx.paymentMethodId;
+                  const signedUrl = scheduleSignedUrls[tx.id];
+                  return (
+                    <div key={tx.id} className="bg-gray-50 rounded-2xl p-4 space-y-2">
+                      <div className="flex justify-between">
+                        <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Name</span>
+                        <span className="text-sm font-bold text-gray-900">{tx.name}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Amount</span>
+                        <span className="text-sm font-bold text-red-600">{formatCurrency(tx.amount)}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Payment Method</span>
+                        <span className="text-sm text-gray-700">{pmName}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Date</span>
+                        <span className="text-sm text-gray-700">{new Date(tx.date).toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' })}</span>
+                      </div>
+                      {tx.receiptUrl && (
+                        <div className="flex items-center space-x-3 pt-1">
+                          {signedUrl ? (
+                            <>
+                              <img src={signedUrl} alt={`Receipt for ${tx.name}`} className="w-12 h-12 rounded-xl object-cover border border-gray-200" onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
+                              <button onClick={() => { setZoom(0.5); setPreviewReceiptUrl(signedUrl); }} title="Preview receipt" className="flex items-center space-x-1 px-3 py-1.5 rounded-xl bg-indigo-50 text-indigo-600 hover:bg-indigo-100 transition-colors text-xs font-bold">
+                                <Eye className="w-3.5 h-3.5" /><span>Preview</span>
+                              </button>
+                            </>
+                          ) : (
+                            <span className="text-xs text-gray-400 italic">Loading receipt…</span>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Receipt Preview Modal */}
+      {previewReceiptUrl && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4" onClick={() => setPreviewReceiptUrl(null)}>
+          <div className="w-full max-w-2xl bg-white rounded-3xl shadow-2xl flex flex-col overflow-hidden" style={{ maxHeight: '90vh' }} onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between p-4 border-b border-gray-100">
+              <h3 className="text-base font-black text-gray-900 uppercase tracking-widest">Receipt Preview</h3>
+              <div className="flex items-center space-x-2">
+                <button onClick={() => setZoom(z => Math.max(MIN_ZOOM, parseFloat((z - ZOOM_INCREMENT).toFixed(2))))} title="Zoom out" className="p-2 rounded-xl hover:bg-gray-100 text-gray-600 transition-colors" aria-label="Zoom out"><ZoomOut className="w-4 h-4" /></button>
+                <span className="text-xs font-bold text-gray-500 w-10 text-center">{Math.round(zoom * 100)}%</span>
+                <button onClick={() => setZoom(z => Math.min(MAX_ZOOM, parseFloat((z + ZOOM_INCREMENT).toFixed(2))))} title="Zoom in" className="p-2 rounded-xl hover:bg-gray-100 text-gray-600 transition-colors" aria-label="Zoom in"><ZoomIn className="w-4 h-4" /></button>
+                <a href={previewReceiptUrl} download target="_blank" rel="noreferrer" title="Download receipt" className="p-2 rounded-xl hover:bg-indigo-50 text-indigo-600 transition-colors" aria-label="Download receipt"><Download className="w-4 h-4" /></a>
+                <button onClick={() => setPreviewReceiptUrl(null)} title="Close" className="p-2 rounded-xl hover:bg-gray-100 text-gray-600 transition-colors" aria-label="Close preview"><X className="w-4 h-4" /></button>
+              </div>
+            </div>
+            <div className="overflow-auto flex-1 p-4 flex justify-center">
+              <img src={previewReceiptUrl} alt={`Receipt — ${schedulePaymentsModal?.label || ''}`} style={{ width: `${zoom * 100}%`, height: 'auto', transition: 'width 0.2s' }} />
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

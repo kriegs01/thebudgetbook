@@ -8,7 +8,7 @@ import { getAllInstallmentsFrontend, createInstallmentFrontend, updateInstallmen
 import { getAllSavingsFrontend, createSavingsFrontend, updateSavingsFrontend, deleteSavingsFrontend } from './src/services/savingsService';
 import { getAllBudgetSetupsFrontend, deleteBudgetSetupFrontend } from './src/services/budgetSetupsService';
 import { getPaymentSchedulesBySource } from './src/services/paymentSchedulesService';
-import { getAllTransactions, createPaymentScheduleTransaction } from './src/services/transactionsService';
+import { getAllTransactions, createPaymentScheduleTransaction, uploadTransactionReceipt, updateTransaction } from './src/services/transactionsService';
 import { recordPayment } from './src/services/paymentSchedulesService';
 import { supabase } from './src/utils/supabaseClient';
 import { combineDateWithCurrentTime } from './src/utils/dateUtils';
@@ -521,6 +521,7 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
       date: string;
       accountId: string;
       receipt?: string;
+      receiptFile?: File;
     }
   ) => {
     try {
@@ -603,6 +604,18 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
           transactionId: transaction.id,
           linkedScheduleId: targetSchedule.id,
         });
+
+        // Upload receipt to storage if a file was provided
+        if (payment.receiptFile) {
+          const { path, error: uploadError } = await uploadTransactionReceipt(transaction.id, payment.receiptFile);
+          if (uploadError || !path) {
+            console.error('[App] Receipt upload failed for installment payment:', uploadError);
+            alert('Payment saved, but receipt upload failed. You can re-attach it from the transaction details.');
+          } else {
+            await updateTransaction(transaction.id, { receipt_url: path });
+            console.log('[App] Receipt uploaded and linked to installment transaction:', path);
+          }
+        }
       }
 
       // Update the installment's paidAmount
@@ -635,6 +648,7 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
       date: string;
       accountId: string;
       receipt?: string;
+      receiptFile?: File;
       scheduleId?: string; // target schedule ID passed from the UI selection
       expectedAmount?: number; // true expected amount when DB expected_amount is 0 (e.g. Loans billers)
     }
@@ -731,6 +745,18 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
       }
 
       console.log('[App] Transaction created successfully:', transaction.id);
+
+      // Upload receipt to storage if a file was provided
+      if (payment.receiptFile) {
+        const { path, error: uploadError } = await uploadTransactionReceipt(transaction.id, payment.receiptFile);
+        if (uploadError || !path) {
+          console.error('[App] Receipt upload failed for biller payment:', uploadError);
+          alert('Payment saved, but receipt upload failed. You can re-attach it from the transaction details.');
+        } else {
+          await updateTransaction(transaction.id, { receipt_url: path });
+          console.log('[App] Receipt uploaded and linked to biller transaction:', path);
+        }
+      }
 
       // Update biller's payment tracking in the old schedules array (for backward compatibility)
       // This updates the biller object stored in the billers table

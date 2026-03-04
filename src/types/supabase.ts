@@ -75,6 +75,7 @@ export interface SupabaseTransaction {
   transaction_type: 'payment' | 'withdraw' | 'transfer' | 'loan' | 'cash_in' | 'loan_payment'; // NEW
   notes: string | null; // NEW
   related_transaction_id: string | null; // NEW - links transfer pairs and loan payments
+  receipt_url: string | null; // URL of receipt image in Supabase Storage
   user_id: string | null; // uuid, references auth.users(id)
 }
 
