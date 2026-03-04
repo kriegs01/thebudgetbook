@@ -420,6 +420,39 @@ export const createTransfer = async (
 };
 
 /**
+ * Upload a receipt image to Supabase Storage and return the public URL.
+ * Files are stored under {userId}/{transactionId}/{filename} in the
+ * "transaction-receipts" bucket.
+ */
+export const uploadTransactionReceipt = async (
+  transactionId: string,
+  file: File
+): Promise<{ url: string | null; error: unknown }> => {
+  try {
+    const user = await getCachedUser();
+    const rawExt = (file.name.split('.').pop() ?? '').toLowerCase();
+    const allowedExtensions = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'pdf'];
+    const ext = allowedExtensions.includes(rawExt) ? rawExt : 'jpg';
+    const path = `${user.id}/${transactionId}/${Date.now()}.${ext}`;
+
+    const { error: uploadError } = await supabase.storage
+      .from('transaction-receipts')
+      .upload(path, file, { upsert: true });
+
+    if (uploadError) throw uploadError;
+
+    const { data } = supabase.storage
+      .from('transaction-receipts')
+      .getPublicUrl(path);
+
+    return { url: data.publicUrl, error: null };
+  } catch (error) {
+    console.error('Error uploading receipt:', error);
+    return { url: null, error };
+  }
+};
+
+/**
  * Get loan transactions with their payment history for the current user
  */
 export const getLoanTransactionsWithPayments = async (accountId: string) => {

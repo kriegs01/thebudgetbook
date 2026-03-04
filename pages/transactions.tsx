@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { Plus, ArrowLeft } from 'lucide-react';
-import { getAllTransactions, createTransaction, deleteTransactionAndRevertSchedule } from '../src/services/transactionsService';
+import { Plus, Info, Eye, ZoomIn, ZoomOut, Download, X } from 'lucide-react';
+import { getAllTransactions, createTransaction, updateTransaction, deleteTransactionAndRevertSchedule, uploadTransactionReceipt } from '../src/services/transactionsService';
 import { getAllAccountsFrontend } from '../src/services/accountsService';
 import { combineDateWithCurrentTime, getTodayIso } from '../src/utils/dateUtils';
 
@@ -10,6 +10,7 @@ type Transaction = {
   date: string; // ISO
   amount: number;
   paymentMethodId: string; // account id
+  receiptUrl?: string | null;
 };
 
 type AccountOption = { id: string; bank: string };
@@ -30,6 +31,14 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ onTransactionDelete
   const [accounts, setAccounts] = useState<AccountOption[]>([]);
   const [showForm, setShowForm] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+
+  // Transaction details modal
+  const [selectedTx, setSelectedTx] = useState<Transaction | null>(null);
+  // Receipt preview modal
+  const [previewReceiptUrl, setPreviewReceiptUrl] = useState<string | null>(null);
+  const [zoom, setZoom] = useState(1);
+  // Receipt file for the add-transaction form
+  const [receiptFile, setReceiptFile] = useState<File | null>(null);
 
   const [form, setForm] = useState({
     name: '',
@@ -61,7 +70,8 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ onTransactionDelete
           name: t.name,
           date: t.date,
           amount: t.amount,
-          paymentMethodId: t.payment_method_id
+          paymentMethodId: t.payment_method_id,
+          receiptUrl: t.receipt_url ?? null,
         })));
       }
     } catch (error) {
@@ -103,6 +113,17 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ onTransactionDelete
       }
       
       console.log('Transaction created successfully:', data);
+
+      // Upload receipt if a file was selected
+      if (receiptFile && data) {
+        const { url, error: uploadError } = await uploadTransactionReceipt(data.id, receiptFile);
+        if (uploadError) {
+          console.error('Error uploading receipt:', uploadError);
+          alert('Transaction saved, but receipt upload failed. Please try again.');
+        } else if (url) {
+          await updateTransaction(data.id, { receipt_url: url });
+        }
+      }
       
       // Reload transactions to get fresh data
       await loadData();
@@ -114,6 +135,7 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ onTransactionDelete
       }
       
       setShowForm(false);
+      setReceiptFile(null);
       setForm({ name: '', date: todayIso(), amount: '', paymentMethodId: accounts[0]?.id ?? '' });
     } catch (error) {
       console.error('Error creating transaction:', error);
@@ -186,7 +208,7 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ onTransactionDelete
                     {transactions.map(tx => {
                       const pm = accounts.find(a => a.id === tx.paymentMethodId);
                       return (
-                        <tr key={tx.id} className="border-t border-gray-100">
+                        <tr key={tx.id} className="border-t border-gray-100 group">
                           <td className="px-4 py-3"><div className="text-sm font-medium text-gray-900">{tx.name}</div></td>
                           <td className="px-4 py-3">
                             <div className="text-sm text-gray-900">{new Date(tx.date).toLocaleDateString()}</div>
@@ -195,7 +217,16 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ onTransactionDelete
                           <td className="px-4 py-3"><div className={`text-sm font-semibold ${tx.amount > 0 ? 'text-red-600' : 'text-green-600'}`}>{formatCurrency(-tx.amount)}</div></td>
                           <td className="px-4 py-3"><div className="text-sm text-gray-700">{pm ? pm.bank : tx.paymentMethodId}</div></td>
                           <td className="px-4 py-3 text-right">
-                            <button onClick={() => removeTx(tx.id)} className="text-sm text-red-600">Delete</button>
+                            <div className="flex items-center justify-end space-x-2">
+                              <button
+                                onClick={() => setSelectedTx(tx)}
+                                title="View transaction details"
+                                className="text-gray-400 hover:text-indigo-600 opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity rounded-full p-1 hover:bg-indigo-50"
+                              >
+                                <Info className="w-4 h-4" />
+                              </button>
+                              <button onClick={() => removeTx(tx.id)} className="text-sm text-red-600">Delete</button>
+                            </div>
                           </td>
                         </tr>
                       );
@@ -274,9 +305,14 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ onTransactionDelete
                 <div>
                   <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Upload Receipt (Optional)</label>
                   <div className="relative">
-                    <input type="file" className="absolute inset-0 opacity-0 cursor-pointer" />
+                    <input
+                      type="file"
+                      accept="image/*,application/pdf"
+                      className="absolute inset-0 opacity-0 cursor-pointer"
+                      onChange={e => setReceiptFile(e.target.files?.[0] ?? null)}
+                    />
                     <div className="w-full bg-gray-50 border-2 border-dashed border-gray-200 rounded-2xl p-6 text-center text-sm text-gray-500 hover:border-indigo-300 hover:bg-indigo-50 transition-all flex flex-col items-center">
-                      <span className="font-bold">Click or drag to upload receipt</span>
+                      <span className="font-bold">{receiptFile ? receiptFile.name : 'Click or drag to upload receipt'}</span>
                     </div>
                   </div>
                 </div>
@@ -290,6 +326,128 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ onTransactionDelete
           </div>
         )}
       </div>
+
+      {/* Transaction Details Modal */}
+      {selectedTx && (() => {
+        const pm = accounts.find(a => a.id === selectedTx.paymentMethodId);
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-md" onClick={() => setSelectedTx(null)}>
+            <div className="w-full max-w-md bg-white rounded-3xl p-8 shadow-2xl relative" onClick={e => e.stopPropagation()}>
+              <button
+                onClick={() => setSelectedTx(null)}
+                className="absolute top-4 right-4 text-gray-400 hover:text-gray-700 p-2 rounded-full hover:bg-gray-100 transition-colors"
+                aria-label="Close"
+              >
+                <X className="w-5 h-5" />
+              </button>
+              <h2 className="text-2xl font-black text-gray-900 mb-6">Transaction Details</h2>
+              <dl className="space-y-4 mb-6">
+                <div className="flex justify-between">
+                  <dt className="text-[10px] font-black text-gray-400 uppercase tracking-widest self-center">Name</dt>
+                  <dd className="text-sm font-bold text-gray-900">{selectedTx.name}</dd>
+                </div>
+                <div className="flex justify-between">
+                  <dt className="text-[10px] font-black text-gray-400 uppercase tracking-widest self-center">Date</dt>
+                  <dd className="text-sm text-gray-900">
+                    {new Date(selectedTx.date).toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' })}
+                    <span className="ml-2 text-xs text-gray-400">{new Date(selectedTx.date).toLocaleTimeString()}</span>
+                  </dd>
+                </div>
+                <div className="flex justify-between">
+                  <dt className="text-[10px] font-black text-gray-400 uppercase tracking-widest self-center">Amount</dt>
+                  <dd className={`text-sm font-bold ${selectedTx.amount > 0 ? 'text-red-600' : 'text-green-600'}`}>
+                    {formatCurrency(-selectedTx.amount)}
+                  </dd>
+                </div>
+                <div className="flex justify-between">
+                  <dt className="text-[10px] font-black text-gray-400 uppercase tracking-widest self-center">Payment Method</dt>
+                  <dd className="text-sm text-gray-700">{pm ? pm.bank : selectedTx.paymentMethodId}</dd>
+                </div>
+              </dl>
+
+              <div>
+                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-3">Receipt</p>
+                {selectedTx.receiptUrl ? (
+                  <div className="flex items-center space-x-3">
+                    <img
+                      src={selectedTx.receiptUrl}
+                      alt="Receipt thumbnail"
+                      className="w-16 h-16 rounded-xl object-cover border border-gray-200"
+                    />
+                    <button
+                      onClick={() => { setZoom(1); setPreviewReceiptUrl(selectedTx.receiptUrl!); }}
+                      title="Preview receipt"
+                      className="flex items-center space-x-1 px-3 py-2 rounded-xl bg-indigo-50 text-indigo-600 hover:bg-indigo-100 transition-colors text-sm font-bold"
+                    >
+                      <Eye className="w-4 h-4" />
+                      <span>Preview</span>
+                    </button>
+                  </div>
+                ) : (
+                  <p className="text-sm text-gray-400 italic">No receipt attached</p>
+                )}
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* Receipt Preview Modal */}
+      {previewReceiptUrl && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md" onClick={() => setPreviewReceiptUrl(null)}>
+          <div className="w-full max-w-2xl bg-white rounded-3xl shadow-2xl flex flex-col overflow-hidden" style={{ maxHeight: '90vh' }} onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between p-4 border-b border-gray-100">
+              <h3 className="text-base font-black text-gray-900 uppercase tracking-widest">Receipt Preview</h3>
+              <div className="flex items-center space-x-2">
+                <button
+                  onClick={() => setZoom(z => Math.max(0.25, parseFloat((z - 0.25).toFixed(2))))}
+                  title="Zoom out"
+                  className="p-2 rounded-xl hover:bg-gray-100 text-gray-600 transition-colors"
+                  aria-label="Zoom out"
+                >
+                  <ZoomOut className="w-4 h-4" />
+                </button>
+                <span className="text-xs font-bold text-gray-500 w-10 text-center">{Math.round(zoom * 100)}%</span>
+                <button
+                  onClick={() => setZoom(z => Math.min(4, parseFloat((z + 0.25).toFixed(2))))}
+                  title="Zoom in"
+                  className="p-2 rounded-xl hover:bg-gray-100 text-gray-600 transition-colors"
+                  aria-label="Zoom in"
+                >
+                  <ZoomIn className="w-4 h-4" />
+                </button>
+                <a
+                  href={previewReceiptUrl}
+                  download
+                  target="_blank"
+                  rel="noreferrer"
+                  title="Download receipt"
+                  className="p-2 rounded-xl hover:bg-indigo-50 text-indigo-600 transition-colors"
+                  aria-label="Download receipt"
+                >
+                  <Download className="w-4 h-4" />
+                </a>
+                <button
+                  onClick={() => setPreviewReceiptUrl(null)}
+                  title="Close"
+                  className="p-2 rounded-xl hover:bg-gray-100 text-gray-600 transition-colors"
+                  aria-label="Close preview"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+            <div className="overflow-auto flex-1 p-4 flex justify-center">
+              <img
+                src={previewReceiptUrl}
+                alt="Receipt"
+                style={{ transform: `scale(${zoom})`, transformOrigin: 'top center', transition: 'transform 0.2s' }}
+                className="max-w-full h-auto"
+              />
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
