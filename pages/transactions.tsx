@@ -414,9 +414,9 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ onTransactionDelete
         );
       })()}
 
-      {/* Receipt Preview Modal */}
+      {/* Receipt Preview Modal — overlays the details modal without dimming the background */}
       {previewReceiptUrl && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md" onClick={() => setPreviewReceiptUrl(null)}>
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4" onClick={() => setPreviewReceiptUrl(null)}>
           <div className="w-full max-w-2xl bg-white rounded-3xl shadow-2xl flex flex-col overflow-hidden" style={{ maxHeight: '90vh' }} onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between p-4 border-b border-gray-100">
               <h3 className="text-base font-black text-gray-900 uppercase tracking-widest">Receipt Preview</h3>
@@ -463,8 +463,7 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ onTransactionDelete
               <img
                 src={previewReceiptUrl}
                 alt="Receipt"
-                style={{ transform: `scale(${zoom})`, transformOrigin: 'top center', transition: 'transform 0.2s' }}
-                className="max-w-full h-auto"
+                style={{ width: `${zoom * 100}%`, height: 'auto', transition: 'width 0.2s' }}
               />
             </div>
           </div>
