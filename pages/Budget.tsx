@@ -1802,7 +1802,7 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                                           name: `${installment.name} - ${selectedMonth} ${new Date().getFullYear()}`,
                                           date: new Date().toISOString().split('T')[0],
                                           amount: isPartial && installmentSchedule
-                                            ? Math.max(0, installmentSchedule.expected_amount - installmentSchedule.amount_paid).toString()
+                                            ? Math.max(0, installmentSchedule.expected_amount - installmentSchedule.amount_paid).toFixed(2)
                                             : installment.monthlyAmount.toString(),
                                           accountId: installment.accountId || accounts[0]?.id || '',
                                           paymentScheduleId: installmentSchedule?.id || '' // FIX: Pass schedule ID
