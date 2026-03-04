@@ -1,8 +1,8 @@
 import React, { useEffect, useState } from 'react';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, Info, Eye, ZoomIn, ZoomOut, Download, X } from 'lucide-react';
 import { useSearchParams, Link } from 'react-router-dom';
 import { Account } from '../../types';
-import { getTransactionsByPaymentMethod, createTransaction, createTransfer, getLoanTransactionsWithPayments } from '../../src/services/transactionsService';
+import { getTransactionsByPaymentMethod, createTransaction, createTransfer, getLoanTransactionsWithPayments, getReceiptSignedUrl } from '../../src/services/transactionsService';
 import { combineDateWithCurrentTime } from '../../src/utils/dateUtils';
 
 type Transaction = {
@@ -14,6 +14,7 @@ type Transaction = {
   transaction_type?: 'payment' | 'withdraw' | 'transfer' | 'loan' | 'cash_in' | 'loan_payment';
   notes?: string | null;
   related_transaction_id?: string | null;
+  receiptUrl?: string | null;
 };
 
 type LoanTransaction = Transaction & {
@@ -52,6 +53,12 @@ const AccountFilteredTransactions: React.FC<AccountFilteredTransactionsProps> = 
   const [showCashInModal, setShowCashInModal] = useState(false);
   const [showLoanPaymentModal, setShowLoanPaymentModal] = useState(false);
   const [selectedLoan, setSelectedLoan] = useState<LoanTransaction | null>(null);
+
+  // Transaction details modal
+  const [selectedTx, setSelectedTx] = useState<Transaction | null>(null);
+  const [receiptSignedUrl, setReceiptSignedUrl] = useState<string | null | undefined>(undefined);
+  const [previewReceiptUrl, setPreviewReceiptUrl] = useState<string | null>(null);
+  const [zoom, setZoom] = useState(0.5);
   
   // Loading states
   const [isLoading, setIsLoading] = useState(true);
@@ -85,7 +92,8 @@ const AccountFilteredTransactions: React.FC<AccountFilteredTransactionsProps> = 
         paymentMethodId: t.payment_method_id,
         transaction_type: t.transaction_type,
         notes: t.notes,
-        related_transaction_id: t.related_transaction_id
+        related_transaction_id: t.related_transaction_id,
+        receiptUrl: (t as unknown as { receipt_url?: string | null }).receipt_url ?? null
       }));
       setTransactions(txList);
 
@@ -151,6 +159,18 @@ const AccountFilteredTransactions: React.FC<AccountFilteredTransactionsProps> = 
     setMessage({ type, text });
     setTimeout(() => setMessage(null), 3000);
   };
+
+  // Generate a fresh signed URL whenever the Transaction Details modal opens
+  useEffect(() => {
+    if (selectedTx?.receiptUrl) {
+      setReceiptSignedUrl(undefined);
+      getReceiptSignedUrl(selectedTx.receiptUrl)
+        .then(url => setReceiptSignedUrl(url))
+        .catch(() => setReceiptSignedUrl(null));
+    } else {
+      setReceiptSignedUrl(null);
+    }
+  }, [selectedTx]);
 
   const handleWithdrawSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -411,6 +431,7 @@ const AccountFilteredTransactions: React.FC<AccountFilteredTransactionsProps> = 
                     <th className="px-4 py-3 text-xs text-gray-500 uppercase tracking-wider">Type</th>
                     <th className="px-4 py-3 text-xs text-gray-500 uppercase tracking-wider">Date</th>
                     <th className="px-4 py-3 text-xs text-gray-500 uppercase tracking-wider">Amount</th>
+                    <th className="px-4 py-3" />
                     {account?.type === 'Debit' && (
                       <th className="px-4 py-3 text-xs text-gray-500 uppercase tracking-wider">Actions</th>
                     )}
@@ -420,7 +441,7 @@ const AccountFilteredTransactions: React.FC<AccountFilteredTransactionsProps> = 
                   {transactions.map(tx => {
                     const loanTx = loanTransactions.find(l => l.id === tx.id);
                     return (
-                      <tr key={tx.id} className="border-t border-gray-100">
+                      <tr key={tx.id} className="border-t border-gray-100 group">
                         <td className="px-4 py-3"><div className="text-sm font-medium text-gray-900">{tx.name}</div></td>
                         <td className="px-4 py-3">{getTransactionTypeBadge(tx.transaction_type)}</td>
                         <td className="px-4 py-3"><div className="text-sm text-gray-500">{new Date(tx.date).toLocaleDateString()}</div></td>
@@ -428,6 +449,15 @@ const AccountFilteredTransactions: React.FC<AccountFilteredTransactionsProps> = 
                           <div className={`text-sm font-semibold ${tx.amount > 0 ? 'text-red-600' : 'text-green-600'}`}>
                             {formatCurrency(-tx.amount)}
                           </div>
+                        </td>
+                        <td className="px-4 py-3 text-right">
+                          <button
+                            onClick={() => setSelectedTx(tx)}
+                            title="View transaction details"
+                            className="text-gray-400 hover:text-indigo-600 opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity rounded-full p-1 hover:bg-indigo-50"
+                          >
+                            <Info className="w-4 h-4" />
+                          </button>
                         </td>
                         {account?.type === 'Debit' && (
                           <td className="px-4 py-3">
@@ -445,7 +475,7 @@ const AccountFilteredTransactions: React.FC<AccountFilteredTransactionsProps> = 
                     );
                   })}
                   {transactions.length === 0 && (
-                    <tr><td colSpan={account?.type === 'Debit' ? 5 : 4} className="px-4 py-6 text-center text-gray-400">No transactions for this account.</td></tr>
+                    <tr><td colSpan={account?.type === 'Debit' ? 6 : 5} className="px-4 py-6 text-center text-gray-400">No transactions for this account.</td></tr>
                   )}
                 </tbody>
               </table>
@@ -801,6 +831,98 @@ const AccountFilteredTransactions: React.FC<AccountFilteredTransactionsProps> = 
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Transaction Details Modal */}
+      {selectedTx && (() => {
+        const pm = allAccounts.find(a => a.id === selectedTx.paymentMethodId);
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-md" onClick={() => setSelectedTx(null)}>
+            <div className="w-full max-w-md bg-white rounded-3xl p-8 shadow-2xl relative" onClick={e => e.stopPropagation()}>
+              <button
+                onClick={() => setSelectedTx(null)}
+                className="absolute top-4 right-4 text-gray-400 hover:text-gray-700 p-2 rounded-full hover:bg-gray-100 transition-colors"
+                aria-label="Close"
+              >
+                <X className="w-5 h-5" />
+              </button>
+              <h2 className="text-2xl font-black text-gray-900 mb-6">Transaction Details</h2>
+              <dl className="space-y-4 mb-6">
+                <div className="flex justify-between">
+                  <dt className="text-[10px] font-black text-gray-400 uppercase tracking-widest self-center">Name</dt>
+                  <dd className="text-sm font-bold text-gray-900">{selectedTx.name}</dd>
+                </div>
+                <div className="flex justify-between">
+                  <dt className="text-[10px] font-black text-gray-400 uppercase tracking-widest self-center">Date</dt>
+                  <dd className="text-sm text-gray-900">
+                    {new Date(selectedTx.date).toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' })}
+                    <span className="ml-2 text-xs text-gray-400">{new Date(selectedTx.date).toLocaleTimeString()}</span>
+                  </dd>
+                </div>
+                <div className="flex justify-between">
+                  <dt className="text-[10px] font-black text-gray-400 uppercase tracking-widest self-center">Amount</dt>
+                  <dd className={`text-sm font-bold ${selectedTx.amount > 0 ? 'text-red-600' : 'text-green-600'}`}>
+                    {formatCurrency(-selectedTx.amount)}
+                  </dd>
+                </div>
+                <div className="flex justify-between">
+                  <dt className="text-[10px] font-black text-gray-400 uppercase tracking-widest self-center">Payment Method</dt>
+                  <dd className="text-sm text-gray-700">{pm ? pm.bank : selectedTx.paymentMethodId}</dd>
+                </div>
+              </dl>
+              <div>
+                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-3">Receipt</p>
+                {selectedTx.receiptUrl ? (
+                  receiptSignedUrl === undefined ? (
+                    <div className="text-sm text-gray-400">Loading receipt…</div>
+                  ) : receiptSignedUrl ? (
+                    <div className="flex items-center space-x-3">
+                      <img
+                        src={receiptSignedUrl}
+                        alt="Receipt thumbnail"
+                        className="w-16 h-16 rounded-xl object-cover border border-gray-200"
+                        onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
+                      />
+                      <button
+                        onClick={() => { setZoom(0.5); setPreviewReceiptUrl(receiptSignedUrl); }}
+                        title="Preview receipt"
+                        className="flex items-center space-x-1 px-3 py-2 rounded-xl bg-indigo-50 text-indigo-600 hover:bg-indigo-100 transition-colors text-sm font-bold"
+                      >
+                        <Eye className="w-4 h-4" />
+                        <span>Preview</span>
+                      </button>
+                    </div>
+                  ) : (
+                    <p className="text-sm text-gray-400 italic">Could not load receipt preview.</p>
+                  )
+                ) : (
+                  <p className="text-sm text-gray-400 italic">No receipt attached</p>
+                )}
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* Receipt Preview Modal */}
+      {previewReceiptUrl && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4" onClick={() => setPreviewReceiptUrl(null)}>
+          <div className="w-full max-w-2xl bg-white rounded-3xl shadow-2xl flex flex-col overflow-hidden" style={{ maxHeight: '90vh' }} onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between p-4 border-b border-gray-100">
+              <h3 className="text-base font-black text-gray-900 uppercase tracking-widest">Receipt Preview</h3>
+              <div className="flex items-center space-x-2">
+                <button onClick={() => setZoom(z => Math.max(0.25, parseFloat((z - 0.25).toFixed(2))))} title="Zoom out" className="p-2 rounded-xl hover:bg-gray-100 text-gray-600 transition-colors" aria-label="Zoom out"><ZoomOut className="w-4 h-4" /></button>
+                <span className="text-xs font-bold text-gray-500 w-10 text-center">{Math.round(zoom * 100)}%</span>
+                <button onClick={() => setZoom(z => Math.min(4, parseFloat((z + 0.25).toFixed(2))))} title="Zoom in" className="p-2 rounded-xl hover:bg-gray-100 text-gray-600 transition-colors" aria-label="Zoom in"><ZoomIn className="w-4 h-4" /></button>
+                <a href={previewReceiptUrl} download target="_blank" rel="noreferrer" title="Download receipt" className="p-2 rounded-xl hover:bg-indigo-50 text-indigo-600 transition-colors" aria-label="Download receipt"><Download className="w-4 h-4" /></a>
+                <button onClick={() => setPreviewReceiptUrl(null)} title="Close" className="p-2 rounded-xl hover:bg-gray-100 text-gray-600 transition-colors" aria-label="Close preview"><X className="w-4 h-4" /></button>
+              </div>
+            </div>
+            <div className="overflow-auto flex-1 p-4 flex justify-center">
+              <img src={previewReceiptUrl} alt="Receipt" style={{ width: `${zoom * 100}%`, height: 'auto', transition: 'width 0.2s' }} />
+            </div>
           </div>
         </div>
       )}
