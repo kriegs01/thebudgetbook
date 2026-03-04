@@ -155,18 +155,23 @@ const Installments: React.FC<InstallmentsProps> = ({ installments, accounts, bil
       }
     };
 
-    // When monthly amount changes, check whether any payments already exist
+    // When monthly amount changes, check whether any payments already exist.
+    // Check the installment's paidAmount first (covers both the new schedule-based
+    // payment path and the legacy direct-paidAmount-update path), then fall back to
+    // a live DB query on the payment schedules for extra coverage.
     if (newMonthlyAmount !== showEditModal.monthlyAmount) {
-      let hasPayments = false;
-      try {
-        const result = await hasInstallmentPayments(showEditModal.id);
-        if (result.error) {
-          console.error('Error checking installment payments:', result.error);
-        } else {
-          hasPayments = result.hasPayments;
+      let hasPayments = showEditModal.paidAmount > 0;
+      if (!hasPayments) {
+        try {
+          const result = await hasInstallmentPayments(showEditModal.id);
+          if (result.error) {
+            console.error('Error checking installment payments:', result.error);
+          } else {
+            hasPayments = result.hasPayments;
+          }
+        } catch (err) {
+          console.error('Unexpected error checking installment payments:', err);
         }
-      } catch (err) {
-        console.error('Unexpected error checking installment payments:', err);
       }
       if (hasPayments) {
         setConfirmModal({
