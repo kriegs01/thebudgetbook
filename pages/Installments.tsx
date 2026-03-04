@@ -410,7 +410,7 @@ const Installments: React.FC<InstallmentsProps> = ({ installments, accounts, bil
                 // Autofill with remaining due for current period (monthly - already paid this period)
                 const currentPeriodPaid = item.monthlyAmount > 0 ? paidAmount % item.monthlyAmount : 0;
                 setPayFormData({ 
-                  amount: Math.max(0, item.monthlyAmount - currentPeriodPaid).toString(),
+                  amount: Math.max(0, item.monthlyAmount - currentPeriodPaid).toFixed(2),
                   receipt: '',
                   datePaid: new Date().toISOString().split('T')[0],
                   accountId: defaultNonCreditAccountId
@@ -470,7 +470,7 @@ const Installments: React.FC<InstallmentsProps> = ({ installments, accounts, bil
                 // Autofill with remaining due for current period (monthly - already paid this period)
                 const currentPeriodPaid = item.monthlyAmount > 0 ? paidAmount % item.monthlyAmount : 0;
                 setPayFormData({ 
-                  amount: Math.max(0, item.monthlyAmount - currentPeriodPaid).toString(),
+                  amount: Math.max(0, item.monthlyAmount - currentPeriodPaid).toFixed(2),
                   receipt: '',
                   datePaid: new Date().toISOString().split('T')[0],
                   accountId: defaultNonCreditAccountId
@@ -934,7 +934,7 @@ const Installments: React.FC<InstallmentsProps> = ({ installments, accounts, bil
                               setShowPayModal(showViewModal);
                               // Autofill with remaining due for this schedule month (amount - already paid)
                               setPayFormData({ 
-                                amount: Math.max(0, item.amount - item.amountPaid).toString(),
+                                amount: Math.max(0, item.amount - item.amountPaid).toFixed(2),
                                 receipt: '',
                                 datePaid: new Date().toISOString().split('T')[0],
                                 accountId: defaultNonCreditAccountId

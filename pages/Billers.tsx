@@ -28,6 +28,8 @@ interface BillersProps {
     date: string;
     accountId: string;
     receipt?: string;
+    scheduleId?: string; // target schedule ID so the correct month is always updated
+    expectedAmount?: number; // true expected amount when DB expected_amount is 0 (e.g. Loans billers)
   }) => Promise<void>;
   loading?: boolean;
   error?: string | null;
@@ -54,7 +56,7 @@ const calculateStatus = (deactivationDate?: { month: string; year: string }): 'a
 const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, accounts, categories, onUpdate, onDelete, onPayBiller, loading = false, error = null }) => {
   const [showAddModal, setShowAddModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState<Biller | null>(null);
-  const [showPayModal, setShowPayModal] = useState<{ biller: Biller, schedule: PaymentSchedule } | null>(null);
+  const [showPayModal, setShowPayModal] = useState<{ biller: Biller, schedule: PaymentSchedule, expectedAmount?: number } | null>(null);
   const [detailedBillerId, setDetailedBillerId] = useState<string | null>(null);
   const [activeDropdownId, setActiveDropdownId] = useState<string | null>(null);
   const [isInactiveOpen, setIsInactiveOpen] = useState(false);
@@ -436,6 +438,8 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
           date: payFormData.datePaid,
           accountId: payFormData.accountId,
           receipt: payFormData.receipt || undefined,
+          scheduleId: schedule.id, // target the exact schedule the user selected
+          expectedAmount: showPayModal.expectedAmount,
         });
         
         // Close modal and clear form
@@ -838,8 +842,8 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
                                   </span>
                                   <button 
                                     onClick={() => { 
-                                      setShowPayModal({ biller: detailedBiller, schedule: legacySched }); 
-                                      setPayFormData({ ...payFormData, amount: (calculatedAmount - schedule.amount_paid).toString(), receipt: '' }); 
+                                      setShowPayModal({ biller: detailedBiller, schedule: legacySched, expectedAmount: calculatedAmount }); 
+                                      setPayFormData({ ...payFormData, amount: (calculatedAmount - schedule.amount_paid).toFixed(2), receipt: '' }); 
                                     }} 
                                     className="bg-indigo-600 text-white px-4 py-1 rounded-lg font-bold hover:bg-indigo-700 text-xs transition-all"
                                   >
@@ -849,7 +853,7 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
                               ) : (
                                 <button 
                                   onClick={() => { 
-                                    setShowPayModal({ biller: detailedBiller, schedule: legacySched }); 
+                                    setShowPayModal({ biller: detailedBiller, schedule: legacySched, expectedAmount: calculatedAmount }); 
                                     setPayFormData({ ...payFormData, amount: displayAmount.toString(), receipt: '' }); 
                                   }} 
                                   className="bg-indigo-600 text-white px-6 py-2 rounded-xl font-bold hover:bg-indigo-700 text-xs transition-all"
@@ -931,8 +935,8 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
                                   </span>
                                   <button 
                                     onClick={() => { 
-                                      setShowPayModal({ biller: detailedBiller, schedule: sched }); 
-                                      setPayFormData({ ...payFormData, amount: (calculatedAmount - schedWithStatus.amountPaid).toString(), receipt: '' }); 
+                                      setShowPayModal({ biller: detailedBiller, schedule: sched, expectedAmount: calculatedAmount }); 
+                                      setPayFormData({ ...payFormData, amount: (calculatedAmount - schedWithStatus.amountPaid).toFixed(2), receipt: '' }); 
                                     }} 
                                     className="bg-indigo-600 text-white px-4 py-1 rounded-lg font-bold hover:bg-indigo-700 text-xs transition-all"
                                   >
@@ -942,7 +946,7 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
                               ) : (
                                 <button 
                                   onClick={() => { 
-                                    setShowPayModal({ biller: detailedBiller, schedule: sched }); 
+                                    setShowPayModal({ biller: detailedBiller, schedule: sched, expectedAmount: calculatedAmount }); 
                                     setPayFormData({ ...payFormData, amount: displayAmount.toString(), receipt: '' }); 
                                   }} 
                                   className="bg-indigo-600 text-white px-6 py-2 rounded-xl font-bold hover:bg-indigo-700 text-xs transition-all"

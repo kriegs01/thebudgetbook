@@ -329,9 +329,8 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
   }, [paymentSchedules]);
   
   /**
-   * REFACTOR: Check if an item is paid using payment schedules
-   * This is the new approach that uses payment_schedule_id for accurate status
-   * REVIEW FIX: Consider partial payments as "paid" for UI display purposes
+   * REFACTOR: Check if an item is fully paid using payment schedules
+   * Only returns true when status === 'paid' (not partial)
    */
   const checkIfPaidBySchedule = useCallback((
     sourceType: 'biller' | 'installment',
@@ -339,12 +338,19 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
   ): boolean => {
     const schedule = getPaymentSchedule(sourceType, sourceId);
     if (!schedule) return false;
-    
-    // Consider paid if:
-    // 1. Status is 'paid' (fully paid)
-    // 2. Status is 'partial' and amount_paid > 0 (partial payment made)
-    // This provides better UX by showing progress on payments
-    return schedule.amount_paid > 0 && (schedule.status === 'paid' || schedule.status === 'partial');
+    return schedule.status === 'paid';
+  }, [getPaymentSchedule]);
+
+  /**
+   * Check if an item has a partial payment using payment schedules
+   */
+  const checkIfPartialBySchedule = useCallback((
+    sourceType: 'biller' | 'installment',
+    sourceId: string
+  ): boolean => {
+    const schedule = getPaymentSchedule(sourceType, sourceId);
+    if (!schedule) return false;
+    return schedule.status === 'partial' && schedule.amount_paid > 0;
   }, [getPaymentSchedule]);
 
   /**
@@ -1014,7 +1020,8 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
             amountPaid: parseFloat(payFormData.amount),
             datePaid: payFormData.datePaid,
             accountId: payFormData.accountId,
-            receipt: payFormData.receipt || undefined
+            receipt: payFormData.receipt || undefined,
+            expectedAmount: schedule.expectedAmount,
           }
         );
         
@@ -1555,7 +1562,7 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                   </thead>
                   <tbody className="divide-y divide-gray-50">
                     {items.length > 0 ? items.map((item) => {
-                      let isPaid = false, linkedBiller, paymentSchedule;
+                      let isPaid = false, isPartial = false, linkedBiller, paymentSchedule;
                       const isBiller = item.isBiller || billers.some(b => b.id === item.id);
                       
                       if (isBiller) {
@@ -1575,6 +1582,7 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                         // REFACTOR: Use payment schedule status for accurate payment tracking
                         if (paymentSchedule) {
                           isPaid = checkIfPaidBySchedule('biller', item.id);
+                          isPartial = checkIfPartialBySchedule('biller', item.id);
                           if (isPaid) {
                             console.log(`[Budget] Item ${item.name} in ${selectedMonth}: PAID via payment schedule`, {
                               scheduleId: paymentSchedule.id,
@@ -1605,6 +1613,12 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                                 isPaid ? (
                                   <CheckCircle2 className="w-4 h-4 text-green-500" aria-label="Payment completed" title="Paid" />
                                 ) : (
+                                  <>
+                                    {isPartial && paymentSchedule && (
+                                      <span className="text-[9px] font-bold px-2 py-0.5 bg-yellow-100 text-yellow-700 rounded uppercase" title={`Paid ₱${paymentSchedule.amount_paid} of ₱${paymentSchedule.expected_amount}`}>
+                                        Partial
+                                      </span>
+                                    )}
                                   <button 
                                     onClick={() => { 
                                       if(linkedBiller && paymentSchedule) {
@@ -1632,19 +1646,25 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                                           biller: linkedBiller, 
                                           schedule: scheduleForModal // schedule.id is included here
                                         }); 
+                                        const today = new Date().toISOString().split('T')[0];
                                         setPayFormData({
-                                          transactionId: existingTx?.id || '',
-                                          amount: existingTx?.amount.toString() || paymentSchedule.expected_amount.toString(),
-                                          receipt: existingTx ? 'Receipt on file' : '',
-                                          datePaid: existingTx ? new Date(existingTx.date).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
+                                          // When partial, always create a NEW transaction for the remaining amount.
+                                          // Never reuse the existing partial transaction ID, which would overwrite it.
+                                          transactionId: isPartial ? '' : (existingTx?.id || ''),
+                                          amount: isPartial
+                                            ? Math.max(0, parseFloat(item.amount) - paymentSchedule.amount_paid).toFixed(2)
+                                            : existingTx?.amount.toString() || paymentSchedule.expected_amount.toString(),
+                                          receipt: (!isPartial && existingTx) ? 'Receipt on file' : '',
+                                          datePaid: (!isPartial && existingTx) ? new Date(existingTx.date).toISOString().split('T')[0] : today,
                                           accountId: existingTx?.payment_method_id || payFormData.accountId
                                         }); 
                                       } 
                                     }} 
                                     className="px-3 py-1 bg-indigo-600 text-white text-[9px] font-black uppercase rounded-lg hover:bg-indigo-700 transition-colors"
                                   >
-                                    Pay
+                                    {isPartial ? 'Pay Remaining' : 'Pay'}
                                   </button>
+                                  </>
                                 )
                               )}
                               {/* Add Pay button or checkmark for Purchases category items that are not billers */}
@@ -1691,19 +1711,21 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                           const isIncluded = !excludedInstallmentIds.has(installment.id);
                           
                           // REFACTOR: Use payment schedule for accurate status
-                          let isPaid = false;
+                          let isPaid = false, isPartial = false;
                           const installmentSchedule = getPaymentSchedule('installment', installment.id);
                           
                           if (installmentSchedule) {
                             // Use payment schedule status
                             isPaid = checkIfPaidBySchedule('installment', installment.id);
+                            isPartial = checkIfPartialBySchedule('installment', installment.id);
                             console.log('[Budget] Installment payment check via schedule:', {
                               name: installment.name,
                               selectedMonth,
                               scheduleId: installmentSchedule.id,
                               status: installmentSchedule.status,
                               amountPaid: installmentSchedule.amount_paid,
-                              isPaid
+                              isPaid,
+                              isPartial
                             });
                           } else if (installment.startDate) {
                             // Fallback to cumulative calculation if no schedule found
@@ -1766,6 +1788,12 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                                   {isPaid ? (
                                     <CheckCircle2 className="w-4 h-4 text-green-500" aria-label="Payment completed" title="Paid" />
                                   ) : (
+                                    <>
+                                      {isPartial && installmentSchedule && (
+                                        <span className="text-[9px] font-bold px-2 py-0.5 bg-yellow-100 text-yellow-700 rounded uppercase" title={`Paid ₱${installmentSchedule.amount_paid} of ₱${installmentSchedule.expected_amount}`}>
+                                          Partial
+                                        </span>
+                                      )}
                                     <button 
                                       onClick={() => {
                                         // FIX: Include payment schedule ID for proper linking
@@ -1773,7 +1801,9 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                                           id: '',
                                           name: `${installment.name} - ${selectedMonth} ${new Date().getFullYear()}`,
                                           date: new Date().toISOString().split('T')[0],
-                                          amount: installment.monthlyAmount.toString(),
+                                          amount: isPartial && installmentSchedule
+                                            ? Math.max(0, installmentSchedule.expected_amount - installmentSchedule.amount_paid).toFixed(2)
+                                            : installment.monthlyAmount.toString(),
                                           accountId: installment.accountId || accounts[0]?.id || '',
                                           paymentScheduleId: installmentSchedule?.id || '' // FIX: Pass schedule ID
                                         });
@@ -1781,8 +1811,9 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                                       }}
                                       className="px-3 py-1 bg-indigo-600 text-white text-[9px] font-black uppercase rounded-lg hover:bg-indigo-700 transition-colors"
                                     >
-                                      Pay
+                                      {isPartial ? 'Pay Remaining' : 'Pay'}
                                     </button>
+                                    </>
                                   )}
                                   <button 
                                     onClick={() => {
