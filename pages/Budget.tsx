@@ -3,7 +3,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { BudgetItem, Account, Biller, PaymentSchedule, CategorizedSetupItem, SavedBudgetSetup, BudgetCategory, Installment } from '../types';
 import { Plus, Check, ChevronDown, Trash2, Save, FileText, ArrowRight, Upload, CheckCircle2, X, AlertTriangle } from 'lucide-react';
 import { createBudgetSetupFrontend, updateBudgetSetupFrontend } from '../src/services/budgetSetupsService';
-import { createTransaction, getAllTransactions, updateTransaction, createPaymentScheduleTransaction } from '../src/services/transactionsService';
+import { createTransaction, getAllTransactions, updateTransaction, createPaymentScheduleTransaction, uploadTransactionReceipt } from '../src/services/transactionsService';
 import type { SupabaseTransaction, SupabaseMonthlyPaymentSchedule } from '../src/types/supabase';
 import { getInstallmentPaymentSchedule, aggregateCreditCardPurchases } from '../src/utils/paymentStatus'; // PROTOTYPE: Import payment status utilities
 import { getScheduleExpectedAmount } from '../src/utils/linkedAccountUtils'; // ENHANCEMENT: Import for linked account amount calculation
@@ -166,6 +166,7 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
     datePaid: new Date().toISOString().split('T')[0],
     accountId: accounts[0]?.id || ''
   });
+  const [payReceiptFile, setPayReceiptFile] = useState<File | null>(null);
 
   // QA: Transaction form modal for Purchases (supports create and edit)
   // Fix for Issue #6: Enable transaction editing
@@ -1010,6 +1011,19 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
       
       console.log(`[Budget] Transaction ${isEditing ? 'updated' : 'created'} successfully:`, transactionData);
       
+      // Upload receipt to storage if a file was selected
+      if (payReceiptFile && transactionData?.id) {
+        const { path, error: uploadError } = await uploadTransactionReceipt(transactionData.id, payReceiptFile);
+        if (uploadError || !path) {
+          console.error('[Budget] Receipt upload failed:', uploadError);
+          // Non-fatal: transaction was saved, just warn the user
+          alert('Payment saved, but receipt upload failed. You can re-attach it from the transaction details.');
+        } else {
+          await updateTransaction(transactionData.id, { receipt_url: path });
+          console.log('[Budget] Receipt uploaded and linked to transaction:', path);
+        }
+      }
+      
       // REFACTOR: Update payment schedule in monthly_payment_schedules table
       if (paymentScheduleId) {
         console.log('[Budget] Recording payment in payment schedule');
@@ -1128,6 +1142,7 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
         datePaid: new Date().toISOString().split('T')[0],
         accountId: accounts[0]?.id || ''
       });
+      setPayReceiptFile(null);
     } catch (error) {
       console.error('Failed to update payment:', error);
       alert('Failed to process payment. Please try again.');
@@ -2107,7 +2122,7 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
               <div>
                 <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Upload Receipt (Optional)</label>
                 <div className="relative">
-                  <input type="file" className="absolute inset-0 opacity-0 cursor-pointer" onChange={(e) => setPayFormData({...payFormData, receipt: e.target.files?.[0]?.name || ''})} />
+                  <input type="file" className="absolute inset-0 opacity-0 cursor-pointer" onChange={(e) => { const f = e.target.files?.[0] || null; setPayReceiptFile(f); setPayFormData({...payFormData, receipt: f?.name || ''}); }} />
                   <div className="w-full bg-gray-50 border-2 border-dashed border-gray-200 rounded-2xl p-6 text-center text-sm text-gray-500 hover:border-indigo-300 hover:bg-indigo-50 transition-all flex flex-col items-center">
                     <Upload className="w-8 h-8 mb-2 text-indigo-400" />
                     <span className="font-bold">{payFormData.receipt || 'Click or drag to upload receipt'}</span>

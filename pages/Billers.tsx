@@ -28,6 +28,7 @@ interface BillersProps {
     date: string;
     accountId: string;
     receipt?: string;
+    receiptFile?: File;
     scheduleId?: string; // target schedule ID so the correct month is always updated
     expectedAmount?: number; // true expected amount when DB expected_amount is 0 (e.g. Loans billers)
   }) => Promise<void>;
@@ -115,6 +116,7 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
     datePaid: new Date().toISOString().split('T')[0],
     accountId: accounts[0]?.id || ''
   });
+  const [payReceiptFile, setPayReceiptFile] = useState<File | null>(null);
 
   // Load transactions for payment status matching
   useEffect(() => {
@@ -438,6 +440,7 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
           date: payFormData.datePaid,
           accountId: payFormData.accountId,
           receipt: payFormData.receipt || undefined,
+          receiptFile: payReceiptFile || undefined,
           scheduleId: schedule.id, // target the exact schedule the user selected
           expectedAmount: showPayModal.expectedAmount,
         });
@@ -450,6 +453,7 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
           datePaid: new Date().toISOString().split('T')[0],
           accountId: accounts[0]?.id || ''
         });
+        setPayReceiptFile(null);
 
         // Explicitly reload payment schedules to reflect the new payment status
         console.log('[Billers] Payment successful, reloading payment schedules');
@@ -1263,7 +1267,7 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
               <div>
                 <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Receipt Upload</label>
                 <div className="relative">
-                  <input type="file" className="absolute inset-0 opacity-0 cursor-pointer" onChange={(e) => setPayFormData(prev => ({...prev, receipt: e.target.files?.[0]?.name || ''}))} />
+                  <input type="file" className="absolute inset-0 opacity-0 cursor-pointer" onChange={(e) => { const f = e.target.files?.[0] || null; setPayReceiptFile(f); setPayFormData(prev => ({...prev, receipt: f?.name || ''})); }} />
                   <div className="w-full bg-gray-50 border-2 border-dashed border-gray-200 rounded-2xl p-6 text-center text-sm text-gray-500 hover:border-indigo-300 hover:bg-indigo-50 transition-all flex flex-col items-center">
                     <Upload className="w-8 h-8 mb-2 text-indigo-400" />
                     <span className="font-bold">{payFormData.receipt || 'Click or drag to upload receipt'}</span>

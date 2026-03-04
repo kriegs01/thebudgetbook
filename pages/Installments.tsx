@@ -17,6 +17,7 @@ interface InstallmentsProps {
     date: string;
     accountId: string;
     receipt?: string;
+    receiptFile?: File;
   }) => Promise<void>;
   loading?: boolean;
   error?: string | null;
@@ -66,6 +67,7 @@ const Installments: React.FC<InstallmentsProps> = ({ installments, accounts, bil
     datePaid: new Date().toISOString().split('T')[0],
     accountId: defaultNonCreditAccountId
   });
+  const [payReceiptFile, setPayReceiptFile] = useState<File | null>(null);
 
   const formatCurrency = (val: number) => {
     return new Intl.NumberFormat('en-PH', { 
@@ -218,6 +220,7 @@ const Installments: React.FC<InstallmentsProps> = ({ installments, accounts, bil
           date: payFormData.datePaid,
           accountId: payFormData.accountId,
           receipt: payFormData.receipt || undefined,
+          receiptFile: payReceiptFile || undefined,
         });
       } else {
         // Fallback to old method
@@ -238,6 +241,7 @@ const Installments: React.FC<InstallmentsProps> = ({ installments, accounts, bil
         datePaid: new Date().toISOString().split('T')[0],
         accountId: accounts[0]?.id || ''
       });
+      setPayReceiptFile(null);
       
       // If view modal is open, we'll need to refresh - let parent handle this
       if (showViewModal && showViewModal.id === showPayModal.id) {
@@ -746,7 +750,7 @@ const Installments: React.FC<InstallmentsProps> = ({ installments, accounts, bil
               <div>
                 <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Receipt Upload</label>
                 <div className="relative">
-                  <input type="file" className="absolute inset-0 opacity-0 cursor-pointer" onChange={(e) => setPayFormData({...payFormData, receipt: e.target.files?.[0]?.name || ''})} />
+                  <input type="file" className="absolute inset-0 opacity-0 cursor-pointer" onChange={(e) => { const f = e.target.files?.[0] || null; setPayReceiptFile(f); setPayFormData({...payFormData, receipt: f?.name || ''}); }} />
                   <div className="w-full bg-gray-50 border-2 border-dashed border-gray-200 rounded-2xl p-6 text-center text-sm text-gray-500 hover:border-indigo-300 hover:bg-indigo-50 transition-all flex flex-col items-center">
                     <Upload className="w-8 h-8 mb-2 text-indigo-400" />
                     <span className="font-bold">{payFormData.receipt || 'Click or drag to upload receipt'}</span>
