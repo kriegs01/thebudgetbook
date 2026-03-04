@@ -1840,6 +1840,18 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                             }
                           }
                           
+                          // Fallback transaction lookup for Info button when no payment schedule exists
+                          const fallbackInstallmentTx = !installmentSchedule && (isPaid || isPartial)
+                            ? findExistingTransaction(installment.name, installment.monthlyAmount, selectedMonth)
+                            : undefined;
+
+                          // Unified Info button click handler (schedule-based or fallback transaction)
+                          const installmentInfoClick = installmentSchedule
+                            ? () => openSchedulePaymentsModal(installmentSchedule.id, `${installment.name} - ${selectedMonth}`)
+                            : fallbackInstallmentTx
+                              ? () => openDirectPaymentModal(fallbackInstallmentTx, `${installment.name} - ${selectedMonth}`)
+                              : null;
+
                           return (
                             <tr key={`installment-${installment.id}`} className={`${isIncluded ? 'bg-blue-50/30' : 'bg-gray-50 opacity-60'}`}>
                               <td className="p-4 pl-10">
@@ -1866,22 +1878,26 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                                   {isPaid ? (
                                     <>
                                       <CheckCircle2 className="w-4 h-4 text-green-500" aria-label="Payment completed" title="Paid" />
-                                      {installmentSchedule && (
-                                        <button onClick={() => openSchedulePaymentsModal(installmentSchedule.id, `${installment.name} - ${selectedMonth}`)} title="View payment records" className="text-gray-400 hover:text-indigo-600 transition-colors rounded-full p-1 hover:bg-indigo-50">
+                                      {installmentInfoClick && (
+                                        <button onClick={installmentInfoClick} title="View payment records" className="text-gray-400 hover:text-indigo-600 transition-colors rounded-full p-1 hover:bg-indigo-50">
                                           <Info className="w-3.5 h-3.5" />
                                         </button>
                                       )}
                                     </>
                                   ) : (
                                     <>
-                                      {isPartial && installmentSchedule && (
+                                      {isPartial && (
                                         <>
-                                          <span className="text-[9px] font-bold px-2 py-0.5 bg-yellow-100 text-yellow-700 rounded uppercase" title={`Paid ₱${installmentSchedule.amount_paid} of ₱${installmentSchedule.expected_amount}`}>
-                                            Partial
-                                          </span>
-                                          <button onClick={() => openSchedulePaymentsModal(installmentSchedule.id, `${installment.name} - ${selectedMonth}`)} title="View payment records" className="text-gray-400 hover:text-indigo-600 transition-colors rounded-full p-1 hover:bg-indigo-50">
-                                            <Info className="w-3.5 h-3.5" />
-                                          </button>
+                                          {installmentSchedule && (
+                                            <span className="text-[9px] font-bold px-2 py-0.5 bg-yellow-100 text-yellow-700 rounded uppercase" title={`Paid ₱${installmentSchedule.amount_paid} of ₱${installmentSchedule.expected_amount}`}>
+                                              Partial
+                                            </span>
+                                          )}
+                                          {installmentInfoClick && (
+                                            <button onClick={installmentInfoClick} title="View payment records" className="text-gray-400 hover:text-indigo-600 transition-colors rounded-full p-1 hover:bg-indigo-50">
+                                              <Info className="w-3.5 h-3.5" />
+                                            </button>
+                                          )}
                                         </>
                                       )}
                                     <button 
