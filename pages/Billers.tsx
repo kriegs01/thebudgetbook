@@ -768,7 +768,7 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
                   </div>
                 </div>
               </div>
-              <div className="text-right"><p className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Expected Amount</p><p className="text-3xl font-black text-indigo-600">{formatCurrency(detailedBiller.expectedAmount)}</p></div>
+              <div className="text-right"><p className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Expected Amount</p><p className="text-3xl font-black text-indigo-600">{formatCurrency(getExpectedAmount(detailedBiller))}</p></div>
             </div>
             <div className="overflow-hidden rounded-2xl border border-gray-100">
               <div className="overflow-x-auto">

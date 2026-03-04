@@ -164,7 +164,8 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
   // REFACTOR: Use schedule.id for payment schedule linking (removed redundant paymentScheduleId field)
   const [showPayModal, setShowPayModal] = useState<{ 
     biller: Biller, 
-    schedule: PaymentSchedule // schedule.id contains the payment schedule ID for linking
+    schedule: PaymentSchedule; // schedule.id contains the payment schedule ID for linking
+    expectedAmount?: number; // Override when DB expected_amount is 0 (e.g. Loans billers)
   } | null>(null);
   // QA: Add transactionId to support editing from Pay modal
   const [payFormData, setPayFormData] = useState({
@@ -1083,7 +1084,7 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
             datePaid: payFormData.datePaid,
             accountId: payFormData.accountId,
             receipt: payFormData.receipt || undefined,
-            expectedAmount: schedule.expectedAmount,
+            expectedAmount: showPayModal.expectedAmount ?? schedule.expectedAmount,
           }
         );
         
@@ -1686,7 +1687,7 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                                   <>
                                     {isPartial && paymentSchedule && (
                                       <>
-                                        <span className="text-[9px] font-bold px-2 py-0.5 bg-yellow-100 text-yellow-700 rounded uppercase" title={`Paid ₱${paymentSchedule.amount_paid} of ₱${paymentSchedule.expected_amount}`}>
+                                        <span className="text-[9px] font-bold px-2 py-0.5 bg-yellow-100 text-yellow-700 rounded uppercase" title={`Paid ₱${paymentSchedule.amount_paid} of ₱${parseFloat(item.amount)}`}>
                                           Partial
                                         </span>
                                         <button onClick={() => openSchedulePaymentsModal(paymentSchedule.id, `${item.name} - ${selectedMonth}`)} title="View payment records" className="text-gray-400 hover:text-indigo-600 transition-colors rounded-full p-1 hover:bg-indigo-50">
@@ -1719,7 +1720,8 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                                         
                                         setShowPayModal({
                                           biller: linkedBiller, 
-                                          schedule: scheduleForModal // schedule.id is included here
+                                          schedule: scheduleForModal, // schedule.id is included here
+                                          expectedAmount: parseFloat(item.amount) // Use calculated amount (correct for Loans)
                                         }); 
                                         const today = new Date().toISOString().split('T')[0];
                                         setPayFormData({
@@ -1728,7 +1730,7 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                                           transactionId: isPartial ? '' : (existingTx?.id || ''),
                                           amount: isPartial
                                             ? Math.max(0, parseFloat(item.amount) - paymentSchedule.amount_paid).toFixed(2)
-                                            : existingTx?.amount.toString() || paymentSchedule.expected_amount.toString(),
+                                            : existingTx?.amount.toString() || item.amount,
                                           receipt: (!isPartial && existingTx) ? 'Receipt on file' : '',
                                           datePaid: (!isPartial && existingTx) ? new Date(existingTx.date).toISOString().split('T')[0] : today,
                                           accountId: existingTx?.payment_method_id || payFormData.accountId
