@@ -234,7 +234,7 @@ export const updateBillerFrontend = async (biller: Biller, previousBiller?: Bill
 
   if (previousBiller) {
     const isReactivating = previousBiller.status === 'inactive' && updatedBiller.status === 'active';
-    const targetYear = parseInt(updatedBiller.activationDate.year) || 2026;
+    const targetYear = parseInt(updatedBiller.activationDate.year) || new Date().getFullYear();
 
     if (isReactivating) {
       // Reactivation: preserve existing paid/partial schedules; only add missing ones

@@ -23,7 +23,7 @@ export const generateBillerPaymentSchedules = (
 ): CreateMonthlyPaymentScheduleInput[] => {
   const schedules: CreateMonthlyPaymentScheduleInput[] = [];
 
-  const targetYear = year ?? parseInt(biller.activationDate.year) ?? 2026;
+  const targetYear = year ?? parseInt(biller.activationDate.year) ?? new Date().getFullYear();
 
   const activationMonth = MONTHS.indexOf(biller.activationDate.month);
 

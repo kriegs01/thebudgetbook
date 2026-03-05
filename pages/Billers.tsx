@@ -1359,7 +1359,7 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
               {showEditModal?.status === 'inactive' ? (
                 <div className="border-t border-gray-200 pt-6">
                   <label className="block text-[10px] font-black text-indigo-500 uppercase tracking-widest mb-2">Reactivation Date</label>
-                  <p className="text-xs text-gray-500 mb-4">New payment schedules will be created from this month. Existing payment history is preserved.</p>
+                  <p className="text-xs text-gray-500 mb-4">New payment schedules will be created from this month. Existing payment history will be preserved.</p>
                   <div className="grid grid-cols-2 gap-4">
                     <div>
                       <label className="block text-[10px] font-bold text-gray-400 mb-2">Month</label>
