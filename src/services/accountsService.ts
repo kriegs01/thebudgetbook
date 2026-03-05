@@ -85,10 +85,13 @@ export const createAccount = async (account: CreateAccountInput) => {
  */
 export const updateAccount = async (id: string, updates: UpdateAccountInput) => {
   try {
+    const user = await getCachedUser();
+
     const { data, error } = await supabase
       .from(getTableName('accounts'))
       .update(updates)
       .eq('id', id)
+      .eq('user_id', user.id)
       .select()
       .single();
 
