@@ -49,6 +49,28 @@ const calculateTiming = (dayString: string): '1/2' | '2/2' => {
   return (day >= 1 && day <= 21) ? '1/2' : '2/2';
 };
 
+// Utility function to calculate status for a future/past activation date.
+// Returns 'active' only when the activation month has already been reached.
+// Used when reactivating an inactive biller to keep it 'inactive' until its
+// activation month arrives.
+const calculateStatusFromActivation = (activationDate: { month: string; year: string }): 'active' | 'inactive' => {
+  const now = new Date();
+  const currentYear = now.getFullYear();
+  const currentMonth = now.getMonth(); // 0-indexed
+
+  const actYear = parseInt(activationDate.year);
+  const actMonthIdx = MONTHS.indexOf(activationDate.month); // 0-indexed
+
+  if (isNaN(actYear) || actMonthIdx === -1) return 'inactive';
+
+  // Active once the activation month has arrived (current >= activation)
+  if (actYear < currentYear || (actYear === currentYear && actMonthIdx <= currentMonth)) {
+    return 'active';
+  }
+
+  return 'inactive';
+};
+
 // Utility function to calculate status based on deactivationDate.
 // A biller remains 'active' until the deactivation month actually arrives;
 // only then does its status flip to 'inactive'.
@@ -438,13 +460,15 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
       let status: 'active' | 'inactive';
 
       if (isInactiveBiller) {
-        // Reactivation: treat reactMonth/reactYear as the new activation date
+        // Reactivation: treat reactMonth/reactYear as the new activation date.
+        // Only set status to 'active' once the reactivation month has arrived;
+        // otherwise keep 'inactive' until that month is reached.
         activationDate = {
           month: editFormData.reactMonth || editFormData.actMonth,
           year: editFormData.reactYear || editFormData.actYear,
         };
         deactivationDate = undefined;
-        status = 'active';
+        status = calculateStatusFromActivation(activationDate);
       } else {
         // Regular edit for active billers
         activationDate = {
@@ -1422,12 +1446,24 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
                     </div>
                   );
                 })()}
-                {showEditModal?.status === 'inactive' && (
-                  <div className="flex justify-between items-center">
-                    <span className="text-[10px] font-black text-indigo-400 uppercase tracking-widest">After Reactivation:</span>
-                    <span className="text-sm font-black text-green-600">active</span>
-                  </div>
-                )}
+                {showEditModal?.status === 'inactive' && (() => {
+                  const reactDate = {
+                    month: editFormData.reactMonth || editFormData.actMonth,
+                    year: editFormData.reactYear || editFormData.actYear,
+                  };
+                  const computedStatus = calculateStatusFromActivation(reactDate);
+                  return (
+                    <div className="flex justify-between items-center">
+                      <span className="text-[10px] font-black text-indigo-400 uppercase tracking-widest">After Reactivation:</span>
+                      <div className="flex items-center gap-2">
+                        <span className={`text-sm font-black ${computedStatus === 'inactive' ? 'text-gray-600' : 'text-green-600'}`}>{computedStatus}</span>
+                        {computedStatus === 'inactive' && (
+                          <span className="text-xs text-orange-500 font-medium">— activates {reactDate.month} {reactDate.year}</span>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })()}
               </div>
 
               {timingFeedback && (
