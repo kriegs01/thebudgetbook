@@ -14,15 +14,22 @@ const MONTHS = [
 
 /**
  * Generate payment schedules for a biller
- * Creates one schedule per month based on activation/deactivation dates
+ * Creates one schedule per month based on activation/deactivation dates.
+ * If year is omitted, uses the biller's activation year.
  */
 export const generateBillerPaymentSchedules = (
   biller: Biller,
-  year: number = 2026
+  year?: number
 ): CreateMonthlyPaymentScheduleInput[] => {
   const schedules: CreateMonthlyPaymentScheduleInput[] = [];
-  
+
+  const targetYear = year ?? parseInt(biller.activationDate.year) ?? 2026;
+
   const activationMonth = MONTHS.indexOf(biller.activationDate.month);
+
+  // Determine deactivation boundary:
+  // When a deactivation date is set but is in the future, the biller is still active
+  // and schedules should be generated up to (and including) the deactivation month.
   const deactivationMonth = biller.deactivationDate 
     ? MONTHS.indexOf(biller.deactivationDate.month)
     : 11; // Default to December if no deactivation
@@ -31,14 +38,15 @@ export const generateBillerPaymentSchedules = (
   for (let i = 0; i < MONTHS.length; i++) {
     // Check if month is within active period
     const isActive = i >= activationMonth && i <= deactivationMonth;
-    
-    // Only create schedules for active months AND when biller is active
+
+    // Create schedules for active months when the biller is active (or was recently
+    // reactivated — callers should ensure biller.status reflects the intended new state)
     if (isActive && biller.status === 'active') {
       schedules.push({
         source_type: 'biller',
         source_id: biller.id,
         month: MONTHS[i],
-        year: year,
+        year: targetYear,
         payment_number: i + 1, // Month sequence number (1-12) for proper tracking
         expected_amount: biller.expectedAmount,
         amount_paid: 0,

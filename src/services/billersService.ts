@@ -14,7 +14,7 @@ import type {
 import { supabaseBillerToFrontend, supabaseBillersToFrontend, frontendBillerToSupabase } from '../utils/billersAdapter';
 import type { Biller } from '../../types';
 import { generateBillerPaymentSchedules } from '../utils/paymentSchedulesGenerator';
-import { createPaymentSchedulesBulk, deletePaymentSchedulesBySource } from './paymentSchedulesService';
+import { createPaymentSchedulesBulk, deletePaymentSchedulesBySource, deletePaymentSchedule, getPaymentSchedulesBySource } from './paymentSchedulesService';
 import { getCachedUser } from '../utils/authCache';
 
 /**
@@ -216,15 +216,82 @@ export const createBillerFrontend = async (biller: Biller): Promise<{ data: Bill
 };
 
 /**
- * Update an existing biller (accepts frontend Biller type)
+ * Update an existing biller (accepts frontend Biller type).
+ * When previousBiller is supplied the service also reconciles payment schedules:
+ *  - Reactivation (inactive → active): creates new schedules from the new activation month
+ *    without touching existing paid/partial records.
+ *  - Regular edit with date/amount changes: deletes only pending schedules and recreates
+ *    them, preserving all paid or partial entries.
  */
-export const updateBillerFrontend = async (biller: Biller): Promise<{ data: Biller | null; error: any }> => {
+export const updateBillerFrontend = async (biller: Biller, previousBiller?: Biller): Promise<{ data: Biller | null; error: any }> => {
   const supabaseBiller = frontendBillerToSupabase(biller);
   const { data, error } = await updateBiller(biller.id, supabaseBiller);
   if (error || !data) {
     return { data: null, error };
   }
-  return { data: supabaseBillerToFrontend(data), error: null };
+
+  const updatedBiller = supabaseBillerToFrontend(data);
+
+  if (previousBiller) {
+    const isReactivating = previousBiller.status === 'inactive' && updatedBiller.status === 'active';
+    const targetYear = parseInt(updatedBiller.activationDate.year) || 2026;
+
+    if (isReactivating) {
+      // Reactivation: preserve existing paid/partial schedules; only add missing ones
+      const { data: existingSchedules } = await getPaymentSchedulesBySource('biller', biller.id);
+      const existingMonthYears = new Set(
+        (existingSchedules || []).map(s => `${s.month}-${s.year}`)
+      );
+
+      const newSchedules = generateBillerPaymentSchedules(updatedBiller, targetYear);
+      const schedulesToCreate = newSchedules.filter(
+        s => !existingMonthYears.has(`${s.month}-${s.year}`)
+      );
+
+      if (schedulesToCreate.length > 0) {
+        const { error: schedulesError } = await createPaymentSchedulesBulk(schedulesToCreate);
+        if (schedulesError) {
+          console.error('Error creating reactivation schedules:', schedulesError);
+        }
+      }
+    } else {
+      // Regular update: regenerate schedules only when key properties changed
+      const activationChanged =
+        previousBiller.activationDate.month !== updatedBiller.activationDate.month ||
+        previousBiller.activationDate.year !== updatedBiller.activationDate.year;
+      const deactivationChanged =
+        JSON.stringify(previousBiller.deactivationDate) !== JSON.stringify(updatedBiller.deactivationDate);
+      const amountChanged = previousBiller.expectedAmount !== updatedBiller.expectedAmount;
+
+      if (activationChanged || deactivationChanged || amountChanged) {
+        const { data: existingSchedules } = await getPaymentSchedulesBySource('biller', biller.id);
+        const schedules = existingSchedules || [];
+
+        // Delete only pending schedules — preserve paid/partial history
+        const pendingIds = schedules.filter(s => s.status === 'pending').map(s => s.id);
+        for (const id of pendingIds) {
+          await deletePaymentSchedule(id);
+        }
+
+        // Re-create schedules for months not already covered by paid/partial records
+        const coveredMonthYears = new Set(
+          schedules.filter(s => s.status !== 'pending').map(s => `${s.month}-${s.year}`)
+        );
+
+        const newSchedules = generateBillerPaymentSchedules(updatedBiller, targetYear);
+        const toCreate = newSchedules.filter(s => !coveredMonthYears.has(`${s.month}-${s.year}`));
+
+        if (toCreate.length > 0) {
+          const { error: schedulesError } = await createPaymentSchedulesBulk(toCreate);
+          if (schedulesError) {
+            console.error('Error creating updated schedules for biller:', schedulesError);
+          }
+        }
+      }
+    }
+  }
+
+  return { data: updatedBiller, error: null };
 };
 
 /**

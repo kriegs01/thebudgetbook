@@ -427,7 +427,8 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
   };
 
   const handleUpdateBiller = async (updatedBiller: Biller) => {
-    const { data, error } = await updateBillerFrontend(updatedBiller);
+    const previousBiller = billers.find(b => b.id === updatedBiller.id);
+    const { data, error } = await updateBillerFrontend(updatedBiller, previousBiller);
     if (error) {
       console.error('Error updating biller:', error);
       alert('Failed to update biller. Please try again.');
