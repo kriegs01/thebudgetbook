@@ -58,6 +58,8 @@ const SupabaseDemo: React.FC = () => {
       credit_limit: null,
       billing_date: null,
       due_date: null,
+      status: 'active',
+      deactivation_date: null,
     };
 
     const { data, error } = await createAccount(newAccount);

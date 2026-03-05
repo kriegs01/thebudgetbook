@@ -220,6 +220,40 @@ export const deleteAccountFrontend = async (id: string): Promise<{ error: any }>
 };
 
 /**
+ * Deactivate an account (sets status to 'inactive' instead of deleting)
+ * Optionally stores a scheduled deactivation date.
+ */
+export const deactivateAccountFrontend = async (
+  id: string,
+  deactivationDate?: { month: string; year: string } | null
+): Promise<{ data: Account | null; error: any }> => {
+  const updates: UpdateAccountInput = {
+    status: 'inactive',
+    deactivation_date: deactivationDate ?? null,
+  };
+  const { data, error } = await updateAccount(id, updates);
+  if (error || !data) {
+    return { data: null, error };
+  }
+  return { data: supabaseAccountToFrontend(data), error: null };
+};
+
+/**
+ * Reactivate a previously deactivated account (sets status back to 'active')
+ */
+export const reactivateAccountFrontend = async (id: string): Promise<{ data: Account | null; error: any }> => {
+  const updates: UpdateAccountInput = {
+    status: 'active',
+    deactivation_date: null,
+  };
+  const { data, error } = await updateAccount(id, updates);
+  if (error || !data) {
+    return { data: null, error };
+  }
+  return { data: supabaseAccountToFrontend(data), error: null };
+};
+
+/**
  * Get all accounts with calculated balances from transactions
  * This function fetches accounts and transactions, then calculates the current balance
  * for each account based on its initial balance and all transactions

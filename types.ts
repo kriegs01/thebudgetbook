@@ -9,6 +9,11 @@ export interface Account {
   creditLimit?: number;
   billingDate?: string;
   dueDate?: string;
+  status: 'active' | 'inactive';
+  deactivationDate?: {
+    month: string;
+    year: string;
+  };
 }
 
 export interface BudgetItem {

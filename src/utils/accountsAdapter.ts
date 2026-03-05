@@ -20,13 +20,15 @@ export const supabaseAccountToFrontend = (supabaseAccount: SupabaseAccount): Acc
     creditLimit: supabaseAccount.credit_limit ?? undefined,
     billingDate: supabaseAccount.billing_date ?? undefined,
     dueDate: supabaseAccount.due_date ?? undefined,
+    status: (supabaseAccount.status === 'inactive' ? 'inactive' : 'active') as 'active' | 'inactive',
+    deactivationDate: supabaseAccount.deactivation_date ?? undefined,
   };
 };
 
 /**
  * Convert frontend Account to Supabase account type
  */
-export const frontendAccountToSupabase = (account: Account): Omit<SupabaseAccount, 'id' | 'created_at'> => {
+export const frontendAccountToSupabase = (account: Account): Omit<SupabaseAccount, 'id' | 'created_at' | 'user_id'> => {
   return {
     bank: account.bank,
     classification: account.classification,
@@ -35,6 +37,8 @@ export const frontendAccountToSupabase = (account: Account): Omit<SupabaseAccoun
     credit_limit: account.creditLimit ?? null,
     billing_date: account.billingDate ?? null,
     due_date: account.dueDate ?? null,
+    status: account.status ?? 'active',
+    deactivation_date: account.deactivationDate ?? null,
   };
 };
 

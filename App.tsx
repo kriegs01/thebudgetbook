@@ -3,7 +3,7 @@ import { Menu, ChevronLeft } from 'lucide-react';
 import { BrowserRouter, Routes, Route, NavLink } from 'react-router-dom';
 import { NAV_ITEMS, INITIAL_BUDGET, DEFAULT_SETUP, INITIAL_CATEGORIES } from './constants';
 import { getAllBillersFrontend, createBillerFrontend, updateBillerFrontend, deleteBillerFrontend } from './src/services/billersService';
-import { getAllAccountsWithCalculatedBalances, getAllAccountsFrontend, createAccountFrontend, updateAccountFrontend, deleteAccountFrontend } from './src/services/accountsService';
+import { getAllAccountsWithCalculatedBalances, getAllAccountsFrontend, createAccountFrontend, updateAccountFrontend, deleteAccountFrontend, deactivateAccountFrontend, reactivateAccountFrontend } from './src/services/accountsService';
 import { getAllInstallmentsFrontend, createInstallmentFrontend, updateInstallmentFrontend, deleteInstallmentFrontend } from './src/services/installmentsService';
 import { getAllSavingsFrontend, createSavingsFrontend, updateSavingsFrontend, deleteSavingsFrontend } from './src/services/savingsService';
 import { getAllBudgetSetupsFrontend, deleteBudgetSetupFrontend } from './src/services/budgetSetupsService';
@@ -59,6 +59,8 @@ const supabaseToAccount = (supabaseAccount: any): Account => ({
   creditLimit: supabaseAccount.credit_limit,
   billingDate: supabaseAccount.billing_date,
   dueDate: supabaseAccount.due_date,
+  status: supabaseAccount.status ?? 'active',
+  deactivationDate: supabaseAccount.deactivation_date ?? undefined,
 });
 
 // Helper function to convert UI Biller to Supabase format
@@ -475,6 +477,26 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
     if (error) {
       console.error('Error deleting account:', error);
       alert('Failed to delete account. Please try again.');
+    } else {
+      await reloadAccounts();
+    }
+  };
+
+  const handleDeactivateAccount = async (id: string, deactivationDate?: { month: string; year: string } | null) => {
+    const { error } = await deactivateAccountFrontend(id, deactivationDate);
+    if (error) {
+      console.error('Error deactivating account:', error);
+      alert('Failed to deactivate account. Please try again.');
+    } else {
+      await reloadAccounts();
+    }
+  };
+
+  const handleReactivateAccount = async (id: string) => {
+    const { error } = await reactivateAccountFrontend(id);
+    if (error) {
+      console.error('Error reactivating account:', error);
+      alert('Failed to reactivate account. Please try again.');
     } else {
       await reloadAccounts();
     }
@@ -1003,11 +1025,17 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
                   onEdit={handleEditAccount}
                   onDelete={handleDeleteAccount}
                   onDeactivate={async (id, when) => {
-                    // For now, just mark as inactive or remove - can be enhanced later
+                    const MONTH_NAMES = ['January','February','March','April','May','June','July','August','September','October','November','December'];
                     if (when === 'now') {
-                      await handleDeleteAccount(id);
+                      await handleDeactivateAccount(id, null);
+                    } else {
+                      await handleDeactivateAccount(id, {
+                        month: MONTH_NAMES[when.month],
+                        year: String(when.year),
+                      });
                     }
                   }}
+                  onReactivate={handleReactivateAccount}
                   loading={accountsLoading}
                   error={accountsError}
                 />

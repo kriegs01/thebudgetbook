@@ -27,6 +27,8 @@ export interface SupabaseAccount {
   due_date: string | null; // date, nullable
   created_at: string; // timestamptz, default now()
   user_id: string | null; // uuid, references auth.users(id)
+  status: string; // 'active' | 'inactive', default 'active'
+  deactivation_date: any | null; // jsonb, nullable - { month: string, year: string }
 }
 
 export interface SupabaseBiller {
