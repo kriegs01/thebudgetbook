@@ -1266,12 +1266,33 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
 
               <div className="border-t border-gray-200 pt-6">
                 <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Deactivation Date (optional)</label>
-                <p className="text-xs text-gray-400 mb-4">Biller stays active until this month arrives.</p>
+                <p className="text-xs text-gray-400 mb-4">Biller deactivates at the start of this month — last payment is the month before.</p>
                 <div className="grid grid-cols-2 gap-4">
                   <div><label className="block text-[10px] font-bold text-gray-400 mb-2">Month</label>
-                    <select value={addFormData.deactMonth} onChange={(e) => setAddFormData({ ...addFormData, deactMonth: e.target.value })} className="w-full bg-gray-50 border-transparent rounded-2xl p-4 outline-none font-bold text-sm appearance-none"><option value="">None</option>{MONTHS.map(m => <option key={m} value={m}>{m}</option>)}</select>
+                    <select value={addFormData.deactMonth} onChange={(e) => setAddFormData({ ...addFormData, deactMonth: e.target.value })} className="w-full bg-gray-50 border-transparent rounded-2xl p-4 outline-none font-bold text-sm appearance-none">
+                      <option value="">None</option>
+                      {MONTHS.map(m => {
+                        const deactYearNum = parseInt(addFormData.deactYear);
+                        const actYearNum = parseInt(addFormData.actYear);
+                        const sameYear = !isNaN(deactYearNum) && !isNaN(actYearNum) && deactYearNum === actYearNum;
+                        const actMonthIdx = MONTHS.indexOf(addFormData.actMonth);
+                        const mIdx = MONTHS.indexOf(m);
+                        // Disable months on or before activation month when deact year == act year
+                        const isDisabled = sameYear && mIdx <= actMonthIdx;
+                        return <option key={m} value={m} disabled={isDisabled} className={isDisabled ? 'text-gray-300' : ''}>{m}</option>;
+                      })}
+                    </select>
                   </div>
-                  <div><label className="block text-[10px] font-bold text-gray-400 mb-2">Year</label><input type="number" min="2000" max="2100" placeholder="e.g. 2026" value={addFormData.deactYear} onChange={(e) => setAddFormData({ ...addFormData, deactYear: e.target.value })} className="w-full bg-gray-50 border-transparent rounded-2xl p-4 outline-none font-bold" /></div>
+                  <div><label className="block text-[10px] font-bold text-gray-400 mb-2">Year</label><input type="number" min="2000" max="2100" placeholder="e.g. 2026" value={addFormData.deactYear} onChange={(e) => {
+                    const newDeactYear = e.target.value;
+                    const deactYearNum = parseInt(newDeactYear);
+                    const actYearNum = parseInt(addFormData.actYear);
+                    const actMonthIdx = MONTHS.indexOf(addFormData.actMonth);
+                    const deactMonthIdx = MONTHS.indexOf(addFormData.deactMonth);
+                    // Clear deactMonth if it becomes invalid (same year and deact month <= act month)
+                    const shouldClear = !isNaN(deactYearNum) && !isNaN(actYearNum) && deactYearNum === actYearNum && deactMonthIdx !== -1 && deactMonthIdx <= actMonthIdx;
+                    setAddFormData({ ...addFormData, deactYear: newDeactYear, deactMonth: shouldClear ? '' : addFormData.deactMonth });
+                  }} className="w-full bg-gray-50 border-transparent rounded-2xl p-4 outline-none font-bold" /></div>
                 </div>
               </div>
 
@@ -1412,12 +1433,31 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
 
                   <div className="border-t border-gray-200 pt-6">
                     <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Deactivation Date (optional)</label>
-                    <p className="text-xs text-gray-400 mb-4">Biller stays active until this month arrives.</p>
+                    <p className="text-xs text-gray-400 mb-4">Biller deactivates at the start of this month — last payment is the month before.</p>
                     <div className="grid grid-cols-2 gap-4">
                       <div><label className="block text-[10px] font-bold text-gray-400 mb-2">Month</label>
-                        <select value={editFormData.deactMonth} onChange={(e) => setEditFormData({ ...editFormData, deactMonth: e.target.value })} className="w-full bg-gray-50 border-transparent rounded-2xl p-4 outline-none font-bold text-sm appearance-none"><option value="">None</option>{MONTHS.map(m => <option key={m} value={m}>{m}</option>)}</select>
+                        <select value={editFormData.deactMonth} onChange={(e) => setEditFormData({ ...editFormData, deactMonth: e.target.value })} className="w-full bg-gray-50 border-transparent rounded-2xl p-4 outline-none font-bold text-sm appearance-none">
+                          <option value="">None</option>
+                          {MONTHS.map(m => {
+                            const deactYearNum = parseInt(editFormData.deactYear);
+                            const actYearNum = parseInt(editFormData.actYear);
+                            const sameYear = !isNaN(deactYearNum) && !isNaN(actYearNum) && deactYearNum === actYearNum;
+                            const actMonthIdx = MONTHS.indexOf(editFormData.actMonth);
+                            const mIdx = MONTHS.indexOf(m);
+                            const isDisabled = sameYear && mIdx <= actMonthIdx;
+                            return <option key={m} value={m} disabled={isDisabled} className={isDisabled ? 'text-gray-300' : ''}>{m}</option>;
+                          })}
+                        </select>
                       </div>
-                      <div><label className="block text-[10px] font-bold text-gray-400 mb-2">Year</label><input type="number" min="2000" max="2100" placeholder="e.g. 2026" value={editFormData.deactYear} onChange={(e) => setEditFormData({ ...editFormData, deactYear: e.target.value })} className="w-full bg-gray-50 border-transparent rounded-2xl p-4 outline-none font-bold" /></div>
+                      <div><label className="block text-[10px] font-bold text-gray-400 mb-2">Year</label><input type="number" min="2000" max="2100" placeholder="e.g. 2026" value={editFormData.deactYear} onChange={(e) => {
+                        const newDeactYear = e.target.value;
+                        const deactYearNum = parseInt(newDeactYear);
+                        const actYearNum = parseInt(editFormData.actYear);
+                        const actMonthIdx = MONTHS.indexOf(editFormData.actMonth);
+                        const deactMonthIdx = MONTHS.indexOf(editFormData.deactMonth);
+                        const shouldClear = !isNaN(deactYearNum) && !isNaN(actYearNum) && deactYearNum === actYearNum && deactMonthIdx !== -1 && deactMonthIdx <= actMonthIdx;
+                        setEditFormData({ ...editFormData, deactYear: newDeactYear, deactMonth: shouldClear ? '' : editFormData.deactMonth });
+                      }} className="w-full bg-gray-50 border-transparent rounded-2xl p-4 outline-none font-bold" /></div>
                     </div>
                   </div>
                 </>

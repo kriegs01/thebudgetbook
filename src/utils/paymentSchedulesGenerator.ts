@@ -28,16 +28,17 @@ export const generateBillerPaymentSchedules = (
   const activationMonth = MONTHS.indexOf(biller.activationDate.month);
 
   // Determine deactivation boundary:
-  // When a deactivation date is set but is in the future, the biller is still active
-  // and schedules should be generated up to (and including) the deactivation month.
+  // The deactivation date is the FIRST inactive month — the last payment schedule
+  // is the month immediately before the deactivation month.
+  // If no deactivation date is set, include all months through December.
   const deactivationMonth = biller.deactivationDate 
     ? MONTHS.indexOf(biller.deactivationDate.month)
-    : 11; // Default to December if no deactivation
+    : 12; // Sentinel: one past December, so all months (0–11) are included
 
   // Generate schedules for each active month
   for (let i = 0; i < MONTHS.length; i++) {
-    // Check if month is within active period
-    const isActive = i >= activationMonth && i <= deactivationMonth;
+    // Deactivation month is EXCLUDED: active range is [activationMonth, deactivationMonth)
+    const isActive = i >= activationMonth && i < deactivationMonth;
 
     // Create schedules for active months when the biller is active (or was recently
     // reactivated — callers should ensure biller.status reflects the intended new state)
