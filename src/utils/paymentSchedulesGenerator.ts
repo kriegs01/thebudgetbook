@@ -40,9 +40,12 @@ export const generateBillerPaymentSchedules = (
     // Deactivation month is EXCLUDED: active range is [activationMonth, deactivationMonth)
     const isActive = i >= activationMonth && i < deactivationMonth;
 
-    // Create schedules for active months when the biller is active (or was recently
-    // reactivated — callers should ensure biller.status reflects the intended new state)
-    if (isActive && biller.status === 'active') {
+    // The activation/deactivation date range is the single source of truth for which
+    // months receive a schedule.  biller.status is intentionally NOT checked here:
+    // a future-dated reactivation keeps status='inactive' until that month arrives, but
+    // must still generate pending schedules for the upcoming active window so that the
+    // detail view does not fall back to the stale JSONB schedules column.
+    if (isActive) {
       schedules.push({
         source_type: 'biller',
         source_id: biller.id,
