@@ -49,9 +49,49 @@ const calculateTiming = (dayString: string): '1/2' | '2/2' => {
   return (day >= 1 && day <= 21) ? '1/2' : '2/2';
 };
 
-// Utility function to calculate status based on deactivationDate
+// Utility function to calculate status for a future/past activation date.
+// Returns 'active' only when the activation month has already been reached.
+// Used when reactivating an inactive biller to keep it 'inactive' until its
+// activation month arrives.
+const calculateStatusFromActivation = (activationDate: { month: string; year: string }): 'active' | 'inactive' => {
+  const now = new Date();
+  const currentYear = now.getFullYear();
+  const currentMonth = now.getMonth(); // 0-indexed
+
+  const actYear = parseInt(activationDate.year);
+  const actMonthIdx = MONTHS.indexOf(activationDate.month); // 0-indexed
+
+  if (isNaN(actYear) || actMonthIdx === -1) return 'inactive';
+
+  // Active once the activation month has arrived (current >= activation)
+  if (actYear < currentYear || (actYear === currentYear && actMonthIdx <= currentMonth)) {
+    return 'active';
+  }
+
+  return 'inactive';
+};
+
+// Utility function to calculate status based on deactivationDate.
+// A biller remains 'active' until the deactivation month actually arrives;
+// only then does its status flip to 'inactive'.
 const calculateStatus = (deactivationDate?: { month: string; year: string }): 'active' | 'inactive' => {
-  return deactivationDate ? 'inactive' : 'active';
+  if (!deactivationDate) return 'active';
+
+  const now = new Date();
+  const currentYear = now.getFullYear();
+  const currentMonth = now.getMonth(); // 0-indexed
+
+  const deactYear = parseInt(deactivationDate.year);
+  const deactMonth = MONTHS.indexOf(deactivationDate.month); // 0-indexed
+
+  if (isNaN(deactYear) || deactMonth === -1) return 'active';
+
+  // Biller is inactive only when the current month has reached or passed the deactivation month
+  if (currentYear > deactYear || (currentYear === deactYear && currentMonth >= deactMonth)) {
+    return 'inactive';
+  }
+
+  return 'active';
 };
 
 const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, accounts, categories, onUpdate, onDelete, onPayBiller, loading = false, error = null }) => {
@@ -71,6 +111,9 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
   // Payment schedules state for database-driven status display
   const [paymentSchedules, setPaymentSchedules] = useState<SupabaseMonthlyPaymentSchedule[]>([]);
   const [loadingSchedules, setLoadingSchedules] = useState(false);
+
+  // Schedules loaded when opening the edit modal — used for orphaning detection
+  const [editBillerSchedules, setEditBillerSchedules] = useState<SupabaseMonthlyPaymentSchedule[]>([]);
 
   const [confirmModal, setConfirmModal] = useState<{
     show: boolean;
@@ -107,7 +150,9 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
     actYear: '',
     deactMonth: '',
     deactYear: '',
-    linkedAccountId: '' // ENHANCEMENT: Support linking Loans-category billers to credit accounts
+    linkedAccountId: '', // ENHANCEMENT: Support linking Loans-category billers to credit accounts
+    reactMonth: '', // Reactivation date (used when editing an inactive biller)
+    reactYear: '',
   });
 
   const [payFormData, setPayFormData] = useState({
@@ -406,43 +451,101 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
     
     setIsSubmitting(true);
     try {
-      // Calculate timing automatically from dueDate or actDay
+      const isInactiveBiller = showEditModal.status === 'inactive';
       const dayForTiming = editFormData.dueDate || editFormData.actDay;
       const timing = calculateTiming(dayForTiming);
-      
-      // Build activationDate with optional day
-      const activationDate: { month: string; day?: string; year: string } = {
-        month: editFormData.actMonth,
-        year: editFormData.actYear
-      };
-      if (editFormData.actDay) {
-        activationDate.day = editFormData.actDay;
+
+      let activationDate: { month: string; day?: string; year: string };
+      let deactivationDate: { month: string; year: string } | undefined;
+      let status: 'active' | 'inactive';
+
+      if (isInactiveBiller) {
+        // Reactivation: treat reactMonth/reactYear as the new activation date.
+        // Only set status to 'active' once the reactivation month has arrived;
+        // otherwise keep 'inactive' until that month is reached.
+        activationDate = {
+          month: editFormData.reactMonth || editFormData.actMonth,
+          year: editFormData.reactYear || editFormData.actYear,
+        };
+        deactivationDate = undefined;
+        status = calculateStatusFromActivation(activationDate);
+      } else {
+        // Regular edit for active billers
+        activationDate = {
+          month: editFormData.actMonth,
+          year: editFormData.actYear,
+        };
+        if (editFormData.actDay) {
+          activationDate.day = editFormData.actDay;
+        }
+        deactivationDate = (editFormData.deactMonth && editFormData.deactYear)
+          ? { month: editFormData.deactMonth, year: editFormData.deactYear }
+          : undefined;
+        status = calculateStatus(deactivationDate);
       }
-      
-      // Build deactivationDate if provided
-      const deactivationDate = (editFormData.deactMonth && editFormData.deactYear) 
-        ? { month: editFormData.deactMonth, year: editFormData.deactYear }
-        : undefined;
-      
-      // Calculate status automatically
-      const status = calculateStatus(deactivationDate);
-      
-      await onUpdate({ 
-        ...showEditModal, 
-        name: editFormData.name, 
-        category: editFormData.category, 
-        dueDate: editFormData.dueDate, 
-        expectedAmount: parseFloat(editFormData.expectedAmount) || 0, 
-        timing: timing,
-        activationDate: activationDate,
-        deactivationDate: deactivationDate,
-        status: status,
-        linkedAccountId: editFormData.linkedAccountId || undefined // ENHANCEMENT: Support linked credit accounts
-      });
-      
-      // Only close modal on success
-      setShowEditModal(null);
-      setTimingFeedback('');
+
+      // Helper that performs the actual update
+      const applyUpdate = async () => {
+        await onUpdate({
+          ...showEditModal,
+          name: editFormData.name,
+          category: editFormData.category,
+          dueDate: editFormData.dueDate,
+          expectedAmount: parseFloat(editFormData.expectedAmount) || 0,
+          timing: timing,
+          activationDate: activationDate,
+          deactivationDate: deactivationDate,
+          status: status,
+          linkedAccountId: editFormData.linkedAccountId || undefined,
+        });
+        setShowEditModal(null);
+        setTimingFeedback('');
+      };
+
+      // Orphaning check: warn when activation date changes for an active biller
+      // and there are paid/partial schedules for months that fall before the new activation.
+      if (!isInactiveBiller) {
+        const oldActMonth = showEditModal.activationDate.month;
+        const oldActYear = showEditModal.activationDate.year;
+
+        if (oldActMonth !== activationDate.month || oldActYear !== activationDate.year) {
+          const newActMonthIdx = MONTHS.indexOf(activationDate.month);
+          const newActYear = parseInt(activationDate.year);
+
+          const affectedSchedules = editBillerSchedules.filter(s => {
+            const sYear = typeof s.year === 'number' ? s.year : parseInt(String(s.year));
+            const sMonthIdx = MONTHS.indexOf(s.month);
+            return (
+              (sYear < newActYear || (sYear === newActYear && sMonthIdx < newActMonthIdx)) &&
+              (s.status === 'paid' || s.status === 'partial')
+            );
+          });
+
+          if (affectedSchedules.length > 0) {
+            // Show orphaning warning — defer update until user confirms
+            setIsSubmitting(false);
+            setConfirmModal({
+              show: true,
+              title: 'Activation Date Change',
+              message: `Changing the activation date will affect ${affectedSchedules.length} existing payment record(s) for months before ${activationDate.month} ${activationDate.year}. Payment history will be preserved but pending schedules for those months will be removed. Do you want to proceed?`,
+              onConfirm: async () => {
+                setConfirmModal(prev => ({ ...prev, show: false }));
+                setIsSubmitting(true);
+                try {
+                  await applyUpdate();
+                } catch (err) {
+                  console.error('Failed to update biller after confirmation:', err);
+                } finally {
+                  setIsSubmitting(false);
+                }
+              },
+            });
+            return;
+          }
+        }
+      }
+
+      await applyUpdate();
     } catch (error) {
       console.error('Failed to update biller:', error);
       // Keep modal open so user can retry
@@ -609,7 +712,13 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
   const inactiveBillers = billers.filter(b => b.status === 'inactive');
   const detailedBiller = billers.find(b => b.id === detailedBillerId);
 
-  const openEditModal = (biller: Biller) => {
+  const openEditModal = async (biller: Biller) => {
+    // Default reactivation date to next month / current year
+    const nextMonthDate = new Date();
+    nextMonthDate.setMonth(nextMonthDate.getMonth() + 1);
+    const defaultReactMonth = MONTHS[nextMonthDate.getMonth()];
+    const defaultReactYear = nextMonthDate.getFullYear().toString();
+
     setEditFormData({ 
       name: biller.name, 
       category: biller.category, 
@@ -620,11 +729,21 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
       actYear: biller.activationDate.year,
       deactMonth: biller.deactivationDate?.month || '',
       deactYear: biller.deactivationDate?.year || '',
-      linkedAccountId: biller.linkedAccountId || '' // ENHANCEMENT: Populate linked account field
+      linkedAccountId: biller.linkedAccountId || '', // ENHANCEMENT: Populate linked account field
+      reactMonth: defaultReactMonth,
+      reactYear: defaultReactYear,
     });
     setShowEditModal(biller);
     setActiveDropdownId(null);
     setTimingFeedback('');
+
+    // Load this biller's payment schedules for orphaning detection
+    try {
+      const { data } = await getPaymentSchedulesBySource('biller', biller.id);
+      setEditBillerSchedules(data || []);
+    } catch {
+      setEditBillerSchedules([]);
+    }
   };
 
   const renderCategoryOptions = () => (
@@ -1146,12 +1265,34 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
               </div>
 
               <div className="border-t border-gray-200 pt-6">
-                <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-4">Deactivation Date (optional)</label>
+                <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Deactivation Date (optional)</label>
+                <p className="text-xs text-gray-400 mb-4">Biller deactivates at the start of this month — last payment is the month before.</p>
                 <div className="grid grid-cols-2 gap-4">
                   <div><label className="block text-[10px] font-bold text-gray-400 mb-2">Month</label>
-                    <select value={addFormData.deactMonth} onChange={(e) => setAddFormData({ ...addFormData, deactMonth: e.target.value })} className="w-full bg-gray-50 border-transparent rounded-2xl p-4 outline-none font-bold text-sm appearance-none"><option value="">None</option>{MONTHS.map(m => <option key={m} value={m}>{m}</option>)}</select>
+                    <select value={addFormData.deactMonth} onChange={(e) => setAddFormData({ ...addFormData, deactMonth: e.target.value })} className="w-full bg-gray-50 border-transparent rounded-2xl p-4 outline-none font-bold text-sm appearance-none">
+                      <option value="">None</option>
+                      {MONTHS.map(m => {
+                        const deactYearNum = parseInt(addFormData.deactYear);
+                        const actYearNum = parseInt(addFormData.actYear);
+                        const sameYear = !isNaN(deactYearNum) && !isNaN(actYearNum) && deactYearNum === actYearNum;
+                        const actMonthIdx = MONTHS.indexOf(addFormData.actMonth);
+                        const mIdx = MONTHS.indexOf(m);
+                        // Disable months on or before activation month when deact year == act year
+                        const isDisabled = sameYear && mIdx <= actMonthIdx;
+                        return <option key={m} value={m} disabled={isDisabled} className={isDisabled ? 'text-gray-300' : ''}>{m}</option>;
+                      })}
+                    </select>
                   </div>
-                  <div><label className="block text-[10px] font-bold text-gray-400 mb-2">Year</label><input type="number" min="2000" max="2100" placeholder="e.g. 2026" value={addFormData.deactYear} onChange={(e) => setAddFormData({ ...addFormData, deactYear: e.target.value })} className="w-full bg-gray-50 border-transparent rounded-2xl p-4 outline-none font-bold" /></div>
+                  <div><label className="block text-[10px] font-bold text-gray-400 mb-2">Year</label><input type="number" min="2000" max="2100" placeholder="e.g. 2026" value={addFormData.deactYear} onChange={(e) => {
+                    const newDeactYear = e.target.value;
+                    const deactYearNum = parseInt(newDeactYear);
+                    const actYearNum = parseInt(addFormData.actYear);
+                    const actMonthIdx = MONTHS.indexOf(addFormData.actMonth);
+                    const deactMonthIdx = MONTHS.indexOf(addFormData.deactMonth);
+                    // Clear deactMonth if it becomes invalid (same year and deact month <= act month)
+                    const shouldClear = !isNaN(deactYearNum) && !isNaN(actYearNum) && deactYearNum === actYearNum && deactMonthIdx !== -1 && deactMonthIdx <= actMonthIdx;
+                    setAddFormData({ ...addFormData, deactYear: newDeactYear, deactMonth: shouldClear ? '' : addFormData.deactMonth });
+                  }} className="w-full bg-gray-50 border-transparent rounded-2xl p-4 outline-none font-bold" /></div>
                 </div>
               </div>
 
@@ -1161,10 +1302,23 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
                   <span className="text-[10px] font-black text-indigo-400 uppercase tracking-widest">Auto-Computed Timing:</span>
                   <span className="text-sm font-black text-indigo-600">{calculateTiming(addFormData.dueDate || addFormData.actDay)}</span>
                 </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-[10px] font-black text-indigo-400 uppercase tracking-widest">Auto-Computed Status:</span>
-                  <span className={`text-sm font-black ${(addFormData.deactMonth && addFormData.deactYear) ? 'text-gray-600' : 'text-green-600'}`}>{calculateStatus((addFormData.deactMonth && addFormData.deactYear) ? { month: addFormData.deactMonth, year: addFormData.deactYear } : undefined)}</span>
-                </div>
+                {(() => {
+                  const deactDate = (addFormData.deactMonth && addFormData.deactYear)
+                    ? { month: addFormData.deactMonth, year: addFormData.deactYear }
+                    : undefined;
+                  const computedStatus = calculateStatus(deactDate);
+                  return (
+                    <div className="flex justify-between items-center">
+                      <span className="text-[10px] font-black text-indigo-400 uppercase tracking-widest">Auto-Computed Status:</span>
+                      <div className="flex items-center gap-2">
+                        <span className={`text-sm font-black ${computedStatus === 'inactive' ? 'text-gray-600' : 'text-green-600'}`}>{computedStatus}</span>
+                        {deactDate && computedStatus === 'active' && (
+                          <span className="text-xs text-orange-500 font-medium">— deactivates {deactDate.month} {deactDate.year}</span>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })()}
               </div>
 
               {timingFeedback && (
@@ -1246,26 +1400,68 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
                 </div>
               )}
               
-              <div className="border-t border-gray-200 pt-6">
-                <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-4">Activation Date</label>
-                <div className="grid grid-cols-3 gap-4">
-                  <div><label className="block text-[10px] font-bold text-gray-400 mb-2">Month</label>
-                    <select value={editFormData.actMonth} onChange={(e) => setEditFormData({ ...editFormData, actMonth: e.target.value })} className="w-full bg-gray-50 border-transparent rounded-2xl p-4 outline-none font-bold text-sm appearance-none">{MONTHS.map(m => <option key={m} value={m}>{m}</option>)}</select>
+              {/* Date fields: show Reactivation Date for inactive billers, Activation+Deactivation for active */}
+              {showEditModal?.status === 'inactive' ? (
+                <div className="border-t border-gray-200 pt-6">
+                  <label className="block text-[10px] font-black text-indigo-500 uppercase tracking-widest mb-2">Reactivation Date</label>
+                  <p className="text-xs text-gray-500 mb-4">New payment schedules will be created from this month. Existing payment history will be preserved.</p>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-[10px] font-bold text-gray-400 mb-2">Month</label>
+                      <select required value={editFormData.reactMonth} onChange={(e) => setEditFormData({ ...editFormData, reactMonth: e.target.value })} className="w-full bg-indigo-50 border-transparent rounded-2xl p-4 outline-none font-bold text-sm appearance-none">
+                        {MONTHS.map(m => <option key={m} value={m}>{m}</option>)}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-bold text-gray-400 mb-2">Year</label>
+                      <input required type="number" min="2000" max="2100" value={editFormData.reactYear} onChange={(e) => setEditFormData({ ...editFormData, reactYear: e.target.value })} className="w-full bg-indigo-50 border-transparent rounded-2xl p-4 outline-none font-bold" />
+                    </div>
                   </div>
-                  <div><label className="block text-[10px] font-bold text-gray-400 mb-2">Day (optional)</label><input type="number" min="1" max="31" placeholder="e.g. 15" value={editFormData.actDay} onChange={(e) => { setEditFormData({ ...editFormData, actDay: e.target.value }); if (!editFormData.dueDate) showTimingInfo(e.target.value); }} className="w-full bg-gray-50 border-transparent rounded-2xl p-4 outline-none font-bold" /></div>
-                  <div><label className="block text-[10px] font-bold text-gray-400 mb-2">Year</label><input required type="number" min="2000" max="2100" value={editFormData.actYear} onChange={(e) => setEditFormData({ ...editFormData, actYear: e.target.value })} className="w-full bg-gray-50 border-transparent rounded-2xl p-4 outline-none font-bold" /></div>
                 </div>
-              </div>
+              ) : (
+                <>
+                  <div className="border-t border-gray-200 pt-6">
+                    <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-4">Activation Date</label>
+                    <div className="grid grid-cols-3 gap-4">
+                      <div><label className="block text-[10px] font-bold text-gray-400 mb-2">Month</label>
+                        <select value={editFormData.actMonth} onChange={(e) => setEditFormData({ ...editFormData, actMonth: e.target.value })} className="w-full bg-gray-50 border-transparent rounded-2xl p-4 outline-none font-bold text-sm appearance-none">{MONTHS.map(m => <option key={m} value={m}>{m}</option>)}</select>
+                      </div>
+                      <div><label className="block text-[10px] font-bold text-gray-400 mb-2">Day (optional)</label><input type="number" min="1" max="31" placeholder="e.g. 15" value={editFormData.actDay} onChange={(e) => { setEditFormData({ ...editFormData, actDay: e.target.value }); if (!editFormData.dueDate) showTimingInfo(e.target.value); }} className="w-full bg-gray-50 border-transparent rounded-2xl p-4 outline-none font-bold" /></div>
+                      <div><label className="block text-[10px] font-bold text-gray-400 mb-2">Year</label><input required type="number" min="2000" max="2100" value={editFormData.actYear} onChange={(e) => setEditFormData({ ...editFormData, actYear: e.target.value })} className="w-full bg-gray-50 border-transparent rounded-2xl p-4 outline-none font-bold" /></div>
+                    </div>
+                  </div>
 
-              <div className="border-t border-gray-200 pt-6">
-                <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-4">Deactivation Date (optional)</label>
-                <div className="grid grid-cols-2 gap-4">
-                  <div><label className="block text-[10px] font-bold text-gray-400 mb-2">Month</label>
-                    <select value={editFormData.deactMonth} onChange={(e) => setEditFormData({ ...editFormData, deactMonth: e.target.value })} className="w-full bg-gray-50 border-transparent rounded-2xl p-4 outline-none font-bold text-sm appearance-none"><option value="">None</option>{MONTHS.map(m => <option key={m} value={m}>{m}</option>)}</select>
+                  <div className="border-t border-gray-200 pt-6">
+                    <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Deactivation Date (optional)</label>
+                    <p className="text-xs text-gray-400 mb-4">Biller deactivates at the start of this month — last payment is the month before.</p>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div><label className="block text-[10px] font-bold text-gray-400 mb-2">Month</label>
+                        <select value={editFormData.deactMonth} onChange={(e) => setEditFormData({ ...editFormData, deactMonth: e.target.value })} className="w-full bg-gray-50 border-transparent rounded-2xl p-4 outline-none font-bold text-sm appearance-none">
+                          <option value="">None</option>
+                          {MONTHS.map(m => {
+                            const deactYearNum = parseInt(editFormData.deactYear);
+                            const actYearNum = parseInt(editFormData.actYear);
+                            const sameYear = !isNaN(deactYearNum) && !isNaN(actYearNum) && deactYearNum === actYearNum;
+                            const actMonthIdx = MONTHS.indexOf(editFormData.actMonth);
+                            const mIdx = MONTHS.indexOf(m);
+                            const isDisabled = sameYear && mIdx <= actMonthIdx;
+                            return <option key={m} value={m} disabled={isDisabled} className={isDisabled ? 'text-gray-300' : ''}>{m}</option>;
+                          })}
+                        </select>
+                      </div>
+                      <div><label className="block text-[10px] font-bold text-gray-400 mb-2">Year</label><input type="number" min="2000" max="2100" placeholder="e.g. 2026" value={editFormData.deactYear} onChange={(e) => {
+                        const newDeactYear = e.target.value;
+                        const deactYearNum = parseInt(newDeactYear);
+                        const actYearNum = parseInt(editFormData.actYear);
+                        const actMonthIdx = MONTHS.indexOf(editFormData.actMonth);
+                        const deactMonthIdx = MONTHS.indexOf(editFormData.deactMonth);
+                        const shouldClear = !isNaN(deactYearNum) && !isNaN(actYearNum) && deactYearNum === actYearNum && deactMonthIdx !== -1 && deactMonthIdx <= actMonthIdx;
+                        setEditFormData({ ...editFormData, deactYear: newDeactYear, deactMonth: shouldClear ? '' : editFormData.deactMonth });
+                      }} className="w-full bg-gray-50 border-transparent rounded-2xl p-4 outline-none font-bold" /></div>
+                    </div>
                   </div>
-                  <div><label className="block text-[10px] font-bold text-gray-400 mb-2">Year</label><input type="number" min="2000" max="2100" placeholder="e.g. 2026" value={editFormData.deactYear} onChange={(e) => setEditFormData({ ...editFormData, deactYear: e.target.value })} className="w-full bg-gray-50 border-transparent rounded-2xl p-4 outline-none font-bold" /></div>
-                </div>
-              </div>
+                </>
+              )}
 
               {/* Computed fields display */}
               <div className="bg-indigo-50 rounded-2xl p-4 space-y-2">
@@ -1273,10 +1469,41 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
                   <span className="text-[10px] font-black text-indigo-400 uppercase tracking-widest">Auto-Computed Timing:</span>
                   <span className="text-sm font-black text-indigo-600">{calculateTiming(editFormData.dueDate || editFormData.actDay)}</span>
                 </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-[10px] font-black text-indigo-400 uppercase tracking-widest">Auto-Computed Status:</span>
-                  <span className={`text-sm font-black ${(editFormData.deactMonth && editFormData.deactYear) ? 'text-gray-600' : 'text-green-600'}`}>{calculateStatus((editFormData.deactMonth && editFormData.deactYear) ? { month: editFormData.deactMonth, year: editFormData.deactYear } : undefined)}</span>
-                </div>
+                {showEditModal?.status !== 'inactive' && (() => {
+                  const deactDate = (editFormData.deactMonth && editFormData.deactYear)
+                    ? { month: editFormData.deactMonth, year: editFormData.deactYear }
+                    : undefined;
+                  const computedStatus = calculateStatus(deactDate);
+                  return (
+                    <div className="flex justify-between items-center">
+                      <span className="text-[10px] font-black text-indigo-400 uppercase tracking-widest">Auto-Computed Status:</span>
+                      <div className="flex items-center gap-2">
+                        <span className={`text-sm font-black ${computedStatus === 'inactive' ? 'text-gray-600' : 'text-green-600'}`}>{computedStatus}</span>
+                        {deactDate && computedStatus === 'active' && (
+                          <span className="text-xs text-orange-500 font-medium">— deactivates {deactDate.month} {deactDate.year}</span>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })()}
+                {showEditModal?.status === 'inactive' && (() => {
+                  const reactDate = {
+                    month: editFormData.reactMonth || editFormData.actMonth,
+                    year: editFormData.reactYear || editFormData.actYear,
+                  };
+                  const computedStatus = calculateStatusFromActivation(reactDate);
+                  return (
+                    <div className="flex justify-between items-center">
+                      <span className="text-[10px] font-black text-indigo-400 uppercase tracking-widest">After Reactivation:</span>
+                      <div className="flex items-center gap-2">
+                        <span className={`text-sm font-black ${computedStatus === 'inactive' ? 'text-gray-600' : 'text-green-600'}`}>{computedStatus}</span>
+                        {computedStatus === 'inactive' && (
+                          <span className="text-xs text-orange-500 font-medium">— activates {reactDate.month} {reactDate.year}</span>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })()}
               </div>
 
               {timingFeedback && (
@@ -1285,7 +1512,7 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
                 </div>
               )}
 
-              <div className="flex space-x-4 pt-4"><button type="button" onClick={() => { setShowEditModal(null); setTimingFeedback(''); }} className="flex-1 bg-gray-100 py-4 rounded-2xl font-bold text-gray-500">Cancel</button><button type="submit" className="flex-1 bg-indigo-600 text-white py-4 rounded-2xl font-bold shadow-xl">Update Biller</button></div>
+              <div className="flex space-x-4 pt-4"><button type="button" onClick={() => { setShowEditModal(null); setTimingFeedback(''); }} className="flex-1 bg-gray-100 py-4 rounded-2xl font-bold text-gray-500">Cancel</button><button type="submit" disabled={isSubmitting} className="flex-1 bg-indigo-600 text-white py-4 rounded-2xl font-bold shadow-xl disabled:opacity-60">{showEditModal?.status === 'inactive' ? 'Reactivate Biller' : 'Update Biller'}</button></div>
             </form>
           </div>
         </div>

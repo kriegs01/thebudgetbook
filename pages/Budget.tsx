@@ -28,6 +28,44 @@ interface BudgetProps {
 
 const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 
+/**
+ * Checks whether a biller should appear in a budget for the given month/year,
+ * based on its activation and deactivation dates.
+ *
+ * A biller is considered active for a period when:
+ *   activationDate <= selectedPeriod  (inclusive)
+ *   AND (no deactivationDate OR selectedPeriod < deactivationDate)
+ *
+ * The deactivation month is treated as the FIRST inactive month (matches
+ * the calculateStatus logic in Billers.tsx).
+ */
+const isBillerActiveForPeriod = (biller: Biller, month: string, year: number): boolean => {
+  const monthIdx = MONTHS.indexOf(month);
+  if (monthIdx === -1) return false;
+
+  const actYear = parseInt(biller.activationDate.year);
+  const actMonthIdx = MONTHS.indexOf(biller.activationDate.month);
+  if (isNaN(actYear) || actMonthIdx === -1) return false;
+
+  // Selected period must be on or after the activation date
+  if (year < actYear || (year === actYear && monthIdx < actMonthIdx)) {
+    return false;
+  }
+
+  // Selected period must be before the deactivation date (deact month = first inactive month)
+  if (biller.deactivationDate) {
+    const deactYear = parseInt(biller.deactivationDate.year);
+    const deactMonthIdx = MONTHS.indexOf(biller.deactivationDate.month);
+    if (!isNaN(deactYear) && deactMonthIdx !== -1) {
+      if (year > deactYear || (year === deactYear && monthIdx >= deactMonthIdx)) {
+        return false;
+      }
+    }
+  }
+
+  return true;
+};
+
 // Budget setup status constants
 const BUDGET_SETUP_STATUS = {
   SAVED: 'Saved',
@@ -225,15 +263,18 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
             (b.category === cat.name || b.category.startsWith(`${cat.name} -`)) && 
             b.timing === selectedTiming &&
             b.status === 'active' &&
+            isBillerActiveForPeriod(b, selectedMonth, selectedYear) &&
             !removedIds.has(b.id)
           );
 
-          // Remove billers that don't match the current timing
+          // Remove billers that don't match the current timing or are not active for this period
           // ENHANCEMENT: Also update amounts for existing billers (in case of linked account changes)
           const filteredExisting = newData[cat.name].filter(item => {
             if (item.isBiller) {
               const biller = billers.find(b => b.id === item.id);
-              return biller && biller.timing === selectedTiming;
+              return biller &&
+                biller.timing === selectedTiming &&
+                isBillerActiveForPeriod(biller, selectedMonth, selectedYear);
             }
             return true; // Keep non-biller items
           }).map(item => {
@@ -295,7 +336,7 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
         return newData;
       });
     }
-  }, [selectedMonth, selectedTiming, billers, view, removedIds, categories]);
+  }, [selectedMonth, selectedTiming, selectedYear, billers, view, removedIds, categories]);
 
   const formatCurrency = (val: number) => {
     return new Intl.NumberFormat('en-PH', { 

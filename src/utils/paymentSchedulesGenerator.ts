@@ -14,31 +14,43 @@ const MONTHS = [
 
 /**
  * Generate payment schedules for a biller
- * Creates one schedule per month based on activation/deactivation dates
+ * Creates one schedule per month based on activation/deactivation dates.
+ * If year is omitted, uses the biller's activation year.
  */
 export const generateBillerPaymentSchedules = (
   biller: Biller,
-  year: number = 2026
+  year?: number
 ): CreateMonthlyPaymentScheduleInput[] => {
   const schedules: CreateMonthlyPaymentScheduleInput[] = [];
-  
+
+  const targetYear = year ?? parseInt(biller.activationDate.year) ?? new Date().getFullYear();
+
   const activationMonth = MONTHS.indexOf(biller.activationDate.month);
+
+  // Determine deactivation boundary:
+  // The deactivation date is the FIRST inactive month — the last payment schedule
+  // is the month immediately before the deactivation month.
+  // If no deactivation date is set, include all months through December.
   const deactivationMonth = biller.deactivationDate 
     ? MONTHS.indexOf(biller.deactivationDate.month)
-    : 11; // Default to December if no deactivation
+    : 12; // Sentinel: one past December, so all months (0–11) are included
 
   // Generate schedules for each active month
   for (let i = 0; i < MONTHS.length; i++) {
-    // Check if month is within active period
-    const isActive = i >= activationMonth && i <= deactivationMonth;
-    
-    // Only create schedules for active months AND when biller is active
-    if (isActive && biller.status === 'active') {
+    // Deactivation month is EXCLUDED: active range is [activationMonth, deactivationMonth)
+    const isActive = i >= activationMonth && i < deactivationMonth;
+
+    // The activation/deactivation date range is the single source of truth for which
+    // months receive a schedule.  biller.status is intentionally NOT checked here:
+    // a future-dated reactivation keeps status='inactive' until that month arrives, but
+    // must still generate pending schedules for the upcoming active window so that the
+    // detail view does not fall back to the stale JSONB schedules column.
+    if (isActive) {
       schedules.push({
         source_type: 'biller',
         source_id: biller.id,
         month: MONTHS[i],
-        year: year,
+        year: targetYear,
         payment_number: i + 1, // Month sequence number (1-12) for proper tracking
         expected_amount: biller.expectedAmount,
         amount_paid: 0,
