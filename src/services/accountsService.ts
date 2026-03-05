@@ -104,6 +104,30 @@ export const updateAccount = async (id: string, updates: UpdateAccountInput) => 
 };
 
 /**
+ * Like updateAccount, but falls back to a status-only update when the
+ * deactivation_date column is absent from the schema cache (PGRST204).
+ * This keeps activate/deactivate working even before the migration that adds
+ * the deactivation_date column has been applied to the live database.
+ */
+const updateAccountStatusResilient = async (
+  id: string,
+  updates: UpdateAccountInput
+): Promise<{ data: any | null; error: any }> => {
+  const result = await updateAccount(id, updates);
+  if (
+    result.error?.code === 'PGRST204' &&
+    'deactivation_date' in updates
+  ) {
+    // Column doesn't exist in the DB yet — retry with only the other fields
+    const { deactivation_date: _dropped, ...rest }: UpdateAccountInput & { deactivation_date?: any } = updates;
+    if (Object.keys(rest).length > 0) {
+      return await updateAccount(id, rest);
+    }
+  }
+  return result;
+};
+
+/**
  * Delete an account
  */
 export const deleteAccount = async (id: string) => {
@@ -230,11 +254,14 @@ export const deactivateAccountFrontend = async (
   id: string,
   deactivationDate?: { month: string; year: string } | null
 ): Promise<{ data: Account | null; error: any }> => {
-  const updates: UpdateAccountInput = {
-    status: 'inactive',
-    deactivation_date: deactivationDate ?? null,
-  };
-  const { data, error } = await updateAccount(id, updates);
+  // Only include deactivation_date when a real schedule value is provided.
+  // Sending null for a column that doesn't yet exist causes PGRST204, so we
+  // omit the key entirely for the common "deactivate now" case.
+  const updates: UpdateAccountInput = { status: 'inactive' };
+  if (deactivationDate != null) {
+    updates.deactivation_date = deactivationDate;
+  }
+  const { data, error } = await updateAccountStatusResilient(id, updates);
   if (error || !data) {
     return { data: null, error };
   }
@@ -245,11 +272,14 @@ export const deactivateAccountFrontend = async (
  * Reactivate a previously deactivated account (sets status back to 'active')
  */
 export const reactivateAccountFrontend = async (id: string): Promise<{ data: Account | null; error: any }> => {
+  // Include deactivation_date: null to clear any scheduled deactivation.
+  // The resilient helper will retry with status-only if the column doesn't
+  // exist yet in the database schema (PGRST204 schema-cache error).
   const updates: UpdateAccountInput = {
     status: 'active',
     deactivation_date: null,
   };
-  const { data, error } = await updateAccount(id, updates);
+  const { data, error } = await updateAccountStatusResilient(id, updates);
   if (error || !data) {
     return { data: null, error };
   }

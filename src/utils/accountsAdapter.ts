@@ -26,10 +26,17 @@ export const supabaseAccountToFrontend = (supabaseAccount: SupabaseAccount): Acc
 };
 
 /**
- * Convert frontend Account to Supabase account type
+ * Convert frontend Account to Supabase account type.
+ *
+ * `deactivation_date` is intentionally omitted when it has no value so that
+ * routine create/edit operations never reference a column that may not yet
+ * exist in the database schema (avoids PGRST204 schema-cache errors when the
+ * add_status_to_accounts migration has not been applied yet).
+ * Explicit deactivation / reactivation flows set `deactivation_date` directly
+ * through their own update payloads.
  */
 export const frontendAccountToSupabase = (account: Account): Omit<SupabaseAccount, 'id' | 'created_at' | 'user_id'> => {
-  return {
+  const base: Omit<SupabaseAccount, 'id' | 'created_at' | 'user_id' | 'deactivation_date'> = {
     bank: account.bank,
     classification: account.classification,
     balance: account.balance,
@@ -38,8 +45,11 @@ export const frontendAccountToSupabase = (account: Account): Omit<SupabaseAccoun
     billing_date: account.billingDate ?? null,
     due_date: account.dueDate ?? null,
     status: account.status ?? 'active',
-    deactivation_date: account.deactivationDate ?? null,
   };
+  if (account.deactivationDate != null) {
+    return { ...base, deactivation_date: account.deactivationDate };
+  }
+  return base as Omit<SupabaseAccount, 'id' | 'created_at' | 'user_id'>;
 };
 
 /**
