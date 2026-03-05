@@ -375,14 +375,21 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
 
   /**
    * REFACTOR: Get payment schedule for a biller or installment
-   * Uses the monthly_payment_schedules table as the source of truth
+   * Uses the monthly_payment_schedules table as the source of truth.
+   * Optional month/year parameters allow explicit period filtering.
    */
   const getPaymentSchedule = useCallback((
     sourceType: 'biller' | 'installment',
-    sourceId: string
+    sourceId: string,
+    month?: string,
+    year?: number
   ): SupabaseMonthlyPaymentSchedule | undefined => {
     return paymentSchedules.find(
-      schedule => schedule.source_type === sourceType && schedule.source_id === sourceId
+      schedule =>
+        schedule.source_type === sourceType &&
+        schedule.source_id === sourceId &&
+        (month === undefined || schedule.month === month) &&
+        (year === undefined || schedule.year === year)
     );
   }, [paymentSchedules]);
   
@@ -652,9 +659,10 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
     const installmentsTotal = installments
       .filter(inst => {
         const timingMatch = !inst.timing || inst.timing === selectedTiming;
-        const dateMatch = shouldShowInstallment(inst, selectedMonth);
+        const hasScheduleForMonth = !!getPaymentSchedule('installment', inst.id, selectedMonth, selectedYear);
+        const isFinished = inst.totalAmount > 0 && inst.paidAmount >= inst.totalAmount;
         const notExcluded = !excludedInstallmentIds.has(inst.id);
-        return timingMatch && dateMatch && notExcluded;
+        return timingMatch && hasScheduleForMonth && !isFinished && notExcluded;
       })
       .reduce((sum, inst) => sum + inst.monthlyAmount, 0);
 
@@ -837,9 +845,10 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
     const installmentsTotal = installments
       .filter(inst => {
         const timingMatch = !inst.timing || inst.timing === selectedTiming;
-        const dateMatch = shouldShowInstallment(inst, selectedMonth);
+        const hasScheduleForMonth = !!getPaymentSchedule('installment', inst.id, selectedMonth, selectedYear);
+        const isFinished = inst.totalAmount > 0 && inst.paidAmount >= inst.totalAmount;
         const notExcluded = !excludedInstallmentIds.has(inst.id);
-        return timingMatch && dateMatch && notExcluded;
+        return timingMatch && hasScheduleForMonth && !isFinished && notExcluded;
       })
       .reduce((sum, inst) => sum + inst.monthlyAmount, 0);
 
@@ -1379,9 +1388,10 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
       installmentsTotal = installments
         .filter(inst => {
           const timingMatch = !inst.timing || inst.timing === selectedTiming;
-          const dateMatch = shouldShowInstallment(inst, selectedMonth);
+          const hasScheduleForMonth = !!getPaymentSchedule('installment', inst.id, selectedMonth, selectedYear);
+          const isFinished = inst.totalAmount > 0 && inst.paidAmount >= inst.totalAmount;
           const notExcluded = !excludedInstallmentIds.has(inst.id);
-          return timingMatch && dateMatch && notExcluded;
+          return timingMatch && hasScheduleForMonth && !isFinished && notExcluded;
         })
         .reduce((s, inst) => s + inst.monthlyAmount, 0);
     }
@@ -1629,16 +1639,18 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
         {categories.filter(cat => ['Utilities', 'Loans', 'Subscriptions', 'Purchases'].includes(cat.name)).map((cat) => {
           const items = setupData[cat.name] || [];
           
-          // QA: For Loans category, filter installments by timing AND start date
-          // Fix for Issue #1 & #2: Missing loan items and incorrect scheduling
+          // QA: For Loans category, filter installments by timing, payment schedule existence, and completion status
+          // Only show installments that have a payment schedule for the selected month and are not fully paid off
           let relevantInstallments: Installment[] = [];
           if (cat.name === 'Loans') {
             relevantInstallments = installments.filter(inst => {
               // Filter by timing (if set, must match selected timing)
               const timingMatch = !inst.timing || inst.timing === selectedTiming;
-              // Filter by start date (only show if on/after start date)
-              const dateMatch = shouldShowInstallment(inst, selectedMonth);
-              return timingMatch && dateMatch;
+              // Only show installments with a payment schedule for the selected month/year
+              const hasScheduleForMonth = !!getPaymentSchedule('installment', inst.id, selectedMonth, selectedYear);
+              // Exclude installments that are fully paid off (finished)
+              const isFinished = inst.totalAmount > 0 && inst.paidAmount >= inst.totalAmount;
+              return timingMatch && hasScheduleForMonth && !isFinished;
             });
           }
           
@@ -1833,7 +1845,7 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                           
                           // REFACTOR: Use payment schedule for accurate status
                           let isPaid = false, isPartial = false;
-                          const installmentSchedule = getPaymentSchedule('installment', installment.id);
+                          const installmentSchedule = getPaymentSchedule('installment', installment.id, selectedMonth, selectedYear);
                           
                           if (installmentSchedule) {
                             // Use payment schedule status
