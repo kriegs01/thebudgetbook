@@ -349,7 +349,8 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
 
   /**
    * QA: Check if installment should be displayed for selected month
-   * Only shows installments that have started on or before the selected month
+   * Shows installments that have started on or before the selected month
+   * AND whose last payment month (startDate + termDuration - 1) is on or after the selected month.
    * Fix for Issue #2: Incorrect installment scheduling
    */
   const shouldShowInstallment = useCallback((installment: Installment, month: string, year?: number): boolean => {
@@ -365,12 +366,25 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
     
     // Determine target year (use provided year or current year)
     const targetYear = year || new Date().getFullYear();
-    
-    // Compare: installment should only show if start date is on or before selected month
-    if (startYear < targetYear) return true;
-    if (startYear > targetYear) return false;
-    // Same year: compare months (startMonth is 1-12, selectedMonthIndex is 0-11)
-    return startMonth <= (selectedMonthIndex + 1);
+
+    // Use a monotonic month counter (months since year 0) to compare periods safely
+    const startMonthAbs = startYear * 12 + (startMonth - 1);
+    const selectedMonthAbs = targetYear * 12 + selectedMonthIndex;
+
+    // Installment must have started on or before the selected month
+    if (startMonthAbs > selectedMonthAbs) return false;
+
+    // Installment must not be past its last payment month.
+    // Last payment month = startDate + (termDuration - 1).
+    // termDuration is stored as e.g. "12 months" (set by installmentsAdapter.ts:
+    // `${supabase.term_duration} months`) — extract the leading integer.
+    const termMonths = parseInt(installment.termDuration, 10);
+    if (!isNaN(termMonths) && termMonths > 0) {
+      const lastPaymentMonthAbs = startMonthAbs + (termMonths - 1);
+      if (selectedMonthAbs > lastPaymentMonthAbs) return false;
+    }
+
+    return true;
   }, []); // MONTHS is a constant, no need to include in deps
 
   /**
