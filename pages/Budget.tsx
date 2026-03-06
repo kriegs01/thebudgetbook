@@ -661,7 +661,11 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
         const timingMatch = !inst.timing || inst.timing === selectedTiming;
         const scheduleForMonth = getPaymentSchedule('installment', inst.id, selectedMonth, selectedYear);
         const isActiveForPeriod = scheduleForMonth !== undefined || shouldShowInstallment(inst, selectedMonth, selectedYear);
-        const isFinished = inst.totalAmount > 0 && inst.paidAmount >= inst.totalAmount;
+        // Require both the aggregate and the schedule to agree the loan is done.
+        // This prevents a stale/drifted aggregate paidAmount from hiding an installment
+        // whose current-month schedule is still 'pending' or 'partial'.
+        const aggregateFinished = inst.totalAmount > 0 && inst.paidAmount >= inst.totalAmount;
+        const isFinished = aggregateFinished && (!scheduleForMonth || scheduleForMonth.status === 'paid');
         const notExcluded = !excludedInstallmentIds.has(inst.id);
         return timingMatch && isActiveForPeriod && !isFinished && notExcluded;
       })
@@ -848,7 +852,11 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
         const timingMatch = !inst.timing || inst.timing === selectedTiming;
         const scheduleForMonth = getPaymentSchedule('installment', inst.id, selectedMonth, selectedYear);
         const isActiveForPeriod = scheduleForMonth !== undefined || shouldShowInstallment(inst, selectedMonth, selectedYear);
-        const isFinished = inst.totalAmount > 0 && inst.paidAmount >= inst.totalAmount;
+        // Require both the aggregate and the schedule to agree the loan is done.
+        // This prevents a stale/drifted aggregate paidAmount from hiding an installment
+        // whose current-month schedule is still 'pending' or 'partial'.
+        const aggregateFinished = inst.totalAmount > 0 && inst.paidAmount >= inst.totalAmount;
+        const isFinished = aggregateFinished && (!scheduleForMonth || scheduleForMonth.status === 'paid');
         const notExcluded = !excludedInstallmentIds.has(inst.id);
         return timingMatch && isActiveForPeriod && !isFinished && notExcluded;
       })
@@ -1392,7 +1400,11 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
           const timingMatch = !inst.timing || inst.timing === selectedTiming;
           const scheduleForMonth = getPaymentSchedule('installment', inst.id, selectedMonth, selectedYear);
           const isActiveForPeriod = scheduleForMonth !== undefined || shouldShowInstallment(inst, selectedMonth, selectedYear);
-          const isFinished = inst.totalAmount > 0 && inst.paidAmount >= inst.totalAmount;
+          // Require both the aggregate and the schedule to agree the loan is done.
+          // This prevents a stale/drifted aggregate paidAmount from hiding an installment
+          // whose current-month schedule is still 'pending' or 'partial'.
+          const aggregateFinished = inst.totalAmount > 0 && inst.paidAmount >= inst.totalAmount;
+          const isFinished = aggregateFinished && (!scheduleForMonth || scheduleForMonth.status === 'paid');
           const notExcluded = !excludedInstallmentIds.has(inst.id);
           return timingMatch && isActiveForPeriod && !isFinished && notExcluded;
         })
@@ -1653,8 +1665,11 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
               // Use schedule existence when available; fall back to date-based check for older installments
               const scheduleForMonth = getPaymentSchedule('installment', inst.id, selectedMonth, selectedYear);
               const isActiveForPeriod = scheduleForMonth !== undefined || shouldShowInstallment(inst, selectedMonth, selectedYear);
-              // Exclude installments that are fully paid off (entire loan finished)
-              const isFinished = inst.totalAmount > 0 && inst.paidAmount >= inst.totalAmount;
+              // Require both the aggregate and the schedule to agree the loan is done.
+              // This prevents a stale/drifted aggregate paidAmount from hiding an installment
+              // whose current-month schedule is still 'pending' or 'partial'.
+              const aggregateFinished = inst.totalAmount > 0 && inst.paidAmount >= inst.totalAmount;
+              const isFinished = aggregateFinished && (!scheduleForMonth || scheduleForMonth.status === 'paid');
               return timingMatch && isActiveForPeriod && !isFinished;
             });
           }
