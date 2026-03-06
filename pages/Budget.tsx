@@ -659,10 +659,11 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
     const installmentsTotal = installments
       .filter(inst => {
         const timingMatch = !inst.timing || inst.timing === selectedTiming;
-        const hasScheduleForMonth = !!getPaymentSchedule('installment', inst.id, selectedMonth, selectedYear);
+        const scheduleForMonth = getPaymentSchedule('installment', inst.id, selectedMonth, selectedYear);
+        const isActiveForPeriod = scheduleForMonth !== undefined || shouldShowInstallment(inst, selectedMonth, selectedYear);
         const isFinished = inst.totalAmount > 0 && inst.paidAmount >= inst.totalAmount;
         const notExcluded = !excludedInstallmentIds.has(inst.id);
-        return timingMatch && hasScheduleForMonth && !isFinished && notExcluded;
+        return timingMatch && isActiveForPeriod && !isFinished && notExcluded;
       })
       .reduce((sum, inst) => sum + inst.monthlyAmount, 0);
 
@@ -845,10 +846,11 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
     const installmentsTotal = installments
       .filter(inst => {
         const timingMatch = !inst.timing || inst.timing === selectedTiming;
-        const hasScheduleForMonth = !!getPaymentSchedule('installment', inst.id, selectedMonth, selectedYear);
+        const scheduleForMonth = getPaymentSchedule('installment', inst.id, selectedMonth, selectedYear);
+        const isActiveForPeriod = scheduleForMonth !== undefined || shouldShowInstallment(inst, selectedMonth, selectedYear);
         const isFinished = inst.totalAmount > 0 && inst.paidAmount >= inst.totalAmount;
         const notExcluded = !excludedInstallmentIds.has(inst.id);
-        return timingMatch && hasScheduleForMonth && !isFinished && notExcluded;
+        return timingMatch && isActiveForPeriod && !isFinished && notExcluded;
       })
       .reduce((sum, inst) => sum + inst.monthlyAmount, 0);
 
@@ -1388,10 +1390,11 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
       installmentsTotal = installments
         .filter(inst => {
           const timingMatch = !inst.timing || inst.timing === selectedTiming;
-          const hasScheduleForMonth = !!getPaymentSchedule('installment', inst.id, selectedMonth, selectedYear);
+          const scheduleForMonth = getPaymentSchedule('installment', inst.id, selectedMonth, selectedYear);
+          const isActiveForPeriod = scheduleForMonth !== undefined || shouldShowInstallment(inst, selectedMonth, selectedYear);
           const isFinished = inst.totalAmount > 0 && inst.paidAmount >= inst.totalAmount;
           const notExcluded = !excludedInstallmentIds.has(inst.id);
-          return timingMatch && hasScheduleForMonth && !isFinished && notExcluded;
+          return timingMatch && isActiveForPeriod && !isFinished && notExcluded;
         })
         .reduce((s, inst) => s + inst.monthlyAmount, 0);
     }
@@ -1640,17 +1643,19 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
           const items = setupData[cat.name] || [];
           
           // QA: For Loans category, filter installments by timing, payment schedule existence, and completion status
-          // Only show installments that have a payment schedule for the selected month and are not fully paid off
+          // Show installments that have a DB schedule for this month OR (no schedule yet) pass the date check.
+          // Always exclude installments that are fully paid off.
           let relevantInstallments: Installment[] = [];
           if (cat.name === 'Loans') {
             relevantInstallments = installments.filter(inst => {
               // Filter by timing (if set, must match selected timing)
               const timingMatch = !inst.timing || inst.timing === selectedTiming;
-              // Only show installments with a payment schedule for the selected month/year
-              const hasScheduleForMonth = !!getPaymentSchedule('installment', inst.id, selectedMonth, selectedYear);
-              // Exclude installments that are fully paid off (finished)
+              // Use schedule existence when available; fall back to date-based check for older installments
+              const scheduleForMonth = getPaymentSchedule('installment', inst.id, selectedMonth, selectedYear);
+              const isActiveForPeriod = scheduleForMonth !== undefined || shouldShowInstallment(inst, selectedMonth, selectedYear);
+              // Exclude installments that are fully paid off (entire loan finished)
               const isFinished = inst.totalAmount > 0 && inst.paidAmount >= inst.totalAmount;
-              return timingMatch && hasScheduleForMonth && !isFinished;
+              return timingMatch && isActiveForPeriod && !isFinished;
             });
           }
           
