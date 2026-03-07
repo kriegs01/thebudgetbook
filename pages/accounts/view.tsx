@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { ArrowLeft, Info, Eye, ZoomIn, ZoomOut, Download, X } from 'lucide-react';
+import { ArrowLeft, Info, Eye, ZoomIn, ZoomOut, Download, X, Pencil } from 'lucide-react';
 import { useSearchParams, Link } from 'react-router-dom';
 import { Account } from '../../types';
 import { getTransactionsByPaymentMethod, createTransaction, updateTransaction, createTransfer, getLoanTransactionsWithPayments, getReceiptSignedUrl } from '../../src/services/transactionsService';
@@ -475,8 +475,7 @@ const AccountFilteredTransactions: React.FC<AccountFilteredTransactionsProps> = 
                     <th className="px-4 py-3 text-xs text-gray-500 uppercase tracking-wider">Type</th>
                     <th className="px-4 py-3 text-xs text-gray-500 uppercase tracking-wider">Date</th>
                     <th className="px-4 py-3 text-xs text-gray-500 uppercase tracking-wider">Amount</th>
-                    <th className="px-4 py-3" />
-                    <th className="px-4 py-3 text-xs text-gray-500 uppercase tracking-wider">Actions</th>
+                    <th className="px-4 py-3 text-xs text-gray-500 uppercase tracking-wider text-center">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -492,27 +491,28 @@ const AccountFilteredTransactions: React.FC<AccountFilteredTransactionsProps> = 
                             {formatCurrency(-tx.amount)}
                           </div>
                         </td>
-                        <td className="px-4 py-3 text-right">
-                          <button
-                            onClick={() => setSelectedTx(tx)}
-                            title="View transaction details"
-                            className="text-gray-400 hover:text-indigo-600 opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity rounded-full p-1 hover:bg-indigo-50"
-                          >
-                            <Info className="w-4 h-4" />
-                          </button>
-                        </td>
-                        <td className="px-4 py-3">
-                          <div className="flex items-center gap-2">
+                        <td className="px-4 py-3 text-center">
+                          <div className="flex items-center justify-center gap-1">
+                            <button
+                              onClick={() => setSelectedTx(tx)}
+                              title="View details"
+                              aria-label="View transaction details"
+                              className="text-gray-300 hover:text-indigo-500 hover:bg-indigo-50 rounded-full p-1.5 transition-all"
+                            >
+                              <Info className="w-4 h-4" />
+                            </button>
                             <button
                               onClick={() => openEditTxModal(tx)}
-                              className="text-[9px] font-black text-indigo-600 uppercase tracking-widest border border-indigo-100 px-2 py-1 rounded-lg hover:bg-indigo-50 transition-colors opacity-0 group-hover:opacity-100 focus:opacity-100"
+                              title="Edit transaction"
+                              aria-label="Edit transaction"
+                              className="text-gray-300 hover:text-indigo-500 hover:bg-indigo-50 rounded-full p-1.5 transition-all"
                             >
-                              Edit
+                              <Pencil className="w-4 h-4" />
                             </button>
                             {account?.type === 'Debit' && tx.transaction_type === 'loan' && loanTx && (loanTx.remainingBalance ?? 0) > 0 && (
                               <button
                                 onClick={() => openLoanPaymentModal(loanTx)}
-                                className="px-3 py-1 bg-purple-500 hover:bg-purple-600 text-white text-xs font-bold rounded-lg transition-colors"
+                                className="px-3 py-1 bg-purple-500 hover:bg-purple-600 text-white text-xs font-bold rounded-lg transition-colors ml-1"
                               >
                                 Receive Payment
                               </button>
@@ -523,7 +523,7 @@ const AccountFilteredTransactions: React.FC<AccountFilteredTransactionsProps> = 
                     );
                   })}
                   {transactions.length === 0 && (
-                    <tr><td colSpan={6} className="px-4 py-6 text-center text-gray-400">No transactions for this account.</td></tr>
+                    <tr><td colSpan={5} className="px-4 py-6 text-center text-gray-400">No transactions for this account.</td></tr>
                   )}
                 </tbody>
               </table>
