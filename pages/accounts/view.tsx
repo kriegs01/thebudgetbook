@@ -1,8 +1,8 @@
 import React, { useEffect, useState } from 'react';
-import { ArrowLeft, Info, Eye, ZoomIn, ZoomOut, Download, X, Pencil, BanknoteArrowDown } from 'lucide-react';
+import { ArrowLeft, Info, Eye, ZoomIn, ZoomOut, Download, X, Pencil, BanknoteArrowDown, Trash2 } from 'lucide-react';
 import { useSearchParams, Link } from 'react-router-dom';
 import { Account } from '../../types';
-import { getTransactionsByPaymentMethod, createTransaction, updateTransaction, createTransfer, getLoanTransactionsWithPayments, getReceiptSignedUrl } from '../../src/services/transactionsService';
+import { getTransactionsByPaymentMethod, createTransaction, updateTransaction, createTransfer, getLoanTransactionsWithPayments, getReceiptSignedUrl, deleteTransactionAndRevertSchedule } from '../../src/services/transactionsService';
 import { combineDateWithCurrentTime } from '../../src/utils/dateUtils';
 
 type Transaction = {
@@ -339,6 +339,18 @@ const AccountFilteredTransactions: React.FC<AccountFilteredTransactionsProps> = 
     setShowLoanPaymentModal(true);
   };
 
+  const handleDeleteTx = async (tx: Transaction) => {
+    if (!window.confirm(`Delete transaction "${tx.name}"? This action cannot be undone.`)) return;
+    try {
+      const { error } = await deleteTransactionAndRevertSchedule(tx.id);
+      if (error) throw error;
+      await loadTransactions();
+    } catch (error) {
+      console.error('Error deleting transaction:', error);
+      alert('Failed to delete transaction. Please check your connection and try again.');
+    }
+  };
+
   const openEditTxModal = (tx: Transaction) => {
     setEditingViewTx(tx);
     setEditTxForm({
@@ -508,6 +520,14 @@ const AccountFilteredTransactions: React.FC<AccountFilteredTransactionsProps> = 
                               className="text-gray-300 hover:text-indigo-500 hover:bg-indigo-50 rounded-full p-1.5 transition-all"
                             >
                               <Pencil className="w-4 h-4" />
+                            </button>
+                            <button
+                              onClick={() => handleDeleteTx(tx)}
+                              title="Delete transaction"
+                              aria-label="Delete transaction"
+                              className="text-gray-300 hover:text-red-500 hover:bg-red-50 rounded-full p-1.5 transition-all"
+                            >
+                              <Trash2 className="w-4 h-4" />
                             </button>
                             {account?.type === 'Debit' && tx.transaction_type === 'loan' && loanTx && (loanTx.remainingBalance ?? 0) > 0 && (
                               <button
