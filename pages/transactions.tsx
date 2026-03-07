@@ -30,6 +30,7 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ onTransactionDelete
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [accounts, setAccounts] = useState<AccountOption[]>([]);
   const [showForm, setShowForm] = useState(false);
+  const [editingTxId, setEditingTxId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   // Transaction details modal
@@ -107,36 +108,83 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ onTransactionDelete
     }
   }, [selectedTx]);
 
+  const closeForm = () => {
+    setShowForm(false);
+    setEditingTxId(null);
+    setReceiptFile(null);
+    setForm({ name: '', date: todayIso(), amount: '', paymentMethodId: accounts[0]?.id ?? '' });
+  };
+
+  const openEditForm = (tx: Transaction) => {
+    setEditingTxId(tx.id);
+    setForm({
+      name: tx.name,
+      date: new Date(tx.date).toISOString().split('T')[0],
+      amount: tx.amount.toString(),
+      paymentMethodId: tx.paymentMethodId
+    });
+    setReceiptFile(null);
+    setShowForm(true);
+  };
+
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!form.name || !form.date || !form.amount || !form.paymentMethodId) return;
     
     try {
-      const transaction = {
-        name: form.name,
-        date: combineDateWithCurrentTime(form.date),
-        amount: parseFloat(form.amount),
-        payment_method_id: form.paymentMethodId
-      };
-      
-      const { data, error } = await createTransaction(transaction);
-      
-      if (error) {
-        console.error('Error creating transaction:', error);
-        alert('Failed to create transaction. Please try again.');
-        return;
-      }
-      
-      console.log('Transaction created successfully:', data);
+      if (editingTxId) {
+        // Edit mode: update existing transaction
+        const updates = {
+          name: form.name,
+          date: combineDateWithCurrentTime(form.date),
+          amount: parseFloat(form.amount),
+          payment_method_id: form.paymentMethodId
+        };
+        const { error } = await updateTransaction(editingTxId, updates);
+        if (error) {
+          console.error('Error updating transaction:', error);
+          alert('Failed to update transaction. Please try again.');
+          return;
+        }
+        // Upload new receipt if a file was selected during edit
+        if (receiptFile) {
+          const { path, error: uploadError } = await uploadTransactionReceipt(editingTxId, receiptFile);
+          if (uploadError) {
+            console.error('Error uploading receipt:', uploadError);
+            alert('Transaction updated, but receipt upload failed. Please try again.');
+          } else if (path) {
+            await updateTransaction(editingTxId, { receipt_url: path });
+          }
+        }
+        console.log('[Transactions Page] Transaction updated successfully');
+      } else {
+        // Create mode
+        const transaction = {
+          name: form.name,
+          date: combineDateWithCurrentTime(form.date),
+          amount: parseFloat(form.amount),
+          payment_method_id: form.paymentMethodId
+        };
+        
+        const { data, error } = await createTransaction(transaction);
+        
+        if (error) {
+          console.error('Error creating transaction:', error);
+          alert('Failed to create transaction. Please try again.');
+          return;
+        }
+        
+        console.log('Transaction created successfully:', data);
 
-      // Upload receipt if a file was selected
-      if (receiptFile && data) {
-        const { path, error: uploadError } = await uploadTransactionReceipt(data.id, receiptFile);
-        if (uploadError) {
-          console.error('Error uploading receipt:', uploadError);
-          alert('Transaction saved, but receipt upload failed. Please try again.');
-        } else if (path) {
-          await updateTransaction(data.id, { receipt_url: path });
+        // Upload receipt if a file was selected
+        if (receiptFile && data) {
+          const { path, error: uploadError } = await uploadTransactionReceipt(data.id, receiptFile);
+          if (uploadError) {
+            console.error('Error uploading receipt:', uploadError);
+            alert('Transaction saved, but receipt upload failed. Please try again.');
+          } else if (path) {
+            await updateTransaction(data.id, { receipt_url: path });
+          }
         }
       }
       
@@ -145,16 +193,14 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ onTransactionDelete
       
       // Notify parent if callback provided (for refreshing related data like account balances)
       if (onTransactionCreated) {
-        console.log('[Transactions Page] Notifying parent of transaction creation');
+        console.log('[Transactions Page] Notifying parent of transaction change');
         onTransactionCreated();
       }
       
-      setShowForm(false);
-      setReceiptFile(null);
-      setForm({ name: '', date: todayIso(), amount: '', paymentMethodId: accounts[0]?.id ?? '' });
+      closeForm();
     } catch (error) {
-      console.error('Error creating transaction:', error);
-      alert('Failed to create transaction. Please try again.');
+      console.error('Error saving transaction:', error);
+      alert('Failed to save transaction. Please try again.');
     }
   };
 
@@ -240,6 +286,12 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ onTransactionDelete
                               >
                                 <Info className="w-4 h-4" />
                               </button>
+                              <button
+                                onClick={() => openEditForm(tx)}
+                                className="text-[9px] font-black text-indigo-600 uppercase tracking-widest border border-indigo-100 px-2 py-1 rounded-lg hover:bg-indigo-50 transition-colors opacity-0 group-hover:opacity-100 focus:opacity-100"
+                              >
+                                Edit
+                              </button>
                               <button onClick={() => removeTx(tx.id)} className="text-sm text-red-600">Delete</button>
                             </div>
                           </td>
@@ -260,8 +312,8 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ onTransactionDelete
         {showForm && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-md">
             <div className="w-full max-w-md bg-white rounded-3xl p-10 shadow-2xl relative">
-              <h2 className="text-2xl font-black text-gray-900 mb-2">Add New Transaction</h2>
-              <p className="text-gray-500 text-sm mb-8">Record a payment transaction</p>
+              <h2 className="text-2xl font-black text-gray-900 mb-2">{editingTxId ? 'Edit Transaction' : 'Add New Transaction'}</h2>
+              <p className="text-gray-500 text-sm mb-8">{editingTxId ? 'Update the transaction details below' : 'Record a payment transaction'}</p>
               <form onSubmit={onSubmit} className="space-y-6">
                 <div>
                   <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Name</label>
@@ -333,8 +385,8 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ onTransactionDelete
                 </div>
 
                 <div className="flex space-x-4 pt-4">
-                  <button type="button" onClick={() => setShowForm(false)} className="flex-1 bg-gray-100 py-4 rounded-2xl font-bold text-gray-500">Cancel</button>
-                  <button type="submit" disabled={accounts.length === 0} className="flex-1 bg-green-600 text-white py-4 rounded-2xl font-bold hover:bg-green-700 shadow-xl shadow-green-100">Submit Payment</button>
+                  <button type="button" onClick={closeForm} className="flex-1 bg-gray-100 py-4 rounded-2xl font-bold text-gray-500">Cancel</button>
+                  <button type="submit" disabled={accounts.length === 0} className="flex-1 bg-green-600 text-white py-4 rounded-2xl font-bold hover:bg-green-700 shadow-xl shadow-green-100">{editingTxId ? 'Update Transaction' : 'Submit Payment'}</button>
                 </div>
               </form>
             </div>

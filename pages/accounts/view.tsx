@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { ArrowLeft, Info, Eye, ZoomIn, ZoomOut, Download, X } from 'lucide-react';
 import { useSearchParams, Link } from 'react-router-dom';
 import { Account } from '../../types';
-import { getTransactionsByPaymentMethod, createTransaction, createTransfer, getLoanTransactionsWithPayments, getReceiptSignedUrl } from '../../src/services/transactionsService';
+import { getTransactionsByPaymentMethod, createTransaction, updateTransaction, createTransfer, getLoanTransactionsWithPayments, getReceiptSignedUrl } from '../../src/services/transactionsService';
 import { combineDateWithCurrentTime } from '../../src/utils/dateUtils';
 
 type Transaction = {
@@ -71,6 +71,11 @@ const AccountFilteredTransactions: React.FC<AccountFilteredTransactionsProps> = 
   const [loanForm, setLoanForm] = useState({ what: '', amount: '', date: new Date().toISOString().split('T')[0] });
   const [cashInForm, setCashInForm] = useState({ amount: '', date: new Date().toISOString().split('T')[0], notes: '' });
   const [loanPaymentForm, setLoanPaymentForm] = useState({ amount: '', date: new Date().toISOString().split('T')[0] });
+
+  // Edit transaction modal
+  const [showEditTxModal, setShowEditTxModal] = useState(false);
+  const [editingViewTx, setEditingViewTx] = useState<Transaction | null>(null);
+  const [editTxForm, setEditTxForm] = useState({ name: '', amount: '', date: '' });
 
   const loadTransactions = async () => {
     if (typeof window === "undefined" || !accountId) return;
@@ -334,6 +339,45 @@ const AccountFilteredTransactions: React.FC<AccountFilteredTransactionsProps> = 
     setShowLoanPaymentModal(true);
   };
 
+  const openEditTxModal = (tx: Transaction) => {
+    setEditingViewTx(tx);
+    setEditTxForm({
+      name: tx.name,
+      amount: Math.abs(tx.amount).toString(),
+      date: new Date(tx.date).toISOString().split('T')[0]
+    });
+    setShowEditTxModal(true);
+  };
+
+  const handleEditTxSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingViewTx) return;
+
+    setIsSubmitting(true);
+    try {
+      // Preserve the original sign of the amount (positive = money out, negative = money in)
+      const sign = editingViewTx.amount < 0 ? -1 : 1;
+      const { error } = await updateTransaction(editingViewTx.id, {
+        name: editTxForm.name,
+        date: combineDateWithCurrentTime(editTxForm.date),
+        amount: sign * parseFloat(editTxForm.amount)
+      });
+
+      if (error) throw error;
+
+      showMessage('success', 'Transaction updated successfully');
+      setShowEditTxModal(false);
+      setEditingViewTx(null);
+      await loadTransactions();
+      onTransactionCreated?.();
+    } catch (error) {
+      console.error('Error updating transaction:', error);
+      showMessage('error', 'Failed to update transaction');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   const getTransactionTypeBadge = (type?: string) => {
     if (!type || type === 'payment') return null;
     
@@ -432,9 +476,7 @@ const AccountFilteredTransactions: React.FC<AccountFilteredTransactionsProps> = 
                     <th className="px-4 py-3 text-xs text-gray-500 uppercase tracking-wider">Date</th>
                     <th className="px-4 py-3 text-xs text-gray-500 uppercase tracking-wider">Amount</th>
                     <th className="px-4 py-3" />
-                    {account?.type === 'Debit' && (
-                      <th className="px-4 py-3 text-xs text-gray-500 uppercase tracking-wider">Actions</th>
-                    )}
+                    <th className="px-4 py-3 text-xs text-gray-500 uppercase tracking-wider">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -459,9 +501,15 @@ const AccountFilteredTransactions: React.FC<AccountFilteredTransactionsProps> = 
                             <Info className="w-4 h-4" />
                           </button>
                         </td>
-                        {account?.type === 'Debit' && (
-                          <td className="px-4 py-3">
-                            {tx.transaction_type === 'loan' && loanTx && (loanTx.remainingBalance ?? 0) > 0 && (
+                        <td className="px-4 py-3">
+                          <div className="flex items-center gap-2">
+                            <button
+                              onClick={() => openEditTxModal(tx)}
+                              className="text-[9px] font-black text-indigo-600 uppercase tracking-widest border border-indigo-100 px-2 py-1 rounded-lg hover:bg-indigo-50 transition-colors opacity-0 group-hover:opacity-100 focus:opacity-100"
+                            >
+                              Edit
+                            </button>
+                            {account?.type === 'Debit' && tx.transaction_type === 'loan' && loanTx && (loanTx.remainingBalance ?? 0) > 0 && (
                               <button
                                 onClick={() => openLoanPaymentModal(loanTx)}
                                 className="px-3 py-1 bg-purple-500 hover:bg-purple-600 text-white text-xs font-bold rounded-lg transition-colors"
@@ -469,13 +517,13 @@ const AccountFilteredTransactions: React.FC<AccountFilteredTransactionsProps> = 
                                 Receive Payment
                               </button>
                             )}
-                          </td>
-                        )}
+                          </div>
+                        </td>
                       </tr>
                     );
                   })}
                   {transactions.length === 0 && (
-                    <tr><td colSpan={account?.type === 'Debit' ? 6 : 5} className="px-4 py-6 text-center text-gray-400">No transactions for this account.</td></tr>
+                    <tr><td colSpan={6} className="px-4 py-6 text-center text-gray-400">No transactions for this account.</td></tr>
                   )}
                 </tbody>
               </table>
@@ -828,6 +876,72 @@ const AccountFilteredTransactions: React.FC<AccountFilteredTransactionsProps> = 
                   disabled={isSubmitting}
                 >
                   {isSubmitting ? 'Processing...' : 'Record Payment'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Transaction Modal */}
+      {showEditTxModal && editingViewTx && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-md">
+          <div className="w-full max-w-md bg-white rounded-3xl p-10 shadow-2xl relative">
+            <h2 className="text-2xl font-black text-gray-900 mb-2">Edit Transaction</h2>
+            <p className="text-gray-500 text-sm mb-8">Update the transaction details below</p>
+            <form onSubmit={handleEditTxSubmit} className="space-y-6">
+              <div>
+                <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Name</label>
+                <input
+                  value={editTxForm.name}
+                  onChange={e => setEditTxForm(f => ({ ...f, name: e.target.value }))}
+                  required
+                  className="w-full bg-gray-50 border-transparent rounded-2xl p-4 outline-none font-bold focus:ring-2 focus:ring-indigo-500 transition-all"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Amount</label>
+                <div className="relative">
+                  <span className="absolute left-4 top-1/2 -translate-y-1/2 font-bold text-gray-400">₱</span>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={editTxForm.amount}
+                    onChange={e => setEditTxForm(f => ({ ...f, amount: e.target.value }))}
+                    required
+                    className="w-full bg-gray-50 border-transparent rounded-2xl p-4 pl-8 outline-none text-xl font-black focus:ring-2 focus:ring-indigo-500 transition-all"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Date</label>
+                <input
+                  type="date"
+                  value={editTxForm.date}
+                  onChange={e => setEditTxForm(f => ({ ...f, date: e.target.value }))}
+                  required
+                  className="w-full bg-gray-50 border-transparent rounded-2xl p-4 outline-none font-bold text-sm"
+                />
+              </div>
+
+              <div className="flex gap-4 pt-4">
+                <button
+                  type="button"
+                  onClick={() => { setShowEditTxModal(false); setEditingViewTx(null); }}
+                  className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 py-4 rounded-2xl font-bold transition-colors"
+                  disabled={isSubmitting}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white py-4 rounded-2xl font-bold transition-colors disabled:opacity-50"
+                  disabled={isSubmitting}
+                >
+                  {isSubmitting ? 'Saving...' : 'Update Transaction'}
                 </button>
               </div>
             </form>
