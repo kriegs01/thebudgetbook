@@ -250,6 +250,17 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
   const [previewReceiptUrl, setPreviewReceiptUrl] = useState<string | null>(null);
   const [zoom, setZoom] = useState(0.5);
 
+  /**
+   * QA: Returns the sum of monthly amounts from installments linked to a Loans biller,
+   * or null when the biller is not a Loans type or has no linked installments.
+   */
+  const getLinkedInstallmentsAmount = useCallback((biller: Biller): number | null => {
+    if (!biller.category.startsWith('Loans')) return null;
+    const linked = installments.filter(inst => inst.billerId === biller.id);
+    if (linked.length === 0) return null;
+    return linked.reduce((sum, inst) => sum + inst.monthlyAmount, 0);
+  }, [installments]);
+
   // Sync effect with Billers and Categories
   useEffect(() => {
     if (view === 'setup') {
@@ -282,6 +293,11 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
             if (item.isBiller) {
               const biller = billers.find(b => b.id === item.id);
               if (biller) {
+                // QA: For Loans billers, use linked installment monthly amounts first
+                const instAmount = getLinkedInstallmentsAmount(biller);
+                if (instAmount !== null) {
+                  return { ...item, amount: instAmount.toString() };
+                }
                 const schedule = biller.schedules.find(s => s.month === selectedMonth);
                 if (schedule) {
                   const { amount: calculatedAmount } = getScheduleExpectedAmount(
@@ -298,6 +314,15 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
               }
             }
             return item;
+          }).filter(item => {
+            // QA: Exclude Loans biller rows that still resolve to 0 amount
+            if (item.isBiller) {
+              const biller = billers.find(b => b.id === item.id);
+              if (biller?.category.startsWith('Loans') && parseFloat(item.amount) === 0) {
+                return false;
+              }
+            }
+            return true;
           });
 
           const existingIds = new Set(filteredExisting.map(i => i.id));
@@ -306,15 +331,14 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
             .map(b => {
               const schedule = b.schedules.find(s => s.month === selectedMonth);
               
-              // ENHANCEMENT: For linked billers, calculate amount from transactions
+              // QA: For Loans billers, use linked installment monthly amounts first
               let amount: number;
-              if (schedule) {
-                const { amount: calculatedAmount } = getScheduleExpectedAmount(
-                  b,
-                  schedule,
-                  accounts,
-                  transactions
-                );
+              const instAmount = getLinkedInstallmentsAmount(b);
+              if (instAmount !== null) {
+                amount = instAmount;
+              } else if (schedule) {
+                // ENHANCEMENT: For linked billers, calculate amount from transactions
+                const { amount: calculatedAmount } = getScheduleExpectedAmount(b, schedule, accounts, transactions);
                 amount = calculatedAmount;
               } else {
                 amount = b.expectedAmount;
@@ -328,6 +352,14 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                 timing: b.timing,
                 isBiller: true
               };
+            })
+            // QA: Exclude Loans billers that resolve to 0 amount
+            .filter(item => {
+              const biller = billers.find(b => b.id === item.id);
+              if (biller?.category.startsWith('Loans') && parseFloat(item.amount) === 0) {
+                return false;
+              }
+              return true;
             });
 
           newData[cat.name] = [...filteredExisting, ...newItems];
@@ -336,7 +368,7 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
         return newData;
       });
     }
-  }, [selectedMonth, selectedTiming, selectedYear, billers, view, removedIds, categories]);
+  }, [selectedMonth, selectedTiming, selectedYear, billers, view, removedIds, categories, getLinkedInstallmentsAmount]);
 
   const formatCurrency = (val: number) => {
     return new Intl.NumberFormat('en-PH', { 
