@@ -1895,7 +1895,7 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                           <td className="p-4 pr-10 text-right"><button onClick={() => removeItemFromCategory(cat.name, item.id, item.name)} className="text-[9px] font-black text-red-500 uppercase tracking-widest border border-red-50 px-2 py-1 rounded-lg">Exclude</button></td>
                         </tr>
                       );
-                    }) : (
+                    }) : (cat.name === 'Loans' && relevantInstallments.length > 0) ? null : (
                       <tr>
                         <td colSpan={4} className="p-8 text-center text-gray-400 text-sm font-medium">
                           No items yet. Click "Add Item" below to get started.
