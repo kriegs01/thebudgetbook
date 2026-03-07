@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { ArrowLeft, Info, Eye, ZoomIn, ZoomOut, Download, X, Pencil } from 'lucide-react';
+import { ArrowLeft, Info, Eye, ZoomIn, ZoomOut, Download, X, Pencil, BanknoteArrowDown } from 'lucide-react';
 import { useSearchParams, Link } from 'react-router-dom';
 import { Account } from '../../types';
 import { getTransactionsByPaymentMethod, createTransaction, updateTransaction, createTransfer, getLoanTransactionsWithPayments, getReceiptSignedUrl } from '../../src/services/transactionsService';
@@ -512,9 +512,11 @@ const AccountFilteredTransactions: React.FC<AccountFilteredTransactionsProps> = 
                             {account?.type === 'Debit' && tx.transaction_type === 'loan' && loanTx && (loanTx.remainingBalance ?? 0) > 0 && (
                               <button
                                 onClick={() => openLoanPaymentModal(loanTx)}
-                                className="px-3 py-1 bg-purple-500 hover:bg-purple-600 text-white text-xs font-bold rounded-lg transition-colors ml-1"
+                                title="Receive payment"
+                                aria-label="Receive loan payment"
+                                className="bg-purple-500 hover:bg-purple-600 text-white rounded-full p-1.5 transition-all ml-1"
                               >
-                                Receive Payment
+                                <BanknoteArrowDown className="w-4 h-4" />
                               </button>
                             )}
                           </div>
