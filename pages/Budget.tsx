@@ -250,6 +250,17 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
   const [previewReceiptUrl, setPreviewReceiptUrl] = useState<string | null>(null);
   const [zoom, setZoom] = useState(0.5);
 
+  /**
+   * QA: Returns the sum of monthly amounts from installments linked to a Loans biller,
+   * or null when the biller is not a Loans type or has no linked installments.
+   */
+  const getLinkedInstallmentsAmount = useCallback((biller: Biller): number | null => {
+    if (!biller.category.startsWith('Loans')) return null;
+    const linked = installments.filter(inst => inst.billerId === biller.id);
+    if (linked.length === 0) return null;
+    return linked.reduce((sum, inst) => sum + inst.monthlyAmount, 0);
+  }, [installments]);
+
   // Sync effect with Billers and Categories
   useEffect(() => {
     if (view === 'setup') {
@@ -282,6 +293,11 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
             if (item.isBiller) {
               const biller = billers.find(b => b.id === item.id);
               if (biller) {
+                // QA: For Loans billers, use linked installment monthly amounts first
+                const instAmount = getLinkedInstallmentsAmount(biller);
+                if (instAmount !== null) {
+                  return { ...item, amount: instAmount.toString() };
+                }
                 const schedule = biller.schedules.find(s => s.month === selectedMonth);
                 if (schedule) {
                   const { amount: calculatedAmount } = getScheduleExpectedAmount(
@@ -298,6 +314,15 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
               }
             }
             return item;
+          }).filter(item => {
+            // QA: Exclude Loans biller rows that still resolve to 0 amount
+            if (item.isBiller) {
+              const biller = billers.find(b => b.id === item.id);
+              if (biller?.category.startsWith('Loans') && parseFloat(item.amount) === 0) {
+                return false;
+              }
+            }
+            return true;
           });
 
           const existingIds = new Set(filteredExisting.map(i => i.id));
@@ -306,15 +331,14 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
             .map(b => {
               const schedule = b.schedules.find(s => s.month === selectedMonth);
               
-              // ENHANCEMENT: For linked billers, calculate amount from transactions
+              // QA: For Loans billers, use linked installment monthly amounts first
               let amount: number;
-              if (schedule) {
-                const { amount: calculatedAmount } = getScheduleExpectedAmount(
-                  b,
-                  schedule,
-                  accounts,
-                  transactions
-                );
+              const instAmount = getLinkedInstallmentsAmount(b);
+              if (instAmount !== null) {
+                amount = instAmount;
+              } else if (schedule) {
+                // ENHANCEMENT: For linked billers, calculate amount from transactions
+                const { amount: calculatedAmount } = getScheduleExpectedAmount(b, schedule, accounts, transactions);
                 amount = calculatedAmount;
               } else {
                 amount = b.expectedAmount;
@@ -328,6 +352,14 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                 timing: b.timing,
                 isBiller: true
               };
+            })
+            // QA: Exclude Loans billers that resolve to 0 amount
+            .filter(item => {
+              const biller = billers.find(b => b.id === item.id);
+              if (biller?.category.startsWith('Loans') && parseFloat(item.amount) === 0) {
+                return false;
+              }
+              return true;
             });
 
           newData[cat.name] = [...filteredExisting, ...newItems];
@@ -336,7 +368,7 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
         return newData;
       });
     }
-  }, [selectedMonth, selectedTiming, selectedYear, billers, view, removedIds, categories]);
+  }, [selectedMonth, selectedTiming, selectedYear, billers, view, removedIds, categories, getLinkedInstallmentsAmount]);
 
   const formatCurrency = (val: number) => {
     return new Intl.NumberFormat('en-PH', { 
@@ -349,7 +381,8 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
 
   /**
    * QA: Check if installment should be displayed for selected month
-   * Only shows installments that have started on or before the selected month
+   * Shows installments that have started on or before the selected month
+   * AND whose last payment month (startDate + termDuration - 1) is on or after the selected month.
    * Fix for Issue #2: Incorrect installment scheduling
    */
   const shouldShowInstallment = useCallback((installment: Installment, month: string, year?: number): boolean => {
@@ -365,24 +398,44 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
     
     // Determine target year (use provided year or current year)
     const targetYear = year || new Date().getFullYear();
-    
-    // Compare: installment should only show if start date is on or before selected month
-    if (startYear < targetYear) return true;
-    if (startYear > targetYear) return false;
-    // Same year: compare months (startMonth is 1-12, selectedMonthIndex is 0-11)
-    return startMonth <= (selectedMonthIndex + 1);
+
+    // Use a monotonic month counter (months since year 0) to compare periods safely
+    const startMonthAbs = startYear * 12 + (startMonth - 1);
+    const selectedMonthAbs = targetYear * 12 + selectedMonthIndex;
+
+    // Installment must have started on or before the selected month
+    if (startMonthAbs > selectedMonthAbs) return false;
+
+    // Installment must not be past its last payment month.
+    // Last payment month = startDate + (termDuration - 1).
+    // termDuration is stored as e.g. "12 months" (set by installmentsAdapter.ts:
+    // `${supabase.term_duration} months`) — extract the leading integer.
+    const termMonths = parseInt(installment.termDuration, 10);
+    if (!isNaN(termMonths) && termMonths > 0) {
+      const lastPaymentMonthAbs = startMonthAbs + (termMonths - 1);
+      if (selectedMonthAbs > lastPaymentMonthAbs) return false;
+    }
+
+    return true;
   }, []); // MONTHS is a constant, no need to include in deps
 
   /**
    * REFACTOR: Get payment schedule for a biller or installment
-   * Uses the monthly_payment_schedules table as the source of truth
+   * Uses the monthly_payment_schedules table as the source of truth.
+   * Optional month/year parameters allow explicit period filtering.
    */
   const getPaymentSchedule = useCallback((
     sourceType: 'biller' | 'installment',
-    sourceId: string
+    sourceId: string,
+    month?: string,
+    year?: number
   ): SupabaseMonthlyPaymentSchedule | undefined => {
     return paymentSchedules.find(
-      schedule => schedule.source_type === sourceType && schedule.source_id === sourceId
+      schedule =>
+        schedule.source_type === sourceType &&
+        schedule.source_id === sourceId &&
+        (month === undefined || schedule.month === month) &&
+        (year === undefined || schedule.year === year)
     );
   }, [paymentSchedules]);
   
@@ -652,9 +705,15 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
     const installmentsTotal = installments
       .filter(inst => {
         const timingMatch = !inst.timing || inst.timing === selectedTiming;
-        const dateMatch = shouldShowInstallment(inst, selectedMonth);
+        const scheduleForMonth = getPaymentSchedule('installment', inst.id, selectedMonth, selectedYear);
+        const isActiveForPeriod = scheduleForMonth !== undefined || shouldShowInstallment(inst, selectedMonth, selectedYear);
+        // Require both the aggregate and the schedule to agree the loan is done.
+        // This prevents a stale/drifted aggregate paidAmount from hiding an installment
+        // whose current-month schedule is still 'pending' or 'partial'.
+        const aggregateFinished = inst.totalAmount > 0 && inst.paidAmount >= inst.totalAmount;
+        const isFinished = aggregateFinished && (!scheduleForMonth || scheduleForMonth.status === 'paid');
         const notExcluded = !excludedInstallmentIds.has(inst.id);
-        return timingMatch && dateMatch && notExcluded;
+        return timingMatch && isActiveForPeriod && !isFinished && notExcluded;
       })
       .reduce((sum, inst) => sum + inst.monthlyAmount, 0);
 
@@ -837,9 +896,15 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
     const installmentsTotal = installments
       .filter(inst => {
         const timingMatch = !inst.timing || inst.timing === selectedTiming;
-        const dateMatch = shouldShowInstallment(inst, selectedMonth);
+        const scheduleForMonth = getPaymentSchedule('installment', inst.id, selectedMonth, selectedYear);
+        const isActiveForPeriod = scheduleForMonth !== undefined || shouldShowInstallment(inst, selectedMonth, selectedYear);
+        // Require both the aggregate and the schedule to agree the loan is done.
+        // This prevents a stale/drifted aggregate paidAmount from hiding an installment
+        // whose current-month schedule is still 'pending' or 'partial'.
+        const aggregateFinished = inst.totalAmount > 0 && inst.paidAmount >= inst.totalAmount;
+        const isFinished = aggregateFinished && (!scheduleForMonth || scheduleForMonth.status === 'paid');
         const notExcluded = !excludedInstallmentIds.has(inst.id);
-        return timingMatch && dateMatch && notExcluded;
+        return timingMatch && isActiveForPeriod && !isFinished && notExcluded;
       })
       .reduce((sum, inst) => sum + inst.monthlyAmount, 0);
 
@@ -1379,9 +1444,15 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
       installmentsTotal = installments
         .filter(inst => {
           const timingMatch = !inst.timing || inst.timing === selectedTiming;
-          const dateMatch = shouldShowInstallment(inst, selectedMonth);
+          const scheduleForMonth = getPaymentSchedule('installment', inst.id, selectedMonth, selectedYear);
+          const isActiveForPeriod = scheduleForMonth !== undefined || shouldShowInstallment(inst, selectedMonth, selectedYear);
+          // Require both the aggregate and the schedule to agree the loan is done.
+          // This prevents a stale/drifted aggregate paidAmount from hiding an installment
+          // whose current-month schedule is still 'pending' or 'partial'.
+          const aggregateFinished = inst.totalAmount > 0 && inst.paidAmount >= inst.totalAmount;
+          const isFinished = aggregateFinished && (!scheduleForMonth || scheduleForMonth.status === 'paid');
           const notExcluded = !excludedInstallmentIds.has(inst.id);
-          return timingMatch && dateMatch && notExcluded;
+          return timingMatch && isActiveForPeriod && !isFinished && notExcluded;
         })
         .reduce((s, inst) => s + inst.monthlyAmount, 0);
     }
@@ -1629,16 +1700,23 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
         {categories.filter(cat => ['Utilities', 'Loans', 'Subscriptions', 'Purchases'].includes(cat.name)).map((cat) => {
           const items = setupData[cat.name] || [];
           
-          // QA: For Loans category, filter installments by timing AND start date
-          // Fix for Issue #1 & #2: Missing loan items and incorrect scheduling
+          // QA: For Loans category, filter installments by timing, payment schedule existence, and completion status
+          // Show installments that have a DB schedule for this month OR (no schedule yet) pass the date check.
+          // Always exclude installments that are fully paid off.
           let relevantInstallments: Installment[] = [];
           if (cat.name === 'Loans') {
             relevantInstallments = installments.filter(inst => {
               // Filter by timing (if set, must match selected timing)
               const timingMatch = !inst.timing || inst.timing === selectedTiming;
-              // Filter by start date (only show if on/after start date)
-              const dateMatch = shouldShowInstallment(inst, selectedMonth);
-              return timingMatch && dateMatch;
+              // Use schedule existence when available; fall back to date-based check for older installments
+              const scheduleForMonth = getPaymentSchedule('installment', inst.id, selectedMonth, selectedYear);
+              const isActiveForPeriod = scheduleForMonth !== undefined || shouldShowInstallment(inst, selectedMonth, selectedYear);
+              // Require both the aggregate and the schedule to agree the loan is done.
+              // This prevents a stale/drifted aggregate paidAmount from hiding an installment
+              // whose current-month schedule is still 'pending' or 'partial'.
+              const aggregateFinished = inst.totalAmount > 0 && inst.paidAmount >= inst.totalAmount;
+              const isFinished = aggregateFinished && (!scheduleForMonth || scheduleForMonth.status === 'paid');
+              return timingMatch && isActiveForPeriod && !isFinished;
             });
           }
           
@@ -1817,7 +1895,7 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                           <td className="p-4 pr-10 text-right"><button onClick={() => removeItemFromCategory(cat.name, item.id, item.name)} className="text-[9px] font-black text-red-500 uppercase tracking-widest border border-red-50 px-2 py-1 rounded-lg">Exclude</button></td>
                         </tr>
                       );
-                    }) : (
+                    }) : (cat.name === 'Loans' && relevantInstallments.length > 0) ? null : (
                       <tr>
                         <td colSpan={4} className="p-8 text-center text-gray-400 text-sm font-medium">
                           No items yet. Click "Add Item" below to get started.
@@ -1833,7 +1911,7 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                           
                           // REFACTOR: Use payment schedule for accurate status
                           let isPaid = false, isPartial = false;
-                          const installmentSchedule = getPaymentSchedule('installment', installment.id);
+                          const installmentSchedule = getPaymentSchedule('installment', installment.id, selectedMonth, selectedYear);
                           
                           if (installmentSchedule) {
                             // Use payment schedule status
