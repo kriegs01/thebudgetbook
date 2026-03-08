@@ -20,6 +20,7 @@ interface InstallmentsProps {
     accountId: string;
     receipt?: string;
     receiptFile?: File;
+    scheduleId?: string; // target schedule ID when paying a specific month
   }) => Promise<void>;
   loading?: boolean;
   error?: string | null;
@@ -34,6 +35,8 @@ const Installments: React.FC<InstallmentsProps> = ({ installments, accounts, bil
   const [viewMode, setViewMode] = useState<ViewMode>('card');
   const [showModal, setShowModal] = useState(false);
   const [showPayModal, setShowPayModal] = useState<Installment | null>(null);
+  // Track the specific schedule ID being paid when the user clicks Pay on a schedule row
+  const [payModalScheduleId, setPayModalScheduleId] = useState<string | undefined>(undefined);
   const [showEditModal, setShowEditModal] = useState<Installment | null>(null);
   const [showViewModal, setShowViewModal] = useState<Installment | null>(null);
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
@@ -67,6 +70,11 @@ const Installments: React.FC<InstallmentsProps> = ({ installments, accounts, bil
     message: '',
     onConfirm: () => {},
   });
+
+  const closePayModal = () => {
+    setShowPayModal(null);
+    setPayModalScheduleId(undefined);
+  };
   
   const [formData, setFormData] = useState({ 
     name: '', totalAmount: '', monthlyAmount: '', termDuration: '', paidAmount: '', accountId: accounts[0]?.id || '', startDate: '', billerId: '', timing: '1/2' as '1/2' | '2/2'
@@ -284,6 +292,7 @@ const Installments: React.FC<InstallmentsProps> = ({ installments, accounts, bil
           accountId: payFormData.accountId,
           receipt: payFormData.receipt || undefined,
           receiptFile: payReceiptFile || undefined,
+          scheduleId: payModalScheduleId,
         });
       } else {
         // Fallback to old method
@@ -297,7 +306,7 @@ const Installments: React.FC<InstallmentsProps> = ({ installments, accounts, bil
       console.log('[Installments] Payment recorded successfully');
       
       // Close pay modal after successful payment
-      setShowPayModal(null);
+      closePayModal();
       setPayFormData({
         amount: '',
         receipt: '',
@@ -517,6 +526,7 @@ const Installments: React.FC<InstallmentsProps> = ({ installments, accounts, bil
             <button 
               onClick={() => {
                 setShowPayModal(item);
+                setPayModalScheduleId(undefined); // no specific month targeted from card-level Pay
                 // Autofill with remaining due for current period (monthly - already paid this period)
                 const currentPeriodPaid = item.monthlyAmount > 0 ? paidAmount % item.monthlyAmount : 0;
                 setPayFormData({ 
@@ -577,6 +587,7 @@ const Installments: React.FC<InstallmentsProps> = ({ installments, accounts, bil
             <button 
               onClick={() => {
                 setShowPayModal(item);
+                setPayModalScheduleId(undefined); // no specific month targeted from card-level Pay
                 // Autofill with remaining due for current period (monthly - already paid this period)
                 const currentPeriodPaid = item.monthlyAmount > 0 ? paidAmount % item.monthlyAmount : 0;
                 setPayFormData({ 
@@ -796,7 +807,7 @@ const Installments: React.FC<InstallmentsProps> = ({ installments, accounts, bil
       {showPayModal && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md animate-in fade-in">
           <div className="bg-white rounded-3xl w-full max-w-md p-10 shadow-2xl animate-in zoom-in-95 relative">
-            <button onClick={() => setShowPayModal(null)} className="absolute right-6 top-6 p-2 hover:bg-gray-100 rounded-full transition-colors">
+            <button onClick={closePayModal} className="absolute right-6 top-6 p-2 hover:bg-gray-100 rounded-full transition-colors">
               <X className="w-6 h-6 text-gray-400" />
             </button>
             <h2 className="text-2xl font-black text-gray-900 mb-2">Pay {showPayModal.name}</h2>
@@ -835,7 +846,7 @@ const Installments: React.FC<InstallmentsProps> = ({ installments, accounts, bil
               </div>
 
               <div className="flex space-x-4 pt-4">
-                <button type="button" onClick={() => setShowPayModal(null)} className="flex-1 bg-gray-100 py-4 rounded-2xl font-bold text-gray-500 hover:bg-gray-200 transition-colors">Cancel</button>
+                <button type="button" onClick={closePayModal} className="flex-1 bg-gray-100 py-4 rounded-2xl font-bold text-gray-500 hover:bg-gray-200 transition-colors">Cancel</button>
                 <button type="submit" className="flex-1 bg-green-600 text-white py-4 rounded-2xl font-bold hover:bg-green-700 shadow-xl shadow-green-100 transition-all active:scale-95">Record Payment</button>
               </div>
             </form>
@@ -1051,6 +1062,8 @@ const Installments: React.FC<InstallmentsProps> = ({ installments, accounts, bil
                             onClick={() => {
                               setShowViewModal(null);
                               setShowPayModal(showViewModal);
+                              // Pin the payment to this specific schedule month
+                              setPayModalScheduleId(item.scheduleId);
                               // Autofill with remaining due for this schedule month (amount - already paid)
                               setPayFormData({ 
                                 amount: Math.max(0, item.amount - item.amountPaid).toFixed(2),
