@@ -1,9 +1,20 @@
-import React, { useEffect, useState } from 'react';
-import { ArrowLeft, Info, Eye, ZoomIn, ZoomOut, Download, X } from 'lucide-react';
+import React, { useEffect, useState, useMemo, useRef } from 'react';
+import { ArrowLeft, Info, Eye, ZoomIn, ZoomOut, Download, X, Pencil, BanknoteArrowDown, Trash2, ArrowUpFromLine, ArrowDownToLine, ArrowLeftRight, Banknote, CheckSquare, Square, Filter, ChevronDown } from 'lucide-react';
 import { useSearchParams, Link } from 'react-router-dom';
 import { Account } from '../../types';
-import { getTransactionsByPaymentMethod, createTransaction, createTransfer, getLoanTransactionsWithPayments, getReceiptSignedUrl } from '../../src/services/transactionsService';
-import { combineDateWithCurrentTime } from '../../src/utils/dateUtils';
+import { getTransactionsByPaymentMethod, createTransaction, updateTransaction, createTransfer, getLoanTransactionsWithPayments, getReceiptSignedUrl, deleteTransactionAndRevertSchedule, batchDeleteTransactions } from '../../src/services/transactionsService';
+import { combineDateWithCurrentTime, getFirstDayOfCurrentMonthIso, getTodayIso } from '../../src/utils/dateUtils';
+
+const FILTER_MIN_DATE = '2025-01-01';
+
+const TRANSACTION_TYPE_OPTIONS: { value: string; label: string }[] = [
+  { value: 'payment', label: 'Payment' },
+  { value: 'withdraw', label: 'Withdrawal' },
+  { value: 'transfer', label: 'Transfer' },
+  { value: 'loan', label: 'Loan' },
+  { value: 'cash_in', label: 'Cash In' },
+  { value: 'loan_payment', label: 'Loan Payment' },
+];
 
 type Transaction = {
   id: string;
@@ -71,6 +82,24 @@ const AccountFilteredTransactions: React.FC<AccountFilteredTransactionsProps> = 
   const [loanForm, setLoanForm] = useState({ what: '', amount: '', date: new Date().toISOString().split('T')[0] });
   const [cashInForm, setCashInForm] = useState({ amount: '', date: new Date().toISOString().split('T')[0], notes: '' });
   const [loanPaymentForm, setLoanPaymentForm] = useState({ amount: '', date: new Date().toISOString().split('T')[0] });
+
+  // Edit transaction modal
+  const [showEditTxModal, setShowEditTxModal] = useState(false);
+  const [editingViewTx, setEditingViewTx] = useState<Transaction | null>(null);
+  const [editTxForm, setEditTxForm] = useState({ name: '', amount: '', date: '' });
+
+  // ── Filter state ──────────────────────────────────────────────────────────
+  const [filterStartDate, setFilterStartDate] = useState<string>(getFirstDayOfCurrentMonthIso());
+  const [filterEndDate, setFilterEndDate] = useState<string>(getTodayIso());
+  const [filterTypes, setFilterTypes] = useState<Set<string>>(new Set());
+  const [showTypeDropdown, setShowTypeDropdown] = useState(false);
+  const typeDropdownRef = useRef<HTMLDivElement>(null);
+
+  // ── Select / batch-delete state ───────────────────────────────────────────
+  const [isSelectMode, setIsSelectMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [showBatchConfirm, setShowBatchConfirm] = useState(false);
+  const [isBatchDeleting, setIsBatchDeleting] = useState(false);
 
   const loadTransactions = async () => {
     if (typeof window === "undefined" || !accountId) return;
@@ -171,6 +200,113 @@ const AccountFilteredTransactions: React.FC<AccountFilteredTransactionsProps> = 
       setReceiptSignedUrl(null);
     }
   }, [selectedTx]);
+
+  // Close type-filter dropdown when clicking outside
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (typeDropdownRef.current && !typeDropdownRef.current.contains(e.target as Node)) {
+        setShowTypeDropdown(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
+
+  // ── Derived: filtered transactions ────────────────────────────────────────
+  const filteredTransactions = useMemo(() => {
+    return transactions.filter(tx => {
+      const d = tx.date.slice(0, 10);
+      if (d < filterStartDate || d > filterEndDate) return false;
+      if (filterTypes.size > 0 && !filterTypes.has(tx.transaction_type ?? 'payment')) return false;
+      return true;
+    });
+  }, [transactions, filterStartDate, filterEndDate, filterTypes]);
+
+  // ── Derived: current balance (all transactions, unfiltered) ───────────────
+  const currentBalance = useMemo(() => {
+    if (!account) return 0;
+    // initial balance minus sum of all transaction amounts (positive = out, negative = in)
+    return transactions.reduce((bal, tx) => bal - tx.amount, account.balance);
+  }, [transactions, account]);
+
+  // ── Derived: total in / out from filtered transactions ────────────────────
+  const totalIn = useMemo(
+    () => filteredTransactions.reduce((sum, tx) => sum + (tx.amount < 0 ? -tx.amount : 0), 0),
+    [filteredTransactions]
+  );
+  const totalOut = useMemo(
+    () => filteredTransactions.reduce((sum, tx) => sum + (tx.amount > 0 ? tx.amount : 0), 0),
+    [filteredTransactions]
+  );
+
+  // ── Select / batch-delete helpers ─────────────────────────────────────────
+  const toggleSelectMode = () => {
+    setIsSelectMode(prev => {
+      if (prev) setSelectedIds(new Set());
+      return !prev;
+    });
+  };
+
+  const toggleId = (id: string) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+
+  const toggleAllVisible = () => {
+    const visibleIds = filteredTransactions.map(t => t.id);
+    const allSelected = visibleIds.every(id => selectedIds.has(id));
+    setSelectedIds(allSelected ? new Set() : new Set(visibleIds));
+  };
+
+  const handleBatchDelete = async () => {
+    setIsBatchDeleting(true);
+    try {
+      const { errors } = await batchDeleteTransactions([...selectedIds]);
+      if (errors.length > 0) {
+        console.error('Some deletions failed:', errors);
+        alert(`${errors.length} transaction(s) could not be deleted. Please try again.`);
+      }
+      setShowBatchConfirm(false);
+      setSelectedIds(new Set());
+      setIsSelectMode(false);
+      await loadTransactions();
+      onTransactionCreated?.();
+    } catch (error) {
+      console.error('Batch delete error:', error);
+      alert('Failed to delete transactions. Please try again.');
+    } finally {
+      setIsBatchDeleting(false);
+    }
+  };
+
+  // ── Filter helpers ────────────────────────────────────────────────────────
+  const toggleTypeFilter = (val: string) => {
+    setFilterTypes(prev => {
+      const next = new Set(prev);
+      if (next.has(val)) next.delete(val); else next.add(val);
+      return next;
+    });
+  };
+
+  const resetFilters = () => {
+    setFilterStartDate(getFirstDayOfCurrentMonthIso());
+    setFilterEndDate(getTodayIso());
+    setFilterTypes(new Set());
+  };
+
+  const typeFilterLabel =
+    filterTypes.size === 0
+      ? 'All Types'
+      : filterTypes.size === 1
+        ? TRANSACTION_TYPE_OPTIONS.find(o => filterTypes.has(o.value))?.label ?? '1 selected'
+        : `${filterTypes.size} selected`;
+
+  const allVisibleSelected =
+    filteredTransactions.length > 0 &&
+    filteredTransactions.every(t => selectedIds.has(t.id));
 
   const handleWithdrawSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -334,6 +470,57 @@ const AccountFilteredTransactions: React.FC<AccountFilteredTransactionsProps> = 
     setShowLoanPaymentModal(true);
   };
 
+  const handleDeleteTx = async (tx: Transaction) => {
+    if (!window.confirm(`Delete transaction "${tx.name}"? This action cannot be undone.`)) return;
+    try {
+      const { error } = await deleteTransactionAndRevertSchedule(tx.id);
+      if (error) throw error;
+      await loadTransactions();
+    } catch (error) {
+      console.error('Error deleting transaction:', error);
+      alert('Failed to delete transaction. Please check your connection and try again.');
+    }
+  };
+
+  const openEditTxModal = (tx: Transaction) => {
+    setEditingViewTx(tx);
+    setEditTxForm({
+      name: tx.name,
+      amount: Math.abs(tx.amount).toString(),
+      date: new Date(tx.date).toISOString().split('T')[0]
+    });
+    setShowEditTxModal(true);
+  };
+
+  const handleEditTxSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingViewTx) return;
+
+    setIsSubmitting(true);
+    try {
+      // Preserve the original sign of the amount (positive = money out, negative = money in)
+      const sign = editingViewTx.amount < 0 ? -1 : 1;
+      const { error } = await updateTransaction(editingViewTx.id, {
+        name: editTxForm.name,
+        date: combineDateWithCurrentTime(editTxForm.date),
+        amount: sign * parseFloat(editTxForm.amount)
+      });
+
+      if (error) throw error;
+
+      showMessage('success', 'Transaction updated successfully');
+      setShowEditTxModal(false);
+      setEditingViewTx(null);
+      await loadTransactions();
+      onTransactionCreated?.();
+    } catch (error) {
+      console.error('Error updating transaction:', error);
+      showMessage('error', 'Failed to update transaction');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   const getTransactionTypeBadge = (type?: string) => {
     if (!type || type === 'payment') return null;
     
@@ -379,39 +566,156 @@ const AccountFilteredTransactions: React.FC<AccountFilteredTransactionsProps> = 
           </div>
         )}
 
+        {/* ── Filter Bar ──────────────────────────────────────────────────── */}
+        <div className="bg-white rounded-2xl shadow-sm p-4 mb-4">
+          <div className="flex flex-wrap items-end gap-3">
+            <Filter className="w-4 h-4 text-gray-400 self-center mb-1 shrink-0" />
+            <div className="flex flex-col gap-1">
+              <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Start Date</label>
+              <input
+                type="date"
+                value={filterStartDate}
+                min={FILTER_MIN_DATE}
+                max={filterEndDate}
+                onChange={e => setFilterStartDate(e.target.value)}
+                className="bg-gray-50 rounded-xl px-3 py-2 text-sm font-bold border-transparent outline-none focus:ring-2 focus:ring-indigo-400"
+              />
+            </div>
+            <div className="flex flex-col gap-1">
+              <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">End Date</label>
+              <input
+                type="date"
+                value={filterEndDate}
+                min={filterStartDate}
+                max={getTodayIso()}
+                onChange={e => setFilterEndDate(e.target.value)}
+                className="bg-gray-50 rounded-xl px-3 py-2 text-sm font-bold border-transparent outline-none focus:ring-2 focus:ring-indigo-400"
+              />
+            </div>
+            <div className="flex flex-col gap-1 relative" ref={typeDropdownRef}>
+              <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Transaction Type</label>
+              <button
+                type="button"
+                onClick={() => setShowTypeDropdown(p => !p)}
+                className="flex items-center gap-2 bg-gray-50 rounded-xl px-3 py-2 text-sm font-bold border-transparent outline-none focus:ring-2 focus:ring-indigo-400 min-w-[140px] justify-between"
+              >
+                <span>{typeFilterLabel}</span>
+                <ChevronDown className="w-4 h-4 text-gray-400 shrink-0" />
+              </button>
+              {showTypeDropdown && (
+                <div className="absolute top-full left-0 mt-1 z-30 bg-white rounded-xl shadow-lg border border-gray-100 min-w-[180px] py-2">
+                  {TRANSACTION_TYPE_OPTIONS.map(opt => (
+                    <label key={opt.value} className="flex items-center gap-2 px-4 py-2 cursor-pointer hover:bg-gray-50">
+                      <input
+                        type="checkbox"
+                        checked={filterTypes.has(opt.value)}
+                        onChange={() => toggleTypeFilter(opt.value)}
+                        className="rounded"
+                      />
+                      <span className="text-sm font-medium text-gray-700">{opt.label}</span>
+                    </label>
+                  ))}
+                </div>
+              )}
+            </div>
+            <button
+              type="button"
+              onClick={resetFilters}
+              className="self-end px-3 py-2 text-xs font-bold text-gray-500 hover:text-indigo-600 bg-gray-100 hover:bg-indigo-50 rounded-xl transition-colors"
+            >
+              Reset
+            </button>
+          </div>
+        </div>
+
+        {/* ── Dashboard ───────────────────────────────────────────────────── */}
+        <div className="grid grid-cols-3 gap-4 mb-4">
+          <div className="bg-indigo-600 rounded-2xl shadow-sm p-4 text-white">
+            <p className="text-[10px] font-black uppercase tracking-widest text-indigo-200 mb-1">Current Balance</p>
+            <p className="text-2xl font-black">{formatCurrency(currentBalance)}</p>
+            <p className="text-[10px] text-indigo-300 mt-1">All time</p>
+          </div>
+          <div className="bg-white rounded-2xl shadow-sm p-4">
+            <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-1">Total In</p>
+            <p className="text-2xl font-black text-green-600">{formatCurrency(totalIn)}</p>
+            <p className="text-[10px] text-gray-400 mt-1">Based on filter</p>
+          </div>
+          <div className="bg-white rounded-2xl shadow-sm p-4">
+            <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-1">Total Out</p>
+            <p className="text-2xl font-black text-red-600">{formatCurrency(totalOut)}</p>
+            <p className="text-[10px] text-gray-400 mt-1">Based on filter</p>
+          </div>
+        </div>
+
         <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
           <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
             <h2 className="text-sm font-bold uppercase text-gray-600 tracking-widest">Transactions</h2>
             <div className="flex items-center gap-2">
-              <div className="text-sm text-gray-500">{transactions.length} items</div>
-              
-              {/* Transaction Action Buttons - Only for Debit accounts */}
+              <div className="text-sm text-gray-500">{filteredTransactions.length} items</div>
+
+              {/* ── Action icon buttons (Debit only) + Select + Trash ─────── */}
               {account?.type === 'Debit' && (
-                <div className="flex gap-2 ml-4">
+                <div className="flex items-center gap-1.5 ml-2">
                   <button
                     onClick={() => setShowWithdrawModal(true)}
-                    className="px-4 py-2 bg-red-500 hover:bg-red-600 text-white text-sm font-bold rounded-xl transition-colors"
+                    title="Withdraw"
+                    aria-label="Record withdrawal"
+                    className="w-9 h-9 flex items-center justify-center bg-red-500 hover:bg-red-600 text-white rounded-xl transition-colors"
                   >
-                    Withdraw
+                    <ArrowUpFromLine className="w-4 h-4" />
                   </button>
                   <button
                     onClick={() => setShowTransferModal(true)}
-                    className="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white text-sm font-bold rounded-xl transition-colors"
+                    title="Transfer"
+                    aria-label="Transfer money"
+                    className="w-9 h-9 flex items-center justify-center bg-blue-500 hover:bg-blue-600 text-white rounded-xl transition-colors"
                   >
-                    Transfer
+                    <ArrowLeftRight className="w-4 h-4" />
                   </button>
                   <button
                     onClick={() => setShowLoanModal(true)}
-                    className="px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white text-sm font-bold rounded-xl transition-colors"
+                    title="Loan"
+                    aria-label="Record loan"
+                    className="w-9 h-9 flex items-center justify-center bg-orange-500 hover:bg-orange-600 text-white rounded-xl transition-colors"
                   >
-                    Loan
+                    <Banknote className="w-4 h-4" />
                   </button>
                   <button
                     onClick={() => setShowCashInModal(true)}
-                    className="px-4 py-2 bg-green-500 hover:bg-green-600 text-white text-sm font-bold rounded-xl transition-colors"
+                    title="Cash In"
+                    aria-label="Record cash in"
+                    className="w-9 h-9 flex items-center justify-center bg-green-500 hover:bg-green-600 text-white rounded-xl transition-colors"
                   >
-                    Cash In
+                    <ArrowDownToLine className="w-4 h-4" />
                   </button>
+
+                  {/* Select toggle */}
+                  <button
+                    onClick={toggleSelectMode}
+                    title={isSelectMode ? 'Cancel selection' : 'Select transactions'}
+                    aria-label={isSelectMode ? 'Cancel selection' : 'Select transactions'}
+                    className={`w-9 h-9 flex items-center justify-center rounded-xl transition-colors border ${
+                      isSelectMode
+                        ? 'bg-indigo-600 text-white border-indigo-600'
+                        : 'border-gray-300 text-gray-500 hover:border-indigo-400 hover:text-indigo-600'
+                    }`}
+                  >
+                    {isSelectMode ? <CheckSquare className="w-4 h-4" /> : <Square className="w-4 h-4" />}
+                  </button>
+
+                  {/* Trash — shown only when ≥1 item selected */}
+                  <div className="w-9 h-9 flex items-center justify-center">
+                    {isSelectMode && selectedIds.size > 0 && (
+                      <button
+                        onClick={() => setShowBatchConfirm(true)}
+                        title="Delete selected"
+                        aria-label="Delete selected transactions"
+                        className="w-9 h-9 flex items-center justify-center bg-red-500 hover:bg-red-600 text-white rounded-xl transition-colors"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    )}
+                  </div>
                 </div>
               )}
             </div>
@@ -427,21 +731,44 @@ const AccountFilteredTransactions: React.FC<AccountFilteredTransactionsProps> = 
               <table className="min-w-full text-left">
                 <thead>
                   <tr>
+                    {isSelectMode && (
+                      <th className="px-4 py-3 w-10">
+                        <input
+                          type="checkbox"
+                          checked={allVisibleSelected}
+                          onChange={toggleAllVisible}
+                          title="Select all"
+                          aria-label="Select all visible transactions"
+                          className="rounded"
+                        />
+                      </th>
+                    )}
                     <th className="px-4 py-3 text-xs text-gray-500 uppercase tracking-wider">Name</th>
                     <th className="px-4 py-3 text-xs text-gray-500 uppercase tracking-wider">Type</th>
                     <th className="px-4 py-3 text-xs text-gray-500 uppercase tracking-wider">Date</th>
                     <th className="px-4 py-3 text-xs text-gray-500 uppercase tracking-wider">Amount</th>
-                    <th className="px-4 py-3" />
-                    {account?.type === 'Debit' && (
-                      <th className="px-4 py-3 text-xs text-gray-500 uppercase tracking-wider">Actions</th>
-                    )}
+                    <th className="px-4 py-3 text-xs text-gray-500 uppercase tracking-wider text-center">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {transactions.map(tx => {
+                  {filteredTransactions.map(tx => {
                     const loanTx = loanTransactions.find(l => l.id === tx.id);
                     return (
-                      <tr key={tx.id} className="border-t border-gray-100 group">
+                      <tr
+                        key={tx.id}
+                        className={`border-t border-gray-100 group ${isSelectMode && selectedIds.has(tx.id) ? 'bg-indigo-50' : ''}`}
+                      >
+                        {isSelectMode && (
+                          <td className="px-4 py-3">
+                            <input
+                              type="checkbox"
+                              checked={selectedIds.has(tx.id)}
+                              onChange={() => toggleId(tx.id)}
+                              aria-label={`Select transaction ${tx.name}`}
+                              className="rounded"
+                            />
+                          </td>
+                        )}
                         <td className="px-4 py-3"><div className="text-sm font-medium text-gray-900">{tx.name}</div></td>
                         <td className="px-4 py-3">{getTransactionTypeBadge(tx.transaction_type)}</td>
                         <td className="px-4 py-3"><div className="text-sm text-gray-500">{new Date(tx.date).toLocaleDateString()}</div></td>
@@ -450,32 +777,51 @@ const AccountFilteredTransactions: React.FC<AccountFilteredTransactionsProps> = 
                             {formatCurrency(-tx.amount)}
                           </div>
                         </td>
-                        <td className="px-4 py-3 text-right">
-                          <button
-                            onClick={() => setSelectedTx(tx)}
-                            title="View transaction details"
-                            className="text-gray-400 hover:text-indigo-600 opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity rounded-full p-1 hover:bg-indigo-50"
-                          >
-                            <Info className="w-4 h-4" />
-                          </button>
-                        </td>
-                        {account?.type === 'Debit' && (
-                          <td className="px-4 py-3">
-                            {tx.transaction_type === 'loan' && loanTx && (loanTx.remainingBalance ?? 0) > 0 && (
+                        <td className="px-4 py-3 text-center">
+                          <div className="flex items-center justify-center gap-1">
+                            <button
+                              onClick={() => setSelectedTx(tx)}
+                              title="View details"
+                              aria-label="View transaction details"
+                              className="text-gray-300 hover:text-indigo-500 hover:bg-indigo-50 rounded-full p-1.5 transition-all"
+                            >
+                              <Info className="w-4 h-4" />
+                            </button>
+                            <button
+                              onClick={() => openEditTxModal(tx)}
+                              title="Edit transaction"
+                              aria-label="Edit transaction"
+                              className="text-gray-300 hover:text-indigo-500 hover:bg-indigo-50 rounded-full p-1.5 transition-all"
+                            >
+                              <Pencil className="w-4 h-4" />
+                            </button>
+                            <button
+                              onClick={() => handleDeleteTx(tx)}
+                              title="Delete transaction"
+                              aria-label="Delete transaction"
+                              className="text-gray-300 hover:text-red-500 hover:bg-red-50 rounded-full p-1.5 transition-all"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                            {account?.type === 'Debit' && tx.transaction_type === 'loan' && loanTx && (loanTx.remainingBalance ?? 0) > 0 && (
                               <button
                                 onClick={() => openLoanPaymentModal(loanTx)}
-                                className="px-3 py-1 bg-purple-500 hover:bg-purple-600 text-white text-xs font-bold rounded-lg transition-colors"
+                                title="Receive payment"
+                                aria-label="Receive loan payment"
+                                className="bg-purple-500 hover:bg-purple-600 text-white rounded-full p-1.5 transition-all ml-1"
                               >
-                                Receive Payment
+                                <BanknoteArrowDown className="w-4 h-4" />
                               </button>
                             )}
-                          </td>
-                        )}
+                          </div>
+                        </td>
                       </tr>
                     );
                   })}
-                  {transactions.length === 0 && (
-                    <tr><td colSpan={account?.type === 'Debit' ? 6 : 5} className="px-4 py-6 text-center text-gray-400">No transactions for this account.</td></tr>
+                  {filteredTransactions.length === 0 && (
+                    <tr><td colSpan={isSelectMode ? 6 : 5} className="px-4 py-6 text-center text-gray-400">
+                      {transactions.length === 0 ? 'No transactions for this account.' : 'No transactions match the current filter.'}
+                    </td></tr>
                   )}
                 </tbody>
               </table>
@@ -484,6 +830,36 @@ const AccountFilteredTransactions: React.FC<AccountFilteredTransactionsProps> = 
           </div>
         </div>
       </div>
+
+      {/* ── Batch Delete Confirmation Modal ─────────────────────────────────── */}
+      {showBatchConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-md">
+          <div className="w-full max-w-sm bg-white rounded-3xl p-8 shadow-2xl">
+            <h2 className="text-xl font-black text-gray-900 mb-3">Confirm Deletion</h2>
+            <p className="text-sm text-gray-600 mb-6">
+              You are deleting <span className="font-black text-red-600">{selectedIds.size}</span> transaction{selectedIds.size !== 1 ? 's' : ''}, and this will be irreversible. Do you want to proceed?
+            </p>
+            <div className="flex gap-4">
+              <button
+                type="button"
+                onClick={() => setShowBatchConfirm(false)}
+                disabled={isBatchDeleting}
+                className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 py-3 rounded-2xl font-bold transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleBatchDelete}
+                disabled={isBatchDeleting}
+                className="flex-1 bg-red-500 hover:bg-red-600 text-white py-3 rounded-2xl font-bold transition-colors disabled:opacity-50"
+              >
+                {isBatchDeleting ? 'Deleting…' : 'Yes, Delete'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Withdraw Modal */}
       {showWithdrawModal && (
@@ -828,6 +1204,72 @@ const AccountFilteredTransactions: React.FC<AccountFilteredTransactionsProps> = 
                   disabled={isSubmitting}
                 >
                   {isSubmitting ? 'Processing...' : 'Record Payment'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Transaction Modal */}
+      {showEditTxModal && editingViewTx && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-md">
+          <div className="w-full max-w-md bg-white rounded-3xl p-10 shadow-2xl relative">
+            <h2 className="text-2xl font-black text-gray-900 mb-2">Edit Transaction</h2>
+            <p className="text-gray-500 text-sm mb-8">Update the transaction details below</p>
+            <form onSubmit={handleEditTxSubmit} className="space-y-6">
+              <div>
+                <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Name</label>
+                <input
+                  value={editTxForm.name}
+                  onChange={e => setEditTxForm(f => ({ ...f, name: e.target.value }))}
+                  required
+                  className="w-full bg-gray-50 border-transparent rounded-2xl p-4 outline-none font-bold focus:ring-2 focus:ring-indigo-500 transition-all"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Amount</label>
+                <div className="relative">
+                  <span className="absolute left-4 top-1/2 -translate-y-1/2 font-bold text-gray-400">₱</span>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={editTxForm.amount}
+                    onChange={e => setEditTxForm(f => ({ ...f, amount: e.target.value }))}
+                    required
+                    className="w-full bg-gray-50 border-transparent rounded-2xl p-4 pl-8 outline-none text-xl font-black focus:ring-2 focus:ring-indigo-500 transition-all"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Date</label>
+                <input
+                  type="date"
+                  value={editTxForm.date}
+                  onChange={e => setEditTxForm(f => ({ ...f, date: e.target.value }))}
+                  required
+                  className="w-full bg-gray-50 border-transparent rounded-2xl p-4 outline-none font-bold text-sm"
+                />
+              </div>
+
+              <div className="flex gap-4 pt-4">
+                <button
+                  type="button"
+                  onClick={() => { setShowEditTxModal(false); setEditingViewTx(null); }}
+                  className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 py-4 rounded-2xl font-bold transition-colors"
+                  disabled={isSubmitting}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white py-4 rounded-2xl font-bold transition-colors disabled:opacity-50"
+                  disabled={isSubmitting}
+                >
+                  {isSubmitting ? 'Saving...' : 'Update Transaction'}
                 </button>
               </div>
             </form>

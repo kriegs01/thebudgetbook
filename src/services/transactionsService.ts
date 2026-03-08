@@ -477,6 +477,22 @@ export const getReceiptSignedUrl = async (
 };
 
 /**
+ * Batch delete transactions, reverting payment schedule status for each.
+ * Iterates sequentially so that every deletion's schedule-reversion logic is preserved.
+ * Returns an array of per-ID errors for any that failed.
+ */
+export const batchDeleteTransactions = async (
+  ids: string[]
+): Promise<{ errors: { id: string; error: unknown }[] }> => {
+  const errors: { id: string; error: unknown }[] = [];
+  for (const id of ids) {
+    const { error } = await deleteTransactionAndRevertSchedule(id);
+    if (error) errors.push({ id, error });
+  }
+  return { errors };
+};
+
+/**
  * Get loan transactions with their payment history for the current user
  */
 export const getLoanTransactionsWithPayments = async (accountId: string) => {
