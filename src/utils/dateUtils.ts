@@ -47,3 +47,14 @@ export const combineDateWithCurrentTime = (dateString: string): string => {
 export const getTodayIso = (): string => {
   return new Date().toISOString().slice(0, 10);
 };
+
+/**
+ * Gets the first day of the current month in ISO format (YYYY-MM-01)
+ * Useful for initializing filter start-date defaults
+ */
+export const getFirstDayOfCurrentMonthIso = (): string => {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  return `${year}-${month}-01`;
+};
