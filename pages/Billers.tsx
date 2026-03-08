@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Biller, Account, PaymentSchedule, BudgetCategory, Installment } from '../types';
 import { Plus, Calendar, Bell, ChevronDown, ChevronRight, Upload, CheckCircle2, X, ArrowLeft, Power, PowerOff, MoreVertical, Edit2, Eye, Trash2, AlertTriangle, Info, ZoomIn, ZoomOut, Download } from 'lucide-react';
-import { getAllTransactions, getTransactionsByPaymentSchedule, getReceiptSignedUrl } from '../src/services/transactionsService';
+import { getAllTransactions, getTransactionsByPaymentSchedule, getReceiptSignedUrl, updateTransaction } from '../src/services/transactionsService';
 import { getPaymentSchedulesBySource } from '../src/services/paymentSchedulesService';
+import { combineDateWithCurrentTime } from '../src/utils/dateUtils';
 import type { SupabaseTransaction, SupabaseMonthlyPaymentSchedule } from '../src/types/supabase';
 // ENHANCEMENT: Import linked account utilities for billing cycle-based amount calculation
 import { 
@@ -165,11 +166,16 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
 
   // Schedule payments modal (consolidated transactions for a schedule entry)
   type BillerScheduleTx = { id: string; name: string; amount: number; date: string; paymentMethodId: string; receiptUrl?: string | null };
-  const [schedulePaymentsModal, setSchedulePaymentsModal] = useState<{ label: string; transactions: BillerScheduleTx[] } | null>(null);
+  const [schedulePaymentsModal, setSchedulePaymentsModal] = useState<{ label: string; scheduleId: string; transactions: BillerScheduleTx[] } | null>(null);
   const [loadingScheduleTx, setLoadingScheduleTx] = useState(false);
   const [scheduleSignedUrls, setScheduleSignedUrls] = useState<Record<string, string | null>>({});
   const [previewReceiptUrl, setPreviewReceiptUrl] = useState<string | null>(null);
   const [zoom, setZoom] = useState(0.5);
+
+  // Edit schedule transaction modal state
+  const [editingScheduleTx, setEditingScheduleTx] = useState<BillerScheduleTx | null>(null);
+  const [editScheduleTxForm, setEditScheduleTxForm] = useState({ name: '', amount: '', date: '' });
+  const [isEditingScheduleTx, setIsEditingScheduleTx] = useState(false);
 
   // Load transactions for payment status matching
   useEffect(() => {
@@ -237,13 +243,13 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
 
   const openSchedulePaymentsModal = async (scheduleId: string, label: string) => {
     setLoadingScheduleTx(true);
-    setSchedulePaymentsModal({ label, transactions: [] });
+    setSchedulePaymentsModal({ label, scheduleId, transactions: [] });
     try {
       const { data } = await getTransactionsByPaymentSchedule(scheduleId);
       const txs: BillerScheduleTx[] = (data || []).map((t: SupabaseTransaction) => ({
         id: t.id, name: t.name, amount: t.amount, date: t.date, paymentMethodId: t.payment_method_id, receiptUrl: t.receipt_url ?? null
       }));
-      setSchedulePaymentsModal({ label, transactions: txs });
+      setSchedulePaymentsModal({ label, scheduleId, transactions: txs });
       const urls: Record<string, string | null> = {};
       await Promise.all(txs.filter(tx => tx.receiptUrl).map(async tx => {
         urls[tx.id] = await getReceiptSignedUrl(tx.receiptUrl as string).catch(() => null);
@@ -251,6 +257,34 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
       setScheduleSignedUrls(urls);
     } finally {
       setLoadingScheduleTx(false);
+    }
+  };
+
+  const handleEditBillerScheduleTxSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingScheduleTx || !schedulePaymentsModal) return;
+
+    setIsEditingScheduleTx(true);
+    try {
+      const sign = editingScheduleTx.amount < 0 ? -1 : 1;
+      const { error } = await updateTransaction(editingScheduleTx.id, {
+        name: editScheduleTxForm.name,
+        date: combineDateWithCurrentTime(editScheduleTxForm.date),
+        amount: sign * Math.abs(parseFloat(editScheduleTxForm.amount))
+      });
+
+      if (error) throw error;
+
+      setEditingScheduleTx(null);
+      // Reload transactions in the modal for this schedule
+      await openSchedulePaymentsModal(schedulePaymentsModal.scheduleId, schedulePaymentsModal.label);
+      // Reload payment schedules so status (partial/paid/pending) is recalculated
+      await loadPaymentSchedules();
+    } catch (err) {
+      console.error('[Billers] Error updating schedule transaction:', err);
+      alert('Failed to update transaction. Please try again.');
+    } finally {
+      setIsEditingScheduleTx(false);
     }
   };
 
@@ -1567,21 +1601,31 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
                   const signedUrl = scheduleSignedUrls[tx.id];
                   return (
                     <div key={tx.id} className="bg-gray-50 rounded-2xl p-4 space-y-2">
-                      <div className="flex justify-between">
-                        <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Name</span>
-                        <span className="text-sm font-bold text-gray-900">{tx.name}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Amount</span>
-                        <span className="text-sm font-bold text-red-600">{formatCurrency(tx.amount)}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Payment Method</span>
-                        <span className="text-sm text-gray-700">{pmName}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Date</span>
-                        <span className="text-sm text-gray-700">{new Date(tx.date).toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' })}</span>
+                      <div className="flex justify-between items-start">
+                        <div className="space-y-2 flex-1">
+                        <div className="flex justify-between">
+                          <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Name</span>
+                          <span className="text-sm font-bold text-gray-900">{tx.name}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Amount</span>
+                          <span className="text-sm font-bold text-red-600">{formatCurrency(tx.amount)}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Payment Method</span>
+                          <span className="text-sm text-gray-700">{pmName}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Date</span>
+                          <span className="text-sm text-gray-700">{new Date(tx.date).toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' })}</span>
+                        </div>
+                        </div>
+                        <button
+                          onClick={() => { setEditingScheduleTx(tx); setEditScheduleTxForm({ name: tx.name, amount: Math.abs(tx.amount).toString(), date: tx.date.split('T')[0] }); }}
+                          className="ml-3 mt-1 text-[9px] font-black text-indigo-600 uppercase tracking-widest border border-indigo-100 px-2 py-1 rounded-lg hover:bg-indigo-50 transition-colors flex-shrink-0"
+                        >
+                          <Edit2 className="w-3 h-3" />
+                        </button>
                       </div>
                       {tx.receiptUrl && (
                         <div className="flex items-center space-x-3 pt-1">
@@ -1602,6 +1646,54 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
                 })}
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Edit Schedule Transaction Modal */}
+      {editingScheduleTx && (
+        <div className="fixed inset-0 z-[160] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md" onClick={() => setEditingScheduleTx(null)}>
+          <div className="w-full max-w-md bg-white rounded-3xl p-10 shadow-2xl relative" onClick={e => e.stopPropagation()}>
+            <button onClick={() => setEditingScheduleTx(null)} className="absolute right-6 top-6 p-2 hover:bg-gray-100 rounded-full transition-colors" aria-label="Close"><X className="w-6 h-6 text-gray-400" /></button>
+            <h2 className="text-2xl font-black text-gray-900 mb-2">Edit Transaction</h2>
+            <p className="text-gray-500 text-sm mb-8">Update the transaction details below</p>
+            <form onSubmit={handleEditBillerScheduleTxSubmit} className="space-y-6">
+              <div>
+                <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Name</label>
+                <input
+                  value={editScheduleTxForm.name}
+                  onChange={e => setEditScheduleTxForm(f => ({ ...f, name: e.target.value }))}
+                  required
+                  className="w-full bg-gray-50 border-transparent rounded-2xl p-4 outline-none font-bold text-sm"
+                />
+              </div>
+              <div>
+                <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Amount</label>
+                <input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={editScheduleTxForm.amount}
+                  onChange={e => setEditScheduleTxForm(f => ({ ...f, amount: e.target.value }))}
+                  required
+                  className="w-full bg-gray-50 border-transparent rounded-2xl p-4 outline-none font-bold text-sm"
+                />
+              </div>
+              <div>
+                <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Date</label>
+                <input
+                  type="date"
+                  value={editScheduleTxForm.date}
+                  onChange={e => setEditScheduleTxForm(f => ({ ...f, date: e.target.value }))}
+                  required
+                  className="w-full bg-gray-50 border-transparent rounded-2xl p-4 outline-none font-bold text-sm"
+                />
+              </div>
+              <div className="flex gap-4 pt-4">
+                <button type="button" onClick={() => setEditingScheduleTx(null)} className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 py-4 rounded-2xl font-bold transition-colors" disabled={isEditingScheduleTx}>Cancel</button>
+                <button type="submit" className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white py-4 rounded-2xl font-bold transition-colors disabled:opacity-50" disabled={isEditingScheduleTx}>{isEditingScheduleTx ? 'Saving…' : 'Save Changes'}</button>
+              </div>
+            </form>
           </div>
         </div>
       )}

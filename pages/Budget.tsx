@@ -1088,10 +1088,8 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
       // Reload transactions to update paid status
       await reloadTransactions();
       
-      // FIX: Reload payment schedules if a schedule was updated
-      if (paymentScheduleId) {
-        await reloadPaymentSchedules();
-      }
+      // Always reload payment schedules after any transaction change to keep status current
+      await reloadPaymentSchedules();
       
       // Close the modal and reset form to defaults
       setShowTransactionModal(false);
@@ -2156,8 +2154,8 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                             {/* QA: Add edit button for transactions - Fix for Issue #6 */}
                             <button
                               onClick={() => {
-                                // Format date as YYYY-MM-DD for input
-                                const dateStr = new Date(tx.date).toISOString().split('T')[0];
+                                // Format date as YYYY-MM-DD for input (split directly to avoid UTC shift)
+                                const dateStr = tx.date.split('T')[0];
                                 setTransactionFormData({
                                   id: tx.id,
                                   name: tx.name,

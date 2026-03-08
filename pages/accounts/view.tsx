@@ -487,7 +487,7 @@ const AccountFilteredTransactions: React.FC<AccountFilteredTransactionsProps> = 
     setEditTxForm({
       name: tx.name,
       amount: Math.abs(tx.amount).toString(),
-      date: new Date(tx.date).toISOString().split('T')[0]
+      date: tx.date.split('T')[0]
     });
     setShowEditTxModal(true);
   };
