@@ -359,78 +359,37 @@ export const getTransactionsByPaymentSchedule = async (scheduleId: string) => {
 };
 
 /**
- * Delete a transaction and revert payment schedule status if linked
- * Note: Account balances are calculated dynamically from transactions, so no balance reversion needed
+ * Delete a transaction and revert payment schedule status if linked.
+ * Deletes the transaction first, then recalculates the schedule by re-summing all
+ * remaining linked transactions. This is more reliable than delta subtraction because
+ * it is immune to stale amount_paid values caused by edits, double-counting, or any
+ * other prior inconsistency.
+ * Note: Account balances are calculated dynamically from transactions, so no balance reversion needed.
  */
 export const deleteTransactionAndRevertSchedule = async (transactionId: string) => {
   try {
-    // First, get the transaction to check if it has a payment_schedule_id
+    // Fetch the transaction first to capture its payment_schedule_id
     const { data: transaction, error: fetchError } = await getTransactionById(transactionId);
     
     if (fetchError || !transaction) {
       throw new Error('Transaction not found');
     }
 
-    // If transaction is linked to a payment schedule, we need to revert the payment
-    if (transaction.payment_schedule_id) {
-      console.log('[Transactions] Reverting payment schedule for transaction deletion:', {
-        transactionId,
-        scheduleId: transaction.payment_schedule_id,
-        amount: transaction.amount,
-      });
+    const scheduleId = transaction.payment_schedule_id;
 
-      // Get the current schedule
-      const { data: schedule, error: scheduleError } = await supabase
-        .from(getTableName('monthly_payment_schedules'))
-        .select('*')
-        .eq('id', transaction.payment_schedule_id)
-        .single();
-
-      if (!scheduleError && schedule) {
-        // Calculate new amount_paid after removing this transaction
-        const newAmountPaid = Math.max(0, (schedule.amount_paid || 0) - transaction.amount);
-        
-        // Determine new status.
-        // When expected_amount is 0 (unset, e.g. Loans billers), we cannot confirm full
-        // payment, so do not revert to 'paid' — use 'partial' while any amount remains.
-        // When expected_amount > 0, 'paid' is allowed only if the remaining total covers it.
-        let newStatus: 'pending' | 'paid' | 'partial' | 'overdue' = 'pending';
-        if (schedule.expected_amount > 0 && newAmountPaid >= schedule.expected_amount) {
-          newStatus = 'paid';
-        } else if (newAmountPaid > 0) {
-          newStatus = 'partial';
-        }
-
-        // Update the payment schedule
-        await supabase
-          .from(getTableName('monthly_payment_schedules'))
-          .update({
-            amount_paid: newAmountPaid,
-            status: newStatus,
-            // If amount is now 0, clear payment details
-            ...(newAmountPaid === 0 ? {
-              date_paid: null,
-              receipt: null,
-              account_id: null,
-            } : {}),
-          })
-          .eq('id', transaction.payment_schedule_id);
-
-        console.log('[Transactions] Payment schedule reverted:', {
-          scheduleId: transaction.payment_schedule_id,
-          oldAmount: schedule.amount_paid,
-          newAmount: newAmountPaid,
-          newStatus,
-        });
-      }
-    }
-
-    // Now delete the transaction
+    // Delete the transaction
     const { error: deleteError } = await deleteTransaction(transactionId);
-    
     if (deleteError) throw deleteError;
 
     console.log('[Transactions] Transaction deleted successfully:', transactionId);
+
+    // Recalculate the linked payment schedule from all remaining transactions.
+    // By re-summing after deletion we always get a correct amount_paid / status,
+    // regardless of any prior drift between the stored amount_paid and actual transactions.
+    if (scheduleId) {
+      await recalculateScheduleFromTransactions(scheduleId);
+    }
+
     return { error: null };
   } catch (error) {
     console.error('Error deleting transaction and reverting schedule:', error);

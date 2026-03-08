@@ -547,7 +547,8 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
       }
 
       // Find the next unpaid or partially paid schedule
-      const currentMonth = new Date(payment.date).toLocaleString('default', { month: 'long' });
+      // Use en-US locale to match the English month names stored in the DB (e.g. "January")
+      const currentMonth = new Date(payment.date).toLocaleString('en-US', { month: 'long' });
       const currentYear = new Date(payment.date).getFullYear();
       
       // First try to find schedule for current month/year
@@ -690,8 +691,9 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
       }
 
       // Fallback: try to match by payment date month/year (only for unpaid schedules)
+      // Use en-US locale to match the English month names stored in the DB (e.g. "January")
       if (!targetSchedule) {
-        const currentMonth = new Date(payment.date).toLocaleString('default', { month: 'long' });
+        const currentMonth = new Date(payment.date).toLocaleString('en-US', { month: 'long' });
         const currentYear = new Date(payment.date).getFullYear();
         targetSchedule = schedules.find(s => 
           s.month === currentMonth && 
