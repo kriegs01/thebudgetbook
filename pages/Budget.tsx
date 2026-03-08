@@ -3,7 +3,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { BudgetItem, Account, Biller, PaymentSchedule, CategorizedSetupItem, SavedBudgetSetup, BudgetCategory, Installment } from '../types';
 import { Plus, Check, ChevronDown, Trash2, Save, FileText, ArrowRight, Upload, CheckCircle2, X, AlertTriangle, Info, Eye, ZoomIn, ZoomOut, Download } from 'lucide-react';
 import { createBudgetSetupFrontend, updateBudgetSetupFrontend } from '../src/services/budgetSetupsService';
-import { createTransaction, getAllTransactions, updateTransaction, createPaymentScheduleTransaction, uploadTransactionReceipt, getTransactionsByPaymentSchedule, getReceiptSignedUrl } from '../src/services/transactionsService';
+import { createTransaction, getAllTransactions, updateTransaction, updateTransactionAndSyncSchedule, createPaymentScheduleTransaction, uploadTransactionReceipt, getTransactionsByPaymentSchedule, getReceiptSignedUrl } from '../src/services/transactionsService';
 import type { SupabaseTransaction, SupabaseMonthlyPaymentSchedule } from '../src/types/supabase';
 import { getInstallmentPaymentSchedule, aggregateCreditCardPurchases } from '../src/utils/paymentStatus'; // PROTOTYPE: Import payment status utilities
 import { getScheduleExpectedAmount } from '../src/utils/linkedAccountUtils'; // ENHANCEMENT: Import for linked account amount calculation
@@ -1019,14 +1019,14 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
       let transactionData, transactionError;
       
       if (isEditing) {
-        // Update existing transaction
+        // Update existing transaction and recalculate the linked payment schedule
         const transaction = {
           name: transactionFormData.name,
           date: combineDateWithCurrentTime(transactionFormData.date),
           amount: parseFloat(transactionFormData.amount),
           payment_method_id: transactionFormData.accountId
         };
-        const result = await updateTransaction(transactionFormData.id, transaction);
+        const result = await updateTransactionAndSyncSchedule(transactionFormData.id, transaction);
         transactionData = result.data;
         transactionError = result.error;
       } else if (paymentScheduleId) {
@@ -1062,6 +1062,23 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
             console.error('[Budget] Failed to update payment schedule:', scheduleError);
           } else {
             console.log('[Budget] Payment schedule updated successfully');
+          }
+
+          // If this is an installment payment, update the installment's cumulative paidAmount
+          // so that the Loans section reflects the new total and reloadInstallments is triggered.
+          const linkedSchedule = paymentSchedules.find(s => s.id === paymentScheduleId);
+          if (linkedSchedule?.source_type === 'installment') {
+            const inst = installments.find(i => i.id === linkedSchedule.source_id);
+            const amountPaidDelta = parseFloat(transactionFormData.amount);
+            if (inst && !isNaN(amountPaidDelta) && onUpdateInstallment) {
+              await onUpdateInstallment({
+                ...inst,
+                paidAmount: inst.paidAmount + amountPaidDelta
+              });
+              console.log('[Budget] Installment paidAmount updated after schedule payment:', inst.name, '+', amountPaidDelta);
+            } else if (!onUpdateInstallment) {
+              console.warn('[Budget] onUpdateInstallment callback not provided; installment paidAmount will not be synced');
+            }
           }
         }
       } else {

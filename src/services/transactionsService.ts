@@ -115,6 +115,89 @@ export const updateTransaction = async (id: string, updates: UpdateTransactionIn
 };
 
 /**
+ * Recalculate a payment schedule's amount_paid and status by summing all linked transactions.
+ * Must be called after any transaction update that may change the total paid amount for a schedule.
+ */
+const recalculateScheduleFromTransactions = async (scheduleId: string): Promise<void> => {
+  try {
+    // Get all transactions for this schedule
+    const { data: txs } = await getTransactionsByPaymentSchedule(scheduleId);
+
+    // Fetch the schedule to obtain expected_amount and current state
+    const { data: schedule, error: scheduleError } = await supabase
+      .from(getTableName('monthly_payment_schedules'))
+      .select('id, expected_amount, amount_paid, status')
+      .eq('id', scheduleId)
+      .single();
+
+    if (scheduleError || !schedule) {
+      console.error('[Transactions] Could not fetch schedule for recalculation:', scheduleId);
+      return;
+    }
+
+    // Sum all transaction amounts (payment transactions store positive amounts)
+    const totalPaid = Math.max(0, (txs || []).reduce((sum, tx) => sum + tx.amount, 0));
+
+    // Determine new status
+    let newStatus: 'pending' | 'paid' | 'partial' | 'overdue' = 'pending';
+    if (schedule.expected_amount > 0 && totalPaid >= schedule.expected_amount) {
+      newStatus = 'paid';
+    } else if (totalPaid > 0) {
+      newStatus = 'partial';
+    }
+
+    // Skip DB write if nothing changed
+    if (totalPaid === schedule.amount_paid && newStatus === schedule.status) {
+      return;
+    }
+
+    await supabase
+      .from(getTableName('monthly_payment_schedules'))
+      .update({
+        amount_paid: totalPaid,
+        status: newStatus,
+        ...(totalPaid === 0 ? { date_paid: null, receipt: null, account_id: null } : {}),
+      })
+      .eq('id', scheduleId);
+
+    console.log('[Transactions] Payment schedule recalculated from transactions:', {
+      scheduleId,
+      totalPaid,
+      newStatus,
+    });
+  } catch (error) {
+    console.error('[Transactions] Error recalculating schedule:', error);
+  }
+};
+
+/**
+ * Update a transaction and resync the linked payment schedule status.
+ * Use this instead of updateTransaction when the transaction might be linked to a payment
+ * schedule (e.g. installment or biller payments), so that editing the amount correctly
+ * recalculates the schedule's amount_paid and status (partial/paid/pending).
+ */
+export const updateTransactionAndSyncSchedule = async (id: string, updates: UpdateTransactionInput) => {
+  // Fetch the current transaction to discover its payment_schedule_id
+  const { data: currentTx, error: fetchError } = await getTransactionById(id);
+  if (fetchError || !currentTx) {
+    return { data: null, error: fetchError || new Error('Transaction not found') };
+  }
+
+  // Perform the standard update
+  const result = await updateTransaction(id, updates);
+  if (result.error) {
+    return result;
+  }
+
+  // Recalculate the linked schedule if one exists
+  if (currentTx.payment_schedule_id) {
+    await recalculateScheduleFromTransactions(currentTx.payment_schedule_id);
+  }
+
+  return result;
+};
+
+/**
  * Delete a transaction
  */
 export const deleteTransaction = async (id: string) => {

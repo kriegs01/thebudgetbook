@@ -3,7 +3,7 @@ import { Installment, Account, ViewMode, Biller } from '../types';
 import { Plus, LayoutGrid, List, Wallet, Trash2, X, Upload, AlertTriangle, Edit2, Eye, MoreVertical, Info, ZoomIn, ZoomOut, Download } from 'lucide-react';
 import { getPaymentSchedulesBySource } from '../src/services/paymentSchedulesService';
 import { hasInstallmentPayments, deleteAllInstallmentPaymentsAndResetSchedules } from '../src/services/installmentsService';
-import { getTransactionsByPaymentSchedule, getReceiptSignedUrl, updateTransaction } from '../src/services/transactionsService';
+import { getTransactionsByPaymentSchedule, getReceiptSignedUrl, updateTransaction, updateTransactionAndSyncSchedule } from '../src/services/transactionsService';
 import { combineDateWithCurrentTime } from '../src/utils/dateUtils';
 import type { SupabaseMonthlyPaymentSchedule, SupabaseTransaction } from '../src/types/supabase';
 
@@ -120,7 +120,7 @@ const Installments: React.FC<InstallmentsProps> = ({ installments, accounts, bil
     setIsEditingScheduleTx(true);
     try {
       const sign = editingScheduleTx.amount < 0 ? -1 : 1;
-      const { error } = await updateTransaction(editingScheduleTx.id, {
+      const { error } = await updateTransactionAndSyncSchedule(editingScheduleTx.id, {
         name: editScheduleTxForm.name,
         date: combineDateWithCurrentTime(editScheduleTxForm.date),
         amount: sign * Math.abs(parseFloat(editScheduleTxForm.amount))

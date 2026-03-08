@@ -2,7 +2,7 @@ import React, { useEffect, useState, useMemo, useRef } from 'react';
 import { ArrowLeft, Info, Eye, ZoomIn, ZoomOut, Download, X, Pencil, BanknoteArrowDown, Trash2, ArrowUpFromLine, ArrowDownToLine, ArrowLeftRight, Banknote, CheckSquare, Square, Filter, ChevronDown } from 'lucide-react';
 import { useSearchParams, Link } from 'react-router-dom';
 import { Account } from '../../types';
-import { getTransactionsByPaymentMethod, createTransaction, updateTransaction, createTransfer, getLoanTransactionsWithPayments, getReceiptSignedUrl, deleteTransactionAndRevertSchedule, batchDeleteTransactions } from '../../src/services/transactionsService';
+import { getTransactionsByPaymentMethod, createTransaction, updateTransaction, updateTransactionAndSyncSchedule, createTransfer, getLoanTransactionsWithPayments, getReceiptSignedUrl, deleteTransactionAndRevertSchedule, batchDeleteTransactions } from '../../src/services/transactionsService';
 import { combineDateWithCurrentTime, getFirstDayOfCurrentMonthIso, getTodayIso } from '../../src/utils/dateUtils';
 
 const FILTER_MIN_DATE = '2025-01-01';
@@ -500,7 +500,7 @@ const AccountFilteredTransactions: React.FC<AccountFilteredTransactionsProps> = 
     try {
       // Preserve the original sign of the amount (positive = money out, negative = money in)
       const sign = editingViewTx.amount < 0 ? -1 : 1;
-      const { error } = await updateTransaction(editingViewTx.id, {
+      const { error } = await updateTransactionAndSyncSchedule(editingViewTx.id, {
         name: editTxForm.name,
         date: combineDateWithCurrentTime(editTxForm.date),
         amount: sign * parseFloat(editTxForm.amount)

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Biller, Account, PaymentSchedule, BudgetCategory, Installment } from '../types';
 import { Plus, Calendar, Bell, ChevronDown, ChevronRight, Upload, CheckCircle2, X, ArrowLeft, Power, PowerOff, MoreVertical, Edit2, Eye, Trash2, AlertTriangle, Info, ZoomIn, ZoomOut, Download } from 'lucide-react';
-import { getAllTransactions, getTransactionsByPaymentSchedule, getReceiptSignedUrl, updateTransaction } from '../src/services/transactionsService';
+import { getAllTransactions, getTransactionsByPaymentSchedule, getReceiptSignedUrl, updateTransaction, updateTransactionAndSyncSchedule } from '../src/services/transactionsService';
 import { getPaymentSchedulesBySource } from '../src/services/paymentSchedulesService';
 import { combineDateWithCurrentTime } from '../src/utils/dateUtils';
 import type { SupabaseTransaction, SupabaseMonthlyPaymentSchedule } from '../src/types/supabase';
@@ -267,7 +267,7 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
     setIsEditingScheduleTx(true);
     try {
       const sign = editingScheduleTx.amount < 0 ? -1 : 1;
-      const { error } = await updateTransaction(editingScheduleTx.id, {
+      const { error } = await updateTransactionAndSyncSchedule(editingScheduleTx.id, {
         name: editScheduleTxForm.name,
         date: combineDateWithCurrentTime(editScheduleTxForm.date),
         amount: sign * Math.abs(parseFloat(editScheduleTxForm.amount))
