@@ -204,16 +204,12 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ onTransactionDelete
     }
   };
 
-  const removeTx = async (id: string) => {
+  const removeTx = async (id: string, name: string) => {
+    if (!window.confirm(`Delete transaction "${name}"? This action cannot be undone.`)) return;
     try {
       console.log('[Transactions Page] Deleting transaction with reversion:', id);
       const { error } = await deleteTransactionAndRevertSchedule(id);
-      
-      if (error) {
-        console.error('Error deleting transaction:', error);
-        alert('Failed to delete transaction. Please try again.');
-        return;
-      }
+      if (error) throw error;
       
       console.log('[Transactions Page] Transaction deleted successfully');
       // Reload transactions after deletion
@@ -226,7 +222,7 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ onTransactionDelete
       }
     } catch (error) {
       console.error('Error deleting transaction:', error);
-      alert('Failed to delete transaction. Please try again.');
+      alert('Failed to delete transaction. Please check your connection and try again.');
     }
   };
 
@@ -296,7 +292,7 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ onTransactionDelete
                                 <Pencil className="w-4 h-4" />
                               </button>
                               <button
-                                onClick={() => removeTx(tx.id)}
+                                onClick={() => removeTx(tx.id, tx.name)}
                                 title="Delete transaction"
                                 aria-label="Delete transaction"
                                 className="text-gray-300 hover:text-red-500 hover:bg-red-50 rounded-full p-1.5 transition-all"
