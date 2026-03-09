@@ -16,6 +16,7 @@ export const supabaseAccountToFrontend = (supabaseAccount: SupabaseAccount): Acc
     bank: supabaseAccount.bank,
     classification: supabaseAccount.classification as any,
     balance: supabaseAccount.balance,
+    openingBalance: supabaseAccount.balance, // Preserve the DB seed so it is never overwritten by the calculated running balance
     type: supabaseAccount.type as 'Debit' | 'Credit',
     creditLimit: supabaseAccount.credit_limit ?? undefined,
     billingDate: supabaseAccount.billing_date ?? undefined,

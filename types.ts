@@ -5,6 +5,7 @@ export interface Account {
   bank: string;
   classification: AccountClassification;
   balance: number;
+  openingBalance?: number; // The original DB seed balance (set at account creation); balance is the calculated running balance
   type: 'Debit' | 'Credit';
   creditLimit?: number;
   billingDate?: string;

@@ -472,6 +472,7 @@ const AccountFilteredTransactions: React.FC<AccountFilteredTransactionsProps> = 
       const { error } = await deleteTransactionAndRevertSchedule(tx.id);
       if (error) throw error;
       await loadTransactions();
+      onTransactionCreated?.(); // Trigger account balance recalculation after delete
     } catch (error) {
       console.error('Error deleting transaction:', error);
       alert('Failed to delete transaction. Please check your connection and try again.');

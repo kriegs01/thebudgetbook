@@ -151,7 +151,7 @@ const Accounts: React.FC<AccountsProps> = ({ accounts, onAdd, onDelete, onEdit, 
     setFormData({
       bank: acc.bank,
       classification: acc.classification,
-      balance: String(acc.balance ?? 0),
+      balance: String(acc.openingBalance ?? 0), // Use opening balance seed, not calculated running balance
       type: acc.type,
       creditLimit: acc.creditLimit ? String(acc.creditLimit) : '',
       billingDate: acc.billingDate ?? '',
@@ -448,7 +448,7 @@ const Accounts: React.FC<AccountsProps> = ({ accounts, onAdd, onDelete, onEdit, 
                   </select>
                 </div>
                 <div>
-                  <label className="block text-xs font-bold text-gray-400 uppercase mb-1">Balance</label>
+                  <label className="block text-xs font-bold text-gray-400 uppercase mb-1">Opening Balance</label>
                   <input required type="number" value={formData.balance} onChange={(e) => setFormData({...formData, balance: e.target.value})} className="w-full border border-gray-100 rounded-lg px-3 py-2" />
                 </div>
               </div>
