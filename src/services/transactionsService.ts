@@ -115,6 +115,89 @@ export const updateTransaction = async (id: string, updates: UpdateTransactionIn
 };
 
 /**
+ * Recalculate a payment schedule's amount_paid and status by summing all linked transactions.
+ * Must be called after any transaction update that may change the total paid amount for a schedule.
+ */
+const recalculateScheduleFromTransactions = async (scheduleId: string): Promise<void> => {
+  try {
+    // Get all transactions for this schedule
+    const { data: txs } = await getTransactionsByPaymentSchedule(scheduleId);
+
+    // Fetch the schedule to obtain expected_amount and current state
+    const { data: schedule, error: scheduleError } = await supabase
+      .from(getTableName('monthly_payment_schedules'))
+      .select('id, expected_amount, amount_paid, status')
+      .eq('id', scheduleId)
+      .single();
+
+    if (scheduleError || !schedule) {
+      console.error('[Transactions] Could not fetch schedule for recalculation:', scheduleId);
+      return;
+    }
+
+    // Sum all transaction amounts (payment transactions store positive amounts)
+    const totalPaid = Math.max(0, (txs || []).reduce((sum, tx) => sum + tx.amount, 0));
+
+    // Determine new status
+    let newStatus: 'pending' | 'paid' | 'partial' | 'overdue' = 'pending';
+    if (schedule.expected_amount > 0 && totalPaid >= schedule.expected_amount) {
+      newStatus = 'paid';
+    } else if (totalPaid > 0) {
+      newStatus = 'partial';
+    }
+
+    // Skip DB write if nothing changed
+    if (totalPaid === schedule.amount_paid && newStatus === schedule.status) {
+      return;
+    }
+
+    await supabase
+      .from(getTableName('monthly_payment_schedules'))
+      .update({
+        amount_paid: totalPaid,
+        status: newStatus,
+        ...(totalPaid === 0 ? { date_paid: null, receipt: null, account_id: null } : {}),
+      })
+      .eq('id', scheduleId);
+
+    console.log('[Transactions] Payment schedule recalculated from transactions:', {
+      scheduleId,
+      totalPaid,
+      newStatus,
+    });
+  } catch (error) {
+    console.error('[Transactions] Error recalculating schedule:', error);
+  }
+};
+
+/**
+ * Update a transaction and resync the linked payment schedule status.
+ * Use this instead of updateTransaction when the transaction might be linked to a payment
+ * schedule (e.g. installment or biller payments), so that editing the amount correctly
+ * recalculates the schedule's amount_paid and status (partial/paid/pending).
+ */
+export const updateTransactionAndSyncSchedule = async (id: string, updates: UpdateTransactionInput) => {
+  // Fetch the current transaction to discover its payment_schedule_id
+  const { data: currentTx, error: fetchError } = await getTransactionById(id);
+  if (fetchError || !currentTx) {
+    return { data: null, error: fetchError || new Error('Transaction not found') };
+  }
+
+  // Perform the standard update
+  const result = await updateTransaction(id, updates);
+  if (result.error) {
+    return result;
+  }
+
+  // Recalculate the linked schedule if one exists
+  if (currentTx.payment_schedule_id) {
+    await recalculateScheduleFromTransactions(currentTx.payment_schedule_id);
+  }
+
+  return result;
+};
+
+/**
  * Delete a transaction
  */
 export const deleteTransaction = async (id: string) => {
@@ -276,78 +359,37 @@ export const getTransactionsByPaymentSchedule = async (scheduleId: string) => {
 };
 
 /**
- * Delete a transaction and revert payment schedule status if linked
- * Note: Account balances are calculated dynamically from transactions, so no balance reversion needed
+ * Delete a transaction and revert payment schedule status if linked.
+ * Deletes the transaction first, then recalculates the schedule by re-summing all
+ * remaining linked transactions. This is more reliable than delta subtraction because
+ * it is immune to stale amount_paid values caused by edits, double-counting, or any
+ * other prior inconsistency.
+ * Note: Account balances are calculated dynamically from transactions, so no balance reversion needed.
  */
 export const deleteTransactionAndRevertSchedule = async (transactionId: string) => {
   try {
-    // First, get the transaction to check if it has a payment_schedule_id
+    // Fetch the transaction first to capture its payment_schedule_id
     const { data: transaction, error: fetchError } = await getTransactionById(transactionId);
     
     if (fetchError || !transaction) {
       throw new Error('Transaction not found');
     }
 
-    // If transaction is linked to a payment schedule, we need to revert the payment
-    if (transaction.payment_schedule_id) {
-      console.log('[Transactions] Reverting payment schedule for transaction deletion:', {
-        transactionId,
-        scheduleId: transaction.payment_schedule_id,
-        amount: transaction.amount,
-      });
+    const scheduleId = transaction.payment_schedule_id;
 
-      // Get the current schedule
-      const { data: schedule, error: scheduleError } = await supabase
-        .from(getTableName('monthly_payment_schedules'))
-        .select('*')
-        .eq('id', transaction.payment_schedule_id)
-        .single();
-
-      if (!scheduleError && schedule) {
-        // Calculate new amount_paid after removing this transaction
-        const newAmountPaid = Math.max(0, (schedule.amount_paid || 0) - transaction.amount);
-        
-        // Determine new status.
-        // When expected_amount is 0 (unset, e.g. Loans billers), we cannot confirm full
-        // payment, so do not revert to 'paid' — use 'partial' while any amount remains.
-        // When expected_amount > 0, 'paid' is allowed only if the remaining total covers it.
-        let newStatus: 'pending' | 'paid' | 'partial' | 'overdue' = 'pending';
-        if (schedule.expected_amount > 0 && newAmountPaid >= schedule.expected_amount) {
-          newStatus = 'paid';
-        } else if (newAmountPaid > 0) {
-          newStatus = 'partial';
-        }
-
-        // Update the payment schedule
-        await supabase
-          .from(getTableName('monthly_payment_schedules'))
-          .update({
-            amount_paid: newAmountPaid,
-            status: newStatus,
-            // If amount is now 0, clear payment details
-            ...(newAmountPaid === 0 ? {
-              date_paid: null,
-              receipt: null,
-              account_id: null,
-            } : {}),
-          })
-          .eq('id', transaction.payment_schedule_id);
-
-        console.log('[Transactions] Payment schedule reverted:', {
-          scheduleId: transaction.payment_schedule_id,
-          oldAmount: schedule.amount_paid,
-          newAmount: newAmountPaid,
-          newStatus,
-        });
-      }
-    }
-
-    // Now delete the transaction
+    // Delete the transaction
     const { error: deleteError } = await deleteTransaction(transactionId);
-    
     if (deleteError) throw deleteError;
 
     console.log('[Transactions] Transaction deleted successfully:', transactionId);
+
+    // Recalculate the linked payment schedule from all remaining transactions.
+    // By re-summing after deletion we always get a correct amount_paid / status,
+    // regardless of any prior drift between the stored amount_paid and actual transactions.
+    if (scheduleId) {
+      await recalculateScheduleFromTransactions(scheduleId);
+    }
+
     return { error: null };
   } catch (error) {
     console.error('Error deleting transaction and reverting schedule:', error);

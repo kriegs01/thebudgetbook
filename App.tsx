@@ -523,6 +523,7 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
       accountId: string;
       receipt?: string;
       receiptFile?: File;
+      scheduleId?: string; // target schedule ID passed from the UI selection
     }
   ) => {
     try {
@@ -530,6 +531,7 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
         installmentId,
         amount: payment.amount,
         date: payment.date,
+        scheduleId: payment.scheduleId,
       });
 
       // Find the installment to get its details
@@ -546,18 +548,34 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
         throw new Error('Could not find payment schedules for this installment');
       }
 
-      // Find the next unpaid or partially paid schedule
-      const currentMonth = new Date(payment.date).toLocaleString('default', { month: 'long' });
-      const currentYear = new Date(payment.date).getFullYear();
-      
-      // First try to find schedule for current month/year
-      let targetSchedule = schedules.find(s => 
-        s.month === currentMonth && 
-        s.year === currentYear &&
-        s.status !== 'paid'
-      );
+      let targetSchedule;
 
-      // If not found, find the first unpaid schedule
+      // Prefer the schedule ID passed directly from the UI (exact selection by the user)
+      if (payment.scheduleId) {
+        targetSchedule = schedules.find(s => s.id === payment.scheduleId);
+        if (!targetSchedule) {
+          console.warn('[App] Provided scheduleId not found in fetched schedules — falling back to date-based matching', {
+            scheduleId: payment.scheduleId,
+            availableIds: schedules.map(s => s.id),
+          });
+        }
+      }
+
+      // Fallback: try to match by payment date month/year (only for unpaid schedules)
+      // Use en-US locale to match the English month names stored in the DB (e.g. "January")
+      if (!targetSchedule) {
+        const currentMonth = new Date(payment.date).toLocaleString('en-US', { month: 'long' });
+        const currentYear = new Date(payment.date).getFullYear();
+        
+        // First try to find schedule for current month/year
+        targetSchedule = schedules.find(s => 
+          s.month === currentMonth && 
+          s.year === currentYear &&
+          s.status !== 'paid'
+        );
+      }
+
+      // Last resort: find the first unpaid schedule
       if (!targetSchedule) {
         targetSchedule = schedules.find(s => s.status === 'pending' || s.status === 'partial');
       }
@@ -690,8 +708,9 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
       }
 
       // Fallback: try to match by payment date month/year (only for unpaid schedules)
+      // Use en-US locale to match the English month names stored in the DB (e.g. "January")
       if (!targetSchedule) {
-        const currentMonth = new Date(payment.date).toLocaleString('default', { month: 'long' });
+        const currentMonth = new Date(payment.date).toLocaleString('en-US', { month: 'long' });
         const currentYear = new Date(payment.date).getFullYear();
         targetSchedule = schedules.find(s => 
           s.month === currentMonth && 

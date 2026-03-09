@@ -3,7 +3,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { BudgetItem, Account, Biller, PaymentSchedule, CategorizedSetupItem, SavedBudgetSetup, BudgetCategory, Installment } from '../types';
 import { Plus, Check, ChevronDown, Trash2, Save, FileText, ArrowRight, Upload, CheckCircle2, X, AlertTriangle, Info, Eye, ZoomIn, ZoomOut, Download } from 'lucide-react';
 import { createBudgetSetupFrontend, updateBudgetSetupFrontend } from '../src/services/budgetSetupsService';
-import { createTransaction, getAllTransactions, updateTransaction, createPaymentScheduleTransaction, uploadTransactionReceipt, getTransactionsByPaymentSchedule, getReceiptSignedUrl } from '../src/services/transactionsService';
+import { createTransaction, getAllTransactions, updateTransaction, updateTransactionAndSyncSchedule, createPaymentScheduleTransaction, uploadTransactionReceipt, getTransactionsByPaymentSchedule, getReceiptSignedUrl } from '../src/services/transactionsService';
 import type { SupabaseTransaction, SupabaseMonthlyPaymentSchedule } from '../src/types/supabase';
 import { getInstallmentPaymentSchedule, aggregateCreditCardPurchases } from '../src/utils/paymentStatus'; // PROTOTYPE: Import payment status utilities
 import { getScheduleExpectedAmount } from '../src/utils/linkedAccountUtils'; // ENHANCEMENT: Import for linked account amount calculation
@@ -707,11 +707,10 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
         const timingMatch = !inst.timing || inst.timing === selectedTiming;
         const scheduleForMonth = getPaymentSchedule('installment', inst.id, selectedMonth, selectedYear);
         const isActiveForPeriod = scheduleForMonth !== undefined || shouldShowInstallment(inst, selectedMonth, selectedYear);
-        // Require both the aggregate and the schedule to agree the loan is done.
-        // This prevents a stale/drifted aggregate paidAmount from hiding an installment
-        // whose current-month schedule is still 'pending' or 'partial'.
-        const aggregateFinished = inst.totalAmount > 0 && inst.paidAmount >= inst.totalAmount;
-        const isFinished = aggregateFinished && (!scheduleForMonth || scheduleForMonth.status === 'paid');
+        // Only hide when there is NO schedule for this period AND the total is fully paid.
+        // When a schedule exists for the viewed period, always keep the row visible so the
+        // user can see the paid/partial indicator rather than the row disappearing on payment.
+        const isFinished = !scheduleForMonth && inst.totalAmount > 0 && inst.paidAmount >= inst.totalAmount;
         const notExcluded = !excludedInstallmentIds.has(inst.id);
         return timingMatch && isActiveForPeriod && !isFinished && notExcluded;
       })
@@ -898,11 +897,10 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
         const timingMatch = !inst.timing || inst.timing === selectedTiming;
         const scheduleForMonth = getPaymentSchedule('installment', inst.id, selectedMonth, selectedYear);
         const isActiveForPeriod = scheduleForMonth !== undefined || shouldShowInstallment(inst, selectedMonth, selectedYear);
-        // Require both the aggregate and the schedule to agree the loan is done.
-        // This prevents a stale/drifted aggregate paidAmount from hiding an installment
-        // whose current-month schedule is still 'pending' or 'partial'.
-        const aggregateFinished = inst.totalAmount > 0 && inst.paidAmount >= inst.totalAmount;
-        const isFinished = aggregateFinished && (!scheduleForMonth || scheduleForMonth.status === 'paid');
+        // Only hide when there is NO schedule for this period AND the total is fully paid.
+        // When a schedule exists for the viewed period, always keep the row visible so the
+        // user can see the paid/partial indicator rather than the row disappearing on payment.
+        const isFinished = !scheduleForMonth && inst.totalAmount > 0 && inst.paidAmount >= inst.totalAmount;
         const notExcluded = !excludedInstallmentIds.has(inst.id);
         return timingMatch && isActiveForPeriod && !isFinished && notExcluded;
       })
@@ -1019,14 +1017,14 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
       let transactionData, transactionError;
       
       if (isEditing) {
-        // Update existing transaction
+        // Update existing transaction and recalculate the linked payment schedule
         const transaction = {
           name: transactionFormData.name,
           date: combineDateWithCurrentTime(transactionFormData.date),
           amount: parseFloat(transactionFormData.amount),
           payment_method_id: transactionFormData.accountId
         };
-        const result = await updateTransaction(transactionFormData.id, transaction);
+        const result = await updateTransactionAndSyncSchedule(transactionFormData.id, transaction);
         transactionData = result.data;
         transactionError = result.error;
       } else if (paymentScheduleId) {
@@ -1063,6 +1061,23 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
           } else {
             console.log('[Budget] Payment schedule updated successfully');
           }
+
+          // If this is an installment payment, update the installment's cumulative paidAmount
+          // so that the Loans section reflects the new total and reloadInstallments is triggered.
+          const linkedSchedule = paymentSchedules.find(s => s.id === paymentScheduleId);
+          if (linkedSchedule?.source_type === 'installment') {
+            const inst = installments.find(i => i.id === linkedSchedule.source_id);
+            const amountPaidDelta = parseFloat(transactionFormData.amount);
+            if (inst && !isNaN(amountPaidDelta) && onUpdateInstallment) {
+              await onUpdateInstallment({
+                ...inst,
+                paidAmount: inst.paidAmount + amountPaidDelta
+              });
+              console.log('[Budget] Installment paidAmount updated after schedule payment:', inst.name, '+', amountPaidDelta);
+            } else if (!onUpdateInstallment) {
+              console.warn('[Budget] onUpdateInstallment callback not provided; installment paidAmount will not be synced');
+            }
+          }
         }
       } else {
         // Create new transaction without schedule link (for purchases)
@@ -1088,10 +1103,8 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
       // Reload transactions to update paid status
       await reloadTransactions();
       
-      // FIX: Reload payment schedules if a schedule was updated
-      if (paymentScheduleId) {
-        await reloadPaymentSchedules();
-      }
+      // Always reload payment schedules after any transaction change to keep status current
+      await reloadPaymentSchedules();
       
       // Close the modal and reset form to defaults
       setShowTransactionModal(false);
@@ -1446,11 +1459,10 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
           const timingMatch = !inst.timing || inst.timing === selectedTiming;
           const scheduleForMonth = getPaymentSchedule('installment', inst.id, selectedMonth, selectedYear);
           const isActiveForPeriod = scheduleForMonth !== undefined || shouldShowInstallment(inst, selectedMonth, selectedYear);
-          // Require both the aggregate and the schedule to agree the loan is done.
-          // This prevents a stale/drifted aggregate paidAmount from hiding an installment
-          // whose current-month schedule is still 'pending' or 'partial'.
-          const aggregateFinished = inst.totalAmount > 0 && inst.paidAmount >= inst.totalAmount;
-          const isFinished = aggregateFinished && (!scheduleForMonth || scheduleForMonth.status === 'paid');
+          // Only hide when there is NO schedule for this period AND the total is fully paid.
+          // When a schedule exists for the viewed period, always keep the row visible so the
+          // user can see the paid/partial indicator rather than the row disappearing on payment.
+          const isFinished = !scheduleForMonth && inst.totalAmount > 0 && inst.paidAmount >= inst.totalAmount;
           const notExcluded = !excludedInstallmentIds.has(inst.id);
           return timingMatch && isActiveForPeriod && !isFinished && notExcluded;
         })
@@ -1711,11 +1723,10 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
               // Use schedule existence when available; fall back to date-based check for older installments
               const scheduleForMonth = getPaymentSchedule('installment', inst.id, selectedMonth, selectedYear);
               const isActiveForPeriod = scheduleForMonth !== undefined || shouldShowInstallment(inst, selectedMonth, selectedYear);
-              // Require both the aggregate and the schedule to agree the loan is done.
-              // This prevents a stale/drifted aggregate paidAmount from hiding an installment
-              // whose current-month schedule is still 'pending' or 'partial'.
-              const aggregateFinished = inst.totalAmount > 0 && inst.paidAmount >= inst.totalAmount;
-              const isFinished = aggregateFinished && (!scheduleForMonth || scheduleForMonth.status === 'paid');
+              // Only hide when there is NO schedule for this period AND the total is fully paid.
+              // When a schedule exists for the viewed period, always keep the row visible so the
+              // user can see the paid/partial indicator rather than the row disappearing on payment.
+              const isFinished = !scheduleForMonth && inst.totalAmount > 0 && inst.paidAmount >= inst.totalAmount;
               return timingMatch && isActiveForPeriod && !isFinished;
             });
           }
@@ -2156,8 +2167,8 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                             {/* QA: Add edit button for transactions - Fix for Issue #6 */}
                             <button
                               onClick={() => {
-                                // Format date as YYYY-MM-DD for input
-                                const dateStr = new Date(tx.date).toISOString().split('T')[0];
+                                // Format date as YYYY-MM-DD for input (split directly to avoid UTC shift)
+                                const dateStr = tx.date.split('T')[0];
                                 setTransactionFormData({
                                   id: tx.id,
                                   name: tx.name,
