@@ -9,7 +9,7 @@
 
 import type { Biller, Account, PaymentSchedule } from '../../types';
 import type { SupabaseTransaction } from '../types/supabase';
-import { getCycleForMonth, aggregateTransactionsByCycle } from './billingCycles';
+import { getCycleForMonth, aggregateTransactionsByCycle, getDueDayForMonth } from './billingCycles';
 
 /**
  * Check if a biller should use linked account logic
@@ -201,3 +201,24 @@ export const getScheduleExpectedAmount = (
 // - Add ability to manually override calculated amounts for specific cycles
 // - Integrate with statement export feature
 // - Add validation warnings when linked account has no transactions in cycle
+
+/**
+ * Get the computed due day for a biller's linked credit account in a given month/year.
+ * Returns null if the biller has no linked account or the account has no billing config.
+ *
+ * @param biller - The Loans-category biller with linkedAccountId
+ * @param accounts - All available accounts
+ * @param month - 0-indexed month (e.g. 0 = January)
+ * @param year - Year (e.g. 2026)
+ * @returns Due day number (e.g. 2) or null
+ */
+export const getLinkedAccountDueDay = (
+  biller: Biller,
+  accounts: Account[],
+  month: number,
+  year: number
+): number | null => {
+  const linkedAccount = getLinkedAccount(biller, accounts);
+  if (!linkedAccount) return null;
+  return getDueDayForMonth(linkedAccount, month, year);
+};

@@ -8,6 +8,7 @@
  */
 
 import type { SupabaseTransaction } from '../types/supabase';
+import type { Account } from '../../types';
 
 /**
  * Represents a billing cycle with start/end dates and a label
@@ -278,3 +279,81 @@ export const getCycleForMonth = (
 // - Add caching for frequently accessed billing cycles
 // - Consider adding transaction categorization within cycles
 // - Consider edge case handling if billing date changes mid-year (multiple cycles same end month)
+
+/**
+ * Get ordinal suffix for a day number (e.g. 1 → "st", 2 → "nd", 3 → "rd", 4 → "th")
+ *
+ * @param d - Day number
+ * @returns Ordinal suffix string
+ */
+export const ordinalSuffix = (d: number): string => {
+  if (d >= 11 && d <= 13) return 'th';
+  switch (d % 10) {
+    case 1: return 'st';
+    case 2: return 'nd';
+    case 3: return 'rd';
+    default: return 'th';
+  }
+};
+
+/**
+ * Calculate the due date day for a given billing period.
+ *
+ * @param statementDay - Day of month the statement cuts (e.g. 12)
+ * @param daysToPay - Number of days after statement date until due (e.g. 21)
+ * @param statementMonth - 0-indexed month of the statement cut (e.g. 0 = January)
+ * @param statementYear - Year of the statement cut (e.g. 2026)
+ * @returns Object with { dueDay, dueMonth (0-indexed), dueYear }
+ */
+export const calculateDueDate = (
+  statementDay: number,
+  daysToPay: number,
+  statementMonth: number,
+  statementYear: number
+): { dueDay: number; dueMonth: number; dueYear: number } => {
+  const statementDate = new Date(statementYear, statementMonth, statementDay);
+  const dueDate = new Date(statementDate.getTime() + daysToPay * 24 * 60 * 60 * 1000);
+  return {
+    dueDay: dueDate.getDate(),
+    dueMonth: dueDate.getMonth(),
+    dueYear: dueDate.getFullYear(),
+  };
+};
+
+/**
+ * Get the due day of month for a credit account in a given month/year.
+ * Used to determine when a biller payment is due for a specific billing period.
+ *
+ * @param account - The credit account with billingDate (statement day) and dueDate (days to pay)
+ * @param month - 0-indexed month of the billing period
+ * @param year - Year of the billing period
+ * @returns The day of month the payment is due, or null if account has no billing config
+ */
+export const getDueDayForMonth = (
+  account: Account,
+  month: number,
+  year: number
+): number | null => {
+  if (!account.billingDate || !account.dueDate) return null;
+
+  const statementDay = new Date(account.billingDate).getDate();
+  const daysToPay = new Date(account.dueDate).getDate();
+
+  const { dueDay } = calculateDueDate(statementDay, daysToPay, month, year);
+  return dueDay;
+};
+
+/**
+ * Get a human-readable display string for the due day.
+ * e.g. "~2nd of next month" or "~25th of same month"
+ *
+ * @param statementDay - Day of month the statement cuts
+ * @param daysToPay - Number of days after statement date until due
+ * @returns Human-readable string
+ */
+export const getDueDayForDisplay = (statementDay: number, daysToPay: number): string => {
+  // Use a reference month (January) to compute
+  const { dueDay, dueMonth } = calculateDueDate(statementDay, daysToPay, 0, 2000);
+  const crossesMonth = dueMonth > 0; // January reference, so dueMonth > 0 means next month
+  return `${dueDay}${ordinalSuffix(dueDay)} of ${crossesMonth ? 'next month' : 'same month'}`;
+};
