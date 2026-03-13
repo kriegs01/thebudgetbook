@@ -119,6 +119,7 @@ const Accounts: React.FC<AccountsProps> = ({ accounts, onAdd, onDelete, onEdit, 
         bank: formData.bank,
         classification: formData.classification,
         balance: parseFloat(formData.balance || '0'),
+        openingBalance: parseFloat(formData.balance || '0'), // Persisted to opening_balance DB column
         type: formData.type,
         creditLimit: formData.type === 'Credit' ? (formData.creditLimit ? parseFloat(formData.creditLimit) : 0) : undefined,
         billingDate: formData.type === 'Credit' ? (formData.billingDate || undefined) : undefined,

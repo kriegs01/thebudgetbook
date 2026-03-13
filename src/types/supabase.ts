@@ -20,7 +20,8 @@ export interface SupabaseAccount {
   id: string; // uuid
   bank: string;
   classification: string;
-  balance: number; // numeric
+  balance: number; // numeric - legacy column; kept for backward compat but NOT used as calculation seed
+  opening_balance?: number; // numeric - immutable seed for balance recalculation (DEFAULT 0); optional to handle pre-migration DBs
   type: string;
   credit_limit: number | null; // numeric, nullable
   billing_date: string | null; // date, nullable
