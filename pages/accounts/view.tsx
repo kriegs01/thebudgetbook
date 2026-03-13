@@ -222,12 +222,8 @@ const AccountFilteredTransactions: React.FC<AccountFilteredTransactionsProps> = 
     });
   }, [transactions, filterStartDate, filterEndDate, filterTypes]);
 
-  // ── Derived: current balance (all transactions, unfiltered) ───────────────
-  const currentBalance = useMemo(() => {
-    if (!account) return 0;
-    // initial balance minus sum of all transaction amounts (positive = out, negative = in)
-    return transactions.reduce((bal, tx) => bal - tx.amount, account.balance);
-  }, [transactions, account]);
+  // ── Derived: current balance (pre-calculated from App.tsx, no re-reduction needed) ─
+  const currentBalance = useMemo(() => account?.balance ?? 0, [account]);
 
   // ── Derived: total in / out from filtered transactions ────────────────────
   const totalIn = useMemo(
@@ -476,6 +472,7 @@ const AccountFilteredTransactions: React.FC<AccountFilteredTransactionsProps> = 
       const { error } = await deleteTransactionAndRevertSchedule(tx.id);
       if (error) throw error;
       await loadTransactions();
+      onTransactionCreated?.(); // Trigger account balance recalculation after delete
     } catch (error) {
       console.error('Error deleting transaction:', error);
       alert('Failed to delete transaction. Please check your connection and try again.');

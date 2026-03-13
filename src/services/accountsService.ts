@@ -273,19 +273,19 @@ export const getAllAccountsWithCalculatedBalances = async (): Promise<{ data: Ac
       });
       
       // Calculate balance based on account type
-      let calculatedBalance = account.balance; // Start with initial balance
+      let calculatedBalance = account.openingBalance ?? account.balance; // Start with opening balance seed
       
       if (account.type === 'Debit') {
         // For debit accounts: subtract transaction amounts
         calculatedBalance = sortedTransactions.reduce(
           (balance, tx) => balance - tx.amount,
-          account.balance
+          account.openingBalance ?? account.balance
         );
       } else if (account.type === 'Credit') {
         // For credit accounts: add transaction amounts (increases usage/debt)
         calculatedBalance = sortedTransactions.reduce(
           (balance, tx) => balance + tx.amount,
-          account.balance
+          account.openingBalance ?? account.balance
         );
       }
       

@@ -33,8 +33,8 @@ export const calculateAccountBalance = (
   transactions: SupabaseTransaction[],
   initialBalance?: number
 ): number => {
-  // Use provided initial balance or account's current balance as baseline
-  const baseline = initialBalance ?? account.balance;
+  // Use provided initial balance, then the DB opening balance seed, then fall back to account.balance
+  const baseline = initialBalance ?? account.openingBalance ?? account.balance;
   
   // Filter transactions for this account
   // Note: If calling this in a loop, consider pre-filtering transactions
@@ -82,8 +82,8 @@ export const calculateAccountBalanceFromFiltered = (
   accountTransactions: SupabaseTransaction[],
   initialBalance?: number
 ): number => {
-  // Use provided initial balance or account's current balance as baseline
-  const baseline = initialBalance ?? account.balance;
+  // Use provided initial balance, then the DB opening balance seed, then fall back to account.balance
+  const baseline = initialBalance ?? account.openingBalance ?? account.balance;
   
   // Sort transactions by date (oldest first)
   const sortedTransactions = [...accountTransactions].sort((a, b) => 

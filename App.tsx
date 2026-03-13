@@ -3,7 +3,7 @@ import { Menu, ChevronLeft } from 'lucide-react';
 import { BrowserRouter, Routes, Route, NavLink } from 'react-router-dom';
 import { NAV_ITEMS, INITIAL_BUDGET, DEFAULT_SETUP, INITIAL_CATEGORIES } from './constants';
 import { getAllBillersFrontend, createBillerFrontend, updateBillerFrontend, deleteBillerFrontend } from './src/services/billersService';
-import { getAllAccountsWithCalculatedBalances, getAllAccountsFrontend, createAccountFrontend, updateAccountFrontend, deleteAccountFrontend } from './src/services/accountsService';
+import { getAllAccountsFrontend, createAccountFrontend, updateAccountFrontend, deleteAccountFrontend } from './src/services/accountsService';
 import { getAllInstallmentsFrontend, createInstallmentFrontend, updateInstallmentFrontend, deleteInstallmentFrontend } from './src/services/installmentsService';
 import { getAllSavingsFrontend, createSavingsFrontend, updateSavingsFrontend, deleteSavingsFrontend } from './src/services/savingsService';
 import { getAllBudgetSetupsFrontend, deleteBudgetSetupFrontend } from './src/services/budgetSetupsService';
@@ -326,12 +326,20 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
   };
 
   const reloadAccounts = async () => {
-    const { data, error } = await getAllAccountsWithCalculatedBalances();
-    if (error) {
-      console.error('Error reloading accounts:', error);
+    const [accountsResult, transactionsResult] = await Promise.allSettled([
+      getAllAccountsFrontend(),
+      getAllTransactions(),
+    ]);
+    const accountsData = accountsResult.status === 'fulfilled' ? accountsResult.value : { data: null, error: accountsResult.reason };
+    const transactionsData = transactionsResult.status === 'fulfilled' ? transactionsResult.value : { data: null, error: transactionsResult.reason };
+    if (transactionsData.error) {
+      console.error('Error reloading transactions:', transactionsData.error);
+    }
+    if (accountsData.error) {
+      console.error('Error reloading accounts:', accountsData.error);
       setAccountsError('Failed to reload accounts from database');
     } else {
-      setAccounts(data || []);
+      setAccounts(recalculateAllAccountBalances(accountsData.data || [], transactionsData.data || []));
       setAccountsError(null);
     }
   };

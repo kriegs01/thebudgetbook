@@ -5,6 +5,7 @@ export interface Account {
   bank: string;
   classification: AccountClassification;
   balance: number;
+  openingBalance?: number; // Immutable calculation seed — maps to the DB `opening_balance` column (DEFAULT 0). Set once on account creation; NEVER overwritten by recalculation results.
   type: 'Debit' | 'Credit';
   creditLimit?: number;
   billingDate?: string;
