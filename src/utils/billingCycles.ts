@@ -312,7 +312,8 @@ export const calculateDueDate = (
   statementYear: number
 ): { dueDay: number; dueMonth: number; dueYear: number } => {
   const statementDate = new Date(statementYear, statementMonth, statementDay);
-  const dueDate = new Date(statementDate.getTime() + daysToPay * 24 * 60 * 60 * 1000);
+  const dueDate = new Date(statementDate);
+  dueDate.setDate(dueDate.getDate() + daysToPay);
   return {
     dueDay: dueDate.getDate(),
     dueMonth: dueDate.getMonth(),

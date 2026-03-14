@@ -817,9 +817,35 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
     </>
   );
 
-  // Calculate expected amount from linked installments for Loans billers
+  // Calculate expected amount from linked installments or linked credit account for Loans billers
   const getExpectedAmount = (biller: Biller): number => {
     if (biller.category.startsWith('Loans')) {
+      // Check linked credit account first — use current month's billing cycle amount
+      if (shouldUseLinkedAccount(biller)) {
+        const linkedAccount = getLinkedAccount(biller, accounts);
+        const hasLinkedAccountTx = linkedAccount
+          ? transactions.some(tx => tx.payment_method_id === linkedAccount.id)
+          : false;
+        if (hasLinkedAccountTx) {
+          const today = new Date();
+          const currentMonth = today.toLocaleString('en-US', { month: 'long' });
+          const currentYear = today.getFullYear().toString();
+          const currentSchedule: PaymentSchedule = {
+            id: 'display-current',
+            month: currentMonth,
+            year: currentYear,
+            expectedAmount: 0,
+          };
+          const { amount, isFromLinkedAccount } = getScheduleExpectedAmount(
+            biller,
+            currentSchedule,
+            accounts,
+            transactions
+          );
+          if (isFromLinkedAccount && amount > 0) return amount;
+        }
+      }
+
       // Find installments linked to this biller
       const linkedInstallments = installments.filter(inst => inst.billerId === biller.id);
       if (linkedInstallments.length > 0) {

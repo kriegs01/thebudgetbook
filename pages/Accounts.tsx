@@ -29,6 +29,13 @@ const monthNames = [
   'January','February','March','April','May','June','July','August','September','October','November','December'
 ];
 
+/** Prefix for fake-date strings used to store billing day numbers in the DB DATE column.
+ *  Storing as "2000-01-DD" lets us reuse the existing DATE column without a schema migration.
+ *  Existing code extracts the day via `new Date(billingDate).getDate()`, which works for both
+ *  real dates (e.g. "2026-01-12") and these fake-date strings (e.g. "2000-01-12").
+ */
+const FAKE_DATE_PREFIX = '2000-01-';
+
 const Accounts: React.FC<AccountsProps> = ({ accounts, onAdd, onDelete, onEdit, onDeactivate, loading = false, error = null }) => {
   const [viewMode, setViewMode] = useState<ViewMode>('card');
   const [showModal, setShowModal] = useState(false);
@@ -123,8 +130,8 @@ const Accounts: React.FC<AccountsProps> = ({ accounts, onAdd, onDelete, onEdit, 
         openingBalance: parseFloat(formData.balance || '0'), // Persisted to opening_balance DB column
         type: formData.type,
         creditLimit: formData.type === 'Credit' ? (formData.creditLimit ? parseFloat(formData.creditLimit) : 0) : undefined,
-        billingDate: formData.type === 'Credit' ? (formData.billingDate ? `2000-01-${formData.billingDate.padStart(2, '0')}` : undefined) : undefined,
-        dueDate: formData.type === 'Credit' ? (formData.dueDate ? `2000-01-${formData.dueDate.padStart(2, '0')}` : undefined) : undefined
+        billingDate: formData.type === 'Credit' ? (formData.billingDate ? `${FAKE_DATE_PREFIX}${formData.billingDate.padStart(2, '0')}` : undefined) : undefined,
+        dueDate: formData.type === 'Credit' ? (formData.dueDate ? `${FAKE_DATE_PREFIX}${formData.dueDate.padStart(2, '0')}` : undefined) : undefined
       };
 
       if (editingId) {
