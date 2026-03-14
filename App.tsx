@@ -1098,7 +1098,7 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
                 />
               } />
               <Route path="/accounts/view" element={<AccountFilteredTransactions accounts={accounts} onTransactionCreated={reloadAccounts} />} />
-              <Route path="/accounts/statement" element={<StatementPage accounts={accounts} />} />
+              <Route path="/accounts/statement" element={<StatementPage accounts={accounts} transactions={transactions} />} />
               <Route path="/savings" element={
                 <Savings
                   jars={savings}

@@ -1,25 +1,9 @@
-import React, { useEffect, useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { ArrowLeft, Calendar, CreditCard } from 'lucide-react';
 import { useSearchParams, Link } from 'react-router-dom';
 import { Account } from '../../types';
-import { getTransactionsByPaymentMethod } from '../../src/services/transactionsService';
 import type { SupabaseTransaction } from '../../src/types/supabase';
 import { calculateBillingCycles, formatDateRange } from '../../src/utils/billingCycles';
-
-type Transaction = {
-  id: string;
-  name: string;
-  date: string; // ISO string
-  amount: number;
-  paymentMethodId: string;
-};
-
-type BillingCycle = {
-  startDate: Date;
-  endDate: Date;
-  label: string;
-  transactions: Transaction[];
-};
 
 const formatCurrency = (val: number) =>
   new Intl.NumberFormat('en-PH', {
@@ -29,102 +13,56 @@ const formatCurrency = (val: number) =>
     maximumFractionDigits: 2
   }).format(val);
 
-// Check if transaction falls within a billing cycle
-const isInCycle = (transaction: Transaction, cycleStart: Date, cycleEnd: Date): boolean => {
-  const txDate = new Date(transaction.date);
-  return txDate >= cycleStart && txDate <= cycleEnd;
-};
-
 interface StatementPageProps {
   accounts: Account[];
+  transactions: SupabaseTransaction[];
 }
 
-const StatementPage: React.FC<StatementPageProps> = ({ accounts }) => {
+const StatementPage: React.FC<StatementPageProps> = ({ accounts, transactions }) => {
   const [searchParams] = useSearchParams();
   const accountId = searchParams.get('account');
-  const [account, setAccount] = useState<Account | null>(null);
-  const [cycles, setCycles] = useState<BillingCycle[]>([]);
   const [selectedCycleIndex, setSelectedCycleIndex] = useState<number>(0);
-  const [isLoading, setIsLoading] = useState(true);
 
-  useEffect(() => {
-    const loadAccountAndTransactions = async () => {
-      if (!accountId) {
-        setIsLoading(false);
-        return;
-      }
-      
-      setIsLoading(true);
-      try {
-        // Find the account
-        const acc = accounts.find(a => a.id === accountId);
-        if (!acc || acc.type !== 'Credit') {
-          // If accounts have loaded but this account is missing or not a credit account,
-          // stop loading. If accounts haven't loaded yet (empty array), the effect will
-          // re-run once the parent finishes loading, so keep the spinner up.
-          if (accounts.length > 0) {
-            setIsLoading(false);
-          }
-          return;
-        }
-        
-        setAccount(acc);
-        
-        // Get billing date
-        const billingDate = acc.billingDate;
-        if (!billingDate) {
-          // No billing date set, can't calculate cycles
-          setIsLoading(false);
-          return;
-        }
-        
-        // Calculate billing cycles - Generate both past and future cycles to show all transactions
-        const cycleData = calculateBillingCycles(billingDate, 12, false);
-        
-        // Load only this account's transactions from Supabase
-        const { data: transactionsData, error: transactionsError } = await getTransactionsByPaymentMethod(accountId);
-        
-        if (transactionsError) {
-          console.error('Error loading transactions:', transactionsError);
-          setIsLoading(false);
-          return;
-        }
-        
-        // Convert Supabase transactions to local format
-        const accountTransactions: Transaction[] = (transactionsData || []).map(t => ({
-          id: t.id,
-          name: t.name,
-          date: t.date,
-          amount: t.amount,
-          paymentMethodId: t.payment_method_id
-        }));
-        
-        // Group transactions by cycle
-        const billingCycles: BillingCycle[] = cycleData.map((cycle, index) => {
-          const cycleTxs = accountTransactions.filter(tx => 
-            isInCycle(tx, cycle.startDate, cycle.endDate)
-          );
-          
-          return {
-            startDate: cycle.startDate,
-            endDate: cycle.endDate,
-            label: formatDateRange(cycle.startDate, cycle.endDate),
-            transactions: cycleTxs
-          };
-        });
-        
-        setCycles(billingCycles);
-      } catch (error) {
-        console.error('Error loading transactions:', error);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-    
-    loadAccountAndTransactions();
-  }, [accountId, accounts]);
+  // Derive account from the passed accounts list (reactive — no async fetch needed)
+  const account = useMemo(
+    () => accounts.find(a => a.id === accountId && a.type === 'Credit') ?? null,
+    [accounts, accountId]
+  );
 
-  if (isLoading) {
+  // Derive billing cycles from the account's billingDate (pure computation, no fetch)
+  const cycles = useMemo(() => {
+    if (!account?.billingDate) return [];
+
+    const cycleData = calculateBillingCycles(account.billingDate, 12, false);
+
+    // Filter to only this account's transactions
+    const accountTransactions = transactions
+      .filter(t => t.payment_method_id === accountId)
+      .map(t => ({
+        id: t.id,
+        name: t.name,
+        date: t.date,
+        amount: t.amount,
+        paymentMethodId: t.payment_method_id,
+      }));
+
+    return cycleData.map(cycle => {
+      const cycleTxs = accountTransactions.filter(tx => {
+        const txDate = new Date(tx.date);
+        return txDate >= cycle.startDate && txDate <= cycle.endDate;
+      });
+
+      return {
+        startDate: cycle.startDate,
+        endDate: cycle.endDate,
+        label: formatDateRange(cycle.startDate, cycle.endDate),
+        transactions: cycleTxs,
+      };
+    });
+  }, [account, accountId, transactions]);
+
+  // Show spinner while the parent is still loading accounts
+  if (accounts.length === 0) {
     return (
       <div className="min-h-screen bg-gray-50 p-8">
         <div className="max-w-4xl mx-auto flex items-center justify-center py-24">

@@ -105,8 +105,12 @@ export const calculateLinkedAccountAmount = (
   const matchingCycle = cyclesWithTx.find(c => c.label === cycle.label);
   if (!matchingCycle) return null;
   
-  // Return the total amount for this cycle (0 is valid when charges exist on other
-  // cycles but none fall within this specific billing period)
+  // If the matching cycle exists but has no transactions in it, return null so the
+  // caller falls back to the manually configured expected amount.  This handles the
+  // common case where a billing period hasn't accumulated any charges yet (e.g. the
+  // current open cycle) — we should show the user's manual estimate rather than ₱0.
+  if (matchingCycle.transactions.length === 0) return null;
+  
   return matchingCycle.totalAmount;
 };
 
