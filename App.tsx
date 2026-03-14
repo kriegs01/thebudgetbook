@@ -8,7 +8,7 @@ import { getAllInstallmentsFrontend, createInstallmentFrontend, updateInstallmen
 import { getAllSavingsFrontend, createSavingsFrontend, updateSavingsFrontend, deleteSavingsFrontend } from './src/services/savingsService';
 import { getAllBudgetSetupsFrontend, deleteBudgetSetupFrontend } from './src/services/budgetSetupsService';
 import { getPaymentSchedulesBySource } from './src/services/paymentSchedulesService';
-import { getAllTransactions, createPaymentScheduleTransaction, uploadTransactionReceipt, updateTransaction } from './src/services/transactionsService';
+import { getAllTransactions, createTransaction, createPaymentScheduleTransaction, uploadTransactionReceipt, updateTransaction } from './src/services/transactionsService';
 import { recordPayment } from './src/services/paymentSchedulesService';
 import { supabase } from './src/utils/supabaseClient';
 import { combineDateWithCurrentTime } from './src/utils/dateUtils';
@@ -72,6 +72,7 @@ const billerToSupabase = (biller: Biller) => ({
   deactivation_c: biller.deactivationDate ?? null,
   status: biller.status,
   schedules: biller.schedules,
+  linked_account_id: biller.linkedAccountId ?? null,
 });
 
 // Helper function to convert Supabase Biller to UI format
@@ -86,6 +87,7 @@ const supabaseToBiller = (supabaseBiller: any): Biller => ({
   deactivationDate: supabaseBiller.deactivation_c,
   status: supabaseBiller.status,
   schedules: supabaseBiller.schedules,
+  linkedAccountId: supabaseBiller.linked_account_id ?? undefined,
 });
 
 // Helper function to convert UI Installment to Supabase format
@@ -653,6 +655,33 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
 
       await updateInstallmentFrontend(updatedInstallment);
 
+      // If the installment is charged to a credit account, create a balancing
+      // payment transaction on that account so the outstanding balance and
+      // available credit are reduced automatically.
+      // Sign convention: negative amount = money coming into the credit account
+      // (i.e. a payment that reduces what is owed).
+      const creditAccount = accounts.find(
+        a => a.id === installment.accountId && a.type === 'Credit',
+      );
+      if (creditAccount && creditAccount.id !== payment.accountId) {
+        const { error: creditTxError } = await createTransaction({
+          name: `${installment.name} - ${targetSchedule.month} ${targetSchedule.year}`,
+          date: combineDateWithCurrentTime(payment.date),
+          amount: -Math.abs(payment.amount), // Negative – payment received, reduces outstanding
+          payment_method_id: creditAccount.id,
+          transaction_type: 'payment',
+          notes: `Installment payment from account ${payment.accountId}`,
+          payment_schedule_id: null,
+          related_transaction_id: transaction?.id ?? null,
+          receipt_url: null,
+        });
+        if (creditTxError) {
+          console.warn('[App] Balancing credit account transaction failed:', creditTxError);
+        } else {
+          console.log('[App] Balancing credit account transaction created for:', creditAccount.bank);
+        }
+      }
+
       // Reload installments and transactions to get fresh data
       await reloadInstallments();
       await reloadTransactions();
@@ -805,6 +834,35 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
       };
 
       await handleUpdateBiller(updatedBiller);
+
+      // If the biller is linked to a credit account, create a balancing payment
+      // transaction on that account so the outstanding balance and available
+      // credit are reduced automatically.
+      // Sign convention: negative amount = money coming into the credit account.
+      const billerCreditAccountId = biller.linkedAccountId;
+      if (billerCreditAccountId) {
+        const creditAccount = accounts.find(
+          a => a.id === billerCreditAccountId && a.type === 'Credit',
+        );
+        if (creditAccount && creditAccount.id !== payment.accountId) {
+          const { error: creditTxError } = await createTransaction({
+            name: `${biller.name} - ${targetSchedule.month} ${targetSchedule.year}`,
+            date: combineDateWithCurrentTime(payment.date),
+            amount: -Math.abs(payment.amount), // Negative – payment received, reduces outstanding
+            payment_method_id: creditAccount.id,
+            transaction_type: 'payment',
+            notes: `Biller payment from account ${payment.accountId}`,
+            payment_schedule_id: null,
+            related_transaction_id: transaction.id,
+            receipt_url: null,
+          });
+          if (creditTxError) {
+            console.warn('[App] Balancing credit account transaction failed:', creditTxError);
+          } else {
+            console.log('[App] Balancing credit account transaction created for:', creditAccount.bank);
+          }
+        }
+      }
 
       console.log('[App] Payment processed successfully, reloading billers and transactions');
       await reloadBillers();
