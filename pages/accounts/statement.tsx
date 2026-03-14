@@ -289,7 +289,7 @@ const StatementPage: React.FC<StatementPageProps> = ({ accounts }) => {
                           </td>
                           <td className="px-4 py-3 text-right">
                             <div className={`text-sm font-semibold ${tx.amount > 0 ? 'text-red-600' : 'text-green-600'}`}>
-                              {tx.amount < 0 ? '-' : ''}{formatCurrency(Math.abs(tx.amount))}
+                              {formatCurrency(tx.amount)}
                             </div>
                           </td>
                         </tr>

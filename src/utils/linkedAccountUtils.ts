@@ -50,12 +50,13 @@ export const getLinkedAccount = (
  * ENHANCEMENT: Core function that calculates the amount from transaction history
  * using the credit account's billing cycle window (not calendar month)
  * 
- * FIX: Cycles are now mapped by END DATE (cutoff/statement date).
- * For example, if schedule.month is "January", this will fetch the billing cycle
- * whose END DATE falls in January (e.g., Dec 13 – Jan 11).
+ * Cycles are mapped by START DATE so that "January" = the billing period that
+ * began in January (e.g., Jan 11 – Feb 10).  Purchases made during January are
+ * therefore included in the "January" expected-amount calculation, matching what
+ * users see when they open the Account Statement and browse to the current cycle.
  * 
  * @param biller - The biller with linked account
- * @param schedule - The payment schedule (month/year) - refers to the cutoff month
+ * @param schedule - The payment schedule (month/year) - refers to the cycle-start month
  * @param account - The linked credit account
  * @param transactions - All transactions for the account
  * @returns The calculated amount, or null if cannot calculate
@@ -113,13 +114,14 @@ export const calculateLinkedAccountAmount = (
  * Get display label for a schedule with cycle date range
  * 
  * ENHANCEMENT: Generates a display label showing the actual billing cycle dates
- * instead of just the month name (e.g., "Jan 12 – Feb 11, 2026" instead of "January 2026")
+ * instead of just the month name (e.g., "Mar 11 – Apr 10, 2026" instead of "March 2026")
  * 
- * FIX: The cycle is now determined by END DATE mapping. For example, if schedule.month
- * is "February", this returns the cycle whose END DATE is in February (e.g., "Jan 12 – Feb 11, 2026").
- * This clearly shows which transactions (from Jan 12 to Feb 11) are included in the "February" bill.
+ * The cycle is determined by START DATE mapping. For example, if schedule.month
+ * is "March", this returns the cycle whose START DATE is in March (e.g., "Mar 11 – Apr 10, 2026").
+ * This clearly shows which transactions (from Mar 11 to Apr 10) are included in the
+ * "March" billing period.
  * 
- * @param schedule - The payment schedule (month refers to cutoff/statement month)
+ * @param schedule - The payment schedule (month refers to the billing cycle start month)
  * @param account - The linked credit account (optional)
  * @returns Display label with cycle dates if account available, otherwise month/year
  */
@@ -202,12 +204,6 @@ export const getScheduleExpectedAmount = (
   };
 };
 
-
-// CHANGELOG: Billing Cycle-to-Month Mapping Fix
-// - Updated calculateLinkedAccountAmount() and getScheduleDisplayLabel() documentation
-// - Both functions now use END DATE (cutoff/statement date) mapping via getCycleForMonth()
-// - Schedule month names now refer to the cutoff/statement month, not the start month
-// - Example: "February" schedule displays the cycle ending in February (e.g., Jan 12 – Feb 11)
 
 // TODO: Future enhancements
 // - Add caching for calculated amounts to improve performance
