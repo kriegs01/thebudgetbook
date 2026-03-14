@@ -1,8 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { ArrowLeft, Calendar, CreditCard } from 'lucide-react';
 import { useSearchParams, Link } from 'react-router-dom';
-import { Account } from '../../types';
-import type { SupabaseTransaction } from '../../src/types/supabase';
+import { Account, Transaction } from '../../types';
 import { calculateBillingCycles, formatDateRange } from '../../src/utils/billingCycles';
 
 const formatCurrency = (val: number) =>
@@ -15,7 +14,7 @@ const formatCurrency = (val: number) =>
 
 interface StatementPageProps {
   accounts: Account[];
-  transactions: SupabaseTransaction[];
+  transactions: Transaction[];
 }
 
 const StatementPage: React.FC<StatementPageProps> = ({ accounts, transactions }) => {
@@ -35,16 +34,8 @@ const StatementPage: React.FC<StatementPageProps> = ({ accounts, transactions })
 
     const cycleData = calculateBillingCycles(account.billingDate, 12, false);
 
-    // Filter to only this account's transactions
-    const accountTransactions = transactions
-      .filter(t => t.payment_method_id === accountId)
-      .map(t => ({
-        id: t.id,
-        name: t.name,
-        date: t.date,
-        amount: t.amount,
-        paymentMethodId: t.payment_method_id,
-      }));
+    // Filter to only this account's transactions using the frontend paymentMethodId field
+    const accountTransactions = transactions.filter(t => t.paymentMethodId === accountId);
 
     return cycleData.map(cycle => {
       const cycleTxs = accountTransactions.filter(tx => {
