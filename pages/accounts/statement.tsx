@@ -172,7 +172,15 @@ const StatementPage: React.FC<StatementPageProps> = ({ accounts }) => {
   }
 
   const selectedCycle = cycles[selectedCycleIndex];
-  const totalAmount = selectedCycle?.transactions.reduce((sum, tx) => sum + tx.amount, 0) ?? 0;
+  // Only sum positive-amount transactions (charges/purchases) for the "Total Charges" figure.
+  // Payment transactions (negative amounts) appear in the history table below but must not
+  // reduce the charge total — they only affect the credit account's outstanding balance.
+  const totalCharges = selectedCycle?.transactions.reduce(
+    (sum, tx) => (tx.amount > 0 ? sum + tx.amount : sum), 0
+  ) ?? 0;
+  const totalPayments = selectedCycle?.transactions.reduce(
+    (sum, tx) => (tx.amount < 0 ? sum + Math.abs(tx.amount) : sum), 0
+  ) ?? 0;
 
   return (
     <div className="min-h-screen bg-gray-50 p-8">
@@ -225,14 +233,18 @@ const StatementPage: React.FC<StatementPageProps> = ({ accounts }) => {
           <>
             <div className="bg-white rounded-2xl shadow-sm p-6 mb-6">
               <h3 className="text-sm font-bold uppercase text-gray-600 tracking-widest mb-4">Statement Summary</h3>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
                 <div>
                   <p className="text-xs text-gray-400 font-medium mb-1">Statement Period</p>
                   <p className="text-lg font-bold text-gray-900">{selectedCycle.label}</p>
                 </div>
                 <div>
                   <p className="text-xs text-gray-400 font-medium mb-1">Total Charges</p>
-                  <p className="text-lg font-bold text-red-600">{formatCurrency(totalAmount)}</p>
+                  <p className="text-lg font-bold text-red-600">{formatCurrency(totalCharges)}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-gray-400 font-medium mb-1">Payments Made</p>
+                  <p className="text-lg font-bold text-green-600">{formatCurrency(totalPayments)}</p>
                 </div>
                 <div>
                   <p className="text-xs text-gray-400 font-medium mb-1">Credit Limit</p>
@@ -262,6 +274,9 @@ const StatementPage: React.FC<StatementPageProps> = ({ accounts }) => {
                         <tr key={tx.id} className="border-t border-gray-100">
                           <td className="px-4 py-3">
                             <div className="text-sm font-medium text-gray-900">{tx.name}</div>
+                            {tx.amount < 0 && (
+                              <div className="text-xs text-green-600 font-medium mt-0.5">Payment</div>
+                            )}
                           </td>
                           <td className="px-4 py-3">
                             <div className="text-sm text-gray-500">
@@ -273,8 +288,8 @@ const StatementPage: React.FC<StatementPageProps> = ({ accounts }) => {
                             </div>
                           </td>
                           <td className="px-4 py-3 text-right">
-                            <div className={`text-sm font-semibold ${tx.amount < 0 ? 'text-red-600' : 'text-green-600'}`}>
-                              {formatCurrency(Math.abs(tx.amount))}
+                            <div className={`text-sm font-semibold ${tx.amount > 0 ? 'text-red-600' : 'text-green-600'}`}>
+                              {tx.amount < 0 ? '-' : ''}{formatCurrency(Math.abs(tx.amount))}
                             </div>
                           </td>
                         </tr>

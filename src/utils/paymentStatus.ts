@@ -261,7 +261,7 @@ export const aggregateCreditCardPurchases = (
       const isInstallment = installmentNames.has(tx.name.toLowerCase());
 
       // Exclude payment-type transactions (money going INTO the credit account)
-      const isPayment = PAYMENT_TYPES.has(tx.transaction_type ?? '') || tx.amount <= 0;
+      const isPayment = PAYMENT_TYPES.has(tx.transaction_type ?? '') || tx.amount < 0;
       
       return inCycle && !isInstallment && !isPayment;
     });

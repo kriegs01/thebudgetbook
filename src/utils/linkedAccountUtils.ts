@@ -76,15 +76,21 @@ export const calculateLinkedAccountAmount = (
   // Payment/credit transaction types that should not be counted as charges
   const PAYMENT_TYPES = new Set(['payment', 'cash_in', 'loan_payment']);
 
-  // Filter transactions for this account in this cycle.
-  // Exclude payment-type transactions so that payments made to the credit account
+  // Filter transactions for this account to only charge-type transactions.
+  // Exclude payment-type transactions and negative amounts so that bill payments
   // do not reduce the displayed charge amount (only purchases/charges are summed).
   const accountTransactions = transactions.filter(tx =>
     tx.payment_method_id === account.id &&
     !PAYMENT_TYPES.has(tx.transaction_type ?? '') &&
     tx.amount > 0
   );
-  
+
+  // If no charge transactions have ever been recorded on this credit account,
+  // return null so the caller falls back to the manually set expected amount.
+  // This prevents the schedule from displaying ₱0 when only payment transactions
+  // exist (i.e. the user hasn't recorded any credit card purchases separately).
+  if (accountTransactions.length === 0) return null;
+
   // Aggregate by cycle
   // Generate enough cycles to cover historical and future schedules (24 cycles = 2 years)
   const CYCLE_LOOKBACK_COUNT = 24;
@@ -98,7 +104,8 @@ export const calculateLinkedAccountAmount = (
   const matchingCycle = cyclesWithTx.find(c => c.label === cycle.label);
   if (!matchingCycle) return null;
   
-  // Return the total amount for this cycle
+  // Return the total amount for this cycle (0 is valid when charges exist on other
+  // cycles but none fall within this specific billing period)
   return matchingCycle.totalAmount;
 };
 
