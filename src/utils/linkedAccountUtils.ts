@@ -105,11 +105,20 @@ export const calculateLinkedAccountAmount = (
   const matchingCycle = cyclesWithTx.find(c => c.label === cycle.label);
   if (!matchingCycle) return null;
   
-  // If the matching cycle exists but has no transactions in it, return null so the
-  // caller falls back to the manually configured expected amount.  This handles the
-  // common case where a billing period hasn't accumulated any charges yet (e.g. the
-  // current open cycle) — we should show the user's manual estimate rather than ₱0.
-  if (matchingCycle.transactions.length === 0) return null;
+  // If the matching cycle is empty (e.g. open/future billing period with no charges yet),
+  // fall back to the most recent past cycle that has transactions.  This gives the user
+  // a sensible "last known amount" rather than ₱0 / their manual expected amount.
+  if (matchingCycle.transactions.length === 0) {
+    const matchingIndex = cyclesWithTx.indexOf(matchingCycle);
+    // cyclesWithTx preserves the chronological order from calculateBillingCycles:
+    // oldest cycle at index 0, newest (most future) cycle at the last index.
+    // Searching backwards from matchingIndex finds the most-recent past cycle
+    // with recorded charges without creating a reversed copy of the array.
+    for (let i = matchingIndex - 1; i >= 0; i--) {
+      if (cyclesWithTx[i].transactions.length > 0) return cyclesWithTx[i].totalAmount;
+    }
+    return null;
+  }
   
   return matchingCycle.totalAmount;
 };

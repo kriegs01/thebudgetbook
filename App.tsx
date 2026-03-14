@@ -336,6 +336,10 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
     const transactionsData = transactionsResult.status === 'fulfilled' ? transactionsResult.value : { data: null, error: transactionsResult.reason };
     if (transactionsData.error) {
       console.error('Error reloading transactions:', transactionsData.error);
+    } else {
+      // Keep global transactions state in sync so pages like the statement page
+      // immediately reflect any creates/updates/deletes made elsewhere in the app.
+      setTransactions((transactionsData.data || []).map(formatTransaction));
     }
     if (accountsData.error) {
       console.error('Error reloading accounts:', accountsData.error);
