@@ -1192,6 +1192,43 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
         }
       }
       
+      // If the biller is linked to a credit account, create a balancing payment
+      // transaction on that credit account so the outstanding balance and available
+      // credit are reduced automatically.
+      // Sign convention: negative amount = money coming INTO the credit account
+      // (reduces what is owed on the card).
+      // Only do this for new transactions, not edits (edits don't change the credit side).
+      if (!isEditing) {
+        const creditAccountId = biller.linkedAccountId
+          ?? (biller.category.startsWith('Loans') && installments
+            ? installments.find(inst => inst.billerId === biller.id)?.accountId
+            : undefined);
+
+        if (creditAccountId) {
+          const creditAccount = accounts.find(
+            a => a.id === creditAccountId && a.type === 'Credit',
+          );
+          if (creditAccount && creditAccount.id !== payFormData.accountId) {
+            const { error: creditTxError } = await createTransaction({
+              name: `${biller.name} - ${schedule.month} ${schedule.year}`,
+              date: combineDateWithCurrentTime(payFormData.datePaid),
+              amount: -Math.abs(parseFloat(payFormData.amount)), // Negative – payment received, reduces outstanding
+              payment_method_id: creditAccount.id,
+              transaction_type: 'payment',
+              notes: `Biller payment from account ${payFormData.accountId}`,
+              payment_schedule_id: null,
+              related_transaction_id: transactionData?.id ?? null,
+              receipt_url: null,
+            });
+            if (creditTxError) {
+              console.warn('[Budget] Balancing credit account transaction failed:', creditTxError);
+            } else {
+              console.log('[Budget] Balancing credit account transaction created for:', creditAccount.bank);
+            }
+          }
+        }
+      }
+
       // REFACTOR: Update payment schedule in monthly_payment_schedules table
       if (paymentScheduleId) {
         console.log('[Budget] Recording payment in payment schedule');

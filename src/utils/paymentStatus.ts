@@ -246,7 +246,12 @@ export const aggregateCreditCardPurchases = (
       .map(inst => inst.name.toLowerCase())
   );
   
-  // Group transactions by cycle, excluding installments
+  // Payment/credit transaction types that should not be counted as charges
+  const PAYMENT_TYPES = new Set(['payment', 'cash_in', 'loan_payment']);
+
+  // Group transactions by cycle, excluding installments and payment-type transactions.
+  // Payment-type transactions (e.g., credit card payments) must be excluded so they
+  // do not net against charges and produce an artificially low expected amount.
   const summaries: CreditCardCycleSummary[] = cycles.map(cycle => {
     const cycleTxs = accountTransactions.filter(tx => {
       const txDate = new Date(tx.date);
@@ -254,8 +259,11 @@ export const aggregateCreditCardPurchases = (
       
       // Exclude if transaction name matches any installment (case-insensitive)
       const isInstallment = installmentNames.has(tx.name.toLowerCase());
+
+      // Exclude payment-type transactions (money going INTO the credit account)
+      const isPayment = PAYMENT_TYPES.has(tx.transaction_type ?? '') || tx.amount < 0;
       
-      return inCycle && !isInstallment;
+      return inCycle && !isInstallment && !isPayment;
     });
     
     const totalAmount = cycleTxs.reduce((sum, tx) => sum + tx.amount, 0);
@@ -273,6 +281,106 @@ export const aggregateCreditCardPurchases = (
   });
   
   return summaries;
+};
+
+/**
+ * Extended billing-cycle summary that breaks down purchases vs payments.
+ */
+export interface CreditCardCycleWithPayments extends CreditCardCycleSummary {
+  /** Total of positive-amount (charge/purchase) transactions in the cycle. */
+  cyclePurchases: number;
+  /** Total of payment-type transactions (absolute value) applied in the cycle. */
+  cyclePayments: number;
+  /** Unpaid portion: max(0, cyclePurchases − cyclePayments). */
+  cycleUnpaid: number;
+}
+
+/**
+ * Aggregate credit card transactions by billing cycle and separate purchases
+ * from payments so that the unpaid balance per statement period can be derived.
+ *
+ * Sign convention:
+ *   amount > 0  →  charge / purchase
+ *   amount < 0  →  payment / credit (transaction_type in ['payment', 'cash_in', 'loan_payment'])
+ *
+ * @param account      - Credit card account (must have billingDate).
+ * @param transactions - All transactions (filtered to this account internally).
+ * @param installments - Optional installments to exclude from purchase totals.
+ * @returns Array of cycle summaries with purchase/payment breakdown.
+ */
+export const aggregateCreditCardCyclesWithPayments = (
+  account: Account,
+  transactions: SupabaseTransaction[],
+  installments: Installment[] = []
+): CreditCardCycleWithPayments[] => {
+  if (account.classification !== 'Credit Card' || !account.billingDate) {
+    return [];
+  }
+
+  const cycles = calculateBillingCycles(account.billingDate, 6);
+
+  // All transactions for this account
+  const accountTransactions = transactions.filter(
+    tx => tx.payment_method_id === account.id,
+  );
+
+  // Installment names to exclude from "purchases" (case-insensitive)
+  const installmentNames = new Set(
+    installments
+      .filter(inst => inst.accountId === account.id)
+      .map(inst => inst.name.toLowerCase()),
+  );
+
+  // Transaction types that represent inward payments / credits
+  const paymentTypes = new Set(['payment', 'cash_in', 'loan_payment']);
+
+  return cycles.map(cycle => {
+    const cycleTxs = accountTransactions.filter(tx => {
+      const txDate = new Date(tx.date);
+      return txDate >= cycle.startDate && txDate <= cycle.endDate;
+    });
+
+    // Purchases: positive amounts that are not installment payments
+    const purchaseTxs = cycleTxs.filter(
+      tx => tx.amount > 0 && !installmentNames.has(tx.name.toLowerCase()),
+    );
+    const cyclePurchases = purchaseTxs.reduce((sum, tx) => sum + tx.amount, 0);
+
+    // Payments: negative amounts with a recognised payment transaction type
+    const paymentTxs = cycleTxs.filter(
+      tx => tx.amount < 0 && paymentTypes.has(tx.transaction_type ?? ''),
+    );
+    const cyclePayments = paymentTxs.reduce(
+      (sum, tx) => sum + Math.abs(tx.amount),
+      0,
+    );
+
+    const cycleUnpaid = Math.max(0, cyclePurchases - cyclePayments);
+
+    // totalAmount from the base summary uses the same non-installment filter as
+    // aggregateCreditCardPurchases for backward-compatibility.
+    const nonInstallmentTxs = cycleTxs.filter(
+      tx => !installmentNames.has(tx.name.toLowerCase()),
+    );
+    const totalAmount = nonInstallmentTxs.reduce(
+      (sum, tx) => sum + tx.amount,
+      0,
+    );
+
+    return {
+      accountId: account.id,
+      accountName: account.bank,
+      cycleStart: cycle.startDate,
+      cycleEnd: cycle.endDate,
+      cycleLabel: cycle.label,
+      totalAmount,
+      transactionCount: nonInstallmentTxs.length,
+      transactions: nonInstallmentTxs,
+      cyclePurchases,
+      cyclePayments,
+      cycleUnpaid,
+    };
+  });
 };
 
 /**

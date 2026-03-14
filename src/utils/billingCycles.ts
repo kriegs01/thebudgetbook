@@ -212,22 +212,18 @@ export const aggregateTransactionsByCycle = (
 /**
  * Get billing cycle for a specific month/year
  * 
- * ENHANCEMENT: Finds the billing cycle that matches the given month/year based on END DATE
- * Used to display cycle-based amounts for specific schedule rows
+ * Finds the billing cycle whose START DATE falls in the given month/year.
  * 
- * FIX: Changed from midpoint matching to END DATE matching (cutoff/statement date).
- * Each billing cycle is now assigned to the month of its END DATE (cutoff date).
- * 
- * Example: A cycle from Dec 13 – Jan 11 is assigned to "January" because the end date
- * (cutoff/statement date) is Jan 11, which falls in January.
- * 
- * This ensures credit card transaction cycles are properly bucketed by their billing cycle
- * end date (when the statement is generated), not by their start date or calendar overlap.
+ * This means "March 2026" returns the cycle that BEGAN in March – for a billing
+ * day of the 11th that is Mar 11 – Apr 10, 2026.  This aligns with user
+ * intuition: purchases made in March are recorded against the billing period
+ * that started in March, which is also what the Account Statement page
+ * displays as the "current" cycle when the user views it during March.
  * 
  * @param month - Month name (e.g., "January")
  * @param year - Year as string
  * @param billingDate - Billing date in "YYYY-MM-DD" format
- * @returns The billing cycle whose END DATE matches the month/year, or null if not found
+ * @returns The billing cycle whose START DATE matches the month/year, or null if not found
  */
 export const getCycleForMonth = (
   month: string,
@@ -246,39 +242,21 @@ export const getCycleForMonth = (
   const CYCLE_LOOKBACK_COUNT = 24;
   const cycles = calculateBillingCycles(billingDate, CYCLE_LOOKBACK_COUNT);
   
-  // FIX: Map cycles based on END DATE (cutoff/statement date) instead of midpoint
-  // This ensures that cycles spanning two months are assigned to the month of their
-  // cutoff date (when the bill is actually generated and due)
-  //
-  // Example: Dec 13 - Jan 11 cycle should be treated as "January" bill
-  // because the cutoff (end date) is Jan 11 which is in January
+  // Match by START DATE of the cycle.
+  // "March 2026" maps to the cycle that started in March 2026 (e.g., Mar 11 – Apr 10).
+  // This ensures that purchases made during March are included in the "March" billing
+  // schedule, matching what users see when they browse the Account Statement page.
   for (const cycle of cycles) {
-    const endMonth = cycle.endDate.getMonth();
-    const endYear = cycle.endDate.getFullYear();
+    const startMonth = cycle.startDate.getMonth();
+    const startYear = cycle.startDate.getFullYear();
     
-    // Match if the END DATE of the cycle falls in the target month/year
-    if (endMonth === monthIndex && endYear === targetYear) {
+    if (startMonth === monthIndex && startYear === targetYear) {
       return cycle;
     }
   }
   
-  // TODO: Consider edge case where multiple cycles could have same end month
-  // (e.g., if billing date changes mid-year). Currently returns first match.
   return null;
 };
-
-// CHANGELOG: Billing Cycle-to-Month Mapping Fix
-// - Changed getCycleForMonth() to use END DATE (cutoff/statement date) for mapping
-// - Cycles spanning two months now assigned to the month of their END DATE
-// - Example: Dec 13 – Jan 11 is now "January" bill (was "December" before)
-// - This ensures credit card billing cycles align with actual statement generation dates
-
-// TODO: Future enhancements
-// - Add support for statement export with cycle boundaries
-// - Integrate with budget sync to align billing cycles with budget periods
-// - Add caching for frequently accessed billing cycles
-// - Consider adding transaction categorization within cycles
-// - Consider edge case handling if billing date changes mid-year (multiple cycles same end month)
 
 /**
  * Get ordinal suffix for a day number (e.g. 1 → "st", 2 → "nd", 3 → "rd", 4 → "th")

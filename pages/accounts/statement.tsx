@@ -1,25 +1,8 @@
-import React, { useEffect, useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { ArrowLeft, Calendar, CreditCard } from 'lucide-react';
 import { useSearchParams, Link } from 'react-router-dom';
-import { Account } from '../../types';
-import { getTransactionsByPaymentMethod } from '../../src/services/transactionsService';
-import type { SupabaseTransaction } from '../../src/types/supabase';
+import { Account, Transaction } from '../../types';
 import { calculateBillingCycles, formatDateRange } from '../../src/utils/billingCycles';
-
-type Transaction = {
-  id: string;
-  name: string;
-  date: string; // ISO string
-  amount: number;
-  paymentMethodId: string;
-};
-
-type BillingCycle = {
-  startDate: Date;
-  endDate: Date;
-  label: string;
-  transactions: Transaction[];
-};
 
 const formatCurrency = (val: number) =>
   new Intl.NumberFormat('en-PH', {
@@ -29,102 +12,48 @@ const formatCurrency = (val: number) =>
     maximumFractionDigits: 2
   }).format(val);
 
-// Check if transaction falls within a billing cycle
-const isInCycle = (transaction: Transaction, cycleStart: Date, cycleEnd: Date): boolean => {
-  const txDate = new Date(transaction.date);
-  return txDate >= cycleStart && txDate <= cycleEnd;
-};
-
 interface StatementPageProps {
   accounts: Account[];
+  transactions: Transaction[];
 }
 
-const StatementPage: React.FC<StatementPageProps> = ({ accounts }) => {
+const StatementPage: React.FC<StatementPageProps> = ({ accounts, transactions }) => {
   const [searchParams] = useSearchParams();
   const accountId = searchParams.get('account');
-  const [account, setAccount] = useState<Account | null>(null);
-  const [cycles, setCycles] = useState<BillingCycle[]>([]);
   const [selectedCycleIndex, setSelectedCycleIndex] = useState<number>(0);
-  const [isLoading, setIsLoading] = useState(true);
 
-  useEffect(() => {
-    const loadAccountAndTransactions = async () => {
-      if (!accountId) {
-        setIsLoading(false);
-        return;
-      }
-      
-      setIsLoading(true);
-      try {
-        // Find the account
-        const acc = accounts.find(a => a.id === accountId);
-        if (!acc || acc.type !== 'Credit') {
-          // If accounts have loaded but this account is missing or not a credit account,
-          // stop loading. If accounts haven't loaded yet (empty array), the effect will
-          // re-run once the parent finishes loading, so keep the spinner up.
-          if (accounts.length > 0) {
-            setIsLoading(false);
-          }
-          return;
-        }
-        
-        setAccount(acc);
-        
-        // Get billing date
-        const billingDate = acc.billingDate;
-        if (!billingDate) {
-          // No billing date set, can't calculate cycles
-          setIsLoading(false);
-          return;
-        }
-        
-        // Calculate billing cycles - Generate both past and future cycles to show all transactions
-        const cycleData = calculateBillingCycles(billingDate, 12, false);
-        
-        // Load only this account's transactions from Supabase
-        const { data: transactionsData, error: transactionsError } = await getTransactionsByPaymentMethod(accountId);
-        
-        if (transactionsError) {
-          console.error('Error loading transactions:', transactionsError);
-          setIsLoading(false);
-          return;
-        }
-        
-        // Convert Supabase transactions to local format
-        const accountTransactions: Transaction[] = (transactionsData || []).map(t => ({
-          id: t.id,
-          name: t.name,
-          date: t.date,
-          amount: t.amount,
-          paymentMethodId: t.payment_method_id
-        }));
-        
-        // Group transactions by cycle
-        const billingCycles: BillingCycle[] = cycleData.map((cycle, index) => {
-          const cycleTxs = accountTransactions.filter(tx => 
-            isInCycle(tx, cycle.startDate, cycle.endDate)
-          );
-          
-          return {
-            startDate: cycle.startDate,
-            endDate: cycle.endDate,
-            label: formatDateRange(cycle.startDate, cycle.endDate),
-            transactions: cycleTxs
-          };
-        });
-        
-        setCycles(billingCycles);
-      } catch (error) {
-        console.error('Error loading transactions:', error);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-    
-    loadAccountAndTransactions();
-  }, [accountId, accounts]);
+  // Derive account from the passed accounts list (reactive — no async fetch needed)
+  const account = useMemo(
+    () => accounts.find(a => a.id === accountId && a.type === 'Credit') ?? null,
+    [accounts, accountId]
+  );
 
-  if (isLoading) {
+  // Derive billing cycles from the account's billingDate (pure computation, no fetch)
+  const cycles = useMemo(() => {
+    if (!account?.billingDate) return [];
+
+    const cycleData = calculateBillingCycles(account.billingDate, 12, false);
+
+    // Filter to only this account's transactions using the frontend paymentMethodId field
+    const accountTransactions = transactions.filter(t => t.paymentMethodId === accountId);
+
+    return cycleData.map(cycle => {
+      const cycleTxs = accountTransactions.filter(tx => {
+        const txDate = new Date(tx.date);
+        return txDate >= cycle.startDate && txDate <= cycle.endDate;
+      });
+
+      return {
+        startDate: cycle.startDate,
+        endDate: cycle.endDate,
+        label: formatDateRange(cycle.startDate, cycle.endDate),
+        transactions: cycleTxs,
+      };
+    });
+  }, [account, accountId, transactions]);
+
+  // Show spinner while the parent is still loading accounts
+  if (accounts.length === 0) {
     return (
       <div className="min-h-screen bg-gray-50 p-8">
         <div className="max-w-4xl mx-auto flex items-center justify-center py-24">
@@ -172,7 +101,15 @@ const StatementPage: React.FC<StatementPageProps> = ({ accounts }) => {
   }
 
   const selectedCycle = cycles[selectedCycleIndex];
-  const totalAmount = selectedCycle?.transactions.reduce((sum, tx) => sum + tx.amount, 0) ?? 0;
+  // Only sum positive-amount transactions (charges/purchases) for the "Total Charges" figure.
+  // Payment transactions (negative amounts) appear in the history table below but must not
+  // reduce the charge total — they only affect the credit account's outstanding balance.
+  const totalCharges = selectedCycle?.transactions.reduce(
+    (sum, tx) => (tx.amount > 0 ? sum + tx.amount : sum), 0
+  ) ?? 0;
+  const totalPayments = selectedCycle?.transactions.reduce(
+    (sum, tx) => (tx.amount < 0 ? sum + Math.abs(tx.amount) : sum), 0
+  ) ?? 0;
 
   return (
     <div className="min-h-screen bg-gray-50 p-8">
@@ -225,14 +162,18 @@ const StatementPage: React.FC<StatementPageProps> = ({ accounts }) => {
           <>
             <div className="bg-white rounded-2xl shadow-sm p-6 mb-6">
               <h3 className="text-sm font-bold uppercase text-gray-600 tracking-widest mb-4">Statement Summary</h3>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
                 <div>
                   <p className="text-xs text-gray-400 font-medium mb-1">Statement Period</p>
                   <p className="text-lg font-bold text-gray-900">{selectedCycle.label}</p>
                 </div>
                 <div>
                   <p className="text-xs text-gray-400 font-medium mb-1">Total Charges</p>
-                  <p className="text-lg font-bold text-red-600">{formatCurrency(totalAmount)}</p>
+                  <p className="text-lg font-bold text-red-600">{formatCurrency(totalCharges)}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-gray-400 font-medium mb-1">Payments Made</p>
+                  <p className="text-lg font-bold text-green-600">{formatCurrency(totalPayments)}</p>
                 </div>
                 <div>
                   <p className="text-xs text-gray-400 font-medium mb-1">Credit Limit</p>
@@ -262,6 +203,9 @@ const StatementPage: React.FC<StatementPageProps> = ({ accounts }) => {
                         <tr key={tx.id} className="border-t border-gray-100">
                           <td className="px-4 py-3">
                             <div className="text-sm font-medium text-gray-900">{tx.name}</div>
+                            {tx.amount < 0 && (
+                              <div className="text-xs text-green-600 font-medium mt-0.5">Payment</div>
+                            )}
                           </td>
                           <td className="px-4 py-3">
                             <div className="text-sm text-gray-500">
@@ -273,8 +217,8 @@ const StatementPage: React.FC<StatementPageProps> = ({ accounts }) => {
                             </div>
                           </td>
                           <td className="px-4 py-3 text-right">
-                            <div className={`text-sm font-semibold ${tx.amount < 0 ? 'text-red-600' : 'text-green-600'}`}>
-                              {formatCurrency(Math.abs(tx.amount))}
+                            <div className={`text-sm font-semibold ${tx.amount > 0 ? 'text-red-600' : 'text-green-600'}`}>
+                              {formatCurrency(tx.amount)}
                             </div>
                           </td>
                         </tr>

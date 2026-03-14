@@ -1,9 +1,11 @@
 import React, { useEffect, useState, useMemo, useRef } from 'react';
-import { ArrowLeft, Info, Eye, ZoomIn, ZoomOut, Download, X, Pencil, BanknoteArrowDown, Trash2, ArrowUpFromLine, ArrowDownToLine, ArrowLeftRight, Banknote, CheckSquare, Square, Filter, ChevronDown } from 'lucide-react';
+import { ArrowLeft, Info, Eye, ZoomIn, ZoomOut, Download, X, Pencil, BanknoteArrowDown, Trash2, ArrowUpFromLine, ArrowDownToLine, ArrowLeftRight, Banknote, CheckSquare, Square, Filter, ChevronDown, CreditCard } from 'lucide-react';
 import { useSearchParams, Link } from 'react-router-dom';
 import { Account } from '../../types';
+import type { SupabaseTransaction } from '../../src/types/supabase';
 import { getTransactionsByPaymentMethod, createTransaction, updateTransaction, updateTransactionAndSyncSchedule, createTransfer, getLoanTransactionsWithPayments, getReceiptSignedUrl, deleteTransactionAndRevertSchedule, batchDeleteTransactions } from '../../src/services/transactionsService';
 import { combineDateWithCurrentTime, getFirstDayOfCurrentMonthIso, getTodayIso } from '../../src/utils/dateUtils';
+import { deriveCreditStateFromTransactions, DerivedCreditState } from '../../src/utils/accounts';
 
 const FILTER_MIN_DATE = '2025-01-01';
 
@@ -64,6 +66,11 @@ const AccountFilteredTransactions: React.FC<AccountFilteredTransactionsProps> = 
   const [showCashInModal, setShowCashInModal] = useState(false);
   const [showLoanPaymentModal, setShowLoanPaymentModal] = useState(false);
   const [selectedLoan, setSelectedLoan] = useState<LoanTransaction | null>(null);
+  const [showCreditPaymentModal, setShowCreditPaymentModal] = useState(false);
+  const [creditPaymentForm, setCreditPaymentForm] = useState({ amount: '', date: new Date().toISOString().split('T')[0], notes: '' });
+
+  // Derived credit state (credit accounts only)
+  const [derivedCredit, setDerivedCredit] = useState<DerivedCreditState | null>(null);
 
   // Transaction details modal
   const [selectedTx, setSelectedTx] = useState<Transaction | null>(null);
@@ -113,7 +120,9 @@ const AccountFilteredTransactions: React.FC<AccountFilteredTransactionsProps> = 
         return;
       }
       
-      const txList: Transaction[] = (transactionsData || []).map(t => ({
+      const rawTxs: SupabaseTransaction[] = (transactionsData || []) as SupabaseTransaction[];
+
+      const txList: Transaction[] = rawTxs.map(t => ({
         id: t.id,
         name: t.name,
         date: t.date,
@@ -126,8 +135,16 @@ const AccountFilteredTransactions: React.FC<AccountFilteredTransactionsProps> = 
       }));
       setTransactions(txList);
 
-      // Load loan transactions with payments (only for debit accounts)
+      // Derive credit state for credit accounts so outstanding balance and
+      // available credit are always consistent with the transaction ledger.
       const currentAccount = accounts.find(a => a.id === accountId);
+      if (currentAccount?.type === 'Credit') {
+        setDerivedCredit(deriveCreditStateFromTransactions(currentAccount, rawTxs));
+      } else {
+        setDerivedCredit(null);
+      }
+
+      // Load loan transactions with payments (only for debit accounts)
       if (currentAccount?.type === 'Debit') {
         const { data: loansData } = await getLoanTransactionsWithPayments(accountId);
         if (loansData) {
@@ -466,6 +483,47 @@ const AccountFilteredTransactions: React.FC<AccountFilteredTransactionsProps> = 
     setShowLoanPaymentModal(true);
   };
 
+  /**
+   * Record a payment toward this credit account.
+   *
+   * Sign convention: payments are money coming IN to the credit account, so
+   * the transaction amount is stored as a NEGATIVE value. This reduces the
+   * outstanding balance and restores available credit in the same way that
+   * any other inward transaction (cash_in, transfer-in) works for debit accounts.
+   */
+  const handleCreditPaymentSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!accountId) return;
+
+    setIsSubmitting(true);
+    try {
+      const { error } = await createTransaction({
+        name: 'Credit Card Payment',
+        date: combineDateWithCurrentTime(creditPaymentForm.date),
+        amount: -Math.abs(parseFloat(creditPaymentForm.amount)), // Negative – money into the credit account, reduces outstanding
+        payment_method_id: accountId,
+        transaction_type: 'payment',
+        notes: creditPaymentForm.notes || null,
+        payment_schedule_id: null,
+        related_transaction_id: null,
+        receipt_url: null,
+      });
+
+      if (error) throw error;
+
+      showMessage('success', 'Payment recorded successfully');
+      setShowCreditPaymentModal(false);
+      setCreditPaymentForm({ amount: '', date: new Date().toISOString().split('T')[0], notes: '' });
+      await loadTransactions();
+      onTransactionCreated?.();
+    } catch (error) {
+      console.error('Error recording credit payment:', error);
+      showMessage('error', 'Failed to record payment');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   const handleDeleteTx = async (tx: Transaction) => {
     if (!window.confirm(`Delete transaction "${tx.name}"? This action cannot be undone.`)) return;
     try {
@@ -625,6 +683,30 @@ const AccountFilteredTransactions: React.FC<AccountFilteredTransactionsProps> = 
           </div>
         </div>
 
+        {/* ── Credit Account Summary ────────────────────────────────────── */}
+        {account?.type === 'Credit' && account.creditLimit != null && derivedCredit && (
+          <div className="bg-white rounded-2xl shadow-sm p-4 mb-4">
+            <div className="flex items-center gap-2 mb-3">
+              <CreditCard className="w-4 h-4 text-indigo-500" />
+              <span className="text-[10px] font-black uppercase tracking-widest text-gray-500">Credit Summary</span>
+            </div>
+            <div className="grid grid-cols-3 gap-4">
+              <div>
+                <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-1">Credit Limit</p>
+                <p className="text-lg font-black text-gray-900">{formatCurrency(account.creditLimit)}</p>
+              </div>
+              <div>
+                <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-1">Outstanding Balance</p>
+                <p className="text-lg font-black text-red-600">{formatCurrency(derivedCredit.currentOutstanding)}</p>
+              </div>
+              <div>
+                <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-1">Available Credit</p>
+                <p className="text-lg font-black text-green-600">{formatCurrency(derivedCredit.availableCredit ?? 0)}</p>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* ── Dashboard ───────────────────────────────────────────────────── */}
         <div className="grid grid-cols-3 gap-4 mb-4">
           <div className="bg-indigo-600 rounded-2xl shadow-sm p-4 text-white">
@@ -713,6 +795,20 @@ const AccountFilteredTransactions: React.FC<AccountFilteredTransactionsProps> = 
                       </button>
                     )}
                   </div>
+                </div>
+              )}
+
+              {/* ── Make Payment button (Credit accounts only) ────────────── */}
+              {account?.type === 'Credit' && (
+                <div className="flex items-center gap-1.5 ml-2">
+                  <button
+                    onClick={() => setShowCreditPaymentModal(true)}
+                    title="Make Payment"
+                    aria-label="Record credit card payment"
+                    className="w-9 h-9 flex items-center justify-center bg-green-500 hover:bg-green-600 text-white rounded-xl transition-colors"
+                  >
+                    <ArrowDownToLine className="w-4 h-4" />
+                  </button>
                 </div>
               )}
             </div>
@@ -1198,6 +1294,87 @@ const AccountFilteredTransactions: React.FC<AccountFilteredTransactionsProps> = 
                 <button
                   type="submit"
                   className="flex-1 bg-purple-500 hover:bg-purple-600 text-white py-4 rounded-2xl font-bold transition-colors disabled:opacity-50"
+                  disabled={isSubmitting}
+                >
+                  {isSubmitting ? 'Processing...' : 'Record Payment'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Credit Card Payment Modal */}
+      {showCreditPaymentModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-md">
+          <div className="w-full max-w-md bg-white rounded-3xl p-10 shadow-2xl relative">
+            <h2 className="text-2xl font-black text-gray-900 mb-2">Make Payment</h2>
+            <p className="text-gray-500 text-sm mb-8">Record a payment toward this credit account to reduce the outstanding balance</p>
+
+            {account?.creditLimit != null && derivedCredit && (
+              <div className="mb-6 p-4 bg-gray-50 rounded-xl">
+                <div className="flex justify-between mb-2">
+                  <span className="text-sm text-gray-600">Outstanding Balance:</span>
+                  <span className="text-sm font-bold text-red-600">{formatCurrency(derivedCredit.currentOutstanding)}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-sm text-gray-600">Available Credit:</span>
+                  <span className="text-sm font-bold text-green-600">{formatCurrency(derivedCredit.availableCredit ?? 0)}</span>
+                </div>
+              </div>
+            )}
+
+            <form onSubmit={handleCreditPaymentSubmit} className="space-y-6">
+              <div>
+                <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Amount</label>
+                <div className="relative">
+                  <span className="absolute left-4 top-1/2 -translate-y-1/2 font-bold text-gray-400">₱</span>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={creditPaymentForm.amount}
+                    onChange={e => setCreditPaymentForm(f => ({ ...f, amount: e.target.value }))}
+                    required
+                    className="w-full bg-gray-50 border-transparent rounded-2xl p-4 pl-8 outline-none text-xl font-black focus:ring-2 focus:ring-green-500 transition-all"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Date</label>
+                <input
+                  type="date"
+                  value={creditPaymentForm.date}
+                  onChange={e => setCreditPaymentForm(f => ({ ...f, date: e.target.value }))}
+                  required
+                  className="w-full bg-gray-50 border-transparent rounded-2xl p-4 outline-none font-bold text-sm"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Notes (Optional)</label>
+                <textarea
+                  value={creditPaymentForm.notes}
+                  onChange={e => setCreditPaymentForm(f => ({ ...f, notes: e.target.value }))}
+                  placeholder="e.g. Monthly bill payment"
+                  rows={3}
+                  className="w-full bg-gray-50 border-transparent rounded-2xl p-4 outline-none font-bold text-sm focus:ring-2 focus:ring-green-500 transition-all resize-none"
+                />
+              </div>
+
+              <div className="flex gap-4 pt-4">
+                <button
+                  type="button"
+                  onClick={() => setShowCreditPaymentModal(false)}
+                  className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 py-4 rounded-2xl font-bold transition-colors"
+                  disabled={isSubmitting}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="flex-1 bg-green-500 hover:bg-green-600 text-white py-4 rounded-2xl font-bold transition-colors disabled:opacity-50"
                   disabled={isSubmitting}
                 >
                   {isSubmitting ? 'Processing...' : 'Record Payment'}
