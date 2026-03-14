@@ -343,10 +343,16 @@ export const recordPaymentViaTransaction = async (
 };
 
 /**
- * Mark schedules as overdue based on current date and due day for the current user
+ * Mark schedules as overdue based on current date and per-source due days for the current user.
  * This should be called periodically (e.g., daily cron job) to update statuses
+ *
+ * @param sourceDueDays - Map of source_id → due day. Schedules not in the map use defaultDueDay.
+ * @param defaultDueDay - Fallback due day for sources not in sourceDueDays map. Default: 15.
  */
-export const markOverdueSchedules = async (dueDay: number = 15) => {
+export const markOverdueSchedules = async (
+  sourceDueDays: Map<string, number> = new Map(),
+  defaultDueDay: number = 15
+) => {
   try {
     const user = await getCachedUser();
 
@@ -375,7 +381,8 @@ export const markOverdueSchedules = async (dueDay: number = 15) => {
       const monthIndex = MONTHS.indexOf(schedule.month);
       if (monthIndex === -1) continue;
 
-      const dueDate = new Date(schedule.year, monthIndex, dueDay);
+      const effectiveDueDay = sourceDueDays.get(schedule.source_id) ?? defaultDueDay;
+      const dueDate = new Date(schedule.year, monthIndex, effectiveDueDay);
       dueDate.setHours(0, 0, 0, 0);
       
       const todayMidnight = new Date(today);

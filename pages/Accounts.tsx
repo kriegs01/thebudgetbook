@@ -13,6 +13,7 @@ import {
   ChevronDown,
   ChevronRight
 } from 'lucide-react';
+import { getDueDayForDisplay, ordinalSuffix } from '../src/utils/billingCycles';
 
 interface AccountsProps {
   accounts: Account[];
@@ -27,6 +28,13 @@ interface AccountsProps {
 const monthNames = [
   'January','February','March','April','May','June','July','August','September','October','November','December'
 ];
+
+/** Prefix for fake-date strings used to store billing day numbers in the DB DATE column.
+ *  Storing as "2000-01-DD" lets us reuse the existing DATE column without a schema migration.
+ *  Existing code extracts the day via `new Date(billingDate).getDate()`, which works for both
+ *  real dates (e.g. "2026-01-12") and these fake-date strings (e.g. "2000-01-12").
+ */
+const FAKE_DATE_PREFIX = '2000-01-';
 
 const Accounts: React.FC<AccountsProps> = ({ accounts, onAdd, onDelete, onEdit, onDeactivate, loading = false, error = null }) => {
   const [viewMode, setViewMode] = useState<ViewMode>('card');
@@ -122,8 +130,8 @@ const Accounts: React.FC<AccountsProps> = ({ accounts, onAdd, onDelete, onEdit, 
         openingBalance: parseFloat(formData.balance || '0'), // Persisted to opening_balance DB column
         type: formData.type,
         creditLimit: formData.type === 'Credit' ? (formData.creditLimit ? parseFloat(formData.creditLimit) : 0) : undefined,
-        billingDate: formData.type === 'Credit' ? (formData.billingDate || undefined) : undefined,
-        dueDate: formData.type === 'Credit' ? (formData.dueDate || undefined) : undefined
+        billingDate: formData.type === 'Credit' ? (formData.billingDate ? `${FAKE_DATE_PREFIX}${formData.billingDate.padStart(2, '0')}` : undefined) : undefined,
+        dueDate: formData.type === 'Credit' ? (formData.dueDate ? `${FAKE_DATE_PREFIX}${formData.dueDate.padStart(2, '0')}` : undefined) : undefined
       };
 
       if (editingId) {
@@ -155,8 +163,8 @@ const Accounts: React.FC<AccountsProps> = ({ accounts, onAdd, onDelete, onEdit, 
       balance: String(acc.openingBalance ?? 0), // Use opening balance seed, not calculated running balance
       type: acc.type,
       creditLimit: acc.creditLimit ? String(acc.creditLimit) : '',
-      billingDate: acc.billingDate ?? '',
-      dueDate: acc.dueDate ?? ''
+      billingDate: acc.billingDate ? String(new Date(acc.billingDate).getDate()) : '',
+      dueDate: acc.dueDate ? String(new Date(acc.dueDate).getDate()) : ''
     });
     setShowModal(true);
   };
@@ -289,6 +297,16 @@ const Accounts: React.FC<AccountsProps> = ({ accounts, onAdd, onDelete, onEdit, 
             <p className="text-xs text-gray-400 font-medium">Balance</p>
             <p className={`text-2xl font-bold text-gray-900`}>{formatCurrency(acc.balance)}</p>
           </div>
+          {isCredit && acc.billingDate && (
+            <p className="text-xs text-gray-400">
+              Statement: {new Date(acc.billingDate).getDate()}{ordinalSuffix(new Date(acc.billingDate).getDate())} each month
+            </p>
+          )}
+          {isCredit && acc.billingDate && acc.dueDate && (
+            <p className="text-xs text-gray-400">
+              Due: {new Date(acc.dueDate).getDate()} days after → ~{getDueDayForDisplay(new Date(acc.billingDate).getDate(), new Date(acc.dueDate).getDate())}
+            </p>
+          )}
         </div>
 
         {/* Bottom controls: View button placed in lower-right corner */}
@@ -462,14 +480,25 @@ const Accounts: React.FC<AccountsProps> = ({ accounts, onAdd, onDelete, onEdit, 
                       <input type="number" value={formData.creditLimit} onChange={(e) => setFormData({...formData, creditLimit: e.target.value})} className="w-full border border-gray-100 rounded-lg px-3 py-2" />
                     </div>
                     <div>
-                      <label className="block text-xs font-bold text-gray-400 uppercase mb-1">Billing Date</label>
-                      <input type="date" value={formData.billingDate} onChange={(e) => setFormData({...formData, billingDate: e.target.value})} className="w-full border border-gray-100 rounded-lg px-3 py-2" />
+                      <label className="block text-xs font-bold text-gray-400 uppercase mb-1">Statement Day <span className="normal-case font-normal text-gray-400">(day bill cuts)</span></label>
+                      <input type="number" min="1" max="31" placeholder="e.g. 12" value={formData.billingDate} onChange={(e) => setFormData({...formData, billingDate: e.target.value})} className="w-full border border-gray-100 rounded-lg px-3 py-2" />
                     </div>
                     <div>
-                      <label className="block text-xs font-bold text-gray-400 uppercase mb-1">Due Date</label>
-                      <input type="date" value={formData.dueDate} onChange={(e) => setFormData({...formData, dueDate: e.target.value})} className="w-full border border-gray-100 rounded-lg px-3 py-2" />
+                      <label className="block text-xs font-bold text-gray-400 uppercase mb-1">Days to Pay <span className="normal-case font-normal text-gray-400">(grace period)</span></label>
+                      <input type="number" min="1" max="60" placeholder="e.g. 21" value={formData.dueDate} onChange={(e) => setFormData({...formData, dueDate: e.target.value})} className="w-full border border-gray-100 rounded-lg px-3 py-2" />
                     </div>
                   </div>
+                  {formData.billingDate && formData.dueDate && (() => {
+                    const statementDay = parseInt(formData.billingDate);
+                    const daysToPay = parseInt(formData.dueDate);
+                    if (isNaN(statementDay) || isNaN(daysToPay)) return null;
+                    const displayStr = getDueDayForDisplay(statementDay, daysToPay);
+                    return (
+                      <p className="text-xs text-purple-600 mt-2">
+                        📅 Statement cuts on the {statementDay}{ordinalSuffix(statementDay)} · Due ~{displayStr}
+                      </p>
+                    );
+                  })()}
                 </>
               )}
 
