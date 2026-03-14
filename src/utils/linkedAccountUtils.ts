@@ -8,7 +8,7 @@
  */
 
 import type { Biller, Account, PaymentSchedule } from '../../types';
-import type { SupabaseTransaction } from '../types/supabase';
+import type { SupabaseTransaction, SupabaseMonthlyPaymentSchedule, CreateMonthlyPaymentScheduleInput } from '../types/supabase';
 import { getCycleForMonth, aggregateTransactionsByCycle, getDueDayForMonth } from './billingCycles';
 
 /**
@@ -244,4 +244,98 @@ export const getLinkedAccountDueDay = (
   const linkedAccount = getLinkedAccount(biller, accounts);
   if (!linkedAccount) return null;
   return getDueDayForMonth(linkedAccount, month, year);
+};
+
+const MONTH_NAMES = [
+  'January', 'February', 'March', 'April', 'May', 'June',
+  'July', 'August', 'September', 'October', 'November', 'December',
+];
+
+/**
+ * Compute which payment schedule rows need to be created or updated so that every
+ * billing cycle that has CC charge transactions has a corresponding row in
+ * `monthly_payment_schedules` with the correct `expected_amount`.
+ *
+ * This is used by the Billers page to keep the DB in sync with the credit account's
+ * transaction history, addressing the case where:
+ *  - Schedules were never created for older billing cycles, OR
+ *  - Schedules exist but `expected_amount` is 0 (created before the linked account was set).
+ *
+ * Paid schedules are never updated — their amount_paid / status are the source of truth.
+ *
+ * @param biller - The Loans-category biller with linkedAccountId
+ * @param account - The linked credit account (must have billingDate)
+ * @param transactions - All SupabaseTransactions for the user
+ * @param existingSchedules - Rows already in monthly_payment_schedules for this biller
+ * @returns Lists of rows to create and rows to update
+ */
+export const computeLinkedBillerScheduleSync = (
+  biller: Biller,
+  account: Account,
+  transactions: SupabaseTransaction[],
+  existingSchedules: SupabaseMonthlyPaymentSchedule[]
+): {
+  toCreate: CreateMonthlyPaymentScheduleInput[];
+  toUpdate: { id: string; expectedAmount: number }[];
+} => {
+  if (!account.billingDate) return { toCreate: [], toUpdate: [] };
+
+  const PAYMENT_TYPES = new Set(['payment', 'cash_in', 'loan_payment']);
+
+  // Only charge-type positive-amount transactions count toward the CC balance
+  const chargeTransactions = transactions.filter(
+    tx =>
+      tx.payment_method_id === account.id &&
+      !PAYMENT_TYPES.has(tx.transaction_type ?? '') &&
+      tx.amount > 0
+  );
+
+  if (chargeTransactions.length === 0) return { toCreate: [], toUpdate: [] };
+
+  const CYCLE_LOOKBACK_COUNT = 24;
+  const cyclesWithTx = aggregateTransactionsByCycle(
+    chargeTransactions,
+    account.billingDate,
+    CYCLE_LOOKBACK_COUNT
+  );
+
+  const toCreate: CreateMonthlyPaymentScheduleInput[] = [];
+  const toUpdate: { id: string; expectedAmount: number }[] = [];
+
+  for (const cycle of cyclesWithTx) {
+    if (cycle.transactions.length === 0) continue;
+
+    const cycleMonth = MONTH_NAMES[cycle.startDate.getMonth()];
+    const cycleYear = cycle.startDate.getFullYear();
+    const cycleTotal = cycle.totalAmount;
+
+    const existing = existingSchedules.find(
+      s => s.month === cycleMonth && s.year === cycleYear
+    );
+
+    if (!existing) {
+      // Missing schedule row — create it with the correct expected_amount
+      toCreate.push({
+        source_type: 'biller',
+        source_id: biller.id,
+        month: cycleMonth,
+        year: cycleYear,
+        payment_number: null,
+        expected_amount: cycleTotal,
+        amount_paid: 0,
+        receipt: null,
+        date_paid: null,
+        account_id: null,
+        status: 'pending',
+      });
+    } else if (
+      existing.status !== 'paid' &&
+      existing.expected_amount !== cycleTotal
+    ) {
+      // Row exists but expected_amount is stale (e.g. was 0 because biller had no manual amount)
+      toUpdate.push({ id: existing.id, expectedAmount: cycleTotal });
+    }
+  }
+
+  return { toCreate, toUpdate };
 };

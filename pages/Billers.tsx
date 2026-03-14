@@ -1,8 +1,8 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Biller, Account, PaymentSchedule, BudgetCategory, Installment } from '../types';
 import { Plus, Calendar, Bell, ChevronDown, ChevronRight, Upload, CheckCircle2, X, ArrowLeft, Power, PowerOff, MoreVertical, Edit2, Eye, Trash2, AlertTriangle, Info, ZoomIn, ZoomOut, Download } from 'lucide-react';
 import { getAllTransactions, getTransactionsByPaymentSchedule, getReceiptSignedUrl, updateTransaction, updateTransactionAndSyncSchedule } from '../src/services/transactionsService';
-import { getPaymentSchedulesBySource } from '../src/services/paymentSchedulesService';
+import { getPaymentSchedulesBySource, createPaymentSchedulesBulk, updatePaymentSchedule } from '../src/services/paymentSchedulesService';
 import { combineDateWithCurrentTime } from '../src/utils/dateUtils';
 import type { SupabaseTransaction, SupabaseMonthlyPaymentSchedule } from '../src/types/supabase';
 // ENHANCEMENT: Import linked account utilities for billing cycle-based amount calculation
@@ -10,7 +10,8 @@ import {
   getScheduleExpectedAmount, 
   getScheduleDisplayLabel, 
   shouldUseLinkedAccount, 
-  getLinkedAccount 
+  getLinkedAccount,
+  computeLinkedBillerScheduleSync,
 } from '../src/utils/linkedAccountUtils';
 import { getDueDayForMonth, ordinalSuffix } from '../src/utils/billingCycles';
 // Import schedule ID generator for consistent ID creation
@@ -241,6 +242,56 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
   useEffect(() => {
     loadPaymentSchedules();
   }, [detailedBillerId, billers, loadPaymentSchedules]);
+
+  // Track which biller+transaction-snapshot we have already synced so this effect
+  // does not re-fire after the sync itself causes paymentSchedules to reload.
+  const lastSyncKeyRef = useRef<string>('');
+
+  // Sync payment schedule rows for linked-account billers:
+  // When a Loans biller linked to a credit account is opened and transactions are
+  // available, ensure every billing cycle that has CC charge transactions has a
+  // corresponding row in monthly_payment_schedules with the correct expected_amount.
+  // This fixes the case where schedules are missing (never created / deleted by an edit)
+  // or have expected_amount=0 (biller was created/edited before the linked account was set).
+  useEffect(() => {
+    if (!detailedBillerId || transactions.length === 0 || loadingSchedules) return;
+
+    const biller = billers.find(b => b.id === detailedBillerId);
+    if (!biller || !shouldUseLinkedAccount(biller)) return;
+
+    const account = getLinkedAccount(biller, accounts);
+    if (!account) return;
+
+    // Deduplication key: biller id + transaction count + most-recent transaction ID.
+    // This covers the common mutation scenarios (add, delete) while avoiding re-sync
+    // on unrelated state changes. Editing a non-recent transaction in the same session
+    // is an edge case handled by reopening the biller.
+    const recentTxId = transactions[0]?.id ?? '';
+    const syncKey = `${detailedBillerId}:${transactions.length}:${recentTxId}`;
+    if (lastSyncKeyRef.current === syncKey) return;
+    lastSyncKeyRef.current = syncKey;
+
+    const { toCreate, toUpdate } = computeLinkedBillerScheduleSync(
+      biller,
+      account,
+      transactions,
+      paymentSchedules
+    );
+
+    if (toCreate.length === 0 && toUpdate.length === 0) return;
+
+    // Apply changes in the background then reload the schedule list
+    (async () => {
+      if (toCreate.length > 0) {
+        await createPaymentSchedulesBulk(toCreate);
+      }
+      for (const upd of toUpdate) {
+        await updatePaymentSchedule(upd.id, { expected_amount: upd.expectedAmount });
+      }
+      // Reload so the UI reflects the updated/created schedules
+      await loadPaymentSchedules();
+    })();
+  }, [detailedBillerId, transactions, paymentSchedules, loadingSchedules, billers, accounts, loadPaymentSchedules]);
 
   const openSchedulePaymentsModal = async (scheduleId: string, label: string) => {
     setLoadingScheduleTx(true);
