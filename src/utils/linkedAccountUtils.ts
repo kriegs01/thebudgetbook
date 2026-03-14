@@ -73,9 +73,16 @@ export const calculateLinkedAccountAmount = (
   const cycle = getCycleForMonth(schedule.month, schedule.year, account.billingDate);
   if (!cycle) return null;
   
-  // Filter transactions for this account in this cycle
-  const accountTransactions = transactions.filter(tx => 
-    tx.payment_method_id === account.id
+  // Payment/credit transaction types that should not be counted as charges
+  const PAYMENT_TYPES = new Set(['payment', 'cash_in', 'loan_payment']);
+
+  // Filter transactions for this account in this cycle.
+  // Exclude payment-type transactions so that payments made to the credit account
+  // do not reduce the displayed charge amount (only purchases/charges are summed).
+  const accountTransactions = transactions.filter(tx =>
+    tx.payment_method_id === account.id &&
+    !PAYMENT_TYPES.has(tx.transaction_type ?? '') &&
+    tx.amount > 0
   );
   
   // Aggregate by cycle

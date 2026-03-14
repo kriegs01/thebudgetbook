@@ -246,7 +246,12 @@ export const aggregateCreditCardPurchases = (
       .map(inst => inst.name.toLowerCase())
   );
   
-  // Group transactions by cycle, excluding installments
+  // Payment/credit transaction types that should not be counted as charges
+  const PAYMENT_TYPES = new Set(['payment', 'cash_in', 'loan_payment']);
+
+  // Group transactions by cycle, excluding installments and payment-type transactions.
+  // Payment-type transactions (e.g., credit card payments) must be excluded so they
+  // do not net against charges and produce an artificially low expected amount.
   const summaries: CreditCardCycleSummary[] = cycles.map(cycle => {
     const cycleTxs = accountTransactions.filter(tx => {
       const txDate = new Date(tx.date);
@@ -254,8 +259,11 @@ export const aggregateCreditCardPurchases = (
       
       // Exclude if transaction name matches any installment (case-insensitive)
       const isInstallment = installmentNames.has(tx.name.toLowerCase());
+
+      // Exclude payment-type transactions (money going INTO the credit account)
+      const isPayment = PAYMENT_TYPES.has(tx.transaction_type ?? '') || tx.amount <= 0;
       
-      return inCycle && !isInstallment;
+      return inCycle && !isInstallment && !isPayment;
     });
     
     const totalAmount = cycleTxs.reduce((sum, tx) => sum + tx.amount, 0);
