@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Biller, Account, PaymentSchedule, BudgetCategory, Installment } from '../types';
 import { Plus, Calendar, Bell, ChevronDown, ChevronRight, Upload, CheckCircle2, X, ArrowLeft, Power, PowerOff, MoreVertical, Edit2, Eye, Trash2, AlertTriangle, Info, ZoomIn, ZoomOut, Download } from 'lucide-react';
-import { getAllTransactions, getTransactionsByPaymentSchedule, getReceiptSignedUrl, updateTransaction, updateTransactionAndSyncSchedule } from '../src/services/transactionsService';
+import { getAllTransactions, getTransactionsByPaymentSchedule, getReceiptSignedUrl, updateTransaction, updateTransactionAndSyncSchedule, deleteTransactionAndRevertSchedule } from '../src/services/transactionsService';
 import { getPaymentSchedulesBySource } from '../src/services/paymentSchedulesService';
 import { combineDateWithCurrentTime } from '../src/utils/dateUtils';
 import type { SupabaseTransaction, SupabaseMonthlyPaymentSchedule } from '../src/types/supabase';
@@ -286,6 +286,24 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
       alert('Failed to update transaction. Please try again.');
     } finally {
       setIsEditingScheduleTx(false);
+    }
+  };
+
+  /** Delete a payment transaction from the payment records modal.
+   * Cascade-deletes any linked credit_payment counterpart automatically. */
+  const handleDeleteBillerScheduleTx = async (txId: string) => {
+    if (!window.confirm('Delete this payment record? This cannot be undone.')) return;
+    try {
+      const { error } = await deleteTransactionAndRevertSchedule(txId);
+      if (error) throw error;
+      // Reload the modal and the schedule list to reflect the deletion
+      if (schedulePaymentsModal) {
+        await openSchedulePaymentsModal(schedulePaymentsModal.scheduleId, schedulePaymentsModal.label);
+      }
+      await loadPaymentSchedules();
+    } catch (err) {
+      console.error('[Billers] Error deleting schedule transaction:', err);
+      alert('Failed to delete transaction. Please try again.');
     }
   };
 
@@ -1741,6 +1759,13 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
                           className="ml-3 mt-1 text-[9px] font-black text-indigo-600 uppercase tracking-widest border border-indigo-100 px-2 py-1 rounded-lg hover:bg-indigo-50 transition-colors flex-shrink-0"
                         >
                           <Edit2 className="w-3 h-3" />
+                        </button>
+                        <button
+                          onClick={() => handleDeleteBillerScheduleTx(tx.id)}
+                          title="Delete payment record"
+                          className="ml-1 mt-1 text-[9px] font-black text-red-500 uppercase tracking-widest border border-red-100 px-2 py-1 rounded-lg hover:bg-red-50 transition-colors flex-shrink-0"
+                        >
+                          <Trash2 className="w-3 h-3" />
                         </button>
                       </div>
                       {tx.receiptUrl && (

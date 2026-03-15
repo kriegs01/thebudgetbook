@@ -3,7 +3,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { BudgetItem, Account, Biller, PaymentSchedule, CategorizedSetupItem, SavedBudgetSetup, BudgetCategory, Installment } from '../types';
 import { Plus, Check, ChevronDown, Trash2, Save, FileText, ArrowRight, Upload, CheckCircle2, X, AlertTriangle, Info, Eye, ZoomIn, ZoomOut, Download } from 'lucide-react';
 import { createBudgetSetupFrontend, updateBudgetSetupFrontend } from '../src/services/budgetSetupsService';
-import { createTransaction, getAllTransactions, updateTransaction, updateTransactionAndSyncSchedule, createPaymentScheduleTransaction, uploadTransactionReceipt, getTransactionsByPaymentSchedule, getReceiptSignedUrl } from '../src/services/transactionsService';
+import { createTransaction, getAllTransactions, updateTransaction, updateTransactionAndSyncSchedule, createPaymentScheduleTransaction, uploadTransactionReceipt, getTransactionsByPaymentSchedule, getReceiptSignedUrl, deleteTransactionAndRevertSchedule } from '../src/services/transactionsService';
 import type { SupabaseTransaction, SupabaseMonthlyPaymentSchedule } from '../src/types/supabase';
 import { getInstallmentPaymentSchedule, aggregateCreditCardPurchases } from '../src/utils/paymentStatus'; // PROTOTYPE: Import payment status utilities
 import { getScheduleExpectedAmount } from '../src/utils/linkedAccountUtils'; // ENHANCEMENT: Import for linked account amount calculation
@@ -244,7 +244,8 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
   });
 
   // Schedule payments modal (consolidated payment records for a budget item)
-  const [schedulePaymentsModal, setSchedulePaymentsModal] = useState<{ label: string; transactions: BudgetScheduleTx[] } | null>(null);
+  // scheduleId is present for schedule-based modals and null for direct-payment modals
+  const [schedulePaymentsModal, setSchedulePaymentsModal] = useState<{ label: string; scheduleId: string | null; transactions: BudgetScheduleTx[] } | null>(null);
   const [loadingScheduleTx, setLoadingScheduleTx] = useState(false);
   const [scheduleSignedUrls, setScheduleSignedUrls] = useState<Record<string, string | null>>({});
   const [previewReceiptUrl, setPreviewReceiptUrl] = useState<string | null>(null);
@@ -634,13 +635,13 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
   const openSchedulePaymentsModal = async (scheduleId: string, label: string) => {
     setLoadingScheduleTx(true);
     setScheduleSignedUrls({});
-    setSchedulePaymentsModal({ label, transactions: [] });
+    setSchedulePaymentsModal({ label, scheduleId, transactions: [] });
     try {
       const { data } = await getTransactionsByPaymentSchedule(scheduleId);
       const txs: BudgetScheduleTx[] = (data || []).map((t: SupabaseTransaction) => ({
         id: t.id, name: t.name, amount: t.amount, date: t.date, paymentMethodId: t.payment_method_id, receiptUrl: t.receipt_url ?? null
       }));
-      setSchedulePaymentsModal({ label, transactions: txs });
+      setSchedulePaymentsModal({ label, scheduleId, transactions: txs });
       const urls: Record<string, string | null> = {};
       await Promise.all(txs.filter(tx => tx.receiptUrl).map(async tx => {
         urls[tx.id] = await getReceiptSignedUrl(tx.receiptUrl as string).catch(() => null);
@@ -655,11 +656,32 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
   const openDirectPaymentModal = (tx: SupabaseTransaction, label: string) => {
     const txEntry: BudgetScheduleTx = { id: tx.id, name: tx.name, amount: tx.amount, date: tx.date, paymentMethodId: tx.payment_method_id, receiptUrl: tx.receipt_url ?? null };
     setScheduleSignedUrls({});
-    setSchedulePaymentsModal({ label, transactions: [txEntry] });
+    setSchedulePaymentsModal({ label, scheduleId: null, transactions: [txEntry] });
     if (tx.receipt_url) {
       getReceiptSignedUrl(tx.receipt_url)
         .then(url => setScheduleSignedUrls({ [tx.id]: url }))
         .catch(() => setScheduleSignedUrls({ [tx.id]: null }));
+    }
+  };
+
+  /** Delete a payment transaction from the payment records modal.
+   * The cascade-delete in deleteTransactionAndRevertSchedule also removes any linked
+   * credit_payment counterpart on the associated credit account. */
+  const handleDeleteScheduleTx = async (txId: string) => {
+    if (!window.confirm('Delete this payment record? This cannot be undone.')) return;
+    try {
+      const { error } = await deleteTransactionAndRevertSchedule(txId);
+      if (error) throw error;
+      // Reload the modal to reflect the deletion
+      if (schedulePaymentsModal?.scheduleId) {
+        await openSchedulePaymentsModal(schedulePaymentsModal.scheduleId, schedulePaymentsModal.label);
+      } else {
+        // For direct-payment modals (no scheduleId), just close — no reload needed
+        setSchedulePaymentsModal(null);
+      }
+    } catch (err) {
+      console.error('[Budget] Error deleting schedule transaction:', err);
+      alert('Failed to delete transaction. Please try again.');
     }
   };
 
@@ -2520,6 +2542,15 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                           )}
                         </div>
                       )}
+                      <div className="flex justify-end pt-1">
+                        <button
+                          onClick={() => handleDeleteScheduleTx(tx.id)}
+                          title="Delete payment record"
+                          className="flex items-center space-x-1 px-3 py-1.5 rounded-xl bg-red-50 text-red-600 hover:bg-red-100 transition-colors text-xs font-bold"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" /><span>Delete</span>
+                        </button>
+                      </div>
                     </div>
                   );
                 })}
