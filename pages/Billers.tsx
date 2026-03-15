@@ -231,6 +231,9 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
         setPaymentSchedules([]);
       } finally {
         setLoadingSchedules(false);
+        // Signal that the initial load for this biller has completed.
+        // The sync effect waits for this before running to avoid racing with the load.
+        schedulesReadyForBillerRef.current = detailedBillerId;
       }
     } else {
       // Clear schedules when not viewing details
@@ -246,6 +249,11 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
   // Track which biller+transaction-snapshot we have already synced so this effect
   // does not re-fire after the sync itself causes paymentSchedules to reload.
   const lastSyncKeyRef = useRef<string>('');
+  // Track the biller ID for which loadPaymentSchedules has completed at least once.
+  // The sync effect waits for this before running, preventing a race condition where
+  // the sync fires with an empty paymentSchedules list (before the initial DB load
+  // finishes) and locks the dedup key, which would prevent the correct update pass.
+  const schedulesReadyForBillerRef = useRef<string | null>(null);
 
   // Sync payment schedule rows for linked-account billers:
   // When a Loans biller linked to a credit account is opened and transactions are
@@ -255,6 +263,12 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
   // or have expected_amount=0 (biller was created/edited before the linked account was set).
   useEffect(() => {
     if (!detailedBillerId || transactions.length === 0 || loadingSchedules) return;
+
+    // Only run after the initial loadPaymentSchedules for this biller has completed.
+    // This prevents the race condition where the sync fires with paymentSchedules=[]
+    // (before the load finishes), which would lock the dedup key and skip the real
+    // update pass that sets correct expected_amount values.
+    if (schedulesReadyForBillerRef.current !== detailedBillerId) return;
 
     const biller = billers.find(b => b.id === detailedBillerId);
     if (!biller || !shouldUseLinkedAccount(biller)) return;
@@ -266,6 +280,8 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
     // This covers the common mutation scenarios (add, delete) while avoiding re-sync
     // on unrelated state changes. Editing a non-recent transaction in the same session
     // is an edge case handled by reopening the biller.
+    // Note: getAllTransactions() returns rows ordered by date DESC, so transactions[0]
+    // is always the most-recently-dated transaction.
     const recentTxId = transactions[0]?.id ?? '';
     const syncKey = `${detailedBillerId}:${transactions.length}:${recentTxId}`;
     if (lastSyncKeyRef.current === syncKey) return;

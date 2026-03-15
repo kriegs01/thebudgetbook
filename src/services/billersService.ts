@@ -200,18 +200,26 @@ export const createBillerFrontend = async (biller: Biller): Promise<{ data: Bill
     return { data: null, error };
   }
   
-  // Generate and create payment schedules for the biller
   const convertedBiller = supabaseBillerToFrontend(data);
-  const schedules = generateBillerPaymentSchedules(convertedBiller, 2026);
-  
-  if (schedules.length > 0) {
-    const { error: schedulesError } = await createPaymentSchedulesBulk(schedules);
-    if (schedulesError) {
-      console.error('Error creating payment schedules for biller:', schedulesError);
-      // Don't fail the entire operation, just log the error
+
+  // Generate and create payment schedules for the biller.
+  // Linked-account billers (Loans category with linkedAccountId) get their expected_amount
+  // from CC transaction history, not from biller.expectedAmount (which is 0 by default).
+  // Creating placeholder rows with expected_amount=0 here would cause stale rows to
+  // compete with the correct rows created by the sync effect in the Billers page.
+  // The sync effect handles schedule creation for linked-account billers when the detail
+  // view is first opened.
+  if (!convertedBiller.linkedAccountId) {
+    const schedules = generateBillerPaymentSchedules(convertedBiller, 2026);
+    if (schedules.length > 0) {
+      const { error: schedulesError } = await createPaymentSchedulesBulk(schedules);
+      if (schedulesError) {
+        console.error('Error creating payment schedules for biller:', schedulesError);
+        // Don't fail the entire operation, just log the error
+      }
     }
   }
-  
+
   return { data: convertedBiller, error: null };
 };
 
@@ -237,33 +245,41 @@ export const updateBillerFrontend = async (biller: Biller, previousBiller?: Bill
     const targetYear = parseInt(updatedBiller.activationDate.year) || new Date().getFullYear();
 
     if (isReactivating) {
-      // Reactivation: preserve existing paid/partial schedules; only add missing ones
-      const { data: existingSchedules } = await getPaymentSchedulesBySource('biller', biller.id);
-      const existingMonthYears = new Set(
-        (existingSchedules || []).map(s => `${s.month}-${s.year}`)
-      );
+      // Reactivation: preserve existing paid/partial schedules; only add missing ones.
+      // For linked-account billers the sync effect will create schedules with the
+      // correct expected_amount from CC transactions, so skip placeholder creation here.
+      if (!updatedBiller.linkedAccountId) {
+        const { data: existingSchedules } = await getPaymentSchedulesBySource('biller', biller.id);
+        const existingMonthYears = new Set(
+          (existingSchedules || []).map(s => `${s.month}-${s.year}`)
+        );
 
-      const newSchedules = generateBillerPaymentSchedules(updatedBiller, targetYear);
-      const schedulesToCreate = newSchedules.filter(
-        s => !existingMonthYears.has(`${s.month}-${s.year}`)
-      );
+        const newSchedules = generateBillerPaymentSchedules(updatedBiller, targetYear);
+        const schedulesToCreate = newSchedules.filter(
+          s => !existingMonthYears.has(`${s.month}-${s.year}`)
+        );
 
-      if (schedulesToCreate.length > 0) {
-        const { error: schedulesError } = await createPaymentSchedulesBulk(schedulesToCreate);
-        if (schedulesError) {
-          console.error('Error creating reactivation schedules:', schedulesError);
+        if (schedulesToCreate.length > 0) {
+          const { error: schedulesError } = await createPaymentSchedulesBulk(schedulesToCreate);
+          if (schedulesError) {
+            console.error('Error creating reactivation schedules:', schedulesError);
+          }
         }
       }
     } else {
-      // Regular update: regenerate schedules only when key properties changed
+      // Regular update: regenerate schedules only when key properties changed.
+      // For linked-account billers, delete stale pending rows but do NOT recreate
+      // them with expected_amount=0 — the sync effect will create them with the
+      // correct amount from CC transaction history when the biller is next opened.
       const activationChanged =
         previousBiller.activationDate.month !== updatedBiller.activationDate.month ||
         previousBiller.activationDate.year !== updatedBiller.activationDate.year;
       const deactivationChanged =
         JSON.stringify(previousBiller.deactivationDate) !== JSON.stringify(updatedBiller.deactivationDate);
       const amountChanged = previousBiller.expectedAmount !== updatedBiller.expectedAmount;
+      const linkedAccountChanged = previousBiller.linkedAccountId !== updatedBiller.linkedAccountId;
 
-      if (activationChanged || deactivationChanged || amountChanged) {
+      if (activationChanged || deactivationChanged || amountChanged || linkedAccountChanged) {
         const { data: existingSchedules } = await getPaymentSchedulesBySource('biller', biller.id);
         const schedules = existingSchedules || [];
 
@@ -273,18 +289,20 @@ export const updateBillerFrontend = async (biller: Biller, previousBiller?: Bill
           await deletePaymentSchedule(id);
         }
 
-        // Re-create schedules for months not already covered by paid/partial records
-        const coveredMonthYears = new Set(
-          schedules.filter(s => s.status !== 'pending').map(s => `${s.month}-${s.year}`)
-        );
+        if (!updatedBiller.linkedAccountId) {
+          // Re-create schedules for months not already covered by paid/partial records
+          const coveredMonthYears = new Set(
+            schedules.filter(s => s.status !== 'pending').map(s => `${s.month}-${s.year}`)
+          );
 
-        const newSchedules = generateBillerPaymentSchedules(updatedBiller, targetYear);
-        const toCreate = newSchedules.filter(s => !coveredMonthYears.has(`${s.month}-${s.year}`));
+          const newSchedules = generateBillerPaymentSchedules(updatedBiller, targetYear);
+          const toCreate = newSchedules.filter(s => !coveredMonthYears.has(`${s.month}-${s.year}`));
 
-        if (toCreate.length > 0) {
-          const { error: schedulesError } = await createPaymentSchedulesBulk(toCreate);
-          if (schedulesError) {
-            console.error('Error creating updated schedules for biller:', schedulesError);
+          if (toCreate.length > 0) {
+            const { error: schedulesError } = await createPaymentSchedulesBulk(toCreate);
+            if (schedulesError) {
+              console.error('Error creating updated schedules for biller:', schedulesError);
+            }
           }
         }
       }
