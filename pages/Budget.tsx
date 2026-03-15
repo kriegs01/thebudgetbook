@@ -1191,6 +1191,29 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
           console.log('[Budget] Receipt uploaded and linked to transaction:', path);
         }
       }
+
+      // If this biller is linked to a credit account, record a credit_payment on that account
+      // so the outstanding balance and available credit are updated automatically.
+      if (!isEditing && biller.linkedAccountId && transactionData?.id) {
+        const linkedAccount = accounts.find(a => a.id === biller.linkedAccountId);
+        if (linkedAccount?.type === 'Credit') {
+          const { error: creditTxError } = await createTransaction({
+            name: `${biller.name} - ${schedule.month} ${schedule.year}`,
+            date: combineDateWithCurrentTime(payFormData.datePaid),
+            amount: -Math.abs(parseFloat(payFormData.amount)), // negative → reduces outstanding balance
+            payment_method_id: biller.linkedAccountId,
+            transaction_type: 'credit_payment',
+            notes: null,
+            payment_schedule_id: null,
+            related_transaction_id: transactionData.id,
+          });
+          if (creditTxError) {
+            console.error('[Budget] Failed to create credit account payment transaction:', creditTxError);
+          } else {
+            console.log('[Budget] Credit account payment transaction created for linked account:', biller.linkedAccountId);
+          }
+        }
+      }
       
       // REFACTOR: Update payment schedule in monthly_payment_schedules table
       if (paymentScheduleId) {
