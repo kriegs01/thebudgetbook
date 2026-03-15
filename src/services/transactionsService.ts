@@ -376,6 +376,28 @@ export const deleteTransactionAndRevertSchedule = async (transactionId: string) 
     }
 
     const scheduleId = transaction.payment_schedule_id;
+    const user = await getCachedUser();
+
+    // If this transaction has a linked credit_payment counterpart, delete it first.
+    // The credit_payment row stores `related_transaction_id = transactionId` so we can
+    // find it with a simple query and remove it before the primary transaction is gone.
+    const { data: counterparts } = await supabase
+      .from(getTableName('transactions'))
+      .select('id')
+      .eq('related_transaction_id', transactionId)
+      .eq('transaction_type', 'credit_payment')
+      .eq('user_id', user.id);
+
+    if (counterparts && counterparts.length > 0) {
+      for (const cp of counterparts) {
+        const { error: cpDeleteError } = await deleteTransaction(cp.id);
+        if (cpDeleteError) {
+          console.error('[Transactions] Failed to delete credit_payment counterpart:', cp.id, cpDeleteError);
+        } else {
+          console.log('[Transactions] Deleted credit_payment counterpart:', cp.id);
+        }
+      }
+    }
 
     // Delete the transaction
     const { error: deleteError } = await deleteTransaction(transactionId);
