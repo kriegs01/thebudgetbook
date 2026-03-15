@@ -12,6 +12,7 @@ type Transaction = {
   date: string; // ISO string
   amount: number;
   paymentMethodId: string;
+  transaction_type: string | null;
 };
 
 type BillingCycle = {
@@ -96,7 +97,8 @@ const StatementPage: React.FC<StatementPageProps> = ({ accounts }) => {
           name: t.name,
           date: t.date,
           amount: t.amount,
-          paymentMethodId: t.payment_method_id
+          paymentMethodId: t.payment_method_id,
+          transaction_type: t.transaction_type ?? null
         }));
         
         // Group transactions by cycle
@@ -172,7 +174,11 @@ const StatementPage: React.FC<StatementPageProps> = ({ accounts }) => {
   }
 
   const selectedCycle = cycles[selectedCycleIndex];
-  const totalAmount = selectedCycle?.transactions.reduce((sum, tx) => sum + tx.amount, 0) ?? 0;
+  // Exclude credit_payment transactions from the charge total — payments reduce
+  // the outstanding balance but are not charges for historical record-keeping.
+  const totalAmount = selectedCycle?.transactions
+    .filter(tx => tx.transaction_type !== 'credit_payment')
+    .reduce((sum, tx) => sum + tx.amount, 0) ?? 0;
 
   return (
     <div className="min-h-screen bg-gray-50 p-8">

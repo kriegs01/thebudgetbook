@@ -198,8 +198,12 @@ export const aggregateTransactionsByCycle = (
     const cycleTxs = transactions.filter(tx => 
       isTransactionInCycle(tx, cycle.startDate, cycle.endDate)
     );
-    
-    const totalAmount = cycleTxs.reduce((sum, tx) => sum + tx.amount, 0);
+
+    // Exclude credit_payment transactions from the charge total — they are
+    // balance-reduction counterparts for the credit account, not actual charges.
+    const totalAmount = cycleTxs
+      .filter(tx => tx.transaction_type !== 'credit_payment')
+      .reduce((sum, tx) => sum + tx.amount, 0);
     
     return {
       ...cycle,
