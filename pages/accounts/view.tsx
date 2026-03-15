@@ -1,9 +1,11 @@
 import React, { useEffect, useState, useMemo, useRef } from 'react';
-import { ArrowLeft, Info, Eye, ZoomIn, ZoomOut, Download, X, Pencil, BanknoteArrowDown, Trash2, ArrowUpFromLine, ArrowDownToLine, ArrowLeftRight, Banknote, CheckSquare, Square, Filter, ChevronDown } from 'lucide-react';
+import { ArrowLeft, Info, Eye, ZoomIn, ZoomOut, Download, X, Pencil, BanknoteArrowDown, Trash2, ArrowUpFromLine, ArrowDownToLine, ArrowLeftRight, Banknote, CheckSquare, Square, Filter, ChevronDown, CreditCard } from 'lucide-react';
 import { useSearchParams, Link } from 'react-router-dom';
 import { Account } from '../../types';
 import { getTransactionsByPaymentMethod, createTransaction, updateTransaction, updateTransactionAndSyncSchedule, createTransfer, getLoanTransactionsWithPayments, getReceiptSignedUrl, deleteTransactionAndRevertSchedule, batchDeleteTransactions } from '../../src/services/transactionsService';
 import { combineDateWithCurrentTime, getFirstDayOfCurrentMonthIso, getTodayIso } from '../../src/utils/dateUtils';
+import type { SupabaseTransaction } from '../../src/types/supabase';
+import { computeCreditUtilization, type CreditUtilization } from '../../src/utils/accounts';
 
 const FILTER_MIN_DATE = '2025-01-01';
 
@@ -14,6 +16,7 @@ const TRANSACTION_TYPE_OPTIONS: { value: string; label: string }[] = [
   { value: 'loan', label: 'Loan' },
   { value: 'cash_in', label: 'Cash In' },
   { value: 'loan_payment', label: 'Loan Payment' },
+  { value: 'credit_payment', label: 'Credit Card Payment' },
 ];
 
 type Transaction = {
@@ -22,7 +25,7 @@ type Transaction = {
   date: string; // ISO string
   amount: number;
   paymentMethodId: string;
-  transaction_type?: 'payment' | 'withdraw' | 'transfer' | 'loan' | 'cash_in' | 'loan_payment';
+  transaction_type?: 'payment' | 'withdraw' | 'transfer' | 'loan' | 'cash_in' | 'loan_payment' | 'credit_payment';
   notes?: string | null;
   related_transaction_id?: string | null;
   receiptUrl?: string | null;
@@ -64,6 +67,7 @@ const AccountFilteredTransactions: React.FC<AccountFilteredTransactionsProps> = 
   const [showCashInModal, setShowCashInModal] = useState(false);
   const [showLoanPaymentModal, setShowLoanPaymentModal] = useState(false);
   const [selectedLoan, setSelectedLoan] = useState<LoanTransaction | null>(null);
+  const [showCardPaymentModal, setShowCardPaymentModal] = useState(false);
 
   // Transaction details modal
   const [selectedTx, setSelectedTx] = useState<Transaction | null>(null);
@@ -82,6 +86,12 @@ const AccountFilteredTransactions: React.FC<AccountFilteredTransactionsProps> = 
   const [loanForm, setLoanForm] = useState({ what: '', amount: '', date: new Date().toISOString().split('T')[0] });
   const [cashInForm, setCashInForm] = useState({ amount: '', date: new Date().toISOString().split('T')[0], notes: '' });
   const [loanPaymentForm, setLoanPaymentForm] = useState({ amount: '', date: new Date().toISOString().split('T')[0] });
+  const [cardPaymentForm, setCardPaymentForm] = useState({ name: '', amount: '', date: new Date().toISOString().split('T')[0], notes: '' });
+
+  // Raw Supabase transactions (used for credit utilization calculation)
+  const [supabaseTransactions, setSupabaseTransactions] = useState<SupabaseTransaction[]>([]);
+  // Credit utilization state (null when account is not a credit card with a limit)
+  const [creditUtilization, setCreditUtilization] = useState<CreditUtilization | null>(null);
 
   // Edit transaction modal
   const [showEditTxModal, setShowEditTxModal] = useState(false);
@@ -125,6 +135,17 @@ const AccountFilteredTransactions: React.FC<AccountFilteredTransactionsProps> = 
         receiptUrl: (t as unknown as { receipt_url?: string | null }).receipt_url ?? null
       }));
       setTransactions(txList);
+
+      // Keep the raw Supabase rows for credit utilization computation
+      setSupabaseTransactions(transactionsData || []);
+
+      // Compute credit utilization if this is a credit account with a limit
+      const currentAccountForUtil = accounts.find(a => a.id === accountId);
+      if (currentAccountForUtil?.type === 'Credit' && currentAccountForUtil.creditLimit != null) {
+        setCreditUtilization(computeCreditUtilization(currentAccountForUtil, transactionsData || []));
+      } else {
+        setCreditUtilization(null);
+      }
 
       // Load loan transactions with payments (only for debit accounts)
       const currentAccount = accounts.find(a => a.id === accountId);
@@ -466,6 +487,45 @@ const AccountFilteredTransactions: React.FC<AccountFilteredTransactionsProps> = 
     setShowLoanPaymentModal(true);
   };
 
+  const handleCardPaymentSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!accountId) return;
+
+    const raw = cardPaymentForm.amount.trim();
+    const amountValue = Math.abs(parseFloat(raw || '0'));
+    if (isNaN(amountValue) || amountValue <= 0) {
+      showMessage('error', 'Please enter a valid payment amount greater than zero.');
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      const { error } = await createTransaction({
+        name: cardPaymentForm.name.trim() || 'Credit Card Payment',
+        date: combineDateWithCurrentTime(cardPaymentForm.date),
+        amount: -amountValue,                    // negative → reduces outstanding balance
+        payment_method_id: accountId,
+        transaction_type: 'credit_payment',
+        notes: cardPaymentForm.notes.trim() || null,
+        payment_schedule_id: null,
+        related_transaction_id: null,
+      });
+
+      if (error) throw error;
+
+      showMessage('success', 'Credit card payment recorded successfully');
+      setShowCardPaymentModal(false);
+      setCardPaymentForm({ name: '', amount: '', date: new Date().toISOString().split('T')[0], notes: '' });
+      await loadTransactions();
+      onTransactionCreated?.();
+    } catch (error) {
+      console.error('Error recording credit card payment:', error);
+      showMessage('error', 'Failed to record credit card payment');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   const handleDeleteTx = async (tx: Transaction) => {
     if (!window.confirm(`Delete transaction "${tx.name}"? This action cannot be undone.`)) return;
     try {
@@ -526,7 +586,8 @@ const AccountFilteredTransactions: React.FC<AccountFilteredTransactionsProps> = 
       transfer: { color: 'bg-blue-100 text-blue-700', label: 'Transfer' },
       loan: { color: 'bg-orange-100 text-orange-700', label: 'Loan' },
       cash_in: { color: 'bg-green-100 text-green-700', label: 'Cash In' },
-      loan_payment: { color: 'bg-purple-100 text-purple-700', label: 'Loan Payment' }
+      loan_payment: { color: 'bg-purple-100 text-purple-700', label: 'Loan Payment' },
+      credit_payment: { color: 'bg-teal-100 text-teal-700', label: 'Card Payment' },
     };
     
     const badge = badges[type];
@@ -644,6 +705,24 @@ const AccountFilteredTransactions: React.FC<AccountFilteredTransactionsProps> = 
           </div>
         </div>
 
+        {/* ── Credit Summary (credit accounts only) ───────────────────────── */}
+        {account?.type === 'Credit' && account.creditLimit != null && creditUtilization && (
+          <div className="grid grid-cols-3 gap-4 mb-4">
+            <div className="bg-white rounded-2xl shadow-sm p-4">
+              <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-1">Credit Limit</p>
+              <p className="text-xl font-black text-gray-900">{formatCurrency(account.creditLimit)}</p>
+            </div>
+            <div className="bg-white rounded-2xl shadow-sm p-4">
+              <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-1">Outstanding Balance</p>
+              <p className="text-xl font-black text-red-600">{formatCurrency(creditUtilization.currentOutstanding)}</p>
+            </div>
+            <div className="bg-white rounded-2xl shadow-sm p-4">
+              <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-1">Available Credit</p>
+              <p className="text-xl font-black text-green-600">{formatCurrency(creditUtilization.availableCredit ?? 0)}</p>
+            </div>
+          </div>
+        )}
+
         <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
           <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
             <h2 className="text-sm font-bold uppercase text-gray-600 tracking-widest">Transactions</h2>
@@ -684,6 +763,48 @@ const AccountFilteredTransactions: React.FC<AccountFilteredTransactionsProps> = 
                     className="w-9 h-9 flex items-center justify-center bg-green-500 hover:bg-green-600 text-white rounded-xl transition-colors"
                   >
                     <ArrowDownToLine className="w-4 h-4" />
+                  </button>
+
+                  {/* Select toggle */}
+                  <button
+                    onClick={toggleSelectMode}
+                    title={isSelectMode ? 'Cancel selection' : 'Select transactions'}
+                    aria-label={isSelectMode ? 'Cancel selection' : 'Select transactions'}
+                    className={`w-9 h-9 flex items-center justify-center rounded-xl transition-colors border ${
+                      isSelectMode
+                        ? 'bg-indigo-600 text-white border-indigo-600'
+                        : 'border-gray-300 text-gray-500 hover:border-indigo-400 hover:text-indigo-600'
+                    }`}
+                  >
+                    {isSelectMode ? <CheckSquare className="w-4 h-4" /> : <Square className="w-4 h-4" />}
+                  </button>
+
+                  {/* Trash — shown only when ≥1 item selected */}
+                  <div className="w-9 h-9 flex items-center justify-center">
+                    {isSelectMode && selectedIds.size > 0 && (
+                      <button
+                        onClick={() => setShowBatchConfirm(true)}
+                        title="Delete selected"
+                        aria-label="Delete selected transactions"
+                        className="w-9 h-9 flex items-center justify-center bg-red-500 hover:bg-red-600 text-white rounded-xl transition-colors"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* ── Action icon buttons (Credit only) ────────────────────── */}
+              {account?.type === 'Credit' && (
+                <div className="flex items-center gap-1.5 ml-2">
+                  <button
+                    onClick={() => setShowCardPaymentModal(true)}
+                    title="Make Credit Card Payment"
+                    aria-label="Make credit card payment"
+                    className="w-9 h-9 flex items-center justify-center bg-teal-500 hover:bg-teal-600 text-white rounded-xl transition-colors"
+                  >
+                    <CreditCard className="w-4 h-4" />
                   </button>
 
                   {/* Select toggle */}
@@ -1198,6 +1319,83 @@ const AccountFilteredTransactions: React.FC<AccountFilteredTransactionsProps> = 
                 <button
                   type="submit"
                   className="flex-1 bg-purple-500 hover:bg-purple-600 text-white py-4 rounded-2xl font-bold transition-colors disabled:opacity-50"
+                  disabled={isSubmitting}
+                >
+                  {isSubmitting ? 'Processing...' : 'Record Payment'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Credit Card Payment Modal */}
+      {showCardPaymentModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-md">
+          <div className="w-full max-w-md bg-white rounded-3xl p-10 shadow-2xl relative">
+            <h2 className="text-2xl font-black text-gray-900 mb-2">Make Credit Card Payment</h2>
+            <p className="text-gray-500 text-sm mb-8">Record a payment to reduce your credit card balance</p>
+            <form onSubmit={handleCardPaymentSubmit} className="space-y-6">
+              <div>
+                <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Payment Name (Optional)</label>
+                <input
+                  value={cardPaymentForm.name}
+                  onChange={e => setCardPaymentForm(f => ({ ...f, name: e.target.value }))}
+                  placeholder="Credit Card Payment"
+                  className="w-full bg-gray-50 border-transparent rounded-2xl p-4 outline-none font-bold focus:ring-2 focus:ring-teal-500 transition-all"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Amount</label>
+                <div className="relative">
+                  <span className="absolute left-4 top-1/2 -translate-y-1/2 font-bold text-gray-400">₱</span>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0.01"
+                    value={cardPaymentForm.amount}
+                    onChange={e => setCardPaymentForm(f => ({ ...f, amount: e.target.value }))}
+                    required
+                    className="w-full bg-gray-50 border-transparent rounded-2xl p-4 pl-8 outline-none text-xl font-black focus:ring-2 focus:ring-teal-500 transition-all"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Date</label>
+                <input
+                  type="date"
+                  value={cardPaymentForm.date}
+                  onChange={e => setCardPaymentForm(f => ({ ...f, date: e.target.value }))}
+                  required
+                  className="w-full bg-gray-50 border-transparent rounded-2xl p-4 outline-none font-bold text-sm"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Notes (Optional)</label>
+                <textarea
+                  value={cardPaymentForm.notes}
+                  onChange={e => setCardPaymentForm(f => ({ ...f, notes: e.target.value }))}
+                  placeholder="e.g. Full payment, minimum payment, etc."
+                  rows={3}
+                  className="w-full bg-gray-50 border-transparent rounded-2xl p-4 outline-none font-bold text-sm focus:ring-2 focus:ring-teal-500 transition-all resize-none"
+                />
+              </div>
+
+              <div className="flex gap-4 pt-4">
+                <button
+                  type="button"
+                  onClick={() => setShowCardPaymentModal(false)}
+                  className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 py-4 rounded-2xl font-bold transition-colors"
+                  disabled={isSubmitting}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="flex-1 bg-teal-500 hover:bg-teal-600 text-white py-4 rounded-2xl font-bold transition-colors disabled:opacity-50"
                   disabled={isSubmitting}
                 >
                   {isSubmitting ? 'Processing...' : 'Record Payment'}
