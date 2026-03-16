@@ -262,8 +262,10 @@ export const updateBillerFrontend = async (biller: Biller, previousBiller?: Bill
       const deactivationChanged =
         JSON.stringify(previousBiller.deactivationDate) !== JSON.stringify(updatedBiller.deactivationDate);
       const amountChanged = previousBiller.expectedAmount !== updatedBiller.expectedAmount;
+      const scheduledIncreasesChanged =
+        JSON.stringify(previousBiller.scheduledIncreases ?? []) !== JSON.stringify(updatedBiller.scheduledIncreases ?? []);
 
-      if (activationChanged || deactivationChanged || amountChanged) {
+      if (activationChanged || deactivationChanged || amountChanged || scheduledIncreasesChanged) {
         const { data: existingSchedules } = await getPaymentSchedulesBySource('biller', biller.id);
         const schedules = existingSchedules || [];
 
