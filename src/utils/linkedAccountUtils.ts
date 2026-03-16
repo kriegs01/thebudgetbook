@@ -10,6 +10,21 @@
 import type { Biller, Account, PaymentSchedule } from '../../types';
 import type { SupabaseTransaction } from '../types/supabase';
 import { getCycleForMonth, aggregateTransactionsByCycle, getDueDayForMonth } from './billingCycles';
+import { getBillerAmountForDate } from './billers';
+
+const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+
+/**
+ * Derive a YYYY-MM-01 date string from a schedule's month name and year.
+ * Used to look up which scheduled increase is active for that month.
+ */
+const scheduleDateString = (schedule: PaymentSchedule): string => {
+  const monthIdx = MONTHS.indexOf(schedule.month);
+  if (monthIdx === -1) return '';
+  const year = typeof schedule.year === 'number' ? schedule.year : parseInt(String(schedule.year), 10);
+  if (isNaN(year)) return '';
+  return `${year}-${String(monthIdx + 1).padStart(2, '0')}-01`;
+};
 
 /**
  * Check if a biller should use linked account logic
@@ -148,8 +163,10 @@ export const getScheduleExpectedAmount = (
 ): { amount: number; isFromLinkedAccount: boolean } => {
   // Check if we should use linked account logic
   if (!shouldUseLinkedAccount(biller)) {
+    // Respect scheduled increases (Fixed/Utilities/Subscriptions billers)
+    const dateStr = scheduleDateString(schedule);
     return {
-      amount: schedule.expectedAmount || biller.expectedAmount,
+      amount: dateStr ? getBillerAmountForDate(biller, dateStr) : biller.expectedAmount,
       isFromLinkedAccount: false
     };
   }
@@ -157,10 +174,11 @@ export const getScheduleExpectedAmount = (
   // Get the linked account
   const account = getLinkedAccount(biller, accounts);
   if (!account) {
-    // Fall back to manual amount if account not found or invalid
+    // Fall back to scheduled-increase-aware amount if account not found or invalid
     console.warn(`[Billers] Linked account not found or invalid for biller "${biller.name}"`);
+    const dateStr = scheduleDateString(schedule);
     return {
-      amount: schedule.expectedAmount || biller.expectedAmount,
+      amount: dateStr ? getBillerAmountForDate(biller, dateStr) : biller.expectedAmount,
       isFromLinkedAccount: false
     };
   }
@@ -174,10 +192,11 @@ export const getScheduleExpectedAmount = (
   );
   
   if (calculatedAmount === null) {
-    // Fall back to manual amount if calculation fails
+    // Fall back to scheduled-increase-aware amount if calculation fails
     console.warn(`[Billers] Could not calculate amount from linked account for "${biller.name}" (${schedule.month} ${schedule.year})`);
+    const dateStr = scheduleDateString(schedule);
     return {
-      amount: schedule.expectedAmount || biller.expectedAmount,
+      amount: dateStr ? getBillerAmountForDate(biller, dateStr) : biller.expectedAmount,
       isFromLinkedAccount: false
     };
   }
