@@ -45,7 +45,11 @@ export const supabaseBillerToFrontend = (supabaseBiller: SupabaseBiller): Biller
     deactivationDate: supabaseBiller.deactivation_c || undefined,
     status: supabaseBiller.status as 'active' | 'inactive',
     schedules: schedules,
-    linkedAccountId: supabaseBiller.linked_account_id || undefined // ENHANCEMENT: Support linked credit accounts
+    linkedAccountId: supabaseBiller.linked_account_id || undefined, // ENHANCEMENT: Support linked credit accounts
+    scheduledIncreases: (supabaseBiller.scheduled_increases ?? []).map((inc: any) => ({
+      effectiveDate: inc.effectiveDate,
+      amount: inc.amount,
+    })),
   };
 };
 
@@ -63,7 +67,11 @@ export const frontendBillerToSupabase = (biller: Biller): Omit<SupabaseBiller, '
     deactivation_c: biller.deactivationDate || null,
     status: biller.status,
     schedules: biller.schedules,
-    linked_account_id: biller.linkedAccountId || null // ENHANCEMENT: Support linked credit accounts
+    linked_account_id: biller.linkedAccountId || null, // ENHANCEMENT: Support linked credit accounts
+    scheduled_increases: (biller.scheduledIncreases ?? []).map(inc => ({
+      effectiveDate: inc.effectiveDate,
+      amount: inc.amount,
+    })),
   };
 };
 

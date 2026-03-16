@@ -42,6 +42,7 @@ export interface SupabaseBiller {
   status: string;
   schedules: any; // jsonb
   linked_account_id: string | null; // uuid, nullable - ENHANCEMENT: Links Loans-category billers to credit accounts
+  scheduled_increases: any | null; // jsonb, nullable - Scheduled future amount changes
   user_id: string | null; // uuid, references auth.users(id)
 }
 
