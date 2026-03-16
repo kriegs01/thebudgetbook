@@ -38,6 +38,11 @@ export interface PaymentSchedule {
   accountId?: string;
 }
 
+export interface BillerAmountIncrease {
+  effectiveDate: string; // 'YYYY-MM-DD'
+  amount: number;        // new amount from this date onward
+}
+
 export interface Biller {
   id: string;
   name: string;
@@ -57,6 +62,7 @@ export interface Biller {
   status: 'active' | 'inactive';
   schedules: PaymentSchedule[];
   linkedAccountId?: string; // ENHANCEMENT: Links Loans-category billers to credit accounts for dynamic amount calculation
+  scheduledIncreases?: BillerAmountIncrease[]; // Scheduled future amount changes (Fixed/Utilities/Subscriptions only)
 }
 
 export interface Installment {

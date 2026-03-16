@@ -6,6 +6,7 @@
 
 import type { Biller, Installment } from '../../types';
 import type { CreateMonthlyPaymentScheduleInput } from '../types/supabase';
+import { getBillerAmountForDate } from './billers';
 
 const MONTHS = [
   'January', 'February', 'March', 'April', 'May', 'June',
@@ -46,13 +47,17 @@ export const generateBillerPaymentSchedules = (
     // must still generate pending schedules for the upcoming active window so that the
     // detail view does not fall back to the stale JSONB schedules column.
     if (isActive) {
+      // Resolve the effective amount for this schedule month using scheduled increases
+      const scheduleDateString = `${targetYear}-${String(i + 1).padStart(2, '0')}-01`;
+      const amount = getBillerAmountForDate(biller, scheduleDateString);
+
       schedules.push({
         source_type: 'biller',
         source_id: biller.id,
         month: MONTHS[i],
         year: targetYear,
         payment_number: i + 1, // Month sequence number (1-12) for proper tracking
-        expected_amount: biller.expectedAmount,
+        expected_amount: amount,
         amount_paid: 0,
         receipt: null,
         date_paid: null,
@@ -131,7 +136,8 @@ export const updateBillerPaymentSchedules = (
     oldBiller.expectedAmount !== newBiller.expectedAmount ||
     oldBiller.activationDate.month !== newBiller.activationDate.month ||
     oldBiller.activationDate.year !== newBiller.activationDate.year ||
-    JSON.stringify(oldBiller.deactivationDate) !== JSON.stringify(newBiller.deactivationDate);
+    JSON.stringify(oldBiller.deactivationDate) !== JSON.stringify(newBiller.deactivationDate) ||
+    JSON.stringify(oldBiller.scheduledIncreases ?? []) !== JSON.stringify(newBiller.scheduledIncreases ?? []);
 
   if (needsRegeneration) {
     return {

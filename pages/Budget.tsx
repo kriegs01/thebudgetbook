@@ -7,6 +7,7 @@ import { createTransaction, getAllTransactions, updateTransaction, updateTransac
 import type { SupabaseTransaction, SupabaseMonthlyPaymentSchedule } from '../src/types/supabase';
 import { getInstallmentPaymentSchedule, aggregateCreditCardPurchases } from '../src/utils/paymentStatus'; // PROTOTYPE: Import payment status utilities
 import { getScheduleExpectedAmount } from '../src/utils/linkedAccountUtils'; // ENHANCEMENT: Import for linked account amount calculation
+import { getBillerAmountForDate } from '../src/utils/billers'; // For scheduled increases fallback
 import { getPaymentSchedulesByPeriod, recordPaymentViaTransaction } from '../src/services/paymentSchedulesService';
 import { combineDateWithCurrentTime } from '../src/utils/dateUtils';
 
@@ -342,7 +343,9 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                 const { amount: calculatedAmount } = getScheduleExpectedAmount(b, schedule, accounts, transactions);
                 amount = calculatedAmount;
               } else {
-                amount = b.expectedAmount;
+                // No schedule found — still apply any active scheduled increase
+                const dateStr = `${selectedYear}-${String(MONTHS.indexOf(selectedMonth) + 1).padStart(2, '0')}-01`;
+                amount = getBillerAmountForDate(b, dateStr);
               }
               
               return {

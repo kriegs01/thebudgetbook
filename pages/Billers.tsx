@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Biller, Account, PaymentSchedule, BudgetCategory, Installment } from '../types';
+import { Biller, BillerAmountIncrease, Account, PaymentSchedule, BudgetCategory, Installment } from '../types';
 import { Plus, Calendar, Bell, ChevronDown, ChevronRight, Upload, CheckCircle2, X, ArrowLeft, Power, PowerOff, MoreVertical, Edit2, Eye, Trash2, AlertTriangle, Info, ZoomIn, ZoomOut, Download } from 'lucide-react';
 import { getAllTransactions, getTransactionsByPaymentSchedule, getReceiptSignedUrl, updateTransaction, updateTransactionAndSyncSchedule, deleteTransactionAndRevertSchedule } from '../src/services/transactionsService';
 import { getPaymentSchedulesBySource } from '../src/services/paymentSchedulesService';
@@ -49,6 +49,27 @@ const calculateTiming = (dayString: string): '1/2' | '2/2' => {
   const day = parseInt(dayString);
   if (isNaN(day) || day < 1 || day > 31) return '1/2';
   return (day >= 1 && day <= 21) ? '1/2' : '2/2';
+};
+
+// Categories that support scheduled amount increases (Loans excluded)
+const SCHEDULED_INCREASE_CATEGORY_PREFIXES = ['Fixed', 'Utilities', 'Subscriptions'];
+const categorySupportsScheduledIncreases = (category: string): boolean =>
+  SCHEDULED_INCREASE_CATEGORY_PREFIXES.some(prefix => category.startsWith(prefix));
+
+/**
+ * Returns true when the effective month of a scheduled increase has already
+ * been reached or elapsed (i.e., month/year ≤ today's month/year).
+ * Used to lock the remove button so historical increases can't be deleted.
+ */
+const isIncreaseElapsed = (effectiveMonth: string, effectiveYear: string): boolean => {
+  const today = new Date();
+  const incYear = parseInt(effectiveYear, 10);
+  const incMonthIdx = MONTHS.indexOf(effectiveMonth);
+  if (isNaN(incYear) || incMonthIdx === -1) return false;
+  return (
+    incYear < today.getFullYear() ||
+    (incYear === today.getFullYear() && incMonthIdx <= today.getMonth())
+  );
 };
 
 // Utility function to calculate status for a future/past activation date.
@@ -106,6 +127,19 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
   const [isActiveOpen, setIsActiveOpen] = useState(true);
   const [timingFeedback, setTimingFeedback] = useState<string>('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Collapsible deactivation date visibility for Add/Edit forms
+  const [showAddDeactSection, setShowAddDeactSection] = useState(false);
+  const [showEditDeactSection, setShowEditDeactSection] = useState(false);
+
+  // Collapsible scheduled increases visibility for Add/Edit forms
+  const [showAddScheduledSection, setShowAddScheduledSection] = useState(false);
+  const [showEditScheduledSection, setShowEditScheduledSection] = useState(false);
+
+  // Scheduled increases for Add/Edit forms (eligible categories only)
+  // Shape uses separate month/year fields; effectiveDate is derived as YYYY-MM-01 on submit
+  const [addScheduledIncreases, setAddScheduledIncreases] = useState<{ effectiveMonth: string; effectiveYear: string; amount: string }[]>([]);
+  const [editScheduledIncreases, setEditScheduledIncreases] = useState<{ effectiveMonth: string; effectiveYear: string; amount: string }[]>([]);
 
   // Transactions state for payment status matching
   const [transactions, setTransactions] = useState<SupabaseTransaction[]>([]);
@@ -481,7 +515,19 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
           year: '2026', 
           expectedAmount: expected 
         })),
-        linkedAccountId: addFormData.linkedAccountId || undefined // ENHANCEMENT: Support linked credit accounts
+        linkedAccountId: addFormData.linkedAccountId || undefined, // ENHANCEMENT: Support linked credit accounts
+        scheduledIncreases: categorySupportsScheduledIncreases(addFormData.category)
+          ? addScheduledIncreases
+              .filter(inc => {
+                const parsed = parseFloat(inc.amount);
+                return inc.effectiveMonth !== '' && inc.effectiveYear !== '' && inc.amount !== '' && !isNaN(parsed) && parsed > 0;
+              })
+              .map(inc => ({
+                effectiveDate: `${inc.effectiveYear}-${String(MONTHS.indexOf(inc.effectiveMonth) + 1).padStart(2, '0')}-01`,
+                amount: parseFloat(inc.amount),
+              }))
+              .sort((a, b) => a.effectiveDate.localeCompare(b.effectiveDate))
+          : [],
       };
       
       await onAdd(newBiller);
@@ -500,6 +546,9 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
         deactYear: '',
         linkedAccountId: '' // ENHANCEMENT: Reset linked account field
       });
+      setAddScheduledIncreases([]);
+      setShowAddScheduledSection(false);
+      setShowAddDeactSection(false);
       setTimingFeedback('');
     } catch (error) {
       console.error('Failed to add biller:', error);
@@ -573,8 +622,22 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
           deactivationDate: deactivationDate,
           status: status,
           linkedAccountId: editFormData.linkedAccountId || undefined,
+          scheduledIncreases: categorySupportsScheduledIncreases(editFormData.category)
+            ? editScheduledIncreases
+                .filter(inc => {
+                  const parsed = parseFloat(inc.amount);
+                  return inc.effectiveMonth !== '' && inc.effectiveYear !== '' && inc.amount !== '' && !isNaN(parsed) && parsed > 0;
+                })
+                .map(inc => ({
+                  effectiveDate: `${inc.effectiveYear}-${String(MONTHS.indexOf(inc.effectiveMonth) + 1).padStart(2, '0')}-01`,
+                  amount: parseFloat(inc.amount),
+                }))
+                .sort((a, b) => a.effectiveDate.localeCompare(b.effectiveDate))
+            : [],
         });
         setShowEditModal(null);
+        setEditScheduledIncreases([]);
+        setShowEditScheduledSection(false);
         setTimingFeedback('');
       };
 
@@ -809,6 +872,27 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
       reactMonth: defaultReactMonth,
       reactYear: defaultReactYear,
     });
+
+    // Pre-populate scheduled increases from the biller
+    setEditScheduledIncreases(
+      (biller.scheduledIncreases ?? []).map(inc => {
+        // Parse YYYY-MM-DD → month name + year string
+        const [yearStr, monthStr] = inc.effectiveDate.split('-');
+        const monthIdx = parseInt(monthStr, 10) - 1;
+        return {
+          effectiveMonth: MONTHS[monthIdx] ?? MONTHS[0],
+          effectiveYear: yearStr,
+          amount: inc.amount.toString(),
+        };
+      })
+    );
+
+    // Always start collapsed — user can expand to see/add scheduled increases
+    setShowEditScheduledSection(false);
+
+    // Show the deactivation date section if the biller already has one
+    setShowEditDeactSection(!!(biller.deactivationDate?.month && biller.deactivationDate?.year));
+
     setShowEditModal(biller);
     setActiveDropdownId(null);
     setTimingFeedback('');
@@ -1399,38 +1483,6 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
                 </div>
               </div>
 
-              <div className="border-t border-gray-200 pt-6">
-                <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Deactivation Date (optional)</label>
-                <p className="text-xs text-gray-400 mb-4">Biller deactivates at the start of this month — last payment is the month before.</p>
-                <div className="grid grid-cols-2 gap-4">
-                  <div><label className="block text-[10px] font-bold text-gray-400 mb-2">Month</label>
-                    <select value={addFormData.deactMonth} onChange={(e) => setAddFormData({ ...addFormData, deactMonth: e.target.value })} className="w-full bg-gray-50 border-transparent rounded-2xl p-4 outline-none font-bold text-sm appearance-none">
-                      <option value="">None</option>
-                      {MONTHS.map(m => {
-                        const deactYearNum = parseInt(addFormData.deactYear);
-                        const actYearNum = parseInt(addFormData.actYear);
-                        const sameYear = !isNaN(deactYearNum) && !isNaN(actYearNum) && deactYearNum === actYearNum;
-                        const actMonthIdx = MONTHS.indexOf(addFormData.actMonth);
-                        const mIdx = MONTHS.indexOf(m);
-                        // Disable months on or before activation month when deact year == act year
-                        const isDisabled = sameYear && mIdx <= actMonthIdx;
-                        return <option key={m} value={m} disabled={isDisabled} className={isDisabled ? 'text-gray-300' : ''}>{m}</option>;
-                      })}
-                    </select>
-                  </div>
-                  <div><label className="block text-[10px] font-bold text-gray-400 mb-2">Year</label><input type="number" min="2000" max="2100" placeholder="e.g. 2026" value={addFormData.deactYear} onChange={(e) => {
-                    const newDeactYear = e.target.value;
-                    const deactYearNum = parseInt(newDeactYear);
-                    const actYearNum = parseInt(addFormData.actYear);
-                    const actMonthIdx = MONTHS.indexOf(addFormData.actMonth);
-                    const deactMonthIdx = MONTHS.indexOf(addFormData.deactMonth);
-                    // Clear deactMonth if it becomes invalid (same year and deact month <= act month)
-                    const shouldClear = !isNaN(deactYearNum) && !isNaN(actYearNum) && deactYearNum === actYearNum && deactMonthIdx !== -1 && deactMonthIdx <= actMonthIdx;
-                    setAddFormData({ ...addFormData, deactYear: newDeactYear, deactMonth: shouldClear ? '' : addFormData.deactMonth });
-                  }} className="w-full bg-gray-50 border-transparent rounded-2xl p-4 outline-none font-bold" /></div>
-                </div>
-              </div>
-
               {/* Computed fields display */}
               <div className="bg-indigo-50 rounded-2xl p-4 space-y-2">
                 <div className="flex justify-between items-center">
@@ -1455,6 +1507,153 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
                   );
                 })()}
               </div>
+
+              <div className="border-t border-gray-200 pt-6">
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (showAddDeactSection) {
+                      // Collapse and clear fields
+                      setAddFormData({ ...addFormData, deactMonth: '', deactYear: '' });
+                    }
+                    setShowAddDeactSection(!showAddDeactSection);
+                  }}
+                  className="flex items-center gap-2 text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1 hover:text-gray-600"
+                >
+                  {showAddDeactSection ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
+                  Deactivation Date (optional)
+                </button>
+                {showAddDeactSection && (
+                  <>
+                    <p className="text-xs text-gray-400 mb-4">Biller deactivates at the start of this month — last payment is the month before.</p>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div><label className="block text-[10px] font-bold text-gray-400 mb-2">Month</label>
+                        <select value={addFormData.deactMonth} onChange={(e) => setAddFormData({ ...addFormData, deactMonth: e.target.value })} className="w-full bg-gray-50 border-transparent rounded-2xl p-4 outline-none font-bold text-sm appearance-none">
+                          <option value="">None</option>
+                          {MONTHS.map(m => {
+                            const deactYearNum = parseInt(addFormData.deactYear);
+                            const actYearNum = parseInt(addFormData.actYear);
+                            const sameYear = !isNaN(deactYearNum) && !isNaN(actYearNum) && deactYearNum === actYearNum;
+                            const actMonthIdx = MONTHS.indexOf(addFormData.actMonth);
+                            const mIdx = MONTHS.indexOf(m);
+                            // Disable months on or before activation month when deact year == act year
+                            const isDisabled = sameYear && mIdx <= actMonthIdx;
+                            return <option key={m} value={m} disabled={isDisabled} className={isDisabled ? 'text-gray-300' : ''}>{m}</option>;
+                          })}
+                        </select>
+                      </div>
+                      <div><label className="block text-[10px] font-bold text-gray-400 mb-2">Year</label><input type="number" min="2000" max="2100" placeholder="e.g. 2026" value={addFormData.deactYear} onChange={(e) => {
+                        const newDeactYear = e.target.value;
+                        const deactYearNum = parseInt(newDeactYear);
+                        const actYearNum = parseInt(addFormData.actYear);
+                        const actMonthIdx = MONTHS.indexOf(addFormData.actMonth);
+                        const deactMonthIdx = MONTHS.indexOf(addFormData.deactMonth);
+                        // Clear deactMonth if it becomes invalid (same year and deact month <= act month)
+                        const shouldClear = !isNaN(deactYearNum) && !isNaN(actYearNum) && deactYearNum === actYearNum && deactMonthIdx !== -1 && deactMonthIdx <= actMonthIdx;
+                        setAddFormData({ ...addFormData, deactYear: newDeactYear, deactMonth: shouldClear ? '' : addFormData.deactMonth });
+                      }} className="w-full bg-gray-50 border-transparent rounded-2xl p-4 outline-none font-bold" /></div>
+                    </div>
+                  </>
+                )}
+              </div>
+
+              {/* Scheduled Increases — eligible categories only (Fixed, Utilities, Subscriptions) */}
+              {categorySupportsScheduledIncreases(addFormData.category) && (
+                <div className="border-t border-gray-200 pt-6">
+                  <button
+                    type="button"
+                    onClick={() => setShowAddScheduledSection(!showAddScheduledSection)}
+                    className="flex items-center gap-2 text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1 hover:text-gray-600"
+                  >
+                    {showAddScheduledSection ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
+                    Scheduled Increases (optional)
+                  </button>
+                  {!showAddScheduledSection && (
+                    <span className="text-xs text-gray-400">Set future months when the amount changes.</span>
+                  )}
+                  {showAddScheduledSection && (
+                    <div className="mt-4">
+                      <div className="flex justify-end mb-3">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const next = new Date();
+                            next.setMonth(next.getMonth() + 1);
+                            setAddScheduledIncreases([
+                              ...addScheduledIncreases,
+                              {
+                                effectiveMonth: MONTHS[next.getMonth()],
+                                effectiveYear: next.getFullYear().toString(),
+                                amount: '',
+                              },
+                            ]);
+                          }}
+                          className="flex items-center gap-1 text-xs font-bold text-indigo-600 bg-indigo-50 px-3 py-2 rounded-xl hover:bg-indigo-100"
+                        >
+                          <Plus className="w-3 h-3" /> Add
+                        </button>
+                      </div>
+                      {addScheduledIncreases.map((inc, idx) => (
+                        <div key={idx} className="flex gap-3 mb-3 items-end">
+                          <div className="flex-1">
+                            <label className="block text-[10px] font-bold text-gray-400 mb-1">Month</label>
+                            <select
+                              value={inc.effectiveMonth}
+                              onChange={(e) => {
+                                const updated = [...addScheduledIncreases];
+                                updated[idx] = { ...updated[idx], effectiveMonth: e.target.value };
+                                setAddScheduledIncreases(updated);
+                              }}
+                              className="w-full bg-gray-50 border-transparent rounded-2xl p-3 outline-none font-bold text-sm appearance-none"
+                            >
+                              {MONTHS.map(m => <option key={m} value={m}>{m}</option>)}
+                            </select>
+                          </div>
+                          <div className="w-24">
+                            <label className="block text-[10px] font-bold text-gray-400 mb-1">Year</label>
+                            <input
+                              type="number"
+                              min="2000"
+                              max="2100"
+                              value={inc.effectiveYear}
+                              onChange={(e) => {
+                                const updated = [...addScheduledIncreases];
+                                updated[idx] = { ...updated[idx], effectiveYear: e.target.value };
+                                setAddScheduledIncreases(updated);
+                              }}
+                              className="w-full bg-gray-50 border-transparent rounded-2xl p-3 outline-none font-bold text-sm"
+                            />
+                          </div>
+                          <div className="flex-1">
+                            <label className="block text-[10px] font-bold text-gray-400 mb-1">New Amount</label>
+                            <input
+                              type="number"
+                              min="0"
+                              step="0.01"
+                              placeholder="0.00"
+                              value={inc.amount}
+                              onChange={(e) => {
+                                const updated = [...addScheduledIncreases];
+                                updated[idx] = { ...updated[idx], amount: e.target.value };
+                                setAddScheduledIncreases(updated);
+                              }}
+                              className="w-full bg-gray-50 border-transparent rounded-2xl p-3 outline-none font-bold text-sm"
+                            />
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => setAddScheduledIncreases(addScheduledIncreases.filter((_, i) => i !== idx))}
+                            className="p-3 text-gray-400 hover:text-red-500 rounded-xl hover:bg-red-50"
+                            aria-label="Remove"
+                          >
+                            <X className="w-4 h-4" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
 
               {timingFeedback && (
                 <div className="bg-blue-50 border-l-4 border-blue-400 p-4 rounded">
@@ -1599,80 +1798,210 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
                     </div>
                   </div>
 
-                  <div className="border-t border-gray-200 pt-6">
-                    <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Deactivation Date (optional)</label>
-                    <p className="text-xs text-gray-400 mb-4">Biller deactivates at the start of this month — last payment is the month before.</p>
-                    <div className="grid grid-cols-2 gap-4">
-                      <div><label className="block text-[10px] font-bold text-gray-400 mb-2">Month</label>
-                        <select value={editFormData.deactMonth} onChange={(e) => setEditFormData({ ...editFormData, deactMonth: e.target.value })} className="w-full bg-gray-50 border-transparent rounded-2xl p-4 outline-none font-bold text-sm appearance-none">
-                          <option value="">None</option>
-                          {MONTHS.map(m => {
-                            const deactYearNum = parseInt(editFormData.deactYear);
-                            const actYearNum = parseInt(editFormData.actYear);
-                            const sameYear = !isNaN(deactYearNum) && !isNaN(actYearNum) && deactYearNum === actYearNum;
-                            const actMonthIdx = MONTHS.indexOf(editFormData.actMonth);
-                            const mIdx = MONTHS.indexOf(m);
-                            const isDisabled = sameYear && mIdx <= actMonthIdx;
-                            return <option key={m} value={m} disabled={isDisabled} className={isDisabled ? 'text-gray-300' : ''}>{m}</option>;
-                          })}
-                        </select>
-                      </div>
-                      <div><label className="block text-[10px] font-bold text-gray-400 mb-2">Year</label><input type="number" min="2000" max="2100" placeholder="e.g. 2026" value={editFormData.deactYear} onChange={(e) => {
-                        const newDeactYear = e.target.value;
-                        const deactYearNum = parseInt(newDeactYear);
-                        const actYearNum = parseInt(editFormData.actYear);
-                        const actMonthIdx = MONTHS.indexOf(editFormData.actMonth);
-                        const deactMonthIdx = MONTHS.indexOf(editFormData.deactMonth);
-                        const shouldClear = !isNaN(deactYearNum) && !isNaN(actYearNum) && deactYearNum === actYearNum && deactMonthIdx !== -1 && deactMonthIdx <= actMonthIdx;
-                        setEditFormData({ ...editFormData, deactYear: newDeactYear, deactMonth: shouldClear ? '' : editFormData.deactMonth });
-                      }} className="w-full bg-gray-50 border-transparent rounded-2xl p-4 outline-none font-bold" /></div>
+                  {/* Computed fields display */}
+                  <div className="bg-indigo-50 rounded-2xl p-4 space-y-2">
+                    <div className="flex justify-between items-center">
+                      <span className="text-[10px] font-black text-indigo-400 uppercase tracking-widest">Auto-Computed Timing:</span>
+                      <span className="text-sm font-black text-indigo-600">{calculateTiming(editFormData.dueDate || editFormData.actDay)}</span>
                     </div>
+                    {(() => {
+                      const deactDate = (editFormData.deactMonth && editFormData.deactYear)
+                        ? { month: editFormData.deactMonth, year: editFormData.deactYear }
+                        : undefined;
+                      const computedStatus = calculateStatus(deactDate);
+                      return (
+                        <div className="flex justify-between items-center">
+                          <span className="text-[10px] font-black text-indigo-400 uppercase tracking-widest">Auto-Computed Status:</span>
+                          <div className="flex items-center gap-2">
+                            <span className={`text-sm font-black ${computedStatus === 'inactive' ? 'text-gray-600' : 'text-green-600'}`}>{computedStatus}</span>
+                            {deactDate && computedStatus === 'active' && (
+                              <span className="text-xs text-orange-500 font-medium">— deactivates {deactDate.month} {deactDate.year}</span>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })()}
                   </div>
+
+                  <div className="border-t border-gray-200 pt-6">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (showEditDeactSection) {
+                          // Collapse and clear fields
+                          setEditFormData({ ...editFormData, deactMonth: '', deactYear: '' });
+                        }
+                        setShowEditDeactSection(!showEditDeactSection);
+                      }}
+                      className="flex items-center gap-2 text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1 hover:text-gray-600"
+                    >
+                      {showEditDeactSection ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
+                      Deactivation Date (optional)
+                    </button>
+                    {showEditDeactSection && (
+                      <>
+                        <p className="text-xs text-gray-400 mb-4">Biller deactivates at the start of this month — last payment is the month before.</p>
+                        <div className="grid grid-cols-2 gap-4">
+                          <div><label className="block text-[10px] font-bold text-gray-400 mb-2">Month</label>
+                            <select value={editFormData.deactMonth} onChange={(e) => setEditFormData({ ...editFormData, deactMonth: e.target.value })} className="w-full bg-gray-50 border-transparent rounded-2xl p-4 outline-none font-bold text-sm appearance-none">
+                              <option value="">None</option>
+                              {MONTHS.map(m => {
+                                const deactYearNum = parseInt(editFormData.deactYear);
+                                const actYearNum = parseInt(editFormData.actYear);
+                                const sameYear = !isNaN(deactYearNum) && !isNaN(actYearNum) && deactYearNum === actYearNum;
+                                const actMonthIdx = MONTHS.indexOf(editFormData.actMonth);
+                                const mIdx = MONTHS.indexOf(m);
+                                const isDisabled = sameYear && mIdx <= actMonthIdx;
+                                return <option key={m} value={m} disabled={isDisabled} className={isDisabled ? 'text-gray-300' : ''}>{m}</option>;
+                              })}
+                            </select>
+                          </div>
+                          <div><label className="block text-[10px] font-bold text-gray-400 mb-2">Year</label><input type="number" min="2000" max="2100" placeholder="e.g. 2026" value={editFormData.deactYear} onChange={(e) => {
+                            const newDeactYear = e.target.value;
+                            const deactYearNum = parseInt(newDeactYear);
+                            const actYearNum = parseInt(editFormData.actYear);
+                            const actMonthIdx = MONTHS.indexOf(editFormData.actMonth);
+                            const deactMonthIdx = MONTHS.indexOf(editFormData.deactMonth);
+                            const shouldClear = !isNaN(deactYearNum) && !isNaN(actYearNum) && deactYearNum === actYearNum && deactMonthIdx !== -1 && deactMonthIdx <= actMonthIdx;
+                            setEditFormData({ ...editFormData, deactYear: newDeactYear, deactMonth: shouldClear ? '' : editFormData.deactMonth });
+                          }} className="w-full bg-gray-50 border-transparent rounded-2xl p-4 outline-none font-bold" /></div>
+                        </div>
+                      </>
+                    )}
+                  </div>
+
+                  {/* Scheduled Increases — eligible categories only (Fixed, Utilities, Subscriptions) */}
+                  {categorySupportsScheduledIncreases(editFormData.category) && (
+                    <div className="border-t border-gray-200 pt-6">
+                      <button
+                        type="button"
+                        onClick={() => setShowEditScheduledSection(!showEditScheduledSection)}
+                        className="flex items-center gap-2 text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1 hover:text-gray-600"
+                      >
+                        {showEditScheduledSection ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
+                        Scheduled Increases (optional)
+                      </button>
+                      {!showEditScheduledSection && (
+                        <span className="text-xs text-gray-400">Set future months when the amount changes.</span>
+                      )}
+                      {showEditScheduledSection && (
+                        <div className="mt-4">
+                          <div className="flex justify-end mb-3">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const next = new Date();
+                                next.setMonth(next.getMonth() + 1);
+                                setEditScheduledIncreases([
+                                  ...editScheduledIncreases,
+                                  {
+                                    effectiveMonth: MONTHS[next.getMonth()],
+                                    effectiveYear: next.getFullYear().toString(),
+                                    amount: '',
+                                  },
+                                ]);
+                              }}
+                              className="flex items-center gap-1 text-xs font-bold text-indigo-600 bg-indigo-50 px-3 py-2 rounded-xl hover:bg-indigo-100"
+                            >
+                              <Plus className="w-3 h-3" /> Add
+                            </button>
+                          </div>
+                          {editScheduledIncreases.map((inc, idx) => {
+                            const elapsed = isIncreaseElapsed(inc.effectiveMonth, inc.effectiveYear);
+                            return (
+                              <div key={idx} className="flex gap-3 mb-3 items-end">
+                                <div className="flex-1">
+                                  <label className="block text-[10px] font-bold text-gray-400 mb-1">Month</label>
+                                  <select
+                                    value={inc.effectiveMonth}
+                                    onChange={(e) => {
+                                      const updated = [...editScheduledIncreases];
+                                      updated[idx] = { ...updated[idx], effectiveMonth: e.target.value };
+                                      setEditScheduledIncreases(updated);
+                                    }}
+                                    className="w-full bg-gray-50 border-transparent rounded-2xl p-3 outline-none font-bold text-sm appearance-none"
+                                  >
+                                    {MONTHS.map(m => <option key={m} value={m}>{m}</option>)}
+                                  </select>
+                                </div>
+                                <div className="w-24">
+                                  <label className="block text-[10px] font-bold text-gray-400 mb-1">Year</label>
+                                  <input
+                                    type="number"
+                                    min="2000"
+                                    max="2100"
+                                    value={inc.effectiveYear}
+                                    onChange={(e) => {
+                                      const updated = [...editScheduledIncreases];
+                                      updated[idx] = { ...updated[idx], effectiveYear: e.target.value };
+                                      setEditScheduledIncreases(updated);
+                                    }}
+                                    className="w-full bg-gray-50 border-transparent rounded-2xl p-3 outline-none font-bold text-sm"
+                                  />
+                                </div>
+                                <div className="flex-1">
+                                  <label className="block text-[10px] font-bold text-gray-400 mb-1">New Amount</label>
+                                  <input
+                                    type="number"
+                                    min="0"
+                                    step="0.01"
+                                    placeholder="0.00"
+                                    value={inc.amount}
+                                    onChange={(e) => {
+                                      const updated = [...editScheduledIncreases];
+                                      updated[idx] = { ...updated[idx], amount: e.target.value };
+                                      setEditScheduledIncreases(updated);
+                                    }}
+                                    className="w-full bg-gray-50 border-transparent rounded-2xl p-3 outline-none font-bold text-sm"
+                                  />
+                                </div>
+                                <button
+                                  type="button"
+                                  disabled={elapsed}
+                                  onClick={() => !elapsed && setEditScheduledIncreases(editScheduledIncreases.filter((_, i) => i !== idx))}
+                                  className={`p-3 rounded-xl ${elapsed ? 'text-gray-200 cursor-not-allowed' : 'text-gray-400 hover:text-red-500 hover:bg-red-50'}`}
+                                  aria-label="Remove"
+                                  title={elapsed ? 'Cannot remove a past or current month increase' : 'Remove'}
+                                >
+                                  <X className="w-4 h-4" />
+                                </button>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </>
               )}
 
-              {/* Computed fields display */}
-              <div className="bg-indigo-50 rounded-2xl p-4 space-y-2">
-                <div className="flex justify-between items-center">
-                  <span className="text-[10px] font-black text-indigo-400 uppercase tracking-widest">Auto-Computed Timing:</span>
-                  <span className="text-sm font-black text-indigo-600">{calculateTiming(editFormData.dueDate || editFormData.actDay)}</span>
+              {/* Computed fields display — inactive biller only (reactivation preview) */}
+              {showEditModal?.status === 'inactive' && (
+                <div className="bg-indigo-50 rounded-2xl p-4 space-y-2">
+                  <div className="flex justify-between items-center">
+                    <span className="text-[10px] font-black text-indigo-400 uppercase tracking-widest">Auto-Computed Timing:</span>
+                    <span className="text-sm font-black text-indigo-600">{calculateTiming(editFormData.dueDate || editFormData.actDay)}</span>
+                  </div>
+                  {(() => {
+                    const reactDate = {
+                      month: editFormData.reactMonth || editFormData.actMonth,
+                      year: editFormData.reactYear || editFormData.actYear,
+                    };
+                    const computedStatus = calculateStatusFromActivation(reactDate);
+                    return (
+                      <div className="flex justify-between items-center">
+                        <span className="text-[10px] font-black text-indigo-400 uppercase tracking-widest">After Reactivation:</span>
+                        <div className="flex items-center gap-2">
+                          <span className={`text-sm font-black ${computedStatus === 'inactive' ? 'text-gray-600' : 'text-green-600'}`}>{computedStatus}</span>
+                          {computedStatus === 'inactive' && (
+                            <span className="text-xs text-orange-500 font-medium">— activates {reactDate.month} {reactDate.year}</span>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })()}
                 </div>
-                {showEditModal?.status !== 'inactive' && (() => {
-                  const deactDate = (editFormData.deactMonth && editFormData.deactYear)
-                    ? { month: editFormData.deactMonth, year: editFormData.deactYear }
-                    : undefined;
-                  const computedStatus = calculateStatus(deactDate);
-                  return (
-                    <div className="flex justify-between items-center">
-                      <span className="text-[10px] font-black text-indigo-400 uppercase tracking-widest">Auto-Computed Status:</span>
-                      <div className="flex items-center gap-2">
-                        <span className={`text-sm font-black ${computedStatus === 'inactive' ? 'text-gray-600' : 'text-green-600'}`}>{computedStatus}</span>
-                        {deactDate && computedStatus === 'active' && (
-                          <span className="text-xs text-orange-500 font-medium">— deactivates {deactDate.month} {deactDate.year}</span>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })()}
-                {showEditModal?.status === 'inactive' && (() => {
-                  const reactDate = {
-                    month: editFormData.reactMonth || editFormData.actMonth,
-                    year: editFormData.reactYear || editFormData.actYear,
-                  };
-                  const computedStatus = calculateStatusFromActivation(reactDate);
-                  return (
-                    <div className="flex justify-between items-center">
-                      <span className="text-[10px] font-black text-indigo-400 uppercase tracking-widest">After Reactivation:</span>
-                      <div className="flex items-center gap-2">
-                        <span className={`text-sm font-black ${computedStatus === 'inactive' ? 'text-gray-600' : 'text-green-600'}`}>{computedStatus}</span>
-                        {computedStatus === 'inactive' && (
-                          <span className="text-xs text-orange-500 font-medium">— activates {reactDate.month} {reactDate.year}</span>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })()}
-              </div>
+              )}
 
               {timingFeedback && (
                 <div className="bg-blue-50 border-l-4 border-blue-400 p-4 rounded">
