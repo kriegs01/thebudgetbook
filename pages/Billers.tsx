@@ -56,6 +56,22 @@ const SCHEDULED_INCREASE_CATEGORY_PREFIXES = ['Fixed', 'Utilities', 'Subscriptio
 const categorySupportsScheduledIncreases = (category: string): boolean =>
   SCHEDULED_INCREASE_CATEGORY_PREFIXES.some(prefix => category.startsWith(prefix));
 
+/**
+ * Returns true when the effective month of a scheduled increase has already
+ * been reached or elapsed (i.e., month/year ≤ today's month/year).
+ * Used to lock the remove button so historical increases can't be deleted.
+ */
+const isIncreaseElapsed = (effectiveMonth: string, effectiveYear: string): boolean => {
+  const today = new Date();
+  const incYear = parseInt(effectiveYear, 10);
+  const incMonthIdx = MONTHS.indexOf(effectiveMonth);
+  if (isNaN(incYear) || incMonthIdx === -1) return false;
+  return (
+    incYear < today.getFullYear() ||
+    (incYear === today.getFullYear() && incMonthIdx <= today.getMonth())
+  );
+};
+
 // Utility function to calculate status for a future/past activation date.
 // Returns 'active' only when the activation month has already been reached.
 // Used when reactivating an inactive biller to keep it 'inactive' until its
@@ -116,9 +132,14 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
   const [showAddDeactSection, setShowAddDeactSection] = useState(false);
   const [showEditDeactSection, setShowEditDeactSection] = useState(false);
 
+  // Collapsible scheduled increases visibility for Add/Edit forms
+  const [showAddScheduledSection, setShowAddScheduledSection] = useState(false);
+  const [showEditScheduledSection, setShowEditScheduledSection] = useState(false);
+
   // Scheduled increases for Add/Edit forms (eligible categories only)
-  const [addScheduledIncreases, setAddScheduledIncreases] = useState<{ effectiveDate: string; amount: string }[]>([]);
-  const [editScheduledIncreases, setEditScheduledIncreases] = useState<{ effectiveDate: string; amount: string }[]>([]);
+  // Shape uses separate month/year fields; effectiveDate is derived as YYYY-MM-01 on submit
+  const [addScheduledIncreases, setAddScheduledIncreases] = useState<{ effectiveMonth: string; effectiveYear: string; amount: string }[]>([]);
+  const [editScheduledIncreases, setEditScheduledIncreases] = useState<{ effectiveMonth: string; effectiveYear: string; amount: string }[]>([]);
 
   // Transactions state for payment status matching
   const [transactions, setTransactions] = useState<SupabaseTransaction[]>([]);
@@ -499,9 +520,12 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
           ? addScheduledIncreases
               .filter(inc => {
                 const parsed = parseFloat(inc.amount);
-                return inc.effectiveDate !== '' && inc.amount !== '' && !isNaN(parsed) && parsed > 0;
+                return inc.effectiveMonth !== '' && inc.effectiveYear !== '' && inc.amount !== '' && !isNaN(parsed) && parsed > 0;
               })
-              .map(inc => ({ effectiveDate: inc.effectiveDate, amount: parseFloat(inc.amount) }))
+              .map(inc => ({
+                effectiveDate: `${inc.effectiveYear}-${String(MONTHS.indexOf(inc.effectiveMonth) + 1).padStart(2, '0')}-01`,
+                amount: parseFloat(inc.amount),
+              }))
               .sort((a, b) => a.effectiveDate.localeCompare(b.effectiveDate))
           : [],
       };
@@ -523,6 +547,7 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
         linkedAccountId: '' // ENHANCEMENT: Reset linked account field
       });
       setAddScheduledIncreases([]);
+      setShowAddScheduledSection(false);
       setShowAddDeactSection(false);
       setTimingFeedback('');
     } catch (error) {
@@ -601,14 +626,18 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
             ? editScheduledIncreases
                 .filter(inc => {
                   const parsed = parseFloat(inc.amount);
-                  return inc.effectiveDate !== '' && inc.amount !== '' && !isNaN(parsed) && parsed > 0;
+                  return inc.effectiveMonth !== '' && inc.effectiveYear !== '' && inc.amount !== '' && !isNaN(parsed) && parsed > 0;
                 })
-                .map(inc => ({ effectiveDate: inc.effectiveDate, amount: parseFloat(inc.amount) }))
+                .map(inc => ({
+                  effectiveDate: `${inc.effectiveYear}-${String(MONTHS.indexOf(inc.effectiveMonth) + 1).padStart(2, '0')}-01`,
+                  amount: parseFloat(inc.amount),
+                }))
                 .sort((a, b) => a.effectiveDate.localeCompare(b.effectiveDate))
             : [],
         });
         setShowEditModal(null);
         setEditScheduledIncreases([]);
+        setShowEditScheduledSection(false);
         setTimingFeedback('');
       };
 
@@ -846,11 +875,20 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
 
     // Pre-populate scheduled increases from the biller
     setEditScheduledIncreases(
-      (biller.scheduledIncreases ?? []).map(inc => ({
-        effectiveDate: inc.effectiveDate,
-        amount: inc.amount.toString(),
-      }))
+      (biller.scheduledIncreases ?? []).map(inc => {
+        // Parse YYYY-MM-DD → month name + year string
+        const [yearStr, monthStr] = inc.effectiveDate.split('-');
+        const monthIdx = parseInt(monthStr, 10) - 1;
+        return {
+          effectiveMonth: MONTHS[monthIdx] ?? MONTHS[0],
+          effectiveYear: yearStr,
+          amount: inc.amount.toString(),
+        };
+      })
     );
+
+    // Show the scheduled increases section if the biller already has any
+    setShowEditScheduledSection((biller.scheduledIncreases ?? []).length > 0);
 
     // Show the deactivation date section if the biller already has one
     setShowEditDeactSection(!!(biller.deactivationDate?.month && biller.deactivationDate?.year));
@@ -1437,60 +1475,98 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
               {/* Scheduled Increases — eligible categories only (Fixed, Utilities, Subscriptions) */}
               {categorySupportsScheduledIncreases(addFormData.category) && (
                 <div className="border-t border-gray-200 pt-6">
-                  <div className="flex items-center justify-between mb-4">
-                    <div>
-                      <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest">Scheduled Increases (optional)</label>
-                      <p className="text-xs text-gray-400 mt-1">Set future dates when the amount changes.</p>
+                  <button
+                    type="button"
+                    onClick={() => setShowAddScheduledSection(!showAddScheduledSection)}
+                    className="flex items-center justify-between w-full mb-2"
+                  >
+                    <div className="text-left">
+                      <span className="block text-[10px] font-black text-gray-400 uppercase tracking-widest">Scheduled Increases (optional)</span>
+                      <span className="text-xs text-gray-400">Set future months when the amount changes.</span>
                     </div>
-                    <button
-                      type="button"
-                      onClick={() => setAddScheduledIncreases([...addScheduledIncreases, { effectiveDate: '', amount: '' }])}
-                      className="flex items-center gap-1 text-xs font-bold text-indigo-600 bg-indigo-50 px-3 py-2 rounded-xl hover:bg-indigo-100"
-                    >
-                      <Plus className="w-3 h-3" /> Add
-                    </button>
-                  </div>
-                  {addScheduledIncreases.map((inc, idx) => (
-                    <div key={idx} className="flex gap-3 mb-3 items-end">
-                      <div className="flex-1">
-                        <label className="block text-[10px] font-bold text-gray-400 mb-1">Effective Date</label>
-                        <input
-                          type="date"
-                          value={inc.effectiveDate}
-                          onChange={(e) => {
-                            const updated = [...addScheduledIncreases];
-                            updated[idx] = { ...updated[idx], effectiveDate: e.target.value };
-                            setAddScheduledIncreases(updated);
+                    {showAddScheduledSection ? <ChevronDown className="w-4 h-4 text-gray-400" /> : <ChevronRight className="w-4 h-4 text-gray-400" />}
+                  </button>
+                  {showAddScheduledSection && (
+                    <div className="mt-4">
+                      <div className="flex justify-end mb-3">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const next = new Date();
+                            next.setMonth(next.getMonth() + 1);
+                            setAddScheduledIncreases([
+                              ...addScheduledIncreases,
+                              {
+                                effectiveMonth: MONTHS[next.getMonth()],
+                                effectiveYear: next.getFullYear().toString(),
+                                amount: '',
+                              },
+                            ]);
                           }}
-                          className="w-full bg-gray-50 border-transparent rounded-2xl p-3 outline-none font-bold text-sm"
-                        />
+                          className="flex items-center gap-1 text-xs font-bold text-indigo-600 bg-indigo-50 px-3 py-2 rounded-xl hover:bg-indigo-100"
+                        >
+                          <Plus className="w-3 h-3" /> Add
+                        </button>
                       </div>
-                      <div className="flex-1">
-                        <label className="block text-[10px] font-bold text-gray-400 mb-1">New Amount</label>
-                        <input
-                          type="number"
-                          min="0"
-                          step="0.01"
-                          placeholder="0.00"
-                          value={inc.amount}
-                          onChange={(e) => {
-                            const updated = [...addScheduledIncreases];
-                            updated[idx] = { ...updated[idx], amount: e.target.value };
-                            setAddScheduledIncreases(updated);
-                          }}
-                          className="w-full bg-gray-50 border-transparent rounded-2xl p-3 outline-none font-bold text-sm"
-                        />
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => setAddScheduledIncreases(addScheduledIncreases.filter((_, i) => i !== idx))}
-                        className="p-3 text-gray-400 hover:text-red-500 rounded-xl hover:bg-red-50"
-                        aria-label="Remove"
-                      >
-                        <X className="w-4 h-4" />
-                      </button>
+                      {addScheduledIncreases.map((inc, idx) => (
+                        <div key={idx} className="flex gap-3 mb-3 items-end">
+                          <div className="flex-1">
+                            <label className="block text-[10px] font-bold text-gray-400 mb-1">Month</label>
+                            <select
+                              value={inc.effectiveMonth}
+                              onChange={(e) => {
+                                const updated = [...addScheduledIncreases];
+                                updated[idx] = { ...updated[idx], effectiveMonth: e.target.value };
+                                setAddScheduledIncreases(updated);
+                              }}
+                              className="w-full bg-gray-50 border-transparent rounded-2xl p-3 outline-none font-bold text-sm appearance-none"
+                            >
+                              {MONTHS.map(m => <option key={m} value={m}>{m}</option>)}
+                            </select>
+                          </div>
+                          <div className="w-24">
+                            <label className="block text-[10px] font-bold text-gray-400 mb-1">Year</label>
+                            <input
+                              type="number"
+                              min="2000"
+                              max="2100"
+                              value={inc.effectiveYear}
+                              onChange={(e) => {
+                                const updated = [...addScheduledIncreases];
+                                updated[idx] = { ...updated[idx], effectiveYear: e.target.value };
+                                setAddScheduledIncreases(updated);
+                              }}
+                              className="w-full bg-gray-50 border-transparent rounded-2xl p-3 outline-none font-bold text-sm"
+                            />
+                          </div>
+                          <div className="flex-1">
+                            <label className="block text-[10px] font-bold text-gray-400 mb-1">New Amount</label>
+                            <input
+                              type="number"
+                              min="0"
+                              step="0.01"
+                              placeholder="0.00"
+                              value={inc.amount}
+                              onChange={(e) => {
+                                const updated = [...addScheduledIncreases];
+                                updated[idx] = { ...updated[idx], amount: e.target.value };
+                                setAddScheduledIncreases(updated);
+                              }}
+                              className="w-full bg-gray-50 border-transparent rounded-2xl p-3 outline-none font-bold text-sm"
+                            />
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => setAddScheduledIncreases(addScheduledIncreases.filter((_, i) => i !== idx))}
+                            className="p-3 text-gray-400 hover:text-red-500 rounded-xl hover:bg-red-50"
+                            aria-label="Remove"
+                          >
+                            <X className="w-4 h-4" />
+                          </button>
+                        </div>
+                      ))}
                     </div>
-                  ))}
+                  )}
                 </div>
               )}
 
@@ -1714,60 +1790,103 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
                   {/* Scheduled Increases — eligible categories only (Fixed, Utilities, Subscriptions) */}
                   {categorySupportsScheduledIncreases(editFormData.category) && (
                     <div className="border-t border-gray-200 pt-6">
-                      <div className="flex items-center justify-between mb-4">
-                        <div>
-                          <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest">Scheduled Increases (optional)</label>
-                          <p className="text-xs text-gray-400 mt-1">Set future dates when the amount changes.</p>
+                      <button
+                        type="button"
+                        onClick={() => setShowEditScheduledSection(!showEditScheduledSection)}
+                        className="flex items-center justify-between w-full mb-2"
+                      >
+                        <div className="text-left">
+                          <span className="block text-[10px] font-black text-gray-400 uppercase tracking-widest">Scheduled Increases (optional)</span>
+                          <span className="text-xs text-gray-400">Set future months when the amount changes.</span>
                         </div>
-                        <button
-                          type="button"
-                          onClick={() => setEditScheduledIncreases([...editScheduledIncreases, { effectiveDate: '', amount: '' }])}
-                          className="flex items-center gap-1 text-xs font-bold text-indigo-600 bg-indigo-50 px-3 py-2 rounded-xl hover:bg-indigo-100"
-                        >
-                          <Plus className="w-3 h-3" /> Add
-                        </button>
-                      </div>
-                      {editScheduledIncreases.map((inc, idx) => (
-                        <div key={idx} className="flex gap-3 mb-3 items-end">
-                          <div className="flex-1">
-                            <label className="block text-[10px] font-bold text-gray-400 mb-1">Effective Date</label>
-                            <input
-                              type="date"
-                              value={inc.effectiveDate}
-                              onChange={(e) => {
-                                const updated = [...editScheduledIncreases];
-                                updated[idx] = { ...updated[idx], effectiveDate: e.target.value };
-                                setEditScheduledIncreases(updated);
+                        {showEditScheduledSection ? <ChevronDown className="w-4 h-4 text-gray-400" /> : <ChevronRight className="w-4 h-4 text-gray-400" />}
+                      </button>
+                      {showEditScheduledSection && (
+                        <div className="mt-4">
+                          <div className="flex justify-end mb-3">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const next = new Date();
+                                next.setMonth(next.getMonth() + 1);
+                                setEditScheduledIncreases([
+                                  ...editScheduledIncreases,
+                                  {
+                                    effectiveMonth: MONTHS[next.getMonth()],
+                                    effectiveYear: next.getFullYear().toString(),
+                                    amount: '',
+                                  },
+                                ]);
                               }}
-                              className="w-full bg-gray-50 border-transparent rounded-2xl p-3 outline-none font-bold text-sm"
-                            />
+                              className="flex items-center gap-1 text-xs font-bold text-indigo-600 bg-indigo-50 px-3 py-2 rounded-xl hover:bg-indigo-100"
+                            >
+                              <Plus className="w-3 h-3" /> Add
+                            </button>
                           </div>
-                          <div className="flex-1">
-                            <label className="block text-[10px] font-bold text-gray-400 mb-1">New Amount</label>
-                            <input
-                              type="number"
-                              min="0"
-                              step="0.01"
-                              placeholder="0.00"
-                              value={inc.amount}
-                              onChange={(e) => {
-                                const updated = [...editScheduledIncreases];
-                                updated[idx] = { ...updated[idx], amount: e.target.value };
-                                setEditScheduledIncreases(updated);
-                              }}
-                              className="w-full bg-gray-50 border-transparent rounded-2xl p-3 outline-none font-bold text-sm"
-                            />
-                          </div>
-                          <button
-                            type="button"
-                            onClick={() => setEditScheduledIncreases(editScheduledIncreases.filter((_, i) => i !== idx))}
-                            className="p-3 text-gray-400 hover:text-red-500 rounded-xl hover:bg-red-50"
-                            aria-label="Remove"
-                          >
-                            <X className="w-4 h-4" />
-                          </button>
+                          {editScheduledIncreases.map((inc, idx) => {
+                            const elapsed = isIncreaseElapsed(inc.effectiveMonth, inc.effectiveYear);
+                            return (
+                              <div key={idx} className="flex gap-3 mb-3 items-end">
+                                <div className="flex-1">
+                                  <label className="block text-[10px] font-bold text-gray-400 mb-1">Month</label>
+                                  <select
+                                    value={inc.effectiveMonth}
+                                    onChange={(e) => {
+                                      const updated = [...editScheduledIncreases];
+                                      updated[idx] = { ...updated[idx], effectiveMonth: e.target.value };
+                                      setEditScheduledIncreases(updated);
+                                    }}
+                                    className="w-full bg-gray-50 border-transparent rounded-2xl p-3 outline-none font-bold text-sm appearance-none"
+                                  >
+                                    {MONTHS.map(m => <option key={m} value={m}>{m}</option>)}
+                                  </select>
+                                </div>
+                                <div className="w-24">
+                                  <label className="block text-[10px] font-bold text-gray-400 mb-1">Year</label>
+                                  <input
+                                    type="number"
+                                    min="2000"
+                                    max="2100"
+                                    value={inc.effectiveYear}
+                                    onChange={(e) => {
+                                      const updated = [...editScheduledIncreases];
+                                      updated[idx] = { ...updated[idx], effectiveYear: e.target.value };
+                                      setEditScheduledIncreases(updated);
+                                    }}
+                                    className="w-full bg-gray-50 border-transparent rounded-2xl p-3 outline-none font-bold text-sm"
+                                  />
+                                </div>
+                                <div className="flex-1">
+                                  <label className="block text-[10px] font-bold text-gray-400 mb-1">New Amount</label>
+                                  <input
+                                    type="number"
+                                    min="0"
+                                    step="0.01"
+                                    placeholder="0.00"
+                                    value={inc.amount}
+                                    onChange={(e) => {
+                                      const updated = [...editScheduledIncreases];
+                                      updated[idx] = { ...updated[idx], amount: e.target.value };
+                                      setEditScheduledIncreases(updated);
+                                    }}
+                                    className="w-full bg-gray-50 border-transparent rounded-2xl p-3 outline-none font-bold text-sm"
+                                  />
+                                </div>
+                                <button
+                                  type="button"
+                                  disabled={elapsed}
+                                  onClick={() => !elapsed && setEditScheduledIncreases(editScheduledIncreases.filter((_, i) => i !== idx))}
+                                  className={`p-3 rounded-xl ${elapsed ? 'text-gray-200 cursor-not-allowed' : 'text-gray-400 hover:text-red-500 hover:bg-red-50'}`}
+                                  aria-label="Remove"
+                                  title={elapsed ? 'Cannot remove a past or current month increase' : 'Remove'}
+                                >
+                                  <X className="w-4 h-4" />
+                                </button>
+                              </div>
+                            );
+                          })}
                         </div>
-                      ))}
+                      )}
                     </div>
                   )}
 
