@@ -887,8 +887,8 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
       })
     );
 
-    // Show the scheduled increases section if the biller already has any
-    setShowEditScheduledSection((biller.scheduledIncreases ?? []).length > 0);
+    // Always start collapsed — user can expand to see/add scheduled increases
+    setShowEditScheduledSection(false);
 
     // Show the deactivation date section if the biller already has one
     setShowEditDeactSection(!!(biller.deactivationDate?.month && biller.deactivationDate?.year));
