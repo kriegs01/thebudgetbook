@@ -73,7 +73,7 @@ export interface SupabaseTransaction {
   amount: number; // numeric
   payment_method_id: string; // uuid
   payment_schedule_id: string | null; // uuid, nullable - links to monthly_payment_schedules
-  transaction_type: 'payment' | 'withdraw' | 'transfer' | 'loan' | 'cash_in' | 'loan_payment'; // NEW
+  transaction_type: 'payment' | 'withdraw' | 'transfer' | 'loan' | 'cash_in' | 'loan_payment' | 'credit_payment'; // NEW
   notes: string | null; // NEW
   related_transaction_id: string | null; // NEW - links transfer pairs and loan payments
   receipt_url: string | null; // URL of receipt image in Supabase Storage

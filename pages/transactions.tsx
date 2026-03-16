@@ -70,6 +70,9 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ onTransactionDelete
   // ── Derived: filtered transactions ────────────────────────────────────────
   const filteredTransactions = useMemo(() => {
     return transactions.filter(tx => {
+      // Hide credit_payment counterparts — they live exclusively on the credit account
+      // statement and should not appear in the global transaction list.
+      if (tx.transaction_type === 'credit_payment') return false;
       const d = tx.date.slice(0, 10);
       if (d < filterStartDate || d > filterEndDate) return false;
       if (filterPaymentMethods.size > 0 && !filterPaymentMethods.has(tx.paymentMethodId)) return false;

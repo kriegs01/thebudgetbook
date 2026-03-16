@@ -8,7 +8,7 @@ import { getAllInstallmentsFrontend, createInstallmentFrontend, updateInstallmen
 import { getAllSavingsFrontend, createSavingsFrontend, updateSavingsFrontend, deleteSavingsFrontend } from './src/services/savingsService';
 import { getAllBudgetSetupsFrontend, deleteBudgetSetupFrontend } from './src/services/budgetSetupsService';
 import { getPaymentSchedulesBySource } from './src/services/paymentSchedulesService';
-import { getAllTransactions, createPaymentScheduleTransaction, uploadTransactionReceipt, updateTransaction } from './src/services/transactionsService';
+import { getAllTransactions, createTransaction, createPaymentScheduleTransaction, uploadTransactionReceipt, updateTransaction } from './src/services/transactionsService';
 import { recordPayment } from './src/services/paymentSchedulesService';
 import { supabase } from './src/utils/supabaseClient';
 import { combineDateWithCurrentTime } from './src/utils/dateUtils';
@@ -783,6 +783,29 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
         } else {
           await updateTransaction(transaction.id, { receipt_url: path });
           console.log('[App] Receipt uploaded and linked to biller transaction:', path);
+        }
+      }
+
+      // If this biller is linked to a credit account, record a credit_payment on that account
+      // so the outstanding balance and available credit are updated automatically.
+      if (biller.linkedAccountId) {
+        const linkedAccount = accounts.find(a => a.id === biller.linkedAccountId);
+        if (linkedAccount?.type === 'Credit') {
+          const { error: creditTxError } = await createTransaction({
+            name: `${biller.name} - ${targetSchedule.month} ${targetSchedule.year}`,
+            date: combineDateWithCurrentTime(payment.date),
+            amount: -Math.abs(payment.amount), // negative → reduces outstanding balance
+            payment_method_id: biller.linkedAccountId,
+            transaction_type: 'credit_payment',
+            notes: null,
+            payment_schedule_id: null,
+            related_transaction_id: transaction.id,
+          });
+          if (creditTxError) {
+            console.error('[App] Failed to create credit account payment transaction:', creditTxError);
+          } else {
+            console.log('[App] Credit account payment transaction created for linked account:', biller.linkedAccountId);
+          }
         }
       }
 

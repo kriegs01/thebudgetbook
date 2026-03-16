@@ -254,8 +254,12 @@ export const aggregateCreditCardPurchases = (
       
       // Exclude if transaction name matches any installment (case-insensitive)
       const isInstallment = installmentNames.has(tx.name.toLowerCase());
+
+      // Exclude credit card payments — they reduce the outstanding balance but
+      // are NOT charges and must not affect the billing-cycle charge total.
+      const isCreditPayment = tx.transaction_type === 'credit_payment';
       
-      return inCycle && !isInstallment;
+      return inCycle && !isInstallment && !isCreditPayment;
     });
     
     const totalAmount = cycleTxs.reduce((sum, tx) => sum + tx.amount, 0);
