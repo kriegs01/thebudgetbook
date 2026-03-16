@@ -1472,20 +1472,105 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
                 </div>
               )}
               
+              <div className="border-t border-gray-200 pt-6">
+                <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-4">Activation Date</label>
+                <div className="grid grid-cols-3 gap-4">
+                  <div><label className="block text-[10px] font-bold text-gray-400 mb-2">Month</label>
+                    <select value={addFormData.actMonth} onChange={(e) => setAddFormData({ ...addFormData, actMonth: e.target.value })} className="w-full bg-gray-50 border-transparent rounded-2xl p-4 outline-none font-bold text-sm appearance-none">{MONTHS.map(m => <option key={m} value={m}>{m}</option>)}</select>
+                  </div>
+                  <div><label className="block text-[10px] font-bold text-gray-400 mb-2">Day (optional)</label><input type="number" min="1" max="31" placeholder="e.g. 15" value={addFormData.actDay} onChange={(e) => { setAddFormData({ ...addFormData, actDay: e.target.value }); if (!addFormData.dueDate) showTimingInfo(e.target.value); }} className="w-full bg-gray-50 border-transparent rounded-2xl p-4 outline-none font-bold" /></div>
+                  <div><label className="block text-[10px] font-bold text-gray-400 mb-2">Year</label><input required type="number" min="2000" max="2100" value={addFormData.actYear} onChange={(e) => setAddFormData({ ...addFormData, actYear: e.target.value })} className="w-full bg-gray-50 border-transparent rounded-2xl p-4 outline-none font-bold" /></div>
+                </div>
+              </div>
+
+              {/* Computed fields display */}
+              <div className="bg-indigo-50 rounded-2xl p-4 space-y-2">
+                <div className="flex justify-between items-center">
+                  <span className="text-[10px] font-black text-indigo-400 uppercase tracking-widest">Auto-Computed Timing:</span>
+                  <span className="text-sm font-black text-indigo-600">{calculateTiming(addFormData.dueDate || addFormData.actDay)}</span>
+                </div>
+                {(() => {
+                  const deactDate = (addFormData.deactMonth && addFormData.deactYear)
+                    ? { month: addFormData.deactMonth, year: addFormData.deactYear }
+                    : undefined;
+                  const computedStatus = calculateStatus(deactDate);
+                  return (
+                    <div className="flex justify-between items-center">
+                      <span className="text-[10px] font-black text-indigo-400 uppercase tracking-widest">Auto-Computed Status:</span>
+                      <div className="flex items-center gap-2">
+                        <span className={`text-sm font-black ${computedStatus === 'inactive' ? 'text-gray-600' : 'text-green-600'}`}>{computedStatus}</span>
+                        {deactDate && computedStatus === 'active' && (
+                          <span className="text-xs text-orange-500 font-medium">— deactivates {deactDate.month} {deactDate.year}</span>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })()}
+              </div>
+
+              <div className="border-t border-gray-200 pt-6">
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (showAddDeactSection) {
+                      // Collapse and clear fields
+                      setAddFormData({ ...addFormData, deactMonth: '', deactYear: '' });
+                    }
+                    setShowAddDeactSection(!showAddDeactSection);
+                  }}
+                  className="flex items-center gap-2 text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1 hover:text-gray-600"
+                >
+                  {showAddDeactSection ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
+                  Deactivation Date (optional)
+                </button>
+                {showAddDeactSection && (
+                  <>
+                    <p className="text-xs text-gray-400 mb-4">Biller deactivates at the start of this month — last payment is the month before.</p>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div><label className="block text-[10px] font-bold text-gray-400 mb-2">Month</label>
+                        <select value={addFormData.deactMonth} onChange={(e) => setAddFormData({ ...addFormData, deactMonth: e.target.value })} className="w-full bg-gray-50 border-transparent rounded-2xl p-4 outline-none font-bold text-sm appearance-none">
+                          <option value="">None</option>
+                          {MONTHS.map(m => {
+                            const deactYearNum = parseInt(addFormData.deactYear);
+                            const actYearNum = parseInt(addFormData.actYear);
+                            const sameYear = !isNaN(deactYearNum) && !isNaN(actYearNum) && deactYearNum === actYearNum;
+                            const actMonthIdx = MONTHS.indexOf(addFormData.actMonth);
+                            const mIdx = MONTHS.indexOf(m);
+                            // Disable months on or before activation month when deact year == act year
+                            const isDisabled = sameYear && mIdx <= actMonthIdx;
+                            return <option key={m} value={m} disabled={isDisabled} className={isDisabled ? 'text-gray-300' : ''}>{m}</option>;
+                          })}
+                        </select>
+                      </div>
+                      <div><label className="block text-[10px] font-bold text-gray-400 mb-2">Year</label><input type="number" min="2000" max="2100" placeholder="e.g. 2026" value={addFormData.deactYear} onChange={(e) => {
+                        const newDeactYear = e.target.value;
+                        const deactYearNum = parseInt(newDeactYear);
+                        const actYearNum = parseInt(addFormData.actYear);
+                        const actMonthIdx = MONTHS.indexOf(addFormData.actMonth);
+                        const deactMonthIdx = MONTHS.indexOf(addFormData.deactMonth);
+                        // Clear deactMonth if it becomes invalid (same year and deact month <= act month)
+                        const shouldClear = !isNaN(deactYearNum) && !isNaN(actYearNum) && deactYearNum === actYearNum && deactMonthIdx !== -1 && deactMonthIdx <= actMonthIdx;
+                        setAddFormData({ ...addFormData, deactYear: newDeactYear, deactMonth: shouldClear ? '' : addFormData.deactMonth });
+                      }} className="w-full bg-gray-50 border-transparent rounded-2xl p-4 outline-none font-bold" /></div>
+                    </div>
+                  </>
+                )}
+              </div>
+
               {/* Scheduled Increases — eligible categories only (Fixed, Utilities, Subscriptions) */}
               {categorySupportsScheduledIncreases(addFormData.category) && (
                 <div className="border-t border-gray-200 pt-6">
                   <button
                     type="button"
                     onClick={() => setShowAddScheduledSection(!showAddScheduledSection)}
-                    className="flex items-center justify-between w-full mb-2"
+                    className="flex items-center gap-2 text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1 hover:text-gray-600"
                   >
-                    <div className="text-left">
-                      <span className="block text-[10px] font-black text-gray-400 uppercase tracking-widest">Scheduled Increases (optional)</span>
-                      <span className="text-xs text-gray-400">Set future months when the amount changes.</span>
-                    </div>
-                    {showAddScheduledSection ? <ChevronDown className="w-4 h-4 text-gray-400" /> : <ChevronRight className="w-4 h-4 text-gray-400" />}
+                    {showAddScheduledSection ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
+                    Scheduled Increases (optional)
                   </button>
+                  {!showAddScheduledSection && (
+                    <span className="text-xs text-gray-400">Set future months when the amount changes.</span>
+                  )}
                   {showAddScheduledSection && (
                     <div className="mt-4">
                       <div className="flex justify-end mb-3">
@@ -1569,91 +1654,6 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
                   )}
                 </div>
               )}
-
-              <div className="border-t border-gray-200 pt-6">
-                <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-4">Activation Date</label>
-                <div className="grid grid-cols-3 gap-4">
-                  <div><label className="block text-[10px] font-bold text-gray-400 mb-2">Month</label>
-                    <select value={addFormData.actMonth} onChange={(e) => setAddFormData({ ...addFormData, actMonth: e.target.value })} className="w-full bg-gray-50 border-transparent rounded-2xl p-4 outline-none font-bold text-sm appearance-none">{MONTHS.map(m => <option key={m} value={m}>{m}</option>)}</select>
-                  </div>
-                  <div><label className="block text-[10px] font-bold text-gray-400 mb-2">Day (optional)</label><input type="number" min="1" max="31" placeholder="e.g. 15" value={addFormData.actDay} onChange={(e) => { setAddFormData({ ...addFormData, actDay: e.target.value }); if (!addFormData.dueDate) showTimingInfo(e.target.value); }} className="w-full bg-gray-50 border-transparent rounded-2xl p-4 outline-none font-bold" /></div>
-                  <div><label className="block text-[10px] font-bold text-gray-400 mb-2">Year</label><input required type="number" min="2000" max="2100" value={addFormData.actYear} onChange={(e) => setAddFormData({ ...addFormData, actYear: e.target.value })} className="w-full bg-gray-50 border-transparent rounded-2xl p-4 outline-none font-bold" /></div>
-                </div>
-              </div>
-
-              <div className="border-t border-gray-200 pt-6">
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (showAddDeactSection) {
-                      // Collapse and clear fields
-                      setAddFormData({ ...addFormData, deactMonth: '', deactYear: '' });
-                    }
-                    setShowAddDeactSection(!showAddDeactSection);
-                  }}
-                  className="flex items-center gap-2 text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1 hover:text-gray-600"
-                >
-                  {showAddDeactSection ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
-                  Deactivation Date (optional)
-                </button>
-                {showAddDeactSection && (
-                  <>
-                    <p className="text-xs text-gray-400 mb-4">Biller deactivates at the start of this month — last payment is the month before.</p>
-                    <div className="grid grid-cols-2 gap-4">
-                      <div><label className="block text-[10px] font-bold text-gray-400 mb-2">Month</label>
-                        <select value={addFormData.deactMonth} onChange={(e) => setAddFormData({ ...addFormData, deactMonth: e.target.value })} className="w-full bg-gray-50 border-transparent rounded-2xl p-4 outline-none font-bold text-sm appearance-none">
-                          <option value="">None</option>
-                          {MONTHS.map(m => {
-                            const deactYearNum = parseInt(addFormData.deactYear);
-                            const actYearNum = parseInt(addFormData.actYear);
-                            const sameYear = !isNaN(deactYearNum) && !isNaN(actYearNum) && deactYearNum === actYearNum;
-                            const actMonthIdx = MONTHS.indexOf(addFormData.actMonth);
-                            const mIdx = MONTHS.indexOf(m);
-                            // Disable months on or before activation month when deact year == act year
-                            const isDisabled = sameYear && mIdx <= actMonthIdx;
-                            return <option key={m} value={m} disabled={isDisabled} className={isDisabled ? 'text-gray-300' : ''}>{m}</option>;
-                          })}
-                        </select>
-                      </div>
-                      <div><label className="block text-[10px] font-bold text-gray-400 mb-2">Year</label><input type="number" min="2000" max="2100" placeholder="e.g. 2026" value={addFormData.deactYear} onChange={(e) => {
-                        const newDeactYear = e.target.value;
-                        const deactYearNum = parseInt(newDeactYear);
-                        const actYearNum = parseInt(addFormData.actYear);
-                        const actMonthIdx = MONTHS.indexOf(addFormData.actMonth);
-                        const deactMonthIdx = MONTHS.indexOf(addFormData.deactMonth);
-                        // Clear deactMonth if it becomes invalid (same year and deact month <= act month)
-                        const shouldClear = !isNaN(deactYearNum) && !isNaN(actYearNum) && deactYearNum === actYearNum && deactMonthIdx !== -1 && deactMonthIdx <= actMonthIdx;
-                        setAddFormData({ ...addFormData, deactYear: newDeactYear, deactMonth: shouldClear ? '' : addFormData.deactMonth });
-                      }} className="w-full bg-gray-50 border-transparent rounded-2xl p-4 outline-none font-bold" /></div>
-                    </div>
-                  </>
-                )}
-              </div>
-
-              {/* Computed fields display */}
-              <div className="bg-indigo-50 rounded-2xl p-4 space-y-2">
-                <div className="flex justify-between items-center">
-                  <span className="text-[10px] font-black text-indigo-400 uppercase tracking-widest">Auto-Computed Timing:</span>
-                  <span className="text-sm font-black text-indigo-600">{calculateTiming(addFormData.dueDate || addFormData.actDay)}</span>
-                </div>
-                {(() => {
-                  const deactDate = (addFormData.deactMonth && addFormData.deactYear)
-                    ? { month: addFormData.deactMonth, year: addFormData.deactYear }
-                    : undefined;
-                  const computedStatus = calculateStatus(deactDate);
-                  return (
-                    <div className="flex justify-between items-center">
-                      <span className="text-[10px] font-black text-indigo-400 uppercase tracking-widest">Auto-Computed Status:</span>
-                      <div className="flex items-center gap-2">
-                        <span className={`text-sm font-black ${computedStatus === 'inactive' ? 'text-gray-600' : 'text-green-600'}`}>{computedStatus}</span>
-                        {deactDate && computedStatus === 'active' && (
-                          <span className="text-xs text-orange-500 font-medium">— deactivates {deactDate.month} {deactDate.year}</span>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })()}
-              </div>
 
               {timingFeedback && (
                 <div className="bg-blue-50 border-l-4 border-blue-400 p-4 rounded">
@@ -1787,20 +1787,103 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
                 </div>
               ) : (
                 <>
+                  <div className="border-t border-gray-200 pt-6">
+                    <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-4">Activation Date</label>
+                    <div className="grid grid-cols-3 gap-4">
+                      <div><label className="block text-[10px] font-bold text-gray-400 mb-2">Month</label>
+                        <select value={editFormData.actMonth} onChange={(e) => setEditFormData({ ...editFormData, actMonth: e.target.value })} className="w-full bg-gray-50 border-transparent rounded-2xl p-4 outline-none font-bold text-sm appearance-none">{MONTHS.map(m => <option key={m} value={m}>{m}</option>)}</select>
+                      </div>
+                      <div><label className="block text-[10px] font-bold text-gray-400 mb-2">Day (optional)</label><input type="number" min="1" max="31" placeholder="e.g. 15" value={editFormData.actDay} onChange={(e) => { setEditFormData({ ...editFormData, actDay: e.target.value }); if (!editFormData.dueDate) showTimingInfo(e.target.value); }} className="w-full bg-gray-50 border-transparent rounded-2xl p-4 outline-none font-bold" /></div>
+                      <div><label className="block text-[10px] font-bold text-gray-400 mb-2">Year</label><input required type="number" min="2000" max="2100" value={editFormData.actYear} onChange={(e) => setEditFormData({ ...editFormData, actYear: e.target.value })} className="w-full bg-gray-50 border-transparent rounded-2xl p-4 outline-none font-bold" /></div>
+                    </div>
+                  </div>
+
+                  {/* Computed fields display */}
+                  <div className="bg-indigo-50 rounded-2xl p-4 space-y-2">
+                    <div className="flex justify-between items-center">
+                      <span className="text-[10px] font-black text-indigo-400 uppercase tracking-widest">Auto-Computed Timing:</span>
+                      <span className="text-sm font-black text-indigo-600">{calculateTiming(editFormData.dueDate || editFormData.actDay)}</span>
+                    </div>
+                    {(() => {
+                      const deactDate = (editFormData.deactMonth && editFormData.deactYear)
+                        ? { month: editFormData.deactMonth, year: editFormData.deactYear }
+                        : undefined;
+                      const computedStatus = calculateStatus(deactDate);
+                      return (
+                        <div className="flex justify-between items-center">
+                          <span className="text-[10px] font-black text-indigo-400 uppercase tracking-widest">Auto-Computed Status:</span>
+                          <div className="flex items-center gap-2">
+                            <span className={`text-sm font-black ${computedStatus === 'inactive' ? 'text-gray-600' : 'text-green-600'}`}>{computedStatus}</span>
+                            {deactDate && computedStatus === 'active' && (
+                              <span className="text-xs text-orange-500 font-medium">— deactivates {deactDate.month} {deactDate.year}</span>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })()}
+                  </div>
+
+                  <div className="border-t border-gray-200 pt-6">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (showEditDeactSection) {
+                          // Collapse and clear fields
+                          setEditFormData({ ...editFormData, deactMonth: '', deactYear: '' });
+                        }
+                        setShowEditDeactSection(!showEditDeactSection);
+                      }}
+                      className="flex items-center gap-2 text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1 hover:text-gray-600"
+                    >
+                      {showEditDeactSection ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
+                      Deactivation Date (optional)
+                    </button>
+                    {showEditDeactSection && (
+                      <>
+                        <p className="text-xs text-gray-400 mb-4">Biller deactivates at the start of this month — last payment is the month before.</p>
+                        <div className="grid grid-cols-2 gap-4">
+                          <div><label className="block text-[10px] font-bold text-gray-400 mb-2">Month</label>
+                            <select value={editFormData.deactMonth} onChange={(e) => setEditFormData({ ...editFormData, deactMonth: e.target.value })} className="w-full bg-gray-50 border-transparent rounded-2xl p-4 outline-none font-bold text-sm appearance-none">
+                              <option value="">None</option>
+                              {MONTHS.map(m => {
+                                const deactYearNum = parseInt(editFormData.deactYear);
+                                const actYearNum = parseInt(editFormData.actYear);
+                                const sameYear = !isNaN(deactYearNum) && !isNaN(actYearNum) && deactYearNum === actYearNum;
+                                const actMonthIdx = MONTHS.indexOf(editFormData.actMonth);
+                                const mIdx = MONTHS.indexOf(m);
+                                const isDisabled = sameYear && mIdx <= actMonthIdx;
+                                return <option key={m} value={m} disabled={isDisabled} className={isDisabled ? 'text-gray-300' : ''}>{m}</option>;
+                              })}
+                            </select>
+                          </div>
+                          <div><label className="block text-[10px] font-bold text-gray-400 mb-2">Year</label><input type="number" min="2000" max="2100" placeholder="e.g. 2026" value={editFormData.deactYear} onChange={(e) => {
+                            const newDeactYear = e.target.value;
+                            const deactYearNum = parseInt(newDeactYear);
+                            const actYearNum = parseInt(editFormData.actYear);
+                            const actMonthIdx = MONTHS.indexOf(editFormData.actMonth);
+                            const deactMonthIdx = MONTHS.indexOf(editFormData.deactMonth);
+                            const shouldClear = !isNaN(deactYearNum) && !isNaN(actYearNum) && deactYearNum === actYearNum && deactMonthIdx !== -1 && deactMonthIdx <= actMonthIdx;
+                            setEditFormData({ ...editFormData, deactYear: newDeactYear, deactMonth: shouldClear ? '' : editFormData.deactMonth });
+                          }} className="w-full bg-gray-50 border-transparent rounded-2xl p-4 outline-none font-bold" /></div>
+                        </div>
+                      </>
+                    )}
+                  </div>
+
                   {/* Scheduled Increases — eligible categories only (Fixed, Utilities, Subscriptions) */}
                   {categorySupportsScheduledIncreases(editFormData.category) && (
                     <div className="border-t border-gray-200 pt-6">
                       <button
                         type="button"
                         onClick={() => setShowEditScheduledSection(!showEditScheduledSection)}
-                        className="flex items-center justify-between w-full mb-2"
+                        className="flex items-center gap-2 text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1 hover:text-gray-600"
                       >
-                        <div className="text-left">
-                          <span className="block text-[10px] font-black text-gray-400 uppercase tracking-widest">Scheduled Increases (optional)</span>
-                          <span className="text-xs text-gray-400">Set future months when the amount changes.</span>
-                        </div>
-                        {showEditScheduledSection ? <ChevronDown className="w-4 h-4 text-gray-400" /> : <ChevronRight className="w-4 h-4 text-gray-400" />}
+                        {showEditScheduledSection ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
+                        Scheduled Increases (optional)
                       </button>
+                      {!showEditScheduledSection && (
+                        <span className="text-xs text-gray-400">Set future months when the amount changes.</span>
+                      )}
                       {showEditScheduledSection && (
                         <div className="mt-4">
                           <div className="flex justify-end mb-3">
@@ -1889,109 +1972,36 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
                       )}
                     </div>
                   )}
-
-                  <div className="border-t border-gray-200 pt-6">
-                    <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-4">Activation Date</label>
-                    <div className="grid grid-cols-3 gap-4">
-                      <div><label className="block text-[10px] font-bold text-gray-400 mb-2">Month</label>
-                        <select value={editFormData.actMonth} onChange={(e) => setEditFormData({ ...editFormData, actMonth: e.target.value })} className="w-full bg-gray-50 border-transparent rounded-2xl p-4 outline-none font-bold text-sm appearance-none">{MONTHS.map(m => <option key={m} value={m}>{m}</option>)}</select>
-                      </div>
-                      <div><label className="block text-[10px] font-bold text-gray-400 mb-2">Day (optional)</label><input type="number" min="1" max="31" placeholder="e.g. 15" value={editFormData.actDay} onChange={(e) => { setEditFormData({ ...editFormData, actDay: e.target.value }); if (!editFormData.dueDate) showTimingInfo(e.target.value); }} className="w-full bg-gray-50 border-transparent rounded-2xl p-4 outline-none font-bold" /></div>
-                      <div><label className="block text-[10px] font-bold text-gray-400 mb-2">Year</label><input required type="number" min="2000" max="2100" value={editFormData.actYear} onChange={(e) => setEditFormData({ ...editFormData, actYear: e.target.value })} className="w-full bg-gray-50 border-transparent rounded-2xl p-4 outline-none font-bold" /></div>
-                    </div>
-                  </div>
-
-                  <div className="border-t border-gray-200 pt-6">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        if (showEditDeactSection) {
-                          // Collapse and clear fields
-                          setEditFormData({ ...editFormData, deactMonth: '', deactYear: '' });
-                        }
-                        setShowEditDeactSection(!showEditDeactSection);
-                      }}
-                      className="flex items-center gap-2 text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1 hover:text-gray-600"
-                    >
-                      {showEditDeactSection ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
-                      Deactivation Date (optional)
-                    </button>
-                    {showEditDeactSection && (
-                      <>
-                        <p className="text-xs text-gray-400 mb-4">Biller deactivates at the start of this month — last payment is the month before.</p>
-                        <div className="grid grid-cols-2 gap-4">
-                          <div><label className="block text-[10px] font-bold text-gray-400 mb-2">Month</label>
-                            <select value={editFormData.deactMonth} onChange={(e) => setEditFormData({ ...editFormData, deactMonth: e.target.value })} className="w-full bg-gray-50 border-transparent rounded-2xl p-4 outline-none font-bold text-sm appearance-none">
-                              <option value="">None</option>
-                              {MONTHS.map(m => {
-                                const deactYearNum = parseInt(editFormData.deactYear);
-                                const actYearNum = parseInt(editFormData.actYear);
-                                const sameYear = !isNaN(deactYearNum) && !isNaN(actYearNum) && deactYearNum === actYearNum;
-                                const actMonthIdx = MONTHS.indexOf(editFormData.actMonth);
-                                const mIdx = MONTHS.indexOf(m);
-                                const isDisabled = sameYear && mIdx <= actMonthIdx;
-                                return <option key={m} value={m} disabled={isDisabled} className={isDisabled ? 'text-gray-300' : ''}>{m}</option>;
-                              })}
-                            </select>
-                          </div>
-                          <div><label className="block text-[10px] font-bold text-gray-400 mb-2">Year</label><input type="number" min="2000" max="2100" placeholder="e.g. 2026" value={editFormData.deactYear} onChange={(e) => {
-                            const newDeactYear = e.target.value;
-                            const deactYearNum = parseInt(newDeactYear);
-                            const actYearNum = parseInt(editFormData.actYear);
-                            const actMonthIdx = MONTHS.indexOf(editFormData.actMonth);
-                            const deactMonthIdx = MONTHS.indexOf(editFormData.deactMonth);
-                            const shouldClear = !isNaN(deactYearNum) && !isNaN(actYearNum) && deactYearNum === actYearNum && deactMonthIdx !== -1 && deactMonthIdx <= actMonthIdx;
-                            setEditFormData({ ...editFormData, deactYear: newDeactYear, deactMonth: shouldClear ? '' : editFormData.deactMonth });
-                          }} className="w-full bg-gray-50 border-transparent rounded-2xl p-4 outline-none font-bold" /></div>
-                        </div>
-                      </>
-                    )}
-                  </div>
                 </>
               )}
 
-              {/* Computed fields display */}
-              <div className="bg-indigo-50 rounded-2xl p-4 space-y-2">
-                <div className="flex justify-between items-center">
-                  <span className="text-[10px] font-black text-indigo-400 uppercase tracking-widest">Auto-Computed Timing:</span>
-                  <span className="text-sm font-black text-indigo-600">{calculateTiming(editFormData.dueDate || editFormData.actDay)}</span>
+              {/* Computed fields display — inactive biller only (reactivation preview) */}
+              {showEditModal?.status === 'inactive' && (
+                <div className="bg-indigo-50 rounded-2xl p-4 space-y-2">
+                  <div className="flex justify-between items-center">
+                    <span className="text-[10px] font-black text-indigo-400 uppercase tracking-widest">Auto-Computed Timing:</span>
+                    <span className="text-sm font-black text-indigo-600">{calculateTiming(editFormData.dueDate || editFormData.actDay)}</span>
+                  </div>
+                  {(() => {
+                    const reactDate = {
+                      month: editFormData.reactMonth || editFormData.actMonth,
+                      year: editFormData.reactYear || editFormData.actYear,
+                    };
+                    const computedStatus = calculateStatusFromActivation(reactDate);
+                    return (
+                      <div className="flex justify-between items-center">
+                        <span className="text-[10px] font-black text-indigo-400 uppercase tracking-widest">After Reactivation:</span>
+                        <div className="flex items-center gap-2">
+                          <span className={`text-sm font-black ${computedStatus === 'inactive' ? 'text-gray-600' : 'text-green-600'}`}>{computedStatus}</span>
+                          {computedStatus === 'inactive' && (
+                            <span className="text-xs text-orange-500 font-medium">— activates {reactDate.month} {reactDate.year}</span>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })()}
                 </div>
-                {showEditModal?.status !== 'inactive' && (() => {
-                  const deactDate = (editFormData.deactMonth && editFormData.deactYear)
-                    ? { month: editFormData.deactMonth, year: editFormData.deactYear }
-                    : undefined;
-                  const computedStatus = calculateStatus(deactDate);
-                  return (
-                    <div className="flex justify-between items-center">
-                      <span className="text-[10px] font-black text-indigo-400 uppercase tracking-widest">Auto-Computed Status:</span>
-                      <div className="flex items-center gap-2">
-                        <span className={`text-sm font-black ${computedStatus === 'inactive' ? 'text-gray-600' : 'text-green-600'}`}>{computedStatus}</span>
-                        {deactDate && computedStatus === 'active' && (
-                          <span className="text-xs text-orange-500 font-medium">— deactivates {deactDate.month} {deactDate.year}</span>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })()}
-                {showEditModal?.status === 'inactive' && (() => {
-                  const reactDate = {
-                    month: editFormData.reactMonth || editFormData.actMonth,
-                    year: editFormData.reactYear || editFormData.actYear,
-                  };
-                  const computedStatus = calculateStatusFromActivation(reactDate);
-                  return (
-                    <div className="flex justify-between items-center">
-                      <span className="text-[10px] font-black text-indigo-400 uppercase tracking-widest">After Reactivation:</span>
-                      <div className="flex items-center gap-2">
-                        <span className={`text-sm font-black ${computedStatus === 'inactive' ? 'text-gray-600' : 'text-green-600'}`}>{computedStatus}</span>
-                        {computedStatus === 'inactive' && (
-                          <span className="text-xs text-orange-500 font-medium">— activates {reactDate.month} {reactDate.year}</span>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })()}
-              </div>
+              )}
 
               {timingFeedback && (
                 <div className="bg-blue-50 border-l-4 border-blue-400 p-4 rounded">
