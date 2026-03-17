@@ -79,12 +79,14 @@ export const createWallet = async (payload: CreateWalletInput): Promise<{ data: 
  */
 export const updateWallet = async (id: string, updates: UpdateWalletInput): Promise<{ data: Wallet | null; error: any }> => {
   try {
+    const user = await getCachedUser();
     const now = new Date().toISOString();
 
     const { data, error } = await supabase
       .from(getTableName('wallets'))
       .update({ ...updates, updated_at: now })
       .eq('id', id)
+      .eq('user_id', user.id)
       .select()
       .single();
 
@@ -101,10 +103,13 @@ export const updateWallet = async (id: string, updates: UpdateWalletInput): Prom
  */
 export const deleteWallet = async (id: string): Promise<{ error: any }> => {
   try {
+    const user = await getCachedUser();
+
     const { error } = await supabase
       .from(getTableName('wallets'))
       .delete()
-      .eq('id', id);
+      .eq('id', id)
+      .eq('user_id', user.id);
 
     if (error) throw error;
     return { error: null };
