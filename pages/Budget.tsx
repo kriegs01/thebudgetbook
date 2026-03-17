@@ -234,10 +234,12 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
     });
   }, [stashTopUps, selectedMonth, selectedYear]);
 
-  /** Computes funded/remaining/isFunded aggregates for a wallet in the selected month. */
+  /** Computes funded/remaining/isFunded aggregates for a wallet in the selected month.
+   * Amounts in the DB are stored as negative (cash_in convention), so Math.abs is used
+   * to compute the positive funded total for display and comparison. */
   const getStashAggregates = useCallback((wallet: Wallet) => {
     const topUps = getStashTopUps(wallet.id);
-    const funded = topUps.reduce((sum, tx) => sum + tx.amount, 0);
+    const funded = topUps.reduce((sum, tx) => sum + Math.abs(tx.amount), 0);
     const remaining = Math.max(0, wallet.amount - funded);
     const isFunded = funded >= wallet.amount;
     return { funded, remaining, isFunded, topUps };
@@ -264,7 +266,8 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
     try {
       const { error } = await createTransaction({
         name: `Stash top-up - ${fundModal.wallet.name} (${selectedMonth} ${selectedYear})`,
-        amount,
+        // Negative amount: cash_in = money IN to the linked account (adds to balance per sign convention)
+        amount: -amount,
         date: combineDateWithCurrentTime(fundForm.date),
         payment_method_id: fundModal.wallet.accountId,
         transaction_type: 'cash_in',
@@ -294,10 +297,11 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
    * Uses deleteTransactionAndRevertSchedule which safely handles null payment_schedule_id
    * and also cleans up any credit_payment counterpart transactions. */
   const handleDeleteStashTopUp = (txId: string, amount: number) => {
+    const absAmount = Math.abs(amount);
     setConfirmModal({
       show: true,
       title: 'Delete Top-up',
-      message: `Delete this stash top-up of ${formatCurrency(amount)}? This will remove the underlying transaction.`,
+      message: `Delete this stash top-up of ${formatCurrency(absAmount)}? This will remove the underlying transaction.`,
       onConfirm: async () => {
         setConfirmModal(p => ({ ...p, show: false }));
         const { error } = await deleteTransactionAndRevertSchedule(txId);
@@ -2835,10 +2839,10 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                         {tx.notes && <p className="text-xs text-gray-400 italic">{tx.notes}</p>}
                       </div>
                       <div className="flex items-center space-x-3">
-                        <span className="text-sm font-black text-indigo-600">{formatCurrency(tx.amount)}</span>
+                        <span className="text-sm font-black text-indigo-600">{formatCurrency(Math.abs(tx.amount))}</span>
                         <button
                           onClick={() => handleDeleteStashTopUp(tx.id, tx.amount)}
-                          aria-label={`Delete top-up of ${formatCurrency(tx.amount)} from ${new Date(tx.date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}`}
+                          aria-label={`Delete top-up of ${formatCurrency(Math.abs(tx.amount))} from ${new Date(tx.date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}`}
                           className="text-red-400 hover:text-red-600 p-1.5 rounded-xl hover:bg-red-50 transition-colors"
                         >
                           <Trash2 className="w-3.5 h-3.5" />
