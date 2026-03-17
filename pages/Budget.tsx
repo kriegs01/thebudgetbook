@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { BudgetItem, Account, Biller, PaymentSchedule, CategorizedSetupItem, SavedBudgetSetup, BudgetCategory, Installment } from '../types';
+import { BudgetItem, Account, Biller, PaymentSchedule, CategorizedSetupItem, SavedBudgetSetup, BudgetCategory, Installment, Wallet } from '../types';
 import { Plus, Check, ChevronDown, Trash2, Save, FileText, ArrowRight, Upload, CheckCircle2, X, AlertTriangle, Info, Eye, ZoomIn, ZoomOut, Download } from 'lucide-react';
 import { createBudgetSetupFrontend, updateBudgetSetupFrontend } from '../src/services/budgetSetupsService';
 import { createTransaction, getAllTransactions, updateTransaction, updateTransactionAndSyncSchedule, createPaymentScheduleTransaction, uploadTransactionReceipt, getTransactionsByPaymentSchedule, getReceiptSignedUrl, deleteTransactionAndRevertSchedule } from '../src/services/transactionsService';
@@ -10,6 +10,7 @@ import { getScheduleExpectedAmount } from '../src/utils/linkedAccountUtils'; // 
 import { getBillerAmountForDate } from '../src/utils/billers'; // For scheduled increases fallback
 import { getPaymentSchedulesByPeriod, recordPaymentViaTransaction } from '../src/services/paymentSchedulesService';
 import { combineDateWithCurrentTime } from '../src/utils/dateUtils';
+import { getWalletsForCurrentUser, updateWallet } from '../src/services/walletsService';
 
 interface BudgetProps {
   items: BudgetItem[];
@@ -111,6 +112,9 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
   // Transactions state - used for matching payments
   const [transactions, setTransactions] = useState<SupabaseTransaction[]>([]);
   
+  // Wallets (Stash) state
+  const [wallets, setWallets] = useState<Wallet[]>([]);
+
   // REFACTOR: Payment schedules state - source of truth for payment status
   const [paymentSchedules, setPaymentSchedules] = useState<SupabaseMonthlyPaymentSchedule[]>([]);
 
@@ -171,6 +175,33 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
 
     loadTransactions();
   }, []); // Load once on mount, reload happens after creating transactions
+
+  // Load wallets for the Stash section
+  useEffect(() => {
+    const loadWallets = async () => {
+      try {
+        const { data, error } = await getWalletsForCurrentUser();
+        if (error) {
+          console.error('[Budget] Failed to load wallets:', error);
+        } else {
+          setWallets(data || []);
+        }
+      } catch (error) {
+        console.error('[Budget] Error loading wallets:', error);
+      }
+    };
+    loadWallets();
+  }, []);
+
+  const handleWalletAmountChange = (walletId: string, value: string) => {
+    setWallets(prev => prev.map(w => w.id === walletId ? { ...w, amount: parseFloat(value) || 0 } : w));
+  };
+
+  const handleWalletAmountBlur = async (walletId: string, value: string) => {
+    const amount = parseFloat(value);
+    if (isNaN(amount) || amount < 0) return;
+    await updateWallet(walletId, { amount });
+  };
   
   // REFACTOR: Load payment schedules for the selected month
   // This provides accurate payment status from the monthly_payment_schedules table
@@ -1654,6 +1685,65 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
 
       {/* Category Tables - Full Width and Stacked for FIXED, UTILITIES, LOANS, SUBSCRIPTIONS, PURCHASES */}
       <div className="space-y-6">
+        {/* Stash section - wallets from the wallets table */}
+        <div className="bg-white rounded-[3rem] shadow-sm border border-gray-100 overflow-hidden w-full">
+          <div className="p-8 border-b border-gray-50 bg-gray-50/30 flex justify-between items-center">
+            <h3 className="text-xs font-black text-gray-900 uppercase tracking-[0.25em]">Stash</h3>
+            <span className="text-lg font-black text-indigo-600">
+              {formatCurrency(wallets.reduce((s, w) => s + w.amount, 0))}
+            </span>
+          </div>
+          <div className="overflow-x-auto">
+            {wallets.length === 0 ? (
+              <div className="px-10 py-8 text-center text-gray-400 text-sm">
+                No wallets configured yet.{' '}
+                <a href="/wallets" className="text-indigo-500 font-bold hover:underline">Set up your wallets →</a>
+              </div>
+            ) : (
+              <table className="w-full text-left">
+                <thead>
+                  <tr className="text-[10px] font-black text-gray-400 uppercase border-b border-gray-50">
+                    <th className="p-4 pl-10">Name</th>
+                    <th className="p-4">Amount</th>
+                    <th className="p-4 pr-10">Account</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-50">
+                  {wallets.map((wallet) => {
+                    const linkedAccount = accounts.find(a => a.id === wallet.accountId);
+                    return (
+                      <tr key={wallet.id} className="bg-white">
+                        <td className="p-4 pl-10">
+                          <span className="text-sm font-bold text-gray-900">{wallet.name}</span>
+                        </td>
+                        <td className="p-4">
+                          <div className="flex items-center space-x-1">
+                            <span className="text-gray-400 font-bold">₱</span>
+                            <input
+                              type="number"
+                              min="0"
+                              step="0.01"
+                              value={wallet.amount}
+                              onChange={(e) => handleWalletAmountChange(wallet.id, e.target.value)}
+                              onBlur={(e) => handleWalletAmountBlur(wallet.id, e.target.value)}
+                              className="bg-transparent border-none text-sm font-black text-indigo-600 w-28 outline-none focus:bg-indigo-50 focus:rounded-lg focus:px-1 transition-all"
+                            />
+                          </div>
+                        </td>
+                        <td className="p-4 pr-10">
+                          <span className="text-sm text-gray-600">
+                            {linkedAccount ? `${linkedAccount.bank} (${linkedAccount.classification})` : wallet.accountId}
+                          </span>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            )}
+          </div>
+        </div>
+
         {/* Fixed category - full width with account and settle columns */}
         {categories.filter(cat => cat.name === 'Fixed').map((cat) => {
           const items = setupData[cat.name] || [];
