@@ -621,3 +621,27 @@ export const getLoanTransactionsWithPayments = async (accountId: string) => {
     return { data: null, error };
   }
 };
+
+/**
+ * Get all stash top-up transactions for the current user.
+ * These are transactions that have wallet_id set (IS NOT NULL).
+ * Used by the Stash section in Budget Setup to show funded/remaining per wallet per month.
+ */
+export const getAllStashTransactions = async () => {
+  try {
+    const user = await getCachedUser();
+
+    const { data, error } = await supabase
+      .from(getTableName('transactions'))
+      .select('*')
+      .eq('user_id', user.id)
+      .not('wallet_id', 'is', null)
+      .order('date', { ascending: false });
+
+    if (error) throw error;
+    return { data, error: null };
+  } catch (error) {
+    console.error('Error fetching stash transactions:', error);
+    return { data: null, error };
+  }
+};

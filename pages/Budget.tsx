@@ -3,7 +3,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { BudgetItem, Account, Biller, PaymentSchedule, CategorizedSetupItem, SavedBudgetSetup, BudgetCategory, Installment, Wallet } from '../types';
 import { Plus, Check, ChevronDown, Trash2, Save, FileText, ArrowRight, Upload, CheckCircle2, X, AlertTriangle, Info, Eye, ZoomIn, ZoomOut, Download } from 'lucide-react';
 import { createBudgetSetupFrontend, updateBudgetSetupFrontend } from '../src/services/budgetSetupsService';
-import { createTransaction, getAllTransactions, updateTransaction, updateTransactionAndSyncSchedule, createPaymentScheduleTransaction, uploadTransactionReceipt, getTransactionsByPaymentSchedule, getReceiptSignedUrl, deleteTransactionAndRevertSchedule } from '../src/services/transactionsService';
+import { createTransaction, getAllTransactions, updateTransaction, updateTransactionAndSyncSchedule, createPaymentScheduleTransaction, uploadTransactionReceipt, getTransactionsByPaymentSchedule, getReceiptSignedUrl, deleteTransactionAndRevertSchedule, getAllStashTransactions } from '../src/services/transactionsService';
 import type { SupabaseTransaction, SupabaseMonthlyPaymentSchedule } from '../src/types/supabase';
 import { getInstallmentPaymentSchedule, aggregateCreditCardPurchases } from '../src/utils/paymentStatus'; // PROTOTYPE: Import payment status utilities
 import { getScheduleExpectedAmount } from '../src/utils/linkedAccountUtils'; // ENHANCEMENT: Import for linked account amount calculation
@@ -114,6 +114,8 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
   
   // Wallets (Stash) state
   const [wallets, setWallets] = useState<Wallet[]>([]);
+  // Dedicated stash top-up transactions state (queries directly by wallet_id IS NOT NULL)
+  const [stashTopUps, setStashTopUps] = useState<SupabaseTransaction[]>([]);
 
   // Stash funding modal state
   const [fundModal, setFundModal] = useState<{ wallet: Wallet } | null>(null);
@@ -183,32 +185,54 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
     loadTransactions();
   }, []); // Load once on mount, reload happens after creating transactions
 
-  // Load wallets for the Stash section
+  // Load wallets and stash top-ups for the Stash section
   useEffect(() => {
-    const loadWallets = async () => {
+    const loadWalletsAndStash = async () => {
       try {
-        const { data, error } = await getWalletsForCurrentUser();
-        if (error) {
-          console.error('[Budget] Failed to load wallets:', error);
+        const [walletsResult, stashResult] = await Promise.all([
+          getWalletsForCurrentUser(),
+          getAllStashTransactions(),
+        ]);
+        if (walletsResult.error) {
+          console.error('[Budget] Failed to load wallets:', walletsResult.error);
         } else {
-          setWallets(data || []);
+          setWallets(walletsResult.data || []);
+        }
+        if (stashResult.error) {
+          console.error('[Budget] Failed to load stash transactions:', stashResult.error);
+        } else {
+          setStashTopUps((stashResult.data as SupabaseTransaction[]) || []);
         }
       } catch (error) {
-        console.error('[Budget] Error loading wallets:', error);
+        console.error('[Budget] Error loading wallets/stash:', error);
       }
     };
-    loadWallets();
+    loadWalletsAndStash();
+  }, []);
+
+  /** Reloads stash top-up transactions from the DB. */
+  const reloadStashTopUps = useCallback(async () => {
+    try {
+      const { data, error } = await getAllStashTransactions();
+      if (error) {
+        console.error('[Budget] Failed to reload stash transactions:', error);
+      } else {
+        setStashTopUps((data as SupabaseTransaction[]) || []);
+      }
+    } catch (error) {
+      console.error('[Budget] Error reloading stash transactions:', error);
+    }
   }, []);
 
   /** Returns all stash top-up transactions for a wallet within the selected budget month. */
   const getStashTopUps = useCallback((walletId: string): SupabaseTransaction[] => {
     const monthIndex = MONTHS.indexOf(selectedMonth);
-    return transactions.filter(tx => {
+    return stashTopUps.filter(tx => {
       if (tx.wallet_id !== walletId) return false;
       const txDate = new Date(tx.date);
       return txDate.getMonth() === monthIndex && txDate.getFullYear() === selectedYear;
     });
-  }, [transactions, selectedMonth, selectedYear]);
+  }, [stashTopUps, selectedMonth, selectedYear]);
 
   /** Computes funded/remaining/isFunded aggregates for a wallet in the selected month. */
   const getStashAggregates = useCallback((wallet: Wallet) => {
@@ -255,7 +279,8 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
       setFundModal(null);
       setStashStatusMsg({ msg: `Funded stash '${walletName}' by ${formatCurrency(amount)}`, type: 'success' });
       setTimeout(() => setStashStatusMsg(null), 3000);
-      await reloadTransactions();
+      // Reload stash top-ups directly (dedicated query by wallet_id) so the row and info modal update
+      await reloadStashTopUps();
     } catch (err) {
       console.error('[Budget] Error funding stash:', err);
       setStashStatusMsg({ msg: 'Failed to fund stash. Please try again.', type: 'error' });
@@ -281,7 +306,8 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
           setStashStatusMsg({ msg: 'Failed to delete top-up.', type: 'error' });
         } else {
           setStashStatusMsg({ msg: 'Top-up deleted.', type: 'success' });
-          await reloadTransactions();
+          // Reload stash top-ups directly so the row and info modal reflect the deletion
+          await reloadStashTopUps();
         }
         setTimeout(() => setStashStatusMsg(null), 3000);
       },
@@ -1831,7 +1857,7 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                         <td className="p-4 pr-10 text-center">
                           <div className="flex items-center justify-center space-x-2">
                             {isFunded && (
-                              <CheckCircle2 className="w-4 h-4 text-green-500" title="Fully funded this month" aria-label="Fully funded this month" />
+                              <CheckCircle2 className="w-4 h-4 text-green-500" role="img" aria-label="Fully funded this month" />
                             )}
                             <button
                               onClick={() => handleOpenFundModal(wallet)}
@@ -2812,7 +2838,7 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                         <span className="text-sm font-black text-indigo-600">{formatCurrency(tx.amount)}</span>
                         <button
                           onClick={() => handleDeleteStashTopUp(tx.id, tx.amount)}
-                          title="Delete top-up"
+                          aria-label={`Delete top-up of ${formatCurrency(tx.amount)} from ${new Date(tx.date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}`}
                           className="text-red-400 hover:text-red-600 p-1.5 rounded-xl hover:bg-red-50 transition-colors"
                         >
                           <Trash2 className="w-3.5 h-3.5" />
