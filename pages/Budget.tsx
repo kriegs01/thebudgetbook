@@ -116,6 +116,8 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
   const [wallets, setWallets] = useState<Wallet[]>([]);
   // Dedicated stash top-up transactions state (queries directly by wallet_id IS NOT NULL)
   const [stashTopUps, setStashTopUps] = useState<SupabaseTransaction[]>([]);
+  // Wallet IDs excluded from the grand total (persisted in setup data as _excludedWalletIds)
+  const [excludedWalletIds, setExcludedWalletIds] = useState<Set<string>>(new Set());
 
   // Stash funding modal state
   const [fundModal, setFundModal] = useState<{ wallet: Wallet } | null>(null);
@@ -148,11 +150,18 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
       } else {
         setExcludedInstallmentIds(new Set());
       }
+      // Restore excluded wallet IDs from persisted setup data
+      if (Array.isArray(existingSetup.data._excludedWalletIds)) {
+        setExcludedWalletIds(new Set(existingSetup.data._excludedWalletIds));
+      } else {
+        setExcludedWalletIds(new Set());
+      }
     } else {
       // Reset to defaults if no saved setup
       setProjectedSalary('11000');
       setActualSalary('');
       setExcludedInstallmentIds(new Set());
+      setExcludedWalletIds(new Set());
     }
   }, [selectedMonth, selectedTiming, savedSetups]);
 
@@ -264,7 +273,7 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
     if (isNaN(amount) || amount <= 0) return;
     setFundSubmitting(true);
     try {
-      const { error } = await createTransaction({
+      const { data: newTx, error } = await createTransaction({
         name: `Stash top-up - ${fundModal.wallet.name} (${selectedMonth} ${selectedYear})`,
         // Negative amount: cash_in = money IN to the linked account (adds to balance per sign convention)
         amount: -amount,
@@ -278,11 +287,29 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
         receipt_url: null,
       });
       if (error) throw error;
+      // Optimistic update: immediately add the new top-up so the row status and info modal
+      // reflect the fund without waiting for the DB reload to complete.
+      if (newTx) {
+        setStashTopUps(prev => [newTx as SupabaseTransaction, ...prev]);
+      }
       const walletName = fundModal.wallet.name;
       setFundModal(null);
       setStashStatusMsg({ msg: `Funded stash '${walletName}' by ${formatCurrency(amount)}`, type: 'success' });
       setTimeout(() => setStashStatusMsg(null), 3000);
-      // Reload stash top-ups directly (dedicated query by wallet_id) so the row and info modal update
+      // Also update the budget setup status to Active when stash is being funded
+      const existingSetup = savedSetups.find(s => s.month === selectedMonth && s.timing === selectedTiming);
+      if (existingSetup && existingSetup.status !== BUDGET_SETUP_STATUS.ACTIVE) {
+        const { error: statusError } = await updateBudgetSetupFrontend({
+          ...existingSetup,
+          status: BUDGET_SETUP_STATUS.ACTIVE,
+        });
+        if (statusError) {
+          console.error('[Budget] Failed to update budget status after stash fund:', statusError);
+        } else if (onReloadSetups) {
+          await onReloadSetups();
+        }
+      }
+      // Reload stash top-ups to ensure full consistency with the DB
       await reloadStashTopUps();
     } catch (err) {
       console.error('[Budget] Error funding stash:', err);
@@ -292,6 +319,19 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
       setFundSubmitting(false);
     }
   };
+
+  /** Toggles a wallet's inclusion in the grand total computation. */
+  const handleWalletIncludeToggle = useCallback((walletId: string) => {
+    setExcludedWalletIds(prev => {
+      const next = new Set(prev);
+      if (next.has(walletId)) {
+        next.delete(walletId);
+      } else {
+        next.add(walletId);
+      }
+      return next;
+    });
+  }, []);
 
   /** Confirms and deletes a stash top-up transaction.
    * Uses deleteTransactionAndRevertSchedule which safely handles null payment_schedule_id
@@ -847,7 +887,8 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
       ...structuredClone(setupData),
       _projectedSalary: projectedSalary,
       _actualSalary: actualSalary,
-      _excludedInstallmentIds: [...excludedInstallmentIds]
+      _excludedInstallmentIds: [...excludedInstallmentIds],
+      _excludedWalletIds: [...excludedWalletIds]
     };
     
     // Check if data has actually changed
@@ -887,10 +928,9 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
       })
       .reduce((sum, inst) => sum + inst.monthlyAmount, 0);
 
-    // Grand total includes both regular items AND installments
-    const total = regularItemsTotal + installmentsTotal;
-
-    const existingSetup = savedSetups.find(s => s.month === selectedMonth && s.timing === selectedTiming);
+    // Grand total includes both regular items AND installments AND included stash wallets
+    const stashTotal = wallets.filter(w => !excludedWalletIds.has(w.id)).reduce((s, w) => s + w.amount, 0);
+    const total = regularItemsTotal + installmentsTotal + stashTotal;
     
     try {
       setAutoSaveStatus('saving');
@@ -949,7 +989,7 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
       setAutoSaveStatus('error');
       setTimeout(() => setAutoSaveStatus('idle'), AUTO_SAVE_STATUS_TIMEOUT_MS);
     }
-  }, [view, setupData, projectedSalary, actualSalary, selectedMonth, selectedTiming, savedSetups, excludedInstallmentIds, onReloadSetups]);
+  }, [view, setupData, projectedSalary, actualSalary, selectedMonth, selectedTiming, savedSetups, excludedInstallmentIds, excludedWalletIds, wallets, onReloadSetups]);
 
   /**
    * Debounced auto-save trigger
@@ -967,12 +1007,12 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
     }, AUTO_SAVE_DEBOUNCE_MS);
   }, [autoSave]);
 
-  // Trigger auto-save when setupData, projectedSalary, actualSalary, or excludedInstallmentIds changes
+  // Trigger auto-save when setupData, projectedSalary, actualSalary, excludedInstallmentIds, or excludedWalletIds changes
   useEffect(() => {
     if (view === 'setup') {
       triggerAutoSave();
     }
-  }, [setupData, projectedSalary, actualSalary, excludedInstallmentIds, view, triggerAutoSave]);
+  }, [setupData, projectedSalary, actualSalary, excludedInstallmentIds, excludedWalletIds, view, triggerAutoSave]);
 
   // Cleanup timeout on component unmount only
   useEffect(() => {
@@ -1077,11 +1117,13 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
       })
       .reduce((sum, inst) => sum + inst.monthlyAmount, 0);
 
-    // Grand total includes both regular items AND installments
-    const total = regularItemsTotal + installmentsTotal;
+    // Grand total includes both regular items AND installments AND included stash wallets
+    const stashTotal = wallets.filter(w => !excludedWalletIds.has(w.id)).reduce((s, w) => s + w.amount, 0);
+    const total = regularItemsTotal + installmentsTotal + stashTotal;
 
     console.log('[Budget] Regular items total:', regularItemsTotal);
     console.log('[Budget] Installments total:', installmentsTotal);
+    console.log('[Budget] Stash total:', stashTotal);
     console.log('[Budget] Grand total amount:', total);
 
     const existingSetup = savedSetups.find(s => s.month === selectedMonth && s.timing === selectedTiming);
@@ -1093,7 +1135,8 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
       ...JSON.parse(JSON.stringify(setupData)),
       _projectedSalary: projectedSalary,
       _actualSalary: actualSalary,
-      _excludedInstallmentIds: [...excludedInstallmentIds]
+      _excludedInstallmentIds: [...excludedInstallmentIds],
+      _excludedWalletIds: [...excludedWalletIds]
     };
     
     console.log('[Budget] Data to save type:', typeof dataToSave);
@@ -1665,7 +1708,9 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
     
     return { category: cat.name, total: itemsTotal + installmentsTotal };
   });
-  const grandTotal = categorySummary.reduce((sum, cat) => sum + cat.total, 0);
+  // Include stash wallet targets for wallets not excluded from the grand total
+  const stashTotal = wallets.filter(w => !excludedWalletIds.has(w.id)).reduce((s, w) => s + w.amount, 0);
+  const grandTotal = categorySummary.reduce((sum, cat) => sum + cat.total, 0) + stashTotal;
 
   // Calculate Month Summary values
   const totalSpend = grandTotal;
@@ -1739,6 +1784,9 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
               {categorySummary.map((item) => (
                 <tr key={item.category}><td className="p-3 pl-6 font-bold text-gray-700 text-sm">{item.category}</td><td className="p-3 pr-6 text-right font-black text-gray-900 text-sm">{formatCurrency(item.total)}</td></tr>
               ))}
+              {stashTotal > 0 && (
+                <tr><td className="p-3 pl-6 font-bold text-gray-700 text-sm">Stash</td><td className="p-3 pr-6 text-right font-black text-gray-900 text-sm">{formatCurrency(stashTotal)}</td></tr>
+              )}
               <tr className="bg-indigo-50/30"><td className="p-3 pl-6 text-xs font-black text-indigo-600 uppercase">Grand Total</td><td className="p-3 pr-6 text-right text-lg font-black text-indigo-600">{formatCurrency(grandTotal)}</td></tr>
             </tbody>
           </table>
@@ -1811,7 +1859,7 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                 </span>
               )}
               <span className="text-lg font-black text-indigo-600">
-                {formatCurrency(wallets.reduce((s, w) => s + w.amount, 0))}
+                {formatCurrency(wallets.filter(w => !excludedWalletIds.has(w.id)).reduce((s, w) => s + w.amount, 0))}
               </span>
             </div>
           </div>
@@ -1827,22 +1875,34 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                   <tr className="text-[10px] font-black text-gray-400 uppercase border-b border-gray-50">
                     <th className="p-4 pl-10">Name</th>
                     <th className="p-4">Target</th>
+                    <th className="p-4">Funded</th>
                     <th className="p-4">Account</th>
                     <th className="p-4 text-center">Info</th>
-                    <th className="p-4 pr-10 text-center">Actions</th>
+                    <th className="p-4 text-center">Actions</th>
+                    <th className="p-4 pr-10 text-right"></th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-50">
                   {wallets.map((wallet) => {
                     const linkedAccount = accounts.find(a => a.id === wallet.accountId);
-                    const { isFunded } = getStashAggregates(wallet);
+                    const { funded, isFunded } = getStashAggregates(wallet);
+                    const isIncluded = !excludedWalletIds.has(wallet.id);
                     return (
-                      <tr key={wallet.id} className="bg-white">
+                      <tr key={wallet.id} className={`${isIncluded ? 'bg-white' : 'bg-gray-50 opacity-60'}`}>
                         <td className="p-4 pl-10">
                           <span className="text-sm font-bold text-gray-900">{wallet.name}</span>
                         </td>
                         <td className="p-4">
                           <span className="text-sm font-black text-indigo-600">{formatCurrency(wallet.amount)}</span>
+                        </td>
+                        <td className="p-4">
+                          {isFunded ? (
+                            <span className="text-xs font-black text-green-600 px-2 py-1 bg-green-50 rounded-lg">Funded</span>
+                          ) : funded > 0 ? (
+                            <span className="text-xs font-bold text-orange-600">{formatCurrency(funded)}</span>
+                          ) : (
+                            <span className="text-xs text-gray-400">—</span>
+                          )}
                         </td>
                         <td className="p-4">
                           <span className="text-sm text-gray-600">
@@ -1858,7 +1918,7 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                             <Info className="w-3.5 h-3.5" />
                           </button>
                         </td>
-                        <td className="p-4 pr-10 text-center">
+                        <td className="p-4 text-center">
                           <div className="flex items-center justify-center space-x-2">
                             {isFunded && (
                               <CheckCircle2 className="w-4 h-4 text-green-500" role="img" aria-label="Fully funded this month" />
@@ -1871,6 +1931,15 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                               <span>Fund</span>
                             </button>
                           </div>
+                        </td>
+                        <td className="p-4 pr-10 text-right">
+                          <button
+                            onClick={() => handleWalletIncludeToggle(wallet.id)}
+                            title={isIncluded ? 'Exclude from grand total' : 'Include in grand total'}
+                            className={`w-8 h-8 rounded-xl border-2 transition-all flex items-center justify-center ${isIncluded ? 'bg-indigo-600 border-indigo-600 text-white' : 'border-gray-200'}`}
+                          >
+                            <Check className="w-4 h-4" />
+                          </button>
                         </td>
                       </tr>
                     );
