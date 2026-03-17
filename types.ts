@@ -120,6 +120,16 @@ export interface SavedBudgetSetup {
 
 export type ViewMode = 'card' | 'list';
 
+export interface Wallet {
+  id: string;
+  userId: string;
+  name: string;
+  amount: number;
+  accountId: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export enum Page {
   DASHBOARD = 'DASHBOARD',
   BUDGET = 'BUDGET',
@@ -128,6 +138,7 @@ export enum Page {
   INSTALLMENTS = 'INSTALLMENTS',
   ACCOUNTS = 'ACCOUNTS',
   SAVINGS = 'SAVINGS',
+  WALLET = 'WALLET',
   SETTINGS = 'SETTINGS',
   TRASH = 'TRASH',
 }

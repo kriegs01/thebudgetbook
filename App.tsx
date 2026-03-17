@@ -32,6 +32,8 @@ import Accounts from './pages/Accounts';
 import AccountFilteredTransactions from './pages/accounts/view';
 import StatementPage from './pages/accounts/statement';
 import Savings from './pages/Savings';
+import WalletsPage from './pages/Wallets';
+import WalletView from './pages/wallets/view';
 import SettingsPage from './pages/Settings';
 import TrashPage from './pages/Trash';
 import SupabaseDemo from './pages/SupabaseDemo';
@@ -191,6 +193,8 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
   const [transactionsLoading, setTransactionsLoading] = useState(true);
   const [currency, setCurrency] = useState('PHP');
   const [categories, setCategories] = useState(INITIAL_CATEGORIES);
+
+  // Wallet state is managed internally by WalletsPage and WalletView (they fetch their own data)
   
   // Lifted Budget Setups State - now loaded from Supabase
   const [budgetSetups, setBudgetSetups] = useState([]);
@@ -1074,6 +1078,8 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
                   error={savingsError}
                 />
               } />
+              <Route path="/wallets" element={<WalletsPage accounts={accounts} />} />
+              <Route path="/wallets/view" element={<WalletView accounts={accounts} />} />
               <Route path="/settings" element={
                 <SettingsPage 
                   currency={currency}

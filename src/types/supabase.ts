@@ -95,6 +95,16 @@ export interface SupabaseBudgetSetup {
   user_id: string | null; // uuid, references auth.users(id)
 }
 
+export interface SupabaseWallet {
+  id: string; // uuid
+  user_id: string; // uuid, references auth.users(id)
+  name: string;
+  amount: number; // numeric(14,2)
+  account_id: string; // uuid, references accounts(id)
+  created_at: string; // timestamptz
+  updated_at: string; // timestamptz
+}
+
 export interface SupabaseMonthlyPaymentSchedule {
   id: string; // uuid
   source_type: 'biller' | 'installment';
@@ -132,6 +142,9 @@ export type UpdateTransactionInput = Partial<CreateTransactionInput>;
 
 export type CreateBudgetSetupInput = Omit<SupabaseBudgetSetup, 'id' | 'created_at' | 'user_id'>;
 export type UpdateBudgetSetupInput = Partial<CreateBudgetSetupInput>;
+
+export type CreateWalletInput = Omit<SupabaseWallet, 'id' | 'created_at' | 'updated_at' | 'user_id'>;
+export type UpdateWalletInput = Partial<CreateWalletInput>;
 
 export type CreateMonthlyPaymentScheduleInput = Omit<SupabaseMonthlyPaymentSchedule, 'id' | 'created_at' | 'updated_at' | 'user_id'>;
 export type UpdateMonthlyPaymentScheduleInput = Partial<CreateMonthlyPaymentScheduleInput>;
