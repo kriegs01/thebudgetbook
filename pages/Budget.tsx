@@ -10,7 +10,7 @@ import { getScheduleExpectedAmount } from '../src/utils/linkedAccountUtils'; // 
 import { getBillerAmountForDate } from '../src/utils/billers'; // For scheduled increases fallback
 import { getPaymentSchedulesByPeriod, recordPaymentViaTransaction } from '../src/services/paymentSchedulesService';
 import { combineDateWithCurrentTime } from '../src/utils/dateUtils';
-import { getWalletsForCurrentUser, updateWallet } from '../src/services/walletsService';
+import { getWalletsForCurrentUser } from '../src/services/walletsService';
 
 interface BudgetProps {
   items: BudgetItem[];
@@ -115,6 +115,13 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
   // Wallets (Stash) state
   const [wallets, setWallets] = useState<Wallet[]>([]);
 
+  // Stash funding modal state
+  const [fundModal, setFundModal] = useState<{ wallet: Wallet } | null>(null);
+  const [fundForm, setFundForm] = useState({ amount: '', date: new Date().toISOString().split('T')[0], notes: '' });
+  const [fundSubmitting, setFundSubmitting] = useState(false);
+  const [stashInfoModal, setStashInfoModal] = useState<{ wallet: Wallet } | null>(null);
+  const [stashStatusMsg, setStashStatusMsg] = useState<{ msg: string; type: 'success' | 'error' } | null>(null);
+
   // REFACTOR: Payment schedules state - source of truth for payment status
   const [paymentSchedules, setPaymentSchedules] = useState<SupabaseMonthlyPaymentSchedule[]>([]);
 
@@ -193,14 +200,92 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
     loadWallets();
   }, []);
 
-  const handleWalletAmountChange = (walletId: string, value: string) => {
-    setWallets(prev => prev.map(w => w.id === walletId ? { ...w, amount: parseFloat(value) || 0 } : w));
+  /** Returns all stash top-up transactions for a wallet within the selected budget month. */
+  const getStashTopUps = useCallback((walletId: string): SupabaseTransaction[] => {
+    const monthIndex = MONTHS.indexOf(selectedMonth);
+    return transactions.filter(tx => {
+      if (tx.wallet_id !== walletId) return false;
+      const txDate = new Date(tx.date);
+      return txDate.getMonth() === monthIndex && txDate.getFullYear() === selectedYear;
+    });
+  }, [transactions, selectedMonth, selectedYear]);
+
+  /** Computes funded/remaining/isFunded aggregates for a wallet in the selected month. */
+  const getStashAggregates = useCallback((wallet: Wallet) => {
+    const topUps = getStashTopUps(wallet.id);
+    const funded = topUps.reduce((sum, tx) => sum + tx.amount, 0);
+    const remaining = Math.max(0, wallet.amount - funded);
+    const isFunded = funded >= wallet.amount;
+    return { funded, remaining, isFunded, topUps };
+  }, [getStashTopUps]);
+
+  /** Opens the Fund Stash modal, pre-filling the amount with the remaining balance. */
+  const handleOpenFundModal = useCallback((wallet: Wallet) => {
+    const { remaining } = getStashAggregates(wallet);
+    setFundForm({
+      amount: remaining > 0 ? remaining.toFixed(2) : '',
+      date: new Date().toISOString().split('T')[0],
+      notes: '',
+    });
+    setFundModal({ wallet });
+  }, [getStashAggregates]);
+
+  /** Submits the Fund Stash form, creating a stash top-up transaction. */
+  const handleFundSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!fundModal) return;
+    const amount = parseFloat(fundForm.amount);
+    if (isNaN(amount) || amount <= 0) return;
+    setFundSubmitting(true);
+    try {
+      const { error } = await createTransaction({
+        name: `Stash top-up - ${fundModal.wallet.name} (${selectedMonth} ${selectedYear})`,
+        amount,
+        date: combineDateWithCurrentTime(fundForm.date),
+        payment_method_id: fundModal.wallet.accountId,
+        transaction_type: 'cash_in',
+        wallet_id: fundModal.wallet.id,
+        notes: fundForm.notes || null,
+        payment_schedule_id: null,
+        related_transaction_id: null,
+        receipt_url: null,
+      });
+      if (error) throw error;
+      const walletName = fundModal.wallet.name;
+      setFundModal(null);
+      setStashStatusMsg({ msg: `Funded stash '${walletName}' by ${formatCurrency(amount)}`, type: 'success' });
+      setTimeout(() => setStashStatusMsg(null), 3000);
+      await reloadTransactions();
+    } catch (err) {
+      console.error('[Budget] Error funding stash:', err);
+      setStashStatusMsg({ msg: 'Failed to fund stash. Please try again.', type: 'error' });
+      setTimeout(() => setStashStatusMsg(null), 3000);
+    } finally {
+      setFundSubmitting(false);
+    }
   };
 
-  const handleWalletAmountBlur = async (walletId: string, value: string) => {
-    const amount = parseFloat(value);
-    if (isNaN(amount) || amount < 0) return;
-    await updateWallet(walletId, { amount });
+  /** Confirms and deletes a stash top-up transaction.
+   * Uses deleteTransactionAndRevertSchedule which safely handles null payment_schedule_id
+   * and also cleans up any credit_payment counterpart transactions. */
+  const handleDeleteStashTopUp = (txId: string, amount: number) => {
+    setConfirmModal({
+      show: true,
+      title: 'Delete Top-up',
+      message: `Delete this stash top-up of ${formatCurrency(amount)}? This will remove the underlying transaction.`,
+      onConfirm: async () => {
+        setConfirmModal(p => ({ ...p, show: false }));
+        const { error } = await deleteTransactionAndRevertSchedule(txId);
+        if (error) {
+          console.error('[Budget] Error deleting stash top-up:', error);
+          setStashStatusMsg({ msg: 'Failed to delete top-up.', type: 'error' });
+        } else {
+          setStashStatusMsg({ msg: 'Top-up deleted.', type: 'success' });
+          await reloadTransactions();
+        }
+        setTimeout(() => setStashStatusMsg(null), 3000);
+      },
+    });
   };
   
   // REFACTOR: Load payment schedules for the selected month
@@ -1689,9 +1774,16 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
         <div className="bg-white rounded-[3rem] shadow-sm border border-gray-100 overflow-hidden w-full">
           <div className="p-8 border-b border-gray-50 bg-gray-50/30 flex justify-between items-center">
             <h3 className="text-xs font-black text-gray-900 uppercase tracking-[0.25em]">Stash</h3>
-            <span className="text-lg font-black text-indigo-600">
-              {formatCurrency(wallets.reduce((s, w) => s + w.amount, 0))}
-            </span>
+            <div className="flex items-center space-x-3">
+              {stashStatusMsg && (
+                <span className={`text-xs font-bold px-3 py-1 rounded-xl ${stashStatusMsg.type === 'success' ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'}`}>
+                  {stashStatusMsg.msg}
+                </span>
+              )}
+              <span className="text-lg font-black text-indigo-600">
+                {formatCurrency(wallets.reduce((s, w) => s + w.amount, 0))}
+              </span>
+            </div>
           </div>
           <div className="overflow-x-auto">
             {wallets.length === 0 ? (
@@ -1704,36 +1796,51 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                 <thead>
                   <tr className="text-[10px] font-black text-gray-400 uppercase border-b border-gray-50">
                     <th className="p-4 pl-10">Name</th>
-                    <th className="p-4">Amount</th>
-                    <th className="p-4 pr-10">Account</th>
+                    <th className="p-4">Target</th>
+                    <th className="p-4">Account</th>
+                    <th className="p-4 text-center">Info</th>
+                    <th className="p-4 pr-10 text-center">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-50">
                   {wallets.map((wallet) => {
                     const linkedAccount = accounts.find(a => a.id === wallet.accountId);
+                    const { isFunded } = getStashAggregates(wallet);
                     return (
                       <tr key={wallet.id} className="bg-white">
                         <td className="p-4 pl-10">
                           <span className="text-sm font-bold text-gray-900">{wallet.name}</span>
                         </td>
                         <td className="p-4">
-                          <div className="flex items-center space-x-1">
-                            <span className="text-gray-400 font-bold">₱</span>
-                            <input
-                              type="number"
-                              min="0"
-                              step="0.01"
-                              value={wallet.amount}
-                              onChange={(e) => handleWalletAmountChange(wallet.id, e.target.value)}
-                              onBlur={(e) => handleWalletAmountBlur(wallet.id, e.target.value)}
-                              className="bg-transparent border-none text-sm font-black text-indigo-600 w-28 outline-none focus:bg-indigo-50 focus:rounded-lg focus:px-1 transition-all"
-                            />
-                          </div>
+                          <span className="text-sm font-black text-indigo-600">{formatCurrency(wallet.amount)}</span>
                         </td>
-                        <td className="p-4 pr-10">
+                        <td className="p-4">
                           <span className="text-sm text-gray-600">
                             {linkedAccount ? `${linkedAccount.bank} (${linkedAccount.classification})` : wallet.accountId}
                           </span>
+                        </td>
+                        <td className="p-4 text-center">
+                          <button
+                            onClick={() => setStashInfoModal({ wallet })}
+                            title="View stash details"
+                            className="text-gray-400 hover:text-indigo-600 transition-colors rounded-full p-1 hover:bg-indigo-50"
+                          >
+                            <Info className="w-3.5 h-3.5" />
+                          </button>
+                        </td>
+                        <td className="p-4 pr-10 text-center">
+                          <div className="flex items-center justify-center space-x-2">
+                            {isFunded && (
+                              <CheckCircle2 className="w-4 h-4 text-green-500" title="Fully funded this month" aria-label="Fully funded this month" />
+                            )}
+                            <button
+                              onClick={() => handleOpenFundModal(wallet)}
+                              className="flex items-center space-x-1 px-3 py-1 rounded-xl bg-indigo-50 text-indigo-600 hover:bg-indigo-100 transition-colors text-xs font-bold"
+                            >
+                              <Plus className="w-3 h-3" />
+                              <span>Fund</span>
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     );
@@ -2585,9 +2692,140 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
         </div>
       )}
 
-      {confirmModal.show && <ConfirmDialog {...confirmModal} onClose={() => setConfirmModal(p => ({ ...p, show: false }))} />}
+      {/* Fund Stash Modal */}
+      {fundModal && (
+        <div className="fixed inset-0 z-[150] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md" onClick={() => setFundModal(null)}>
+          <div className="w-full max-w-md bg-white rounded-3xl p-8 shadow-2xl relative" onClick={e => e.stopPropagation()}>
+            <button onClick={() => setFundModal(null)} className="absolute top-4 right-4 text-gray-400 hover:text-gray-700 p-2 rounded-full hover:bg-gray-100 transition-colors" aria-label="Close"><X className="w-5 h-5" /></button>
+            <div className="flex items-center space-x-3 mb-6">
+              <div className="w-12 h-12 bg-indigo-50 text-indigo-600 rounded-2xl flex items-center justify-center">
+                <Plus className="w-6 h-6" />
+              </div>
+              <div>
+                <h2 className="text-xl font-black text-gray-900 uppercase tracking-tight">Fund Stash</h2>
+                <p className="text-xs text-gray-500 font-medium">{fundModal.wallet.name}</p>
+              </div>
+            </div>
+            <form onSubmit={handleFundSubmit} className="space-y-5">
+              <div>
+                <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Amount <span className="text-red-500">*</span></label>
+                <div className="flex items-center border border-gray-200 rounded-2xl px-4 py-3 focus-within:border-indigo-400 transition-colors">
+                  <span className="text-gray-400 font-bold mr-2">₱</span>
+                  <input
+                    type="number"
+                    min="0.01"
+                    step="0.01"
+                    value={fundForm.amount}
+                    onChange={e => setFundForm(f => ({ ...f, amount: e.target.value }))}
+                    placeholder="0.00"
+                    required
+                    className="flex-1 bg-transparent border-none outline-none text-sm font-black text-indigo-600"
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Date <span className="text-red-500">*</span></label>
+                <input
+                  type="date"
+                  value={fundForm.date}
+                  onChange={e => setFundForm(f => ({ ...f, date: e.target.value }))}
+                  required
+                  className="w-full border border-gray-200 rounded-2xl px-4 py-3 text-sm font-bold text-gray-800 outline-none focus:border-indigo-400 transition-colors"
+                />
+              </div>
+              <div>
+                <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Notes <span className="text-gray-300">(optional)</span></label>
+                <input
+                  type="text"
+                  value={fundForm.notes}
+                  onChange={e => setFundForm(f => ({ ...f, notes: e.target.value }))}
+                  placeholder="e.g. Monthly allocation"
+                  className="w-full border border-gray-200 rounded-2xl px-4 py-3 text-sm text-gray-700 outline-none focus:border-indigo-400 transition-colors"
+                />
+              </div>
+              <div className="flex flex-col space-y-3 pt-2">
+                <button
+                  type="submit"
+                  disabled={fundSubmitting}
+                  className="w-full bg-indigo-600 text-white py-4 rounded-2xl font-black uppercase tracking-widest text-[10px] hover:bg-indigo-700 transition-all disabled:opacity-60"
+                >
+                  {fundSubmitting ? 'Funding…' : 'Fund Stash'}
+                </button>
+                <button type="button" onClick={() => setFundModal(null)} className="w-full bg-gray-100 text-gray-500 py-4 rounded-2xl font-black uppercase tracking-widest text-[10px] hover:bg-gray-200 transition-all">
+                  Cancel
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
-      {/* Schedule Payments Modal */}
+      {/* Stash Info Modal */}
+      {stashInfoModal && (() => {
+        const { funded, remaining, topUps } = getStashAggregates(stashInfoModal.wallet);
+        const linkedAccount = accounts.find(a => a.id === stashInfoModal.wallet.accountId);
+        return (
+          <div className="fixed inset-0 z-[150] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md" onClick={() => setStashInfoModal(null)}>
+            <div className="w-full max-w-lg bg-white rounded-3xl p-8 shadow-2xl relative max-h-[85vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+              <button onClick={() => setStashInfoModal(null)} className="absolute top-4 right-4 text-gray-400 hover:text-gray-700 p-2 rounded-full hover:bg-gray-100 transition-colors" aria-label="Close"><X className="w-5 h-5" /></button>
+              <div className="flex items-center space-x-3 mb-6">
+                <div className="w-12 h-12 bg-indigo-50 text-indigo-600 rounded-2xl flex items-center justify-center">
+                  <Info className="w-6 h-6" />
+                </div>
+                <div>
+                  <h2 className="text-xl font-black text-gray-900 uppercase tracking-tight">Stash Info</h2>
+                  <p className="text-xs text-gray-500 font-medium">{stashInfoModal.wallet.name} · {selectedMonth} {selectedYear}</p>
+                </div>
+              </div>
+              {/* Summary */}
+              <div className="grid grid-cols-3 gap-4 mb-6">
+                <div className="bg-gray-50 rounded-2xl p-4 text-center">
+                  <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Target</p>
+                  <p className="text-base font-black text-indigo-600">{formatCurrency(stashInfoModal.wallet.amount)}</p>
+                </div>
+                <div className="bg-green-50 rounded-2xl p-4 text-center">
+                  <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Funded</p>
+                  <p className="text-base font-black text-green-600">{formatCurrency(funded)}</p>
+                </div>
+                <div className="bg-orange-50 rounded-2xl p-4 text-center">
+                  <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Remaining</p>
+                  <p className="text-base font-black text-orange-600">{formatCurrency(remaining)}</p>
+                </div>
+              </div>
+              {linkedAccount && (
+                <p className="text-xs text-gray-500 mb-5 font-medium">Account: <span className="text-gray-700 font-bold">{linkedAccount.bank} ({linkedAccount.classification})</span></p>
+              )}
+              {/* Top-ups list */}
+              <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-3">Top-ups this month</h3>
+              {topUps.length === 0 ? (
+                <p className="text-sm text-gray-400 italic py-4 text-center">No top-ups for this stash this month. Fund this stash to see top-ups here.</p>
+              ) : (
+                <div className="space-y-3">
+                  {topUps.map(tx => (
+                    <div key={tx.id} className="bg-gray-50 rounded-2xl p-4 flex items-center justify-between">
+                      <div className="space-y-0.5">
+                        <p className="text-sm font-bold text-gray-900">{tx.name}</p>
+                        <p className="text-xs text-gray-500">{new Date(tx.date).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })}</p>
+                        {tx.notes && <p className="text-xs text-gray-400 italic">{tx.notes}</p>}
+                      </div>
+                      <div className="flex items-center space-x-3">
+                        <span className="text-sm font-black text-indigo-600">{formatCurrency(tx.amount)}</span>
+                        <button
+                          onClick={() => handleDeleteStashTopUp(tx.id, tx.amount)}
+                          title="Delete top-up"
+                          className="text-red-400 hover:text-red-600 p-1.5 rounded-xl hover:bg-red-50 transition-colors"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        );
+      })()}
       {schedulePaymentsModal && (
         <div className="fixed inset-0 z-[150] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md" onClick={() => setSchedulePaymentsModal(null)}>
           <div className="w-full max-w-lg bg-white rounded-3xl p-8 shadow-2xl relative max-h-[85vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
@@ -2673,6 +2911,7 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
           </div>
         </div>
       )}
+      {confirmModal.show && <ConfirmDialog {...confirmModal} onClose={() => setConfirmModal(p => ({ ...p, show: false }))} />}
     </div>
   );
 };

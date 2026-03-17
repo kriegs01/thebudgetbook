@@ -79,6 +79,7 @@ export interface SupabaseTransaction {
   related_transaction_id: string | null; // NEW - links transfer pairs and loan payments
   receipt_url: string | null; // URL of receipt image in Supabase Storage
   user_id: string | null; // uuid, references auth.users(id)
+  wallet_id: string | null; // uuid, nullable - links stash top-up transactions to a wallet
 }
 
 export interface SupabaseBudgetSetup {
