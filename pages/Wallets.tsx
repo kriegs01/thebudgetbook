@@ -53,7 +53,8 @@ const WalletsPage: React.FC<WalletsPageProps> = ({ accounts }) => {
 
   const openAddModal = () => {
     setEditingWallet(null);
-    setFormData({ name: '', amount: '', accountId: accounts[0]?.id || '' });
+    const firstDebitAccount = accounts.find((acc) => acc.type !== 'Credit');
+    setFormData({ name: '', amount: '', accountId: firstDebitAccount?.id || '' });
     setFormError(null);
     setShowModal(true);
   };
@@ -353,7 +354,7 @@ const WalletsPage: React.FC<WalletsPageProps> = ({ accounts }) => {
                   className="w-full bg-gray-50 border-transparent rounded-xl p-4 outline-none focus:ring-2 focus:ring-indigo-500 font-bold"
                 >
                   <option value="">Select account</option>
-                  {accounts.map((acc) => (
+                  {accounts.filter((acc) => acc.type !== 'Credit').map((acc) => (
                     <option key={acc.id} value={acc.id}>
                       {acc.bank} ({acc.classification})
                     </option>
