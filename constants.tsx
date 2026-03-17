@@ -1,4 +1,4 @@
-import { LayoutDashboard, Wallet, Receipt, CreditCard, Landmark, PiggyBank, Settings, Trash2, FileText, FolderOpen } from 'lucide-react';
+import { LayoutDashboard, Wallet, WalletCards, Receipt, CreditCard, Landmark, PiggyBank, Settings, Trash2, FileText } from 'lucide-react';
 import { Page, Account, BudgetItem, Biller, Installment, SavingsJar, BudgetCategory, PaymentSchedule, CategorizedSetupItem } from './types';
 
 export const NAV_ITEMS = [
@@ -9,7 +9,7 @@ export const NAV_ITEMS = [
   { id: Page.INSTALLMENTS, label: 'Installments', icon: <CreditCard className="w-5 h-5" />, path: "/installments" },
   { id: Page.ACCOUNTS, label: 'Accounts', icon: <Landmark className="w-5 h-5" />, path: "/accounts" },
   { id: Page.SAVINGS, label: 'Savings', icon: <PiggyBank className="w-5 h-5" />, path: "/savings" },
-  { id: Page.WALLET, label: 'Wallet', icon: <FolderOpen className="w-5 h-5" />, path: "/wallets" },
+  { id: Page.WALLET, label: 'Wallet', icon: <WalletCards className="w-5 h-5" />, path: "/wallets" },
   { id: Page.SETTINGS, label: 'Settings', icon: <Settings className="w-5 h-5" />, path: "/settings" },
   { id: Page.TRASH, label: 'Trash', icon: <Trash2 className="w-5 h-5" />, path: "/trash" },
 ];

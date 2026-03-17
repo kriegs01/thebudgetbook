@@ -10,7 +10,7 @@ import { getScheduleExpectedAmount } from '../src/utils/linkedAccountUtils'; // 
 import { getBillerAmountForDate } from '../src/utils/billers'; // For scheduled increases fallback
 import { getPaymentSchedulesByPeriod, recordPaymentViaTransaction } from '../src/services/paymentSchedulesService';
 import { combineDateWithCurrentTime } from '../src/utils/dateUtils';
-import { getWalletsForCurrentUser } from '../src/services/walletsService';
+import { getWalletsForCurrentUser, updateWallet } from '../src/services/walletsService';
 
 interface BudgetProps {
   items: BudgetItem[];
@@ -192,6 +192,16 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
     };
     loadWallets();
   }, []);
+
+  const handleWalletAmountChange = (walletId: string, value: string) => {
+    setWallets(prev => prev.map(w => w.id === walletId ? { ...w, amount: parseFloat(value) || 0 } : w));
+  };
+
+  const handleWalletAmountBlur = async (walletId: string, value: string) => {
+    const amount = parseFloat(value);
+    if (isNaN(amount) || amount < 0) return;
+    await updateWallet(walletId, { amount });
+  };
   
   // REFACTOR: Load payment schedules for the selected month
   // This provides accurate payment status from the monthly_payment_schedules table
@@ -1707,7 +1717,18 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                           <span className="text-sm font-bold text-gray-900">{wallet.name}</span>
                         </td>
                         <td className="p-4">
-                          <span className="text-sm font-black text-indigo-600">{formatCurrency(wallet.amount)}</span>
+                          <div className="flex items-center space-x-1">
+                            <span className="text-gray-400 font-bold">₱</span>
+                            <input
+                              type="number"
+                              min="0"
+                              step="0.01"
+                              value={wallet.amount}
+                              onChange={(e) => handleWalletAmountChange(wallet.id, e.target.value)}
+                              onBlur={(e) => handleWalletAmountBlur(wallet.id, e.target.value)}
+                              className="bg-transparent border-none text-sm font-black text-indigo-600 w-28 outline-none focus:bg-indigo-50 focus:rounded-lg focus:px-1 transition-all"
+                            />
+                          </div>
                         </td>
                         <td className="p-4 pr-10">
                           <span className="text-sm text-gray-600">

@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, LayoutGrid, List, Eye, Pencil, FolderOpen, AlertTriangle } from 'lucide-react';
+import { Plus, LayoutGrid, List, Eye, Pencil, WalletCards, AlertTriangle, Trash2 } from 'lucide-react';
 import { Wallet, Account } from '../types';
-import { getWalletsForCurrentUser, createWallet, updateWallet } from '../src/services/walletsService';
+import { getWalletsForCurrentUser, createWallet, updateWallet, deleteWallet } from '../src/services/walletsService';
 
 interface WalletsPageProps {
   accounts: Account[];
@@ -30,6 +30,8 @@ const WalletsPage: React.FC<WalletsPageProps> = ({ accounts }) => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [formData, setFormData] = useState({ name: '', amount: '', accountId: '' });
   const [formError, setFormError] = useState<string | null>(null);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const loadWallets = useCallback(async () => {
     setLoading(true);
@@ -67,6 +69,7 @@ const WalletsPage: React.FC<WalletsPageProps> = ({ accounts }) => {
     setShowModal(false);
     setEditingWallet(null);
     setFormError(null);
+    setShowDeleteConfirm(false);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -104,6 +107,22 @@ const WalletsPage: React.FC<WalletsPageProps> = ({ accounts }) => {
       }
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!editingWallet || isDeleting) return;
+    setIsDeleting(true);
+    try {
+      const { error: err } = await deleteWallet(editingWallet.id);
+      if (err) {
+        alert('Failed to delete wallet. Please try again.');
+      } else {
+        await loadWallets();
+        closeModal();
+      }
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -177,7 +196,7 @@ const WalletsPage: React.FC<WalletsPageProps> = ({ accounts }) => {
           {wallets.length === 0 && (
             <div className="text-center py-12">
               <div className="inline-flex items-center justify-center w-20 h-20 rounded-full bg-gray-100 mb-4">
-                <FolderOpen className="w-10 h-10 text-gray-400" />
+                <WalletCards className="w-10 h-10 text-gray-400" />
               </div>
               <h3 className="text-xl font-bold text-gray-900 mb-2">No Wallets Yet</h3>
               <p className="text-gray-500 mb-6">Create your first wallet to start tracking your stashes.</p>
@@ -202,7 +221,7 @@ const WalletsPage: React.FC<WalletsPageProps> = ({ accounts }) => {
                   <div className="flex items-start justify-between">
                     <div className="flex items-center space-x-3">
                       <div className="w-10 h-10 flex-shrink-0 bg-indigo-50 rounded-xl flex items-center justify-center">
-                        <FolderOpen className="w-5 h-5 text-indigo-600" />
+                        <WalletCards className="w-5 h-5 text-indigo-600" />
                       </div>
                       <div>
                         <h3 className="font-bold text-gray-900">{wallet.name}</h3>
@@ -254,7 +273,7 @@ const WalletsPage: React.FC<WalletsPageProps> = ({ accounts }) => {
                         <td className="px-6 py-4">
                           <div className="flex items-center space-x-3">
                             <div className="w-8 h-8 bg-indigo-50 rounded-lg flex items-center justify-center">
-                              <FolderOpen className="w-4 h-4 text-indigo-600" />
+                              <WalletCards className="w-4 h-4 text-indigo-600" />
                             </div>
                             <span className="font-bold text-gray-900">{wallet.name}</span>
                           </div>
@@ -346,6 +365,31 @@ const WalletsPage: React.FC<WalletsPageProps> = ({ accounts }) => {
                 <p className="text-sm text-red-600 font-medium">{formError}</p>
               )}
 
+              {/* Delete confirmation inline */}
+              {showDeleteConfirm && (
+                <div className="bg-red-50 border border-red-200 rounded-xl p-4 space-y-3">
+                  <p className="text-sm font-bold text-red-800">Delete this wallet?</p>
+                  <p className="text-xs text-red-600">This will permanently remove the wallet. This action cannot be undone.</p>
+                  <div className="flex space-x-2">
+                    <button
+                      type="button"
+                      onClick={() => setShowDeleteConfirm(false)}
+                      className="flex-1 bg-white border border-gray-200 py-2 rounded-xl font-bold text-gray-600 hover:bg-gray-50 text-sm"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleDelete}
+                      disabled={isDeleting}
+                      className="flex-1 bg-red-600 text-white py-2 rounded-xl font-bold hover:bg-red-700 disabled:opacity-60 text-sm"
+                    >
+                      {isDeleting ? 'Deleting...' : 'Yes, Delete'}
+                    </button>
+                  </div>
+                </div>
+              )}
+
               <div className="flex space-x-3 pt-4">
                 <button
                   type="button"
@@ -354,6 +398,16 @@ const WalletsPage: React.FC<WalletsPageProps> = ({ accounts }) => {
                 >
                   Cancel
                 </button>
+                {editingWallet && !showDeleteConfirm && (
+                  <button
+                    type="button"
+                    onClick={() => setShowDeleteConfirm(true)}
+                    className="flex items-center justify-center space-x-1 px-4 py-3 rounded-xl font-bold text-red-500 bg-red-50 hover:bg-red-100 transition-colors"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                    <span>Delete</span>
+                  </button>
+                )}
                 <button
                   type="submit"
                   disabled={isSubmitting}

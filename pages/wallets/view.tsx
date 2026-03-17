@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useSearchParams, Link } from 'react-router-dom';
-import { ArrowLeft, FolderOpen } from 'lucide-react';
+import { ArrowLeft, WalletCards } from 'lucide-react';
 import { Wallet, Account } from '../../types';
 import { getWalletById } from '../../src/services/walletsService';
 import { supabase, getTableName } from '../../src/utils/supabaseClient';
@@ -112,7 +112,7 @@ const WalletView: React.FC<WalletViewProps> = ({ accounts }) => {
             <p className="text-xs font-black text-gray-400 uppercase tracking-widest mb-1">Wallet Name</p>
             <div className="flex items-center space-x-2">
               <div className="w-8 h-8 bg-indigo-50 rounded-lg flex items-center justify-center">
-                <FolderOpen className="w-4 h-4 text-indigo-600" />
+                <WalletCards className="w-4 h-4 text-indigo-600" />
               </div>
               <p className="text-lg font-black text-gray-900">{wallet.name}</p>
             </div>
@@ -138,7 +138,7 @@ const WalletView: React.FC<WalletViewProps> = ({ accounts }) => {
         {topUps.length === 0 ? (
           <div className="px-8 py-12 text-center">
             <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-gray-100 mb-4">
-              <FolderOpen className="w-8 h-8 text-gray-400" />
+              <WalletCards className="w-8 h-8 text-gray-400" />
             </div>
             <p className="text-gray-500 font-medium">No top-ups yet.</p>
             <p className="text-gray-400 text-sm mt-1">Top-ups made to this stash will appear here.</p>
