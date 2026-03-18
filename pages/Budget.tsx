@@ -121,7 +121,7 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
 
   // Stash funding modal state
   const [fundModal, setFundModal] = useState<{ wallet: Wallet } | null>(null);
-  const [fundForm, setFundForm] = useState({ amount: '', date: new Date().toISOString().split('T')[0], notes: '' });
+  const [fundForm, setFundForm] = useState({ amount: '', date: '', notes: '' });
   const [fundSubmitting, setFundSubmitting] = useState(false);
   const [stashInfoModal, setStashInfoModal] = useState<{ wallet: Wallet } | null>(null);
   const [stashStatusMsg, setStashStatusMsg] = useState<{ msg: string; type: 'success' | 'error' } | null>(null);
@@ -254,16 +254,31 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
     return { funded, remaining, isFunded, topUps };
   }, [getStashTopUps]);
 
-  /** Opens the Fund Stash modal, pre-filling the amount with the remaining balance. */
+  /** Opens the Fund Stash modal, pre-filling the amount with the remaining balance.
+   * The date is defaulted to a date within the selected budget month/year so that
+   * getStashTopUps correctly picks up the transaction in the status and info modal.
+   * If today falls within the selected budget month/year, today's local date is used;
+   * otherwise the 1st of the selected budget month is used. */
   const handleOpenFundModal = useCallback((wallet: Wallet) => {
     const { remaining } = getStashAggregates(wallet);
+    const now = new Date();
+    const selectedMonthIndex = MONTHS.indexOf(selectedMonth);
+    const isCurrentPeriod =
+      now.getFullYear() === selectedYear && now.getMonth() === selectedMonthIndex;
+    // Build default date using local date components (not UTC) to avoid midnight boundary issues
+    let defaultDate: string;
+    if (isCurrentPeriod) {
+      defaultDate = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+    } else {
+      defaultDate = `${selectedYear}-${String(selectedMonthIndex + 1).padStart(2, '0')}-01`;
+    }
     setFundForm({
       amount: remaining > 0 ? remaining.toFixed(2) : '',
-      date: new Date().toISOString().split('T')[0],
+      date: defaultDate,
       notes: '',
     });
     setFundModal({ wallet });
-  }, [getStashAggregates]);
+  }, [getStashAggregates, selectedMonth, selectedYear]);
 
   /** Submits the Fund Stash form, creating a stash top-up transaction. */
   const handleFundSubmit = async (e: React.FormEvent) => {
@@ -2849,6 +2864,8 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                   type="date"
                   value={fundForm.date}
                   onChange={e => setFundForm(f => ({ ...f, date: e.target.value }))}
+                  min={(() => { const mi = MONTHS.indexOf(selectedMonth); return `${selectedYear}-${String(mi + 1).padStart(2, '0')}-01`; })()}
+                  max={(() => { const mi = MONTHS.indexOf(selectedMonth); const last = new Date(selectedYear, mi + 1, 0).getDate(); return `${selectedYear}-${String(mi + 1).padStart(2, '0')}-${String(last).padStart(2, '0')}`; })()}
                   required
                   className="w-full border border-gray-200 rounded-2xl px-4 py-3 text-sm font-bold text-gray-800 outline-none focus:border-indigo-400 transition-colors"
                 />
