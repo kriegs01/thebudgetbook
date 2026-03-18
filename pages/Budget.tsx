@@ -1911,7 +1911,6 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                   <tr className="text-[10px] font-black text-gray-400 uppercase border-b border-gray-50">
                     <th className="p-4 pl-10">Name</th>
                     <th className="p-4">Target</th>
-                    <th className="p-4">Funded</th>
                     <th className="p-4">Account</th>
                     <th className="p-4 text-center">Info</th>
                     <th className="p-4 text-center">Actions</th>
@@ -1932,33 +1931,38 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                           <span className="text-sm font-black text-indigo-600">{formatCurrency(wallet.amount)}</span>
                         </td>
                         <td className="p-4">
-                          {isFunded ? (
-                            <span className="text-xs font-black text-green-600 px-2 py-1 bg-green-50 rounded-lg">Funded</span>
-                          ) : funded > 0 ? (
-                            <span className="text-xs font-bold text-orange-600">{formatCurrency(funded)}</span>
-                          ) : (
-                            <span className="text-xs text-gray-400">—</span>
-                          )}
-                        </td>
-                        <td className="p-4">
                           <span className="text-sm text-gray-600">
                             {linkedAccount ? `${linkedAccount.bank} (${linkedAccount.classification})` : wallet.accountId}
                           </span>
                         </td>
                         <td className="p-4 text-center">
-                          <button
-                            onClick={() => setStashInfoModal({ wallet })}
-                            title="View stash details"
-                            className="text-gray-400 hover:text-indigo-600 transition-colors rounded-full p-1 hover:bg-indigo-50"
-                          >
-                            <Info className="w-3.5 h-3.5" />
-                          </button>
+                          <div className="flex items-center justify-center space-x-2">
+                            {isFunded ? (
+                              <span aria-label="Fully funded this month" className="text-xs font-black text-green-600 px-2 py-1 bg-green-50 rounded-lg">Funded</span>
+                            ) : funded > 0 ? (
+                              <span aria-label={`Partially funded: ${formatCurrency(funded)}`} className="text-xs font-bold text-orange-600">{formatCurrency(funded)}</span>
+                            ) : (
+                              <span aria-label="Not yet funded" className="text-xs text-gray-400">—</span>
+                            )}
+                            <button
+                              onClick={() => setStashInfoModal({ wallet })}
+                              title="View stash details"
+                              className="text-gray-400 hover:text-indigo-600 transition-colors rounded-full p-1 hover:bg-indigo-50"
+                            >
+                              <Info className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
                         </td>
                         <td className="p-4 text-center">
-                          <div className="flex items-center justify-center space-x-2">
-                            {isFunded && (
-                              <CheckCircle2 className="w-4 h-4 text-green-500" role="img" aria-label="Fully funded this month" />
-                            )}
+                          {isFunded ? (
+                            <button
+                              onClick={() => handleOpenFundModal(wallet)}
+                              title="Add more to this stash"
+                              className="w-7 h-7 flex items-center justify-center rounded-full bg-indigo-50 text-indigo-600 hover:bg-indigo-100 transition-colors"
+                            >
+                              <Plus className="w-3.5 h-3.5" />
+                            </button>
+                          ) : (
                             <button
                               onClick={() => handleOpenFundModal(wallet)}
                               className="flex items-center space-x-1 px-3 py-1 rounded-xl bg-indigo-50 text-indigo-600 hover:bg-indigo-100 transition-colors text-xs font-bold"
@@ -1966,7 +1970,7 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                               <Plus className="w-3 h-3" />
                               <span>Fund</span>
                             </button>
-                          </div>
+                          )}
                         </td>
                         <td className="p-4 pr-10 text-right">
                           <button
