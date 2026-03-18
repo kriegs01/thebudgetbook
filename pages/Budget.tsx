@@ -271,32 +271,41 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
     if (!fundModal) return;
     const amount = parseFloat(fundForm.amount);
     if (isNaN(amount) || amount <= 0) return;
+    // Capture wallet details before the modal is closed so they remain accessible
+    // in the async steps that follow setFundModal(null).
+    const walletId = fundModal.wallet.id;
+    const walletName = fundModal.wallet.name;
+    const walletAccountId = fundModal.wallet.accountId;
     setFundSubmitting(true);
     try {
       const { data: newTx, error } = await createTransaction({
-        name: `Stash top-up - ${fundModal.wallet.name} (${selectedMonth} ${selectedYear})`,
+        name: `Stash top-up - ${walletName} (${selectedMonth} ${selectedYear})`,
         // Negative amount: cash_in = money IN to the linked account (adds to balance per sign convention)
         amount: -amount,
         date: combineDateWithCurrentTime(fundForm.date),
-        payment_method_id: fundModal.wallet.accountId,
+        payment_method_id: walletAccountId,
         transaction_type: 'cash_in',
-        wallet_id: fundModal.wallet.id,
+        wallet_id: walletId,
         notes: fundForm.notes || null,
         payment_schedule_id: null,
         related_transaction_id: null,
         receipt_url: null,
       });
       if (error) throw error;
-      // Optimistic update: immediately add the new top-up so the row status and info modal
-      // reflect the fund without waiting for the DB reload to complete.
-      if (newTx) {
-        setStashTopUps(prev => [newTx as SupabaseTransaction, ...prev]);
+      // Build a safe tx with wallet_id explicitly set.  The DB row returned by
+      // createTransaction may omit wallet_id if the migration hasn't been applied
+      // to the target table yet, which would cause getStashTopUps to filter it out.
+      const safeNewTx: SupabaseTransaction | null = newTx
+        ? { ...(newTx as SupabaseTransaction), wallet_id: walletId }
+        : null;
+      // Optimistic update: show funded state immediately (deduplicate by id)
+      if (safeNewTx) {
+        setStashTopUps(prev => [safeNewTx, ...prev.filter(t => t.id !== safeNewTx.id)]);
       }
-      const walletName = fundModal.wallet.name;
       setFundModal(null);
       setStashStatusMsg({ msg: `Funded stash '${walletName}' by ${formatCurrency(amount)}`, type: 'success' });
       setTimeout(() => setStashStatusMsg(null), 3000);
-      // Also update the budget setup status to Active when stash is being funded
+      // Update budget setup status to Active when stash is being funded
       const existingSetup = savedSetups.find(s => s.month === selectedMonth && s.timing === selectedTiming);
       if (existingSetup && existingSetup.status !== BUDGET_SETUP_STATUS.ACTIVE) {
         const { error: statusError } = await updateBudgetSetupFrontend({
@@ -309,8 +318,20 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
           await onReloadSetups();
         }
       }
-      // Reload stash top-ups to ensure full consistency with the DB
-      await reloadStashTopUps();
+      // Reload from DB and merge: if the new tx isn't in the DB results (e.g. the
+      // wallet_id column migration hasn't been applied yet), keep the optimistic tx
+      // so the row and info modal continue to reflect the fund.
+      const { data: freshData, error: reloadError } = await getAllStashTransactions();
+      if (!reloadError && freshData !== null) {
+        const freshTopUps = freshData as SupabaseTransaction[];
+        if (safeNewTx && !freshTopUps.some(t => t.id === safeNewTx.id)) {
+          // New tx absent from DB result — keep it alongside the refreshed list
+          setStashTopUps([safeNewTx, ...freshTopUps]);
+        } else {
+          setStashTopUps(freshTopUps);
+        }
+      }
+      // If reload errors, the optimistic state set above remains intact
     } catch (err) {
       console.error('[Budget] Error funding stash:', err);
       setStashStatusMsg({ msg: 'Failed to fund stash. Please try again.', type: 'error' });
