@@ -386,8 +386,9 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
           setStashStatusMsg({ msg: 'Failed to delete top-up.', type: 'error' });
         } else {
           setStashStatusMsg({ msg: 'Top-up deleted.', type: 'success' });
-          // Reload stash top-ups directly so the row and info modal reflect the deletion
-          await reloadStashTopUps();
+          // Reload stash top-ups AND the main transactions list so the Transactions page
+          // and account balances reflect the deletion immediately.
+          await Promise.all([reloadStashTopUps(), reloadTransactions()]);
         }
         setTimeout(() => setStashStatusMsg(null), 3000);
       },
