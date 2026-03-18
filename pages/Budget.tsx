@@ -965,7 +965,8 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
       .reduce((sum, inst) => sum + inst.monthlyAmount, 0);
 
     // Grand total includes both regular items AND installments AND included stash wallets
-    const stashTotal = wallets.filter(w => !excludedWalletIds.has(w.id)).reduce((s, w) => s + w.amount, 0);
+    // Use the actual funded amount when it exceeds the target (over-funded stash)
+    const stashTotal = wallets.filter(w => !excludedWalletIds.has(w.id)).reduce((s, w) => s + Math.max(w.amount, getStashAggregates(w).funded), 0);
     const total = regularItemsTotal + installmentsTotal + stashTotal;
     
     try {
@@ -1027,7 +1028,7 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
       setAutoSaveStatus('error');
       setTimeout(() => setAutoSaveStatus('idle'), AUTO_SAVE_STATUS_TIMEOUT_MS);
     }
-  }, [view, setupData, projectedSalary, actualSalary, selectedMonth, selectedTiming, savedSetups, excludedInstallmentIds, excludedWalletIds, wallets, onReloadSetups]);
+  }, [view, setupData, projectedSalary, actualSalary, selectedMonth, selectedTiming, savedSetups, excludedInstallmentIds, excludedWalletIds, wallets, getStashAggregates, onReloadSetups]);
 
   /**
    * Debounced auto-save trigger
@@ -1156,7 +1157,8 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
       .reduce((sum, inst) => sum + inst.monthlyAmount, 0);
 
     // Grand total includes both regular items AND installments AND included stash wallets
-    const stashTotal = wallets.filter(w => !excludedWalletIds.has(w.id)).reduce((s, w) => s + w.amount, 0);
+    // Use the actual funded amount when it exceeds the target (over-funded stash)
+    const stashTotal = wallets.filter(w => !excludedWalletIds.has(w.id)).reduce((s, w) => s + Math.max(w.amount, getStashAggregates(w).funded), 0);
     const total = regularItemsTotal + installmentsTotal + stashTotal;
 
     console.log('[Budget] Regular items total:', regularItemsTotal);
@@ -1747,7 +1749,8 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
     return { category: cat.name, total: itemsTotal + installmentsTotal };
   });
   // Include stash wallet targets for wallets not excluded from the grand total
-  const stashTotal = wallets.filter(w => !excludedWalletIds.has(w.id)).reduce((s, w) => s + w.amount, 0);
+  // Use the actual funded amount when it exceeds the target (over-funded stash)
+  const stashTotal = wallets.filter(w => !excludedWalletIds.has(w.id)).reduce((s, w) => s + Math.max(w.amount, getStashAggregates(w).funded), 0);
   const grandTotal = categorySummary.reduce((sum, cat) => sum + cat.total, 0) + stashTotal;
 
   // Calculate Month Summary values
@@ -1897,7 +1900,7 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                 </span>
               )}
               <span className="text-lg font-black text-indigo-600">
-                {formatCurrency(wallets.filter(w => !excludedWalletIds.has(w.id)).reduce((s, w) => s + w.amount, 0))}
+                {formatCurrency(wallets.filter(w => !excludedWalletIds.has(w.id)).reduce((s, w) => s + Math.max(w.amount, getStashAggregates(w).funded), 0))}
               </span>
             </div>
           </div>
