@@ -68,3 +68,13 @@ export const getFirstDayOfCurrentYearIso = (): string => {
   const year = new Date().getFullYear();
   return `${year}-01-01`;
 };
+
+/**
+ * Gets the last day of the current year in ISO format (YYYY-12-31)
+ * Useful for initializing filter end-date defaults so that future-dated transactions
+ * (e.g. stash top-ups for upcoming budget months) remain visible in the list.
+ */
+export const getLastDayOfCurrentYearIso = (): string => {
+  const year = new Date().getFullYear();
+  return `${year}-12-31`;
+};

@@ -2,7 +2,7 @@ import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react'
 import { Plus, Info, Eye, ZoomIn, ZoomOut, Download, X, Pencil, Trash2, CheckSquare, Square, ChevronDown, Filter } from 'lucide-react';
 import { getAllTransactions, createTransaction, updateTransaction, deleteTransactionAndRevertSchedule, uploadTransactionReceipt, getReceiptSignedUrl, batchDeleteTransactions } from '../src/services/transactionsService';
 import { getAllAccountsFrontend } from '../src/services/accountsService';
-import { combineDateWithCurrentTime, getTodayIso, getFirstDayOfCurrentYearIso } from '../src/utils/dateUtils';
+import { combineDateWithCurrentTime, getTodayIso, getFirstDayOfCurrentYearIso, getLastDayOfCurrentYearIso } from '../src/utils/dateUtils';
 
 const FILTER_MIN_DATE = '2025-01-01';
 
@@ -57,7 +57,7 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ onTransactionDelete
 
   // ── Filter state ──────────────────────────────────────────────────────────
   const [filterStartDate, setFilterStartDate] = useState<string>(getFirstDayOfCurrentYearIso());
-  const [filterEndDate, setFilterEndDate] = useState<string>(getTodayIso());
+  const [filterEndDate, setFilterEndDate] = useState<string>(getLastDayOfCurrentYearIso());
   const [filterPaymentMethods, setFilterPaymentMethods] = useState<Set<string>>(new Set());
   const [showPaymentMethodDropdown, setShowPaymentMethodDropdown] = useState(false);
   const pmDropdownRef = useRef<HTMLDivElement>(null);
@@ -346,7 +346,7 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ onTransactionDelete
 
   const resetFilters = () => {
     setFilterStartDate(getFirstDayOfCurrentYearIso());
-    setFilterEndDate(getTodayIso());
+    setFilterEndDate(getLastDayOfCurrentYearIso());
     setFilterPaymentMethods(new Set());
   };
 
@@ -396,7 +396,6 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ onTransactionDelete
                 type="date"
                 value={filterEndDate}
                 min={filterStartDate}
-                max={getTodayIso()}
                 onChange={e => setFilterEndDate(e.target.value)}
                 className="bg-gray-50 rounded-xl px-3 py-2 text-sm font-bold border-transparent outline-none focus:ring-2 focus:ring-indigo-400"
               />
