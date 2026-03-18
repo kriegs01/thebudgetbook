@@ -27,9 +27,10 @@ const formatCurrency = (val: number) =>
 interface TransactionsPageProps {
   onTransactionDeleted?: () => void;
   onTransactionCreated?: () => void;
+  refreshKey?: number; // Increment to trigger a live data refresh from outside
 }
 
-const TransactionsPage: React.FC<TransactionsPageProps> = ({ onTransactionDeleted, onTransactionCreated }) => {
+const TransactionsPage: React.FC<TransactionsPageProps> = ({ onTransactionDeleted, onTransactionCreated, refreshKey }) => {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [accounts, setAccounts] = useState<AccountOption[]>([]);
   const [showForm, setShowForm] = useState(false);
@@ -124,6 +125,20 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ onTransactionDelete
   useEffect(() => {
     loadData();
   }, [loadData]);
+
+  // Re-fetch transactions when the parent signals an external change (e.g. stash top-up
+  // created/deleted from the Budget page). Uses a ref so the initial render is skipped.
+  const prevRefreshKey = useRef<number | undefined>();
+  useEffect(() => {
+    if (prevRefreshKey.current === undefined) {
+      prevRefreshKey.current = refreshKey;
+      return;
+    }
+    if (prevRefreshKey.current !== refreshKey) {
+      prevRefreshKey.current = refreshKey;
+      loadData();
+    }
+  }, [refreshKey, loadData]);
 
   useEffect(() => {
     // Set default paymentMethodId when accounts are loaded and form hasn't been touched
