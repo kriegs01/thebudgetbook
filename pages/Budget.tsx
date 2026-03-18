@@ -1927,6 +1927,8 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                     const linkedAccount = accounts.find(a => a.id === wallet.accountId);
                     const { funded, isFunded } = getStashAggregates(wallet);
                     const isIncluded = !excludedWalletIds.has(wallet.id);
+                    const isOverFunded = funded > wallet.amount && wallet.amount > 0;
+                    const isExactlyFunded = funded === wallet.amount && wallet.amount > 0;
                     return (
                       <tr key={wallet.id} className={`${isIncluded ? 'bg-white' : 'bg-gray-50 opacity-60'}`}>
                         <td className="p-4 pl-10">
@@ -1942,10 +1944,10 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                         </td>
                         <td className="p-4 text-center">
                           <div className="flex items-center justify-center space-x-2">
-                            {isFunded ? (
+                            {isOverFunded ? (
+                              <span aria-label={`Overfunded by ${formatCurrency(funded - wallet.amount)}`} className="text-xs font-black text-blue-600 px-2 py-1 bg-blue-50 rounded-lg">Overfunded +{formatCurrency(funded - wallet.amount)}</span>
+                            ) : isExactlyFunded ? (
                               <span aria-label="Fully funded this month" className="text-xs font-black text-green-600 px-2 py-1 bg-green-50 rounded-lg">Funded</span>
-                            ) : funded > 0 ? (
-                              <span aria-label={`Partially funded: ${formatCurrency(funded)}`} className="text-xs font-bold text-orange-600">{formatCurrency(funded)}</span>
                             ) : (
                               <span aria-label="Not yet funded" className="text-xs text-gray-400">—</span>
                             )}
