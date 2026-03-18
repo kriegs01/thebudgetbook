@@ -1895,7 +1895,12 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
   const remaining = salaryToUse - totalSpend;
 
   // totalPaid: sum of amounts for checked/included items that are paid/settled/funded.
-  // canClose: accessible when totalPaid covers totalSpend (every included item is settled).
+  // Mirrors the UI paid indicators exactly for each section:
+  //   • Biller items – schedule-first (status==='paid'); transaction matching only when no schedule exists.
+  //   • Fixed non-billers – item.settled flag (Settle button).
+  //   • Purchases non-billers – transaction matching (Pay/Paid button exists in UI).
+  //   • All other non-biller items – not counted (no paid indicator shown in UI).
+  // canClose: accessible when totalPaid covers totalSpend.
   let totalPaid = 0;
   for (const [catName, items] of Object.entries(setupData)) {
     if (!Array.isArray(items)) continue;
@@ -1905,12 +1910,23 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
       const isBiller = item.isBiller || billers.some(b => b.id === item.id);
       let paid = false;
       if (isBiller) {
-        paid = checkIfPaidBySchedule('biller', item.id) || checkIfPaidByTransaction(item.name, item.amount, selectedMonth);
+        // Mirror render loop: paymentSchedules state is already filtered to selectedMonth/selectedYear,
+        // so getPaymentSchedule() only returns a schedule for this period.
+        // If a schedule exists, rely solely on its status (no transaction override for pending schedules).
+        // Only fall back to transaction matching when no schedule has been created yet.
+        const ps = getPaymentSchedule('biller', item.id);
+        if (ps) {
+          paid = ps.status === 'paid';
+        } else {
+          paid = checkIfPaidByTransaction(item.name, item.amount, selectedMonth, selectedYear);
+        }
       } else if (catName === 'Fixed') {
         paid = !!item.settled;
-      } else {
-        paid = checkIfPaidByTransaction(item.name, item.amount, selectedMonth);
+      } else if (catName === 'Purchases') {
+        // Purchases non-billers have a Pay/Paid button in the UI
+        paid = checkIfPaidByTransaction(item.name, item.amount, selectedMonth, selectedYear);
       }
+      // Other non-biller items (Utilities, Subscriptions, etc.) have no paid indicator → not counted
       if (paid) totalPaid += amount;
     }
   }
