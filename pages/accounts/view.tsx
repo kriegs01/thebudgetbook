@@ -340,7 +340,6 @@ const AccountFilteredTransactions: React.FC<AccountFilteredTransactionsProps> = 
         notes: null,
         payment_schedule_id: null,
         related_transaction_id: null,
-        receipt_url: null,
       });
 
       if (error) throw error;
@@ -401,7 +400,6 @@ const AccountFilteredTransactions: React.FC<AccountFilteredTransactionsProps> = 
         notes: loanForm.what,
         payment_schedule_id: null,
         related_transaction_id: null,
-        receipt_url: null,
       });
 
       if (error) throw error;
@@ -434,7 +432,6 @@ const AccountFilteredTransactions: React.FC<AccountFilteredTransactionsProps> = 
         notes: cashInForm.notes || null,
         payment_schedule_id: null,
         related_transaction_id: null,
-        receipt_url: null,
       });
 
       if (error) throw error;
@@ -467,7 +464,6 @@ const AccountFilteredTransactions: React.FC<AccountFilteredTransactionsProps> = 
         notes: `Payment for: ${selectedLoan.name}`,
         payment_schedule_id: null,
         related_transaction_id: selectedLoan.id,
-        receipt_url: null,
       });
 
       if (error) throw error;
@@ -513,7 +509,6 @@ const AccountFilteredTransactions: React.FC<AccountFilteredTransactionsProps> = 
         notes: cardPaymentForm.notes.trim() || null,
         payment_schedule_id: null,
         related_transaction_id: null,
-        receipt_url: null,
       });
 
       if (error) throw error;

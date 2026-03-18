@@ -138,7 +138,14 @@ export type UpdateInstallmentInput = Partial<CreateInstallmentInput>;
 export type CreateSavingsInput = Omit<SupabaseSavings, 'id' | 'user_id'>;
 export type UpdateSavingsInput = Partial<CreateSavingsInput>;
 
-export type CreateTransactionInput = Omit<SupabaseTransaction, 'id' | 'user_id'>;
+// Required fields only; newer columns that may not exist in all DB environments are optional
+export type CreateTransactionInput = Omit<SupabaseTransaction, 'id' | 'user_id' | 'transaction_type' | 'notes' | 'related_transaction_id' | 'receipt_url' | 'wallet_id'> & {
+  transaction_type?: SupabaseTransaction['transaction_type'];
+  notes?: string | null;
+  related_transaction_id?: string | null;
+  receipt_url?: string | null;
+  wallet_id?: string | null;
+};
 export type UpdateTransactionInput = Partial<CreateTransactionInput>;
 
 export type CreateBudgetSetupInput = Omit<SupabaseBudgetSetup, 'id' | 'created_at' | 'user_id'>;

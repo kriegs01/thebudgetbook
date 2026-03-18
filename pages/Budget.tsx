@@ -1366,12 +1366,7 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
           name: transactionFormData.name,
           date: combineDateWithCurrentTime(transactionFormData.date),
           amount: parseFloat(transactionFormData.amount),
-          payment_method_id: transactionFormData.accountId,
-          transaction_type: 'payment' as const,
-          notes: null,
-          payment_schedule_id: null,
-          related_transaction_id: null,
-          receipt_url: null,
+          payment_method_id: transactionFormData.accountId
         };
         const result = await createTransaction(transaction);
         transactionData = result.data;
@@ -1450,12 +1445,7 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
           name: `${biller.name} - ${schedule.month} ${schedule.year}`,
           date: combineDateWithCurrentTime(payFormData.datePaid),
           amount: parseFloat(payFormData.amount),
-          payment_method_id: payFormData.accountId,
-          transaction_type: 'payment' as const,
-          notes: null,
-          payment_schedule_id: null,
-          related_transaction_id: null,
-          receipt_url: null,
+          payment_method_id: payFormData.accountId
         };
         const result = await createTransaction(transaction);
         transactionData = result.data;

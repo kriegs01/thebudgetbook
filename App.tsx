@@ -807,7 +807,6 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
             notes: null,
             payment_schedule_id: null,
             related_transaction_id: transaction.id,
-            receipt_url: null,
           });
           if (creditTxError) {
             console.error('[App] Failed to create credit account payment transaction:', creditTxError);
