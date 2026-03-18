@@ -3,7 +3,7 @@ import { ArrowLeft, Info, Eye, ZoomIn, ZoomOut, Download, X, Pencil, BanknoteArr
 import { useSearchParams, Link } from 'react-router-dom';
 import { Account } from '../../types';
 import { getTransactionsByPaymentMethod, createTransaction, updateTransaction, updateTransactionAndSyncSchedule, createTransfer, getLoanTransactionsWithPayments, getReceiptSignedUrl, deleteTransactionAndRevertSchedule, batchDeleteTransactions } from '../../src/services/transactionsService';
-import { combineDateWithCurrentTime, getFirstDayOfCurrentMonthIso, getTodayIso } from '../../src/utils/dateUtils';
+import { combineDateWithCurrentTime, getFirstDayOfCurrentYearIso, getTodayIso } from '../../src/utils/dateUtils';
 import type { SupabaseTransaction } from '../../src/types/supabase';
 import { computeCreditUtilization, type CreditUtilization } from '../../src/utils/accounts';
 
@@ -99,7 +99,7 @@ const AccountFilteredTransactions: React.FC<AccountFilteredTransactionsProps> = 
   const [editTxForm, setEditTxForm] = useState({ name: '', amount: '', date: '' });
 
   // ── Filter state ──────────────────────────────────────────────────────────
-  const [filterStartDate, setFilterStartDate] = useState<string>(getFirstDayOfCurrentMonthIso());
+  const [filterStartDate, setFilterStartDate] = useState<string>(getFirstDayOfCurrentYearIso());
   const [filterEndDate, setFilterEndDate] = useState<string>(getTodayIso());
   const [filterTypes, setFilterTypes] = useState<Set<string>>(new Set());
   const [showTypeDropdown, setShowTypeDropdown] = useState(false);
@@ -309,7 +309,7 @@ const AccountFilteredTransactions: React.FC<AccountFilteredTransactionsProps> = 
   };
 
   const resetFilters = () => {
-    setFilterStartDate(getFirstDayOfCurrentMonthIso());
+    setFilterStartDate(getFirstDayOfCurrentYearIso());
     setFilterEndDate(getTodayIso());
     setFilterTypes(new Set());
   };

@@ -2,7 +2,7 @@ import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react'
 import { Plus, Info, Eye, ZoomIn, ZoomOut, Download, X, Pencil, Trash2, CheckSquare, Square, ChevronDown, Filter } from 'lucide-react';
 import { getAllTransactions, createTransaction, updateTransaction, deleteTransactionAndRevertSchedule, uploadTransactionReceipt, getReceiptSignedUrl, batchDeleteTransactions } from '../src/services/transactionsService';
 import { getAllAccountsFrontend } from '../src/services/accountsService';
-import { combineDateWithCurrentTime, getTodayIso, getFirstDayOfCurrentMonthIso } from '../src/utils/dateUtils';
+import { combineDateWithCurrentTime, getTodayIso, getFirstDayOfCurrentYearIso } from '../src/utils/dateUtils';
 
 const FILTER_MIN_DATE = '2025-01-01';
 
@@ -56,7 +56,7 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ onTransactionDelete
   });
 
   // ── Filter state ──────────────────────────────────────────────────────────
-  const [filterStartDate, setFilterStartDate] = useState<string>(getFirstDayOfCurrentMonthIso());
+  const [filterStartDate, setFilterStartDate] = useState<string>(getFirstDayOfCurrentYearIso());
   const [filterEndDate, setFilterEndDate] = useState<string>(getTodayIso());
   const [filterPaymentMethods, setFilterPaymentMethods] = useState<Set<string>>(new Set());
   const [showPaymentMethodDropdown, setShowPaymentMethodDropdown] = useState(false);
@@ -345,7 +345,7 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ onTransactionDelete
   };
 
   const resetFilters = () => {
-    setFilterStartDate(getFirstDayOfCurrentMonthIso());
+    setFilterStartDate(getFirstDayOfCurrentYearIso());
     setFilterEndDate(getTodayIso());
     setFilterPaymentMethods(new Set());
   };
