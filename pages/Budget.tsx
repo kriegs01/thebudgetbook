@@ -898,11 +898,12 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
   const isArchived = currentSetup?.isArchived ?? false;
 
   /**
-   * canClose: true when every included item in the budget has been settled/paid
-   * and every included stash wallet is funded.
+   * canClose: true when every *included* (checked) item in the budget categories
+   * is settled or paid, and every included installment in the Loans section is paid.
+   * Stash wallets are savings goals and do not need to be funded before closing.
    */
   const canClose = useMemo(() => {
-    // Iterate all categories
+    // Check setupData category items – only those with item.included === true
     for (const [catName, items] of Object.entries(setupData)) {
       if (!Array.isArray(items)) continue;
       for (const item of items) {
@@ -923,7 +924,7 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
       }
     }
 
-    // Check installments in the Loans section
+    // Check installments that are included (not in excludedInstallmentIds)
     const relevantInstallments = installments.filter(inst => {
       const timingMatch = !inst.timing || inst.timing === selectedTiming;
       const scheduleForMonth = getPaymentSchedule('installment', inst.id, selectedMonth, selectedYear);
@@ -936,19 +937,8 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
       if (!checkIfPaidBySchedule('installment', inst.id)) return false;
     }
 
-    // Check included stash wallets
-    for (const wallet of wallets) {
-      if (excludedWalletIds.has(wallet.id)) continue;
-      const { isFunded } = getStashAggregates(wallet);
-      if (!isFunded) return false;
-    }
-
-    // Require at least some items/wallets to close
-    const totalItems = Object.values(setupData)
-      .filter((v): v is CategorizedSetupItem[] => Array.isArray(v))
-      .reduce((s, arr) => s + arr.filter(i => i.included).length, 0);
-    return totalItems > 0 || wallets.filter(w => !excludedWalletIds.has(w.id)).length > 0;
-  }, [setupData, billers, checkIfPaidBySchedule, checkIfPaidByTransaction, selectedMonth, installments, selectedTiming, excludedInstallmentIds, getPaymentSchedule, selectedYear, wallets, excludedWalletIds, getStashAggregates]);
+    return true;
+  }, [setupData, billers, checkIfPaidBySchedule, checkIfPaidByTransaction, selectedMonth, installments, selectedTiming, excludedInstallmentIds, getPaymentSchedule, selectedYear]);
 
   /** Handle closing (archiving) the current budget setup */
   const handleCloseBudget = useCallback(() => {
@@ -2002,7 +1992,7 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                 <button
                   onClick={handleCloseBudget}
                   disabled={!canClose || !currentSetup}
-                  title={canClose ? 'Close and archive this budget' : 'All items must be paid or settled before closing'}
+                  title={canClose ? 'Close and archive this budget' : 'All included items must be paid or settled (including Loans) before closing'}
                   className={`flex items-center space-x-2 px-6 py-3 rounded-2xl font-black uppercase tracking-widest text-xs transition-all ${
                     canClose && currentSetup
                       ? 'bg-gray-700 text-white hover:bg-gray-800 shadow-xl'
