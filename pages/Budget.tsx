@@ -295,19 +295,33 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
     const walletAccountId = fundModal.wallet.accountId;
     setFundSubmitting(true);
     try {
-      const { data: newTx, error } = await createTransaction({
+      // Build the base payload without wallet_id so we can retry without it if needed.
+      const stashTxBase = {
         name: `Stash top-up - ${walletName} (${selectedMonth} ${selectedYear})`,
         // Negative amount: cash_in = money IN to the linked account (adds to balance per sign convention)
         amount: -amount,
         date: combineDateWithCurrentTime(fundForm.date),
         payment_method_id: walletAccountId,
-        transaction_type: 'cash_in',
-        wallet_id: walletId,
+        transaction_type: 'cash_in' as const,
         notes: fundForm.notes || null,
         payment_schedule_id: null,
         related_transaction_id: null,
         receipt_url: null,
-      });
+      };
+      // First attempt: include wallet_id so the transaction is linked to the stash wallet.
+      let creationResult = await createTransaction({ ...stashTxBase, wallet_id: walletId });
+      // If the wallet_id column doesn't exist yet in this environment (migration pending),
+      // PostgREST returns a column-not-found error.  Retry without wallet_id so the
+      // transaction is at least created; the optimistic frontend state will still show it
+      // as a funded stash entry via safeNewTx below.
+      if (creationResult.error) {
+        const errMsg = JSON.stringify(creationResult.error).toLowerCase();
+        if (errMsg.includes('wallet_id') || errMsg.includes('42703') || errMsg.includes('column')) {
+          console.warn('[Budget] wallet_id column not available, retrying without it:', creationResult.error);
+          creationResult = await createTransaction(stashTxBase);
+        }
+      }
+      const { data: newTx, error } = creationResult;
       if (error) throw error;
       // Build a safe tx with wallet_id explicitly set.  The DB row returned by
       // createTransaction may omit wallet_id if the migration hasn't been applied
@@ -1352,7 +1366,12 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
           name: transactionFormData.name,
           date: combineDateWithCurrentTime(transactionFormData.date),
           amount: parseFloat(transactionFormData.amount),
-          payment_method_id: transactionFormData.accountId
+          payment_method_id: transactionFormData.accountId,
+          transaction_type: 'payment' as const,
+          notes: null,
+          payment_schedule_id: null,
+          related_transaction_id: null,
+          receipt_url: null,
         };
         const result = await createTransaction(transaction);
         transactionData = result.data;
@@ -1431,7 +1450,12 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
           name: `${biller.name} - ${schedule.month} ${schedule.year}`,
           date: combineDateWithCurrentTime(payFormData.datePaid),
           amount: parseFloat(payFormData.amount),
-          payment_method_id: payFormData.accountId
+          payment_method_id: payFormData.accountId,
+          transaction_type: 'payment' as const,
+          notes: null,
+          payment_schedule_id: null,
+          related_transaction_id: null,
+          receipt_url: null,
         };
         const result = await createTransaction(transaction);
         transactionData = result.data;
@@ -1473,6 +1497,7 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
             notes: null,
             payment_schedule_id: null,
             related_transaction_id: transactionData.id,
+            receipt_url: null,
           });
           if (creditTxError) {
             console.error('[Budget] Failed to create credit account payment transaction:', creditTxError);

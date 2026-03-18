@@ -227,7 +227,12 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ onTransactionDelete
           name: form.name,
           date: combineDateWithCurrentTime(form.date),
           amount: parseFloat(form.amount),
-          payment_method_id: form.paymentMethodId
+          payment_method_id: form.paymentMethodId,
+          transaction_type: 'payment' as const,
+          notes: null,
+          payment_schedule_id: null,
+          related_transaction_id: null,
+          receipt_url: null,
         };
         
         const { data, error } = await createTransaction(transaction);
