@@ -58,3 +58,13 @@ export const getFirstDayOfCurrentMonthIso = (): string => {
   const month = String(now.getMonth() + 1).padStart(2, '0');
   return `${year}-${month}-01`;
 };
+
+/**
+ * Gets the first day of the current year in ISO format (YYYY-01-01)
+ * Useful for initializing filter start-date defaults that need to cover the full year,
+ * e.g. so stash top-up transactions dated in past months of the current year remain visible.
+ */
+export const getFirstDayOfCurrentYearIso = (): string => {
+  const year = new Date().getFullYear();
+  return `${year}-01-01`;
+};
