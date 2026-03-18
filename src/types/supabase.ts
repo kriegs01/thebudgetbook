@@ -94,6 +94,9 @@ export interface SupabaseBudgetSetup {
   };
   created_at: string; // timestamptz
   user_id: string | null; // uuid, references auth.users(id)
+  is_archived: boolean; // archive lifecycle flag (DEFAULT false)
+  closed_at: string | null; // timestamptz - set when budget is closed/archived
+  reopened_at: string | null; // timestamptz - set when budget is reopened
 }
 
 export interface SupabaseWallet {

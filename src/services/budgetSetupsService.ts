@@ -36,6 +36,9 @@ const supabaseBudgetSetupToFrontend = (setup: SupabaseBudgetSetup): SavedBudgetS
     status: setup.status,
     totalAmount: setup.total_amount,
     data: setup.data,
+    isArchived: setup.is_archived ?? false,
+    closedAt: setup.closed_at ?? null,
+    reopenedAt: setup.reopened_at ?? null,
   };
 };
 
@@ -97,6 +100,9 @@ const frontendBudgetSetupToSupabase = (setup: Partial<SavedBudgetSetup>): Partia
   if (setup.timing !== undefined) supabaseSetup.timing = setup.timing;
   if (setup.status !== undefined) supabaseSetup.status = setup.status;
   if (setup.totalAmount !== undefined) supabaseSetup.total_amount = setup.totalAmount;
+  if (setup.isArchived !== undefined) supabaseSetup.is_archived = setup.isArchived;
+  if (setup.closedAt !== undefined) supabaseSetup.closed_at = setup.closedAt ?? null;
+  if (setup.reopenedAt !== undefined) supabaseSetup.reopened_at = setup.reopenedAt ?? null;
   
   // Validate and log data field
   if (setup.data !== undefined) {
@@ -354,4 +360,35 @@ export const updateBudgetSetupFrontend = async (setup: SavedBudgetSetup): Promis
  */
 export const deleteBudgetSetupFrontend = async (id: string): Promise<{ error: any }> => {
   return await deleteBudgetSetup(id);
+};
+
+/**
+ * Archive (close) a budget setup.
+ * Sets is_archived = true and records the closed_at timestamp.
+ */
+export const archiveBudgetSetup = async (id: string): Promise<{ data: SavedBudgetSetup | null; error: any }> => {
+  const { data, error } = await updateBudgetSetup(id, {
+    is_archived: true,
+    closed_at: new Date().toISOString(),
+    reopened_at: null,
+  });
+  if (error || !data) {
+    return { data: null, error };
+  }
+  return { data: supabaseBudgetSetupToFrontend(data), error: null };
+};
+
+/**
+ * Reopen an archived budget setup.
+ * Sets is_archived = false and records the reopened_at timestamp.
+ */
+export const reopenBudgetSetup = async (id: string): Promise<{ data: SavedBudgetSetup | null; error: any }> => {
+  const { data, error } = await updateBudgetSetup(id, {
+    is_archived: false,
+    reopened_at: new Date().toISOString(),
+  });
+  if (error || !data) {
+    return { data: null, error };
+  }
+  return { data: supabaseBudgetSetupToFrontend(data), error: null };
 };
