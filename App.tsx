@@ -1021,6 +1021,8 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
                   }}
                   onReloadSetups={reloadBudgetSetups}
                   onReloadBillers={reloadBillers}
+                  onTransactionCreated={handleTransactionCreated}
+                  onTransactionDeleted={handleTransactionDeleted}
                 />
               } />
               <Route path="/billers" element={

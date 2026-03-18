@@ -26,6 +26,8 @@ interface BudgetProps {
   onReloadBillers?: () => Promise<void>;
   onUpdateInstallment?: (installment: Installment) => Promise<void>; // For updating installment payments
   installments?: Installment[]; // PROTOTYPE: Installments for Loans section
+  onTransactionCreated?: () => void; // Notify App to reload accounts/balances after stash top-up
+  onTransactionDeleted?: () => void; // Notify App to reload accounts/balances after stash top-up deletion
 }
 
 const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
@@ -92,7 +94,7 @@ const ZOOM_INCREMENT = 0.25;
 const MIN_ZOOM = 0.25;
 const MAX_ZOOM = 4;
 
-const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSetups, setSavedSetups, onUpdateBiller, onMoveToTrash, onReloadSetups, onReloadBillers, onUpdateInstallment, installments = [] }) => {
+const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSetups, setSavedSetups, onUpdateBiller, onMoveToTrash, onReloadSetups, onReloadBillers, onUpdateInstallment, installments = [], onTransactionCreated, onTransactionDeleted }) => {
   const [view, setView] = useState<'summary' | 'setup'>('summary');
   const [selectedMonth, setSelectedMonth] = useState(MONTHS[new Date().getMonth()]);
   const [selectedTiming, setSelectedTiming] = useState<'1/2' | '2/2'>('1/2');
@@ -353,6 +355,8 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
         }
       }
       // If reload errors, the optimistic state set above remains intact
+      // Notify parent to reload accounts so balances immediately reflect the new top-up.
+      if (onTransactionCreated) onTransactionCreated();
     } catch (err) {
       console.error('[Budget] Error funding stash:', err);
       setStashStatusMsg({ msg: 'Failed to fund stash. Please try again.', type: 'error' });
@@ -395,6 +399,8 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
           // Reload stash top-ups AND the main transactions list so the Transactions page
           // and account balances reflect the deletion immediately.
           await Promise.all([reloadStashTopUps(), reloadTransactions()]);
+          // Notify parent to reload accounts so balances immediately reflect the deletion.
+          if (onTransactionDeleted) onTransactionDeleted();
         }
         setTimeout(() => setStashStatusMsg(null), 3000);
       },
