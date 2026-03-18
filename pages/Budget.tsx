@@ -336,7 +336,13 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
       // Reload from DB and merge: if the new tx isn't in the DB results (e.g. the
       // wallet_id column migration hasn't been applied yet), keep the optimistic tx
       // so the row and info modal continue to reflect the fund.
-      const { data: freshData, error: reloadError } = await getAllStashTransactions();
+      // Also reload the main transactions list so the Transactions page and account
+      // balances immediately reflect the new top-up.
+      const [stashResult] = await Promise.all([
+        getAllStashTransactions(),
+        reloadTransactions(),
+      ]);
+      const { data: freshData, error: reloadError } = stashResult;
       if (!reloadError && freshData !== null) {
         const freshTopUps = freshData as SupabaseTransaction[];
         if (safeNewTx && !freshTopUps.some(t => t.id === safeNewTx.id)) {
