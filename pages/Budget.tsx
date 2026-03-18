@@ -2216,7 +2216,7 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                             onClick={() => handleWalletIncludeToggle(wallet.id)}
                             disabled={isArchived}
                             title={isIncluded ? 'Exclude from grand total' : 'Include in grand total'}
-                            className={`w-8 h-8 rounded-xl border-2 transition-all flex items-center justify-center ${isArchived ? 'opacity-40 cursor-not-allowed ' : ''}${isIncluded ? 'bg-indigo-600 border-indigo-600 text-white' : 'border-gray-200'}`}
+                            className={`w-8 h-8 rounded-xl border-2 transition-all flex items-center justify-center ${isArchived ? 'opacity-40 cursor-not-allowed' : ''} ${isIncluded ? 'bg-indigo-600 border-indigo-600 text-white' : 'border-gray-200'}`}
                           >
                             <Check className="w-4 h-4" />
                           </button>
@@ -2303,7 +2303,7 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                               <button 
                                 onClick={() => handleSetupToggle(cat.name, item.id)}
                                 disabled={isArchived}
-                                className={`w-8 h-8 rounded-xl border-2 transition-all flex items-center justify-center ${isArchived ? 'opacity-40 cursor-not-allowed ' : ''}${item.included ? 'bg-indigo-600 border-indigo-600 text-white' : 'border-gray-200'}`}
+                                className={`w-8 h-8 rounded-xl border-2 transition-all flex items-center justify-center ${isArchived ? 'opacity-40 cursor-not-allowed' : ''} ${item.included ? 'bg-indigo-600 border-indigo-600 text-white' : 'border-gray-200'}`}
                               >
                                 <Check className="w-4 h-4" />
                               </button>
@@ -2529,7 +2529,7 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                                   </button>
                                 )
                               )}
-                              <button onClick={() => handleSetupToggle(cat.name, item.id)} disabled={isArchived} className={`w-8 h-8 rounded-xl border-2 transition-all flex items-center justify-center ${isArchived ? 'opacity-40 cursor-not-allowed ' : ''}${item.included ? 'bg-indigo-600 border-indigo-600 text-white' : 'border-gray-200'}`}><Check className="w-4 h-4" /></button>
+                              <button onClick={() => handleSetupToggle(cat.name, item.id)} disabled={isArchived} className={`w-8 h-8 rounded-xl border-2 transition-all flex items-center justify-center ${isArchived ? 'opacity-40 cursor-not-allowed' : ''} ${item.included ? 'bg-indigo-600 border-indigo-600 text-white' : 'border-gray-200'}`}><Check className="w-4 h-4" /></button>
                             </div>
                           </td>
                           <td className="p-4 pr-10 text-right"><button onClick={() => removeItemFromCategory(cat.name, item.id, item.name)} disabled={isArchived} className={`text-[9px] font-black uppercase tracking-widest border px-2 py-1 rounded-lg ${isArchived ? 'border-gray-100 text-gray-300 cursor-not-allowed' : 'border-red-50 text-red-500'}`}>Exclude</button></td>
@@ -2696,7 +2696,7 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                                       });
                                     }}
                                     disabled={isArchived}
-                                    className={`w-8 h-8 rounded-xl border-2 transition-all flex items-center justify-center ${isArchived ? 'opacity-40 cursor-not-allowed ' : ''}${isIncluded ? 'bg-indigo-600 border-indigo-600 text-white' : 'border-gray-200'}`}
+                                    className={`w-8 h-8 rounded-xl border-2 transition-all flex items-center justify-center ${isArchived ? 'opacity-40 cursor-not-allowed' : ''} ${isIncluded ? 'bg-indigo-600 border-indigo-600 text-white' : 'border-gray-200'}`}
                                   >
                                     <Check className="w-4 h-4" />
                                   </button>
@@ -2927,7 +2927,7 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                                       </button>
                                     )
                                   )}
-                                  <button onClick={() => handleSetupToggle(cat.name, item.id)} disabled={isArchived} className={`w-8 h-8 rounded-xl border-2 transition-all flex items-center justify-center ${isArchived ? 'opacity-40 cursor-not-allowed ' : ''}${item.included ? 'bg-indigo-600 border-indigo-600 text-white' : 'border-gray-200'}`}><Check className="w-4 h-4" /></button>
+                                  <button onClick={() => handleSetupToggle(cat.name, item.id)} disabled={isArchived} className={`w-8 h-8 rounded-xl border-2 transition-all flex items-center justify-center ${isArchived ? 'opacity-40 cursor-not-allowed' : ''} ${item.included ? 'bg-indigo-600 border-indigo-600 text-white' : 'border-gray-200'}`}><Check className="w-4 h-4" /></button>
                                 </div>
                               </td>
                               <td className="p-4 pr-10 text-right"><button onClick={() => removeItemFromCategory(cat.name, item.id, item.name)} disabled={isArchived} className={`text-[9px] font-black uppercase tracking-widest border px-2 py-1 rounded-lg ${isArchived ? 'border-gray-100 text-gray-300 cursor-not-allowed' : 'border-red-50 text-red-500'}`}>Exclude</button></td>
