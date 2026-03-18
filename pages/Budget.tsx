@@ -897,48 +897,7 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
   /** Whether the currently viewed budget is archived */
   const isArchived = currentSetup?.isArchived ?? false;
 
-  /**
-   * canClose: true when every *included* (checked) item in the budget categories
-   * is settled or paid, and every included installment in the Loans section is paid.
-   * Stash wallets are savings goals and do not need to be funded before closing.
-   */
-  const canClose = useMemo(() => {
-    // Check setupData category items – only those with item.included === true
-    for (const [catName, items] of Object.entries(setupData)) {
-      if (!Array.isArray(items)) continue;
-      for (const item of items) {
-        if (!item.included) continue;
-        const isBiller = item.isBiller || billers.some(b => b.id === item.id);
-        if (isBiller) {
-          const paidBySchedule = checkIfPaidBySchedule('biller', item.id);
-          const paidByTx = checkIfPaidByTransaction(item.name, item.amount, selectedMonth);
-          if (!paidBySchedule && !paidByTx) return false;
-        } else if (catName === 'Fixed') {
-          // Fixed non-biller items use the explicit Settle button
-          if (!item.settled) return false;
-        } else {
-          // Other categories (Utilities, Subscriptions, Purchases, etc.) use transaction matching
-          const paidByTx = checkIfPaidByTransaction(item.name, item.amount, selectedMonth);
-          if (!paidByTx) return false;
-        }
-      }
-    }
 
-    // Check installments that are included (not in excludedInstallmentIds)
-    const relevantInstallments = installments.filter(inst => {
-      const timingMatch = !inst.timing || inst.timing === selectedTiming;
-      const scheduleForMonth = getPaymentSchedule('installment', inst.id, selectedMonth, selectedYear);
-      const isActiveForPeriod = scheduleForMonth !== undefined || shouldShowInstallment(inst, selectedMonth, selectedYear);
-      const isFinished = !scheduleForMonth && inst.totalAmount > 0 && inst.paidAmount >= inst.totalAmount;
-      const notExcluded = !excludedInstallmentIds.has(inst.id);
-      return timingMatch && isActiveForPeriod && !isFinished && notExcluded;
-    });
-    for (const inst of relevantInstallments) {
-      if (!checkIfPaidBySchedule('installment', inst.id)) return false;
-    }
-
-    return true;
-  }, [setupData, billers, checkIfPaidBySchedule, checkIfPaidByTransaction, selectedMonth, installments, selectedTiming, excludedInstallmentIds, getPaymentSchedule, selectedYear]);
 
   /** Handle closing (archiving) the current budget setup */
   const handleCloseBudget = useCallback(() => {
@@ -1935,6 +1894,43 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
   const salaryToUse = actualSalaryValue !== null && !isNaN(actualSalaryValue) ? actualSalaryValue : projectedSalaryValue;
   const remaining = salaryToUse - totalSpend;
 
+  // totalPaid: sum of amounts for checked/included items that are paid/settled/funded.
+  // canClose: accessible when totalPaid covers totalSpend (every included item is settled).
+  let totalPaid = 0;
+  for (const [catName, items] of Object.entries(setupData)) {
+    if (!Array.isArray(items)) continue;
+    for (const item of items) {
+      if (!item.included) continue;
+      const amount = parseFloat(item.amount) || 0;
+      const isBiller = item.isBiller || billers.some(b => b.id === item.id);
+      let paid = false;
+      if (isBiller) {
+        paid = checkIfPaidBySchedule('biller', item.id) || checkIfPaidByTransaction(item.name, item.amount, selectedMonth);
+      } else if (catName === 'Fixed') {
+        paid = !!item.settled;
+      } else {
+        paid = checkIfPaidByTransaction(item.name, item.amount, selectedMonth);
+      }
+      if (paid) totalPaid += amount;
+    }
+  }
+  const relevantInstallmentsForPaid = installments.filter(inst => {
+    const timingMatch = !inst.timing || inst.timing === selectedTiming;
+    const scheduleForMonth = getPaymentSchedule('installment', inst.id, selectedMonth, selectedYear);
+    const isActiveForPeriod = scheduleForMonth !== undefined || shouldShowInstallment(inst, selectedMonth, selectedYear);
+    const isFinished = !scheduleForMonth && inst.totalAmount > 0 && inst.paidAmount >= inst.totalAmount;
+    const notExcluded = !excludedInstallmentIds.has(inst.id);
+    return timingMatch && isActiveForPeriod && !isFinished && notExcluded;
+  });
+  for (const inst of relevantInstallmentsForPaid) {
+    if (checkIfPaidBySchedule('installment', inst.id)) totalPaid += inst.monthlyAmount;
+  }
+  for (const w of wallets.filter(ww => !excludedWalletIds.has(ww.id))) {
+    const { funded, isFunded } = getStashAggregates(w);
+    if (isFunded) totalPaid += Math.max(w.amount, funded); // use funded when it exceeds target (over-funded stash)
+  }
+  const canClose = totalSpend > 0 && totalPaid >= totalSpend;
+
   return (
     <div className="space-y-8 animate-in slide-in-from-right-4 duration-500 pb-20 w-full">
       <div className="flex flex-col space-y-6">
@@ -1992,7 +1988,7 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                 <button
                   onClick={handleCloseBudget}
                   disabled={!canClose || !currentSetup}
-                  title={canClose ? 'Close and archive this budget' : 'All included items must be paid or settled (including Loans) before closing'}
+                  title={canClose ? 'Close and archive this budget' : `Total Paid (${formatCurrency(totalPaid)}) must reach Total Spend (${formatCurrency(totalSpend)}) before closing`}
                   className={`flex items-center space-x-2 px-6 py-3 rounded-2xl font-black uppercase tracking-widest text-xs transition-all ${
                     canClose && currentSetup
                       ? 'bg-gray-700 text-white hover:bg-gray-800 shadow-xl'
@@ -2097,6 +2093,10 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
               <tr>
                 <td className="p-3 pl-6 font-bold text-gray-700 text-sm">Total Spend</td>
                 <td className="p-3 pr-6 text-right font-black text-gray-900 text-sm">{formatCurrency(totalSpend)}</td>
+              </tr>
+              <tr className={`${canClose ? 'bg-green-50/30' : ''}`}>
+                <td className="p-3 pl-6 font-bold text-gray-700 text-sm">Total Paid</td>
+                <td className={`p-3 pr-6 text-right font-black text-sm ${canClose ? 'text-green-600' : 'text-gray-900'}`}>{formatCurrency(totalPaid)}</td>
               </tr>
               <tr className={`${remaining >= 0 ? 'bg-green-50/30' : 'bg-red-50/30'}`}>
                 <td className="p-3 pl-6 text-xs font-black uppercase">Remaining</td>
