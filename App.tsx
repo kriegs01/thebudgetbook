@@ -191,6 +191,9 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
   const [savingsError, setSavingsError] = useState<string | null>(null);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [transactionsLoading, setTransactionsLoading] = useState(true);
+  // Counter incremented whenever a transaction is created or deleted so TransactionsPage
+  // can detect the change and refresh its own independent state.
+  const [txRefreshKey, setTxRefreshKey] = useState(0);
   const [currency, setCurrency] = useState('PHP');
   const [categories, setCategories] = useState(INITIAL_CATEGORIES);
 
@@ -851,6 +854,7 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
     await reloadAccounts(); // Reload accounts to recalculate balances
     await reloadInstallments();
     await reloadTransactions();
+    setTxRefreshKey(k => k + 1); // Signal TransactionsPage to refresh its own state
   };
 
   /**
@@ -858,8 +862,10 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
    * This triggers a reload of accounts to recalculate balances
    */
   const handleTransactionCreated = async () => {
-    console.log('[App] Transaction created, reloading accounts to recalculate balances');
+    console.log('[App] Transaction created, reloading accounts and transactions to recalculate balances');
     await reloadAccounts(); // Reload accounts to recalculate balances
+    await reloadTransactions(); // Keep App-level transactions state (Dashboard) in sync
+    setTxRefreshKey(k => k + 1); // Signal TransactionsPage to refresh its own state
   };
 
 
@@ -1021,6 +1027,8 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
                   }}
                   onReloadSetups={reloadBudgetSetups}
                   onReloadBillers={reloadBillers}
+                  onTransactionCreated={handleTransactionCreated}
+                  onTransactionDeleted={handleTransactionDeleted}
                 />
               } />
               <Route path="/billers" element={
@@ -1105,6 +1113,7 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
                 <TransactionsPage 
                   onTransactionDeleted={handleTransactionDeleted}
                   onTransactionCreated={handleTransactionCreated}
+                  refreshKey={txRefreshKey}
                 />
               } />
               <Route path="/supabase-demo" element={

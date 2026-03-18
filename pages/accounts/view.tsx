@@ -339,7 +339,7 @@ const AccountFilteredTransactions: React.FC<AccountFilteredTransactionsProps> = 
         transaction_type: 'withdraw',
         notes: null,
         payment_schedule_id: null,
-        related_transaction_id: null
+        related_transaction_id: null,
       });
 
       if (error) throw error;
@@ -399,7 +399,7 @@ const AccountFilteredTransactions: React.FC<AccountFilteredTransactionsProps> = 
         transaction_type: 'loan',
         notes: loanForm.what,
         payment_schedule_id: null,
-        related_transaction_id: null
+        related_transaction_id: null,
       });
 
       if (error) throw error;
@@ -431,7 +431,7 @@ const AccountFilteredTransactions: React.FC<AccountFilteredTransactionsProps> = 
         transaction_type: 'cash_in',
         notes: cashInForm.notes || null,
         payment_schedule_id: null,
-        related_transaction_id: null
+        related_transaction_id: null,
       });
 
       if (error) throw error;
@@ -463,7 +463,7 @@ const AccountFilteredTransactions: React.FC<AccountFilteredTransactionsProps> = 
         transaction_type: 'loan_payment',
         notes: `Payment for: ${selectedLoan.name}`,
         payment_schedule_id: null,
-        related_transaction_id: selectedLoan.id
+        related_transaction_id: selectedLoan.id,
       });
 
       if (error) throw error;

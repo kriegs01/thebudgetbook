@@ -3,14 +3,14 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { BudgetItem, Account, Biller, PaymentSchedule, CategorizedSetupItem, SavedBudgetSetup, BudgetCategory, Installment, Wallet } from '../types';
 import { Plus, Check, ChevronDown, Trash2, Save, FileText, ArrowRight, Upload, CheckCircle2, X, AlertTriangle, Info, Eye, ZoomIn, ZoomOut, Download } from 'lucide-react';
 import { createBudgetSetupFrontend, updateBudgetSetupFrontend } from '../src/services/budgetSetupsService';
-import { createTransaction, getAllTransactions, updateTransaction, updateTransactionAndSyncSchedule, createPaymentScheduleTransaction, uploadTransactionReceipt, getTransactionsByPaymentSchedule, getReceiptSignedUrl, deleteTransactionAndRevertSchedule } from '../src/services/transactionsService';
+import { createTransaction, getAllTransactions, updateTransaction, updateTransactionAndSyncSchedule, createPaymentScheduleTransaction, uploadTransactionReceipt, getTransactionsByPaymentSchedule, getReceiptSignedUrl, deleteTransactionAndRevertSchedule, getAllStashTransactions } from '../src/services/transactionsService';
 import type { SupabaseTransaction, SupabaseMonthlyPaymentSchedule } from '../src/types/supabase';
 import { getInstallmentPaymentSchedule, aggregateCreditCardPurchases } from '../src/utils/paymentStatus'; // PROTOTYPE: Import payment status utilities
 import { getScheduleExpectedAmount } from '../src/utils/linkedAccountUtils'; // ENHANCEMENT: Import for linked account amount calculation
 import { getBillerAmountForDate } from '../src/utils/billers'; // For scheduled increases fallback
 import { getPaymentSchedulesByPeriod, recordPaymentViaTransaction } from '../src/services/paymentSchedulesService';
 import { combineDateWithCurrentTime } from '../src/utils/dateUtils';
-import { getWalletsForCurrentUser, updateWallet } from '../src/services/walletsService';
+import { getWalletsForCurrentUser } from '../src/services/walletsService';
 
 interface BudgetProps {
   items: BudgetItem[];
@@ -26,6 +26,8 @@ interface BudgetProps {
   onReloadBillers?: () => Promise<void>;
   onUpdateInstallment?: (installment: Installment) => Promise<void>; // For updating installment payments
   installments?: Installment[]; // PROTOTYPE: Installments for Loans section
+  onTransactionCreated?: () => void; // Notify App to reload accounts/balances after stash top-up
+  onTransactionDeleted?: () => void; // Notify App to reload accounts/balances after stash top-up deletion
 }
 
 const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
@@ -92,7 +94,7 @@ const ZOOM_INCREMENT = 0.25;
 const MIN_ZOOM = 0.25;
 const MAX_ZOOM = 4;
 
-const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSetups, setSavedSetups, onUpdateBiller, onMoveToTrash, onReloadSetups, onReloadBillers, onUpdateInstallment, installments = [] }) => {
+const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSetups, setSavedSetups, onUpdateBiller, onMoveToTrash, onReloadSetups, onReloadBillers, onUpdateInstallment, installments = [], onTransactionCreated, onTransactionDeleted }) => {
   const [view, setView] = useState<'summary' | 'setup'>('summary');
   const [selectedMonth, setSelectedMonth] = useState(MONTHS[new Date().getMonth()]);
   const [selectedTiming, setSelectedTiming] = useState<'1/2' | '2/2'>('1/2');
@@ -114,6 +116,17 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
   
   // Wallets (Stash) state
   const [wallets, setWallets] = useState<Wallet[]>([]);
+  // Dedicated stash top-up transactions state (queries directly by wallet_id IS NOT NULL)
+  const [stashTopUps, setStashTopUps] = useState<SupabaseTransaction[]>([]);
+  // Wallet IDs excluded from the grand total (persisted in setup data as _excludedWalletIds)
+  const [excludedWalletIds, setExcludedWalletIds] = useState<Set<string>>(new Set());
+
+  // Stash funding modal state
+  const [fundModal, setFundModal] = useState<{ wallet: Wallet } | null>(null);
+  const [fundForm, setFundForm] = useState({ amount: '', date: '', notes: '' });
+  const [fundSubmitting, setFundSubmitting] = useState(false);
+  const [stashInfoModal, setStashInfoModal] = useState<{ wallet: Wallet } | null>(null);
+  const [stashStatusMsg, setStashStatusMsg] = useState<{ msg: string; type: 'success' | 'error' } | null>(null);
 
   // REFACTOR: Payment schedules state - source of truth for payment status
   const [paymentSchedules, setPaymentSchedules] = useState<SupabaseMonthlyPaymentSchedule[]>([]);
@@ -139,11 +152,18 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
       } else {
         setExcludedInstallmentIds(new Set());
       }
+      // Restore excluded wallet IDs from persisted setup data
+      if (Array.isArray(existingSetup.data._excludedWalletIds)) {
+        setExcludedWalletIds(new Set(existingSetup.data._excludedWalletIds));
+      } else {
+        setExcludedWalletIds(new Set());
+      }
     } else {
       // Reset to defaults if no saved setup
       setProjectedSalary('11000');
       setActualSalary('');
       setExcludedInstallmentIds(new Set());
+      setExcludedWalletIds(new Set());
     }
   }, [selectedMonth, selectedTiming, savedSetups]);
 
@@ -176,31 +196,229 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
     loadTransactions();
   }, []); // Load once on mount, reload happens after creating transactions
 
-  // Load wallets for the Stash section
+  // Load wallets and stash top-ups for the Stash section
   useEffect(() => {
-    const loadWallets = async () => {
+    const loadWalletsAndStash = async () => {
       try {
-        const { data, error } = await getWalletsForCurrentUser();
-        if (error) {
-          console.error('[Budget] Failed to load wallets:', error);
+        const [walletsResult, stashResult] = await Promise.all([
+          getWalletsForCurrentUser(),
+          getAllStashTransactions(),
+        ]);
+        if (walletsResult.error) {
+          console.error('[Budget] Failed to load wallets:', walletsResult.error);
         } else {
-          setWallets(data || []);
+          setWallets(walletsResult.data || []);
+        }
+        if (stashResult.error) {
+          console.error('[Budget] Failed to load stash transactions:', stashResult.error);
+        } else {
+          setStashTopUps((stashResult.data as SupabaseTransaction[]) || []);
         }
       } catch (error) {
-        console.error('[Budget] Error loading wallets:', error);
+        console.error('[Budget] Error loading wallets/stash:', error);
       }
     };
-    loadWallets();
+    loadWalletsAndStash();
   }, []);
 
-  const handleWalletAmountChange = (walletId: string, value: string) => {
-    setWallets(prev => prev.map(w => w.id === walletId ? { ...w, amount: parseFloat(value) || 0 } : w));
+  /** Reloads stash top-up transactions from the DB. */
+  const reloadStashTopUps = useCallback(async () => {
+    try {
+      const { data, error } = await getAllStashTransactions();
+      if (error) {
+        console.error('[Budget] Failed to reload stash transactions:', error);
+      } else {
+        setStashTopUps((data as SupabaseTransaction[]) || []);
+      }
+    } catch (error) {
+      console.error('[Budget] Error reloading stash transactions:', error);
+    }
+  }, []);
+
+  /** Returns all stash top-up transactions for a wallet within the selected budget month. */
+  const getStashTopUps = useCallback((walletId: string): SupabaseTransaction[] => {
+    const monthIndex = MONTHS.indexOf(selectedMonth);
+    return stashTopUps.filter(tx => {
+      if (tx.wallet_id !== walletId) return false;
+      const txDate = new Date(tx.date);
+      return txDate.getMonth() === monthIndex && txDate.getFullYear() === selectedYear;
+    });
+  }, [stashTopUps, selectedMonth, selectedYear]);
+
+  /** Computes funded/remaining/isFunded aggregates for a wallet in the selected month.
+   * Amounts in the DB are stored as negative (cash_in convention), so Math.abs is used
+   * to compute the positive funded total for display and comparison. */
+  const getStashAggregates = useCallback((wallet: Wallet) => {
+    const topUps = getStashTopUps(wallet.id);
+    const funded = topUps.reduce((sum, tx) => sum + Math.abs(tx.amount), 0);
+    const remaining = Math.max(0, wallet.amount - funded);
+    const isFunded = funded >= wallet.amount;
+    return { funded, remaining, isFunded, topUps };
+  }, [getStashTopUps]);
+
+  /** Opens the Fund Stash modal, pre-filling the amount with the remaining balance.
+   * The date is defaulted to a date within the selected budget month/year so that
+   * getStashTopUps correctly picks up the transaction in the status and info modal.
+   * If today falls within the selected budget month/year, today's local date is used;
+   * otherwise the 1st of the selected budget month is used. */
+  const handleOpenFundModal = useCallback((wallet: Wallet) => {
+    const { remaining } = getStashAggregates(wallet);
+    const now = new Date();
+    const selectedMonthIndex = MONTHS.indexOf(selectedMonth);
+    const isCurrentPeriod =
+      now.getFullYear() === selectedYear && now.getMonth() === selectedMonthIndex;
+    // Build default date using local date components (not UTC) to avoid midnight boundary issues
+    let defaultDate: string;
+    if (isCurrentPeriod) {
+      defaultDate = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+    } else {
+      defaultDate = `${selectedYear}-${String(selectedMonthIndex + 1).padStart(2, '0')}-01`;
+    }
+    setFundForm({
+      amount: remaining > 0 ? remaining.toFixed(2) : '',
+      date: defaultDate,
+      notes: '',
+    });
+    setFundModal({ wallet });
+  }, [getStashAggregates, selectedMonth, selectedYear]);
+
+  /** Submits the Fund Stash form, creating a stash top-up transaction. */
+  const handleFundSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!fundModal) return;
+    const amount = parseFloat(fundForm.amount);
+    if (isNaN(amount) || amount <= 0) return;
+    // Capture wallet details before the modal is closed so they remain accessible
+    // in the async steps that follow setFundModal(null).
+    const walletId = fundModal.wallet.id;
+    const walletName = fundModal.wallet.name;
+    const walletAccountId = fundModal.wallet.accountId;
+    setFundSubmitting(true);
+    try {
+      // Build the base payload without wallet_id so we can retry without it if needed.
+      const stashTxBase = {
+        name: `Stash top-up - ${walletName} (${selectedMonth} ${selectedYear})`,
+        // Negative amount: cash_in = money IN to the linked account (adds to balance per sign convention)
+        amount: -amount,
+        date: combineDateWithCurrentTime(fundForm.date),
+        payment_method_id: walletAccountId,
+        transaction_type: 'cash_in' as const,
+        notes: fundForm.notes || null,
+        payment_schedule_id: null,
+        related_transaction_id: null,
+        receipt_url: null,
+      };
+      // First attempt: include wallet_id so the transaction is linked to the stash wallet.
+      let creationResult = await createTransaction({ ...stashTxBase, wallet_id: walletId });
+      // If the wallet_id column doesn't exist yet in this environment (migration pending),
+      // PostgREST returns a column-not-found error.  Retry without wallet_id so the
+      // transaction is at least created; the optimistic frontend state will still show it
+      // as a funded stash entry via safeNewTx below.
+      if (creationResult.error) {
+        const errMsg = JSON.stringify(creationResult.error).toLowerCase();
+        if (errMsg.includes('wallet_id') || errMsg.includes('42703') || errMsg.includes('column')) {
+          console.warn('[Budget] wallet_id column not available, retrying without it:', creationResult.error);
+          creationResult = await createTransaction(stashTxBase);
+        }
+      }
+      const { data: newTx, error } = creationResult;
+      if (error) throw error;
+      // Build a safe tx with wallet_id explicitly set.  The DB row returned by
+      // createTransaction may omit wallet_id if the migration hasn't been applied
+      // to the target table yet, which would cause getStashTopUps to filter it out.
+      const safeNewTx: SupabaseTransaction | null = newTx
+        ? { ...(newTx as SupabaseTransaction), wallet_id: walletId }
+        : null;
+      // Optimistic update: show funded state immediately (deduplicate by id)
+      if (safeNewTx) {
+        setStashTopUps(prev => [safeNewTx, ...prev.filter(t => t.id !== safeNewTx.id)]);
+      }
+      setFundModal(null);
+      setStashStatusMsg({ msg: `Funded stash '${walletName}' by ${formatCurrency(amount)}`, type: 'success' });
+      setTimeout(() => setStashStatusMsg(null), 3000);
+      // Update budget setup status to Active when stash is being funded
+      const existingSetup = savedSetups.find(s => s.month === selectedMonth && s.timing === selectedTiming);
+      if (existingSetup && existingSetup.status !== BUDGET_SETUP_STATUS.ACTIVE) {
+        const { error: statusError } = await updateBudgetSetupFrontend({
+          ...existingSetup,
+          status: BUDGET_SETUP_STATUS.ACTIVE,
+        });
+        if (statusError) {
+          console.error('[Budget] Failed to update budget status after stash fund:', statusError);
+        } else if (onReloadSetups) {
+          await onReloadSetups();
+        }
+      }
+      // Reload from DB and merge: if the new tx isn't in the DB results (e.g. the
+      // wallet_id column migration hasn't been applied yet), keep the optimistic tx
+      // so the row and info modal continue to reflect the fund.
+      // Also reload the main transactions list so the Transactions page and account
+      // balances immediately reflect the new top-up.
+      const [stashResult] = await Promise.all([
+        getAllStashTransactions(),
+        reloadTransactions(),
+      ]);
+      const { data: freshData, error: reloadError } = stashResult;
+      if (!reloadError && freshData !== null) {
+        const freshTopUps = freshData as SupabaseTransaction[];
+        if (safeNewTx && !freshTopUps.some(t => t.id === safeNewTx.id)) {
+          // New tx absent from DB result — keep it alongside the refreshed list
+          setStashTopUps([safeNewTx, ...freshTopUps]);
+        } else {
+          setStashTopUps(freshTopUps);
+        }
+      }
+      // If reload errors, the optimistic state set above remains intact
+      // Notify parent to reload accounts so balances immediately reflect the new top-up.
+      if (onTransactionCreated) onTransactionCreated();
+    } catch (err) {
+      console.error('[Budget] Error funding stash:', err);
+      setStashStatusMsg({ msg: 'Failed to fund stash. Please try again.', type: 'error' });
+      setTimeout(() => setStashStatusMsg(null), 3000);
+    } finally {
+      setFundSubmitting(false);
+    }
   };
 
-  const handleWalletAmountBlur = async (walletId: string, value: string) => {
-    const amount = parseFloat(value);
-    if (isNaN(amount) || amount < 0) return;
-    await updateWallet(walletId, { amount });
+  /** Toggles a wallet's inclusion in the grand total computation. */
+  const handleWalletIncludeToggle = useCallback((walletId: string) => {
+    setExcludedWalletIds(prev => {
+      const next = new Set(prev);
+      if (next.has(walletId)) {
+        next.delete(walletId);
+      } else {
+        next.add(walletId);
+      }
+      return next;
+    });
+  }, []);
+
+  /** Confirms and deletes a stash top-up transaction.
+   * Uses deleteTransactionAndRevertSchedule which safely handles null payment_schedule_id
+   * and also cleans up any credit_payment counterpart transactions. */
+  const handleDeleteStashTopUp = (txId: string, amount: number) => {
+    const absAmount = Math.abs(amount);
+    setConfirmModal({
+      show: true,
+      title: 'Delete Top-up',
+      message: `Delete this stash top-up of ${formatCurrency(absAmount)}? This will remove the underlying transaction.`,
+      onConfirm: async () => {
+        setConfirmModal(p => ({ ...p, show: false }));
+        const { error } = await deleteTransactionAndRevertSchedule(txId);
+        if (error) {
+          console.error('[Budget] Error deleting stash top-up:', error);
+          setStashStatusMsg({ msg: 'Failed to delete top-up.', type: 'error' });
+        } else {
+          setStashStatusMsg({ msg: 'Top-up deleted.', type: 'success' });
+          // Reload stash top-ups AND the main transactions list so the Transactions page
+          // and account balances reflect the deletion immediately.
+          await Promise.all([reloadStashTopUps(), reloadTransactions()]);
+          // Notify parent to reload accounts so balances immediately reflect the deletion.
+          if (onTransactionDeleted) onTransactionDeleted();
+        }
+        setTimeout(() => setStashStatusMsg(null), 3000);
+      },
+    });
   };
   
   // REFACTOR: Load payment schedules for the selected month
@@ -732,7 +950,8 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
       ...structuredClone(setupData),
       _projectedSalary: projectedSalary,
       _actualSalary: actualSalary,
-      _excludedInstallmentIds: [...excludedInstallmentIds]
+      _excludedInstallmentIds: [...excludedInstallmentIds],
+      _excludedWalletIds: [...excludedWalletIds]
     };
     
     // Check if data has actually changed
@@ -772,14 +991,16 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
       })
       .reduce((sum, inst) => sum + inst.monthlyAmount, 0);
 
-    // Grand total includes both regular items AND installments
-    const total = regularItemsTotal + installmentsTotal;
-
-    const existingSetup = savedSetups.find(s => s.month === selectedMonth && s.timing === selectedTiming);
+    // Grand total includes both regular items AND installments AND included stash wallets
+    // Use the actual funded amount when it exceeds the target (over-funded stash)
+    const stashTotal = wallets.filter(w => !excludedWalletIds.has(w.id)).reduce((s, w) => s + Math.max(w.amount, getStashAggregates(w).funded), 0);
+    const total = regularItemsTotal + installmentsTotal + stashTotal;
     
     try {
       setAutoSaveStatus('saving');
       console.log('[Budget] Auto-saving budget setup...');
+      
+      const existingSetup = savedSetups.find(s => s.month === selectedMonth && s.timing === selectedTiming);
       
       if (existingSetup) {
         // Update existing setup
@@ -834,7 +1055,7 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
       setAutoSaveStatus('error');
       setTimeout(() => setAutoSaveStatus('idle'), AUTO_SAVE_STATUS_TIMEOUT_MS);
     }
-  }, [view, setupData, projectedSalary, actualSalary, selectedMonth, selectedTiming, savedSetups, excludedInstallmentIds, onReloadSetups]);
+  }, [view, setupData, projectedSalary, actualSalary, selectedMonth, selectedTiming, savedSetups, excludedInstallmentIds, excludedWalletIds, wallets, getStashAggregates, onReloadSetups]);
 
   /**
    * Debounced auto-save trigger
@@ -852,12 +1073,12 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
     }, AUTO_SAVE_DEBOUNCE_MS);
   }, [autoSave]);
 
-  // Trigger auto-save when setupData, projectedSalary, actualSalary, or excludedInstallmentIds changes
+  // Trigger auto-save when setupData, projectedSalary, actualSalary, excludedInstallmentIds, or excludedWalletIds changes
   useEffect(() => {
     if (view === 'setup') {
       triggerAutoSave();
     }
-  }, [setupData, projectedSalary, actualSalary, excludedInstallmentIds, view, triggerAutoSave]);
+  }, [setupData, projectedSalary, actualSalary, excludedInstallmentIds, excludedWalletIds, view, triggerAutoSave]);
 
   // Cleanup timeout on component unmount only
   useEffect(() => {
@@ -962,11 +1183,14 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
       })
       .reduce((sum, inst) => sum + inst.monthlyAmount, 0);
 
-    // Grand total includes both regular items AND installments
-    const total = regularItemsTotal + installmentsTotal;
+    // Grand total includes both regular items AND installments AND included stash wallets
+    // Use the actual funded amount when it exceeds the target (over-funded stash)
+    const stashTotal = wallets.filter(w => !excludedWalletIds.has(w.id)).reduce((s, w) => s + Math.max(w.amount, getStashAggregates(w).funded), 0);
+    const total = regularItemsTotal + installmentsTotal + stashTotal;
 
     console.log('[Budget] Regular items total:', regularItemsTotal);
     console.log('[Budget] Installments total:', installmentsTotal);
+    console.log('[Budget] Stash total:', stashTotal);
     console.log('[Budget] Grand total amount:', total);
 
     const existingSetup = savedSetups.find(s => s.month === selectedMonth && s.timing === selectedTiming);
@@ -978,7 +1202,8 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
       ...JSON.parse(JSON.stringify(setupData)),
       _projectedSalary: projectedSalary,
       _actualSalary: actualSalary,
-      _excludedInstallmentIds: [...excludedInstallmentIds]
+      _excludedInstallmentIds: [...excludedInstallmentIds],
+      _excludedWalletIds: [...excludedWalletIds]
     };
     
     console.log('[Budget] Data to save type:', typeof dataToSave);
@@ -1262,6 +1487,7 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
             notes: null,
             payment_schedule_id: null,
             related_transaction_id: transactionData.id,
+            receipt_url: null,
           });
           if (creditTxError) {
             console.error('[Budget] Failed to create credit account payment transaction:', creditTxError);
@@ -1550,7 +1776,10 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
     
     return { category: cat.name, total: itemsTotal + installmentsTotal };
   });
-  const grandTotal = categorySummary.reduce((sum, cat) => sum + cat.total, 0);
+  // Include stash wallet targets for wallets not excluded from the grand total
+  // Use the actual funded amount when it exceeds the target (over-funded stash)
+  const stashTotal = wallets.filter(w => !excludedWalletIds.has(w.id)).reduce((s, w) => s + Math.max(w.amount, getStashAggregates(w).funded), 0);
+  const grandTotal = categorySummary.reduce((sum, cat) => sum + cat.total, 0) + stashTotal;
 
   // Calculate Month Summary values
   const totalSpend = grandTotal;
@@ -1624,6 +1853,9 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
               {categorySummary.map((item) => (
                 <tr key={item.category}><td className="p-3 pl-6 font-bold text-gray-700 text-sm">{item.category}</td><td className="p-3 pr-6 text-right font-black text-gray-900 text-sm">{formatCurrency(item.total)}</td></tr>
               ))}
+              {stashTotal > 0 && (
+                <tr><td className="p-3 pl-6 font-bold text-gray-700 text-sm">Stash</td><td className="p-3 pr-6 text-right font-black text-gray-900 text-sm">{formatCurrency(stashTotal)}</td></tr>
+              )}
               <tr className="bg-indigo-50/30"><td className="p-3 pl-6 text-xs font-black text-indigo-600 uppercase">Grand Total</td><td className="p-3 pr-6 text-right text-lg font-black text-indigo-600">{formatCurrency(grandTotal)}</td></tr>
             </tbody>
           </table>
@@ -1689,9 +1921,16 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
         <div className="bg-white rounded-[3rem] shadow-sm border border-gray-100 overflow-hidden w-full">
           <div className="p-8 border-b border-gray-50 bg-gray-50/30 flex justify-between items-center">
             <h3 className="text-xs font-black text-gray-900 uppercase tracking-[0.25em]">Stash</h3>
-            <span className="text-lg font-black text-indigo-600">
-              {formatCurrency(wallets.reduce((s, w) => s + w.amount, 0))}
-            </span>
+            <div className="flex items-center space-x-3">
+              {stashStatusMsg && (
+                <span className={`text-xs font-bold px-3 py-1 rounded-xl ${stashStatusMsg.type === 'success' ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'}`}>
+                  {stashStatusMsg.msg}
+                </span>
+              )}
+              <span className="text-lg font-black text-indigo-600">
+                {formatCurrency(wallets.filter(w => !excludedWalletIds.has(w.id)).reduce((s, w) => s + Math.max(w.amount, getStashAggregates(w).funded), 0))}
+              </span>
+            </div>
           </div>
           <div className="overflow-x-auto">
             {wallets.length === 0 ? (
@@ -1704,36 +1943,78 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                 <thead>
                   <tr className="text-[10px] font-black text-gray-400 uppercase border-b border-gray-50">
                     <th className="p-4 pl-10">Name</th>
-                    <th className="p-4">Amount</th>
-                    <th className="p-4 pr-10">Account</th>
+                    <th className="p-4">Target</th>
+                    <th className="p-4">Account</th>
+                    <th className="p-4 text-center">Info</th>
+                    <th className="p-4 text-center">Actions</th>
+                    <th className="p-4 pr-10 text-right"></th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-50">
                   {wallets.map((wallet) => {
                     const linkedAccount = accounts.find(a => a.id === wallet.accountId);
+                    const { funded, isFunded } = getStashAggregates(wallet);
+                    const isIncluded = !excludedWalletIds.has(wallet.id);
+                    const isOverFunded = funded > wallet.amount && wallet.amount > 0;
+                    const isExactlyFunded = funded === wallet.amount && wallet.amount > 0;
                     return (
-                      <tr key={wallet.id} className="bg-white">
+                      <tr key={wallet.id} className={`${isIncluded ? 'bg-white' : 'bg-gray-50 opacity-60'}`}>
                         <td className="p-4 pl-10">
                           <span className="text-sm font-bold text-gray-900">{wallet.name}</span>
                         </td>
                         <td className="p-4">
-                          <div className="flex items-center space-x-1">
-                            <span className="text-gray-400 font-bold">₱</span>
-                            <input
-                              type="number"
-                              min="0"
-                              step="0.01"
-                              value={wallet.amount}
-                              onChange={(e) => handleWalletAmountChange(wallet.id, e.target.value)}
-                              onBlur={(e) => handleWalletAmountBlur(wallet.id, e.target.value)}
-                              className="bg-transparent border-none text-sm font-black text-indigo-600 w-28 outline-none focus:bg-indigo-50 focus:rounded-lg focus:px-1 transition-all"
-                            />
-                          </div>
+                          <span className="text-sm font-black text-indigo-600">{formatCurrency(wallet.amount)}</span>
                         </td>
-                        <td className="p-4 pr-10">
+                        <td className="p-4">
                           <span className="text-sm text-gray-600">
                             {linkedAccount ? `${linkedAccount.bank} (${linkedAccount.classification})` : wallet.accountId}
                           </span>
+                        </td>
+                        <td className="p-4 text-center">
+                          <div className="flex items-center justify-center space-x-2">
+                            {isOverFunded ? (
+                              <span aria-label={`Overfunded by ${formatCurrency(funded - wallet.amount)}`} className="text-xs font-black text-blue-600 px-2 py-1 bg-blue-50 rounded-lg">Overfunded +{formatCurrency(funded - wallet.amount)}</span>
+                            ) : isExactlyFunded ? (
+                              <span aria-label="Fully funded this month" className="text-xs font-black text-green-600 px-2 py-1 bg-green-50 rounded-lg">Funded</span>
+                            ) : (
+                              <span aria-label="Not yet funded" className="text-xs text-gray-400">—</span>
+                            )}
+                            <button
+                              onClick={() => setStashInfoModal({ wallet })}
+                              title="View stash details"
+                              className="text-gray-400 hover:text-indigo-600 transition-colors rounded-full p-1 hover:bg-indigo-50"
+                            >
+                              <Info className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        </td>
+                        <td className="p-4 text-center">
+                          {isFunded ? (
+                            <button
+                              onClick={() => handleOpenFundModal(wallet)}
+                              title="Add more to this stash"
+                              className="w-7 h-7 inline-flex items-center justify-center rounded-full bg-indigo-50 text-indigo-600 hover:bg-indigo-100 transition-colors"
+                            >
+                              <Plus className="w-3.5 h-3.5" />
+                            </button>
+                          ) : (
+                            <button
+                              onClick={() => handleOpenFundModal(wallet)}
+                              className="inline-flex items-center space-x-1 px-3 py-1 rounded-xl bg-indigo-50 text-indigo-600 hover:bg-indigo-100 transition-colors text-xs font-bold"
+                            >
+                              <Plus className="w-3 h-3" />
+                              <span>Fund</span>
+                            </button>
+                          )}
+                        </td>
+                        <td className="p-4 pr-10 text-right">
+                          <button
+                            onClick={() => handleWalletIncludeToggle(wallet.id)}
+                            title={isIncluded ? 'Exclude from grand total' : 'Include in grand total'}
+                            className={`w-8 h-8 rounded-xl border-2 transition-all flex items-center justify-center ${isIncluded ? 'bg-indigo-600 border-indigo-600 text-white' : 'border-gray-200'}`}
+                          >
+                            <Check className="w-4 h-4" />
+                          </button>
                         </td>
                       </tr>
                     );
@@ -2585,9 +2866,142 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
         </div>
       )}
 
-      {confirmModal.show && <ConfirmDialog {...confirmModal} onClose={() => setConfirmModal(p => ({ ...p, show: false }))} />}
+      {/* Fund Stash Modal */}
+      {fundModal && (
+        <div className="fixed inset-0 z-[150] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md" onClick={() => setFundModal(null)}>
+          <div className="w-full max-w-md bg-white rounded-3xl p-8 shadow-2xl relative" onClick={e => e.stopPropagation()}>
+            <button onClick={() => setFundModal(null)} className="absolute top-4 right-4 text-gray-400 hover:text-gray-700 p-2 rounded-full hover:bg-gray-100 transition-colors" aria-label="Close"><X className="w-5 h-5" /></button>
+            <div className="flex items-center space-x-3 mb-6">
+              <div className="w-12 h-12 bg-indigo-50 text-indigo-600 rounded-2xl flex items-center justify-center">
+                <Plus className="w-6 h-6" />
+              </div>
+              <div>
+                <h2 className="text-xl font-black text-gray-900 uppercase tracking-tight">Fund Stash</h2>
+                <p className="text-xs text-gray-500 font-medium">{fundModal.wallet.name}</p>
+              </div>
+            </div>
+            <form onSubmit={handleFundSubmit} className="space-y-5">
+              <div>
+                <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Amount <span className="text-red-500">*</span></label>
+                <div className="flex items-center border border-gray-200 rounded-2xl px-4 py-3 focus-within:border-indigo-400 transition-colors">
+                  <span className="text-gray-400 font-bold mr-2">₱</span>
+                  <input
+                    type="number"
+                    min="0.01"
+                    step="0.01"
+                    value={fundForm.amount}
+                    onChange={e => setFundForm(f => ({ ...f, amount: e.target.value }))}
+                    placeholder="0.00"
+                    required
+                    className="flex-1 bg-transparent border-none outline-none text-sm font-black text-indigo-600"
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Date <span className="text-red-500">*</span></label>
+                <input
+                  type="date"
+                  value={fundForm.date}
+                  onChange={e => setFundForm(f => ({ ...f, date: e.target.value }))}
+                  min={(() => { const mi = MONTHS.indexOf(selectedMonth); return `${selectedYear}-${String(mi + 1).padStart(2, '0')}-01`; })()}
+                  max={(() => { const mi = MONTHS.indexOf(selectedMonth); const last = new Date(selectedYear, mi + 1, 0).getDate(); return `${selectedYear}-${String(mi + 1).padStart(2, '0')}-${String(last).padStart(2, '0')}`; })()}
+                  required
+                  className="w-full border border-gray-200 rounded-2xl px-4 py-3 text-sm font-bold text-gray-800 outline-none focus:border-indigo-400 transition-colors"
+                />
+              </div>
+              <div>
+                <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Notes <span className="text-gray-300">(optional)</span></label>
+                <input
+                  type="text"
+                  value={fundForm.notes}
+                  onChange={e => setFundForm(f => ({ ...f, notes: e.target.value }))}
+                  placeholder="e.g. Monthly allocation"
+                  className="w-full border border-gray-200 rounded-2xl px-4 py-3 text-sm text-gray-700 outline-none focus:border-indigo-400 transition-colors"
+                />
+              </div>
+              <div className="flex flex-col space-y-3 pt-2">
+                <button
+                  type="submit"
+                  disabled={fundSubmitting}
+                  className="w-full bg-indigo-600 text-white py-4 rounded-2xl font-black uppercase tracking-widest text-[10px] hover:bg-indigo-700 transition-all disabled:opacity-60"
+                >
+                  {fundSubmitting ? 'Funding…' : 'Fund Stash'}
+                </button>
+                <button type="button" onClick={() => setFundModal(null)} className="w-full bg-gray-100 text-gray-500 py-4 rounded-2xl font-black uppercase tracking-widest text-[10px] hover:bg-gray-200 transition-all">
+                  Cancel
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
-      {/* Schedule Payments Modal */}
+      {/* Stash Info Modal */}
+      {stashInfoModal && (() => {
+        const { funded, remaining, topUps } = getStashAggregates(stashInfoModal.wallet);
+        const linkedAccount = accounts.find(a => a.id === stashInfoModal.wallet.accountId);
+        return (
+          <div className="fixed inset-0 z-[150] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md" onClick={() => setStashInfoModal(null)}>
+            <div className="w-full max-w-lg bg-white rounded-3xl p-8 shadow-2xl relative max-h-[85vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+              <button onClick={() => setStashInfoModal(null)} className="absolute top-4 right-4 text-gray-400 hover:text-gray-700 p-2 rounded-full hover:bg-gray-100 transition-colors" aria-label="Close"><X className="w-5 h-5" /></button>
+              <div className="flex items-center space-x-3 mb-6">
+                <div className="w-12 h-12 bg-indigo-50 text-indigo-600 rounded-2xl flex items-center justify-center">
+                  <Info className="w-6 h-6" />
+                </div>
+                <div>
+                  <h2 className="text-xl font-black text-gray-900 uppercase tracking-tight">Stash Info</h2>
+                  <p className="text-xs text-gray-500 font-medium">{stashInfoModal.wallet.name} · {selectedMonth} {selectedYear}</p>
+                </div>
+              </div>
+              {/* Summary */}
+              <div className="grid grid-cols-3 gap-4 mb-6">
+                <div className="bg-gray-50 rounded-2xl p-4 text-center">
+                  <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Target</p>
+                  <p className="text-base font-black text-indigo-600">{formatCurrency(stashInfoModal.wallet.amount)}</p>
+                </div>
+                <div className="bg-green-50 rounded-2xl p-4 text-center">
+                  <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Funded</p>
+                  <p className="text-base font-black text-green-600">{formatCurrency(funded)}</p>
+                </div>
+                <div className="bg-orange-50 rounded-2xl p-4 text-center">
+                  <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Remaining</p>
+                  <p className="text-base font-black text-orange-600">{formatCurrency(remaining)}</p>
+                </div>
+              </div>
+              {linkedAccount && (
+                <p className="text-xs text-gray-500 mb-5 font-medium">Account: <span className="text-gray-700 font-bold">{linkedAccount.bank} ({linkedAccount.classification})</span></p>
+              )}
+              {/* Top-ups list */}
+              <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-3">Top-ups this month</h3>
+              {topUps.length === 0 ? (
+                <p className="text-sm text-gray-400 italic py-4 text-center">No top-ups for this stash this month. Fund this stash to see top-ups here.</p>
+              ) : (
+                <div className="space-y-3">
+                  {topUps.map(tx => (
+                    <div key={tx.id} className="bg-gray-50 rounded-2xl p-4 flex items-center justify-between">
+                      <div className="space-y-0.5">
+                        <p className="text-sm font-bold text-gray-900">{tx.name}</p>
+                        <p className="text-xs text-gray-500">{new Date(tx.date).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })}</p>
+                        {tx.notes && <p className="text-xs text-gray-400 italic">{tx.notes}</p>}
+                      </div>
+                      <div className="flex items-center space-x-3">
+                        <span className="text-sm font-black text-indigo-600">{formatCurrency(Math.abs(tx.amount))}</span>
+                        <button
+                          onClick={() => handleDeleteStashTopUp(tx.id, tx.amount)}
+                          aria-label={`Delete top-up of ${formatCurrency(Math.abs(tx.amount))} from ${new Date(tx.date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}`}
+                          className="text-red-400 hover:text-red-600 p-1.5 rounded-xl hover:bg-red-50 transition-colors"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        );
+      })()}
       {schedulePaymentsModal && (
         <div className="fixed inset-0 z-[150] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md" onClick={() => setSchedulePaymentsModal(null)}>
           <div className="w-full max-w-lg bg-white rounded-3xl p-8 shadow-2xl relative max-h-[85vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
@@ -2673,6 +3087,7 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
           </div>
         </div>
       )}
+      {confirmModal.show && <ConfirmDialog {...confirmModal} onClose={() => setConfirmModal(p => ({ ...p, show: false }))} />}
     </div>
   );
 };
