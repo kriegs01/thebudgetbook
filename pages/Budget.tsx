@@ -972,6 +972,8 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
       setAutoSaveStatus('saving');
       console.log('[Budget] Auto-saving budget setup...');
       
+      const existingSetup = savedSetups.find(s => s.month === selectedMonth && s.timing === selectedTiming);
+      
       if (existingSetup) {
         // Update existing setup
         const updatedSetup: SavedBudgetSetup = {
@@ -1958,14 +1960,14 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                             <button
                               onClick={() => handleOpenFundModal(wallet)}
                               title="Add more to this stash"
-                              className="w-7 h-7 flex items-center justify-center rounded-full bg-indigo-50 text-indigo-600 hover:bg-indigo-100 transition-colors"
+                              className="w-7 h-7 inline-flex items-center justify-center rounded-full bg-indigo-50 text-indigo-600 hover:bg-indigo-100 transition-colors"
                             >
                               <Plus className="w-3.5 h-3.5" />
                             </button>
                           ) : (
                             <button
                               onClick={() => handleOpenFundModal(wallet)}
-                              className="flex items-center space-x-1 px-3 py-1 rounded-xl bg-indigo-50 text-indigo-600 hover:bg-indigo-100 transition-colors text-xs font-bold"
+                              className="inline-flex items-center space-x-1 px-3 py-1 rounded-xl bg-indigo-50 text-indigo-600 hover:bg-indigo-100 transition-colors text-xs font-bold"
                             >
                               <Plus className="w-3 h-3" />
                               <span>Fund</span>
