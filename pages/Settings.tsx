@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ChevronDown, ChevronRight, Hash, Globe, Bell, Lock, Trash2, AlertTriangle, RotateCcw, Plus, X, Database, Copy, Shield, User, Mail, Key } from 'lucide-react';
+import { ChevronDown, ChevronRight, Hash, Globe, Bell, Lock, Trash2, AlertTriangle, RotateCcw, Plus, X, Database, Copy, Shield, User, Mail, Key, MoreVertical } from 'lucide-react';
 import { BudgetCategory } from '../types';
 import { useTestEnvironment } from '../src/contexts/TestEnvironmentContext';
 import { useAuth } from '../src/contexts/AuthContext';
@@ -16,11 +16,66 @@ interface SettingsProps {
   onResetAll?: () => void;
 }
 
+const SETTING_MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+
 const Settings: React.FC<SettingsProps> = ({ currency, setCurrency, categories, setCategories, onResetAll }) => {
   const [openSection, setOpenSection] = useState<string | null>(null);
   const [newCatName, setNewCatName] = useState('');
   const [showAddCat, setShowAddCat] = useState(false);
   const [newSubcatNames, setNewSubcatNames] = useState<{ [id: string]: string }>({});
+
+  // Category settings modal state
+  const [catSettingsModal, setCatSettingsModal] = useState<{ catId: string; catName: string } | null>(null);
+  const [catSettingsDraftMonth, setCatSettingsDraftMonth] = useState(1);
+  const [catSettingsDraftYear, setCatSettingsDraftYear] = useState(new Date().getFullYear());
+  const [catSettingsDraftFlexi, setCatSettingsDraftFlexi] = useState(true);
+
+  const openCatSettings = (cat: { id: string; name: string; active?: boolean; deactivatedAt?: string; flexiMode?: boolean }) => {
+    const now = new Date();
+    const nextMonthDate = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+    // If already deactivated, show its stored date; otherwise default to next month / current year
+    let month = nextMonthDate.getMonth() + 1; // 1-12
+    let year = nextMonthDate.getFullYear();
+    if (cat.deactivatedAt) {
+      const parts = cat.deactivatedAt.split('-');
+      year = parseInt(parts[0], 10);
+      month = parseInt(parts[1], 10);
+    }
+    setCatSettingsDraftMonth(month);
+    setCatSettingsDraftYear(year);
+    setCatSettingsDraftFlexi(cat.flexiMode ?? true);
+    setCatSettingsModal({ catId: cat.id, catName: cat.name });
+  };
+
+  const closeCatSettings = () => setCatSettingsModal(null);
+
+  const handleCatSettingsSave = () => {
+    if (!catSettingsModal) return;
+    setCategories(prev => prev.map(c => {
+      if (c.id !== catSettingsModal.catId) return c;
+      const deactivatedAt = `${catSettingsDraftYear}-${String(catSettingsDraftMonth).padStart(2, '0')}-01`;
+      // Preserve active state; only update deactivatedAt + flexiMode
+      return { ...c, deactivatedAt, flexiMode: catSettingsDraftFlexi };
+    }));
+    closeCatSettings();
+  };
+
+  const handleCatSettingsToggleActive = () => {
+    if (!catSettingsModal) return;
+    setCategories(prev => prev.map(c => {
+      if (c.id !== catSettingsModal.catId) return c;
+      if (c.active === false) {
+        // Reactivate
+        const { deactivatedAt: _removed, ...rest } = c;
+        return { ...rest, active: true };
+      } else {
+        // Deactivate using the draft month/year
+        const deactivatedAt = `${catSettingsDraftYear}-${String(catSettingsDraftMonth).padStart(2, '0')}-01`;
+        return { ...c, active: false, deactivatedAt };
+      }
+    }));
+    closeCatSettings();
+  };
 
   // Auth context
   const { userProfile, updateProfile, refreshProfile, user } = useAuth();
@@ -98,28 +153,6 @@ const Settings: React.FC<SettingsProps> = ({ currency, setCurrency, categories, 
         setConfirmModal(p => ({ ...p, show: false }));
       }
     });
-  };
-
-  const handleToggleActive = (catId: string) => {
-    setCategories(prev => prev.map(c => {
-      if (c.id !== catId) return c;
-      if (c.active === false) {
-        // Reactivate: clear deactivatedAt, restore active
-        const { deactivatedAt: _removed, ...rest } = c;
-        return { ...rest, active: true };
-      } else {
-        // Deactivate: mark inactive as of start of current month
-        const now = new Date();
-        const deactivatedAt = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
-        return { ...c, active: false, deactivatedAt };
-      }
-    }));
-  };
-
-  const handleToggleFlexiMode = (catId: string) => {
-    setCategories(prev => prev.map(c =>
-      c.id === catId ? { ...c, flexiMode: !(c.flexiMode ?? true) } : c
-    ));
   };
 
   // Function to copy production data to test tables
@@ -454,43 +487,23 @@ const Settings: React.FC<SettingsProps> = ({ currency, setCurrency, categories, 
         <div className="space-y-6 pt-2">
           {categories.map(cat => (
             <div key={cat.id} className={`p-4 rounded-[2rem] border space-y-4 ${cat.active === false ? 'bg-amber-50/40 border-amber-100' : 'bg-gray-50 border-gray-100'}`}>
-              {/* Category header: name + legacy badge + delete */}
+              {/* Category header: name + legacy badge + three-dot menu */}
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <span className="text-sm font-black text-gray-900 uppercase tracking-widest">{cat.name}</span>
                   {cat.active === false && (
                     <span className="text-[9px] font-black text-amber-600 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full uppercase tracking-wider">Legacy</span>
                   )}
+                  {(cat.flexiMode ?? true) === false && (
+                    <span className="text-[9px] font-black text-gray-400 bg-gray-100 border border-gray-200 px-2 py-0.5 rounded-full uppercase tracking-wider">Data Only</span>
+                  )}
                 </div>
-                <button onClick={() => handleDeleteCategory(cat.id, cat.name)} className="text-gray-300 hover:text-red-500 transition-colors">
-                  <Trash2 className="w-4 h-4" />
-                </button>
-              </div>
-
-              {/* Lifecycle + Flexi mode controls */}
-              <div className="flex flex-wrap gap-2">
                 <button
-                  onClick={() => handleToggleActive(cat.id)}
-                  title={cat.active === false ? 'Reactivate this category for new budgets' : 'Deactivate this category (hides it from future budgets)'}
-                  className={`text-[10px] font-black uppercase tracking-widest px-3 py-1.5 rounded-xl border transition-colors ${
-                    cat.active === false
-                      ? 'bg-green-50 border-green-200 text-green-700 hover:bg-green-100'
-                      : 'bg-white border-gray-200 text-gray-500 hover:bg-red-50 hover:border-red-200 hover:text-red-600'
-                  }`}
+                  onClick={() => openCatSettings(cat)}
+                  className="text-gray-400 hover:text-gray-700 transition-colors p-1 rounded-lg hover:bg-gray-100"
+                  title="Category settings"
                 >
-                  {cat.active === false ? '↑ Reactivate' : '↓ Deactivate'}
-                </button>
-
-                <button
-                  onClick={() => handleToggleFlexiMode(cat.id)}
-                  title={(cat.flexiMode ?? true) ? 'Flexi ON: users can add manual items. Click to make data-only.' : 'Flexi OFF: data-only (no Add Item). Click to allow manual items.'}
-                  className={`text-[10px] font-black uppercase tracking-widest px-3 py-1.5 rounded-xl border transition-colors ${
-                    (cat.flexiMode ?? true)
-                      ? 'bg-indigo-50 border-indigo-200 text-indigo-700 hover:bg-indigo-100'
-                      : 'bg-white border-gray-200 text-gray-400 hover:bg-indigo-50 hover:border-indigo-200 hover:text-indigo-600'
-                  }`}
-                >
-                  Flexi: {(cat.flexiMode ?? true) ? 'ON' : 'OFF'}
+                  <MoreVertical className="w-4 h-4" />
                 </button>
               </div>
               
@@ -548,6 +561,101 @@ const Settings: React.FC<SettingsProps> = ({ currency, setCurrency, categories, 
               <span>Create New Category</span>
             </button>
           )}
+
+          {/* Category Settings Modal */}
+          {catSettingsModal && (() => {
+            const cat = categories.find(c => c.id === catSettingsModal.catId);
+            const isDeactivated = cat?.active === false;
+            const currentYear = new Date().getFullYear();
+            const years = Array.from({ length: 6 }, (_, i) => currentYear + i);
+            return (
+              <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-end justify-center sm:items-center p-4" onClick={closeCatSettings}>
+                <div className="bg-white rounded-[2rem] shadow-2xl w-full max-w-sm p-6 space-y-5" onClick={e => e.stopPropagation()}>
+                  {/* Modal header */}
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Category Settings</p>
+                      <h3 className="text-base font-black text-gray-900 uppercase tracking-widest mt-0.5">{catSettingsModal.catName}</h3>
+                    </div>
+                    <button onClick={closeCatSettings} className="text-gray-300 hover:text-gray-600 transition-colors">
+                      <X className="w-5 h-5" />
+                    </button>
+                  </div>
+
+                  {/* Deactivation date label */}
+                  <div>
+                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">
+                      {isDeactivated ? 'Deactivated from' : 'Deactivate from'}
+                    </p>
+                    <div className="flex gap-2">
+                      <select
+                        value={catSettingsDraftMonth}
+                        onChange={e => setCatSettingsDraftMonth(Number(e.target.value))}
+                        className="flex-1 bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 text-xs font-bold text-gray-700 outline-none focus:ring-2 focus:ring-indigo-400"
+                      >
+                        {SETTING_MONTHS.map((m, i) => (
+                          <option key={m} value={i + 1}>{m}</option>
+                        ))}
+                      </select>
+                      <select
+                        value={catSettingsDraftYear}
+                        onChange={e => setCatSettingsDraftYear(Number(e.target.value))}
+                        className="w-24 bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 text-xs font-bold text-gray-700 outline-none focus:ring-2 focus:ring-indigo-400"
+                      >
+                        {years.map(y => (
+                          <option key={y} value={y}>{y}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <p className="text-[9px] text-gray-400 mt-1.5">Budgets before this month will still show the category (legacy).</p>
+                  </div>
+
+                  {/* Flexi Mode toggle */}
+                  <div className="flex items-center justify-between bg-gray-50 rounded-2xl px-4 py-3">
+                    <div>
+                      <p className="text-xs font-black text-gray-700 uppercase tracking-widest">Flexi Mode</p>
+                      <p className="text-[9px] text-gray-400 mt-0.5">{catSettingsDraftFlexi ? 'ON — manual items can be added' : 'OFF — data-only, no Add Item'}</p>
+                    </div>
+                    <button
+                      onClick={() => setCatSettingsDraftFlexi(f => !f)}
+                      className={`relative w-11 h-6 rounded-full transition-colors ${catSettingsDraftFlexi ? 'bg-indigo-500' : 'bg-gray-300'}`}
+                    >
+                      <span className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${catSettingsDraftFlexi ? 'translate-x-5' : 'translate-x-0.5'}`} />
+                    </button>
+                  </div>
+
+                  {/* Save button */}
+                  <button
+                    onClick={handleCatSettingsSave}
+                    className="w-full bg-indigo-600 text-white py-3 rounded-xl font-black text-xs uppercase tracking-widest hover:bg-indigo-700 transition-colors"
+                  >
+                    Save
+                  </button>
+
+                  {/* Deactivate / Reactivate */}
+                  <button
+                    onClick={handleCatSettingsToggleActive}
+                    className={`w-full py-3 rounded-xl font-black text-xs uppercase tracking-widest border transition-colors ${
+                      isDeactivated
+                        ? 'bg-green-50 border-green-200 text-green-700 hover:bg-green-100'
+                        : 'bg-amber-50 border-amber-200 text-amber-700 hover:bg-amber-100'
+                    }`}
+                  >
+                    {isDeactivated ? '↑ Reactivate Category' : '↓ Deactivate from Selected Month'}
+                  </button>
+
+                  {/* Delete */}
+                  <button
+                    onClick={() => { closeCatSettings(); handleDeleteCategory(catSettingsModal.catId, catSettingsModal.catName); }}
+                    className="w-full py-3 rounded-xl font-black text-xs uppercase tracking-widest border border-red-100 text-red-400 hover:bg-red-50 hover:text-red-600 transition-colors flex items-center justify-center gap-2"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                    Delete Category
+                  </button>
+                </div>
+              </div>
+            );
+          })()}
         </div>
       )
     },
