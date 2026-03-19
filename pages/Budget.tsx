@@ -111,6 +111,21 @@ const isLegacyBudget = (year: number, month: string): boolean => {
   return budgetStart < STASH_GO_LIVE;
 };
 
+/**
+ * Calculates the remaining amount for a saved budget setup.
+ * Uses the same formula as the Budget Setup page's Month Summary:
+ *   remaining = salaryToUse - setup.totalAmount
+ * where salaryToUse = _actualSalary if set, otherwise _projectedSalary.
+ */
+const calculateBudgetRemaining = (setup: SavedBudgetSetup): number => {
+  const actualStr = setup.data._actualSalary;
+  const projectedStr = setup.data._projectedSalary;
+  const actualValue = actualStr && actualStr.trim() !== '' ? parseFloat(actualStr) : null;
+  const projectedValue = parseFloat(projectedStr || '0') || 0;
+  const salaryToUse = actualValue !== null && !isNaN(actualValue) ? actualValue : projectedValue;
+  return salaryToUse - setup.totalAmount;
+};
+
 const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSetups, setSavedSetups, onUpdateBiller, onMoveToTrash, onReloadSetups, onReloadBillers, onUpdateInstallment, installments = [], onTransactionCreated, onTransactionDeleted, onArchiveBudget, onReopenBudget }) => {
   const [view, setView] = useState<'summary' | 'setup'>('summary');
   const [selectedMonth, setSelectedMonth] = useState(MONTHS[new Date().getMonth()]);
@@ -1738,7 +1753,9 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
     const activeSetups = savedSetups.filter(s => !s.isArchived);
     const archivedSetups = savedSetups.filter(s => s.isArchived);
 
-    const renderSetupRow = (setup: SavedBudgetSetup) => (
+    const renderSetupRow = (setup: SavedBudgetSetup) => {
+      const remaining = calculateBudgetRemaining(setup);
+      return (
       <tr key={setup.id} className="hover:bg-gray-50/50 transition-colors group">
         <td className="p-8 pl-12">
           <div className="flex items-center space-x-5">
@@ -1750,6 +1767,11 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
         </td>
         <td className="p-8"><span className="text-[10px] font-black text-gray-500 bg-gray-100/80 px-4 py-1.5 rounded-full uppercase tracking-widest">{setup.timing}</span></td>
         <td className="p-8"><span className="text-base font-black text-gray-900 tracking-tight">{formatCurrency(setup.totalAmount)}</span></td>
+        <td className="p-8">
+          <span className={`text-base font-black tracking-tight ${remaining >= 0 ? 'text-green-600' : 'text-red-500'}`}>
+            {formatCurrency(remaining)}
+          </span>
+        </td>
         <td className="p-8">
           {setup.isArchived ? (
             <span className="text-[10px] font-black uppercase tracking-[0.15em] px-4 py-1.5 rounded-full bg-amber-100 text-amber-700">Archived</span>
@@ -1804,7 +1826,8 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
           </div>
         </td>
       </tr>
-    );
+      );
+    };
 
     return (
       <div className="space-y-8 animate-in fade-in duration-500 w-full">
@@ -1836,15 +1859,16 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                     <th className="p-8 pl-12 text-[10px] font-black text-gray-400 uppercase tracking-[0.3em]">Month</th>
                     <th className="p-8 text-[10px] font-black text-gray-400 uppercase tracking-[0.3em]">Timing</th>
                     <th className="p-8 text-[10px] font-black text-gray-400 uppercase tracking-[0.3em]">Total Budget</th>
+                    <th className="p-8 text-[10px] font-black text-gray-400 uppercase tracking-[0.3em]">Remaining</th>
                     <th className="p-8 text-[10px] font-black text-gray-400 uppercase tracking-[0.3em]">Status</th>
-                    <th className="p-8 pr-12 text-right"></th>
+                    <th className="p-8 pr-12 text-right text-[10px] font-black text-gray-400 uppercase tracking-[0.3em]">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-50">
                   {activeSetups.length > 0 ? (
                     activeSetups.map(renderSetupRow)
                   ) : (
-                    <tr><td colSpan={5} className="p-24 text-center text-gray-400 font-bold uppercase tracking-widest">No history found</td></tr>
+                    <tr><td colSpan={6} className="p-24 text-center text-gray-400 font-bold uppercase tracking-widest">No history found</td></tr>
                   )}
                 </tbody>
               </table>
@@ -1875,8 +1899,9 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                         <th className="p-8 pl-12 text-[10px] font-black text-gray-400 uppercase tracking-[0.3em]">Month</th>
                         <th className="p-8 text-[10px] font-black text-gray-400 uppercase tracking-[0.3em]">Timing</th>
                         <th className="p-8 text-[10px] font-black text-gray-400 uppercase tracking-[0.3em]">Total Budget</th>
+                        <th className="p-8 text-[10px] font-black text-gray-400 uppercase tracking-[0.3em]">Remaining</th>
                         <th className="p-8 text-[10px] font-black text-gray-400 uppercase tracking-[0.3em]">Status</th>
-                        <th className="p-8 pr-12 text-right"></th>
+                        <th className="p-8 pr-12 text-right text-[10px] font-black text-gray-400 uppercase tracking-[0.3em]">Actions</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-amber-50">
