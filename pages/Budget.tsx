@@ -1986,30 +1986,42 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
     );
   }
 
-  const categorySummary = categories.map((cat) => {
-    const items = setupData[cat.name] || [];
-    const itemsTotal = items.filter(i => i.included).reduce((sum, item) => sum + (parseFloat(item.amount) || 0), 0);
-    
-    // FIX: Include installments for Loans category (same logic as Setup view)
-    let installmentsTotal = 0;
-    if (cat.name === 'Loans') {
-      installmentsTotal = installments
-        .filter(inst => {
-          const timingMatch = !inst.timing || inst.timing === selectedTiming;
-          const scheduleForMonth = getPaymentSchedule('installment', inst.id, selectedMonth, selectedYear);
-          const isActiveForPeriod = scheduleForMonth !== undefined || shouldShowInstallment(inst, selectedMonth, selectedYear);
-          // Only hide when there is NO schedule for this period AND the total is fully paid.
-          // When a schedule exists for the viewed period, always keep the row visible so the
-          // user can see the paid/partial indicator rather than the row disappearing on payment.
-          const isFinished = !scheduleForMonth && inst.totalAmount > 0 && inst.paidAmount >= inst.totalAmount;
-          const notExcluded = !excludedInstallmentIds.has(inst.id);
-          return timingMatch && isActiveForPeriod && !isFinished && notExcluded;
-        })
-        .reduce((s, inst) => s + inst.monthlyAmount, 0);
-    }
-    
-    return { category: cat.name, total: itemsTotal + installmentsTotal };
-  });
+  const categorySummary = categories
+    .filter(cat => {
+      const catItems = setupData[cat.name] || [];
+      const hasLoansData = cat.name === 'Loans' && installments.some(inst => {
+        const timingMatch = !inst.timing || inst.timing === selectedTiming;
+        const scheduleForMonth = getPaymentSchedule('installment', inst.id, selectedMonth, selectedYear);
+        const isActiveForPeriod = scheduleForMonth !== undefined || shouldShowInstallment(inst, selectedMonth, selectedYear);
+        const isFinished = !scheduleForMonth && inst.totalAmount > 0 && inst.paidAmount >= inst.totalAmount;
+        return timingMatch && isActiveForPeriod && !isFinished && !excludedInstallmentIds.has(inst.id);
+      });
+      return shouldRenderCategorySection(cat, catItems.length > 0 || hasLoansData, selectedYear, selectedMonth);
+    })
+    .map((cat) => {
+      const items = setupData[cat.name] || [];
+      const itemsTotal = items.filter(i => i.included).reduce((sum, item) => sum + (parseFloat(item.amount) || 0), 0);
+
+      // FIX: Include installments for Loans category (same logic as Setup view)
+      let installmentsTotal = 0;
+      if (cat.name === 'Loans') {
+        installmentsTotal = installments
+          .filter(inst => {
+            const timingMatch = !inst.timing || inst.timing === selectedTiming;
+            const scheduleForMonth = getPaymentSchedule('installment', inst.id, selectedMonth, selectedYear);
+            const isActiveForPeriod = scheduleForMonth !== undefined || shouldShowInstallment(inst, selectedMonth, selectedYear);
+            // Only hide when there is NO schedule for this period AND the total is fully paid.
+            // When a schedule exists for the viewed period, always keep the row visible so the
+            // user can see the paid/partial indicator rather than the row disappearing on payment.
+            const isFinished = !scheduleForMonth && inst.totalAmount > 0 && inst.paidAmount >= inst.totalAmount;
+            const notExcluded = !excludedInstallmentIds.has(inst.id);
+            return timingMatch && isActiveForPeriod && !isFinished && notExcluded;
+          })
+          .reduce((s, inst) => s + inst.monthlyAmount, 0);
+      }
+
+      return { category: cat.name, total: itemsTotal + installmentsTotal };
+    });
   // Include stash wallet targets for wallets not excluded from the grand total
   // Use the actual funded amount when it exceeds the target (over-funded stash)
   const stashTotal = wallets.filter(w => !excludedWalletIds.has(w.id)).reduce((s, w) => s + Math.max(w.amount, getStashAggregates(w).funded), 0);
