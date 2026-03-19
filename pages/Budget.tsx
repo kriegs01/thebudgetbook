@@ -3,6 +3,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { BudgetItem, Account, Biller, PaymentSchedule, CategorizedSetupItem, SavedBudgetSetup, BudgetCategory, Installment, Wallet } from '../types';
 import { Plus, Check, ChevronDown, Trash2, Save, FileText, ArrowRight, Upload, CheckCircle2, X, AlertTriangle, Info, Eye, ZoomIn, ZoomOut, Download, Archive, RotateCcw, Lock } from 'lucide-react';
 import { createBudgetSetupFrontend, updateBudgetSetupFrontend, archiveBudgetSetup, reopenBudgetSetup } from '../src/services/budgetSetupsService';
+import { IconSquircleButton } from '../src/components/IconSquircleButton';
 import { createTransaction, getAllTransactions, updateTransaction, updateTransactionAndSyncSchedule, createPaymentScheduleTransaction, uploadTransactionReceipt, getTransactionsByPaymentSchedule, getReceiptSignedUrl, deleteTransactionAndRevertSchedule, getAllStashTransactions } from '../src/services/transactionsService';
 import type { SupabaseTransaction, SupabaseMonthlyPaymentSchedule } from '../src/types/supabase';
 import { getInstallmentPaymentSchedule, aggregateCreditCardPurchases } from '../src/utils/paymentStatus'; // PROTOTYPE: Import payment status utilities
@@ -1781,28 +1782,31 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
             </span>
           )}
         </td>
-        <td className="p-8 pr-12 text-right">
-          <div className="flex items-center justify-end space-x-4">
+        <td className="p-6 pr-8 text-center">
+          <div className="flex justify-center items-center gap-2">
             {setup.isArchived ? (
-              <button
-                onClick={() => handleReopenSetup(setup)}
-                disabled={archiveSubmitting}
-                className="flex items-center space-x-1 px-4 py-2 text-[10px] font-black text-indigo-600 hover:bg-indigo-50 rounded-xl transition-all uppercase tracking-widest border border-indigo-100 disabled:opacity-50"
-              >
-                <RotateCcw className="w-3.5 h-3.5" />
-                <span>Reopen</span>
-              </button>
+              <>
+                <IconSquircleButton
+                  variant="reopen"
+                  onClick={() => handleReopenSetup(setup)}
+                  disabled={archiveSubmitting}
+                  aria-label="Reopen budget"
+                >
+                  <RotateCcw className="w-4 h-4" />
+                </IconSquircleButton>
+              </>
             ) : (
               <>
-                <button
+                <IconSquircleButton
+                  variant="close"
                   onClick={() => handleArchiveSetup(setup)}
                   disabled={archiveSubmitting}
-                  className="flex items-center space-x-1 px-4 py-2 text-[10px] font-black text-amber-600 hover:bg-amber-50 rounded-xl transition-all uppercase tracking-widest border border-amber-100 disabled:opacity-50"
+                  aria-label="Close budget"
                 >
-                  <Archive className="w-3.5 h-3.5" />
-                  <span>Close</span>
-                </button>
-                <button 
+                  <Archive className="w-4 h-4" />
+                </IconSquircleButton>
+                <IconSquircleButton
+                  variant="remove"
                   onClick={() => {
                     setConfirmModal({
                       show: true,
@@ -1813,16 +1817,20 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                         setConfirmModal(prev => ({ ...prev, show: false }));
                       }
                     });
-                  }} 
-                  className="px-4 py-2 text-[10px] font-black text-red-500 hover:bg-red-50 rounded-xl transition-all uppercase tracking-widest border border-red-100"
+                  }}
+                  aria-label="Remove budget"
                 >
-                  Remove
-                </button>
+                  <Trash2 className="w-4 h-4" />
+                </IconSquircleButton>
               </>
             )}
-            <button onClick={() => handleLoadSetup(setup)} className="p-3 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-2xl transition-all">
-              <ArrowRight className="w-6 h-6" />
-            </button>
+            <IconSquircleButton
+              variant="open"
+              onClick={() => handleLoadSetup(setup)}
+              aria-label="Open budget"
+            >
+              <ArrowRight className="w-4 h-4" />
+            </IconSquircleButton>
           </div>
         </td>
       </tr>
@@ -1861,7 +1869,7 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                     <th className="p-8 text-[10px] font-black text-gray-400 uppercase tracking-[0.3em]">Total Budget</th>
                     <th className="p-8 text-[10px] font-black text-gray-400 uppercase tracking-[0.3em]">Remaining</th>
                     <th className="p-8 text-[10px] font-black text-gray-400 uppercase tracking-[0.3em]">Status</th>
-                    <th className="p-8 pr-12 text-right text-[10px] font-black text-gray-400 uppercase tracking-[0.3em]">Actions</th>
+                    <th className="p-6 pr-8 text-center text-[10px] font-black text-gray-400 uppercase tracking-[0.3em]">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-50">
@@ -1901,7 +1909,7 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                         <th className="p-8 text-[10px] font-black text-gray-400 uppercase tracking-[0.3em]">Total Budget</th>
                         <th className="p-8 text-[10px] font-black text-gray-400 uppercase tracking-[0.3em]">Remaining</th>
                         <th className="p-8 text-[10px] font-black text-gray-400 uppercase tracking-[0.3em]">Status</th>
-                        <th className="p-8 pr-12 text-right text-[10px] font-black text-gray-400 uppercase tracking-[0.3em]">Actions</th>
+                        <th className="p-6 pr-8 text-center text-[10px] font-black text-gray-400 uppercase tracking-[0.3em]">Actions</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-amber-50">
