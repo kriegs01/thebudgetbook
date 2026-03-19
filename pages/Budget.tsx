@@ -1,8 +1,8 @@
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { BudgetItem, Account, Biller, PaymentSchedule, CategorizedSetupItem, SavedBudgetSetup, BudgetCategory, Installment, Wallet } from '../types';
-import { Plus, Check, ChevronDown, Trash2, Save, FileText, ArrowRight, Upload, CheckCircle2, X, AlertTriangle, Info, Eye, ZoomIn, ZoomOut, Download } from 'lucide-react';
-import { createBudgetSetupFrontend, updateBudgetSetupFrontend } from '../src/services/budgetSetupsService';
+import { Plus, Check, ChevronDown, Trash2, Save, FileText, ArrowRight, Upload, CheckCircle2, X, AlertTriangle, Info, Eye, ZoomIn, ZoomOut, Download, Archive, RotateCcw, Lock } from 'lucide-react';
+import { createBudgetSetupFrontend, updateBudgetSetupFrontend, archiveBudgetSetup, reopenBudgetSetup } from '../src/services/budgetSetupsService';
 import { createTransaction, getAllTransactions, updateTransaction, updateTransactionAndSyncSchedule, createPaymentScheduleTransaction, uploadTransactionReceipt, getTransactionsByPaymentSchedule, getReceiptSignedUrl, deleteTransactionAndRevertSchedule, getAllStashTransactions } from '../src/services/transactionsService';
 import type { SupabaseTransaction, SupabaseMonthlyPaymentSchedule } from '../src/types/supabase';
 import { getInstallmentPaymentSchedule, aggregateCreditCardPurchases } from '../src/utils/paymentStatus'; // PROTOTYPE: Import payment status utilities
@@ -28,6 +28,8 @@ interface BudgetProps {
   installments?: Installment[]; // PROTOTYPE: Installments for Loans section
   onTransactionCreated?: () => void; // Notify App to reload accounts/balances after stash top-up
   onTransactionDeleted?: () => void; // Notify App to reload accounts/balances after stash top-up deletion
+  onArchiveBudget?: (setup: SavedBudgetSetup) => Promise<void>; // Archive (close) a budget
+  onReopenBudget?: (setup: SavedBudgetSetup) => Promise<void>; // Reopen an archived budget
 }
 
 const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
@@ -94,7 +96,22 @@ const ZOOM_INCREMENT = 0.25;
 const MIN_ZOOM = 0.25;
 const MAX_ZOOM = 4;
 
-const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSetups, setSavedSetups, onUpdateBiller, onMoveToTrash, onReloadSetups, onReloadBillers, onUpdateInstallment, installments = [], onTransactionCreated, onTransactionDeleted }) => {
+// The first month where new stash-based budgets are in use.
+// Budgets before this date are considered "legacy" (fixed billers, no real transactions).
+const STASH_GO_LIVE = new Date(2026, 2, 1); // March 1, 2026
+
+/**
+ * Returns true if the given year/month predates the stash go-live date.
+ * Legacy budgets use schedule/flag paid status; new budgets use real transactions.
+ */
+const isLegacyBudget = (year: number, month: string): boolean => {
+  const monthIdx = MONTHS.indexOf(month);
+  if (monthIdx === -1) return false;
+  const budgetStart = new Date(year, monthIdx, 1);
+  return budgetStart < STASH_GO_LIVE;
+};
+
+const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSetups, setSavedSetups, onUpdateBiller, onMoveToTrash, onReloadSetups, onReloadBillers, onUpdateInstallment, installments = [], onTransactionCreated, onTransactionDeleted, onArchiveBudget, onReopenBudget }) => {
   const [view, setView] = useState<'summary' | 'setup'>('summary');
   const [selectedMonth, setSelectedMonth] = useState(MONTHS[new Date().getMonth()]);
   const [selectedTiming, setSelectedTiming] = useState<'1/2' | '2/2'>('1/2');
@@ -127,6 +144,13 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
   const [fundSubmitting, setFundSubmitting] = useState(false);
   const [stashInfoModal, setStashInfoModal] = useState<{ wallet: Wallet } | null>(null);
   const [stashStatusMsg, setStashStatusMsg] = useState<{ msg: string; type: 'success' | 'error' } | null>(null);
+
+  // Archive/reopen operation status
+  const [archiveStatusMsg, setArchiveStatusMsg] = useState<{ msg: string; type: 'success' | 'error' } | null>(null);
+  const [archiveSubmitting, setArchiveSubmitting] = useState(false);
+
+  // Collapsible archived section on summary view
+  const [showArchived, setShowArchived] = useState(false);
 
   // REFACTOR: Payment schedules state - source of truth for payment status
   const [paymentSchedules, setPaymentSchedules] = useState<SupabaseMonthlyPaymentSchedule[]>([]);
@@ -1668,7 +1692,120 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
     console.log('[Budget] ===== Budget setup loaded successfully =====');
   };
 
+  const handleArchiveSetup = (setup: SavedBudgetSetup) => {
+    setConfirmModal({
+      show: true,
+      title: 'Close Budget',
+      message: `Close and archive the ${setup.month} (${setup.timing}) budget? You'll still be able to view it in Archived Budgets and it will still be used in projections, but you won't be able to modify it.`,
+      onConfirm: async () => {
+        setConfirmModal(prev => ({ ...prev, show: false }));
+        setArchiveSubmitting(true);
+        try {
+          await onArchiveBudget?.(setup);
+          setArchiveStatusMsg({ msg: 'Budget closed and archived.', type: 'success' });
+        } catch {
+          setArchiveStatusMsg({ msg: 'Could not close budget. Please try again.', type: 'error' });
+        } finally {
+          setArchiveSubmitting(false);
+          setTimeout(() => setArchiveStatusMsg(null), 3000);
+        }
+      }
+    });
+  };
+
+  const handleReopenSetup = (setup: SavedBudgetSetup) => {
+    setConfirmModal({
+      show: true,
+      title: 'Reopen Budget',
+      message: `Reopen the ${setup.month} (${setup.timing}) budget? You'll be able to make changes again. This may affect your projections.`,
+      onConfirm: async () => {
+        setConfirmModal(prev => ({ ...prev, show: false }));
+        setArchiveSubmitting(true);
+        try {
+          await onReopenBudget?.(setup);
+          setArchiveStatusMsg({ msg: 'Budget reopened. You can edit this budget again.', type: 'success' });
+        } catch {
+          setArchiveStatusMsg({ msg: 'Could not reopen budget. Please try again.', type: 'error' });
+        } finally {
+          setArchiveSubmitting(false);
+          setTimeout(() => setArchiveStatusMsg(null), 3000);
+        }
+      }
+    });
+  };
+
   if (view === 'summary') {
+    const activeSetups = savedSetups.filter(s => !s.isArchived);
+    const archivedSetups = savedSetups.filter(s => s.isArchived);
+
+    const renderSetupRow = (setup: SavedBudgetSetup) => (
+      <tr key={setup.id} className="hover:bg-gray-50/50 transition-colors group">
+        <td className="p-8 pl-12">
+          <div className="flex items-center space-x-5">
+            <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shadow-sm ${setup.isArchived ? 'bg-amber-50 text-amber-500' : 'bg-indigo-50 text-indigo-600 shadow-indigo-50/50'}`}>
+              {setup.isArchived ? <Archive className="w-6 h-6" /> : <FileText className="w-6 h-6" />}
+            </div>
+            <span className="text-base font-black text-gray-900 tracking-tight">{setup.month}</span>
+          </div>
+        </td>
+        <td className="p-8"><span className="text-[10px] font-black text-gray-500 bg-gray-100/80 px-4 py-1.5 rounded-full uppercase tracking-widest">{setup.timing}</span></td>
+        <td className="p-8"><span className="text-base font-black text-gray-900 tracking-tight">{formatCurrency(setup.totalAmount)}</span></td>
+        <td className="p-8">
+          {setup.isArchived ? (
+            <span className="text-[10px] font-black uppercase tracking-[0.15em] px-4 py-1.5 rounded-full bg-amber-100 text-amber-700">Archived</span>
+          ) : (
+            <span className={`text-[10px] font-black uppercase tracking-[0.15em] px-4 py-1.5 rounded-full ${setup.status === BUDGET_SETUP_STATUS.ACTIVE ? 'bg-green-100 text-green-700' : 'bg-blue-100 text-blue-700'}`}>
+              {setup.status}
+            </span>
+          )}
+        </td>
+        <td className="p-8 pr-12 text-right">
+          <div className="flex items-center justify-end space-x-4">
+            {setup.isArchived ? (
+              <button
+                onClick={() => handleReopenSetup(setup)}
+                disabled={archiveSubmitting}
+                className="flex items-center space-x-1 px-4 py-2 text-[10px] font-black text-indigo-600 hover:bg-indigo-50 rounded-xl transition-all uppercase tracking-widest border border-indigo-100 disabled:opacity-50"
+              >
+                <RotateCcw className="w-3.5 h-3.5" />
+                <span>Reopen</span>
+              </button>
+            ) : (
+              <>
+                <button
+                  onClick={() => handleArchiveSetup(setup)}
+                  disabled={archiveSubmitting}
+                  className="flex items-center space-x-1 px-4 py-2 text-[10px] font-black text-amber-600 hover:bg-amber-50 rounded-xl transition-all uppercase tracking-widest border border-amber-100 disabled:opacity-50"
+                >
+                  <Archive className="w-3.5 h-3.5" />
+                  <span>Close</span>
+                </button>
+                <button 
+                  onClick={() => {
+                    setConfirmModal({
+                      show: true,
+                      title: 'Move to Trash',
+                      message: `Are you sure you want to move the ${setup.month} (${setup.timing}) budget history entry to Trash?`,
+                      onConfirm: () => {
+                        onMoveToTrash?.(setup);
+                        setConfirmModal(prev => ({ ...prev, show: false }));
+                      }
+                    });
+                  }} 
+                  className="px-4 py-2 text-[10px] font-black text-red-500 hover:bg-red-50 rounded-xl transition-all uppercase tracking-widest border border-red-100"
+                >
+                  Remove
+                </button>
+              </>
+            )}
+            <button onClick={() => handleLoadSetup(setup)} className="p-3 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-2xl transition-all">
+              <ArrowRight className="w-6 h-6" />
+            </button>
+          </div>
+        </td>
+      </tr>
+    );
+
     return (
       <div className="space-y-8 animate-in fade-in duration-500 w-full">
         <div className="flex items-center justify-between">
@@ -1682,6 +1819,14 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
           </button>
         </div>
 
+        {archiveStatusMsg && (
+          <div className={`flex items-center space-x-3 px-6 py-4 rounded-2xl text-sm font-bold ${archiveStatusMsg.type === 'success' ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'}`}>
+            {archiveStatusMsg.type === 'success' ? <Check className="w-4 h-4 flex-shrink-0" /> : <AlertTriangle className="w-4 h-4 flex-shrink-0" />}
+            <span>{archiveStatusMsg.msg}</span>
+          </div>
+        )}
+
+        {/* Active budgets */}
         <div className="bg-white/40 backdrop-blur-xl rounded-[3rem] shadow-sm border border-gray-100 p-2 w-full">
           <div className="bg-white rounded-[2.5rem] overflow-hidden w-full">
             <div className="overflow-x-auto w-full">
@@ -1696,49 +1841,8 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-50">
-                  {savedSetups.length > 0 ? (
-                    savedSetups.map((setup) => (
-                      <tr key={setup.id} className="hover:bg-gray-50/50 transition-colors group">
-                        <td className="p-8 pl-12">
-                          <div className="flex items-center space-x-5">
-                            <div className="w-12 h-12 rounded-2xl bg-indigo-50 flex items-center justify-center text-indigo-600 shadow-sm shadow-indigo-50/50">
-                              <FileText className="w-6 h-6" />
-                            </div>
-                            <span className="text-base font-black text-gray-900 tracking-tight">{setup.month}</span>
-                          </div>
-                        </td>
-                        <td className="p-8"><span className="text-[10px] font-black text-gray-500 bg-gray-100/80 px-4 py-1.5 rounded-full uppercase tracking-widest">{setup.timing}</span></td>
-                        <td className="p-8"><span className="text-base font-black text-gray-900 tracking-tight">{formatCurrency(setup.totalAmount)}</span></td>
-                        <td className="p-8">
-                          <span className={`text-[10px] font-black uppercase tracking-[0.15em] px-4 py-1.5 rounded-full ${setup.status === BUDGET_SETUP_STATUS.ACTIVE ? 'bg-green-100 text-green-700' : 'bg-blue-100 text-blue-700'}`}>
-                            {setup.status}
-                          </span>
-                        </td>
-                        <td className="p-8 pr-12 text-right">
-                          <div className="flex items-center justify-end space-x-4">
-                            <button 
-                              onClick={() => {
-                                setConfirmModal({
-                                  show: true,
-                                  title: 'Move to Trash',
-                                  message: `Are you sure you want to move the ${setup.month} (${setup.timing}) budget history entry to Trash?`,
-                                  onConfirm: () => {
-                                    onMoveToTrash?.(setup);
-                                    setConfirmModal(prev => ({ ...prev, show: false }));
-                                  }
-                                });
-                              }} 
-                              className="px-4 py-2 text-[10px] font-black text-red-500 hover:bg-red-50 rounded-xl transition-all uppercase tracking-widest border border-red-100"
-                            >
-                              Remove
-                            </button>
-                            <button onClick={() => handleLoadSetup(setup)} className="p-3 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-2xl transition-all">
-                              <ArrowRight className="w-6 h-6" />
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))
+                  {activeSetups.length > 0 ? (
+                    activeSetups.map(renderSetupRow)
                   ) : (
                     <tr><td colSpan={5} className="p-24 text-center text-gray-400 font-bold uppercase tracking-widest">No history found</td></tr>
                   )}
@@ -1747,6 +1851,44 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
             </div>
           </div>
         </div>
+
+        {/* Archived budgets – collapsible */}
+        {archivedSetups.length > 0 && (
+          <div className="bg-white/40 backdrop-blur-xl rounded-[3rem] shadow-sm border border-amber-100 p-2 w-full">
+            <div className="bg-white rounded-[2.5rem] overflow-hidden w-full">
+              <button
+                type="button"
+                onClick={() => setShowArchived(prev => !prev)}
+                className="w-full flex items-center justify-between p-8 pl-12 pr-12 hover:bg-amber-50/40 transition-colors rounded-[2.5rem]"
+              >
+                <div className="flex items-center space-x-3">
+                  <Archive className="w-5 h-5 text-amber-500" />
+                  <span className="text-xs font-black text-amber-700 uppercase tracking-[0.25em]">Archived Budgets ({archivedSetups.length})</span>
+                </div>
+                <ChevronDown className={`w-5 h-5 text-amber-400 transition-transform ${showArchived ? 'rotate-180' : ''}`} />
+              </button>
+              {showArchived && (
+                <div className="overflow-x-auto w-full border-t border-amber-50">
+                  <table className="w-full text-left">
+                    <thead>
+                      <tr className="border-b border-amber-50">
+                        <th className="p-8 pl-12 text-[10px] font-black text-gray-400 uppercase tracking-[0.3em]">Month</th>
+                        <th className="p-8 text-[10px] font-black text-gray-400 uppercase tracking-[0.3em]">Timing</th>
+                        <th className="p-8 text-[10px] font-black text-gray-400 uppercase tracking-[0.3em]">Total Budget</th>
+                        <th className="p-8 text-[10px] font-black text-gray-400 uppercase tracking-[0.3em]">Status</th>
+                        <th className="p-8 pr-12 text-right"></th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-amber-50">
+                      {archivedSetups.map(renderSetupRow)}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
         {confirmModal.show && <ConfirmDialog {...confirmModal} onClose={() => setConfirmModal(p => ({ ...p, show: false }))} />}
       </div>
     );
@@ -1788,6 +1930,11 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
   const salaryToUse = actualSalaryValue !== null && !isNaN(actualSalaryValue) ? actualSalaryValue : projectedSalaryValue;
   const remaining = salaryToUse - totalSpend;
 
+  // Determine read-only state for the current setup
+  const currentSetup = savedSetups.find(s => s.month === selectedMonth && s.timing === selectedTiming);
+  const isReadOnly = currentSetup?.isArchived ?? false;
+  const legacyMode = isLegacyBudget(selectedYear, selectedMonth);
+
   return (
     <div className="space-y-8 animate-in slide-in-from-right-4 duration-500 pb-20 w-full">
       <div className="flex flex-col space-y-6">
@@ -1798,11 +1945,11 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
           </button>
           <div className="text-center">
             <h2 className="text-2xl font-black text-gray-900 tracking-tighter uppercase">BUDGET SETUP</h2>
-            <p className="text-xs text-gray-400 font-bold uppercase tracking-widest mt-1">Configure Recurring Expenses</p>
+            <p className="text-xs text-gray-400 font-bold uppercase tracking-widest mt-1">{isReadOnly ? 'Archived — Read Only' : 'Configure Recurring Expenses'}</p>
           </div>
           <div className="flex items-center space-x-3">
             {/* Autosave Status Indicator */}
-            {autoSaveStatus !== 'idle' && (
+            {!isReadOnly && autoSaveStatus !== 'idle' && (
               <div className="flex items-center space-x-2 text-xs font-bold">
                 {autoSaveStatus === 'saving' && (
                   <>
@@ -1824,21 +1971,54 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                 )}
               </div>
             )}
-            <button onClick={handleSaveSetup} className="flex items-center space-x-3 bg-indigo-600 text-white px-8 py-3 rounded-2xl font-black uppercase tracking-widest text-xs hover:bg-indigo-700 shadow-xl">
-              <Save className="w-5 h-5" />
-              <span>Save</span>
-            </button>
+            {currentSetup && isReadOnly && (
+              <button
+                onClick={() => handleReopenSetup(currentSetup)}
+                disabled={archiveSubmitting}
+                className="flex items-center space-x-2 bg-indigo-50 text-indigo-700 px-6 py-3 rounded-2xl font-black uppercase tracking-widest text-xs hover:bg-indigo-100 transition-all disabled:opacity-50"
+              >
+                <RotateCcw className="w-4 h-4" />
+                <span>Reopen</span>
+              </button>
+            )}
+            {currentSetup && !isReadOnly && (
+              <button
+                onClick={() => handleArchiveSetup(currentSetup)}
+                disabled={archiveSubmitting}
+                className="flex items-center space-x-2 bg-amber-50 text-amber-700 px-6 py-3 rounded-2xl font-black uppercase tracking-widest text-xs hover:bg-amber-100 transition-all disabled:opacity-50"
+              >
+                <Archive className="w-4 h-4" />
+                <span>Close</span>
+              </button>
+            )}
+            {!isReadOnly && (
+              <button onClick={handleSaveSetup} className="flex items-center space-x-3 bg-indigo-600 text-white px-8 py-3 rounded-2xl font-black uppercase tracking-widest text-xs hover:bg-indigo-700 shadow-xl">
+                <Save className="w-5 h-5" />
+                <span>Save</span>
+              </button>
+            )}
           </div>
         </div>
 
+        {/* Read-only banner for archived budgets */}
+        {isReadOnly && (
+          <div className="flex items-center space-x-3 bg-amber-50 border border-amber-200 rounded-2xl px-6 py-4">
+            <Lock className="w-5 h-5 text-amber-600 flex-shrink-0" />
+            <p className="text-sm font-bold text-amber-800">This budget is closed and archived. You can view it, but cannot make changes. Use <span className="font-black">Reopen</span> to edit it again.</p>
+          </div>
+        )}
+
         <div className="flex justify-center items-center space-x-6">
-          <select value={selectedMonth} onChange={(e) => setSelectedMonth(e.target.value)} className="bg-white border border-gray-100 rounded-[1.5rem] px-8 py-4 font-black text-indigo-600 shadow-sm outline-none">
+          <select value={selectedMonth} onChange={(e) => setSelectedMonth(e.target.value)} disabled={isReadOnly} className="bg-white border border-gray-100 rounded-[1.5rem] px-8 py-4 font-black text-indigo-600 shadow-sm outline-none disabled:opacity-60 disabled:cursor-not-allowed">
             {MONTHS.map(m => <option key={m} value={m}>{m}</option>)}
           </select>
-          <select value={selectedTiming} onChange={(e) => setSelectedTiming(e.target.value as '1/2' | '2/2')} className="bg-white border border-gray-100 rounded-[1.5rem] px-8 py-4 font-black text-indigo-600 shadow-sm outline-none">
+          <select value={selectedTiming} onChange={(e) => setSelectedTiming(e.target.value as '1/2' | '2/2')} disabled={isReadOnly} className="bg-white border border-gray-100 rounded-[1.5rem] px-8 py-4 font-black text-indigo-600 shadow-sm outline-none disabled:opacity-60 disabled:cursor-not-allowed">
             <option value="1/2">1/2</option>
             <option value="2/2">2/2</option>
           </select>
+          {legacyMode && (
+            <span className="text-[10px] font-black text-gray-400 bg-gray-100 px-4 py-2 rounded-full uppercase tracking-widest">Legacy Budget</span>
+          )}
         </div>
       </div>
 
@@ -1878,7 +2058,8 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                       step="0.01"
                       value={projectedSalary} 
                       onChange={(e) => setProjectedSalary(e.target.value)} 
-                      className="bg-transparent border-none text-sm font-black text-gray-900 w-28 text-right outline-none focus:bg-indigo-50 rounded px-1"
+                      disabled={isReadOnly}
+                      className="bg-transparent border-none text-sm font-black text-gray-900 w-28 text-right outline-none focus:bg-indigo-50 rounded px-1 disabled:opacity-60 disabled:cursor-not-allowed"
                       aria-label="Projected Salary"
                     />
                   </div>
@@ -1895,8 +2076,9 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                       step="0.01"
                       value={actualSalary} 
                       onChange={(e) => setActualSalary(e.target.value)} 
+                      disabled={isReadOnly}
                       placeholder="Enter actual"
-                      className="bg-transparent border-none text-sm font-black text-gray-900 w-28 text-right outline-none focus:bg-indigo-50 rounded px-1 placeholder:text-gray-300"
+                      className="bg-transparent border-none text-sm font-black text-gray-900 w-28 text-right outline-none focus:bg-indigo-50 rounded px-1 placeholder:text-gray-300 disabled:opacity-60 disabled:cursor-not-allowed"
                       aria-label="Actual Salary"
                     />
                   </div>
@@ -1989,7 +2171,7 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                           </div>
                         </td>
                         <td className="p-4 text-center">
-                          {isFunded ? (
+                          {!isReadOnly && (isFunded ? (
                             <button
                               onClick={() => handleOpenFundModal(wallet)}
                               title="Add more to this stash"
@@ -2005,16 +2187,18 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                               <Plus className="w-3 h-3" />
                               <span>Fund</span>
                             </button>
-                          )}
+                          ))}
                         </td>
                         <td className="p-4 pr-10 text-right">
-                          <button
-                            onClick={() => handleWalletIncludeToggle(wallet.id)}
-                            title={isIncluded ? 'Exclude from grand total' : 'Include in grand total'}
-                            className={`w-8 h-8 rounded-xl border-2 transition-all flex items-center justify-center ${isIncluded ? 'bg-indigo-600 border-indigo-600 text-white' : 'border-gray-200'}`}
-                          >
-                            <Check className="w-4 h-4" />
-                          </button>
+                          {!isReadOnly && (
+                            <button
+                              onClick={() => handleWalletIncludeToggle(wallet.id)}
+                              title={isIncluded ? 'Exclude from grand total' : 'Include in grand total'}
+                              className={`w-8 h-8 rounded-xl border-2 transition-all flex items-center justify-center ${isIncluded ? 'bg-indigo-600 border-indigo-600 text-white' : 'border-gray-200'}`}
+                            >
+                              <Check className="w-4 h-4" />
+                            </button>
+                          )}
                         </td>
                       </tr>
                     );
@@ -2054,7 +2238,8 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                               type="text" 
                               value={item.name} 
                               onChange={(e) => handleSetupUpdate(cat.name, item.id, 'name', e.target.value)} 
-                              className="bg-transparent border-none text-sm font-bold w-full" 
+                              disabled={isReadOnly}
+                              className="bg-transparent border-none text-sm font-bold w-full disabled:cursor-default" 
                             />
                           </td>
                           <td className="p-4">
@@ -2064,7 +2249,8 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                                 type="number" 
                                 value={item.amount} 
                                 onChange={(e) => handleSetupUpdate(cat.name, item.id, 'amount', e.target.value)} 
-                                className="bg-transparent border-none text-sm font-black w-24" 
+                                disabled={isReadOnly}
+                                className="bg-transparent border-none text-sm font-black w-24 disabled:cursor-default" 
                               />
                             </div>
                           </td>
@@ -2072,7 +2258,8 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                             <select 
                               value={item.accountId || ''} 
                               onChange={(e) => handleSetupUpdate(cat.name, item.id, 'accountId', e.target.value)}
-                              className="bg-gray-50 border border-gray-200 rounded-lg px-3 py-1.5 text-xs font-bold text-gray-700 outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
+                              disabled={isReadOnly}
+                              className="bg-gray-50 border border-gray-200 rounded-lg px-3 py-1.5 text-xs font-bold text-gray-700 outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 disabled:opacity-60 disabled:cursor-not-allowed"
                             >
                               <option value="">Select Account</option>
                               {accounts.filter(acc => acc.type === 'Debit').map(acc => (
@@ -2086,29 +2273,33 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                             <div className="flex items-center justify-center space-x-2">
                               {item.settled ? (
                                 <CheckCircle2 className="w-4 h-4 text-green-500" aria-label="Item settled" title="Settled" />
-                              ) : (
+                              ) : !isReadOnly ? (
                                 <button 
                                   onClick={() => handleSetupUpdate(cat.name, item.id, 'settled', true)}
                                   className="px-3 py-1 bg-green-600 text-white text-[9px] font-black uppercase rounded-lg hover:bg-green-700 transition-colors"
                                 >
                                   Settle
                                 </button>
+                              ) : null}
+                              {!isReadOnly && (
+                                <button 
+                                  onClick={() => handleSetupToggle(cat.name, item.id)} 
+                                  className={`w-8 h-8 rounded-xl border-2 transition-all flex items-center justify-center ${item.included ? 'bg-indigo-600 border-indigo-600 text-white' : 'border-gray-200'}`}
+                                >
+                                  <Check className="w-4 h-4" />
+                                </button>
                               )}
-                              <button 
-                                onClick={() => handleSetupToggle(cat.name, item.id)} 
-                                className={`w-8 h-8 rounded-xl border-2 transition-all flex items-center justify-center ${item.included ? 'bg-indigo-600 border-indigo-600 text-white' : 'border-gray-200'}`}
-                              >
-                                <Check className="w-4 h-4" />
-                              </button>
                             </div>
                           </td>
                           <td className="p-4 pr-10 text-right">
-                            <button 
-                              onClick={() => removeItemFromCategory(cat.name, item.id, item.name)} 
-                              className="text-[9px] font-black text-red-500 uppercase tracking-widest border border-red-50 px-2 py-1 rounded-lg"
-                            >
-                              Exclude
-                            </button>
+                            {!isReadOnly && (
+                              <button 
+                                onClick={() => removeItemFromCategory(cat.name, item.id, item.name)} 
+                                className="text-[9px] font-black text-red-500 uppercase tracking-widest border border-red-50 px-2 py-1 rounded-lg"
+                              >
+                                Exclude
+                              </button>
+                            )}
                           </td>
                         </tr>
                       );
@@ -2121,7 +2312,7 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                     )}
                   </tbody>
                 </table>
-                <button onClick={() => addItemToCategory(cat.name)} className="w-full p-4 text-[10px] font-black text-gray-400 uppercase hover:text-indigo-600 border-t border-gray-50">+ Add Item</button>
+                {!isReadOnly && <button onClick={() => addItemToCategory(cat.name)} className="w-full p-4 text-[10px] font-black text-gray-400 uppercase hover:text-indigo-600 border-t border-gray-50">+ Add Item</button>}
               </div>
             </div>
           );
@@ -2216,9 +2407,9 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                       }
                       return (
                         <tr key={item.id} className={`${item.included ? 'bg-white' : 'bg-gray-50 opacity-60'}`}>
-                          <td className="p-4 pl-10"><input type="text" value={item.name} onChange={(e) => handleSetupUpdate(cat.name, item.id, 'name', e.target.value)} className="bg-transparent border-none text-sm font-bold w-full" /></td>
+                          <td className="p-4 pl-10"><input type="text" value={item.name} onChange={(e) => handleSetupUpdate(cat.name, item.id, 'name', e.target.value)} disabled={isReadOnly} className="bg-transparent border-none text-sm font-bold w-full disabled:cursor-default" /></td>
                           <td className="p-4">
-                            <div className="flex items-center space-x-1"><span className="text-gray-400 font-bold">₱</span><input type="number" value={item.amount} onChange={(e) => handleSetupUpdate(cat.name, item.id, 'amount', e.target.value)} className="bg-transparent border-none text-sm font-black w-24" /></div>
+                            <div className="flex items-center space-x-1"><span className="text-gray-400 font-bold">₱</span><input type="number" value={item.amount} onChange={(e) => handleSetupUpdate(cat.name, item.id, 'amount', e.target.value)} disabled={isReadOnly} className="bg-transparent border-none text-sm font-black w-24 disabled:cursor-default" /></div>
                           </td>
                           <td className="p-4 text-center">
                             <div className="flex items-center justify-center space-x-2">
@@ -2244,7 +2435,7 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                                         </button>
                                       </>
                                     )}
-                                  <button 
+                                  {!isReadOnly && <button 
                                     onClick={() => { 
                                       if(linkedBiller && paymentSchedule) {
                                         // REFACTOR: Use payment schedule from monthly_payment_schedules table
@@ -2289,7 +2480,7 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                                     className="px-3 py-1 bg-indigo-600 text-white text-[9px] font-black uppercase rounded-lg hover:bg-indigo-700 transition-colors"
                                   >
                                     {isPartial ? 'Pay Remaining' : 'Pay'}
-                                  </button>
+                                  </button>}
                                   </>
                                 )
                               )}
@@ -2300,7 +2491,7 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                                     <CheckCircle2 className="w-4 h-4 text-green-500" aria-label="Payment completed" title="Paid" />
                                     <button onClick={() => { const tx = findExistingTransaction(item.name, item.amount, selectedMonth); if (tx) openDirectPaymentModal(tx, `${item.name} - ${selectedMonth}`); }} title="View payment records" className="text-gray-400 hover:text-indigo-600 transition-colors rounded-full p-1 hover:bg-indigo-50"><Info className="w-3.5 h-3.5" /></button>
                                   </>
-                                ) : (
+                                ) : !isReadOnly ? (
                                   <button 
                                     onClick={() => {
                                       setTransactionFormData({
@@ -2317,12 +2508,12 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                                   >
                                     Pay
                                   </button>
-                                )
+                                ) : null
                               )}
-                              <button onClick={() => handleSetupToggle(cat.name, item.id)} className={`w-8 h-8 rounded-xl border-2 transition-all flex items-center justify-center ${item.included ? 'bg-indigo-600 border-indigo-600 text-white' : 'border-gray-200'}`}><Check className="w-4 h-4" /></button>
+                              {!isReadOnly && <button onClick={() => handleSetupToggle(cat.name, item.id)} className={`w-8 h-8 rounded-xl border-2 transition-all flex items-center justify-center ${item.included ? 'bg-indigo-600 border-indigo-600 text-white' : 'border-gray-200'}`}><Check className="w-4 h-4" /></button>}
                             </div>
                           </td>
-                          <td className="p-4 pr-10 text-right"><button onClick={() => removeItemFromCategory(cat.name, item.id, item.name)} className="text-[9px] font-black text-red-500 uppercase tracking-widest border border-red-50 px-2 py-1 rounded-lg">Exclude</button></td>
+                          <td className="p-4 pr-10 text-right">{!isReadOnly && <button onClick={() => removeItemFromCategory(cat.name, item.id, item.name)} className="text-[9px] font-black text-red-500 uppercase tracking-widest border border-red-50 px-2 py-1 rounded-lg">Exclude</button>}</td>
                         </tr>
                       );
                     }) : (cat.name === 'Loans' && relevantInstallments.length > 0) ? null : (
@@ -2451,7 +2642,7 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                                           )}
                                         </>
                                       )}
-                                    <button 
+                                    {!isReadOnly && <button 
                                       onClick={() => {
                                         // FIX: Include payment schedule ID for proper linking
                                         setTransactionFormData({
@@ -2469,10 +2660,10 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                                       className="px-3 py-1 bg-indigo-600 text-white text-[9px] font-black uppercase rounded-lg hover:bg-indigo-700 transition-colors"
                                     >
                                       {isPartial ? 'Pay Remaining' : 'Pay'}
-                                    </button>
+                                    </button>}
                                     </>
                                   )}
-                                  <button 
+                                  {!isReadOnly && <button 
                                     onClick={() => {
                                       setExcludedInstallmentIds(prev => {
                                         const newSet = new Set(prev);
@@ -2487,11 +2678,11 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                                     className={`w-8 h-8 rounded-xl border-2 transition-all flex items-center justify-center ${isIncluded ? 'bg-indigo-600 border-indigo-600 text-white' : 'border-gray-200'}`}
                                   >
                                     <Check className="w-4 h-4" />
-                                  </button>
+                                  </button>}
                                 </div>
                               </td>
                               <td className="p-4 pr-10 text-right">
-                                <button 
+                                {!isReadOnly && <button 
                                   onClick={() => {
                                     setConfirmModal({
                                       show: true,
@@ -2506,7 +2697,7 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                                   className="text-[9px] font-black text-red-500 uppercase tracking-widest border border-red-50 px-2 py-1 rounded-lg hover:bg-red-50 transition-colors"
                                 >
                                   Exclude
-                                </button>
+                                </button>}
                               </td>
                             </tr>
                           );
@@ -2515,7 +2706,7 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                     )}
                   </tbody>
                 </table>
-                <button onClick={() => addItemToCategory(cat.name)} className="w-full p-4 text-[10px] font-black text-gray-400 uppercase hover:text-indigo-600 border-t border-gray-50">+ Add Item</button>
+                {!isReadOnly && <button onClick={() => addItemToCategory(cat.name)} className="w-full p-4 text-[10px] font-black text-gray-400 uppercase hover:text-indigo-600 border-t border-gray-50">+ Add Item</button>}
               </div>
             </div>
           );

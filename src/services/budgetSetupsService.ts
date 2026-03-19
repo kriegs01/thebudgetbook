@@ -36,6 +36,9 @@ const supabaseBudgetSetupToFrontend = (setup: SupabaseBudgetSetup): SavedBudgetS
     status: setup.status,
     totalAmount: setup.total_amount,
     data: setup.data,
+    isArchived: setup.is_archived ?? false,
+    closedAt: setup.closed_at ?? null,
+    reopenedAt: setup.reopened_at ?? null,
   };
 };
 
@@ -354,4 +357,32 @@ export const updateBudgetSetupFrontend = async (setup: SavedBudgetSetup): Promis
  */
 export const deleteBudgetSetupFrontend = async (id: string): Promise<{ error: any }> => {
   return await deleteBudgetSetup(id);
+};
+
+/**
+ * Archive (close) a budget setup
+ */
+export const archiveBudgetSetup = async (id: string): Promise<{ data: SavedBudgetSetup | null; error: any }> => {
+  const { data, error } = await updateBudgetSetup(id, {
+    is_archived: true,
+    closed_at: new Date().toISOString(),
+  });
+  if (error || !data) {
+    return { data: null, error };
+  }
+  return { data: supabaseBudgetSetupToFrontend(data), error: null };
+};
+
+/**
+ * Reopen an archived budget setup
+ */
+export const reopenBudgetSetup = async (id: string): Promise<{ data: SavedBudgetSetup | null; error: any }> => {
+  const { data, error } = await updateBudgetSetup(id, {
+    is_archived: false,
+    reopened_at: new Date().toISOString(),
+  });
+  if (error || !data) {
+    return { data: null, error };
+  }
+  return { data: supabaseBudgetSetupToFrontend(data), error: null };
 };

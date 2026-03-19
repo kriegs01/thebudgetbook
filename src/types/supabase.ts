@@ -94,6 +94,9 @@ export interface SupabaseBudgetSetup {
   };
   created_at: string; // timestamptz
   user_id: string | null; // uuid, references auth.users(id)
+  is_archived: boolean; // Close/Archive lifecycle flag
+  closed_at: string | null; // timestamptz - set when budget is closed/archived
+  reopened_at: string | null; // timestamptz - set when a closed budget is reopened
 }
 
 export interface SupabaseWallet {
@@ -148,8 +151,12 @@ export type CreateTransactionInput = Omit<SupabaseTransaction, 'id' | 'user_id' 
 };
 export type UpdateTransactionInput = Partial<CreateTransactionInput>;
 
-export type CreateBudgetSetupInput = Omit<SupabaseBudgetSetup, 'id' | 'created_at' | 'user_id'>;
-export type UpdateBudgetSetupInput = Partial<CreateBudgetSetupInput>;
+export type CreateBudgetSetupInput = Omit<SupabaseBudgetSetup, 'id' | 'created_at' | 'user_id' | 'is_archived' | 'closed_at' | 'reopened_at'> & {
+  is_archived?: boolean;
+  closed_at?: string | null;
+  reopened_at?: string | null;
+};
+export type UpdateBudgetSetupInput = Partial<Omit<SupabaseBudgetSetup, 'id' | 'created_at' | 'user_id'>>;
 
 export type CreateWalletInput = Omit<SupabaseWallet, 'id' | 'created_at' | 'updated_at' | 'user_id'>;
 export type UpdateWalletInput = Partial<CreateWalletInput>;

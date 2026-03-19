@@ -116,6 +116,9 @@ export interface SavedBudgetSetup {
     _actualSalary?: string;
     _excludedInstallmentIds?: string[];
   };
+  isArchived: boolean;
+  closedAt: string | null;
+  reopenedAt: string | null;
 }
 
 export type ViewMode = 'card' | 'list';
