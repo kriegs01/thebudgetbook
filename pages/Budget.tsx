@@ -144,6 +144,33 @@ const isCategoryActiveForBudget = (
 };
 
 /**
+ * Returns true if a category section should be rendered for the given budget month/year.
+ *
+ * Key distinction from `isCategoryActiveForBudget`:
+ * - When a `deactivatedAt` date is set and the budget month is AT or AFTER that cutoff,
+ *   the section is NEVER rendered — even if `setupData` still has items for that month.
+ *   This prevents legacy data from leaking into months at/after the deactivation date.
+ * - Before the cutoff, the section renders if the category is active OR has data.
+ */
+const shouldRenderCategorySection = (
+  cat: BudgetCategory,
+  hasData: boolean,
+  selectedYear: number,
+  selectedMonthName: string
+): boolean => {
+  if (cat.deactivatedAt) {
+    const monthIndex = MONTHS.indexOf(selectedMonthName);
+    if (monthIndex >= 0) {
+      const budgetMonthStart = new Date(selectedYear, monthIndex, 1);
+      const deactivationDate = new Date(cat.deactivatedAt);
+      // At or after the cutoff month → never render
+      if (budgetMonthStart >= deactivationDate) return false;
+    }
+  }
+  return isCategoryActiveForBudget(cat, selectedYear, selectedMonthName) || hasData;
+};
+
+/**
  * Calculates the remaining amount for a saved budget setup.
  * Uses the same formula as the Budget Setup page's Month Summary:
  *   remaining = salaryToUse - setup.totalAmount
@@ -2277,7 +2304,7 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
         {/* Fixed category - full width with account and settle columns */}
         {categories.filter(cat => cat.name === 'Fixed').map((cat) => {
           const items = setupData[cat.name] || [];
-          const shouldRenderCategory = isCategoryActiveForBudget(cat, selectedYear, selectedMonth) || items.length > 0;
+          const shouldRenderCategory = shouldRenderCategorySection(cat, items.length > 0, selectedYear, selectedMonth);
           if (!shouldRenderCategory) return null;
           const canAddItems = !isReadOnly && (cat.flexiMode ?? true) && isCategoryActiveForBudget(cat, selectedYear, selectedMonth);
           const isLegacyCategory = cat.active === false;
@@ -2415,7 +2442,7 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
 
           // Lifecycle: show if currently active OR has data (items or installments for Loans)
           const hasData = items.length > 0 || (cat.name === 'Loans' && relevantInstallments.length > 0);
-          const shouldRenderCategory = isCategoryActiveForBudget(cat, selectedYear, selectedMonth) || hasData;
+          const shouldRenderCategory = shouldRenderCategorySection(cat, hasData, selectedYear, selectedMonth);
           if (!shouldRenderCategory) return null;
 
           // Flexi mode: only show Add Item when category allows manual items AND is still active
@@ -2910,7 +2937,7 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
         {(() => {
           const remainingCats = categories.filter(cat =>
             !['Fixed', 'Utilities', 'Loans', 'Subscriptions', 'Purchases'].includes(cat.name) &&
-            (isCategoryActiveForBudget(cat, selectedYear, selectedMonth) || (setupData[cat.name] || []).length > 0)
+            shouldRenderCategorySection(cat, (setupData[cat.name] || []).length > 0, selectedYear, selectedMonth)
           );
           if (remainingCats.length === 0) return null;
           return (
