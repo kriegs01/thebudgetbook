@@ -119,6 +119,7 @@ const isLegacyBudget = (year: number, month: string): boolean => {
  * where salaryToUse = _actualSalary if set, otherwise _projectedSalary.
  */
 const calculateBudgetRemaining = (setup: SavedBudgetSetup): number => {
+  if (!setup.data) return -setup.totalAmount;
   const actualStr = setup.data._actualSalary;
   const projectedStr = setup.data._projectedSalary;
   const actualValue = actualStr && actualStr.trim() !== '' ? parseFloat(actualStr) : null;

@@ -1,4 +1,4 @@
-import React from 'react';
+import type { ReactNode } from 'react';
 
 type Variant = 'close' | 'remove' | 'open' | 'reopen';
 
@@ -7,7 +7,7 @@ interface IconSquircleButtonProps {
   onClick?: () => void;
   disabled?: boolean;
   'aria-label': string;
-  children: React.ReactNode;
+  children: ReactNode;
 }
 
 const variantClasses: Record<Variant, string> = {
