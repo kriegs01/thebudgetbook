@@ -113,6 +113,36 @@ const isLegacyBudget = (year: number, month: string): boolean => {
 };
 
 /**
+ * Returns true if a category should be considered "active" for the given budget month/year.
+ *
+ * Rules:
+ * - If `cat.active` is explicitly false AND `cat.deactivatedAt` is set, the category is only
+ *   considered active for budget months that fall on or before the deactivation month.
+ * - If `cat.active` is missing or true, the category is always active regardless of deactivatedAt.
+ * - Handles missing/invalid month names gracefully (returns true to avoid accidentally hiding sections).
+ */
+const isCategoryActiveForBudget = (
+  cat: BudgetCategory,
+  selectedYear: number,
+  selectedMonthName: string
+): boolean => {
+  const baseActive = cat.active !== false; // default true when undefined
+
+  if (!cat.deactivatedAt || baseActive) {
+    return baseActive;
+  }
+
+  const monthIndex = MONTHS.indexOf(selectedMonthName);
+  if (monthIndex < 0) return true; // fallback: don't hide accidentally
+
+  const budgetMonthStart = new Date(selectedYear, monthIndex, 1);
+  const deactivationDate = new Date(cat.deactivatedAt);
+
+  // Category is active for budget months up to and including the deactivation month
+  return budgetMonthStart <= deactivationDate;
+};
+
+/**
  * Calculates the remaining amount for a saved budget setup.
  * Uses the same formula as the Budget Setup page's Month Summary:
  *   remaining = salaryToUse - setup.totalAmount
@@ -2246,10 +2276,17 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
         {/* Fixed category - full width with account and settle columns */}
         {categories.filter(cat => cat.name === 'Fixed').map((cat) => {
           const items = setupData[cat.name] || [];
+          const shouldRenderCategory = isCategoryActiveForBudget(cat, selectedYear, selectedMonth) || items.length > 0;
+          if (!shouldRenderCategory) return null;
+          const canAddItems = !isReadOnly && (cat.flexiMode ?? true) && isCategoryActiveForBudget(cat, selectedYear, selectedMonth);
+          const isLegacyCategory = cat.active === false;
           return (
             <div key={cat.id} className="bg-white rounded-[3rem] shadow-sm border border-gray-100 overflow-hidden w-full">
               <div className="p-8 border-b border-gray-50 bg-gray-50/30 flex justify-between items-center">
-                <h3 className="text-xs font-black text-gray-900 uppercase tracking-[0.25em]">{cat.name}</h3>
+                <div className="flex items-center space-x-2">
+                  <h3 className="text-xs font-black text-gray-900 uppercase tracking-[0.25em]">{cat.name}</h3>
+                  {isLegacyCategory && <span className="text-[9px] font-black text-amber-600 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full uppercase tracking-wider" aria-label="Legacy category — use Stash for new savings/allowance items" title="This category is legacy. Use Stash for new savings/allowance items.">Legacy</span>}
+                </div>
                 <span className="text-lg font-black text-indigo-600">{formatCurrency(items.filter(i => i.included).reduce((s, i) => s + (parseFloat(i.amount) || 0), 0))}</span>
               </div>
               <div className="overflow-x-auto">
@@ -2346,7 +2383,7 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                     )}
                   </tbody>
                 </table>
-                {!isReadOnly && <button onClick={() => addItemToCategory(cat.name)} className="w-full p-4 text-[10px] font-black text-gray-400 uppercase hover:text-indigo-600 border-t border-gray-50">+ Add Item</button>}
+                {canAddItems && <button onClick={() => addItemToCategory(cat.name)} className="w-full p-4 text-[10px] font-black text-gray-400 uppercase hover:text-indigo-600 border-t border-gray-50">+ Add Item</button>}
               </div>
             </div>
           );
@@ -2374,6 +2411,14 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
               return timingMatch && isActiveForPeriod && !isFinished;
             });
           }
+
+          // Lifecycle: show if currently active OR has data (items or installments for Loans)
+          const hasData = items.length > 0 || (cat.name === 'Loans' && relevantInstallments.length > 0);
+          const shouldRenderCategory = isCategoryActiveForBudget(cat, selectedYear, selectedMonth) || hasData;
+          if (!shouldRenderCategory) return null;
+
+          // Flexi mode: only show Add Item when category allows manual items AND is still active
+          const canAddItems = !isReadOnly && (cat.flexiMode ?? true) && isCategoryActiveForBudget(cat, selectedYear, selectedMonth);
           
           // PROTOTYPE: Calculate total including installment monthly amounts (only included ones)
           const itemsTotal = items.filter(i => i.included).reduce((s, i) => s + (parseFloat(i.amount) || 0), 0);
@@ -2740,7 +2785,7 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                     )}
                   </tbody>
                 </table>
-                {!isReadOnly && <button onClick={() => addItemToCategory(cat.name)} className="w-full p-4 text-[10px] font-black text-gray-400 uppercase hover:text-indigo-600 border-t border-gray-50">+ Add Item</button>}
+                {canAddItems && <button onClick={() => addItemToCategory(cat.name)} className="w-full p-4 text-[10px] font-black text-gray-400 uppercase hover:text-indigo-600 border-t border-gray-50">+ Add Item</button>}
               </div>
             </div>
           );
@@ -2861,10 +2906,17 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
         })()}
 
         {/* Remaining categories (excluding Fixed, Utilities, Loans, Subscriptions, Purchases) - keep in grid if needed */}
-        {categories.filter(cat => !['Fixed', 'Utilities', 'Loans', 'Subscriptions', 'Purchases'].includes(cat.name)).length > 0 && (
+        {(() => {
+          const remainingCats = categories.filter(cat =>
+            !['Fixed', 'Utilities', 'Loans', 'Subscriptions', 'Purchases'].includes(cat.name) &&
+            (isCategoryActiveForBudget(cat, selectedYear, selectedMonth) || (setupData[cat.name] || []).length > 0)
+          );
+          if (remainingCats.length === 0) return null;
+          return (
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-            {categories.filter(cat => !['Fixed', 'Utilities', 'Loans', 'Subscriptions', 'Purchases'].includes(cat.name)).map((cat) => {
+            {remainingCats.map((cat) => {
               const items = setupData[cat.name] || [];
+              const canAddItems = !isReadOnly && (cat.flexiMode ?? true) && isCategoryActiveForBudget(cat, selectedYear, selectedMonth);
               return (
                 <div key={cat.id} className="bg-white rounded-[3rem] shadow-sm border border-gray-100 overflow-hidden flex flex-col">
                   <div className="p-8 border-b border-gray-50 bg-gray-50/30 flex justify-between items-center">
@@ -2947,13 +2999,14 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                         })}
                       </tbody>
                     </table>
-                    <button onClick={() => addItemToCategory(cat.name)} className="w-full p-4 text-[10px] font-black text-gray-400 uppercase hover:text-indigo-600">+ Add Item</button>
+                    {canAddItems && <button onClick={() => addItemToCategory(cat.name)} className="w-full p-4 text-[10px] font-black text-gray-400 uppercase hover:text-indigo-600">+ Add Item</button>}
                   </div>
                 </div>
               );
             })}
           </div>
-        )}
+          );
+        })()}
       </div>
 
       {showPayModal && (
