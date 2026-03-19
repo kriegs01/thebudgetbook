@@ -100,6 +100,28 @@ const Settings: React.FC<SettingsProps> = ({ currency, setCurrency, categories, 
     });
   };
 
+  const handleToggleActive = (catId: string) => {
+    setCategories(prev => prev.map(c => {
+      if (c.id !== catId) return c;
+      if (c.active === false) {
+        // Reactivate: clear deactivatedAt, restore active
+        const { deactivatedAt: _removed, ...rest } = c;
+        return { ...rest, active: true };
+      } else {
+        // Deactivate: mark inactive as of start of current month
+        const now = new Date();
+        const deactivatedAt = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
+        return { ...c, active: false, deactivatedAt };
+      }
+    }));
+  };
+
+  const handleToggleFlexiMode = (catId: string) => {
+    setCategories(prev => prev.map(c =>
+      c.id === catId ? { ...c, flexiMode: !(c.flexiMode ?? true) } : c
+    ));
+  };
+
   // Function to copy production data to test tables
   const copyProductionToTest = async () => {
     if (!confirm('This will replace all test data with current production data. Continue?')) {
@@ -431,11 +453,44 @@ const Settings: React.FC<SettingsProps> = ({ currency, setCurrency, categories, 
       content: (
         <div className="space-y-6 pt-2">
           {categories.map(cat => (
-            <div key={cat.id} className="p-4 bg-gray-50 rounded-[2rem] border border-gray-100 space-y-4">
+            <div key={cat.id} className={`p-4 rounded-[2rem] border space-y-4 ${cat.active === false ? 'bg-amber-50/40 border-amber-100' : 'bg-gray-50 border-gray-100'}`}>
+              {/* Category header: name + legacy badge + delete */}
               <div className="flex items-center justify-between">
-                <span className="text-sm font-black text-gray-900 uppercase tracking-widest">{cat.name}</span>
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-black text-gray-900 uppercase tracking-widest">{cat.name}</span>
+                  {cat.active === false && (
+                    <span className="text-[9px] font-black text-amber-600 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full uppercase tracking-wider">Legacy</span>
+                  )}
+                </div>
                 <button onClick={() => handleDeleteCategory(cat.id, cat.name)} className="text-gray-300 hover:text-red-500 transition-colors">
                   <Trash2 className="w-4 h-4" />
+                </button>
+              </div>
+
+              {/* Lifecycle + Flexi mode controls */}
+              <div className="flex flex-wrap gap-2">
+                <button
+                  onClick={() => handleToggleActive(cat.id)}
+                  title={cat.active === false ? 'Reactivate this category for new budgets' : 'Deactivate this category (hides it from future budgets)'}
+                  className={`text-[10px] font-black uppercase tracking-widest px-3 py-1.5 rounded-xl border transition-colors ${
+                    cat.active === false
+                      ? 'bg-green-50 border-green-200 text-green-700 hover:bg-green-100'
+                      : 'bg-white border-gray-200 text-gray-500 hover:bg-red-50 hover:border-red-200 hover:text-red-600'
+                  }`}
+                >
+                  {cat.active === false ? '↑ Reactivate' : '↓ Deactivate'}
+                </button>
+
+                <button
+                  onClick={() => handleToggleFlexiMode(cat.id)}
+                  title={(cat.flexiMode ?? true) ? 'Flexi ON: users can add manual items. Click to make data-only.' : 'Flexi OFF: data-only (no Add Item). Click to allow manual items.'}
+                  className={`text-[10px] font-black uppercase tracking-widest px-3 py-1.5 rounded-xl border transition-colors ${
+                    (cat.flexiMode ?? true)
+                      ? 'bg-indigo-50 border-indigo-200 text-indigo-700 hover:bg-indigo-100'
+                      : 'bg-white border-gray-200 text-gray-400 hover:bg-indigo-50 hover:border-indigo-200 hover:text-indigo-600'
+                  }`}
+                >
+                  Flexi: {(cat.flexiMode ?? true) ? 'ON' : 'OFF'}
                 </button>
               </div>
               
