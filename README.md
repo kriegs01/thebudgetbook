@@ -125,6 +125,8 @@ For detailed setup instructions, see [SUPABASE_SETUP.md](SUPABASE_SETUP.md).
 3. Test thoroughly (especially Supabase integration)
 4. Submit a pull request
 
+> **Note:** This repository uses an automated PR creation pipeline. This note was added to verify that the automated PR flow is working correctly for `kriegs01/thebudgetbook`.
+
 ## Security Notes
 
 - ⚠️ Never commit `.env.local` or any file with credentials
