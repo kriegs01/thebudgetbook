@@ -1,8 +1,8 @@
 
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { BudgetItem, Account, Biller, PaymentSchedule, CategorizedSetupItem, SavedBudgetSetup, BudgetCategory, Installment, Wallet } from '../types';
-import { Plus, Check, ChevronDown, Trash2, Save, FileText, ArrowRight, Upload, CheckCircle2, X, AlertTriangle, Info, Eye, ZoomIn, ZoomOut, Download } from 'lucide-react';
-import { createBudgetSetupFrontend, updateBudgetSetupFrontend } from '../src/services/budgetSetupsService';
+import { Plus, Check, ChevronDown, Trash2, Save, FileText, ArrowRight, Upload, CheckCircle2, X, AlertTriangle, Info, Eye, ZoomIn, ZoomOut, Download, Lock, RotateCcw } from 'lucide-react';
+import { createBudgetSetupFrontend, updateBudgetSetupFrontend, archiveBudgetSetup, reopenBudgetSetup } from '../src/services/budgetSetupsService';
 import { createTransaction, getAllTransactions, updateTransaction, updateTransactionAndSyncSchedule, createPaymentScheduleTransaction, uploadTransactionReceipt, getTransactionsByPaymentSchedule, getReceiptSignedUrl, deleteTransactionAndRevertSchedule, getAllStashTransactions } from '../src/services/transactionsService';
 import type { SupabaseTransaction, SupabaseMonthlyPaymentSchedule } from '../src/types/supabase';
 import { getInstallmentPaymentSchedule, aggregateCreditCardPurchases } from '../src/utils/paymentStatus'; // PROTOTYPE: Import payment status utilities
@@ -86,6 +86,18 @@ const TRANSACTION_AMOUNT_TOLERANCE = 1; // ±1 peso tolerance for amount matchin
 const TRANSACTION_MIN_NAME_LENGTH = 3; // Minimum length for partial name matching to avoid false positives
 const TRANSACTION_DATE_GRACE_DAYS = 7; // Allow transactions up to N days after budget month ends (for late payments)
 
+// Stash go-live date: budgets before this date are "legacy" (fixed-type billers, no real transactions required)
+const STASH_GO_LIVE = new Date(2026, 2, 1); // March 1, 2026
+
+/**
+ * Returns true when the given year/month (1-12) is before the stash go-live date.
+ * Legacy budgets relied on payment schedules/flags instead of real transactions.
+ */
+const isLegacyBudget = (year: number, month: number): boolean => {
+  const budgetStart = new Date(year, month - 1, 1);
+  return budgetStart < STASH_GO_LIVE;
+};
+
 // Schedule payments modal transaction type
 type BudgetScheduleTx = { id: string; name: string; amount: number; date: string; paymentMethodId: string; receiptUrl?: string | null };
 
@@ -99,6 +111,12 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
   const [selectedMonth, setSelectedMonth] = useState(MONTHS[new Date().getMonth()]);
   const [selectedTiming, setSelectedTiming] = useState<'1/2' | '2/2'>('1/2');
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear()); // REFACTOR: Track budget year for accurate payment schedule loading
+
+  // Tracks which saved setup was loaded into the setup view (null = new/unsaved)
+  const [currentLoadedSetupId, setCurrentLoadedSetupId] = useState<string | null>(null);
+
+  // Controls visibility of the collapsed Archived section in the summary view
+  const [archivedSectionOpen, setArchivedSectionOpen] = useState(false);
 
   // Categorized Setup State
   const [setupData, setSetupData] = useState<{ [key: string]: CategorizedSetupItem[] }>({});
@@ -1026,7 +1044,10 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
           timing: selectedTiming,
           status: BUDGET_SETUP_STATUS.SAVED,
           totalAmount: total,
-          data: dataToSave
+          data: dataToSave,
+          isArchived: false,
+          closedAt: null,
+          reopenedAt: null,
         };
         
         const { error } = await createBudgetSetupFrontend(newSetup);
@@ -1099,6 +1120,7 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
   };
 
   const handleSetupUpdate = (category: string, id: string, field: keyof CategorizedSetupItem, value: any) => {
+    if (isCurrentlyArchived) return;
     setSetupData(prev => ({
       ...prev,
       [category]: prev[category].map(item => 
@@ -1108,6 +1130,7 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
   };
 
   const addItemToCategory = (category: string) => {
+    if (isCurrentlyArchived) return;
     // For all categories, add a blank item
     const newItem: CategorizedSetupItem = {
       id: Math.random().toString(36).substr(2, 9),
@@ -1250,7 +1273,10 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
           timing: selectedTiming,
           status: BUDGET_SETUP_STATUS.SAVED,
           totalAmount: total,
-          data: dataToSave
+          data: dataToSave,
+          isArchived: false,
+          closedAt: null,
+          reopenedAt: null,
         };
         
         const { data, error } = await createBudgetSetupFrontend(newSetup);
@@ -1630,6 +1656,7 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
     setRemovedIds(new Set());
     setSelectedMonth(MONTHS[new Date().getMonth()]);
     setSelectedTiming('1/2');
+    setCurrentLoadedSetupId(null);
     setView('setup');
   };
 
@@ -1663,12 +1690,185 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
     }
     setSelectedMonth(setup.month);
     setSelectedTiming(setup.timing as '1/2' | '2/2');
+    setCurrentLoadedSetupId(setup.id);
     setView('setup');
     
     console.log('[Budget] ===== Budget setup loaded successfully =====');
   };
 
+  // --- Archive / Reopen lifecycle ---
+
+  // The currently loaded saved setup (null when editing a new unsaved setup)
+  const currentLoadedSetup = useMemo(
+    () => (currentLoadedSetupId ? savedSetups.find(s => s.id === currentLoadedSetupId) ?? null : null),
+    [currentLoadedSetupId, savedSetups]
+  );
+
+  // Whether the current period is a "legacy" budget (before stash go-live)
+  const legacyMode = useMemo(
+    () => isLegacyBudget(selectedYear, MONTHS.indexOf(selectedMonth) + 1),
+    [selectedYear, selectedMonth]
+  );
+
+  // Compute whether all included billers + installments are paid for the current period.
+  // Used to enable the Close button.
+  const allItemsPaid = useMemo(() => {
+    // Check all included biller items across categories
+    for (const cat of categories) {
+      const items = setupData[cat.name] || [];
+      for (const item of items) {
+        if (!item.included) continue;
+        const isBillerItem = item.isBiller || billers.some(b => b.id === item.id);
+        if (!isBillerItem) continue;
+
+        const ps = paymentSchedules.find(
+          s => s.source_type === 'biller' && s.source_id === item.id &&
+               s.month === selectedMonth && s.year === selectedYear
+        );
+        const paidBySchedule = ps?.status === 'paid';
+        const paidByTransaction = checkIfPaidByTransaction(item.name, item.amount, selectedMonth, selectedYear);
+        const paid = legacyMode ? (paidBySchedule || paidByTransaction) : (paidByTransaction || paidBySchedule);
+        if (!paid) return false;
+      }
+    }
+
+    // Check included installments (active for this period)
+    for (const inst of installments) {
+      const timingMatch = !inst.timing || inst.timing === selectedTiming;
+      if (!timingMatch) continue;
+      if (excludedInstallmentIds.has(inst.id)) continue;
+
+      const scheduleForMonth = paymentSchedules.find(
+        s => s.source_type === 'installment' && s.source_id === inst.id &&
+             s.month === selectedMonth && s.year === selectedYear
+      );
+      const isActiveForPeriod = scheduleForMonth !== undefined || shouldShowInstallment(inst, selectedMonth, selectedYear);
+      if (!isActiveForPeriod) continue;
+
+      const isFinished = !scheduleForMonth && inst.totalAmount > 0 && inst.paidAmount >= inst.totalAmount;
+      if (isFinished) continue;
+
+      const paid = scheduleForMonth?.status === 'paid';
+      if (!paid) return false;
+    }
+
+    return true;
+  }, [
+    setupData, categories, billers, paymentSchedules, selectedMonth, selectedYear, selectedTiming,
+    installments, excludedInstallmentIds, legacyMode, checkIfPaidByTransaction, shouldShowInstallment
+  ]);
+
+  const canClose = allItemsPaid && !!currentLoadedSetup && !currentLoadedSetup.isArchived;
+  const isCurrentlyArchived = !!currentLoadedSetup?.isArchived;
+
+  const handleCloseBudget = () => {
+    if (!currentLoadedSetup) return;
+    setConfirmModal({
+      show: true,
+      title: 'Close Budget',
+      message: "Close this budget? You'll still be able to view it in Archived Budgets and it will still be used in projections, but you won't be able to modify it.",
+      onConfirm: async () => {
+        setConfirmModal(p => ({ ...p, show: false }));
+        const { data, error } = await archiveBudgetSetup(currentLoadedSetup.id);
+        if (error) {
+          alert('Failed to close budget. Please try again.');
+          return;
+        }
+        if (data && onReloadSetups) await onReloadSetups();
+      }
+    });
+  };
+
+  const handleReopenBudget = () => {
+    if (!currentLoadedSetup) return;
+    setConfirmModal({
+      show: true,
+      title: 'Reopen Budget',
+      message: "Reopen this budget? You'll be able to make changes again. This may affect your projections.",
+      onConfirm: async () => {
+        setConfirmModal(p => ({ ...p, show: false }));
+        const { data, error } = await reopenBudgetSetup(currentLoadedSetup.id);
+        if (error) {
+          alert('Failed to reopen budget. Please try again.');
+          return;
+        }
+        if (data && onReloadSetups) await onReloadSetups();
+      }
+    });
+  };
+
   if (view === 'summary') {
+    const activeBudgets = savedSetups.filter(s => !s.isArchived);
+    const archivedBudgets = savedSetups.filter(s => s.isArchived);
+
+    const budgetTableRow = (setup: SavedBudgetSetup) => (
+      <tr key={setup.id} className="hover:bg-gray-50/50 transition-colors group">
+        <td className="p-8 pl-12">
+          <div className="flex items-center space-x-5">
+            <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shadow-sm ${setup.isArchived ? 'bg-gray-100 text-gray-400' : 'bg-indigo-50 text-indigo-600 shadow-indigo-50/50'}`}>
+              {setup.isArchived ? <Lock className="w-6 h-6" /> : <FileText className="w-6 h-6" />}
+            </div>
+            <div>
+              <span className="text-base font-black text-gray-900 tracking-tight">{setup.month}</span>
+              {setup.isArchived && setup.closedAt && (
+                <p className="text-[10px] text-gray-400 font-bold mt-0.5">
+                  Closed {new Date(setup.closedAt).toLocaleDateString()}
+                </p>
+              )}
+            </div>
+          </div>
+        </td>
+        <td className="p-8"><span className="text-[10px] font-black text-gray-500 bg-gray-100/80 px-4 py-1.5 rounded-full uppercase tracking-widest">{setup.timing}</span></td>
+        <td className="p-8"><span className="text-base font-black text-gray-900 tracking-tight">{formatCurrency(setup.totalAmount)}</span></td>
+        <td className="p-8">
+          {setup.isArchived ? (
+            <span className="text-[10px] font-black uppercase tracking-[0.15em] px-4 py-1.5 rounded-full bg-gray-100 text-gray-500">Archived</span>
+          ) : (
+            <span className={`text-[10px] font-black uppercase tracking-[0.15em] px-4 py-1.5 rounded-full ${setup.status === BUDGET_SETUP_STATUS.ACTIVE ? 'bg-green-100 text-green-700' : 'bg-blue-100 text-blue-700'}`}>
+              {setup.status}
+            </span>
+          )}
+        </td>
+        <td className="p-8 pr-12 text-right">
+          <div className="flex items-center justify-end space-x-4">
+            {!setup.isArchived && (
+              <button 
+                onClick={() => {
+                  setConfirmModal({
+                    show: true,
+                    title: 'Move to Trash',
+                    message: `Are you sure you want to move the ${setup.month} (${setup.timing}) budget history entry to Trash?`,
+                    onConfirm: () => {
+                      onMoveToTrash?.(setup);
+                      setConfirmModal(prev => ({ ...prev, show: false }));
+                    }
+                  });
+                }} 
+                className="px-4 py-2 text-[10px] font-black text-red-500 hover:bg-red-50 rounded-xl transition-all uppercase tracking-widest border border-red-100"
+              >
+                Remove
+              </button>
+            )}
+            <button onClick={() => handleLoadSetup(setup)} className="p-3 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-2xl transition-all">
+              <ArrowRight className="w-6 h-6" />
+            </button>
+          </div>
+        </td>
+      </tr>
+    );
+
+    const budgetTableHead = (
+      <thead>
+        <tr className="border-b border-gray-50">
+          <th className="p-8 pl-12 text-[10px] font-black text-gray-400 uppercase tracking-[0.3em]">Month</th>
+          <th className="p-8 text-[10px] font-black text-gray-400 uppercase tracking-[0.3em]">Timing</th>
+          <th className="p-8 text-[10px] font-black text-gray-400 uppercase tracking-[0.3em]">Total Budget</th>
+          <th className="p-8 text-[10px] font-black text-gray-400 uppercase tracking-[0.3em]">Status</th>
+          <th className="p-8 pr-12 text-right"></th>
+        </tr>
+      </thead>
+    );
+
     return (
       <div className="space-y-8 animate-in fade-in duration-500 w-full">
         <div className="flex items-center justify-between">
@@ -1682,71 +1882,55 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
           </button>
         </div>
 
+        {/* Active budgets */}
         <div className="bg-white/40 backdrop-blur-xl rounded-[3rem] shadow-sm border border-gray-100 p-2 w-full">
           <div className="bg-white rounded-[2.5rem] overflow-hidden w-full">
             <div className="overflow-x-auto w-full">
               <table className="w-full text-left">
-                <thead>
-                  <tr className="border-b border-gray-50">
-                    <th className="p-8 pl-12 text-[10px] font-black text-gray-400 uppercase tracking-[0.3em]">Month</th>
-                    <th className="p-8 text-[10px] font-black text-gray-400 uppercase tracking-[0.3em]">Timing</th>
-                    <th className="p-8 text-[10px] font-black text-gray-400 uppercase tracking-[0.3em]">Total Budget</th>
-                    <th className="p-8 text-[10px] font-black text-gray-400 uppercase tracking-[0.3em]">Status</th>
-                    <th className="p-8 pr-12 text-right"></th>
-                  </tr>
-                </thead>
+                {budgetTableHead}
                 <tbody className="divide-y divide-gray-50">
-                  {savedSetups.length > 0 ? (
-                    savedSetups.map((setup) => (
-                      <tr key={setup.id} className="hover:bg-gray-50/50 transition-colors group">
-                        <td className="p-8 pl-12">
-                          <div className="flex items-center space-x-5">
-                            <div className="w-12 h-12 rounded-2xl bg-indigo-50 flex items-center justify-center text-indigo-600 shadow-sm shadow-indigo-50/50">
-                              <FileText className="w-6 h-6" />
-                            </div>
-                            <span className="text-base font-black text-gray-900 tracking-tight">{setup.month}</span>
-                          </div>
-                        </td>
-                        <td className="p-8"><span className="text-[10px] font-black text-gray-500 bg-gray-100/80 px-4 py-1.5 rounded-full uppercase tracking-widest">{setup.timing}</span></td>
-                        <td className="p-8"><span className="text-base font-black text-gray-900 tracking-tight">{formatCurrency(setup.totalAmount)}</span></td>
-                        <td className="p-8">
-                          <span className={`text-[10px] font-black uppercase tracking-[0.15em] px-4 py-1.5 rounded-full ${setup.status === BUDGET_SETUP_STATUS.ACTIVE ? 'bg-green-100 text-green-700' : 'bg-blue-100 text-blue-700'}`}>
-                            {setup.status}
-                          </span>
-                        </td>
-                        <td className="p-8 pr-12 text-right">
-                          <div className="flex items-center justify-end space-x-4">
-                            <button 
-                              onClick={() => {
-                                setConfirmModal({
-                                  show: true,
-                                  title: 'Move to Trash',
-                                  message: `Are you sure you want to move the ${setup.month} (${setup.timing}) budget history entry to Trash?`,
-                                  onConfirm: () => {
-                                    onMoveToTrash?.(setup);
-                                    setConfirmModal(prev => ({ ...prev, show: false }));
-                                  }
-                                });
-                              }} 
-                              className="px-4 py-2 text-[10px] font-black text-red-500 hover:bg-red-50 rounded-xl transition-all uppercase tracking-widest border border-red-100"
-                            >
-                              Remove
-                            </button>
-                            <button onClick={() => handleLoadSetup(setup)} className="p-3 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-2xl transition-all">
-                              <ArrowRight className="w-6 h-6" />
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))
+                  {activeBudgets.length > 0 ? (
+                    activeBudgets.map(budgetTableRow)
                   ) : (
-                    <tr><td colSpan={5} className="p-24 text-center text-gray-400 font-bold uppercase tracking-widest">No history found</td></tr>
+                    <tr><td colSpan={5} className="p-24 text-center text-gray-400 font-bold uppercase tracking-widest">No active budgets</td></tr>
                   )}
                 </tbody>
               </table>
             </div>
           </div>
         </div>
+
+        {/* Archived budgets (collapsible) */}
+        {archivedBudgets.length > 0 && (
+          <div className="bg-white/40 backdrop-blur-xl rounded-[3rem] shadow-sm border border-gray-100 p-2 w-full">
+            <div className="bg-white rounded-[2.5rem] overflow-hidden w-full">
+              <button
+                type="button"
+                onClick={() => setArchivedSectionOpen(o => !o)}
+                className="w-full flex items-center justify-between px-12 py-6 hover:bg-gray-50/60 transition-colors rounded-[2.5rem]"
+              >
+                <div className="flex items-center space-x-3">
+                  <Lock className="w-4 h-4 text-gray-400" />
+                  <span className="text-xs font-black text-gray-500 uppercase tracking-[0.25em]">
+                    Archived budgets ({archivedBudgets.length})
+                  </span>
+                </div>
+                <ChevronDown className={`w-5 h-5 text-gray-400 transition-transform ${archivedSectionOpen ? 'rotate-180' : ''}`} />
+              </button>
+              {archivedSectionOpen && (
+                <div className="overflow-x-auto w-full border-t border-gray-50">
+                  <table className="w-full text-left">
+                    {budgetTableHead}
+                    <tbody className="divide-y divide-gray-50">
+                      {archivedBudgets.map(budgetTableRow)}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
         {confirmModal.show && <ConfirmDialog {...confirmModal} onClose={() => setConfirmModal(p => ({ ...p, show: false }))} />}
       </div>
     );
@@ -1802,7 +1986,7 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
           </div>
           <div className="flex items-center space-x-3">
             {/* Autosave Status Indicator */}
-            {autoSaveStatus !== 'idle' && (
+            {!isCurrentlyArchived && autoSaveStatus !== 'idle' && (
               <div className="flex items-center space-x-2 text-xs font-bold">
                 {autoSaveStatus === 'saving' && (
                   <>
@@ -1824,18 +2008,59 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                 )}
               </div>
             )}
-            <button onClick={handleSaveSetup} className="flex items-center space-x-3 bg-indigo-600 text-white px-8 py-3 rounded-2xl font-black uppercase tracking-widest text-xs hover:bg-indigo-700 shadow-xl">
-              <Save className="w-5 h-5" />
-              <span>Save</span>
-            </button>
+            {/* Close / Reopen buttons */}
+            {isCurrentlyArchived ? (
+              <button
+                onClick={handleReopenBudget}
+                className="flex items-center space-x-2 bg-gray-100 text-gray-700 px-6 py-3 rounded-2xl font-black uppercase tracking-widest text-xs hover:bg-gray-200 transition-all"
+              >
+                <RotateCcw className="w-4 h-4" />
+                <span>Reopen</span>
+              </button>
+            ) : (
+              <>
+                <button
+                  onClick={handleCloseBudget}
+                  disabled={!canClose}
+                  title={canClose ? 'Close this budget' : 'All items must be paid before closing'}
+                  className={`flex items-center space-x-2 px-6 py-3 rounded-2xl font-black uppercase tracking-widest text-xs transition-all ${
+                    canClose
+                      ? 'bg-orange-500 text-white hover:bg-orange-600 shadow-xl'
+                      : 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                  }`}
+                >
+                  <Lock className="w-4 h-4" />
+                  <span>Close</span>
+                </button>
+                <button onClick={handleSaveSetup} className="flex items-center space-x-3 bg-indigo-600 text-white px-8 py-3 rounded-2xl font-black uppercase tracking-widest text-xs hover:bg-indigo-700 shadow-xl">
+                  <Save className="w-5 h-5" />
+                  <span>Save</span>
+                </button>
+              </>
+            )}
           </div>
         </div>
 
+        {/* Archived banner */}
+        {isCurrentlyArchived && (
+          <div className="flex items-center space-x-3 bg-amber-50 border border-amber-200 rounded-2xl px-6 py-4">
+            <Lock className="w-5 h-5 text-amber-600 flex-shrink-0" />
+            <p className="text-sm font-bold text-amber-800">
+              This budget is closed and archived. You can view it, but cannot make changes.
+              {currentLoadedSetup?.closedAt && (
+                <span className="font-normal text-amber-600 ml-1">
+                  Closed on {new Date(currentLoadedSetup.closedAt).toLocaleDateString()}.
+                </span>
+              )}
+            </p>
+          </div>
+        )}
+
         <div className="flex justify-center items-center space-x-6">
-          <select value={selectedMonth} onChange={(e) => setSelectedMonth(e.target.value)} className="bg-white border border-gray-100 rounded-[1.5rem] px-8 py-4 font-black text-indigo-600 shadow-sm outline-none">
+          <select value={selectedMonth} onChange={(e) => setSelectedMonth(e.target.value)} disabled={isCurrentlyArchived} className="bg-white border border-gray-100 rounded-[1.5rem] px-8 py-4 font-black text-indigo-600 shadow-sm outline-none disabled:opacity-50 disabled:cursor-not-allowed">
             {MONTHS.map(m => <option key={m} value={m}>{m}</option>)}
           </select>
-          <select value={selectedTiming} onChange={(e) => setSelectedTiming(e.target.value as '1/2' | '2/2')} className="bg-white border border-gray-100 rounded-[1.5rem] px-8 py-4 font-black text-indigo-600 shadow-sm outline-none">
+          <select value={selectedTiming} onChange={(e) => setSelectedTiming(e.target.value as '1/2' | '2/2')} disabled={isCurrentlyArchived} className="bg-white border border-gray-100 rounded-[1.5rem] px-8 py-4 font-black text-indigo-600 shadow-sm outline-none disabled:opacity-50 disabled:cursor-not-allowed">
             <option value="1/2">1/2</option>
             <option value="2/2">2/2</option>
           </select>
@@ -1991,16 +2216,18 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                         <td className="p-4 text-center">
                           {isFunded ? (
                             <button
-                              onClick={() => handleOpenFundModal(wallet)}
-                              title="Add more to this stash"
-                              className="w-7 h-7 inline-flex items-center justify-center rounded-full bg-indigo-50 text-indigo-600 hover:bg-indigo-100 transition-colors"
+                              onClick={() => !isCurrentlyArchived && handleOpenFundModal(wallet)}
+                              disabled={isCurrentlyArchived}
+                              title={isCurrentlyArchived ? 'Budget is archived' : 'Add more to this stash'}
+                              className={`w-7 h-7 inline-flex items-center justify-center rounded-full transition-colors ${isCurrentlyArchived ? 'bg-gray-100 text-gray-300 cursor-not-allowed' : 'bg-indigo-50 text-indigo-600 hover:bg-indigo-100'}`}
                             >
                               <Plus className="w-3.5 h-3.5" />
                             </button>
                           ) : (
                             <button
-                              onClick={() => handleOpenFundModal(wallet)}
-                              className="inline-flex items-center space-x-1 px-3 py-1 rounded-xl bg-indigo-50 text-indigo-600 hover:bg-indigo-100 transition-colors text-xs font-bold"
+                              onClick={() => !isCurrentlyArchived && handleOpenFundModal(wallet)}
+                              disabled={isCurrentlyArchived}
+                              className={`inline-flex items-center space-x-1 px-3 py-1 rounded-xl text-xs font-bold transition-colors ${isCurrentlyArchived ? 'bg-gray-100 text-gray-300 cursor-not-allowed' : 'bg-indigo-50 text-indigo-600 hover:bg-indigo-100'}`}
                             >
                               <Plus className="w-3 h-3" />
                               <span>Fund</span>

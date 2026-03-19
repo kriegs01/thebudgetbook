@@ -36,6 +36,9 @@ const supabaseBudgetSetupToFrontend = (setup: SupabaseBudgetSetup): SavedBudgetS
     status: setup.status,
     totalAmount: setup.total_amount,
     data: setup.data,
+    isArchived: setup.is_archived ?? false,
+    closedAt: setup.closed_at ?? null,
+    reopenedAt: setup.reopened_at ?? null,
   };
 };
 
@@ -354,4 +357,48 @@ export const updateBudgetSetupFrontend = async (setup: SavedBudgetSetup): Promis
  */
 export const deleteBudgetSetupFrontend = async (id: string): Promise<{ error: any }> => {
   return await deleteBudgetSetup(id);
+};
+
+/**
+ * Archive (close) a budget setup — sets is_archived=true and records closed_at timestamp
+ */
+export const archiveBudgetSetup = async (id: string): Promise<{ data: SavedBudgetSetup | null; error: any }> => {
+  try {
+    const user = await getCachedUser();
+    const { data, error } = await supabase
+      .from(getTableName('budget_setups'))
+      .update({ is_archived: true, closed_at: new Date().toISOString() })
+      .eq('id', id)
+      .eq('user_id', user.id)
+      .select()
+      .single();
+
+    if (error) throw error;
+    return { data: supabaseBudgetSetupToFrontend(data), error: null };
+  } catch (error) {
+    console.error('[budgetSetupsService] Error archiving budget setup:', error);
+    return { data: null, error };
+  }
+};
+
+/**
+ * Reopen an archived budget setup — sets is_archived=false and records reopened_at timestamp
+ */
+export const reopenBudgetSetup = async (id: string): Promise<{ data: SavedBudgetSetup | null; error: any }> => {
+  try {
+    const user = await getCachedUser();
+    const { data, error } = await supabase
+      .from(getTableName('budget_setups'))
+      .update({ is_archived: false, reopened_at: new Date().toISOString() })
+      .eq('id', id)
+      .eq('user_id', user.id)
+      .select()
+      .single();
+
+    if (error) throw error;
+    return { data: supabaseBudgetSetupToFrontend(data), error: null };
+  } catch (error) {
+    console.error('[budgetSetupsService] Error reopening budget setup:', error);
+    return { data: null, error };
+  }
 };
