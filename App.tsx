@@ -6,7 +6,7 @@ import { getAllBillersFrontend, createBillerFrontend, updateBillerFrontend, dele
 import { getAllAccountsFrontend, createAccountFrontend, updateAccountFrontend, deleteAccountFrontend } from './src/services/accountsService';
 import { getAllInstallmentsFrontend, createInstallmentFrontend, updateInstallmentFrontend, deleteInstallmentFrontend } from './src/services/installmentsService';
 import { getAllSavingsFrontend, createSavingsFrontend, updateSavingsFrontend, deleteSavingsFrontend } from './src/services/savingsService';
-import { getAllBudgetSetupsFrontend, deleteBudgetSetupFrontend } from './src/services/budgetSetupsService';
+import { getAllBudgetSetupsFrontend, deleteBudgetSetupFrontend, archiveBudgetSetup, reopenBudgetSetup } from './src/services/budgetSetupsService';
 import { getPaymentSchedulesBySource } from './src/services/paymentSchedulesService';
 import { getAllTransactions, createTransaction, createPaymentScheduleTransaction, uploadTransactionReceipt, updateTransaction } from './src/services/transactionsService';
 import { recordPayment } from './src/services/paymentSchedulesService';
@@ -1029,6 +1029,26 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
                   onReloadBillers={reloadBillers}
                   onTransactionCreated={handleTransactionCreated}
                   onTransactionDeleted={handleTransactionDeleted}
+                  onArchiveBudget={async (setup) => {
+                    const { data, error } = await archiveBudgetSetup(setup.id);
+                    if (error) {
+                      console.error('Error archiving budget setup:', error);
+                      throw error;
+                    }
+                    if (data) {
+                      setBudgetSetups(prev => prev.map(s => s.id === data.id ? data : s));
+                    }
+                  }}
+                  onReopenBudget={async (setup) => {
+                    const { data, error } = await reopenBudgetSetup(setup.id);
+                    if (error) {
+                      console.error('Error reopening budget setup:', error);
+                      throw error;
+                    }
+                    if (data) {
+                      setBudgetSetups(prev => prev.map(s => s.id === data.id ? data : s));
+                    }
+                  }}
                 />
               } />
               <Route path="/billers" element={
