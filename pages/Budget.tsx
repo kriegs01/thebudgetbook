@@ -117,7 +117,8 @@ const isLegacyBudget = (year: number, month: string): boolean => {
  *
  * Rules:
  * - If `cat.active` is explicitly false AND `cat.deactivatedAt` is set, the category is only
- *   considered active for budget months that fall on or before the deactivation month.
+ *   considered active for budget months that fall **before** the deactivation month (exclusive).
+ *   The deactivation month itself — and all months after it — do not show the category.
  * - If `cat.active` is missing or true, the category is always active regardless of deactivatedAt.
  * - Handles missing/invalid month names gracefully (returns true to avoid accidentally hiding sections).
  */
@@ -138,8 +139,8 @@ const isCategoryActiveForBudget = (
   const budgetMonthStart = new Date(selectedYear, monthIndex, 1);
   const deactivationDate = new Date(cat.deactivatedAt);
 
-  // Category is active for budget months up to and including the deactivation month
-  return budgetMonthStart <= deactivationDate;
+  // Category is active for budget months strictly before the deactivation month
+  return budgetMonthStart < deactivationDate;
 };
 
 /**

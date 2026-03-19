@@ -607,7 +607,7 @@ const Settings: React.FC<SettingsProps> = ({ currency, setCurrency, categories, 
                         ))}
                       </select>
                     </div>
-                    <p className="text-[9px] text-gray-400 mt-1.5">Budgets before this month will still show the category (legacy).</p>
+                    <p className="text-[9px] text-gray-400 mt-1.5">From this month onwards the category will no longer appear. Earlier budgets keep it as legacy.</p>
                   </div>
 
                   {/* Flexi Mode toggle */}
@@ -618,9 +618,9 @@ const Settings: React.FC<SettingsProps> = ({ currency, setCurrency, categories, 
                     </div>
                     <button
                       onClick={() => setCatSettingsDraftFlexi(f => !f)}
-                      className={`relative w-11 h-6 rounded-full transition-colors ${catSettingsDraftFlexi ? 'bg-indigo-500' : 'bg-gray-300'}`}
+                      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${catSettingsDraftFlexi ? 'bg-indigo-500' : 'bg-gray-300'}`}
                     >
-                      <span className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${catSettingsDraftFlexi ? 'translate-x-5' : 'translate-x-0.5'}`} />
+                      <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${catSettingsDraftFlexi ? 'translate-x-6' : 'translate-x-1'}`} />
                     </button>
                   </div>
 

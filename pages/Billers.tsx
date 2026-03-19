@@ -916,11 +916,9 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
       if (c.active === false) {
         if (!c.deactivatedAt) return false;
         const deactivationDate = new Date(c.deactivatedAt);
-        // Build the first day of the month *after* deactivation — this is the boundary date.
-        // Using `today < boundary` means the entire deactivation month is still included;
-        // the category is hidden only when today falls in a later month.
-        const deactivationMonthEnd = new Date(deactivationDate.getFullYear(), deactivationDate.getMonth() + 1, 1);
-        return today < deactivationMonthEnd;
+        // Category is hidden from the deactivation month onwards (inclusive).
+        // Show only if today falls strictly before the deactivation date (first of that month).
+        return today < deactivationDate;
       }
       return true;
     });
