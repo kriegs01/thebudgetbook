@@ -1115,6 +1115,9 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
                   categories={categories}
                   setCategories={setCategories}
                   onResetAll={handleResetAll}
+                  billers={billers}
+                  installments={installments}
+                  onUpdateBiller={handleUpdateBiller}
                 />
               } />
               <Route path="/trash" element={

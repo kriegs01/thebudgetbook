@@ -27,11 +27,13 @@ export interface BudgetCategory {
   subcategories: string[];
 
   // Lifecycle config — default: active (treat missing `active` as true)
-  active?: boolean;        // false = legacy/deactivated category
-  deactivatedAt?: string;  // ISO date string, e.g. '2026-03-01'; budgets up to this month still show the category
+  active?: boolean;          // false = deactivated category
+  deactivatedAt?: string;    // ISO date, e.g. '2026-03-01' — first month where category is HIDDEN
+  reactivatedFrom?: string;  // ISO date, e.g. '2026-09-01' — first month where category is VISIBLE again (inclusive)
+  legacyFrom?: string;       // ISO date — if set, "Legacy" label shown only for months >= this date (before deactivation)
 
   // Behavior config — default: data + manual (treat missing `flexiMode` as true)
-  flexiMode?: boolean;     // true = data + manual "Add Item"; false = data-only (no Add Item button)
+  flexiMode?: boolean;       // true = data + manual "Add Item"; false = data-only (no Add Item button)
 }
 
 export interface PaymentSchedule {

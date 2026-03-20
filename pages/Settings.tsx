@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { ChevronDown, ChevronRight, Hash, Globe, Bell, Lock, Trash2, AlertTriangle, RotateCcw, Plus, X, Database, Copy, Shield, User, Mail, Key, MoreVertical } from 'lucide-react';
-import { BudgetCategory } from '../types';
+import { ChevronDown, ChevronRight, Hash, Globe, Bell, Lock, Trash2, AlertTriangle, RotateCcw, Plus, X, Database, Copy, Shield, User, Mail, Key, MoreVertical, Check } from 'lucide-react';
+import { BudgetCategory, Biller, Installment } from '../types';
 import { useTestEnvironment } from '../src/contexts/TestEnvironmentContext';
 import { useAuth } from '../src/contexts/AuthContext';
 import { supabase } from '../src/utils/supabaseClient';
@@ -14,26 +14,110 @@ interface SettingsProps {
   categories: BudgetCategory[];
   setCategories: React.Dispatch<React.SetStateAction<BudgetCategory[]>>;
   onResetAll?: () => void;
+  billers?: Biller[];
+  installments?: Installment[];
+  onUpdateBiller?: (biller: Biller) => Promise<void>;
 }
 
 const SETTING_MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 
-const Settings: React.FC<SettingsProps> = ({ currency, setCurrency, categories, setCategories, onResetAll }) => {
+// ─── Helpers ────────────────────────────────────────────────────────────────
+
+/** Convert { month: 'March', year: '2026' } → Date(2026, 2, 1) */
+const billerDeactivationToDate = (d: { month: string; year: string } | undefined): Date | null => {
+  if (!d) return null;
+  const mi = SETTING_MONTHS.indexOf(d.month);
+  const yr = parseInt(d.year, 10);
+  if (mi < 0 || isNaN(yr)) return null;
+  return new Date(yr, mi, 1);
+};
+
+/** Format a 0-based monthIndex + year as "March 2026" */
+const formatYearMonth = (year: number, monthIndex: number) =>
+  `${SETTING_MONTHS[monthIndex]} ${year}`;
+
+// ─── Types ───────────────────────────────────────────────────────────────────
+
+interface DeactivationConflict {
+  type: 'biller' | 'installment';
+  id: string;
+  name: string;
+  lastActiveLabel: string; // "No end date" or "Until February 2026"
+  biller?: Biller;
+}
+
+interface DeleteConflict {
+  type: 'biller' | 'installment';
+  id: string;
+  name: string;
+  currentCategory: string;
+  reassignable: boolean;
+  newCategoryId: string | null;
+  biller?: Biller;
+}
+
+// ─── Component ───────────────────────────────────────────────────────────────
+
+const Settings: React.FC<SettingsProps> = ({ currency, setCurrency, categories, setCategories, onResetAll, billers = [], installments = [], onUpdateBiller }) => {
   const [openSection, setOpenSection] = useState<string | null>(null);
   const [newCatName, setNewCatName] = useState('');
   const [showAddCat, setShowAddCat] = useState(false);
   const [newSubcatNames, setNewSubcatNames] = useState<{ [id: string]: string }>({});
 
-  // Category settings modal state
+  // ── Category Settings modal state ──────────────────────────────────────────
   const [catSettingsModal, setCatSettingsModal] = useState<{ catId: string; catName: string } | null>(null);
+  // Deactivation draft
   const [catSettingsDraftMonth, setCatSettingsDraftMonth] = useState(1);
   const [catSettingsDraftYear, setCatSettingsDraftYear] = useState(new Date().getFullYear());
+  // Reactivation draft
+  const [showReactivationPicker, setShowReactivationPicker] = useState(false);
+  const [reactDraftMonth, setReactDraftMonth] = useState(1);
+  const [reactDraftYear, setReactDraftYear] = useState(new Date().getFullYear());
+  // Flexi mode
   const [catSettingsDraftFlexi, setCatSettingsDraftFlexi] = useState(true);
 
-  const openCatSettings = (cat: { id: string; name: string; active?: boolean; deactivatedAt?: string; flexiMode?: boolean }) => {
+  // ── Deactivation conflict modal ────────────────────────────────────────────
+  const [deactConflictModal, setDeactConflictModal] = useState<{
+    catId: string;
+    catName: string;
+    deactivatedAt: string;      // ISO date to save
+    lastActiveLabel: string;    // human-readable last active month
+    conflicts: DeactivationConflict[];
+  } | null>(null);
+  const [deactConflictSaving, setDeactConflictSaving] = useState(false);
+  const [deactConflictError, setDeactConflictError] = useState<string | null>(null);
+
+  // ── Delete reassignment modal ──────────────────────────────────────────────
+  const [deleteModal, setDeleteModal] = useState<{
+    catId: string;
+    catName: string;
+    conflicts: DeleteConflict[];
+  } | null>(null);
+  const [deleteSaving, setDeleteSaving] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+
+  // ── Shared confirm modal ───────────────────────────────────────────────────
+  const [confirmModal, setConfirmModal] = useState<{
+    show: boolean;
+    title: string;
+    message: string;
+    onConfirm: () => void;
+  }>({
+    show: false,
+    title: '',
+    message: '',
+    onConfirm: () => {},
+  });
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // Category settings helpers
+  // ─────────────────────────────────────────────────────────────────────────
+
+  const openCatSettings = (cat: BudgetCategory) => {
     const now = new Date();
     const nextMonthDate = new Date(now.getFullYear(), now.getMonth() + 1, 1);
-    // If already deactivated, show its stored date; otherwise default to next month / current year
+
+    // Deactivation draft defaults
     let month = nextMonthDate.getMonth() + 1; // 1-12
     let year = nextMonthDate.getFullYear();
     if (cat.deactivatedAt) {
@@ -43,42 +127,285 @@ const Settings: React.FC<SettingsProps> = ({ currency, setCurrency, categories, 
     }
     setCatSettingsDraftMonth(month);
     setCatSettingsDraftYear(year);
+
+    // Reactivation draft defaults
+    if (cat.reactivatedFrom) {
+      const parts = cat.reactivatedFrom.split('-');
+      setReactDraftYear(parseInt(parts[0], 10));
+      setReactDraftMonth(parseInt(parts[1], 10));
+    } else if (cat.deactivatedAt) {
+      // Default reactivation to deactivation+1 month
+      const deactParts = cat.deactivatedAt.split('-');
+      const deactYear = parseInt(deactParts[0], 10);
+      const deactMonth = parseInt(deactParts[1], 10); // 1-12
+      const nextDate = new Date(deactYear, deactMonth, 1); // deactMonth is 1-12, used as 0-indexed month → gives deactivation + 1 month
+      setReactDraftYear(nextDate.getFullYear());
+      setReactDraftMonth(nextDate.getMonth() + 1);
+    } else {
+      const d2 = new Date(now.getFullYear(), now.getMonth() + 2, 1);
+      setReactDraftYear(d2.getFullYear());
+      setReactDraftMonth(d2.getMonth() + 1);
+    }
+    setShowReactivationPicker(!!cat.reactivatedFrom);
     setCatSettingsDraftFlexi(cat.flexiMode ?? true);
     setCatSettingsModal({ catId: cat.id, catName: cat.name });
   };
 
-  const closeCatSettings = () => setCatSettingsModal(null);
+  const closeCatSettings = () => {
+    setCatSettingsModal(null);
+    setDeactConflictError(null);
+  };
 
+  /** Build conflicts for a proposed deactivation date */
+  const buildDeactivationConflicts = (
+    catName: string,
+    proposedDeactivationDate: Date
+  ): DeactivationConflict[] => {
+    const conflicts: DeactivationConflict[] = [];
+
+    // Check billers whose category matches this category
+    for (const b of billers) {
+      if (b.category !== catName && !b.category.startsWith(`${catName} -`)) continue;
+      const endDate = billerDeactivationToDate(b.deactivationDate);
+      // Conflict: biller has no end date, OR its end date is >= proposed deactivation
+      if (!endDate || endDate >= proposedDeactivationDate) {
+        conflicts.push({
+          type: 'biller',
+          id: b.id,
+          name: b.name,
+          lastActiveLabel: endDate
+            ? `Until ${SETTING_MONTHS[endDate.getMonth()]} ${endDate.getFullYear()}`
+            : 'No end date',
+          biller: b,
+        });
+      }
+    }
+
+    // Check installments whose linked biller is in this category
+    for (const inst of installments) {
+      if (!inst.billerId) continue;
+      const linkedBiller = billers.find(b => b.id === inst.billerId);
+      if (!linkedBiller) continue;
+      if (linkedBiller.category !== catName && !linkedBiller.category.startsWith(`${catName} -`)) continue;
+      // Already covered by biller conflicts above (same biller)
+      const already = conflicts.some(c => c.type === 'biller' && c.id === linkedBiller.id);
+      if (!already) {
+        const endDate = billerDeactivationToDate(linkedBiller.deactivationDate);
+        if (!endDate || endDate >= proposedDeactivationDate) {
+          conflicts.push({
+            type: 'installment',
+            id: inst.id,
+            name: inst.name,
+            lastActiveLabel: endDate
+              ? `Until ${SETTING_MONTHS[endDate.getMonth()]} ${endDate.getFullYear()}`
+              : 'No end date',
+          });
+        }
+      }
+    }
+
+    return conflicts;
+  };
+
+  /** Initiate deactivation — run conflict check first */
+  const handleDeactivate = () => {
+    if (!catSettingsModal) return;
+    const proposedDate = new Date(catSettingsDraftYear, catSettingsDraftMonth - 1, 1);
+    const isoDate = `${catSettingsDraftYear}-${String(catSettingsDraftMonth).padStart(2, '0')}-01`;
+    const conflicts = buildDeactivationConflicts(catSettingsModal.catName, proposedDate);
+
+    if (conflicts.length === 0) {
+      // No conflicts — save directly
+      applyDeactivation(catSettingsModal.catId, isoDate);
+      closeCatSettings();
+    } else {
+      // Show conflict modal
+      const prevMonthDate = new Date(proposedDate.getFullYear(), proposedDate.getMonth() - 1, 1);
+      const lastActiveLabel = formatYearMonth(prevMonthDate.getFullYear(), prevMonthDate.getMonth());
+      setDeactConflictModal({
+        catId: catSettingsModal.catId,
+        catName: catSettingsModal.catName,
+        deactivatedAt: isoDate,
+        lastActiveLabel,
+        conflicts,
+      });
+      closeCatSettings();
+    }
+  };
+
+  const applyDeactivation = (catId: string, deactivatedAt: string) => {
+    setCategories(prev => prev.map(c => {
+      if (c.id !== catId) return c;
+      return { ...c, active: false, deactivatedAt };
+    }));
+  };
+
+  /** Align conflicting billers to end on lastActiveMonth, then save deactivation */
+  const handleAlignAndDeactivate = async () => {
+    if (!deactConflictModal || !onUpdateBiller) return;
+    setDeactConflictSaving(true);
+    setDeactConflictError(null);
+
+    const deactivationDate = new Date(deactConflictModal.deactivatedAt);
+    // Last active month = one month before deactivation
+    const lastActive = new Date(deactivationDate.getFullYear(), deactivationDate.getMonth() - 1, 1);
+    const lastActiveMon = SETTING_MONTHS[lastActive.getMonth()];
+    const lastActiveYr = String(lastActive.getFullYear());
+
+    try {
+      for (const conflict of deactConflictModal.conflicts) {
+        if (conflict.type === 'biller' && conflict.biller) {
+          const updated: Biller = {
+            ...conflict.biller,
+            deactivationDate: { month: lastActiveMon, year: lastActiveYr },
+          };
+          await onUpdateBiller(updated);
+        }
+      }
+      // All updates succeeded — save deactivation
+      applyDeactivation(deactConflictModal.catId, deactConflictModal.deactivatedAt);
+      setDeactConflictModal(null);
+    } catch {
+      setDeactConflictError('Some items could not be updated. Please try again.');
+    } finally {
+      setDeactConflictSaving(false);
+    }
+  };
+
+  /** Save all category settings (deactivatedAt + reactivation + flexi) */
   const handleCatSettingsSave = () => {
     if (!catSettingsModal) return;
+    const deactivatedAt = `${catSettingsDraftYear}-${String(catSettingsDraftMonth).padStart(2, '0')}-01`;
+
+    let reactivatedFrom: string | undefined;
+    if (showReactivationPicker) {
+      const deactDate = new Date(catSettingsDraftYear, catSettingsDraftMonth - 1, 1);
+      const reactDate = new Date(reactDraftYear, reactDraftMonth - 1, 1);
+      if (reactDate > deactDate) {
+        reactivatedFrom = `${reactDraftYear}-${String(reactDraftMonth).padStart(2, '0')}-01`;
+      }
+    }
+
     setCategories(prev => prev.map(c => {
       if (c.id !== catSettingsModal.catId) return c;
-      const deactivatedAt = `${catSettingsDraftYear}-${String(catSettingsDraftMonth).padStart(2, '0')}-01`;
-      // Preserve active state; only update deactivatedAt + flexiMode
-      return { ...c, deactivatedAt, flexiMode: catSettingsDraftFlexi };
+      const updated: BudgetCategory = { ...c, deactivatedAt, flexiMode: catSettingsDraftFlexi };
+      if (reactivatedFrom) {
+        updated.reactivatedFrom = reactivatedFrom;
+      } else {
+        delete updated.reactivatedFrom;
+      }
+      return updated;
     }));
     closeCatSettings();
   };
 
-  const handleCatSettingsToggleActive = () => {
+  /** Fully reactivate (remove deactivatedAt + reactivatedFrom, set active: true) */
+  const handleFullReactivate = () => {
     if (!catSettingsModal) return;
     setCategories(prev => prev.map(c => {
       if (c.id !== catSettingsModal.catId) return c;
-      if (c.active === false) {
-        // Reactivate
-        const { deactivatedAt: _removed, ...rest } = c;
-        return { ...rest, active: true };
-      } else {
-        // Deactivate using the draft month/year
-        const deactivatedAt = `${catSettingsDraftYear}-${String(catSettingsDraftMonth).padStart(2, '0')}-01`;
-        return { ...c, active: false, deactivatedAt };
-      }
+      const updated: BudgetCategory = { ...c, active: true };
+      delete updated.deactivatedAt;
+      delete updated.reactivatedFrom;
+      return updated;
     }));
     closeCatSettings();
   };
 
-  // Auth context
-  const { userProfile, updateProfile, refreshProfile, user } = useAuth();
+  // ─── Delete Category ───────────────────────────────────────────────────────
+
+  const handleDeleteCategory = (catId: string, catName: string) => {
+    // Scan billers for references
+    const catBillers = billers.filter(
+      b => b.category === catName || b.category.startsWith(`${catName} -`)
+    );
+
+    if (catBillers.length === 0) {
+      // No conflicts — simple confirm
+      setConfirmModal({
+        show: true,
+        title: 'Delete Category',
+        message: `Are you sure you want to permanently delete the category "${catName}"?`,
+        onConfirm: () => {
+          setCategories(prev => prev.filter(c => c.id !== catId));
+          setConfirmModal(p => ({ ...p, show: false }));
+        },
+      });
+      return;
+    }
+
+    // Build conflict list
+    const conflicts: DeleteConflict[] = catBillers.map(b => {
+      // Installments linked to Loans category billers are non-reassignable
+      const hasInstallment = installments.some(i => i.billerId === b.id);
+      const isLoans = catName === 'Loans' || b.category.startsWith('Loans -');
+      const reassignable = !isLoans && !hasInstallment;
+      return {
+        type: 'biller',
+        id: b.id,
+        name: b.name,
+        currentCategory: b.category,
+        reassignable,
+        newCategoryId: null,
+        biller: b,
+      };
+    });
+
+    // Add orphan installments (no biller match)
+    for (const inst of installments) {
+      if (!inst.billerId) continue;
+      const linkedBiller = billers.find(b => b.id === inst.billerId);
+      if (!linkedBiller) continue;
+      if (linkedBiller.category !== catName && !linkedBiller.category.startsWith(`${catName} -`)) continue;
+      if (conflicts.some(c => c.type === 'installment' && c.id === inst.id)) continue;
+      conflicts.push({
+        type: 'installment',
+        id: inst.id,
+        name: inst.name,
+        currentCategory: catName,
+        reassignable: false,
+        newCategoryId: null,
+      });
+    }
+
+    setDeleteModal({ catId, catName, conflicts });
+  };
+
+  const handleDeleteReassignChange = (conflictId: string, newCatId: string) => {
+    setDeleteModal(prev => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        conflicts: prev.conflicts.map(c =>
+          c.id === conflictId ? { ...c, newCategoryId: newCatId } : c
+        ),
+      };
+    });
+  };
+
+  const handleReassignAndDelete = async () => {
+    if (!deleteModal || !onUpdateBiller) return;
+    setDeleteSaving(true);
+    setDeleteError(null);
+
+    try {
+      for (const conflict of deleteModal.conflicts) {
+        if (!conflict.reassignable || !conflict.newCategoryId || !conflict.biller) continue;
+        const targetCat = categories.find(c => c.id === conflict.newCategoryId);
+        if (!targetCat) continue;
+        const updated: Biller = { ...conflict.biller, category: targetCat.name };
+        await onUpdateBiller(updated);
+      }
+      setCategories(prev => prev.filter(c => c.id !== deleteModal.catId));
+      setDeleteModal(null);
+    } catch {
+      setDeleteError('Some items could not be reassigned. Please try again.');
+    } finally {
+      setDeleteSaving(false);
+    }
+  };
+
+
 
   // Account management state
   const [editFirstName, setEditFirstName] = useState('');
@@ -96,18 +423,6 @@ const Settings: React.FC<SettingsProps> = ({ currency, setCurrency, categories, 
   const [isCopying, setIsCopying] = useState(false);
   const [isClearing, setIsClearing] = useState(false);
 
-  const [confirmModal, setConfirmModal] = useState<{
-    show: boolean;
-    title: string;
-    message: string;
-    onConfirm: () => void;
-  }>({
-    show: false,
-    title: '',
-    message: '',
-    onConfirm: () => {},
-  });
-
   const toggleSection = (id: string) => {
     setOpenSection(openSection === id ? null : id);
   };
@@ -118,18 +433,6 @@ const Settings: React.FC<SettingsProps> = ({ currency, setCurrency, categories, 
     setCategories(prev => [...prev, { id: Math.random().toString(36).substr(2, 9), name: newCatName.trim(), subcategories: [] }]);
     setNewCatName('');
     setShowAddCat(false);
-  };
-
-  const handleDeleteCategory = (id: string, name: string) => {
-    setConfirmModal({
-      show: true,
-      title: 'Delete Category',
-      message: `Are you sure you want to permanently delete the category "${name}" and all its sub-links?`,
-      onConfirm: () => {
-        setCategories(prev => prev.filter(c => c.id !== id));
-        setConfirmModal(p => ({ ...p, show: false }));
-      }
-    });
   };
 
   const handleAddSubcategory = (catId: string) => {
@@ -491,10 +794,10 @@ const Settings: React.FC<SettingsProps> = ({ currency, setCurrency, categories, 
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <span className="text-sm font-black text-gray-900 uppercase tracking-widest">{cat.name}</span>
-                  {cat.active === false && (
+                  {cat.deactivatedAt && (
                     <span className="text-[9px] font-black text-amber-600 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full uppercase tracking-wider">Legacy</span>
                   )}
-                  {(cat.flexiMode ?? true) === false && (
+                  {cat.flexiMode === false && (
                     <span className="text-[9px] font-black text-gray-400 bg-gray-100 border border-gray-200 px-2 py-0.5 rounded-full uppercase tracking-wider">Data Only</span>
                   )}
                 </div>
@@ -565,12 +868,20 @@ const Settings: React.FC<SettingsProps> = ({ currency, setCurrency, categories, 
           {/* Category Settings Modal */}
           {catSettingsModal && (() => {
             const cat = categories.find(c => c.id === catSettingsModal.catId);
-            const isDeactivated = cat?.active === false;
+            if (!cat) return null;
+            const isDeactivated = !!cat.deactivatedAt;
+            const hasReactivation = !!cat.reactivatedFrom;
             const currentYear = new Date().getFullYear();
-            const years = Array.from({ length: 6 }, (_, i) => currentYear + i);
+            const years = Array.from({ length: 8 }, (_, i) => currentYear - 1 + i);
+
+            // Compute which reactivation months/years are allowed (strictly after deactivation)
+            const deactDate = new Date(catSettingsDraftYear, catSettingsDraftMonth - 1, 1);
+            const reactDate = new Date(reactDraftYear, reactDraftMonth - 1, 1);
+            const reactIsValid = reactDate > deactDate;
+
             return (
               <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-end justify-center sm:items-center p-4" onClick={closeCatSettings}>
-                <div className="bg-white rounded-[2rem] shadow-2xl w-full max-w-sm p-6 space-y-5" onClick={e => e.stopPropagation()}>
+                <div className="bg-white rounded-[2rem] shadow-2xl w-full max-w-sm p-6 space-y-5 max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
                   {/* Modal header */}
                   <div className="flex items-center justify-between">
                     <div>
@@ -582,10 +893,10 @@ const Settings: React.FC<SettingsProps> = ({ currency, setCurrency, categories, 
                     </button>
                   </div>
 
-                  {/* Deactivation date label */}
-                  <div>
-                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">
-                      {isDeactivated ? 'Deactivated from' : 'Deactivate from'}
+                  {/* Deactivation date picker */}
+                  <div className="space-y-2">
+                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">
+                      {isDeactivated ? 'Deactivated From' : 'Deactivate From'}
                     </p>
                     <div className="flex gap-2">
                       <select
@@ -607,7 +918,72 @@ const Settings: React.FC<SettingsProps> = ({ currency, setCurrency, categories, 
                         ))}
                       </select>
                     </div>
-                    <p className="text-[9px] text-gray-400 mt-1.5">From this month onwards the category will no longer appear. Earlier budgets keep it as legacy.</p>
+                    <p className="text-[9px] text-gray-400">From this month onwards the category will no longer appear in new budgets.</p>
+                  </div>
+
+                  {/* Reactivation toggle + picker */}
+                  <div className="space-y-2">
+                    <button
+                      type="button"
+                      onClick={() => setShowReactivationPicker(p => !p)}
+                      className="flex items-center justify-between w-full bg-gray-50 rounded-2xl px-4 py-3 hover:bg-gray-100 transition-colors"
+                    >
+                      <div className="text-left">
+                        <p className="text-xs font-black text-gray-700 uppercase tracking-widest">Reactivation</p>
+                        <p className="text-[9px] text-gray-400 mt-0.5">
+                          {hasReactivation && cat.reactivatedFrom
+                            ? `Scheduled: ${SETTING_MONTHS[parseInt(cat.reactivatedFrom.split('-')[1], 10) - 1]} ${cat.reactivatedFrom.split('-')[0]}`
+                            : showReactivationPicker
+                              ? 'Set reactivation date below'
+                              : 'Tap to schedule reactivation'}
+                        </p>
+                      </div>
+                      <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform ${showReactivationPicker ? 'rotate-180' : ''}`} />
+                    </button>
+
+                    {showReactivationPicker && (
+                      <div className="pl-2 space-y-2">
+                        <div className="flex gap-2">
+                          <select
+                            value={reactDraftMonth}
+                            onChange={e => setReactDraftMonth(Number(e.target.value))}
+                            className="flex-1 bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 text-xs font-bold text-gray-700 outline-none focus:ring-2 focus:ring-green-400"
+                          >
+                            {SETTING_MONTHS.map((m, i) => {
+                              const candidate = new Date(reactDraftYear, i, 1);
+                              const disabled = candidate <= deactDate;
+                              return (
+                                <option key={m} value={i + 1} disabled={disabled}>{m}{disabled ? ' ✕' : ''}</option>
+                              );
+                            })}
+                          </select>
+                          <select
+                            value={reactDraftYear}
+                            onChange={e => setReactDraftYear(Number(e.target.value))}
+                            className="w-24 bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 text-xs font-bold text-gray-700 outline-none focus:ring-2 focus:ring-green-400"
+                          >
+                            {years.map(y => (
+                              <option key={y} value={y}>{y}</option>
+                            ))}
+                          </select>
+                        </div>
+                        {!reactIsValid && (
+                          <p className="text-[9px] text-red-500 font-bold">Reactivation must be after the deactivation month.</p>
+                        )}
+                        {reactIsValid && (
+                          <p className="text-[9px] text-green-600 font-bold">
+                            Category will reappear from {SETTING_MONTHS[reactDraftMonth - 1]} {reactDraftYear}.
+                          </p>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => { setShowReactivationPicker(false); }}
+                          className="text-[9px] text-gray-400 hover:text-red-500 font-bold uppercase tracking-widest"
+                        >
+                          Remove reactivation date
+                        </button>
+                      </div>
+                    )}
                   </div>
 
                   {/* Flexi Mode toggle */}
@@ -624,25 +1000,33 @@ const Settings: React.FC<SettingsProps> = ({ currency, setCurrency, categories, 
                     </button>
                   </div>
 
-                  {/* Save button */}
+                  {/* Save */}
                   <button
                     onClick={handleCatSettingsSave}
                     className="w-full bg-indigo-600 text-white py-3 rounded-xl font-black text-xs uppercase tracking-widest hover:bg-indigo-700 transition-colors"
                   >
-                    Save
+                    Save Settings
                   </button>
 
-                  {/* Deactivate / Reactivate */}
-                  <button
-                    onClick={handleCatSettingsToggleActive}
-                    className={`w-full py-3 rounded-xl font-black text-xs uppercase tracking-widest border transition-colors ${
-                      isDeactivated
-                        ? 'bg-green-50 border-green-200 text-green-700 hover:bg-green-100'
-                        : 'bg-amber-50 border-amber-200 text-amber-700 hover:bg-amber-100'
-                    }`}
-                  >
-                    {isDeactivated ? '↑ Reactivate Category' : '↓ Deactivate from Selected Month'}
-                  </button>
+                  {/* Deactivate with conflict check */}
+                  {!isDeactivated && (
+                    <button
+                      onClick={handleDeactivate}
+                      className="w-full py-3 rounded-xl font-black text-xs uppercase tracking-widest border bg-amber-50 border-amber-200 text-amber-700 hover:bg-amber-100 transition-colors"
+                    >
+                      ↓ Deactivate from Selected Month
+                    </button>
+                  )}
+
+                  {/* Full reactivate (remove deactivation) */}
+                  {isDeactivated && (
+                    <button
+                      onClick={handleFullReactivate}
+                      className="w-full py-3 rounded-xl font-black text-xs uppercase tracking-widest border bg-green-50 border-green-200 text-green-700 hover:bg-green-100 transition-colors"
+                    >
+                      ↑ Remove Deactivation (Fully Reactivate)
+                    </button>
+                  )}
 
                   {/* Delete */}
                   <button
@@ -656,6 +1040,166 @@ const Settings: React.FC<SettingsProps> = ({ currency, setCurrency, categories, 
               </div>
             );
           })()}
+
+          {/* Deactivation Conflicts Modal */}
+          {deactConflictModal && (
+            <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-end justify-center sm:items-center p-4">
+              <div className="bg-white rounded-[2rem] shadow-2xl w-full max-w-md p-6 space-y-5 max-h-[90vh] overflow-y-auto">
+                <div className="flex items-start justify-between">
+                  <div>
+                    <p className="text-[10px] font-black text-amber-500 uppercase tracking-widest">Deactivation Conflict</p>
+                    <h3 className="text-base font-black text-gray-900 mt-0.5">
+                      Deactivate "{deactConflictModal.catName}"
+                    </h3>
+                  </div>
+                  <button onClick={() => setDeactConflictModal(null)} className="text-gray-300 hover:text-gray-600">
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
+
+                <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 flex gap-3">
+                  <AlertTriangle className="w-4 h-4 text-amber-500 flex-shrink-0 mt-0.5" />
+                  <p className="text-xs text-amber-700 font-medium">
+                    The following items are still active at or after the proposed deactivation date.
+                    To proceed, either cancel and adjust them manually, or use "Align &amp; Deactivate"
+                    to automatically set their end date to <strong>{deactConflictModal.lastActiveLabel}</strong>.
+                  </p>
+                </div>
+
+                <div className="space-y-2">
+                  {deactConflictModal.conflicts.map(c => (
+                    <div key={c.id} className="flex items-center justify-between bg-gray-50 rounded-2xl px-4 py-3">
+                      <div>
+                        <p className="text-xs font-black text-gray-800">{c.name}</p>
+                        <p className="text-[9px] text-gray-400 uppercase tracking-wider">{c.type}</p>
+                      </div>
+                      <span className="text-[9px] font-bold text-red-500 bg-red-50 px-2 py-1 rounded-full">{c.lastActiveLabel}</span>
+                    </div>
+                  ))}
+                </div>
+
+                {deactConflictError && (
+                  <p className="text-xs text-red-600 font-bold">{deactConflictError}</p>
+                )}
+
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => setDeactConflictModal(null)}
+                    className="flex-1 py-3 rounded-xl font-black text-xs uppercase tracking-widest border border-gray-200 text-gray-500 hover:bg-gray-50 transition-colors"
+                    disabled={deactConflictSaving}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleAlignAndDeactivate}
+                    disabled={deactConflictSaving || !onUpdateBiller}
+                    className="flex-1 py-3 rounded-xl font-black text-xs uppercase tracking-widest bg-amber-500 text-white hover:bg-amber-600 disabled:opacity-50 transition-colors"
+                  >
+                    {deactConflictSaving ? 'Aligning...' : 'Align & Deactivate'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Delete Reassignment Modal */}
+          {deleteModal && (() => {
+            const reassignableConflicts = deleteModal.conflicts.filter(c => c.reassignable);
+            const lockedConflicts = deleteModal.conflicts.filter(c => !c.reassignable);
+            const allReassigned = reassignableConflicts.every(c => c.newCategoryId !== null);
+            const canDelete = allReassigned && lockedConflicts.length === 0;
+            const otherCategories = categories.filter(c => c.id !== deleteModal.catId && c.active !== false);
+            return (
+              <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-end justify-center sm:items-center p-4">
+                <div className="bg-white rounded-[2rem] shadow-2xl w-full max-w-md p-6 space-y-5 max-h-[90vh] overflow-y-auto">
+                  <div className="flex items-start justify-between">
+                    <div>
+                      <p className="text-[10px] font-black text-red-400 uppercase tracking-widest">Delete Category</p>
+                      <h3 className="text-base font-black text-gray-900 mt-0.5">"{deleteModal.catName}"</h3>
+                    </div>
+                    <button onClick={() => setDeleteModal(null)} className="text-gray-300 hover:text-gray-600">
+                      <X className="w-5 h-5" />
+                    </button>
+                  </div>
+
+                  <div className="bg-red-50 border border-red-100 rounded-2xl p-4 flex gap-3">
+                    <AlertTriangle className="w-4 h-4 text-red-400 flex-shrink-0 mt-0.5" />
+                    <p className="text-xs text-red-600 font-medium">
+                      This category still has items assigned to it.
+                      Reassignable billers must be moved to another category before deletion.
+                      Loans/Installments are locked and must be handled in their own screens.
+                    </p>
+                  </div>
+
+                  {reassignableConflicts.length > 0 && (
+                    <div className="space-y-2">
+                      <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Reassign Billers</p>
+                      {reassignableConflicts.map(c => (
+                        <div key={c.id} className="flex items-center justify-between gap-3 bg-gray-50 rounded-2xl px-4 py-3">
+                          <div className="min-w-0 flex-1">
+                            <p className="text-xs font-black text-gray-800 truncate">{c.name}</p>
+                            <p className="text-[9px] text-gray-400 uppercase tracking-wider">{c.currentCategory}</p>
+                          </div>
+                          <select
+                            value={c.newCategoryId ?? ''}
+                            onChange={e => handleDeleteReassignChange(c.id, e.target.value)}
+                            className="bg-white border border-gray-200 rounded-xl px-2 py-1.5 text-xs font-bold text-gray-700 outline-none focus:ring-2 focus:ring-red-300 max-w-[140px]"
+                          >
+                            <option value="">Select…</option>
+                            {otherCategories.map(oc => (
+                              <option key={oc.id} value={oc.id}>{oc.name}</option>
+                            ))}
+                          </select>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {lockedConflicts.length > 0 && (
+                    <div className="space-y-2">
+                      <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Locked Items</p>
+                      {lockedConflicts.map(c => (
+                        <div key={c.id} className="flex items-center justify-between bg-orange-50 border border-orange-100 rounded-2xl px-4 py-3">
+                          <div>
+                            <p className="text-xs font-black text-gray-800">{c.name}</p>
+                            <p className="text-[9px] text-orange-500 uppercase tracking-wider">{c.type} — Locked</p>
+                          </div>
+                          <span className="text-[9px] font-bold text-orange-500 bg-orange-100 px-2 py-1 rounded-full">Must handle separately</span>
+                        </div>
+                      ))}
+                      <p className="text-[9px] text-orange-500 font-bold">
+                        You have {lockedConflicts.length} locked item{lockedConflicts.length > 1 ? 's' : ''}.
+                        Close or move them in their own screens before deleting this category.
+                      </p>
+                    </div>
+                  )}
+
+                  {deleteError && (
+                    <p className="text-xs text-red-600 font-bold">{deleteError}</p>
+                  )}
+
+                  <div className="flex gap-3">
+                    <button
+                      onClick={() => setDeleteModal(null)}
+                      className="flex-1 py-3 rounded-xl font-black text-xs uppercase tracking-widest border border-gray-200 text-gray-500 hover:bg-gray-50 transition-colors"
+                      disabled={deleteSaving}
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      onClick={handleReassignAndDelete}
+                      disabled={!canDelete || deleteSaving || !onUpdateBiller}
+                      className="flex-1 py-3 rounded-xl font-black text-xs uppercase tracking-widest bg-red-500 text-white hover:bg-red-600 disabled:opacity-40 transition-colors"
+                      title={!canDelete ? (lockedConflicts.length > 0 ? 'Resolve locked items first' : 'Assign all billers to a new category') : undefined}
+                    >
+                      {deleteSaving ? 'Deleting...' : 'Reassign & Delete'}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            );
+          })()}
+
         </div>
       )
     },
