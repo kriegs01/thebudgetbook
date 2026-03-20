@@ -407,6 +407,9 @@ const Settings: React.FC<SettingsProps> = ({ currency, setCurrency, categories, 
 
 
 
+  // Auth context
+  const { userProfile, updateProfile, refreshProfile, user } = useAuth();
+
   // Account management state
   const [editFirstName, setEditFirstName] = useState('');
   const [editLastName, setEditLastName] = useState('');
