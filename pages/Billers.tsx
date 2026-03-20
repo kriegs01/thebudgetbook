@@ -915,7 +915,10 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
     const activeCats = categories.filter(c => {
       if (c.active === false) {
         if (!c.deactivatedAt) return false;
-        const deactivationDate = new Date(c.deactivatedAt);
+        const deactivationDate = (() => {
+          const [y, m] = c.deactivatedAt.split('-').map(Number);
+          return new Date(y, m - 1, 1); // local time, same as `today`
+        })();
         // Category is hidden from the deactivation month onwards (inclusive).
         // Show only if today falls strictly before the deactivation date (first of that month).
         return today < deactivationDate;

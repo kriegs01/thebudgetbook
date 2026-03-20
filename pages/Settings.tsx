@@ -32,6 +32,16 @@ const billerDeactivationToDate = (d: { month: string; year: string } | undefined
   return new Date(yr, mi, 1);
 };
 
+/**
+ * Parse an ISO lifecycle date string ("YYYY-MM-DD") as local-time month start.
+ * Avoids UTC/local timezone mismatch: `new Date('2026-03-01')` is UTC midnight,
+ * which in UTC+ timezones is the previous calendar day.
+ */
+const parseIsoAsLocal = (iso: string): Date => {
+  const [y, m] = iso.split('-').map(Number);
+  return new Date(y, m - 1, 1);
+};
+
 /** Format a 0-based monthIndex + year as "March 2026" */
 const formatYearMonth = (year: number, monthIndex: number) =>
   `${SETTING_MONTHS[monthIndex]} ${year}`;
@@ -246,7 +256,7 @@ const Settings: React.FC<SettingsProps> = ({ currency, setCurrency, categories, 
     // 2. Reactivation
     if (showReactivationPicker && reactDraftMonth !== null && reactDraftYear !== null) {
       const reactDate = new Date(reactDraftYear, reactDraftMonth - 1, 1);
-      const deactDate = updated.deactivatedAt ? new Date(updated.deactivatedAt) : null;
+      const deactDate = updated.deactivatedAt ? parseIsoAsLocal(updated.deactivatedAt) : null;
       if (!deactDate || reactDate > deactDate) {
         updated.reactivatedFrom = `${reactDraftYear}-${String(reactDraftMonth).padStart(2, '0')}-01`;
       }
@@ -264,7 +274,7 @@ const Settings: React.FC<SettingsProps> = ({ currency, setCurrency, categories, 
     setDeactConflictSaving(true);
     setDeactConflictError(null);
 
-    const deactivationDate = new Date(deactConflictModal.deactivatedAt);
+    const deactivationDate = parseIsoAsLocal(deactConflictModal.deactivatedAt);
     // Last active month = one month before deactivation
     const lastActive = new Date(deactivationDate.getFullYear(), deactivationDate.getMonth() - 1, 1);
     const lastActiveMon = SETTING_MONTHS[lastActive.getMonth()];

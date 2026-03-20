@@ -113,6 +113,19 @@ const isLegacyBudget = (year: number, month: string): boolean => {
 };
 
 /**
+ * Parse an ISO lifecycle date string ("YYYY-MM-DD") as local-time month start.
+ *
+ * Using local time (not UTC) keeps lifecycle comparisons consistent with
+ * `new Date(year, monthIndex, 1)` used for the budget month itself.
+ * Without this, `new Date('2026-03-01')` is parsed as UTC midnight, which in
+ * UTC+ timezones falls on the previous day locally, causing off-by-one errors.
+ */
+const parseIsoMonthStart = (iso: string): Date => {
+  const [y, m] = iso.split('-').map(Number);
+  return new Date(y, m - 1, 1); // local time — day is always 01
+};
+
+/**
  * Returns true if a category should be considered "active" for the given budget month/year.
  *
  * Rules (in priority order):
@@ -136,8 +149,8 @@ const isCategoryActiveForBudget = (
   if (monthIndex < 0) return cat.active !== false; // fallback: don't hide accidentally
 
   const budgetMonthStart = new Date(selectedYear, monthIndex, 1);
-  const deactivationDate = cat.deactivatedAt ? new Date(cat.deactivatedAt) : null;
-  const reactivationDate = cat.reactivatedFrom ? new Date(cat.reactivatedFrom) : null;
+  const deactivationDate = cat.deactivatedAt ? parseIsoMonthStart(cat.deactivatedAt) : null;
+  const reactivationDate = cat.reactivatedFrom ? parseIsoMonthStart(cat.reactivatedFrom) : null;
 
   if (!deactivationDate && !reactivationDate) {
     return cat.active !== false;
@@ -185,8 +198,8 @@ const shouldRenderCategorySection = (
     const monthIndex = MONTHS.indexOf(selectedMonthName);
     if (monthIndex >= 0) {
       const budgetMonthStart = new Date(selectedYear, monthIndex, 1);
-      const deactivationDate = new Date(cat.deactivatedAt);
-      const reactivationDate = cat.reactivatedFrom ? new Date(cat.reactivatedFrom) : null;
+      const deactivationDate = parseIsoMonthStart(cat.deactivatedAt);
+      const reactivationDate = cat.reactivatedFrom ? parseIsoMonthStart(cat.reactivatedFrom) : null;
       const inGap = budgetMonthStart >= deactivationDate && (!reactivationDate || budgetMonthStart < reactivationDate);
       if (inGap) return false;
     }
@@ -214,14 +227,14 @@ const isCategoryLegacyForBudget = (
   if (monthIndex < 0) return false;
 
   const budgetMonthStart = new Date(selectedYear, monthIndex, 1);
-  const deactivationDate = new Date(cat.deactivatedAt);
+  const deactivationDate = parseIsoMonthStart(cat.deactivatedAt);
 
   // Must be visible (before deactivation cutoff)
   if (budgetMonthStart >= deactivationDate) return false;
 
   // If legacyFrom is set, only show label from that month onwards
   if (cat.legacyFrom) {
-    const legacyFromDate = new Date(cat.legacyFrom);
+    const legacyFromDate = parseIsoMonthStart(cat.legacyFrom);
     return budgetMonthStart >= legacyFromDate;
   }
 
