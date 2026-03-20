@@ -66,13 +66,13 @@ const Settings: React.FC<SettingsProps> = ({ currency, setCurrency, categories, 
 
   // ── Category Settings modal state ──────────────────────────────────────────
   const [catSettingsModal, setCatSettingsModal] = useState<{ catId: string; catName: string } | null>(null);
-  // Deactivation draft
-  const [catSettingsDraftMonth, setCatSettingsDraftMonth] = useState(1);
-  const [catSettingsDraftYear, setCatSettingsDraftYear] = useState(new Date().getFullYear());
-  // Reactivation draft
+  // Deactivation draft — null means "not set"
+  const [catSettingsDraftMonth, setCatSettingsDraftMonth] = useState<number | null>(null);
+  const [catSettingsDraftYear, setCatSettingsDraftYear] = useState<number | null>(null);
+  // Reactivation draft — null means "not set"
   const [showReactivationPicker, setShowReactivationPicker] = useState(false);
-  const [reactDraftMonth, setReactDraftMonth] = useState(1);
-  const [reactDraftYear, setReactDraftYear] = useState(new Date().getFullYear());
+  const [reactDraftMonth, setReactDraftMonth] = useState<number | null>(null);
+  const [reactDraftYear, setReactDraftYear] = useState<number | null>(null);
   // Flexi mode
   const [catSettingsDraftFlexi, setCatSettingsDraftFlexi] = useState(true);
 
@@ -114,38 +114,26 @@ const Settings: React.FC<SettingsProps> = ({ currency, setCurrency, categories, 
   // ─────────────────────────────────────────────────────────────────────────
 
   const openCatSettings = (cat: BudgetCategory) => {
-    const now = new Date();
-    const nextMonthDate = new Date(now.getFullYear(), now.getMonth() + 1, 1);
-
-    // Deactivation draft defaults
-    let month = nextMonthDate.getMonth() + 1; // 1-12
-    let year = nextMonthDate.getFullYear();
+    // Deactivation draft: pre-fill only if the category already has a date
     if (cat.deactivatedAt) {
       const parts = cat.deactivatedAt.split('-');
-      year = parseInt(parts[0], 10);
-      month = parseInt(parts[1], 10);
+      setCatSettingsDraftYear(parseInt(parts[0], 10));
+      setCatSettingsDraftMonth(parseInt(parts[1], 10));
+    } else {
+      setCatSettingsDraftMonth(null);
+      setCatSettingsDraftYear(null);
     }
-    setCatSettingsDraftMonth(month);
-    setCatSettingsDraftYear(year);
 
-    // Reactivation draft defaults
+    // Reactivation draft: pre-fill only if already set
     if (cat.reactivatedFrom) {
       const parts = cat.reactivatedFrom.split('-');
       setReactDraftYear(parseInt(parts[0], 10));
       setReactDraftMonth(parseInt(parts[1], 10));
-    } else if (cat.deactivatedAt) {
-      // Default reactivation to deactivation+1 month
-      const deactParts = cat.deactivatedAt.split('-');
-      const deactYear = parseInt(deactParts[0], 10);
-      const deactMonth = parseInt(deactParts[1], 10); // 1-12
-      const nextDate = new Date(deactYear, deactMonth, 1); // deactMonth is 1-12, used as 0-indexed month → gives deactivation + 1 month
-      setReactDraftYear(nextDate.getFullYear());
-      setReactDraftMonth(nextDate.getMonth() + 1);
     } else {
-      const d2 = new Date(now.getFullYear(), now.getMonth() + 2, 1);
-      setReactDraftYear(d2.getFullYear());
-      setReactDraftMonth(d2.getMonth() + 1);
+      setReactDraftMonth(null);
+      setReactDraftYear(null);
     }
+
     setShowReactivationPicker(!!cat.reactivatedFrom);
     setCatSettingsDraftFlexi(cat.flexiMode ?? true);
     setCatSettingsModal({ catId: cat.id, catName: cat.name });
@@ -210,6 +198,7 @@ const Settings: React.FC<SettingsProps> = ({ currency, setCurrency, categories, 
   /** Initiate deactivation — run conflict check first */
   const handleDeactivate = () => {
     if (!catSettingsModal) return;
+    if (catSettingsDraftMonth === null || catSettingsDraftYear === null) return;
     const proposedDate = new Date(catSettingsDraftYear, catSettingsDraftMonth - 1, 1);
     const isoDate = `${catSettingsDraftYear}-${String(catSettingsDraftMonth).padStart(2, '0')}-01`;
     const conflicts = buildDeactivationConflicts(catSettingsModal.catName, proposedDate);
@@ -275,20 +264,30 @@ const Settings: React.FC<SettingsProps> = ({ currency, setCurrency, categories, 
   /** Save all category settings (deactivatedAt + reactivation + flexi) */
   const handleCatSettingsSave = () => {
     if (!catSettingsModal) return;
-    const deactivatedAt = `${catSettingsDraftYear}-${String(catSettingsDraftMonth).padStart(2, '0')}-01`;
+
+    // Only build deactivatedAt when both fields are explicitly set
+    let deactivatedAt: string | undefined;
+    if (catSettingsDraftMonth !== null && catSettingsDraftYear !== null) {
+      deactivatedAt = `${catSettingsDraftYear}-${String(catSettingsDraftMonth).padStart(2, '0')}-01`;
+    }
 
     let reactivatedFrom: string | undefined;
-    if (showReactivationPicker) {
-      const deactDate = new Date(catSettingsDraftYear, catSettingsDraftMonth - 1, 1);
+    if (showReactivationPicker && reactDraftMonth !== null && reactDraftYear !== null) {
       const reactDate = new Date(reactDraftYear, reactDraftMonth - 1, 1);
-      if (reactDate > deactDate) {
+      const deactDate = deactivatedAt ? new Date(catSettingsDraftYear!, catSettingsDraftMonth! - 1, 1) : null;
+      if (!deactDate || reactDate > deactDate) {
         reactivatedFrom = `${reactDraftYear}-${String(reactDraftMonth).padStart(2, '0')}-01`;
       }
     }
 
     setCategories(prev => prev.map(c => {
       if (c.id !== catSettingsModal.catId) return c;
-      const updated: BudgetCategory = { ...c, deactivatedAt, flexiMode: catSettingsDraftFlexi };
+      const updated: BudgetCategory = { ...c, flexiMode: catSettingsDraftFlexi };
+      if (deactivatedAt) {
+        updated.deactivatedAt = deactivatedAt;
+      } else {
+        delete updated.deactivatedAt;
+      }
       if (reactivatedFrom) {
         updated.reactivatedFrom = reactivatedFrom;
       } else {
@@ -878,9 +877,13 @@ const Settings: React.FC<SettingsProps> = ({ currency, setCurrency, categories, 
             const years = Array.from({ length: 8 }, (_, i) => currentYear - 1 + i);
 
             // Compute which reactivation months/years are allowed (strictly after deactivation)
-            const deactDate = new Date(catSettingsDraftYear, catSettingsDraftMonth - 1, 1);
-            const reactDate = new Date(reactDraftYear, reactDraftMonth - 1, 1);
-            const reactIsValid = reactDate > deactDate;
+            const deactDate = catSettingsDraftMonth !== null && catSettingsDraftYear !== null
+              ? new Date(catSettingsDraftYear, catSettingsDraftMonth - 1, 1)
+              : null;
+            const reactDate = reactDraftMonth !== null && reactDraftYear !== null
+              ? new Date(reactDraftYear, reactDraftMonth - 1, 1)
+              : null;
+            const reactIsValid = deactDate !== null && reactDate !== null && reactDate > deactDate;
 
             return (
               <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-end justify-center sm:items-center p-4" onClick={closeCatSettings}>
@@ -903,19 +906,21 @@ const Settings: React.FC<SettingsProps> = ({ currency, setCurrency, categories, 
                     </p>
                     <div className="flex gap-2">
                       <select
-                        value={catSettingsDraftMonth}
-                        onChange={e => setCatSettingsDraftMonth(Number(e.target.value))}
+                        value={catSettingsDraftMonth ?? ''}
+                        onChange={e => setCatSettingsDraftMonth(e.target.value === '' ? null : Number(e.target.value))}
                         className="flex-1 bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 text-xs font-bold text-gray-700 outline-none focus:ring-2 focus:ring-indigo-400"
                       >
+                        <option value="">— Month —</option>
                         {SETTING_MONTHS.map((m, i) => (
                           <option key={m} value={i + 1}>{m}</option>
                         ))}
                       </select>
                       <select
-                        value={catSettingsDraftYear}
-                        onChange={e => setCatSettingsDraftYear(Number(e.target.value))}
+                        value={catSettingsDraftYear ?? ''}
+                        onChange={e => setCatSettingsDraftYear(e.target.value === '' ? null : Number(e.target.value))}
                         className="w-24 bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 text-xs font-bold text-gray-700 outline-none focus:ring-2 focus:ring-indigo-400"
                       >
+                        <option value="">— Year —</option>
                         {years.map(y => (
                           <option key={y} value={y}>{y}</option>
                         ))}
@@ -948,23 +953,25 @@ const Settings: React.FC<SettingsProps> = ({ currency, setCurrency, categories, 
                       <div className="pl-2 space-y-2">
                         <div className="flex gap-2">
                           <select
-                            value={reactDraftMonth}
-                            onChange={e => setReactDraftMonth(Number(e.target.value))}
+                            value={reactDraftMonth ?? ''}
+                            onChange={e => setReactDraftMonth(e.target.value === '' ? null : Number(e.target.value))}
                             className="flex-1 bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 text-xs font-bold text-gray-700 outline-none focus:ring-2 focus:ring-green-400"
                           >
+                            <option value="">— Month —</option>
                             {SETTING_MONTHS.map((m, i) => {
-                              const candidate = new Date(reactDraftYear, i, 1);
-                              const disabled = candidate <= deactDate;
+                              const candidate = new Date(reactDraftYear ?? new Date().getFullYear(), i, 1);
+                              const disabled = deactDate !== null && candidate <= deactDate;
                               return (
                                 <option key={m} value={i + 1} disabled={disabled}>{m}{disabled ? ' ✕' : ''}</option>
                               );
                             })}
                           </select>
                           <select
-                            value={reactDraftYear}
-                            onChange={e => setReactDraftYear(Number(e.target.value))}
+                            value={reactDraftYear ?? ''}
+                            onChange={e => setReactDraftYear(e.target.value === '' ? null : Number(e.target.value))}
                             className="w-24 bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 text-xs font-bold text-gray-700 outline-none focus:ring-2 focus:ring-green-400"
                           >
+                            <option value="">— Year —</option>
                             {years.map(y => (
                               <option key={y} value={y}>{y}</option>
                             ))}
@@ -1015,7 +1022,8 @@ const Settings: React.FC<SettingsProps> = ({ currency, setCurrency, categories, 
                   {!isDeactivated && (
                     <button
                       onClick={handleDeactivate}
-                      className="w-full py-3 rounded-xl font-black text-xs uppercase tracking-widest border bg-amber-50 border-amber-200 text-amber-700 hover:bg-amber-100 transition-colors"
+                      disabled={catSettingsDraftMonth === null || catSettingsDraftYear === null}
+                      className="w-full py-3 rounded-xl font-black text-xs uppercase tracking-widest border bg-amber-50 border-amber-200 text-amber-700 hover:bg-amber-100 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                     >
                       ↓ Deactivate from Selected Month
                     </button>
