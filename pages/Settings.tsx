@@ -89,6 +89,8 @@ const Settings: React.FC<SettingsProps> = ({ currency, setCurrency, categories, 
   } | null>(null);
   const [deactConflictSaving, setDeactConflictSaving] = useState(false);
   const [deactConflictError, setDeactConflictError] = useState<string | null>(null);
+  // Full pending category update — stored when conflicts are found so the conflict modal can apply everything atomically
+  const [deactConflictPendingCategory, setDeactConflictPendingCategory] = useState<BudgetCategory | null>(null);
 
   // ── Delete reassignment modal ──────────────────────────────────────────────
   const [deleteModal, setDeleteModal] = useState<{
@@ -201,41 +203,62 @@ const Settings: React.FC<SettingsProps> = ({ currency, setCurrency, categories, 
     return conflicts;
   };
 
-  /** Initiate deactivation — run conflict check first */
-  const handleDeactivate = () => {
+  /** Save all category settings (subcategories + deactivation + reactivation + flexi).
+   *  Runs deactivation conflict check inline — shows conflict modal and returns early if conflicts found. */
+  const handleCatSettingsSave = () => {
     if (!catSettingsModal) return;
-    if (catSettingsDraftMonth === null || catSettingsDraftYear === null) return;
-    const proposedDate = new Date(catSettingsDraftYear, catSettingsDraftMonth - 1, 1);
-    const isoDate = `${catSettingsDraftYear}-${String(catSettingsDraftMonth).padStart(2, '0')}-01`;
-    const conflicts = buildDeactivationConflicts(catSettingsModal.catName, proposedDate);
+    const cat = categories.find(c => c.id === catSettingsModal.catId);
+    if (!cat) return;
 
-    if (conflicts.length === 0) {
-      // No conflicts — save directly
-      applyDeactivation(catSettingsModal.catId, isoDate);
-      closeCatSettings();
+    // Build the full updated category
+    const updated: BudgetCategory = { ...cat, subcategories: localSubcats, flexiMode: catSettingsDraftFlexi };
+
+    // 1. Deactivation
+    if (catSettingsDraftMonth !== null && catSettingsDraftYear !== null) {
+      const isoDate = `${catSettingsDraftYear}-${String(catSettingsDraftMonth).padStart(2, '0')}-01`;
+      updated.deactivatedAt = isoDate;
+      updated.active = false;
+
+      // Only run conflict check when the deactivation date has changed
+      if (isoDate !== cat.deactivatedAt) {
+        const proposedDate = new Date(catSettingsDraftYear, catSettingsDraftMonth - 1, 1);
+        const conflicts = buildDeactivationConflicts(catSettingsModal.catName, proposedDate);
+        if (conflicts.length > 0) {
+          const prevMonthDate = new Date(proposedDate.getFullYear(), proposedDate.getMonth() - 1, 1);
+          const lastActiveLabel = formatYearMonth(prevMonthDate.getFullYear(), prevMonthDate.getMonth());
+          setDeactConflictPendingCategory(updated);
+          setDeactConflictModal({
+            catId: catSettingsModal.catId,
+            catName: catSettingsModal.catName,
+            deactivatedAt: isoDate,
+            lastActiveLabel,
+            conflicts,
+          });
+          closeCatSettings();
+          return;
+        }
+      }
     } else {
-      // Show conflict modal
-      const prevMonthDate = new Date(proposedDate.getFullYear(), proposedDate.getMonth() - 1, 1);
-      const lastActiveLabel = formatYearMonth(prevMonthDate.getFullYear(), prevMonthDate.getMonth());
-      setDeactConflictModal({
-        catId: catSettingsModal.catId,
-        catName: catSettingsModal.catName,
-        deactivatedAt: isoDate,
-        lastActiveLabel,
-        conflicts,
-      });
-      closeCatSettings();
+      delete updated.deactivatedAt;
+      updated.active = true;
     }
+
+    // 2. Reactivation
+    if (showReactivationPicker && reactDraftMonth !== null && reactDraftYear !== null) {
+      const reactDate = new Date(reactDraftYear, reactDraftMonth - 1, 1);
+      const deactDate = updated.deactivatedAt ? new Date(updated.deactivatedAt) : null;
+      if (!deactDate || reactDate > deactDate) {
+        updated.reactivatedFrom = `${reactDraftYear}-${String(reactDraftMonth).padStart(2, '0')}-01`;
+      }
+    } else {
+      delete updated.reactivatedFrom;
+    }
+
+    setCategories(prev => prev.map(c => c.id === catSettingsModal.catId ? updated : c));
+    closeCatSettings();
   };
 
-  const applyDeactivation = (catId: string, deactivatedAt: string) => {
-    setCategories(prev => prev.map(c => {
-      if (c.id !== catId) return c;
-      return { ...c, active: false, deactivatedAt };
-    }));
-  };
-
-  /** Align conflicting billers to end on lastActiveMonth, then save deactivation */
+  /** Align conflicting billers to end on lastActiveMonth, then apply full pending category update */
   const handleAlignAndDeactivate = async () => {
     if (!deactConflictModal || !onUpdateBiller) return;
     setDeactConflictSaving(true);
@@ -250,71 +273,26 @@ const Settings: React.FC<SettingsProps> = ({ currency, setCurrency, categories, 
     try {
       for (const conflict of deactConflictModal.conflicts) {
         if (conflict.type === 'biller' && conflict.biller) {
-          const updated: Biller = {
+          const updatedBiller: Biller = {
             ...conflict.biller,
             deactivationDate: { month: lastActiveMon, year: lastActiveYr },
           };
-          await onUpdateBiller(updated);
+          await onUpdateBiller(updatedBiller);
         }
       }
-      // All updates succeeded — save deactivation
-      applyDeactivation(deactConflictModal.catId, deactConflictModal.deactivatedAt);
+      // Apply the full pending category update (includes subcats, flexi, deactivation, reactivation)
+      if (deactConflictPendingCategory) {
+        setCategories(prev => prev.map(c =>
+          c.id === deactConflictModal.catId ? deactConflictPendingCategory : c
+        ));
+        setDeactConflictPendingCategory(null);
+      }
       setDeactConflictModal(null);
     } catch {
       setDeactConflictError('Some items could not be updated. Please try again.');
     } finally {
       setDeactConflictSaving(false);
     }
-  };
-
-  /** Save all category settings (deactivatedAt + reactivation + flexi) */
-  const handleCatSettingsSave = () => {
-    if (!catSettingsModal) return;
-
-    // Only build deactivatedAt when both fields are explicitly set
-    let deactivatedAt: string | undefined;
-    if (catSettingsDraftMonth !== null && catSettingsDraftYear !== null) {
-      deactivatedAt = `${catSettingsDraftYear}-${String(catSettingsDraftMonth).padStart(2, '0')}-01`;
-    }
-
-    let reactivatedFrom: string | undefined;
-    if (showReactivationPicker && reactDraftMonth !== null && reactDraftYear !== null) {
-      const reactDate = new Date(reactDraftYear, reactDraftMonth - 1, 1);
-      const deactDate = deactivatedAt ? new Date(catSettingsDraftYear!, catSettingsDraftMonth! - 1, 1) : null;
-      if (!deactDate || reactDate > deactDate) {
-        reactivatedFrom = `${reactDraftYear}-${String(reactDraftMonth).padStart(2, '0')}-01`;
-      }
-    }
-
-    setCategories(prev => prev.map(c => {
-      if (c.id !== catSettingsModal.catId) return c;
-      const updated: BudgetCategory = { ...c, subcategories: localSubcats, flexiMode: catSettingsDraftFlexi };
-      if (deactivatedAt) {
-        updated.deactivatedAt = deactivatedAt;
-      } else {
-        delete updated.deactivatedAt;
-      }
-      if (reactivatedFrom) {
-        updated.reactivatedFrom = reactivatedFrom;
-      } else {
-        delete updated.reactivatedFrom;
-      }
-      return updated;
-    }));
-    closeCatSettings();
-  };
-
-  /** Fully reactivate (remove deactivatedAt + reactivatedFrom, set active: true) */
-  const handleFullReactivate = () => {
-    if (!catSettingsModal) return;
-    setCategories(prev => prev.map(c => {
-      if (c.id !== catSettingsModal.catId) return c;
-      const updated: BudgetCategory = { ...c, active: true };
-      delete updated.deactivatedAt;
-      delete updated.reactivatedFrom;
-      return updated;
-    }));
-    closeCatSettings();
   };
 
   // ─── Delete Category ───────────────────────────────────────────────────────
@@ -967,6 +945,15 @@ const Settings: React.FC<SettingsProps> = ({ currency, setCurrency, categories, 
                       </select>
                     </div>
                     <p className="text-[9px] text-gray-400">From this month onwards the category will no longer appear in new budgets.</p>
+                    {catSettingsDraftMonth !== null && catSettingsDraftYear !== null && (
+                      <button
+                        type="button"
+                        onClick={() => { setCatSettingsDraftMonth(null); setCatSettingsDraftYear(null); }}
+                        className="text-[9px] text-red-400 hover:text-red-600 font-bold uppercase tracking-widest transition-colors"
+                      >
+                        Remove deactivation
+                      </button>
+                    )}
                   </div>
 
                   {/* Reactivation toggle + picker */}
@@ -1027,7 +1014,7 @@ const Settings: React.FC<SettingsProps> = ({ currency, setCurrency, categories, 
                         )}
                         <button
                           type="button"
-                          onClick={() => { setShowReactivationPicker(false); }}
+                          onClick={() => { setShowReactivationPicker(false); setReactDraftMonth(null); setReactDraftYear(null); }}
                           className="text-[9px] text-gray-400 hover:text-red-500 font-bold uppercase tracking-widest"
                         >
                           Remove reactivation date
@@ -1057,27 +1044,6 @@ const Settings: React.FC<SettingsProps> = ({ currency, setCurrency, categories, 
                   >
                     Save Settings
                   </button>
-
-                  {/* Deactivate with conflict check */}
-                  {!isDeactivated && (
-                    <button
-                      onClick={handleDeactivate}
-                      disabled={catSettingsDraftMonth === null || catSettingsDraftYear === null}
-                      className="w-full py-3 rounded-xl font-black text-xs uppercase tracking-widest border bg-amber-50 border-amber-200 text-amber-700 hover:bg-amber-100 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-                    >
-                      ↓ Deactivate from Selected Month
-                    </button>
-                  )}
-
-                  {/* Full reactivate (remove deactivation) */}
-                  {isDeactivated && (
-                    <button
-                      onClick={handleFullReactivate}
-                      className="w-full py-3 rounded-xl font-black text-xs uppercase tracking-widest border bg-green-50 border-green-200 text-green-700 hover:bg-green-100 transition-colors"
-                    >
-                      ↑ Remove Deactivation (Fully Reactivate)
-                    </button>
-                  )}
 
                   {/* Delete */}
                   <button
