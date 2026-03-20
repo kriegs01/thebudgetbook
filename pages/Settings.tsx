@@ -62,7 +62,6 @@ const Settings: React.FC<SettingsProps> = ({ currency, setCurrency, categories, 
   const [openSection, setOpenSection] = useState<string | null>(null);
   const [newCatName, setNewCatName] = useState('');
   const [showAddCat, setShowAddCat] = useState(false);
-  const [newSubcatNames, setNewSubcatNames] = useState<{ [id: string]: string }>({});
 
   // ── Category Settings modal state ──────────────────────────────────────────
   const [catSettingsModal, setCatSettingsModal] = useState<{ catId: string; catName: string } | null>(null);
@@ -75,6 +74,10 @@ const Settings: React.FC<SettingsProps> = ({ currency, setCurrency, categories, 
   const [reactDraftYear, setReactDraftYear] = useState<number | null>(null);
   // Flexi mode
   const [catSettingsDraftFlexi, setCatSettingsDraftFlexi] = useState(true);
+  // Subcategories draft (local to modal — only written on Save)
+  const [localSubcats, setLocalSubcats] = useState<string[]>([]);
+  const [newSubcatInput, setNewSubcatInput] = useState('');
+  const [showSubcatSection, setShowSubcatSection] = useState(true);
 
   // ── Deactivation conflict modal ────────────────────────────────────────────
   const [deactConflictModal, setDeactConflictModal] = useState<{
@@ -136,6 +139,9 @@ const Settings: React.FC<SettingsProps> = ({ currency, setCurrency, categories, 
 
     setShowReactivationPicker(!!cat.reactivatedFrom);
     setCatSettingsDraftFlexi(cat.flexiMode ?? true);
+    setLocalSubcats(cat.subcategories ?? []);
+    setNewSubcatInput('');
+    setShowSubcatSection(true);
     setCatSettingsModal({ catId: cat.id, catName: cat.name });
   };
 
@@ -282,7 +288,7 @@ const Settings: React.FC<SettingsProps> = ({ currency, setCurrency, categories, 
 
     setCategories(prev => prev.map(c => {
       if (c.id !== catSettingsModal.catId) return c;
-      const updated: BudgetCategory = { ...c, flexiMode: catSettingsDraftFlexi };
+      const updated: BudgetCategory = { ...c, subcategories: localSubcats, flexiMode: catSettingsDraftFlexi };
       if (deactivatedAt) {
         updated.deactivatedAt = deactivatedAt;
       } else {
@@ -435,29 +441,6 @@ const Settings: React.FC<SettingsProps> = ({ currency, setCurrency, categories, 
     setCategories(prev => [...prev, { id: Math.random().toString(36).substr(2, 9), name: newCatName.trim(), subcategories: [] }]);
     setNewCatName('');
     setShowAddCat(false);
-  };
-
-  const handleAddSubcategory = (catId: string) => {
-    const name = newSubcatNames[catId];
-    if (!name?.trim()) return;
-    setCategories(prev => prev.map(c => 
-      c.id === catId ? { ...c, subcategories: [...c.subcategories, name.trim()] } : c
-    ));
-    setNewSubcatNames(prev => ({ ...prev, [catId]: '' }));
-  };
-
-  const handleDeleteSubcategory = (catId: string, subName: string) => {
-    setConfirmModal({
-      show: true,
-      title: 'Remove Subcategory',
-      message: `Remove "${subName}" from this category?`,
-      onConfirm: () => {
-        setCategories(prev => prev.map(c => 
-          c.id === catId ? { ...c, subcategories: c.subcategories.filter(s => s !== subName) } : c
-        ));
-        setConfirmModal(p => ({ ...p, show: false }));
-      }
-    });
   };
 
   // Function to copy production data to test tables
@@ -791,10 +774,10 @@ const Settings: React.FC<SettingsProps> = ({ currency, setCurrency, categories, 
       content: (
         <div className="space-y-6 pt-2">
           {categories.map(cat => (
-            <div key={cat.id} className={`p-4 rounded-[2rem] border space-y-4 ${cat.active === false ? 'bg-amber-50/40 border-amber-100' : 'bg-gray-50 border-gray-100'}`}>
-              {/* Category header: name + legacy badge + three-dot menu */}
+            <div key={cat.id} className={`p-4 rounded-[2rem] border ${cat.active === false ? 'bg-amber-50/40 border-amber-100' : 'bg-gray-50 border-gray-100'}`}>
+              {/* Category header: name + badges + three-dot menu */}
               <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 flex-wrap">
                   <span className="text-sm font-black text-gray-900 uppercase tracking-widest">{cat.name}</span>
                   {cat.deactivatedAt && (
                     <span className="text-[9px] font-black text-amber-600 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full uppercase tracking-wider">Legacy</span>
@@ -811,32 +794,18 @@ const Settings: React.FC<SettingsProps> = ({ currency, setCurrency, categories, 
                   <MoreVertical className="w-4 h-4" />
                 </button>
               </div>
-              
-              <div className="flex flex-wrap gap-2">
-                {cat.subcategories.map(sub => (
-                  <div key={sub} className="flex items-center space-x-2 px-3 py-1 bg-white border border-gray-200 rounded-full group">
-                    <span className="text-[10px] font-bold text-gray-600">{sub}</span>
-                    <button onClick={() => handleDeleteSubcategory(cat.id, sub)} className="opacity-0 group-hover:opacity-100 text-gray-300 hover:text-red-500 transition-all">
-                      <X className="w-3 h-3" />
-                    </button>
-                  </div>
-                ))}
-              </div>
-
-              <div className="flex space-x-2">
-                <input 
-                  type="text" 
-                  placeholder="New Subcategory..." 
-                  value={newSubcatNames[cat.id] || ''} 
-                  onChange={(e) => setNewSubcatNames({ ...newSubcatNames, [cat.id]: e.target.value })}
-                  className="flex-1 bg-white border border-gray-100 rounded-xl px-4 py-2 text-xs font-medium outline-none focus:ring-1 focus:ring-indigo-200"
-                />
-                <button 
-                  onClick={() => handleAddSubcategory(cat.id)}
-                  className="p-2 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 transition-colors"
+              {/* Compact meta row */}
+              <div className="flex items-center gap-3 mt-2">
+                <button
+                  onClick={() => openCatSettings(cat)}
+                  className="text-[10px] font-bold text-gray-400 hover:text-indigo-500 transition-colors"
                 >
-                  <Plus className="w-4 h-4" />
+                  {cat.subcategories.length} subcategor{cat.subcategories.length === 1 ? 'y' : 'ies'}
                 </button>
+                <span className="text-gray-200">·</span>
+                <span className="text-[10px] font-bold text-gray-400">
+                  Flexi: {cat.flexiMode === false ? 'Off' : 'On'}
+                </span>
               </div>
             </div>
           ))}
@@ -897,6 +866,77 @@ const Settings: React.FC<SettingsProps> = ({ currency, setCurrency, categories, 
                     <button onClick={closeCatSettings} className="text-gray-300 hover:text-gray-600 transition-colors">
                       <X className="w-5 h-5" />
                     </button>
+                  </div>
+
+                  {/* Subcategories section (collapsible) */}
+                  <div className="space-y-2">
+                    <button
+                      type="button"
+                      onClick={() => setShowSubcatSection(p => !p)}
+                      className="flex items-center justify-between w-full"
+                    >
+                      <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Subcategories</p>
+                      <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform ${showSubcatSection ? 'rotate-180' : ''}`} />
+                    </button>
+
+                    {showSubcatSection && (
+                      <div className="space-y-2">
+                        {/* Existing subcategory chips */}
+                        {localSubcats.length > 0 && (
+                          <div className="flex flex-wrap gap-1.5">
+                            {localSubcats.map(sub => (
+                              <div key={sub} className="flex items-center gap-1.5 px-3 py-1 bg-gray-100 rounded-full">
+                                <span className="text-[10px] font-bold text-gray-600">{sub}</span>
+                                <button
+                                  type="button"
+                                  onClick={() => setLocalSubcats(prev => prev.filter(s => s !== sub))}
+                                  className="text-gray-400 hover:text-red-500 transition-colors"
+                                >
+                                  <X className="w-3 h-3" />
+                                </button>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                        {localSubcats.length === 0 && (
+                          <p className="text-[10px] text-gray-400 italic">No subcategories yet.</p>
+                        )}
+
+                        {/* Add new subcategory */}
+                        <div className="flex gap-2">
+                          <input
+                            type="text"
+                            placeholder="New subcategory…"
+                            value={newSubcatInput}
+                            onChange={e => setNewSubcatInput(e.target.value)}
+                            onKeyDown={e => {
+                              if (e.key === 'Enter') {
+                                e.preventDefault();
+                                const trimmed = newSubcatInput.trim();
+                                if (trimmed && !localSubcats.includes(trimmed)) {
+                                  setLocalSubcats(prev => [...prev, trimmed]);
+                                  setNewSubcatInput('');
+                                }
+                              }
+                            }}
+                            className="flex-1 bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 text-xs font-bold text-gray-700 outline-none focus:ring-2 focus:ring-indigo-400"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const trimmed = newSubcatInput.trim();
+                              if (trimmed && !localSubcats.includes(trimmed)) {
+                                setLocalSubcats(prev => [...prev, trimmed]);
+                                setNewSubcatInput('');
+                              }
+                            }}
+                            className="p-2 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 transition-colors"
+                          >
+                            <Plus className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </div>
+                    )}
                   </div>
 
                   {/* Deactivation date picker */}
