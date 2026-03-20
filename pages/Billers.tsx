@@ -906,18 +906,38 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
     }
   };
 
-  const renderCategoryOptions = () => (
-    <>
-      {categories.map(c => (
-        <React.Fragment key={c.id}>
-          <option value={c.name} className="font-bold">{c.name}</option>
-          {c.subcategories.map(sub => (
-            <option key={`${c.id}-${sub}`} value={`${c.name} - ${sub}`}>&nbsp;&nbsp;&nbsp;{sub}</option>
-          ))}
-        </React.Fragment>
-      ))}
-    </>
-  );
+  const renderCategoryOptions = () => {
+    // Filter out legacy/inactive categories for new biller creation.
+    // A category is considered inactive when active === false AND its deactivatedAt date
+    // is in the past (or present) relative to today.
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const activeCats = categories.filter(c => {
+      if (c.active === false) {
+        if (!c.deactivatedAt) return false;
+        const deactivationDate = (() => {
+          const [y, m] = c.deactivatedAt.split('-').map(Number);
+          return new Date(y, m - 1, 1); // local time, same as `today`
+        })();
+        // Category is hidden from the deactivation month onwards (inclusive).
+        // Show only if today falls strictly before the deactivation date (first of that month).
+        return today < deactivationDate;
+      }
+      return true;
+    });
+    return (
+      <>
+        {activeCats.map(c => (
+          <React.Fragment key={c.id}>
+            <option value={c.name} className="font-bold">{c.name}</option>
+            {c.subcategories.map(sub => (
+              <option key={`${c.id}-${sub}`} value={`${c.name} - ${sub}`}>&nbsp;&nbsp;&nbsp;{sub}</option>
+            ))}
+          </React.Fragment>
+        ))}
+      </>
+    );
+  };
 
   // Calculate expected amount from linked installments or linked credit account for Loans billers
   const getExpectedAmount = (biller: Biller): number => {

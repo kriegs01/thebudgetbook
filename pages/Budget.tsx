@@ -113,6 +113,135 @@ const isLegacyBudget = (year: number, month: string): boolean => {
 };
 
 /**
+ * Parse an ISO lifecycle date string ("YYYY-MM-DD") as local-time month start.
+ *
+ * Using local time (not UTC) keeps lifecycle comparisons consistent with
+ * `new Date(year, monthIndex, 1)` used for the budget month itself.
+ * Without this, `new Date('2026-03-01')` is parsed as UTC midnight, which in
+ * UTC+ timezones falls on the previous day locally, causing off-by-one errors.
+ */
+const parseIsoMonthStart = (iso: string): Date => {
+  const [y, m] = iso.split('-').map(Number);
+  return new Date(y, m - 1, 1); // local time — day is always 01
+};
+
+/**
+ * Returns true if a category should be considered "active" for the given budget month/year.
+ *
+ * Rules (in priority order):
+ * 1. Deactivation only (`deactivatedAt` set, no `reactivatedFrom`):
+ *    - Active for months strictly BEFORE deactivatedAt; hidden from that month onwards.
+ * 2. Deactivation + reactivation (`deactivatedAt` AND `reactivatedFrom` set):
+ *    - Active before deactivatedAt.
+ *    - Hidden in the gap [deactivatedAt, reactivatedFrom).
+ *    - Active again from reactivatedFrom onwards (inclusive).
+ * 3. Reactivation only (`reactivatedFrom` set, no `deactivatedAt`):
+ *    - Active from reactivatedFrom onwards; hidden before it.
+ * 4. No lifecycle dates: active if `cat.active !== false`.
+ * - Handles missing/invalid month names gracefully (returns true to avoid accidentally hiding sections).
+ */
+const isCategoryActiveForBudget = (
+  cat: BudgetCategory,
+  selectedYear: number,
+  selectedMonthName: string
+): boolean => {
+  const monthIndex = MONTHS.indexOf(selectedMonthName);
+  if (monthIndex < 0) return cat.active !== false; // fallback: don't hide accidentally
+
+  const budgetMonthStart = new Date(selectedYear, monthIndex, 1);
+  const deactivationDate = cat.deactivatedAt ? parseIsoMonthStart(cat.deactivatedAt) : null;
+  const reactivationDate = cat.reactivatedFrom ? parseIsoMonthStart(cat.reactivatedFrom) : null;
+
+  if (!deactivationDate && !reactivationDate) {
+    return cat.active !== false;
+  }
+
+  // Deactivation only
+  if (deactivationDate && !reactivationDate) {
+    return budgetMonthStart < deactivationDate;
+  }
+
+  // Reactivation only (rare)
+  if (!deactivationDate && reactivationDate) {
+    return budgetMonthStart >= reactivationDate;
+  }
+
+  // Deactivation + reactivation gap logic
+  if (budgetMonthStart < deactivationDate!) {
+    return true; // before deactivation
+  }
+  if (reactivationDate && budgetMonthStart >= reactivationDate) {
+    return true; // from reactivation onwards
+  }
+  return false; // in the gap [deactivatedAt, reactivatedFrom)
+};
+
+/**
+ * Returns true if a category section should be rendered for the given budget month/year.
+ *
+ * Key distinction from `isCategoryActiveForBudget`:
+ * - When a `deactivatedAt` date is set and the budget month is AT or AFTER that cutoff
+ *   (and before any `reactivatedFrom`), the section is NEVER rendered — even if `setupData`
+ *   still has items. This prevents legacy data from leaking into months at/after the cutoff.
+ * - Before the cutoff, or after reactivation, the section renders if the category is active OR has data.
+ */
+const shouldRenderCategorySection = (
+  cat: BudgetCategory,
+  hasData: boolean,
+  selectedYear: number,
+  selectedMonthName: string
+): boolean => {
+  const isActive = isCategoryActiveForBudget(cat, selectedYear, selectedMonthName);
+
+  // Hard cutoff: if the category is in its deactivation gap, never render
+  if (cat.deactivatedAt) {
+    const monthIndex = MONTHS.indexOf(selectedMonthName);
+    if (monthIndex >= 0) {
+      const budgetMonthStart = new Date(selectedYear, monthIndex, 1);
+      const deactivationDate = parseIsoMonthStart(cat.deactivatedAt);
+      const reactivationDate = cat.reactivatedFrom ? parseIsoMonthStart(cat.reactivatedFrom) : null;
+      const inGap = budgetMonthStart >= deactivationDate && (!reactivationDate || budgetMonthStart < reactivationDate);
+      if (inGap) return false;
+    }
+  }
+
+  return isActive || hasData;
+};
+
+/**
+ * Returns true if a "Legacy" label should be shown for the category in the given month.
+ *
+ * A category is "Legacy" for a given month when:
+ * - It has a `deactivatedAt` date, AND
+ * - It is currently visible (before the deactivation cutoff, or after reactivation), AND
+ * - If `legacyFrom` is set, the budget month must be >= legacyFrom.
+ */
+const isCategoryLegacyForBudget = (
+  cat: BudgetCategory,
+  selectedYear: number,
+  selectedMonthName: string
+): boolean => {
+  if (!cat.deactivatedAt) return false;
+
+  const monthIndex = MONTHS.indexOf(selectedMonthName);
+  if (monthIndex < 0) return false;
+
+  const budgetMonthStart = new Date(selectedYear, monthIndex, 1);
+  const deactivationDate = parseIsoMonthStart(cat.deactivatedAt);
+
+  // Must be visible (before deactivation cutoff)
+  if (budgetMonthStart >= deactivationDate) return false;
+
+  // If legacyFrom is set, only show label from that month onwards
+  if (cat.legacyFrom) {
+    const legacyFromDate = parseIsoMonthStart(cat.legacyFrom);
+    return budgetMonthStart >= legacyFromDate;
+  }
+
+  return true; // has deactivatedAt and is still visible → always legacy
+};
+
+/**
  * Calculates the remaining amount for a saved budget setup.
  * Uses the same formula as the Budget Setup page's Month Summary:
  *   remaining = salaryToUse - setup.totalAmount
@@ -1928,30 +2057,42 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
     );
   }
 
-  const categorySummary = categories.map((cat) => {
-    const items = setupData[cat.name] || [];
-    const itemsTotal = items.filter(i => i.included).reduce((sum, item) => sum + (parseFloat(item.amount) || 0), 0);
-    
-    // FIX: Include installments for Loans category (same logic as Setup view)
-    let installmentsTotal = 0;
-    if (cat.name === 'Loans') {
-      installmentsTotal = installments
-        .filter(inst => {
-          const timingMatch = !inst.timing || inst.timing === selectedTiming;
-          const scheduleForMonth = getPaymentSchedule('installment', inst.id, selectedMonth, selectedYear);
-          const isActiveForPeriod = scheduleForMonth !== undefined || shouldShowInstallment(inst, selectedMonth, selectedYear);
-          // Only hide when there is NO schedule for this period AND the total is fully paid.
-          // When a schedule exists for the viewed period, always keep the row visible so the
-          // user can see the paid/partial indicator rather than the row disappearing on payment.
-          const isFinished = !scheduleForMonth && inst.totalAmount > 0 && inst.paidAmount >= inst.totalAmount;
-          const notExcluded = !excludedInstallmentIds.has(inst.id);
-          return timingMatch && isActiveForPeriod && !isFinished && notExcluded;
-        })
-        .reduce((s, inst) => s + inst.monthlyAmount, 0);
-    }
-    
-    return { category: cat.name, total: itemsTotal + installmentsTotal };
-  });
+  const categorySummary = categories
+    .filter(cat => {
+      const catItems = setupData[cat.name] || [];
+      const hasLoansData = cat.name === 'Loans' && installments.some(inst => {
+        const timingMatch = !inst.timing || inst.timing === selectedTiming;
+        const scheduleForMonth = getPaymentSchedule('installment', inst.id, selectedMonth, selectedYear);
+        const isActiveForPeriod = scheduleForMonth !== undefined || shouldShowInstallment(inst, selectedMonth, selectedYear);
+        const isFinished = !scheduleForMonth && inst.totalAmount > 0 && inst.paidAmount >= inst.totalAmount;
+        return timingMatch && isActiveForPeriod && !isFinished && !excludedInstallmentIds.has(inst.id);
+      });
+      return shouldRenderCategorySection(cat, catItems.length > 0 || hasLoansData, selectedYear, selectedMonth);
+    })
+    .map((cat) => {
+      const items = setupData[cat.name] || [];
+      const itemsTotal = items.filter(i => i.included).reduce((sum, item) => sum + (parseFloat(item.amount) || 0), 0);
+
+      // FIX: Include installments for Loans category (same logic as Setup view)
+      let installmentsTotal = 0;
+      if (cat.name === 'Loans') {
+        installmentsTotal = installments
+          .filter(inst => {
+            const timingMatch = !inst.timing || inst.timing === selectedTiming;
+            const scheduleForMonth = getPaymentSchedule('installment', inst.id, selectedMonth, selectedYear);
+            const isActiveForPeriod = scheduleForMonth !== undefined || shouldShowInstallment(inst, selectedMonth, selectedYear);
+            // Only hide when there is NO schedule for this period AND the total is fully paid.
+            // When a schedule exists for the viewed period, always keep the row visible so the
+            // user can see the paid/partial indicator rather than the row disappearing on payment.
+            const isFinished = !scheduleForMonth && inst.totalAmount > 0 && inst.paidAmount >= inst.totalAmount;
+            const notExcluded = !excludedInstallmentIds.has(inst.id);
+            return timingMatch && isActiveForPeriod && !isFinished && notExcluded;
+          })
+          .reduce((s, inst) => s + inst.monthlyAmount, 0);
+      }
+
+      return { category: cat.name, total: itemsTotal + installmentsTotal };
+    });
   // Include stash wallet targets for wallets not excluded from the grand total
   // Use the actual funded amount when it exceeds the target (over-funded stash)
   const stashTotal = wallets.filter(w => !excludedWalletIds.has(w.id)).reduce((s, w) => s + Math.max(w.amount, getStashAggregates(w).funded), 0);
@@ -2246,10 +2387,17 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
         {/* Fixed category - full width with account and settle columns */}
         {categories.filter(cat => cat.name === 'Fixed').map((cat) => {
           const items = setupData[cat.name] || [];
+          const shouldRenderCategory = shouldRenderCategorySection(cat, items.length > 0, selectedYear, selectedMonth);
+          if (!shouldRenderCategory) return null;
+          const canAddItems = !isReadOnly && (cat.flexiMode ?? true) && isCategoryActiveForBudget(cat, selectedYear, selectedMonth);
+          const isLegacyCategory = isCategoryLegacyForBudget(cat, selectedYear, selectedMonth);
           return (
             <div key={cat.id} className="bg-white rounded-[3rem] shadow-sm border border-gray-100 overflow-hidden w-full">
               <div className="p-8 border-b border-gray-50 bg-gray-50/30 flex justify-between items-center">
-                <h3 className="text-xs font-black text-gray-900 uppercase tracking-[0.25em]">{cat.name}</h3>
+                <div className="flex items-center space-x-2">
+                  <h3 className="text-xs font-black text-gray-900 uppercase tracking-[0.25em]">{cat.name}</h3>
+                  {isLegacyCategory && <span className="text-[9px] font-black text-amber-600 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full uppercase tracking-wider" aria-label="Legacy category — use Stash for new savings/allowance items" title="This category is legacy. Use Stash for new savings/allowance items.">Legacy</span>}
+                </div>
                 <span className="text-lg font-black text-indigo-600">{formatCurrency(items.filter(i => i.included).reduce((s, i) => s + (parseFloat(i.amount) || 0), 0))}</span>
               </div>
               <div className="overflow-x-auto">
@@ -2346,7 +2494,7 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                     )}
                   </tbody>
                 </table>
-                {!isReadOnly && <button onClick={() => addItemToCategory(cat.name)} className="w-full p-4 text-[10px] font-black text-gray-400 uppercase hover:text-indigo-600 border-t border-gray-50">+ Add Item</button>}
+                {canAddItems && <button onClick={() => addItemToCategory(cat.name)} className="w-full p-4 text-[10px] font-black text-gray-400 uppercase hover:text-indigo-600 border-t border-gray-50">+ Add Item</button>}
               </div>
             </div>
           );
@@ -2374,6 +2522,15 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
               return timingMatch && isActiveForPeriod && !isFinished;
             });
           }
+
+          // Lifecycle: show if currently active OR has data (items or installments for Loans)
+          const hasData = items.length > 0 || (cat.name === 'Loans' && relevantInstallments.length > 0);
+          const shouldRenderCategory = shouldRenderCategorySection(cat, hasData, selectedYear, selectedMonth);
+          if (!shouldRenderCategory) return null;
+
+          // Flexi mode: only show Add Item when category allows manual items AND is still active
+          const canAddItems = !isReadOnly && (cat.flexiMode ?? true) && isCategoryActiveForBudget(cat, selectedYear, selectedMonth);
+          const isLegacyCategory = isCategoryLegacyForBudget(cat, selectedYear, selectedMonth);
           
           // PROTOTYPE: Calculate total including installment monthly amounts (only included ones)
           const itemsTotal = items.filter(i => i.included).reduce((s, i) => s + (parseFloat(i.amount) || 0), 0);
@@ -2385,7 +2542,10 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
           return (
             <div key={cat.id} className="bg-white rounded-[3rem] shadow-sm border border-gray-100 overflow-hidden w-full">
               <div className="p-8 border-b border-gray-50 bg-gray-50/30 flex justify-between items-center">
-                <h3 className="text-xs font-black text-gray-900 uppercase tracking-[0.25em]">{cat.name}</h3>
+                <div className="flex items-center space-x-2">
+                  <h3 className="text-xs font-black text-gray-900 uppercase tracking-[0.25em]">{cat.name}</h3>
+                  {isLegacyCategory && <span className="text-[9px] font-black text-amber-600 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full uppercase tracking-wider">Legacy</span>}
+                </div>
                 <span className="text-lg font-black text-indigo-600">{formatCurrency(categoryTotal)}</span>
               </div>
               <div className="overflow-x-auto">
@@ -2740,7 +2900,7 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                     )}
                   </tbody>
                 </table>
-                {!isReadOnly && <button onClick={() => addItemToCategory(cat.name)} className="w-full p-4 text-[10px] font-black text-gray-400 uppercase hover:text-indigo-600 border-t border-gray-50">+ Add Item</button>}
+                {canAddItems && <button onClick={() => addItemToCategory(cat.name)} className="w-full p-4 text-[10px] font-black text-gray-400 uppercase hover:text-indigo-600 border-t border-gray-50">+ Add Item</button>}
               </div>
             </div>
           );
@@ -2861,14 +3021,25 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
         })()}
 
         {/* Remaining categories (excluding Fixed, Utilities, Loans, Subscriptions, Purchases) - keep in grid if needed */}
-        {categories.filter(cat => !['Fixed', 'Utilities', 'Loans', 'Subscriptions', 'Purchases'].includes(cat.name)).length > 0 && (
+        {(() => {
+          const remainingCats = categories.filter(cat =>
+            !['Fixed', 'Utilities', 'Loans', 'Subscriptions', 'Purchases'].includes(cat.name) &&
+            shouldRenderCategorySection(cat, (setupData[cat.name] || []).length > 0, selectedYear, selectedMonth)
+          );
+          if (remainingCats.length === 0) return null;
+          return (
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-            {categories.filter(cat => !['Fixed', 'Utilities', 'Loans', 'Subscriptions', 'Purchases'].includes(cat.name)).map((cat) => {
+            {remainingCats.map((cat) => {
               const items = setupData[cat.name] || [];
+              const canAddItems = !isReadOnly && (cat.flexiMode ?? true) && isCategoryActiveForBudget(cat, selectedYear, selectedMonth);
+              const isLegacyCategory = isCategoryLegacyForBudget(cat, selectedYear, selectedMonth);
               return (
                 <div key={cat.id} className="bg-white rounded-[3rem] shadow-sm border border-gray-100 overflow-hidden flex flex-col">
                   <div className="p-8 border-b border-gray-50 bg-gray-50/30 flex justify-between items-center">
-                    <h3 className="text-xs font-black text-gray-900 uppercase tracking-[0.25em]">{cat.name}</h3>
+                    <div className="flex items-center space-x-2">
+                      <h3 className="text-xs font-black text-gray-900 uppercase tracking-[0.25em]">{cat.name}</h3>
+                      {isLegacyCategory && <span className="text-[9px] font-black text-amber-600 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full uppercase tracking-wider">Legacy</span>}
+                    </div>
                     <span className="text-lg font-black text-indigo-600">{formatCurrency(items.filter(i => i.included).reduce((s, i) => s + (parseFloat(i.amount) || 0), 0))}</span>
                   </div>
                   <div className="overflow-x-auto">
@@ -2947,13 +3118,14 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                         })}
                       </tbody>
                     </table>
-                    <button onClick={() => addItemToCategory(cat.name)} className="w-full p-4 text-[10px] font-black text-gray-400 uppercase hover:text-indigo-600">+ Add Item</button>
+                    {canAddItems && <button onClick={() => addItemToCategory(cat.name)} className="w-full p-4 text-[10px] font-black text-gray-400 uppercase hover:text-indigo-600">+ Add Item</button>}
                   </div>
                 </div>
               );
             })}
           </div>
-        )}
+          );
+        })()}
       </div>
 
       {showPayModal && (

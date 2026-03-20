@@ -15,11 +15,44 @@ export const NAV_ITEMS = [
 ];
 
 export const INITIAL_CATEGORIES: BudgetCategory[] = [
-  { id: 'cat1', name: 'Fixed', subcategories: ['Allowance', 'Savings', 'Share'] },
-  { id: 'cat2', name: 'Utilities', subcategories: ['Electric', 'Water', 'Internet'] },
-  { id: 'cat3', name: 'Loans', subcategories: ['Bank Loan', 'Personal Loan'] },
-  { id: 'cat4', name: 'Subscriptions', subcategories: ['Netflix', 'Spotify', 'Prime'] },
-  { id: 'cat5', name: 'Purchases', subcategories: ['Groceries', 'Personal Care'] },
+  {
+    id: 'cat1',
+    name: 'Fixed',
+    subcategories: ['Allowance', 'Savings', 'Share'],
+    // Legacy category — superseded by Stash (wallet) from March 2026 onward.
+    // Keep active for historical budgets that still reference Fixed items/billers.
+    active: false,
+    deactivatedAt: '2026-03-01',
+    flexiMode: true, // historical months may still have manual items
+  },
+  {
+    id: 'cat2',
+    name: 'Utilities',
+    subcategories: ['Electric', 'Water', 'Internet'],
+    active: true,
+    flexiMode: true, // billers + manual items allowed
+  },
+  {
+    id: 'cat3',
+    name: 'Loans',
+    subcategories: ['Bank Loan', 'Personal Loan'],
+    active: true,
+    flexiMode: false, // data-only — driven by installments/billers; no manual Add Item
+  },
+  {
+    id: 'cat4',
+    name: 'Subscriptions',
+    subcategories: ['Netflix', 'Spotify', 'Prime'],
+    active: true,
+    flexiMode: true,
+  },
+  {
+    id: 'cat5',
+    name: 'Purchases',
+    subcategories: ['Groceries', 'Personal Care'],
+    active: true,
+    flexiMode: true,
+  },
 ];
 
 export const INITIAL_BUDGET: BudgetItem[] = [
