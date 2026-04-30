@@ -72,6 +72,7 @@ const Settings: React.FC<SettingsProps> = ({ currency, setCurrency, categories, 
   const [openSection, setOpenSection] = useState<string | null>(null);
   const [newCatName, setNewCatName] = useState('');
   const [showAddCat, setShowAddCat] = useState(false);
+  const [isDangerZoneOpen, setIsDangerZoneOpen] = useState(false);
 
   // ── Category Settings modal state ──────────────────────────────────────────
   const [catSettingsModal, setCatSettingsModal] = useState<{ catId: string; catName: string } | null>(null);
@@ -1343,7 +1344,10 @@ const Settings: React.FC<SettingsProps> = ({ currency, setCurrency, categories, 
       <div className="bg-white rounded-[3rem] border border-gray-100 shadow-sm overflow-hidden">
         <div className="p-6 md:p-8 border-b border-gray-100 flex items-center space-x-6 bg-gray-50/30">
           <div className="w-16 h-16 md:w-20 md:h-20 rounded-2xl bg-gradient-to-br from-indigo-500 to-blue-600 flex items-center justify-center text-white text-2xl md:text-3xl font-black shadow-2xl">
-            JD
+            {userProfile ? 
+              `${userProfile.first_name.charAt(0)}${userProfile.last_name.charAt(0)}`.toUpperCase() :
+              user?.email?.charAt(0).toUpperCase() || 'U'
+            }
           </div>
           <div>
             <h2 className="text-2xl md:text-3xl font-black text-gray-900 uppercase tracking-tight">Settings</h2>
@@ -1376,33 +1380,41 @@ const Settings: React.FC<SettingsProps> = ({ currency, setCurrency, categories, 
         </div>
       </div>
 
-      <div className="bg-red-50/50 rounded-[3rem] border border-red-100 p-6 md:p-8 space-y-4">
-        <div className="flex items-center space-x-4 text-red-600">
-          <AlertTriangle className="w-8 h-8" />
-          <h3 className="text-xl font-black uppercase tracking-widest">Danger Zone</h3>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div className="bg-white p-6 rounded-[2rem] border border-red-100 flex flex-col justify-between">
-            <div>
-              <h4 className="text-red-700 font-black uppercase text-sm mb-2">Reset All Data</h4>
-              <p className="text-red-600/70 text-xs mb-6 font-medium">Wipe all entries on all pages. Your app will return to an empty state.</p>
-            </div>
-            <PinProtectedAction
-              featureId="danger_zone"
-              onVerified={onResetAll ? onResetAll : () => console.warn('onResetAll not provided to Settings component')}
-              actionLabel="Reset All Data"
-            >
-              <button 
-                onClick={(e) => e.preventDefault()}
-                className="flex items-center justify-center space-x-3 w-full py-4 bg-red-600 text-white rounded-2xl font-black uppercase tracking-widest text-[10px] hover:bg-red-700 transition-all shadow-xl shadow-red-100"
-              >
-                <RotateCcw className="w-5 h-5" />
-                <span>🔒 Reset Everything</span>
-              </button>
-            </PinProtectedAction>
+      <div className="bg-red-50/50 rounded-[3rem] border border-red-100 p-6 md:p-8">
+        <button 
+          onClick={() => setIsDangerZoneOpen(!isDangerZoneOpen)}
+          className="w-full flex items-center justify-between text-red-600 group"
+        >
+          <div className="flex items-center space-x-4">
+            <AlertTriangle className="w-8 h-8 group-hover:scale-110 transition-transform" />
+            <h3 className="text-xl font-black uppercase tracking-widest">Danger Zone</h3>
           </div>
-        </div>
+          {isDangerZoneOpen ? <ChevronDown className="w-6 h-6" /> : <ChevronRight className="w-6 h-6" />}
+        </button>
+
+        {isDangerZoneOpen && (
+          <div className="mt-6 grid grid-cols-1 md:grid-cols-2 gap-4 animate-in slide-in-from-top-4 duration-300">
+            <div className="bg-white p-6 rounded-[2rem] border border-red-100 flex flex-col justify-between">
+              <div>
+                <h4 className="text-red-700 font-black uppercase text-sm mb-2">Reset All Data</h4>
+                <p className="text-red-600/70 text-xs mb-6 font-medium">Wipe all entries on all pages. Your app will return to an empty state.</p>
+              </div>
+              <PinProtectedAction
+                featureId="danger_zone"
+                onVerified={onResetAll ? onResetAll : () => console.warn('onResetAll not provided to Settings component')}
+                actionLabel="Reset All Data"
+              >
+                <button 
+                  onClick={(e) => e.preventDefault()}
+                  className="flex items-center justify-center space-x-3 w-full py-4 bg-red-600 text-white rounded-2xl font-black uppercase tracking-widest text-[10px] hover:bg-red-700 transition-all shadow-xl shadow-red-100"
+                >
+                  <RotateCcw className="w-5 h-5" />
+                  <span>🔒 Reset Everything</span>
+                </button>
+              </PinProtectedAction>
+            </div>
+          </div>
+        )}
       </div>
 
       {confirmModal.show && <ConfirmDialog {...confirmModal} onClose={() => setConfirmModal(p => ({ ...p, show: false }))} />}
