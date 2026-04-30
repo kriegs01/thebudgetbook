@@ -51,6 +51,7 @@ const Installments: React.FC<InstallmentsProps> = ({ installments, accounts, bil
   const [loadingSchedules, setLoadingSchedules] = useState(false);
   // Store total paid amounts from database for each installment
   const [dbPaidAmounts, setDbPaidAmounts] = useState<Map<string, number>>(new Map());
+  const [dbArchiveStatus, setDbArchiveStatus] = useState<Record<string, string>>({});
 
   // Schedule payments modal (consolidated transactions for a schedule entry)
   type ScheduleTx = { id: string; name: string; amount: number; date: string; paymentMethodId: string; receiptUrl?: string | null };
@@ -376,6 +377,25 @@ const Installments: React.FC<InstallmentsProps> = ({ installments, accounts, bil
       
       const finalStatus = isPaid ? 'completed' : closeTagging;
 
+      // 1. Force immediate UI update to make it disappear from active list
+      setDbArchiveStatus(prev => ({ ...prev, [showCloseModal.id]: finalStatus }));
+
+      // 2. Direct DB update to bypass potential adapter omissions
+      try {
+        const isTestMode = localStorage.getItem('test_environment_enabled') === 'true';
+        const tableName = isTestMode ? 'installments_test' : 'installments';
+        const { error: dbError } = await supabase
+          .from(tableName)
+          .update({ 
+            is_archived: true, 
+            archive_status: finalStatus 
+          })
+          .eq('id', showCloseModal.id);
+      } catch (err) {
+        console.warn('[Installments] Failed to execute direct archive update:', err);
+      }
+
+      // 3. Proceed with standard update (updates state and calls original service logic)
       await onUpdate?.({
         ...showCloseModal,
         isArchived: true,
@@ -428,6 +448,34 @@ const Installments: React.FC<InstallmentsProps> = ({ installments, accounts, bil
     }
   }, [installments]);
 
+  // Load accurate archive status directly from DB to bypass potential adapter omissions
+  useEffect(() => {
+    const loadArchiveStatus = async () => {
+      if (installments.length === 0) return;
+      try {
+        const isTestMode = localStorage.getItem('test_environment_enabled') === 'true';
+        const tableName = isTestMode ? 'installments_test' : 'installments';
+        const { data, error } = await supabase
+          .from(tableName)
+          .select('id, is_archived, archive_status')
+          .in('id', installments.map(i => i.id));
+          
+        if (!error && data) {
+          const statuses: Record<string, string> = {};
+          data.forEach(row => {
+            if (row.is_archived === true || row.is_archived === 'true') {
+              statuses[row.id] = row.archive_status || 'completed';
+            }
+          });
+          setDbArchiveStatus(statuses);
+        }
+      } catch (e) {
+        console.warn('[Installments] Failed to load DB archive status', e);
+      }
+    };
+    loadArchiveStatus();
+  }, [installments]);
+
   // Load payment schedules when view modal is opened (extracted so it can be called after edits)
   const loadPaymentSchedulesForModal = useCallback(async () => {
     if (showViewModal) {
@@ -462,6 +510,14 @@ const Installments: React.FC<InstallmentsProps> = ({ installments, accounts, bil
     loadPaymentSchedulesForModal();
   }, [loadPaymentSchedulesForModal]);
 
+  const isItemArchived = useCallback((item: Installment) => {
+    return !!item.isArchived || dbArchiveStatus.hasOwnProperty(item.id);
+  }, [dbArchiveStatus]);
+
+  const getItemArchiveStatus = useCallback((item: Installment) => {
+    return dbArchiveStatus[item.id] || item.archiveStatus || 'Completed';
+  }, [dbArchiveStatus]);
+
   const renderCard = (item: Installment) => {
     // Use database paid amount if available, otherwise fall back to item.paidAmount
     const paidAmount = dbPaidAmounts.get(item.id) ?? item.paidAmount;
@@ -470,23 +526,26 @@ const Installments: React.FC<InstallmentsProps> = ({ installments, accounts, bil
     const account = accounts.find(a => a.id === item.accountId);
     const isFullyPaid = paidAmount >= item.totalAmount;
 
+    const archived = isItemArchived(item);
+    const archStatus = getItemArchiveStatus(item);
+
     return (
       <div key={item.id} className="bg-white p-6 rounded-3xl shadow-sm border border-gray-100 hover:shadow-md transition-all group relative overflow-hidden">
         <div className="flex justify-between items-start mb-4">
           <div className="flex-1">
             <div className="flex items-center gap-2 mb-1">
               <h3 className="font-black text-lg text-gray-900 group-hover:text-indigo-600 transition-colors uppercase tracking-tight">{item.name}</h3>
-              {item.isArchived && (
+              {archived && (
                 <span className={`text-[9px] font-black px-2 py-0.5 rounded uppercase tracking-wider ${
-                  item.archiveStatus === 'terminated' ? 'bg-red-100 text-red-700' :
-                  item.archiveStatus === 'transferred' ? 'bg-blue-100 text-blue-700' :
+                  archStatus === 'terminated' ? 'bg-red-100 text-red-700' :
+                  archStatus === 'transferred' ? 'bg-blue-100 text-blue-700' :
                   'bg-green-100 text-green-700'
                 }`}>
-                  {item.archiveStatus || 'Completed'}
+                  {archStatus}
                 </span>
               )}
               {/* PROTOTYPE: Timing badge */}
-              {!item.isArchived && item.timing && (
+              {!archived && item.timing && (
                 <span className="text-[10px] font-bold px-2 py-0.5 bg-blue-50 rounded text-blue-500">{item.timing}</span>
               )}
             </div>
@@ -508,9 +567,9 @@ const Installments: React.FC<InstallmentsProps> = ({ installments, accounts, bil
                     className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center space-x-2"
                   >
                     <Eye className="w-4 h-4" />
-                    <span>View {item.isArchived ? 'History' : 'Schedule'}</span>
+                    <span>View {archived ? 'History' : 'Schedule'}</span>
                   </button>
-                  {!item.isArchived && (
+                  {!archived && (
                     <>
                       <button 
                         onClick={() => openEditModal(item)}
@@ -578,7 +637,7 @@ const Installments: React.FC<InstallmentsProps> = ({ installments, accounts, bil
             >
               View
             </button>
-            {!item.isArchived && (
+            {!archived && (
               isFullyPaid ? (
                 <button 
                   onClick={() => { setShowCloseModal(item); setCloseTagging('completed'); }}
@@ -618,18 +677,21 @@ const Installments: React.FC<InstallmentsProps> = ({ installments, accounts, bil
     const account = accounts.find(a => a.id === item.accountId);
     const isFullyPaid = paidAmount >= item.totalAmount;
 
+    const archived = isItemArchived(item);
+    const archStatus = getItemArchiveStatus(item);
+
     return (
       <div key={item.id} className="bg-white p-4 pr-6 rounded-2xl border border-gray-100 flex flex-col md:flex-row md:items-center justify-between gap-4 hover:bg-gray-50 transition-colors group">
         <div className="flex-1">
           <div className="flex items-center space-x-2">
             <h3 className="font-black text-gray-900 uppercase tracking-tight">{item.name}</h3>
-            {item.isArchived && (
+            {archived && (
               <span className={`text-[9px] font-black px-2 py-0.5 rounded uppercase tracking-wider ${
-                item.archiveStatus === 'terminated' ? 'bg-red-100 text-red-700' :
-                item.archiveStatus === 'transferred' ? 'bg-blue-100 text-blue-700' :
+                archStatus === 'terminated' ? 'bg-red-100 text-red-700' :
+                archStatus === 'transferred' ? 'bg-blue-100 text-blue-700' :
                 'bg-green-100 text-green-700'
               }`}>
-                {item.archiveStatus || 'Completed'}
+                {archStatus}
               </span>
             )}
             <span className="text-[10px] bg-gray-100 px-2 py-0.5 rounded-full text-gray-500 font-black uppercase tracking-widest">{item.termDuration}</span>
@@ -659,7 +721,7 @@ const Installments: React.FC<InstallmentsProps> = ({ installments, accounts, bil
             >
               View
             </button>
-            {!item.isArchived && (
+            {!archived && (
               isFullyPaid ? (
                 <button 
                   onClick={() => { setShowCloseModal(item); setCloseTagging('completed'); }}
@@ -697,7 +759,7 @@ const Installments: React.FC<InstallmentsProps> = ({ installments, accounts, bil
                 <>
                   <div className="fixed inset-0 z-[10]" onClick={() => setOpenMenuId(null)}></div>
                   <div className="absolute right-0 top-full mt-2 w-44 bg-white rounded-xl shadow-xl border border-gray-100 py-2 z-[20]">
-                    {!item.isArchived && (
+                    {!archived && (
                       <>
                         <button 
                           onClick={() => openEditModal(item)}
@@ -733,8 +795,8 @@ const Installments: React.FC<InstallmentsProps> = ({ installments, accounts, bil
     );
   };
 
-  const activeInstallmentsList = installments.filter(i => !i.isArchived);
-  const archivedInstallmentsList = installments.filter(i => !!i.isArchived);
+  const activeInstallmentsList = installments.filter(i => !isItemArchived(i));
+  const archivedInstallmentsList = installments.filter(i => isItemArchived(i));
 
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
