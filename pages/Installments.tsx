@@ -635,15 +635,15 @@ const Installments: React.FC<InstallmentsProps> = ({ installments, accounts, bil
           </div>
         </div>
 
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col space-y-4 pt-2">
           <div className="flex items-center space-x-2 text-[10px] font-black text-gray-400 uppercase tracking-widest">
-            <Wallet className="w-3.5 h-3.5" />
-            <span>{account?.bank || 'Account'}</span>
+            <Wallet className="w-3.5 h-3.5 flex-shrink-0" />
+            <span className="truncate">{account?.bank || 'Account'}</span>
           </div>
-          <div className="flex items-center space-x-2">
+          <div className="flex items-center gap-2 w-full">
             <button 
               onClick={() => { setShowViewModal(item); }}
-              className="bg-gray-100 text-gray-700 px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest hover:bg-gray-200 transition-all"
+              className="flex-1 bg-gray-100 text-gray-700 px-4 py-3 rounded-xl text-xs font-black uppercase tracking-widest hover:bg-gray-200 transition-all text-center"
             >
               View
             </button>
@@ -651,7 +651,7 @@ const Installments: React.FC<InstallmentsProps> = ({ installments, accounts, bil
               isFullyPaid ? (
                 <button 
                   onClick={() => { setShowCloseModal(item); setCloseTagging('completed'); }}
-                  className="bg-amber-500 text-white px-5 py-2 rounded-xl text-xs font-black uppercase tracking-widest hover:bg-amber-600 transition-all shadow-lg shadow-amber-100/50"
+                  className="flex-1 bg-amber-500 text-white px-4 py-3 rounded-xl text-xs font-black uppercase tracking-widest hover:bg-amber-600 transition-all shadow-lg shadow-amber-100/50 text-center"
                 >
                   Close
                 </button>
@@ -668,7 +668,7 @@ const Installments: React.FC<InstallmentsProps> = ({ installments, accounts, bil
                       accountId: defaultNonCreditAccountId
                     });
                   }}
-                  className="bg-indigo-600 text-white px-5 py-2 rounded-xl text-xs font-black uppercase tracking-widest hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-100"
+                  className="flex-1 bg-indigo-600 text-white px-4 py-3 rounded-xl text-xs font-black uppercase tracking-widest hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-100 text-center"
                 >
                   Pay
                 </button>
