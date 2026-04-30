@@ -72,6 +72,7 @@ const Settings: React.FC<SettingsProps> = ({ currency, setCurrency, categories, 
   const [openSection, setOpenSection] = useState<string | null>(null);
   const [newCatName, setNewCatName] = useState('');
   const [showAddCat, setShowAddCat] = useState(false);
+  const [isDangerZoneOpen, setIsDangerZoneOpen] = useState(false);
 
   // ── Category Settings modal state ──────────────────────────────────────────
   const [catSettingsModal, setCatSettingsModal] = useState<{ catId: string; catName: string } | null>(null);
@@ -611,9 +612,9 @@ const Settings: React.FC<SettingsProps> = ({ currency, setCurrency, categories, 
       label: 'Account',
       icon: <User className="w-5 h-5" />,
       content: (
-        <div className="space-y-6 pt-2">
+        <div className="space-y-4 pt-2">
           {/* User Info Display */}
-          <div className="flex items-center space-x-4 p-6 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-2xl border border-blue-100">
+          <div className="flex items-center space-x-4 p-4 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-2xl border border-blue-100">
             <div className="w-16 h-16 rounded-full bg-blue-500 flex items-center justify-center text-white text-2xl font-bold">
               {userProfile ? 
                 `${userProfile.first_name.charAt(0)}${userProfile.last_name.charAt(0)}`.toUpperCase() :
@@ -641,7 +642,7 @@ const Settings: React.FC<SettingsProps> = ({ currency, setCurrency, categories, 
           )}
 
           {/* Update Name */}
-          <div className="p-6 bg-white rounded-2xl border border-gray-200 space-y-4">
+          <div className="p-4 bg-white rounded-2xl border border-gray-200 space-y-3">
             <div className="flex items-center space-x-2 mb-4">
               <User className="w-5 h-5 text-gray-600" />
               <h4 className="text-sm font-bold text-gray-900 uppercase">Update Name</h4>
@@ -680,7 +681,7 @@ const Settings: React.FC<SettingsProps> = ({ currency, setCurrency, categories, 
           </div>
 
           {/* Update Email */}
-          <div className="p-6 bg-white rounded-2xl border border-gray-200 space-y-4">
+          <div className="p-4 bg-white rounded-2xl border border-gray-200 space-y-3">
             <div className="flex items-center space-x-2 mb-4">
               <Mail className="w-5 h-5 text-gray-600" />
               <h4 className="text-sm font-bold text-gray-900 uppercase">Update Email</h4>
@@ -710,7 +711,7 @@ const Settings: React.FC<SettingsProps> = ({ currency, setCurrency, categories, 
           </div>
 
           {/* Update Password */}
-          <div className="p-6 bg-white rounded-2xl border border-gray-200 space-y-4">
+          <div className="p-4 bg-white rounded-2xl border border-gray-200 space-y-3">
             <div className="flex items-center space-x-2 mb-4">
               <Key className="w-5 h-5 text-gray-600" />
               <h4 className="text-sm font-bold text-gray-900 uppercase">Change Password</h4>
@@ -760,7 +761,7 @@ const Settings: React.FC<SettingsProps> = ({ currency, setCurrency, categories, 
       label: 'Budget Categories', 
       icon: <Hash className="w-5 h-5" />,
       content: (
-        <div className="space-y-6 pt-2">
+        <div className="space-y-4 pt-2">
           {categories.map(cat => (
             <div key={cat.id} className={`p-4 rounded-[2rem] border ${cat.active === false ? 'bg-amber-50/40 border-amber-100' : 'bg-gray-50 border-gray-100'}`}>
               {/* Category header: name + badges + three-dot menu */}
@@ -1264,8 +1265,8 @@ const Settings: React.FC<SettingsProps> = ({ currency, setCurrency, categories, 
       label: 'Test Environment',
       icon: <Database className="w-5 h-5" />,
       content: (
-        <div className="space-y-6 pt-2">
-          <div className="bg-blue-50 border border-blue-200 rounded-2xl p-6">
+        <div className="space-y-4 pt-2">
+          <div className="bg-blue-50 border border-blue-200 rounded-2xl p-4">
             <div className="flex items-start space-x-3">
               <AlertTriangle className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />
               <div>
@@ -1279,7 +1280,7 @@ const Settings: React.FC<SettingsProps> = ({ currency, setCurrency, categories, 
             </div>
           </div>
 
-          <div className="flex items-center justify-between p-6 bg-gray-50 rounded-2xl border border-gray-200">
+          <div className="flex items-center justify-between p-4 bg-gray-50 rounded-2xl border border-gray-200">
             <div>
               <h4 className="font-black text-sm text-gray-900 uppercase mb-1">Test Mode</h4>
               <p className="text-xs text-gray-500">
@@ -1339,27 +1340,30 @@ const Settings: React.FC<SettingsProps> = ({ currency, setCurrency, categories, 
   ];
 
   return (
-    <div className="max-w-3xl mx-auto space-y-6 animate-in slide-in-from-right-4 duration-500 pb-20">
+    <div className="max-w-3xl mx-auto space-y-4 animate-in slide-in-from-right-4 duration-500 pb-20">
       <div className="bg-white rounded-[3rem] border border-gray-100 shadow-sm overflow-hidden">
-        <div className="p-10 border-b border-gray-100 flex items-center space-x-8 bg-gray-50/30">
-          <div className="w-24 h-24 rounded-3xl bg-gradient-to-br from-indigo-500 to-blue-600 flex items-center justify-center text-white text-4xl font-black shadow-2xl">
-            JD
+        <div className="p-6 md:p-8 border-b border-gray-100 flex items-center space-x-6 bg-gray-50/30">
+          <div className="w-16 h-16 md:w-20 md:h-20 rounded-2xl bg-gradient-to-br from-indigo-500 to-blue-600 flex items-center justify-center text-white text-2xl md:text-3xl font-black shadow-2xl">
+            {userProfile ? 
+              `${userProfile.first_name.charAt(0)}${userProfile.last_name.charAt(0)}`.toUpperCase() :
+              user?.email?.charAt(0).toUpperCase() || 'U'
+            }
           </div>
           <div>
-            <h2 className="text-3xl font-black text-gray-900 uppercase tracking-tight">Settings</h2>
+            <h2 className="text-2xl md:text-3xl font-black text-gray-900 uppercase tracking-tight">Settings</h2>
             <p className="text-gray-500 font-medium">Personal Financial Profile & App Configuration</p>
           </div>
         </div>
 
         <div className="divide-y divide-gray-50">
           {sections.map((section) => (
-            <div key={section.id} className="p-4">
+            <div key={section.id} className="p-2">
               <button 
                 onClick={() => toggleSection(section.id)}
-                className="w-full flex items-center justify-between p-6 rounded-[2rem] hover:bg-gray-50 transition-colors"
+                className="w-full flex items-center justify-between p-4 md:p-5 rounded-[1.5rem] hover:bg-gray-50 transition-colors"
               >
-                <div className="flex items-center space-x-6">
-                  <div className="p-3.5 bg-gray-100 text-gray-500 rounded-2xl">
+                <div className="flex items-center space-x-4 md:space-x-6">
+                  <div className="p-3 bg-gray-100 text-gray-500 rounded-2xl">
                     {section.icon}
                   </div>
                   <span className="font-black text-lg text-gray-700 uppercase tracking-tight">{section.label}</span>
@@ -1367,7 +1371,7 @@ const Settings: React.FC<SettingsProps> = ({ currency, setCurrency, categories, 
                 {openSection === section.id ? <ChevronDown className="w-6 h-6 text-gray-400" /> : <ChevronRight className="w-6 h-6 text-gray-400" />}
               </button>
               {openSection === section.id && (
-                <div className="px-10 md:px-24 pb-10 animate-in slide-in-from-top-4 duration-300">
+                <div className="px-6 md:px-16 pb-6 animate-in slide-in-from-top-4 duration-300">
                   {section.content}
                 </div>
               )}
@@ -1376,33 +1380,41 @@ const Settings: React.FC<SettingsProps> = ({ currency, setCurrency, categories, 
         </div>
       </div>
 
-      <div className="bg-red-50/50 rounded-[3rem] border border-red-100 p-10 space-y-6">
-        <div className="flex items-center space-x-4 text-red-600">
-          <AlertTriangle className="w-8 h-8" />
-          <h3 className="text-xl font-black uppercase tracking-widest">Danger Zone</h3>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <div className="bg-white p-8 rounded-[2rem] border border-red-100 flex flex-col justify-between">
-            <div>
-              <h4 className="text-red-700 font-black uppercase text-sm mb-2">Reset All Data</h4>
-              <p className="text-red-600/70 text-xs mb-6 font-medium">Wipe all entries on all pages. Your app will return to an empty state.</p>
-            </div>
-            <PinProtectedAction
-              featureId="danger_zone"
-              onVerified={onResetAll ? onResetAll : () => console.warn('onResetAll not provided to Settings component')}
-              actionLabel="Reset All Data"
-            >
-              <button 
-                onClick={(e) => e.preventDefault()}
-                className="flex items-center justify-center space-x-3 w-full py-4 bg-red-600 text-white rounded-2xl font-black uppercase tracking-widest text-[10px] hover:bg-red-700 transition-all shadow-xl shadow-red-100"
-              >
-                <RotateCcw className="w-5 h-5" />
-                <span>🔒 Reset Everything</span>
-              </button>
-            </PinProtectedAction>
+      <div className="bg-red-50/50 rounded-[3rem] border border-red-100 p-6 md:p-8">
+        <button 
+          onClick={() => setIsDangerZoneOpen(!isDangerZoneOpen)}
+          className="w-full flex items-center justify-between text-red-600 group"
+        >
+          <div className="flex items-center space-x-4">
+            <AlertTriangle className="w-8 h-8 group-hover:scale-110 transition-transform" />
+            <h3 className="text-xl font-black uppercase tracking-widest">Danger Zone</h3>
           </div>
-        </div>
+          {isDangerZoneOpen ? <ChevronDown className="w-6 h-6" /> : <ChevronRight className="w-6 h-6" />}
+        </button>
+
+        {isDangerZoneOpen && (
+          <div className="mt-6 grid grid-cols-1 md:grid-cols-2 gap-4 animate-in slide-in-from-top-4 duration-300">
+            <div className="bg-white p-6 rounded-[2rem] border border-red-100 flex flex-col justify-between">
+              <div>
+                <h4 className="text-red-700 font-black uppercase text-sm mb-2">Reset All Data</h4>
+                <p className="text-red-600/70 text-xs mb-6 font-medium">Wipe all entries on all pages. Your app will return to an empty state.</p>
+              </div>
+              <PinProtectedAction
+                featureId="danger_zone"
+                onVerified={onResetAll ? onResetAll : () => console.warn('onResetAll not provided to Settings component')}
+                actionLabel="Reset All Data"
+              >
+                <button 
+                  onClick={(e) => e.preventDefault()}
+                  className="flex items-center justify-center space-x-3 w-full py-4 bg-red-600 text-white rounded-2xl font-black uppercase tracking-widest text-[10px] hover:bg-red-700 transition-all shadow-xl shadow-red-100"
+                >
+                  <RotateCcw className="w-5 h-5" />
+                  <span>🔒 Reset Everything</span>
+                </button>
+              </PinProtectedAction>
+            </div>
+          </div>
+        )}
       </div>
 
       {confirmModal.show && <ConfirmDialog {...confirmModal} onClose={() => setConfirmModal(p => ({ ...p, show: false }))} />}
