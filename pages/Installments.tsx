@@ -1410,22 +1410,22 @@ const Installments: React.FC<InstallmentsProps> = ({ installments, accounts, bil
       {/* Edit Schedule Transaction Modal */}
       {editingScheduleTx && (
         <div className="fixed inset-0 z-[160] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md" onClick={() => setEditingScheduleTx(null)}>
-          <div className="w-full max-w-md bg-white rounded-3xl p-10 shadow-2xl relative" onClick={e => e.stopPropagation()}>
-            <button onClick={() => setEditingScheduleTx(null)} className="absolute right-6 top-6 p-2 hover:bg-gray-100 rounded-full transition-colors" aria-label="Close"><X className="w-6 h-6 text-gray-400" /></button>
-            <h2 className="text-2xl font-black text-gray-900 mb-2">Edit Transaction</h2>
-            <p className="text-gray-500 text-sm mb-8">Update the transaction details below</p>
+          <div className="w-full max-w-md bg-white dark:bg-gray-900 rounded-3xl p-10 shadow-2xl relative transition-colors" onClick={e => e.stopPropagation()}>
+            <button onClick={() => setEditingScheduleTx(null)} className="absolute right-6 top-6 p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full transition-colors" aria-label="Close"><X className="w-6 h-6 text-gray-400 dark:text-gray-500" /></button>
+            <h2 className="text-2xl font-black text-gray-900 dark:text-gray-100 mb-2 transition-colors">Edit Transaction</h2>
+            <p className="text-gray-500 dark:text-gray-400 text-sm mb-8 transition-colors">Update the transaction details below</p>
             <form onSubmit={handleEditScheduleTxSubmit} className="space-y-6">
               <div>
-                <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Name</label>
+                <label className="block text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-2 transition-colors">Name</label>
                 <input
                   value={editScheduleTxForm.name}
                   onChange={e => setEditScheduleTxForm(f => ({ ...f, name: e.target.value }))}
                   required
-                  className="w-full bg-gray-50 border-transparent rounded-2xl p-4 outline-none font-bold text-sm"
+                  className="w-full bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-transparent rounded-2xl p-4 outline-none font-bold text-sm transition-colors"
                 />
               </div>
               <div>
-                <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Amount</label>
+                <label className="block text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-2 transition-colors">Amount</label>
                 <input
                   type="number"
                   step="0.01"
@@ -1433,21 +1433,21 @@ const Installments: React.FC<InstallmentsProps> = ({ installments, accounts, bil
                   value={editScheduleTxForm.amount}
                   onChange={e => setEditScheduleTxForm(f => ({ ...f, amount: e.target.value }))}
                   required
-                  className="w-full bg-gray-50 border-transparent rounded-2xl p-4 outline-none font-bold text-sm"
+                  className="w-full bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-transparent rounded-2xl p-4 outline-none font-bold text-sm transition-colors"
                 />
               </div>
               <div>
-                <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Date</label>
+                <label className="block text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-2 transition-colors">Date</label>
                 <input
                   type="date"
                   value={editScheduleTxForm.date}
                   onChange={e => setEditScheduleTxForm(f => ({ ...f, date: e.target.value }))}
                   required
-                  className="w-full bg-gray-50 border-transparent rounded-2xl p-4 outline-none font-bold text-sm"
+                  className="w-full bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-transparent rounded-2xl p-4 outline-none font-bold text-sm transition-colors"
                 />
               </div>
               <div className="flex gap-4 pt-4">
-                <button type="button" onClick={() => setEditingScheduleTx(null)} className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 py-4 rounded-2xl font-bold transition-colors" disabled={isEditingScheduleTx}>Cancel</button>
+                <button type="button" onClick={() => setEditingScheduleTx(null)} className="flex-1 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 py-4 rounded-2xl font-bold transition-colors" disabled={isEditingScheduleTx}>Cancel</button>
                 <button type="submit" className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white py-4 rounded-2xl font-bold transition-colors disabled:opacity-50" disabled={isEditingScheduleTx}>{isEditingScheduleTx ? 'Saving…' : 'Save Changes'}</button>
               </div>
             </form>
