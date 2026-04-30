@@ -202,20 +202,39 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
   const [categories, setCategories] = useState(INITIAL_CATEGORIES);
 
   // Navigation Customization State
-  const [navPreferences, setNavPreferences] = useState<{id: string, visible: boolean}[]>(() => {
-    const saved = localStorage.getItem('nav_preferences');
-    if (saved) {
-      try { 
-        const parsed = JSON.parse(saved);
-        // Merge any new hardcoded routes that might have been added to constants.ts later
-        const newItems = NAV_ITEMS.filter(n => !parsed.some((p: any) => p.id === n.id)).map(n => ({ id: n.id, visible: true }));
-        return [...parsed, ...newItems];
-      } catch (e) {}
-    }
-    return NAV_ITEMS.map(item => ({ id: item.id, visible: true }));
-  });
+  const [navPreferences, setNavPreferences] = useState<{id: string, visible: boolean}[]>([]);
   const [showNavEditModal, setShowNavEditModal] = useState(false);
   const [tempNavPrefs, setTempNavPrefs] = useState(navPreferences);
+
+  useEffect(() => {
+    let initialPrefs = null;
+
+    // Priority: 1. Supabase profile, 2. localStorage (fallback), 3. Default
+    if (userProfile?.nav_preferences && Array.isArray(userProfile.nav_preferences)) {
+      console.log('[App] Loading nav preferences from Supabase profile.');
+      initialPrefs = userProfile.nav_preferences;
+    } else {
+      const localData = localStorage.getItem('nav_preferences');
+      if (localData) {
+        try {
+          console.log('[App] Loading nav preferences from localStorage (fallback).');
+          initialPrefs = JSON.parse(localData);
+        } catch (e) {
+          console.error('Failed to parse nav preferences from localStorage', e);
+        }
+      }
+    }
+
+    if (!initialPrefs || !Array.isArray(initialPrefs)) {
+      console.log('[App] Setting default nav preferences.');
+      initialPrefs = NAV_ITEMS.map(item => ({ id: item.id, visible: true }));
+    }
+
+    // Merge with hardcoded NAV_ITEMS to include any new items from constants.ts
+    const currentNavIds = new Set(initialPrefs.map((p: any) => p.id));
+    const newItems = NAV_ITEMS.filter(n => !currentNavIds.has(n.id)).map(n => ({ id: n.id, visible: true }));
+    setNavPreferences([...initialPrefs, ...newItems]);
+  }, [userProfile]);
 
   // Wallet state is managed internally by WalletsPage and WalletView (they fetch their own data)
   
@@ -925,10 +944,26 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
     }
   };
 
-  const handleSaveNavPreferences = () => {
+  const handleSaveNavPreferences = async () => {
     setNavPreferences(tempNavPrefs);
-    localStorage.setItem('nav_preferences', JSON.stringify(tempNavPrefs));
     setShowNavEditModal(false);
+
+    // Save to Supabase profile
+    const { error } = await supabase
+      .from('user_profiles')
+      .update({ nav_preferences: tempNavPrefs })
+      .eq('user_id', user.id);
+
+    if (error) {
+      console.error("Failed to save nav preferences to Supabase:", error);
+      // Fallback to localStorage if Supabase fails, so user doesn't lose settings on this device
+      alert('Could not save your navigation settings to the cloud. They will be saved on this device only for now.');
+      localStorage.setItem('nav_preferences', JSON.stringify(tempNavPrefs));
+    } else {
+      // On successful save to Supabase, remove the old localStorage value
+      localStorage.removeItem('nav_preferences');
+      console.log("Nav preferences saved to Supabase profile.");
+    }
   };
 
   const handleMoveNavUp = (index: number) => {
