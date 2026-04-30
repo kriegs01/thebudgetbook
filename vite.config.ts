@@ -4,7 +4,6 @@ import react from '@vitejs/plugin-react';
 
 export default defineConfig(({ mode }) => {
     const env = loadEnv(mode, '.', '');
-    const isProduction = mode === 'production';
     
     return {
       server: {
@@ -19,20 +18,6 @@ export default defineConfig(({ mode }) => {
       resolve: {
         alias: {
           '@': path.resolve(__dirname, '.'),
-        }
-      },
-      build: {
-        rollupOptions: {
-          // Only mark dependencies as external in production builds
-          // In development, Vite dev server needs to bundle them
-          external: isProduction ? [
-            'react',
-            'react-dom',
-            'react-router-dom',
-            'recharts',
-            'lucide-react',
-            '@supabase/supabase-js'
-          ] : []
         }
       }
     };
