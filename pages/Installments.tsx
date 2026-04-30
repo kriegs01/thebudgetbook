@@ -1,11 +1,12 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Installment, Account, ViewMode, Biller } from '../types';
-import { Plus, LayoutGrid, List, Wallet, Trash2, X, Upload, AlertTriangle, Edit2, Eye, MoreVertical, Info, ZoomIn, ZoomOut, Download } from 'lucide-react';
+import { Plus, LayoutGrid, List, Wallet, Trash2, X, Upload, AlertTriangle, Edit2, Eye, MoreVertical, Info, ZoomIn, ZoomOut, Download, Archive, CheckCircle2, ChevronDown } from 'lucide-react';
 import { getPaymentSchedulesBySource } from '../src/services/paymentSchedulesService';
 import { hasInstallmentPayments, deleteAllInstallmentPaymentsAndResetSchedules } from '../src/services/installmentsService';
 import { getTransactionsByPaymentSchedule, getReceiptSignedUrl, updateTransaction, updateTransactionAndSyncSchedule } from '../src/services/transactionsService';
 import { combineDateWithCurrentTime } from '../src/utils/dateUtils';
 import type { SupabaseMonthlyPaymentSchedule, SupabaseTransaction } from '../src/types/supabase';
+import { supabase } from '../src/utils/supabaseClient';
 
 interface InstallmentsProps {
   installments: Installment[];
@@ -37,6 +38,12 @@ const Installments: React.FC<InstallmentsProps> = ({ installments, accounts, bil
   const [showPayModal, setShowPayModal] = useState<Installment | null>(null);
   // Track the specific schedule ID being paid when the user clicks Pay on a schedule row
   const [payModalScheduleId, setPayModalScheduleId] = useState<string | undefined>(undefined);
+
+  // Close/Archive state
+  const [showCloseModal, setShowCloseModal] = useState<Installment | null>(null);
+  const [closeTagging, setCloseTagging] = useState<'completed' | 'terminated' | 'transferred'>('completed');
+  const [isCompletedOpen, setIsCompletedOpen] = useState(false);
+
   const [showEditModal, setShowEditModal] = useState<Installment | null>(null);
   const [showViewModal, setShowViewModal] = useState<Installment | null>(null);
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
@@ -45,6 +52,7 @@ const Installments: React.FC<InstallmentsProps> = ({ installments, accounts, bil
   const [loadingSchedules, setLoadingSchedules] = useState(false);
   // Store total paid amounts from database for each installment
   const [dbPaidAmounts, setDbPaidAmounts] = useState<Map<string, number>>(new Map());
+  const [dbArchiveStatus, setDbArchiveStatus] = useState<Record<string, string>>({});
 
   // Schedule payments modal (consolidated transactions for a schedule entry)
   type ScheduleTx = { id: string; name: string; amount: number; date: string; paymentMethodId: string; receiptUrl?: string | null };
@@ -358,6 +366,60 @@ const Installments: React.FC<InstallmentsProps> = ({ installments, accounts, bil
     setOpenMenuId(null);
   };
 
+  const handleCloseSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!showCloseModal || isSubmitting) return;
+
+    setIsSubmitting(true);
+    console.log('[Installments] Starting archive process for:', showCloseModal.name);
+    try {
+      const currentPaid = dbPaidAmounts.get(showCloseModal.id) ?? showCloseModal.paidAmount;
+      const isPaid = currentPaid >= showCloseModal.totalAmount;
+      
+      const finalStatus = isPaid ? 'completed' : closeTagging;
+
+      // 1. Force immediate UI update to make it disappear from active list
+      setDbArchiveStatus(prev => {
+        return { ...prev, [showCloseModal.id]: finalStatus };
+      });
+
+      // 2. Proceed with standard update first so it doesn't overwrite our explicit DB patch
+      await onUpdate?.({
+        ...showCloseModal,
+        isArchived: true,
+        archiveStatus: finalStatus
+      });
+
+      // 3. Direct DB update AFTER standard update to guarantee it sticks
+      try {
+        const isTestMode = localStorage.getItem('test_environment_enabled') === 'true';
+        const tableName = isTestMode ? 'installments_test' : 'installments';
+        const { error: dbError } = await supabase
+          .from(tableName)
+          .update({ 
+            is_archived: true, 
+            archive_status: finalStatus 
+          })
+          .eq('id', showCloseModal.id);
+
+        if (dbError) {
+          console.error('[Installments] DB update error:', dbError);
+        }
+      } catch (err) {
+        console.warn('[Installments] Failed to execute direct archive update:', err);
+      }
+
+      console.log('[Installments] Archive successful');
+      setIsCompletedOpen(true); // Automatically expand the section to show the archived card
+      setShowCloseModal(null);
+    } catch (error) {
+      console.error('Failed to archive installment:', error);
+      alert('Failed to archive installment. Please try again.');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   // Load total paid amounts from payment schedules for all installments
   useEffect(() => {
     const loadAllPaidAmounts = async () => {
@@ -394,6 +456,36 @@ const Installments: React.FC<InstallmentsProps> = ({ installments, accounts, bil
     }
   }, [installments]);
 
+  // Load accurate archive status directly from DB to bypass potential adapter omissions
+  useEffect(() => {
+    const loadArchiveStatus = async () => {
+      if (installments.length === 0) return;
+      try {
+        const isTestMode = localStorage.getItem('test_environment_enabled') === 'true';
+        const tableName = isTestMode ? 'installments_test' : 'installments';
+        const { data, error } = await supabase
+          .from(tableName)
+          .select('id, is_archived, archive_status')
+          .in('id', installments.map(i => i.id));
+          
+        if (!error && data) {
+          const statuses: Record<string, string> = {};
+          data.forEach(row => {
+            if (row.is_archived) {
+              statuses[row.id] = row.archive_status || 'completed';
+            }
+          });
+          setDbArchiveStatus(statuses);
+        } else if (error) {
+          console.warn('[Installments] Failed to load DB archive status.', error);
+        }
+      } catch (e) {
+        console.warn('[Installments] Failed to load DB archive status', e);
+      }
+    };
+    loadArchiveStatus();
+  }, [installments]);
+
   // Load payment schedules when view modal is opened (extracted so it can be called after edits)
   const loadPaymentSchedulesForModal = useCallback(async () => {
     if (showViewModal) {
@@ -428,12 +520,24 @@ const Installments: React.FC<InstallmentsProps> = ({ installments, accounts, bil
     loadPaymentSchedulesForModal();
   }, [loadPaymentSchedulesForModal]);
 
+  const isItemArchived = useCallback((item: Installment) => {
+    return !!item.isArchived || dbArchiveStatus.hasOwnProperty(item.id);
+  }, [dbArchiveStatus]);
+
+  const getItemArchiveStatus = useCallback((item: Installment) => {
+    return dbArchiveStatus[item.id] || item.archiveStatus || 'Completed';
+  }, [dbArchiveStatus]);
+
   const renderCard = (item: Installment) => {
     // Use database paid amount if available, otherwise fall back to item.paidAmount
     const paidAmount = dbPaidAmounts.get(item.id) ?? item.paidAmount;
     const progress = (paidAmount / item.totalAmount) * 100;
     const remaining = item.totalAmount - paidAmount;
     const account = accounts.find(a => a.id === item.accountId);
+    const isFullyPaid = paidAmount >= item.totalAmount;
+
+    const archived = isItemArchived(item);
+    const archStatus = getItemArchiveStatus(item);
 
     return (
       <div key={item.id} className="bg-white p-6 rounded-3xl shadow-sm border border-gray-100 hover:shadow-md transition-all group relative overflow-hidden">
@@ -441,8 +545,17 @@ const Installments: React.FC<InstallmentsProps> = ({ installments, accounts, bil
           <div className="flex-1">
             <div className="flex items-center gap-2 mb-1">
               <h3 className="font-black text-lg text-gray-900 group-hover:text-indigo-600 transition-colors uppercase tracking-tight">{item.name}</h3>
+              {archived && (
+                <span className={`text-[9px] font-black px-2 py-0.5 rounded uppercase tracking-wider ${
+                  archStatus === 'terminated' ? 'bg-red-100 text-red-700' :
+                  archStatus === 'transferred' ? 'bg-blue-100 text-blue-700' :
+                  'bg-green-100 text-green-700'
+                }`}>
+                  {archStatus}
+                </span>
+              )}
               {/* PROTOTYPE: Timing badge */}
-              {item.timing && (
+              {!archived && item.timing && (
                 <span className="text-[10px] font-bold px-2 py-0.5 bg-blue-50 rounded text-blue-500">{item.timing}</span>
               )}
             </div>
@@ -464,15 +577,26 @@ const Installments: React.FC<InstallmentsProps> = ({ installments, accounts, bil
                     className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center space-x-2"
                   >
                     <Eye className="w-4 h-4" />
-                    <span>View Schedule</span>
+                    <span>View {archived ? 'History' : 'Schedule'}</span>
                   </button>
-                  <button 
-                    onClick={() => openEditModal(item)}
-                    className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center space-x-2"
-                  >
-                    <Edit2 className="w-4 h-4" />
-                    <span>Edit</span>
-                  </button>
+                  {!archived && (
+                    <>
+                      <button 
+                        onClick={() => openEditModal(item)}
+                        className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center space-x-2"
+                      >
+                        <Edit2 className="w-4 h-4" />
+                        <span>Edit</span>
+                      </button>
+                      <button 
+                        onClick={() => { setShowCloseModal(item); setOpenMenuId(null); setCloseTagging(isFullyPaid ? 'completed' : 'terminated'); }}
+                        className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-amber-50 hover:text-amber-700 transition-colors flex items-center space-x-2"
+                      >
+                        <Archive className="w-4 h-4" />
+                        <span>Close</span>
+                      </button>
+                    </>
+                  )}
                   <div className="border-t border-gray-100 my-1"></div>
                   <button 
                     onClick={() => handleDeleteTrigger(item.id, item.name)}
@@ -511,35 +635,45 @@ const Installments: React.FC<InstallmentsProps> = ({ installments, accounts, bil
           </div>
         </div>
 
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col space-y-4 pt-2">
           <div className="flex items-center space-x-2 text-[10px] font-black text-gray-400 uppercase tracking-widest">
-            <Wallet className="w-3.5 h-3.5" />
-            <span>{account?.bank || 'Account'}</span>
+            <Wallet className="w-3.5 h-3.5 flex-shrink-0" />
+            <span className="truncate">{account?.bank || 'Account'}</span>
           </div>
-          <div className="flex items-center space-x-2">
+          <div className="flex items-center gap-2 w-full">
             <button 
               onClick={() => { setShowViewModal(item); }}
-              className="bg-gray-100 text-gray-700 px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest hover:bg-gray-200 transition-all"
+              className="flex-1 bg-gray-100 text-gray-700 px-4 py-3 rounded-xl text-xs font-black uppercase tracking-widest hover:bg-gray-200 transition-all text-center"
             >
               View
             </button>
-            <button 
-              onClick={() => {
-                setShowPayModal(item);
-                setPayModalScheduleId(undefined); // no specific month targeted from card-level Pay
-                // Autofill with remaining due for current period (monthly - already paid this period)
-                const currentPeriodPaid = item.monthlyAmount > 0 ? paidAmount % item.monthlyAmount : 0;
-                setPayFormData({ 
-                  amount: Math.max(0, item.monthlyAmount - currentPeriodPaid).toFixed(2),
-                  receipt: '',
-                  datePaid: new Date().toISOString().split('T')[0],
-                  accountId: defaultNonCreditAccountId
-                });
-              }}
-              className="bg-indigo-600 text-white px-5 py-2 rounded-xl text-xs font-black uppercase tracking-widest hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-100"
-            >
-              Pay
-            </button>
+            {!archived && (
+              isFullyPaid ? (
+                <button 
+                  onClick={() => { setShowCloseModal(item); setCloseTagging('completed'); }}
+                  className="flex-1 bg-amber-500 text-white px-4 py-3 rounded-xl text-xs font-black uppercase tracking-widest hover:bg-amber-600 transition-all shadow-lg shadow-amber-100/50 text-center"
+                >
+                  Close
+                </button>
+              ) : (
+                <button 
+                  onClick={() => {
+                    setShowPayModal(item);
+                    setPayModalScheduleId(undefined);
+                    const currentPeriodPaid = item.monthlyAmount > 0 ? paidAmount % item.monthlyAmount : 0;
+                    setPayFormData({ 
+                      amount: Math.max(0, item.monthlyAmount - currentPeriodPaid).toFixed(2),
+                      receipt: '',
+                      datePaid: new Date().toISOString().split('T')[0],
+                      accountId: defaultNonCreditAccountId
+                    });
+                  }}
+                  className="flex-1 bg-indigo-600 text-white px-4 py-3 rounded-xl text-xs font-black uppercase tracking-widest hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-100 text-center"
+                >
+                  Pay
+                </button>
+              )
+            )}
           </div>
         </div>
       </div>
@@ -551,12 +685,25 @@ const Installments: React.FC<InstallmentsProps> = ({ installments, accounts, bil
     const paidAmount = dbPaidAmounts.get(item.id) ?? item.paidAmount;
     const progress = (paidAmount / item.totalAmount) * 100;
     const account = accounts.find(a => a.id === item.accountId);
+    const isFullyPaid = paidAmount >= item.totalAmount;
+
+    const archived = isItemArchived(item);
+    const archStatus = getItemArchiveStatus(item);
 
     return (
       <div key={item.id} className="bg-white p-4 pr-6 rounded-2xl border border-gray-100 flex flex-col md:flex-row md:items-center justify-between gap-4 hover:bg-gray-50 transition-colors group">
         <div className="flex-1">
           <div className="flex items-center space-x-2">
             <h3 className="font-black text-gray-900 uppercase tracking-tight">{item.name}</h3>
+            {archived && (
+              <span className={`text-[9px] font-black px-2 py-0.5 rounded uppercase tracking-wider ${
+                archStatus === 'terminated' ? 'bg-red-100 text-red-700' :
+                archStatus === 'transferred' ? 'bg-blue-100 text-blue-700' :
+                'bg-green-100 text-green-700'
+              }`}>
+                {archStatus}
+              </span>
+            )}
             <span className="text-[10px] bg-gray-100 px-2 py-0.5 rounded-full text-gray-500 font-black uppercase tracking-widest">{item.termDuration}</span>
           </div>
           <div className="flex items-center space-x-4 mt-1">
@@ -584,23 +731,33 @@ const Installments: React.FC<InstallmentsProps> = ({ installments, accounts, bil
             >
               View
             </button>
-            <button 
-              onClick={() => {
-                setShowPayModal(item);
-                setPayModalScheduleId(undefined); // no specific month targeted from card-level Pay
-                // Autofill with remaining due for current period (monthly - already paid this period)
-                const currentPeriodPaid = item.monthlyAmount > 0 ? paidAmount % item.monthlyAmount : 0;
-                setPayFormData({ 
-                  amount: Math.max(0, item.monthlyAmount - currentPeriodPaid).toFixed(2),
-                  receipt: '',
-                  datePaid: new Date().toISOString().split('T')[0],
-                  accountId: defaultNonCreditAccountId
-                });
-              }}
-              className="bg-indigo-600 text-white px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest hover:bg-indigo-700 transition-all"
-            >
-              Pay
-            </button>
+            {!archived && (
+              isFullyPaid ? (
+                <button 
+                  onClick={() => { setShowCloseModal(item); setCloseTagging('completed'); }}
+                  className="bg-amber-500 text-white px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest hover:bg-amber-600 transition-all"
+                >
+                  Close
+                </button>
+              ) : (
+                <button 
+                  onClick={() => {
+                    setShowPayModal(item);
+                    setPayModalScheduleId(undefined);
+                    const currentPeriodPaid = item.monthlyAmount > 0 ? paidAmount % item.monthlyAmount : 0;
+                    setPayFormData({ 
+                      amount: Math.max(0, item.monthlyAmount - currentPeriodPaid).toFixed(2),
+                      receipt: '',
+                      datePaid: new Date().toISOString().split('T')[0],
+                      accountId: defaultNonCreditAccountId
+                    });
+                  }}
+                  className="bg-indigo-600 text-white px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest hover:bg-indigo-700 transition-all"
+                >
+                  Pay
+                </button>
+              )
+            )}
             <div className="relative">
               <button 
                 onClick={() => setOpenMenuId(openMenuId === item.id ? null : item.id)}
@@ -612,13 +769,24 @@ const Installments: React.FC<InstallmentsProps> = ({ installments, accounts, bil
                 <>
                   <div className="fixed inset-0 z-[10]" onClick={() => setOpenMenuId(null)}></div>
                   <div className="absolute right-0 top-full mt-2 w-44 bg-white rounded-xl shadow-xl border border-gray-100 py-2 z-[20]">
-                    <button 
-                      onClick={() => openEditModal(item)}
-                      className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center space-x-2"
-                    >
-                      <Edit2 className="w-4 h-4" />
-                      <span>Edit</span>
-                    </button>
+                    {!archived && (
+                      <>
+                        <button 
+                          onClick={() => openEditModal(item)}
+                          className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center space-x-2"
+                        >
+                          <Edit2 className="w-4 h-4" />
+                          <span>Edit</span>
+                        </button>
+                        <button 
+                          onClick={() => { setShowCloseModal(item); setOpenMenuId(null); setCloseTagging(isFullyPaid ? 'completed' : 'terminated'); }}
+                          className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-amber-50 hover:text-amber-700 transition-colors flex items-center space-x-2"
+                        >
+                          <Archive className="w-4 h-4" />
+                          <span>Close</span>
+                        </button>
+                      </>
+                    )}
                     <div className="border-t border-gray-100 my-1"></div>
                     <button 
                       onClick={() => handleDeleteTrigger(item.id, item.name)}
@@ -636,6 +804,9 @@ const Installments: React.FC<InstallmentsProps> = ({ installments, accounts, bil
       </div>
     );
   };
+
+  const activeInstallmentsList = installments.filter(i => !isItemArchived(i));
+  const archivedInstallmentsList = installments.filter(i => isItemArchived(i));
 
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
@@ -690,14 +861,34 @@ const Installments: React.FC<InstallmentsProps> = ({ installments, accounts, bil
       </div>
 
       <div className={viewMode === 'card' ? "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6" : "space-y-4"}>
-        {installments.length > 0 ? (
-          installments.map(item => viewMode === 'card' ? renderCard(item) : renderListItem(item))
+        {activeInstallmentsList.length > 0 ? (
+          activeInstallmentsList.map(item => viewMode === 'card' ? renderCard(item) : renderListItem(item))
         ) : (
           <div className="col-span-full p-24 text-center">
             <p className="text-gray-400 font-black uppercase tracking-widest text-sm">No installments being tracked</p>
           </div>
         )}
       </div>
+
+      {/* Completed Installments Section */}
+      {archivedInstallmentsList.length > 0 && (
+        <div className="mt-12 pt-12 border-t border-gray-100">
+          <button 
+            onClick={() => setIsCompletedOpen(!isCompletedOpen)}
+            className="flex items-center space-x-3 mb-6 text-gray-400 hover:text-gray-600 transition-colors group"
+          >
+            <Archive className="w-5 h-5" />
+            <h3 className="text-sm font-black uppercase tracking-[0.2em]">Completed Installments ({archivedInstallmentsList.length})</h3>
+            <ChevronDown className={`w-4 h-4 transition-transform ${isCompletedOpen ? 'rotate-180' : ''}`} />
+          </button>
+          
+          {isCompletedOpen && (
+            <div className={viewMode === 'card' ? "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 opacity-80" : "space-y-4 opacity-80"}>
+              {archivedInstallmentsList.map(item => viewMode === 'card' ? renderCard(item) : renderListItem(item))}
+            </div>
+          )}
+        </div>
+      )}
       </>
       )}
 
@@ -802,6 +993,62 @@ const Installments: React.FC<InstallmentsProps> = ({ installments, accounts, bil
           </div>
         </div>
       )}
+
+      {/* Close Modal */}
+      {showCloseModal && (() => {
+        const paidAmount = dbPaidAmounts.get(showCloseModal.id) ?? showCloseModal.paidAmount;
+        const isFullyPaid = paidAmount >= showCloseModal.totalAmount;
+
+        return (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md">
+            <div className="bg-white rounded-[2.5rem] w-full max-w-md p-10 shadow-2xl animate-in zoom-in-95 relative">
+              <button onClick={() => setShowCloseModal(null)} className="absolute right-6 top-6 p-2 hover:bg-gray-100 rounded-full transition-colors">
+                <X className="w-6 h-6 text-gray-400" />
+              </button>
+              <h2 className="text-2xl font-black text-gray-900 mb-2 uppercase tracking-tight">Close Installment</h2>
+              <p className="text-gray-500 text-sm mb-8">Mark this installment as finished and move it to archives.</p>
+              
+              <form onSubmit={handleCloseSubmit} className="space-y-6">
+                <div>
+                  <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Tagging</label>
+                  <div className="space-y-4">
+                    <p className="text-sm font-bold text-gray-700">This Installment has been:</p>
+                    {isFullyPaid ? (
+                      <div className="flex items-center space-x-3 p-4 bg-green-50 text-green-700 rounded-2xl border border-green-100">
+                        <CheckCircle2 className="w-5 h-5" />
+                        <span className="font-black uppercase tracking-widest text-xs">Completed</span>
+                      </div>
+                    ) : (
+                      <div className="relative">
+                        <select 
+                          value={closeTagging} 
+                          onChange={(e) => setCloseTagging(e.target.value as any)}
+                          className="w-full bg-gray-50 border-transparent rounded-2xl p-4 outline-none font-bold text-sm appearance-none focus:ring-2 focus:ring-indigo-500"
+                        >
+                          <option value="terminated">Terminated (Early Close)</option>
+                          <option value="transferred">Transferred (Moved to other loan)</option>
+                        </select>
+                        <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                <div className="flex space-x-4 pt-4">
+                  <button type="button" disabled={isSubmitting} onClick={() => setShowCloseModal(null)} className="flex-1 bg-gray-100 py-4 rounded-2xl font-bold text-gray-500 disabled:opacity-50">Cancel</button>
+                  <button 
+                    type="submit" 
+                    disabled={isSubmitting}
+                    className="flex-1 bg-amber-500 text-white py-4 rounded-2xl font-bold hover:bg-amber-600 shadow-xl shadow-amber-100 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center justify-center space-x-2"
+                  >
+                    {isSubmitting ? <span>Archiving...</span> : <span>Archive</span>}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* Standardized Modals */}
       {showPayModal && (
