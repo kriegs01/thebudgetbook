@@ -590,7 +590,7 @@ const Installments: React.FC<InstallmentsProps> = ({ installments, accounts, bil
                       </button>
                       <button 
                         onClick={() => { setShowCloseModal(item); setOpenMenuId(null); setCloseTagging(isFullyPaid ? 'completed' : 'terminated'); }}
-                        className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center space-x-2"
+                        className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-amber-50 hover:text-amber-700 transition-colors flex items-center space-x-2"
                       >
                         <Archive className="w-4 h-4" />
                         <span>Close</span>
@@ -651,7 +651,7 @@ const Installments: React.FC<InstallmentsProps> = ({ installments, accounts, bil
               isFullyPaid ? (
                 <button 
                   onClick={() => { setShowCloseModal(item); setCloseTagging('completed'); }}
-                  className="bg-gray-900 text-white px-5 py-2 rounded-xl text-xs font-black uppercase tracking-widest hover:bg-black transition-all shadow-lg"
+                  className="bg-amber-500 text-white px-5 py-2 rounded-xl text-xs font-black uppercase tracking-widest hover:bg-amber-600 transition-all shadow-lg shadow-amber-100/50"
                 >
                   Close
                 </button>
@@ -735,7 +735,7 @@ const Installments: React.FC<InstallmentsProps> = ({ installments, accounts, bil
               isFullyPaid ? (
                 <button 
                   onClick={() => { setShowCloseModal(item); setCloseTagging('completed'); }}
-                  className="bg-gray-900 text-white px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest hover:bg-black transition-all"
+                  className="bg-amber-500 text-white px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest hover:bg-amber-600 transition-all"
                 >
                   Close
                 </button>
@@ -780,7 +780,7 @@ const Installments: React.FC<InstallmentsProps> = ({ installments, accounts, bil
                         </button>
                         <button 
                           onClick={() => { setShowCloseModal(item); setOpenMenuId(null); setCloseTagging(isFullyPaid ? 'completed' : 'terminated'); }}
-                          className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center space-x-2"
+                          className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-amber-50 hover:text-amber-700 transition-colors flex items-center space-x-2"
                         >
                           <Archive className="w-4 h-4" />
                           <span>Close</span>
@@ -1039,7 +1039,7 @@ const Installments: React.FC<InstallmentsProps> = ({ installments, accounts, bil
                   <button 
                     type="submit" 
                     disabled={isSubmitting}
-                    className="flex-1 bg-gray-900 text-white py-4 rounded-2xl font-bold hover:bg-black shadow-xl disabled:bg-gray-400 disabled:cursor-not-allowed transition-all flex items-center justify-center space-x-2"
+                    className="flex-1 bg-amber-500 text-white py-4 rounded-2xl font-bold hover:bg-amber-600 shadow-xl shadow-amber-100 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center justify-center space-x-2"
                   >
                     {isSubmitting ? <span>Archiving...</span> : <span>Archive</span>}
                   </button>
