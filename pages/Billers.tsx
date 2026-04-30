@@ -1069,37 +1069,37 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
       {detailedBiller ? (
         <div className="space-y-6 animate-in slide-in-from-right-4 duration-500">
           <div className="flex items-center justify-between">
-            <button onClick={() => setDetailedBillerId(null)} className="flex items-center space-x-2 text-gray-500 hover:text-gray-900 group"><ArrowLeft className="w-5 h-5 group-hover:-translate-x-1 transition-transform" /><span className="font-medium">Back to Billers</span></button>
+            <button onClick={() => setDetailedBillerId(null)} className="flex items-center space-x-2 text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 group transition-colors"><ArrowLeft className="w-5 h-5 group-hover:-translate-x-1 transition-transform" /><span className="font-medium">Back to Billers</span></button>
             <div className="flex items-center space-x-3">
-              <button onClick={() => openEditModal(detailedBiller)} className="flex items-center space-x-2 px-4 py-2 bg-gray-100 text-gray-600 rounded-xl text-xs font-bold hover:bg-gray-200"><Edit2 className="w-4 h-4" /><span>Edit</span></button>
-              <button onClick={() => handleDeleteTrigger(detailedBiller.id, detailedBiller.name)} className="flex items-center space-x-2 px-4 py-2 bg-red-50 text-red-600 rounded-xl text-xs font-bold hover:bg-red-100"><Trash2 className="w-4 h-4" /><span>Delete</span></button>
+              <button onClick={() => openEditModal(detailedBiller)} className="flex items-center space-x-2 px-4 py-2 bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 rounded-xl text-xs font-bold hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"><Edit2 className="w-4 h-4" /><span>Edit</span></button>
+              <button onClick={() => handleDeleteTrigger(detailedBiller.id, detailedBiller.name)} className="flex items-center space-x-2 px-4 py-2 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 rounded-xl text-xs font-bold hover:bg-red-100 dark:hover:bg-red-900/40 transition-colors"><Trash2 className="w-4 h-4" /><span>Delete</span></button>
             </div>
           </div>
-          <div className="bg-white p-8 rounded-3xl border border-gray-100 shadow-sm">
+          <div className="bg-white dark:bg-gray-900 p-8 rounded-3xl border border-gray-100 dark:border-gray-800 shadow-sm transition-colors">
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-8">
               <div className="flex items-center space-x-6">
-                <div className="p-5 bg-indigo-50 text-indigo-600 rounded-3xl"><Bell className="w-10 h-10" /></div>
+                <div className="p-5 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 rounded-3xl transition-colors"><Bell className="w-10 h-10" /></div>
                 <div>
-                  <h2 className="text-3xl font-black text-gray-900">{detailedBiller.name}</h2>
+                  <h2 className="text-3xl font-black text-gray-900 dark:text-gray-100 transition-colors">{detailedBiller.name}</h2>
                   <div className="flex items-center space-x-3 mt-2">
-                    <span className="px-3 py-1 bg-gray-100 rounded-full text-xs font-bold text-gray-500 uppercase">{detailedBiller.category}</span>
-                    <span className="text-sm text-gray-400 font-medium">Due every {detailedBiller.dueDate}</span>
+                    <span className="px-3 py-1 bg-gray-100 dark:bg-gray-800 rounded-full text-xs font-bold text-gray-500 dark:text-gray-400 uppercase transition-colors">{detailedBiller.category}</span>
+                    <span className="text-sm text-gray-400 dark:text-gray-500 font-medium transition-colors">Due every {detailedBiller.dueDate}</span>
                     {/* ENHANCEMENT: Show linked account info */}
                     {shouldUseLinkedAccount(detailedBiller) && getLinkedAccount(detailedBiller, accounts) && (
-                      <span className="px-3 py-1 bg-purple-100 rounded-full text-xs font-bold text-purple-600">
+                      <span className="px-3 py-1 bg-purple-100 dark:bg-purple-900/30 rounded-full text-xs font-bold text-purple-600 dark:text-purple-400 transition-colors">
                         <span role="img" aria-label="Linked">🔗</span> Linked to {getLinkedAccount(detailedBiller, accounts)?.bank}
                       </span>
                     )}
                   </div>
                 </div>
               </div>
-              <div className="text-right"><p className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Expected Amount</p><p className="text-3xl font-black text-indigo-600">{formatCurrency(getExpectedAmount(detailedBiller))}</p></div>
+              <div className="text-right"><p className="text-xs font-bold text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-1 transition-colors">Expected Amount</p><p className="text-3xl font-black text-indigo-600 dark:text-indigo-400 transition-colors">{formatCurrency(getExpectedAmount(detailedBiller))}</p></div>
             </div>
-            <div className="overflow-hidden rounded-2xl border border-gray-100">
+            <div className="overflow-hidden rounded-2xl border border-gray-100 dark:border-gray-800 transition-colors">
               <div className="overflow-x-auto">
                 <table className="w-full text-left">
-                  <thead><tr className="bg-gray-50 border-b border-gray-100"><th className="p-4 text-xs font-bold text-gray-400 uppercase">Month</th><th className="p-4 text-xs font-bold text-gray-400 uppercase">Amount</th><th className="p-4 text-xs font-bold text-gray-400 uppercase text-center">Action</th></tr></thead>
-                  <tbody className="divide-y divide-gray-50">{paymentSchedules.length > 0 ? (
+                  <thead><tr className="bg-gray-50 dark:bg-gray-800/50 border-b border-gray-100 dark:border-gray-800 transition-colors"><th className="p-4 text-xs font-bold text-gray-400 dark:text-gray-500 uppercase transition-colors">Month</th><th className="p-4 text-xs font-bold text-gray-400 dark:text-gray-500 uppercase transition-colors">Amount</th><th className="p-4 text-xs font-bold text-gray-400 dark:text-gray-500 uppercase text-center transition-colors">Action</th></tr></thead>
+                  <tbody className="divide-y divide-gray-50 dark:divide-gray-800/50 transition-colors">{paymentSchedules.length > 0 ? (
                     // PRIMARY: Display database payment schedules directly (source of truth)
                     (() => {
                       console.log('[Billers] Displaying database payment schedules (sorted chronologically)');
@@ -1165,32 +1165,32 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
                         
                         return (
                           <tr key={schedule.id} className={`${
-                            isPaid ? 'bg-green-50' : 
-                            isPartial ? 'bg-yellow-50' : 
-                            'hover:bg-gray-50/50'
+                            isPaid ? 'bg-green-50 dark:bg-green-900/20' : 
+                            isPartial ? 'bg-yellow-50 dark:bg-yellow-900/20' : 
+                            'hover:bg-gray-50/50 dark:hover:bg-gray-800/50'
                           } transition-colors`}>
                             <td className="p-4">
                               <div className="flex flex-col">
-                                <span className="font-bold text-gray-900">{displayLabel}</span>
+                                <span className="font-bold text-gray-900 dark:text-gray-100 transition-colors">{displayLabel}</span>
                                 {isFromLinkedAccount && (
-                                  <span className="text-[10px] text-purple-600 font-medium mt-1 flex items-center gap-1">
-                                    <span className="inline-block w-1.5 h-1.5 rounded-full bg-purple-600" aria-hidden="true"></span>
+                                  <span className="text-[10px] text-purple-600 dark:text-purple-400 font-medium mt-1 flex items-center gap-1 transition-colors">
+                                    <span className="inline-block w-1.5 h-1.5 rounded-full bg-purple-600 dark:bg-purple-400 transition-colors" aria-hidden="true"></span>
                                     From linked account
                                   </span>
                                 )}
                                 {isPartial && schedule.amount_paid > 0 && (
-                                  <span className="text-xs text-gray-500 mt-1">
+                                  <span className="text-xs text-gray-500 dark:text-gray-400 mt-1 transition-colors">
                                     Paid: {formatCurrency(schedule.amount_paid)} of {formatCurrency(calculatedAmount)}
                                   </span>
                                 )}
                               </div>
                             </td>
-                            <td className="p-4 font-medium text-gray-600">{formatCurrency(displayAmount)}</td>
+                            <td className="p-4 font-medium text-gray-600 dark:text-gray-400 transition-colors">{formatCurrency(displayAmount)}</td>
                             <td className="p-4 text-center">
                               {isPaid ? (
                                 <span role="status" className="flex items-center justify-center space-x-2 text-green-600">
                                   <CheckCircle2 className="w-5 h-5" aria-label="Payment completed" title="Paid" />
-                                  <button onClick={() => openSchedulePaymentsModal(schedule.id, `${schedule.month} ${schedule.year}`)} title="View payment records" className="text-gray-400 hover:text-indigo-600 transition-colors rounded-full p-1 hover:bg-indigo-50"><Info className="w-4 h-4" /></button>
+                                  <button onClick={() => openSchedulePaymentsModal(schedule.id, `${schedule.month} ${schedule.year}`)} title="View payment records" className="text-gray-400 dark:text-gray-500 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors rounded-full p-1 hover:bg-indigo-50 dark:hover:bg-indigo-900/30"><Info className="w-4 h-4" /></button>
                                 </span>
                               ) : isPartial ? (
                                 <div className="flex flex-col items-center space-y-1">
@@ -1198,7 +1198,7 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
                                     <span className="px-3 py-1 bg-yellow-500 text-white rounded-lg font-bold text-xs">
                                       Partial
                                     </span>
-                                    <button onClick={() => openSchedulePaymentsModal(schedule.id, `${schedule.month} ${schedule.year}`)} title="View payment records" className="text-gray-400 hover:text-indigo-600 transition-colors rounded-full p-1 hover:bg-indigo-50"><Info className="w-4 h-4" /></button>
+                                    <button onClick={() => openSchedulePaymentsModal(schedule.id, `${schedule.month} ${schedule.year}`)} title="View payment records" className="text-gray-400 dark:text-gray-500 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors rounded-full p-1 hover:bg-indigo-50 dark:hover:bg-indigo-900/30"><Info className="w-4 h-4" /></button>
                                   </div>
                                   <button 
                                     onClick={() => { 
@@ -1262,32 +1262,32 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
                         
                         return (
                           <tr key={idx} className={`${
-                            isPaid ? 'bg-green-50' : 
-                            isPartial ? 'bg-yellow-50' : 
-                            'hover:bg-gray-50/50'
+                            isPaid ? 'bg-green-50 dark:bg-green-900/20' : 
+                            isPartial ? 'bg-yellow-50 dark:bg-yellow-900/20' : 
+                            'hover:bg-gray-50/50 dark:hover:bg-gray-800/50'
                           } transition-colors`}>
                             <td className="p-4">
                               <div className="flex flex-col">
-                                <span className="font-bold text-gray-900">{displayLabel}</span>
+                                <span className="font-bold text-gray-900 dark:text-gray-100 transition-colors">{displayLabel}</span>
                                 {isFromLinkedAccount && (
-                                  <span className="text-[10px] text-purple-600 font-medium mt-1 flex items-center gap-1">
-                                    <span className="inline-block w-1.5 h-1.5 rounded-full bg-purple-600" aria-hidden="true"></span>
+                                  <span className="text-[10px] text-purple-600 dark:text-purple-400 font-medium mt-1 flex items-center gap-1 transition-colors">
+                                    <span className="inline-block w-1.5 h-1.5 rounded-full bg-purple-600 dark:bg-purple-400 transition-colors" aria-hidden="true"></span>
                                     From linked account
                                   </span>
                                 )}
                                 {isPartial && schedWithStatus.amountPaid > 0 && (
-                                  <span className="text-xs text-gray-500 mt-1">
+                                  <span className="text-xs text-gray-500 dark:text-gray-400 mt-1 transition-colors">
                                     Paid: {formatCurrency(schedWithStatus.amountPaid)} of {formatCurrency(calculatedAmount)}
                                   </span>
                                 )}
                               </div>
                             </td>
-                            <td className="p-4 font-medium text-gray-600">{formatCurrency(displayAmount)}</td>
+                            <td className="p-4 font-medium text-gray-600 dark:text-gray-400 transition-colors">{formatCurrency(displayAmount)}</td>
                             <td className="p-4 text-center">
                               {isPaid ? (
                                 <span role="status" className="flex items-center justify-center space-x-2 text-green-600">
                                   <CheckCircle2 className="w-5 h-5" aria-label="Payment completed" title="Paid" />
-                                  {sched.id && <button onClick={() => openSchedulePaymentsModal(sched.id!, `${sched.month} ${sched.year}`)} title="View payment records" className="text-gray-400 hover:text-indigo-600 transition-colors rounded-full p-1 hover:bg-indigo-50"><Info className="w-4 h-4" /></button>}
+                                  {sched.id && <button onClick={() => openSchedulePaymentsModal(sched.id!, `${sched.month} ${sched.year}`)} title="View payment records" className="text-gray-400 dark:text-gray-500 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors rounded-full p-1 hover:bg-indigo-50 dark:hover:bg-indigo-900/30"><Info className="w-4 h-4" /></button>}
                                 </span>
                               ) : isPartial ? (
                                 <div className="flex flex-col items-center space-y-1">
@@ -1295,7 +1295,7 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
                                     <span className="px-3 py-1 bg-yellow-500 text-white rounded-lg font-bold text-xs">
                                       Partial
                                     </span>
-                                    {sched.id && <button onClick={() => openSchedulePaymentsModal(sched.id!, `${sched.month} ${sched.year}`)} title="View payment records" className="text-gray-400 hover:text-indigo-600 transition-colors rounded-full p-1 hover:bg-indigo-50"><Info className="w-4 h-4" /></button>}
+                                    {sched.id && <button onClick={() => openSchedulePaymentsModal(sched.id!, `${sched.month} ${sched.year}`)} title="View payment records" className="text-gray-400 dark:text-gray-500 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors rounded-full p-1 hover:bg-indigo-50 dark:hover:bg-indigo-900/30"><Info className="w-4 h-4" /></button>}
                                   </div>
                                   <button 
                                     onClick={() => { 
@@ -1332,7 +1332,7 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
       ) : (
         <>
           <div className="flex items-center justify-between mb-8">
-            <div className="space-y-1"><h2 className="text-3xl font-black text-gray-900 tracking-tight uppercase">BILLERS</h2><p className="text-gray-500 text-sm">Manage recurring bills and payment schedules</p></div>
+            <div className="space-y-1"><h2 className="text-3xl font-black text-gray-900 dark:text-gray-100 tracking-tight uppercase transition-colors">BILLERS</h2><p className="text-gray-500 dark:text-gray-400 text-sm transition-colors">Manage recurring bills and payment schedules</p></div>
             <button onClick={() => { setShowAddModal(true); setTimingFeedback(''); }} className="flex items-center justify-center space-x-2 bg-indigo-600 text-white px-6 py-3 rounded-2xl font-bold hover:bg-indigo-700 shadow-lg"><Plus className="w-5 h-5" /><span>Add Billers</span></button>
           </div>
 
@@ -1341,7 +1341,7 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
             <div className="mb-8">
               <button 
                 onClick={() => setIsActiveOpen(!isActiveOpen)}
-                className="flex items-center space-x-2 mb-4 text-gray-700 hover:text-gray-900 font-bold text-lg"
+                className="flex items-center space-x-2 mb-4 text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100 font-bold text-lg transition-colors"
               >
                 {isActiveOpen ? <ChevronDown className="w-5 h-5" /> : <ChevronRight className="w-5 h-5" />}
                 <span>Active Billers ({activeBillers.length})</span>
@@ -1359,7 +1359,7 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
             <div>
               <button 
                 onClick={() => setIsInactiveOpen(!isInactiveOpen)}
-                className="flex items-center space-x-2 mb-4 text-gray-700 hover:text-gray-900 font-bold text-lg"
+                className="flex items-center space-x-2 mb-4 text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100 font-bold text-lg transition-colors"
               >
                 {isInactiveOpen ? <ChevronDown className="w-5 h-5" /> : <ChevronRight className="w-5 h-5" />}
                 <span>Inactive Billers ({inactiveBillers.length})</span>
@@ -1378,7 +1378,7 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
               <div className="inline-flex items-center justify-center w-20 h-20 rounded-full bg-gray-100 mb-4">
                 <Bell className="w-10 h-10 text-gray-400" />
               </div>
-              <h3 className="text-xl font-bold text-gray-900 mb-2">No Billers Yet</h3>
+              <h3 className="text-xl font-bold text-gray-900 dark:text-gray-100 mb-2 transition-colors">No Billers Yet</h3>
               <p className="text-gray-500 mb-6">Get started by adding your first recurring bill</p>
               <button 
                 onClick={() => { setShowAddModal(true); setTimingFeedback(''); }} 
@@ -1394,25 +1394,25 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
 
       {showAddModal && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md animate-in fade-in">
-          <div className="bg-white rounded-[2.5rem] w-full max-w-lg p-10 shadow-2xl animate-in zoom-in-95 relative max-h-[90vh] overflow-y-auto">
-            <h2 className="text-2xl font-black text-gray-900 mb-8 uppercase tracking-tight">New Biller</h2>
+          <div className="bg-white dark:bg-gray-900 rounded-[2.5rem] w-full max-w-lg p-10 shadow-2xl animate-in zoom-in-95 relative max-h-[90vh] overflow-y-auto transition-colors">
+            <h2 className="text-2xl font-black text-gray-900 dark:text-gray-100 mb-8 uppercase tracking-tight transition-colors">New Biller</h2>
             <form onSubmit={handleAddSubmit} className="space-y-6">
-              <div><label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Category</label>
-                <select value={addFormData.category} onChange={(e) => setAddFormData({ ...addFormData, category: e.target.value })} className="w-full bg-gray-50 border-transparent rounded-2xl p-4 outline-none font-bold text-sm appearance-none">{renderCategoryOptions()}</select>
+              <div><label className="block text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-2 transition-colors">Category</label>
+                <select value={addFormData.category} onChange={(e) => setAddFormData({ ...addFormData, category: e.target.value })} className="w-full bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-transparent rounded-2xl p-4 outline-none font-bold text-sm appearance-none transition-colors">{renderCategoryOptions()}</select>
               </div>
-              <div><label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Biller Name</label><input required type="text" value={addFormData.name} onChange={(e) => setAddFormData({ ...addFormData, name: e.target.value })} className="w-full bg-gray-50 border-transparent rounded-2xl p-4 outline-none font-bold focus:ring-2 focus:ring-indigo-500" /></div>
+              <div><label className="block text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-2 transition-colors">Biller Name</label><input required type="text" value={addFormData.name} onChange={(e) => setAddFormData({ ...addFormData, name: e.target.value })} className="w-full bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-transparent rounded-2xl p-4 outline-none font-bold focus:ring-2 focus:ring-indigo-500 transition-colors" /></div>
               <div className="grid grid-cols-2 gap-4">
                  <div>
-                   <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">
-                     Expected Amount {addFormData.category.startsWith('Loans') && <span className="text-gray-400 font-normal">(Optional for Loans)</span>}
+                   <label className="block text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-2 transition-colors">
+                     Expected Amount {addFormData.category.startsWith('Loans') && <span className="text-gray-400 dark:text-gray-500 font-normal transition-colors">(Optional for Loans)</span>}
                    </label>
-                   <input required={!addFormData.category.startsWith('Loans')} type="number" min="0" step="0.01" value={addFormData.expectedAmount} onChange={(e) => setAddFormData({ ...addFormData, expectedAmount: e.target.value })} className="w-full bg-gray-50 border-transparent rounded-2xl p-4 outline-none font-bold" />
+                   <input required={!addFormData.category.startsWith('Loans')} type="number" min="0" step="0.01" value={addFormData.expectedAmount} onChange={(e) => setAddFormData({ ...addFormData, expectedAmount: e.target.value })} className="w-full bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-transparent rounded-2xl p-4 outline-none font-bold transition-colors" />
                  </div>
                  <div>
-                   <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">
+                   <label className="block text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-2 transition-colors">
                      Due Date (day)
                      {addFormData.category.startsWith('Loans') && addFormData.linkedAccountId && (
-                       <span className="ml-2 text-purple-500 font-bold normal-case">🔗 Auto</span>
+                       <span className="ml-2 text-purple-500 dark:text-purple-400 font-bold normal-case transition-colors">🔗 Auto</span>
                      )}
                    </label>
                    {addFormData.category.startsWith('Loans') && addFormData.linkedAccountId ? (
@@ -1428,10 +1428,10 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
                              type="number"
                              readOnly
                              value={dueDay ?? ''}
-                             className="w-full bg-purple-50 border-2 border-purple-200 rounded-2xl p-4 outline-none font-bold text-purple-700 cursor-not-allowed"
+                             className="w-full bg-purple-50 dark:bg-purple-900/10 border-2 border-purple-200 dark:border-purple-800/30 rounded-2xl p-4 outline-none font-bold text-purple-700 dark:text-purple-400 cursor-not-allowed transition-colors"
                            />
                            {dueDay && statementDay && daysToPay && (
-                             <p className="text-xs text-purple-600 mt-1">
+                             <p className="text-xs text-purple-600 dark:text-purple-400 mt-1 transition-colors">
                                📅 Statement {statementDay}{ordinalSuffix(statementDay)} + {daysToPay} days → Due {dueDay}{ordinalSuffix(dueDay)}
                              </p>
                            )}
@@ -1439,21 +1439,21 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
                        );
                      })()
                    ) : (
-                     <input required type="number" min="1" max="31" placeholder="e.g. 15" value={addFormData.dueDate} onChange={(e) => { setAddFormData({ ...addFormData, dueDate: e.target.value }); showTimingInfo(e.target.value); }} className="w-full bg-gray-50 border-transparent rounded-2xl p-4 outline-none font-bold" />
+                     <input required type="number" min="1" max="31" placeholder="e.g. 15" value={addFormData.dueDate} onChange={(e) => { setAddFormData({ ...addFormData, dueDate: e.target.value }); showTimingInfo(e.target.value); }} className="w-full bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-transparent rounded-2xl p-4 outline-none font-bold transition-colors" />
                    )}
                  </div>
               </div>
               
               {/* ENHANCEMENT: Linked Account for Loans Category */}
               {addFormData.category.startsWith('Loans') && (
-                <div className="bg-purple-50 rounded-2xl p-4 border-2 border-purple-200">
-                  <label className="block text-[10px] font-black text-purple-600 uppercase tracking-widest mb-2">
+                <div className="bg-purple-50 dark:bg-purple-900/10 rounded-2xl p-4 border-2 border-purple-200 dark:border-purple-800/30 transition-colors">
+                  <label className="block text-[10px] font-black text-purple-600 dark:text-purple-400 uppercase tracking-widest mb-2 transition-colors">
                     Linked Credit Account (Optional)
                   </label>
                   <select 
                     value={addFormData.linkedAccountId} 
                     onChange={(e) => setAddFormData({ ...addFormData, linkedAccountId: e.target.value })} 
-                    className="w-full bg-white border-transparent rounded-2xl p-4 outline-none font-bold text-sm appearance-none"
+                    className="w-full bg-white dark:bg-gray-900 dark:text-gray-100 border-transparent rounded-2xl p-4 outline-none font-bold text-sm appearance-none transition-colors"
                   >
                     <option value="">None - Use Manual Amount</option>
                     {accounts
@@ -1471,19 +1471,19 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
                     
                     if (creditAccounts.length === 0) {
                       return (
-                        <p className="text-xs text-orange-600 mt-2 flex items-center gap-1">
+                        <p className="text-xs text-orange-600 dark:text-orange-400 mt-2 flex items-center gap-1 transition-colors">
                           <span className="font-bold">⚠️ No credit accounts found.</span> Create a credit account first to enable linking.
                         </p>
                       );
                     } else if (creditAccountsWithBilling.length === 0) {
                       return (
-                        <p className="text-xs text-orange-600 mt-2 flex items-center gap-1">
+                        <p className="text-xs text-orange-600 dark:text-orange-400 mt-2 flex items-center gap-1 transition-colors">
                           <span className="font-bold">⚠️ No credit accounts with billing dates.</span> Edit your credit accounts to add billing dates.
                         </p>
                       );
                     } else {
                       return (
-                        <p className="text-xs text-purple-600 mt-2">
+                        <p className="text-xs text-purple-600 dark:text-purple-400 mt-2 transition-colors">
                           Link to a credit account to automatically calculate expected amounts from billing cycle transactions
                         </p>
                       );
@@ -1492,22 +1492,22 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
                 </div>
               )}
               
-              <div className="border-t border-gray-200 pt-6">
-                <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-4">Activation Date</label>
+              <div className="border-t border-gray-200 dark:border-gray-800 pt-6 transition-colors">
+                <label className="block text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-4 transition-colors">Activation Date</label>
                 <div className="grid grid-cols-3 gap-4">
-                  <div><label className="block text-[10px] font-bold text-gray-400 mb-2">Month</label>
-                    <select value={addFormData.actMonth} onChange={(e) => setAddFormData({ ...addFormData, actMonth: e.target.value })} className="w-full bg-gray-50 border-transparent rounded-2xl p-4 outline-none font-bold text-sm appearance-none">{MONTHS.map(m => <option key={m} value={m}>{m}</option>)}</select>
+                  <div><label className="block text-[10px] font-bold text-gray-400 dark:text-gray-500 mb-2 transition-colors">Month</label>
+                    <select value={addFormData.actMonth} onChange={(e) => setAddFormData({ ...addFormData, actMonth: e.target.value })} className="w-full bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-transparent rounded-2xl p-4 outline-none font-bold text-sm appearance-none transition-colors">{MONTHS.map(m => <option key={m} value={m}>{m}</option>)}</select>
                   </div>
-                  <div><label className="block text-[10px] font-bold text-gray-400 mb-2">Day (optional)</label><input type="number" min="1" max="31" placeholder="e.g. 15" value={addFormData.actDay} onChange={(e) => { setAddFormData({ ...addFormData, actDay: e.target.value }); if (!addFormData.dueDate) showTimingInfo(e.target.value); }} className="w-full bg-gray-50 border-transparent rounded-2xl p-4 outline-none font-bold" /></div>
-                  <div><label className="block text-[10px] font-bold text-gray-400 mb-2">Year</label><input required type="number" min="2000" max="2100" value={addFormData.actYear} onChange={(e) => setAddFormData({ ...addFormData, actYear: e.target.value })} className="w-full bg-gray-50 border-transparent rounded-2xl p-4 outline-none font-bold" /></div>
+                  <div><label className="block text-[10px] font-bold text-gray-400 dark:text-gray-500 mb-2 transition-colors">Day (optional)</label><input type="number" min="1" max="31" placeholder="e.g. 15" value={addFormData.actDay} onChange={(e) => { setAddFormData({ ...addFormData, actDay: e.target.value }); if (!addFormData.dueDate) showTimingInfo(e.target.value); }} className="w-full bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-transparent rounded-2xl p-4 outline-none font-bold transition-colors" /></div>
+                  <div><label className="block text-[10px] font-bold text-gray-400 dark:text-gray-500 mb-2 transition-colors">Year</label><input required type="number" min="2000" max="2100" value={addFormData.actYear} onChange={(e) => setAddFormData({ ...addFormData, actYear: e.target.value })} className="w-full bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-transparent rounded-2xl p-4 outline-none font-bold transition-colors" /></div>
                 </div>
               </div>
 
               {/* Computed fields display */}
-              <div className="bg-indigo-50 rounded-2xl p-4 space-y-2">
+              <div className="bg-indigo-50 dark:bg-indigo-900/20 rounded-2xl p-4 space-y-2 transition-colors">
                 <div className="flex justify-between items-center">
-                  <span className="text-[10px] font-black text-indigo-400 uppercase tracking-widest">Auto-Computed Timing:</span>
-                  <span className="text-sm font-black text-indigo-600">{calculateTiming(addFormData.dueDate || addFormData.actDay)}</span>
+                  <span className="text-[10px] font-black text-indigo-400 dark:text-indigo-300 uppercase tracking-widest transition-colors">Auto-Computed Timing:</span>
+                  <span className="text-sm font-black text-indigo-600 dark:text-indigo-400 transition-colors">{calculateTiming(addFormData.dueDate || addFormData.actDay)}</span>
                 </div>
                 {(() => {
                   const deactDate = (addFormData.deactMonth && addFormData.deactYear)
@@ -1516,11 +1516,11 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
                   const computedStatus = calculateStatus(deactDate);
                   return (
                     <div className="flex justify-between items-center">
-                      <span className="text-[10px] font-black text-indigo-400 uppercase tracking-widest">Auto-Computed Status:</span>
+                      <span className="text-[10px] font-black text-indigo-400 dark:text-indigo-300 uppercase tracking-widest transition-colors">Auto-Computed Status:</span>
                       <div className="flex items-center gap-2">
-                        <span className={`text-sm font-black ${computedStatus === 'inactive' ? 'text-gray-600' : 'text-green-600'}`}>{computedStatus}</span>
+                        <span className={`text-sm font-black transition-colors ${computedStatus === 'inactive' ? 'text-gray-600 dark:text-gray-400' : 'text-green-600 dark:text-green-400'}`}>{computedStatus}</span>
                         {deactDate && computedStatus === 'active' && (
-                          <span className="text-xs text-orange-500 font-medium">— deactivates {deactDate.month} {deactDate.year}</span>
+                          <span className="text-xs text-orange-500 dark:text-orange-400 font-medium transition-colors">— deactivates {deactDate.month} {deactDate.year}</span>
                         )}
                       </div>
                     </div>
@@ -1528,7 +1528,7 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
                 })()}
               </div>
 
-              <div className="border-t border-gray-200 pt-6">
+              <div className="border-t border-gray-200 dark:border-gray-800 pt-6 transition-colors">
                 <button
                   type="button"
                   onClick={() => {
@@ -1538,17 +1538,17 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
                     }
                     setShowAddDeactSection(!showAddDeactSection);
                   }}
-                  className="flex items-center gap-2 text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1 hover:text-gray-600"
+                  className="flex items-center gap-2 text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-1 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
                 >
                   {showAddDeactSection ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
                   Deactivation Date (optional)
                 </button>
                 {showAddDeactSection && (
                   <>
-                    <p className="text-xs text-gray-400 mb-4">Biller deactivates at the start of this month — last payment is the month before.</p>
+                    <p className="text-xs text-gray-400 dark:text-gray-500 mb-4 transition-colors">Biller deactivates at the start of this month — last payment is the month before.</p>
                     <div className="grid grid-cols-2 gap-4">
-                      <div><label className="block text-[10px] font-bold text-gray-400 mb-2">Month</label>
-                        <select value={addFormData.deactMonth} onChange={(e) => setAddFormData({ ...addFormData, deactMonth: e.target.value })} className="w-full bg-gray-50 border-transparent rounded-2xl p-4 outline-none font-bold text-sm appearance-none">
+                      <div><label className="block text-[10px] font-bold text-gray-400 dark:text-gray-500 mb-2 transition-colors">Month</label>
+                        <select value={addFormData.deactMonth} onChange={(e) => setAddFormData({ ...addFormData, deactMonth: e.target.value })} className="w-full bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-transparent rounded-2xl p-4 outline-none font-bold text-sm appearance-none transition-colors">
                           <option value="">None</option>
                           {MONTHS.map(m => {
                             const deactYearNum = parseInt(addFormData.deactYear);
@@ -1558,11 +1558,11 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
                             const mIdx = MONTHS.indexOf(m);
                             // Disable months on or before activation month when deact year == act year
                             const isDisabled = sameYear && mIdx <= actMonthIdx;
-                            return <option key={m} value={m} disabled={isDisabled} className={isDisabled ? 'text-gray-300' : ''}>{m}</option>;
+                            return <option key={m} value={m} disabled={isDisabled} className={isDisabled ? 'text-gray-300 dark:text-gray-600' : ''}>{m}</option>;
                           })}
                         </select>
                       </div>
-                      <div><label className="block text-[10px] font-bold text-gray-400 mb-2">Year</label><input type="number" min="2000" max="2100" placeholder="e.g. 2026" value={addFormData.deactYear} onChange={(e) => {
+                      <div><label className="block text-[10px] font-bold text-gray-400 dark:text-gray-500 mb-2 transition-colors">Year</label><input type="number" min="2000" max="2100" placeholder="e.g. 2026" value={addFormData.deactYear} onChange={(e) => {
                         const newDeactYear = e.target.value;
                         const deactYearNum = parseInt(newDeactYear);
                         const actYearNum = parseInt(addFormData.actYear);
@@ -1571,7 +1571,7 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
                         // Clear deactMonth if it becomes invalid (same year and deact month <= act month)
                         const shouldClear = !isNaN(deactYearNum) && !isNaN(actYearNum) && deactYearNum === actYearNum && deactMonthIdx !== -1 && deactMonthIdx <= actMonthIdx;
                         setAddFormData({ ...addFormData, deactYear: newDeactYear, deactMonth: shouldClear ? '' : addFormData.deactMonth });
-                      }} className="w-full bg-gray-50 border-transparent rounded-2xl p-4 outline-none font-bold" /></div>
+                      }} className="w-full bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-transparent rounded-2xl p-4 outline-none font-bold transition-colors" /></div>
                     </div>
                   </>
                 )}
@@ -1579,17 +1579,17 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
 
               {/* Scheduled Increases — eligible categories only (Fixed, Utilities, Subscriptions) */}
               {categorySupportsScheduledIncreases(addFormData.category) && (
-                <div className="border-t border-gray-200 pt-6">
+                <div className="border-t border-gray-200 dark:border-gray-800 pt-6 transition-colors">
                   <button
                     type="button"
                     onClick={() => setShowAddScheduledSection(!showAddScheduledSection)}
-                    className="flex items-center gap-2 text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1 hover:text-gray-600"
+                    className="flex items-center gap-2 text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-1 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
                   >
                     {showAddScheduledSection ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
                     Scheduled Increases (optional)
                   </button>
                   {!showAddScheduledSection && (
-                    <span className="text-xs text-gray-400">Set future months when the amount changes.</span>
+                    <span className="text-xs text-gray-400 dark:text-gray-500 transition-colors">Set future months when the amount changes.</span>
                   )}
                   {showAddScheduledSection && (
                     <div className="mt-4">
@@ -1608,7 +1608,7 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
                               },
                             ]);
                           }}
-                          className="flex items-center gap-1 text-xs font-bold text-indigo-600 bg-indigo-50 px-3 py-2 rounded-xl hover:bg-indigo-100"
+                          className="flex items-center gap-1 text-xs font-bold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-900/30 px-3 py-2 rounded-xl hover:bg-indigo-100 dark:hover:bg-indigo-900/50 transition-colors"
                         >
                           <Plus className="w-3 h-3" /> Add
                         </button>
@@ -1616,7 +1616,7 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
                       {addScheduledIncreases.map((inc, idx) => (
                         <div key={idx} className="flex gap-3 mb-3 items-end">
                           <div className="flex-1">
-                            <label className="block text-[10px] font-bold text-gray-400 mb-1">Month</label>
+                            <label className="block text-[10px] font-bold text-gray-400 dark:text-gray-500 mb-1 transition-colors">Month</label>
                             <select
                               value={inc.effectiveMonth}
                               onChange={(e) => {
@@ -1624,13 +1624,13 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
                                 updated[idx] = { ...updated[idx], effectiveMonth: e.target.value };
                                 setAddScheduledIncreases(updated);
                               }}
-                              className="w-full bg-gray-50 border-transparent rounded-2xl p-3 outline-none font-bold text-sm appearance-none"
+                              className="w-full bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-transparent rounded-2xl p-3 outline-none font-bold text-sm appearance-none transition-colors"
                             >
                               {MONTHS.map(m => <option key={m} value={m}>{m}</option>)}
                             </select>
                           </div>
                           <div className="w-24">
-                            <label className="block text-[10px] font-bold text-gray-400 mb-1">Year</label>
+                            <label className="block text-[10px] font-bold text-gray-400 dark:text-gray-500 mb-1 transition-colors">Year</label>
                             <input
                               type="number"
                               min="2000"
@@ -1641,11 +1641,11 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
                                 updated[idx] = { ...updated[idx], effectiveYear: e.target.value };
                                 setAddScheduledIncreases(updated);
                               }}
-                              className="w-full bg-gray-50 border-transparent rounded-2xl p-3 outline-none font-bold text-sm"
+                              className="w-full bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-transparent rounded-2xl p-3 outline-none font-bold text-sm transition-colors"
                             />
                           </div>
                           <div className="flex-1">
-                            <label className="block text-[10px] font-bold text-gray-400 mb-1">New Amount</label>
+                            <label className="block text-[10px] font-bold text-gray-400 dark:text-gray-500 mb-1 transition-colors">New Amount</label>
                             <input
                               type="number"
                               min="0"
@@ -1657,13 +1657,13 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
                                 updated[idx] = { ...updated[idx], amount: e.target.value };
                                 setAddScheduledIncreases(updated);
                               }}
-                              className="w-full bg-gray-50 border-transparent rounded-2xl p-3 outline-none font-bold text-sm"
+                              className="w-full bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-transparent rounded-2xl p-3 outline-none font-bold text-sm transition-colors"
                             />
                           </div>
                           <button
                             type="button"
                             onClick={() => setAddScheduledIncreases(addScheduledIncreases.filter((_, i) => i !== idx))}
-                            className="p-3 text-gray-400 hover:text-red-500 rounded-xl hover:bg-red-50"
+                            className="p-3 text-gray-400 dark:text-gray-500 hover:text-red-500 dark:hover:text-red-400 rounded-xl hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
                             aria-label="Remove"
                           >
                             <X className="w-4 h-4" />
@@ -1676,12 +1676,12 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
               )}
 
               {timingFeedback && (
-                <div className="bg-blue-50 border-l-4 border-blue-400 p-4 rounded">
-                  <p className="text-xs font-medium text-blue-700">{timingFeedback}</p>
+                <div className="bg-blue-50 dark:bg-blue-900/20 border-l-4 border-blue-400 dark:border-blue-500 p-4 rounded transition-colors">
+                  <p className="text-xs font-medium text-blue-700 dark:text-blue-400 transition-colors">{timingFeedback}</p>
                 </div>
               )}
 
-              <div className="flex space-x-4 pt-4"><button type="button" onClick={() => { setShowAddModal(false); setTimingFeedback(''); }} className="flex-1 bg-gray-100 py-4 rounded-2xl font-bold text-gray-500">Cancel</button><button type="submit" className="flex-1 bg-indigo-600 text-white py-4 rounded-2xl font-bold shadow-xl">Add Biller</button></div>
+              <div className="flex space-x-4 pt-4"><button type="button" onClick={() => { setShowAddModal(false); setTimingFeedback(''); }} className="flex-1 bg-gray-100 dark:bg-gray-800 py-4 rounded-2xl font-bold text-gray-500 dark:text-gray-300 transition-colors">Cancel</button><button type="submit" className="flex-1 bg-indigo-600 text-white py-4 rounded-2xl font-bold shadow-xl transition-colors">Add Biller</button></div>
             </form>
           </div>
         </div>
@@ -1689,25 +1689,25 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
 
       {showEditModal && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md animate-in fade-in">
-          <div className="bg-white rounded-[2.5rem] w-full max-w-lg p-10 shadow-2xl animate-in zoom-in-95 relative max-h-[90vh] overflow-y-auto">
-            <h2 className="text-2xl font-black text-gray-900 mb-8 uppercase tracking-tight">Edit Biller</h2>
+          <div className="bg-white dark:bg-gray-900 rounded-[2.5rem] w-full max-w-lg p-10 shadow-2xl animate-in zoom-in-95 relative max-h-[90vh] overflow-y-auto transition-colors">
+            <h2 className="text-2xl font-black text-gray-900 dark:text-gray-100 mb-8 uppercase tracking-tight transition-colors">Edit Biller</h2>
             <form onSubmit={handleEditSubmit} className="space-y-6">
-              <div><label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Category</label>
-                <select value={editFormData.category} onChange={(e) => setEditFormData({ ...editFormData, category: e.target.value })} className="w-full bg-gray-50 border-transparent rounded-2xl p-4 outline-none font-bold text-sm appearance-none">{renderCategoryOptions()}</select>
+              <div><label className="block text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-2 transition-colors">Category</label>
+                <select value={editFormData.category} onChange={(e) => setEditFormData({ ...editFormData, category: e.target.value })} className="w-full bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-transparent rounded-2xl p-4 outline-none font-bold text-sm appearance-none transition-colors">{renderCategoryOptions()}</select>
               </div>
-              <div><label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Biller Name</label><input required type="text" value={editFormData.name} onChange={(e) => setEditFormData({ ...editFormData, name: e.target.value })} className="w-full bg-gray-50 border-transparent rounded-2xl p-4 outline-none font-bold" /></div>
+              <div><label className="block text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-2 transition-colors">Biller Name</label><input required type="text" value={editFormData.name} onChange={(e) => setEditFormData({ ...editFormData, name: e.target.value })} className="w-full bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-transparent rounded-2xl p-4 outline-none font-bold transition-colors" /></div>
               <div className="grid grid-cols-2 gap-4">
                  <div>
-                   <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">
-                     Expected Amount {editFormData.category.startsWith('Loans') && <span className="text-gray-400 font-normal">(Optional for Loans)</span>}
+                   <label className="block text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-2 transition-colors">
+                     Expected Amount {editFormData.category.startsWith('Loans') && <span className="text-gray-400 dark:text-gray-500 font-normal transition-colors">(Optional for Loans)</span>}
                    </label>
-                   <input required={!editFormData.category.startsWith('Loans')} type="number" min="0" step="0.01" value={editFormData.expectedAmount} onChange={(e) => setEditFormData({ ...editFormData, expectedAmount: e.target.value })} className="w-full bg-gray-50 border-transparent rounded-2xl p-4 outline-none font-bold" />
+                   <input required={!editFormData.category.startsWith('Loans')} type="number" min="0" step="0.01" value={editFormData.expectedAmount} onChange={(e) => setEditFormData({ ...editFormData, expectedAmount: e.target.value })} className="w-full bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-transparent rounded-2xl p-4 outline-none font-bold transition-colors" />
                  </div>
                  <div>
-                   <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">
+                   <label className="block text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-2 transition-colors">
                      Due Date (day)
                      {editFormData.category.startsWith('Loans') && editFormData.linkedAccountId && (
-                       <span className="ml-2 text-purple-500 font-bold normal-case">🔗 Auto</span>
+                       <span className="ml-2 text-purple-500 dark:text-purple-400 font-bold normal-case transition-colors">🔗 Auto</span>
                      )}
                    </label>
                    {editFormData.category.startsWith('Loans') && editFormData.linkedAccountId ? (
@@ -1723,10 +1723,10 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
                              type="number"
                              readOnly
                              value={dueDay ?? ''}
-                             className="w-full bg-purple-50 border-2 border-purple-200 rounded-2xl p-4 outline-none font-bold text-purple-700 cursor-not-allowed"
+                             className="w-full bg-purple-50 dark:bg-purple-900/10 border-2 border-purple-200 dark:border-purple-800/30 rounded-2xl p-4 outline-none font-bold text-purple-700 dark:text-purple-400 cursor-not-allowed transition-colors"
                            />
                            {dueDay && statementDay && daysToPay && (
-                             <p className="text-xs text-purple-600 mt-1">
+                             <p className="text-xs text-purple-600 dark:text-purple-400 mt-1 transition-colors">
                                📅 Statement {statementDay}{ordinalSuffix(statementDay)} + {daysToPay} days → Due {dueDay}{ordinalSuffix(dueDay)}
                              </p>
                            )}
@@ -1734,21 +1734,21 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
                        );
                      })()
                    ) : (
-                     <input required type="number" min="1" max="31" placeholder="e.g. 15" value={editFormData.dueDate} onChange={(e) => { setEditFormData({ ...editFormData, dueDate: e.target.value }); showTimingInfo(e.target.value); }} className="w-full bg-gray-50 border-transparent rounded-2xl p-4 outline-none font-bold" />
+                     <input required type="number" min="1" max="31" placeholder="e.g. 15" value={editFormData.dueDate} onChange={(e) => { setEditFormData({ ...editFormData, dueDate: e.target.value }); showTimingInfo(e.target.value); }} className="w-full bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-transparent rounded-2xl p-4 outline-none font-bold transition-colors" />
                    )}
                  </div>
               </div>
               
               {/* ENHANCEMENT: Linked Account for Loans Category */}
               {editFormData.category.startsWith('Loans') && (
-                <div className="bg-purple-50 rounded-2xl p-4 border-2 border-purple-200">
-                  <label className="block text-[10px] font-black text-purple-600 uppercase tracking-widest mb-2">
+                <div className="bg-purple-50 dark:bg-purple-900/10 rounded-2xl p-4 border-2 border-purple-200 dark:border-purple-800/30 transition-colors">
+                  <label className="block text-[10px] font-black text-purple-600 dark:text-purple-400 uppercase tracking-widest mb-2 transition-colors">
                     Linked Credit Account (Optional)
                   </label>
                   <select 
                     value={editFormData.linkedAccountId} 
                     onChange={(e) => setEditFormData({ ...editFormData, linkedAccountId: e.target.value })} 
-                    className="w-full bg-white border-transparent rounded-2xl p-4 outline-none font-bold text-sm appearance-none"
+                    className="w-full bg-white dark:bg-gray-900 dark:text-gray-100 border-transparent rounded-2xl p-4 outline-none font-bold text-sm appearance-none transition-colors"
                   >
                     <option value="">None - Use Manual Amount</option>
                     {accounts
@@ -1766,19 +1766,19 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
                     
                     if (creditAccounts.length === 0) {
                       return (
-                        <p className="text-xs text-orange-600 mt-2 flex items-center gap-1">
+                        <p className="text-xs text-orange-600 dark:text-orange-400 mt-2 flex items-center gap-1 transition-colors">
                           <span className="font-bold">⚠️ No credit accounts found.</span> Create a credit account first to enable linking.
                         </p>
                       );
                     } else if (creditAccountsWithBilling.length === 0) {
                       return (
-                        <p className="text-xs text-orange-600 mt-2 flex items-center gap-1">
+                        <p className="text-xs text-orange-600 dark:text-orange-400 mt-2 flex items-center gap-1 transition-colors">
                           <span className="font-bold">⚠️ No credit accounts with billing dates.</span> Edit your credit accounts to add billing dates.
                         </p>
                       );
                     } else {
                       return (
-                        <p className="text-xs text-purple-600 mt-2">
+                        <p className="text-xs text-purple-600 dark:text-purple-400 mt-2 transition-colors">
                           Link to a credit account to automatically calculate expected amounts from billing cycle transactions
                         </p>
                       );
@@ -1789,40 +1789,40 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
               
               {/* Date fields: show Reactivation Date for inactive billers, Activation+Deactivation for active */}
               {showEditModal?.status === 'inactive' ? (
-                <div className="border-t border-gray-200 pt-6">
-                  <label className="block text-[10px] font-black text-indigo-500 uppercase tracking-widest mb-2">Reactivation Date</label>
-                  <p className="text-xs text-gray-500 mb-4">New payment schedules will be created from this month. Existing payment history will be preserved.</p>
+                <div className="border-t border-gray-200 dark:border-gray-800 pt-6 transition-colors">
+                  <label className="block text-[10px] font-black text-indigo-500 dark:text-indigo-400 uppercase tracking-widest mb-2 transition-colors">Reactivation Date</label>
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mb-4 transition-colors">New payment schedules will be created from this month. Existing payment history will be preserved.</p>
                   <div className="grid grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-[10px] font-bold text-gray-400 mb-2">Month</label>
-                      <select required value={editFormData.reactMonth} onChange={(e) => setEditFormData({ ...editFormData, reactMonth: e.target.value })} className="w-full bg-indigo-50 border-transparent rounded-2xl p-4 outline-none font-bold text-sm appearance-none">
+                      <label className="block text-[10px] font-bold text-gray-400 dark:text-gray-500 mb-2 transition-colors">Month</label>
+                      <select required value={editFormData.reactMonth} onChange={(e) => setEditFormData({ ...editFormData, reactMonth: e.target.value })} className="w-full bg-indigo-50 dark:bg-indigo-900/20 dark:text-indigo-100 border-transparent rounded-2xl p-4 outline-none font-bold text-sm appearance-none transition-colors">
                         {MONTHS.map(m => <option key={m} value={m}>{m}</option>)}
                       </select>
                     </div>
                     <div>
-                      <label className="block text-[10px] font-bold text-gray-400 mb-2">Year</label>
-                      <input required type="number" min="2000" max="2100" value={editFormData.reactYear} onChange={(e) => setEditFormData({ ...editFormData, reactYear: e.target.value })} className="w-full bg-indigo-50 border-transparent rounded-2xl p-4 outline-none font-bold" />
+                      <label className="block text-[10px] font-bold text-gray-400 dark:text-gray-500 mb-2 transition-colors">Year</label>
+                      <input required type="number" min="2000" max="2100" value={editFormData.reactYear} onChange={(e) => setEditFormData({ ...editFormData, reactYear: e.target.value })} className="w-full bg-indigo-50 dark:bg-indigo-900/20 dark:text-indigo-100 border-transparent rounded-2xl p-4 outline-none font-bold transition-colors" />
                     </div>
                   </div>
                 </div>
               ) : (
                 <>
-                  <div className="border-t border-gray-200 pt-6">
-                    <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-4">Activation Date</label>
+                  <div className="border-t border-gray-200 dark:border-gray-800 pt-6 transition-colors">
+                    <label className="block text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-4 transition-colors">Activation Date</label>
                     <div className="grid grid-cols-3 gap-4">
-                      <div><label className="block text-[10px] font-bold text-gray-400 mb-2">Month</label>
-                        <select value={editFormData.actMonth} onChange={(e) => setEditFormData({ ...editFormData, actMonth: e.target.value })} className="w-full bg-gray-50 border-transparent rounded-2xl p-4 outline-none font-bold text-sm appearance-none">{MONTHS.map(m => <option key={m} value={m}>{m}</option>)}</select>
+                      <div><label className="block text-[10px] font-bold text-gray-400 dark:text-gray-500 mb-2 transition-colors">Month</label>
+                        <select value={editFormData.actMonth} onChange={(e) => setEditFormData({ ...editFormData, actMonth: e.target.value })} className="w-full bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-transparent rounded-2xl p-4 outline-none font-bold text-sm appearance-none transition-colors">{MONTHS.map(m => <option key={m} value={m}>{m}</option>)}</select>
                       </div>
-                      <div><label className="block text-[10px] font-bold text-gray-400 mb-2">Day (optional)</label><input type="number" min="1" max="31" placeholder="e.g. 15" value={editFormData.actDay} onChange={(e) => { setEditFormData({ ...editFormData, actDay: e.target.value }); if (!editFormData.dueDate) showTimingInfo(e.target.value); }} className="w-full bg-gray-50 border-transparent rounded-2xl p-4 outline-none font-bold" /></div>
-                      <div><label className="block text-[10px] font-bold text-gray-400 mb-2">Year</label><input required type="number" min="2000" max="2100" value={editFormData.actYear} onChange={(e) => setEditFormData({ ...editFormData, actYear: e.target.value })} className="w-full bg-gray-50 border-transparent rounded-2xl p-4 outline-none font-bold" /></div>
+                      <div><label className="block text-[10px] font-bold text-gray-400 dark:text-gray-500 mb-2 transition-colors">Day (optional)</label><input type="number" min="1" max="31" placeholder="e.g. 15" value={editFormData.actDay} onChange={(e) => { setEditFormData({ ...editFormData, actDay: e.target.value }); if (!editFormData.dueDate) showTimingInfo(e.target.value); }} className="w-full bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-transparent rounded-2xl p-4 outline-none font-bold transition-colors" /></div>
+                      <div><label className="block text-[10px] font-bold text-gray-400 dark:text-gray-500 mb-2 transition-colors">Year</label><input required type="number" min="2000" max="2100" value={editFormData.actYear} onChange={(e) => setEditFormData({ ...editFormData, actYear: e.target.value })} className="w-full bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-transparent rounded-2xl p-4 outline-none font-bold transition-colors" /></div>
                     </div>
                   </div>
 
                   {/* Computed fields display */}
-                  <div className="bg-indigo-50 rounded-2xl p-4 space-y-2">
+                  <div className="bg-indigo-50 dark:bg-indigo-900/20 rounded-2xl p-4 space-y-2 transition-colors">
                     <div className="flex justify-between items-center">
-                      <span className="text-[10px] font-black text-indigo-400 uppercase tracking-widest">Auto-Computed Timing:</span>
-                      <span className="text-sm font-black text-indigo-600">{calculateTiming(editFormData.dueDate || editFormData.actDay)}</span>
+                      <span className="text-[10px] font-black text-indigo-400 dark:text-indigo-300 uppercase tracking-widest transition-colors">Auto-Computed Timing:</span>
+                      <span className="text-sm font-black text-indigo-600 dark:text-indigo-400 transition-colors">{calculateTiming(editFormData.dueDate || editFormData.actDay)}</span>
                     </div>
                     {(() => {
                       const deactDate = (editFormData.deactMonth && editFormData.deactYear)
@@ -1831,9 +1831,9 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
                       const computedStatus = calculateStatus(deactDate);
                       return (
                         <div className="flex justify-between items-center">
-                          <span className="text-[10px] font-black text-indigo-400 uppercase tracking-widest">Auto-Computed Status:</span>
+                          <span className="text-[10px] font-black text-indigo-400 dark:text-indigo-300 uppercase tracking-widest transition-colors">Auto-Computed Status:</span>
                           <div className="flex items-center gap-2">
-                            <span className={`text-sm font-black ${computedStatus === 'inactive' ? 'text-gray-600' : 'text-green-600'}`}>{computedStatus}</span>
+                            <span className={`text-sm font-black transition-colors ${computedStatus === 'inactive' ? 'text-gray-600 dark:text-gray-400' : 'text-green-600 dark:text-green-400'}`}>{computedStatus}</span>
                             {deactDate && computedStatus === 'active' && (
                               <span className="text-xs text-orange-500 font-medium">— deactivates {deactDate.month} {deactDate.year}</span>
                             )}
@@ -1843,7 +1843,7 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
                     })()}
                   </div>
 
-                  <div className="border-t border-gray-200 pt-6">
+                  <div className="border-t border-gray-200 dark:border-gray-800 pt-6 transition-colors">
                     <button
                       type="button"
                       onClick={() => {
@@ -1853,17 +1853,17 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
                         }
                         setShowEditDeactSection(!showEditDeactSection);
                       }}
-                      className="flex items-center gap-2 text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1 hover:text-gray-600"
+                      className="flex items-center gap-2 text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-1 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
                     >
                       {showEditDeactSection ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
                       Deactivation Date (optional)
                     </button>
                     {showEditDeactSection && (
                       <>
-                        <p className="text-xs text-gray-400 mb-4">Biller deactivates at the start of this month — last payment is the month before.</p>
+                        <p className="text-xs text-gray-400 dark:text-gray-500 mb-4 transition-colors">Biller deactivates at the start of this month — last payment is the month before.</p>
                         <div className="grid grid-cols-2 gap-4">
-                          <div><label className="block text-[10px] font-bold text-gray-400 mb-2">Month</label>
-                            <select value={editFormData.deactMonth} onChange={(e) => setEditFormData({ ...editFormData, deactMonth: e.target.value })} className="w-full bg-gray-50 border-transparent rounded-2xl p-4 outline-none font-bold text-sm appearance-none">
+                          <div><label className="block text-[10px] font-bold text-gray-400 dark:text-gray-500 mb-2 transition-colors">Month</label>
+                            <select value={editFormData.deactMonth} onChange={(e) => setEditFormData({ ...editFormData, deactMonth: e.target.value })} className="w-full bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-transparent rounded-2xl p-4 outline-none font-bold text-sm appearance-none transition-colors">
                               <option value="">None</option>
                               {MONTHS.map(m => {
                                 const deactYearNum = parseInt(editFormData.deactYear);
@@ -1872,11 +1872,11 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
                                 const actMonthIdx = MONTHS.indexOf(editFormData.actMonth);
                                 const mIdx = MONTHS.indexOf(m);
                                 const isDisabled = sameYear && mIdx <= actMonthIdx;
-                                return <option key={m} value={m} disabled={isDisabled} className={isDisabled ? 'text-gray-300' : ''}>{m}</option>;
+                                return <option key={m} value={m} disabled={isDisabled} className={isDisabled ? 'text-gray-300 dark:text-gray-600' : ''}>{m}</option>;
                               })}
                             </select>
                           </div>
-                          <div><label className="block text-[10px] font-bold text-gray-400 mb-2">Year</label><input type="number" min="2000" max="2100" placeholder="e.g. 2026" value={editFormData.deactYear} onChange={(e) => {
+                          <div><label className="block text-[10px] font-bold text-gray-400 dark:text-gray-500 mb-2 transition-colors">Year</label><input type="number" min="2000" max="2100" placeholder="e.g. 2026" value={editFormData.deactYear} onChange={(e) => {
                             const newDeactYear = e.target.value;
                             const deactYearNum = parseInt(newDeactYear);
                             const actYearNum = parseInt(editFormData.actYear);
@@ -1884,7 +1884,7 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
                             const deactMonthIdx = MONTHS.indexOf(editFormData.deactMonth);
                             const shouldClear = !isNaN(deactYearNum) && !isNaN(actYearNum) && deactYearNum === actYearNum && deactMonthIdx !== -1 && deactMonthIdx <= actMonthIdx;
                             setEditFormData({ ...editFormData, deactYear: newDeactYear, deactMonth: shouldClear ? '' : editFormData.deactMonth });
-                          }} className="w-full bg-gray-50 border-transparent rounded-2xl p-4 outline-none font-bold" /></div>
+                          }} className="w-full bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-transparent rounded-2xl p-4 outline-none font-bold transition-colors" /></div>
                         </div>
                       </>
                     )}
@@ -1892,17 +1892,17 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
 
                   {/* Scheduled Increases — eligible categories only (Fixed, Utilities, Subscriptions) */}
                   {categorySupportsScheduledIncreases(editFormData.category) && (
-                    <div className="border-t border-gray-200 pt-6">
+                    <div className="border-t border-gray-200 dark:border-gray-800 pt-6 transition-colors">
                       <button
                         type="button"
                         onClick={() => setShowEditScheduledSection(!showEditScheduledSection)}
-                        className="flex items-center gap-2 text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1 hover:text-gray-600"
+                        className="flex items-center gap-2 text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-1 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
                       >
                         {showEditScheduledSection ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
                         Scheduled Increases (optional)
                       </button>
                       {!showEditScheduledSection && (
-                        <span className="text-xs text-gray-400">Set future months when the amount changes.</span>
+                        <span className="text-xs text-gray-400 dark:text-gray-500 transition-colors">Set future months when the amount changes.</span>
                       )}
                       {showEditScheduledSection && (
                         <div className="mt-4">
@@ -1921,7 +1921,7 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
                                   },
                                 ]);
                               }}
-                              className="flex items-center gap-1 text-xs font-bold text-indigo-600 bg-indigo-50 px-3 py-2 rounded-xl hover:bg-indigo-100"
+                              className="flex items-center gap-1 text-xs font-bold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-900/30 px-3 py-2 rounded-xl hover:bg-indigo-100 dark:hover:bg-indigo-900/50 transition-colors"
                             >
                               <Plus className="w-3 h-3" /> Add
                             </button>
@@ -1931,7 +1931,7 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
                             return (
                               <div key={idx} className="flex gap-3 mb-3 items-end">
                                 <div className="flex-1">
-                                  <label className="block text-[10px] font-bold text-gray-400 mb-1">Month</label>
+                                  <label className="block text-[10px] font-bold text-gray-400 dark:text-gray-500 mb-1 transition-colors">Month</label>
                                   <select
                                     value={inc.effectiveMonth}
                                     onChange={(e) => {
@@ -1939,13 +1939,13 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
                                       updated[idx] = { ...updated[idx], effectiveMonth: e.target.value };
                                       setEditScheduledIncreases(updated);
                                     }}
-                                    className="w-full bg-gray-50 border-transparent rounded-2xl p-3 outline-none font-bold text-sm appearance-none"
+                                    className="w-full bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-transparent rounded-2xl p-3 outline-none font-bold text-sm appearance-none transition-colors"
                                   >
                                     {MONTHS.map(m => <option key={m} value={m}>{m}</option>)}
                                   </select>
                                 </div>
                                 <div className="w-24">
-                                  <label className="block text-[10px] font-bold text-gray-400 mb-1">Year</label>
+                                  <label className="block text-[10px] font-bold text-gray-400 dark:text-gray-500 mb-1 transition-colors">Year</label>
                                   <input
                                     type="number"
                                     min="2000"
@@ -1956,11 +1956,11 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
                                       updated[idx] = { ...updated[idx], effectiveYear: e.target.value };
                                       setEditScheduledIncreases(updated);
                                     }}
-                                    className="w-full bg-gray-50 border-transparent rounded-2xl p-3 outline-none font-bold text-sm"
+                                    className="w-full bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-transparent rounded-2xl p-3 outline-none font-bold text-sm transition-colors"
                                   />
                                 </div>
                                 <div className="flex-1">
-                                  <label className="block text-[10px] font-bold text-gray-400 mb-1">New Amount</label>
+                                  <label className="block text-[10px] font-bold text-gray-400 dark:text-gray-500 mb-1 transition-colors">New Amount</label>
                                   <input
                                     type="number"
                                     min="0"
@@ -1972,14 +1972,14 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
                                       updated[idx] = { ...updated[idx], amount: e.target.value };
                                       setEditScheduledIncreases(updated);
                                     }}
-                                    className="w-full bg-gray-50 border-transparent rounded-2xl p-3 outline-none font-bold text-sm"
+                                    className="w-full bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-transparent rounded-2xl p-3 outline-none font-bold text-sm transition-colors"
                                   />
                                 </div>
                                 <button
                                   type="button"
                                   disabled={elapsed}
                                   onClick={() => !elapsed && setEditScheduledIncreases(editScheduledIncreases.filter((_, i) => i !== idx))}
-                                  className={`p-3 rounded-xl ${elapsed ? 'text-gray-200 cursor-not-allowed' : 'text-gray-400 hover:text-red-500 hover:bg-red-50'}`}
+                                  className={`p-3 rounded-xl transition-colors ${elapsed ? 'text-gray-200 dark:text-gray-700 cursor-not-allowed' : 'text-gray-400 dark:text-gray-500 hover:text-red-500 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20'}`}
                                   aria-label="Remove"
                                   title={elapsed ? 'Cannot remove a past or current month increase' : 'Remove'}
                                 >
@@ -1997,10 +1997,10 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
 
               {/* Computed fields display — inactive biller only (reactivation preview) */}
               {showEditModal?.status === 'inactive' && (
-                <div className="bg-indigo-50 rounded-2xl p-4 space-y-2">
+                <div className="bg-indigo-50 dark:bg-indigo-900/20 rounded-2xl p-4 space-y-2 transition-colors">
                   <div className="flex justify-between items-center">
-                    <span className="text-[10px] font-black text-indigo-400 uppercase tracking-widest">Auto-Computed Timing:</span>
-                    <span className="text-sm font-black text-indigo-600">{calculateTiming(editFormData.dueDate || editFormData.actDay)}</span>
+                    <span className="text-[10px] font-black text-indigo-400 dark:text-indigo-300 uppercase tracking-widest transition-colors">Auto-Computed Timing:</span>
+                    <span className="text-sm font-black text-indigo-600 dark:text-indigo-400 transition-colors">{calculateTiming(editFormData.dueDate || editFormData.actDay)}</span>
                   </div>
                   {(() => {
                     const reactDate = {
@@ -2010,9 +2010,9 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
                     const computedStatus = calculateStatusFromActivation(reactDate);
                     return (
                       <div className="flex justify-between items-center">
-                        <span className="text-[10px] font-black text-indigo-400 uppercase tracking-widest">After Reactivation:</span>
+                        <span className="text-[10px] font-black text-indigo-400 dark:text-indigo-300 uppercase tracking-widest transition-colors">After Reactivation:</span>
                         <div className="flex items-center gap-2">
-                          <span className={`text-sm font-black ${computedStatus === 'inactive' ? 'text-gray-600' : 'text-green-600'}`}>{computedStatus}</span>
+                          <span className={`text-sm font-black transition-colors ${computedStatus === 'inactive' ? 'text-gray-600 dark:text-gray-400' : 'text-green-600 dark:text-green-400'}`}>{computedStatus}</span>
                           {computedStatus === 'inactive' && (
                             <span className="text-xs text-orange-500 font-medium">— activates {reactDate.month} {reactDate.year}</span>
                           )}
@@ -2024,12 +2024,12 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
               )}
 
               {timingFeedback && (
-                <div className="bg-blue-50 border-l-4 border-blue-400 p-4 rounded">
-                  <p className="text-xs font-medium text-blue-700">{timingFeedback}</p>
+                <div className="bg-blue-50 dark:bg-blue-900/20 border-l-4 border-blue-400 dark:border-blue-500 p-4 rounded transition-colors">
+                  <p className="text-xs font-medium text-blue-700 dark:text-blue-400 transition-colors">{timingFeedback}</p>
                 </div>
               )}
 
-              <div className="flex space-x-4 pt-4"><button type="button" onClick={() => { setShowEditModal(null); setTimingFeedback(''); }} className="flex-1 bg-gray-100 py-4 rounded-2xl font-bold text-gray-500">Cancel</button><button type="submit" disabled={isSubmitting} className="flex-1 bg-indigo-600 text-white py-4 rounded-2xl font-bold shadow-xl disabled:opacity-60">{showEditModal?.status === 'inactive' ? 'Reactivate Biller' : 'Update Biller'}</button></div>
+              <div className="flex space-x-4 pt-4"><button type="button" onClick={() => { setShowEditModal(null); setTimingFeedback(''); }} className="flex-1 bg-gray-100 dark:bg-gray-800 py-4 rounded-2xl font-bold text-gray-500 dark:text-gray-300 transition-colors">Cancel</button><button type="submit" disabled={isSubmitting} className="flex-1 bg-indigo-600 text-white py-4 rounded-2xl font-bold shadow-xl disabled:opacity-60 transition-colors">{showEditModal?.status === 'inactive' ? 'Reactivate Biller' : 'Update Biller'}</button></div>
             </form>
           </div>
         </div>
