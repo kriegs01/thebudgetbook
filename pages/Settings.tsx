@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ChevronDown, ChevronRight, Hash, Globe, Bell, Lock, Trash2, AlertTriangle, RotateCcw, Plus, X, Database, Copy, Shield, User, Mail, Key, MoreVertical, Check } from 'lucide-react';
+import { ChevronDown, ChevronRight, Hash, Globe, Bell, Lock, Trash2, AlertTriangle, RotateCcw, Plus, X, Database, Copy, Shield, User, Mail, Key, MoreVertical, Check, SlidersHorizontal } from 'lucide-react';
 import { BudgetCategory, Biller, Installment } from '../types';
 import { useTestEnvironment } from '../src/contexts/TestEnvironmentContext';
 import { useAuth } from '../src/contexts/AuthContext';
@@ -17,6 +17,8 @@ interface SettingsProps {
   billers?: Biller[];
   installments?: Installment[];
   onUpdateBiller?: (biller: Biller) => Promise<void>;
+  theme?: 'light' | 'dark';
+  onToggleTheme?: () => void;
 }
 
 const SETTING_MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
@@ -68,7 +70,7 @@ interface DeleteConflict {
 
 // ─── Component ───────────────────────────────────────────────────────────────
 
-const Settings: React.FC<SettingsProps> = ({ currency, setCurrency, categories, setCategories, onResetAll, billers = [], installments = [], onUpdateBiller }) => {
+const Settings: React.FC<SettingsProps> = ({ currency, setCurrency, categories, setCategories, onResetAll, billers = [], installments = [], onUpdateBiller, theme = 'light', onToggleTheme }) => {
   const [openSection, setOpenSection] = useState<string | null>(null);
   const [newCatName, setNewCatName] = useState('');
   const [showAddCat, setShowAddCat] = useState(false);
@@ -751,6 +753,37 @@ const Settings: React.FC<SettingsProps> = ({ currency, setCurrency, categories, 
               className="w-full px-4 py-3 bg-blue-600 text-white rounded-xl font-medium hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
             >
               {isUpdating ? 'Updating...' : 'Change Password'}
+            </button>
+          </div>
+        </div>
+      )
+    },
+    {
+      id: 'general',
+      label: 'General',
+      icon: <SlidersHorizontal className="w-5 h-5" />,
+      content: (
+        <div className="space-y-4 pt-2">
+          <div className="flex items-center justify-between p-4 bg-gray-50 rounded-2xl border border-gray-200">
+            <div>
+              <h4 className="font-black text-sm text-gray-900 uppercase mb-1">Dark Mode</h4>
+              <p className="text-xs text-gray-500">
+                Current Theme: <span className={`font-bold ${theme === 'dark' ? 'text-indigo-600' : 'text-amber-500'}`}>
+                  {theme === 'dark' ? 'DARK' : 'LIGHT'}
+                </span>
+              </p>
+            </div>
+            <button
+              onClick={onToggleTheme}
+              className={`relative inline-flex h-8 w-16 items-center rounded-full transition-colors ${
+                theme === 'dark' ? 'bg-indigo-600' : 'bg-gray-300'
+              }`}
+            >
+              <span
+                className={`inline-block h-6 w-6 transform rounded-full bg-white transition-transform ${
+                  theme === 'dark' ? 'translate-x-9' : 'translate-x-1'
+                }`}
+              />
             </button>
           </div>
         </div>
