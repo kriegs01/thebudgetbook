@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Menu, ChevronLeft } from 'lucide-react';
+import { Menu, ChevronLeft, SlidersHorizontal, ArrowUp, ArrowDown, Eye, EyeOff, X } from 'lucide-react';
 import { BrowserRouter, Routes, Route, NavLink } from 'react-router-dom';
 import { NAV_ITEMS, INITIAL_BUDGET, DEFAULT_SETUP, INITIAL_CATEGORIES } from './constants';
 import { getAllBillersFrontend, createBillerFrontend, updateBillerFrontend, deleteBillerFrontend } from './src/services/billersService';
@@ -200,6 +200,22 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
   const [txRefreshKey, setTxRefreshKey] = useState(0);
   const [currency, setCurrency] = useState('PHP');
   const [categories, setCategories] = useState(INITIAL_CATEGORIES);
+
+  // Navigation Customization State
+  const [navPreferences, setNavPreferences] = useState<{id: string, visible: boolean}[]>(() => {
+    const saved = localStorage.getItem('nav_preferences');
+    if (saved) {
+      try { 
+        const parsed = JSON.parse(saved);
+        // Merge any new hardcoded routes that might have been added to constants.ts later
+        const newItems = NAV_ITEMS.filter(n => !parsed.some((p: any) => p.id === n.id)).map(n => ({ id: n.id, visible: true }));
+        return [...parsed, ...newItems];
+      } catch (e) {}
+    }
+    return NAV_ITEMS.map(item => ({ id: item.id, visible: true }));
+  });
+  const [showNavEditModal, setShowNavEditModal] = useState(false);
+  const [tempNavPrefs, setTempNavPrefs] = useState(navPreferences);
 
   // Wallet state is managed internally by WalletsPage and WalletView (they fetch their own data)
   
@@ -909,6 +925,32 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
     }
   };
 
+  const handleSaveNavPreferences = () => {
+    setNavPreferences(tempNavPrefs);
+    localStorage.setItem('nav_preferences', JSON.stringify(tempNavPrefs));
+    setShowNavEditModal(false);
+  };
+
+  const handleMoveNavUp = (index: number) => {
+    if (index === 0) return;
+    const newPrefs = [...tempNavPrefs];
+    [newPrefs[index - 1], newPrefs[index]] = [newPrefs[index], newPrefs[index - 1]];
+    setTempNavPrefs(newPrefs);
+  };
+
+  const handleMoveNavDown = (index: number) => {
+    if (index === tempNavPrefs.length - 1) return;
+    const newPrefs = [...tempNavPrefs];
+    [newPrefs[index], newPrefs[index + 1]] = [newPrefs[index + 1], newPrefs[index]];
+    setTempNavPrefs(newPrefs);
+  };
+
+  const handleToggleNavVisibility = (id: string) => {
+    setTempNavPrefs(tempNavPrefs.map(pref => 
+      pref.id === id ? { ...pref, visible: !pref.visible } : pref
+    ));
+  };
+
   return (
     <TestEnvironmentProvider>
       <PinProtectionProvider>
@@ -923,25 +965,39 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
                 {isSidebarOpen ? <ChevronLeft className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
               </button>
             </div>
-            <nav className="flex-1 px-3 py-4 space-y-1">
-              {NAV_ITEMS.map((item) => (
-                <NavLink
-                  key={item.id}
-                  to={item.path}
-                  className={({ isActive }) =>
-                    `w-full flex items-center p-3 rounded-xl transition-all ${
-                      isActive ? 'bg-blue-50 text-blue-600' : 'text-gray-700 hover:bg-gray-50'
-                    }`
-                  }
-                  end={item.path === '/'}
-                >
-                  <div className={`${isSidebarOpen ? '' : 'mx-auto'} ${window.location.pathname === item.path ? 'text-blue-600' : 'text-gray-400'} transition-colors`}>
-                    {item.icon}
-                  </div>
-                  {isSidebarOpen && <span className="ml-3 font-bold text-sm">{item.label}</span>}
-                </NavLink>
-              ))}
+            <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
+              {navPreferences.filter(pref => pref.visible).map((pref) => {
+                const item = NAV_ITEMS.find(n => n.id === pref.id);
+                if (!item) return null;
+                return (
+                  <NavLink
+                    key={item.id}
+                    to={item.path}
+                    className={({ isActive }) =>
+                      `w-full flex items-center p-3 rounded-xl transition-all ${
+                        isActive ? 'bg-blue-50 text-blue-600' : 'text-gray-700 hover:bg-gray-50'
+                      }`
+                    }
+                    end={item.path === '/'}
+                  >
+                    <div className={`${isSidebarOpen ? '' : 'mx-auto'} ${window.location.pathname === item.path ? 'text-blue-600' : 'text-gray-400'} transition-colors`}>
+                      {item.icon}
+                    </div>
+                    {isSidebarOpen && <span className="ml-3 font-bold text-sm">{item.label}</span>}
+                  </NavLink>
+                );
+              })}
             </nav>
+            <div className="px-4 py-2 mb-2">
+              <button 
+                onClick={() => { setTempNavPrefs(navPreferences); setShowNavEditModal(true); }} 
+                className={`w-full flex items-center justify-center ${isSidebarOpen ? 'space-x-2' : ''} bg-gray-100 hover:bg-gray-200 text-gray-600 p-2 rounded-full text-xs font-bold uppercase tracking-wider transition-colors`}
+                title="Customize Menu"
+              >
+                <SlidersHorizontal className="w-4 h-4" />
+                {isSidebarOpen && <span>Edit Menu</span>}
+              </button>
+            </div>
             <div className="p-4 border-t border-gray-100">
               {isSidebarOpen ? (
                 <div className="space-y-2">
@@ -1152,6 +1208,49 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
           </div>
         </main>
       </div>
+
+      {/* Navigation Edit Modal */}
+      {showNavEditModal && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md">
+          <div className="bg-white rounded-[2.5rem] w-full max-w-md p-8 shadow-2xl relative flex flex-col max-h-[85vh] animate-in zoom-in-95">
+            <button onClick={() => setShowNavEditModal(false)} className="absolute right-6 top-6 p-2 hover:bg-gray-100 rounded-full transition-colors">
+              <X className="w-5 h-5 text-gray-400" />
+            </button>
+            <h2 className="text-2xl font-black text-gray-900 mb-2 uppercase tracking-tight">Edit Menu</h2>
+            <p className="text-gray-500 text-sm mb-6 font-medium">Reorder pages or hide the ones you don't use often.</p>
+            
+            <div className="flex-1 overflow-y-auto space-y-2 mb-6 pr-2">
+              {tempNavPrefs.map((pref, idx) => {
+                const item = NAV_ITEMS.find(n => n.id === pref.id);
+                if (!item) return null;
+                return (
+                  <div key={pref.id} className={`flex items-center justify-between p-3 rounded-2xl border transition-all ${pref.visible ? 'bg-white border-gray-200' : 'bg-gray-50 border-transparent opacity-60'}`}>
+                    <div className="flex items-center space-x-3">
+                      <div className={`p-2 rounded-xl ${pref.visible ? 'bg-indigo-50 text-indigo-600' : 'bg-gray-200 text-gray-500'}`}>
+                        {item.icon}
+                      </div>
+                      <span className="font-bold text-gray-800">{item.label}</span>
+                    </div>
+                    <div className="flex items-center space-x-1">
+                      <button onClick={() => handleMoveNavUp(idx)} disabled={idx === 0} className="p-2 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-xl disabled:opacity-30 transition-colors"><ArrowUp className="w-4 h-4" /></button>
+                      <button onClick={() => handleMoveNavDown(idx)} disabled={idx === tempNavPrefs.length - 1} className="p-2 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-xl disabled:opacity-30 transition-colors"><ArrowDown className="w-4 h-4" /></button>
+                      <div className="w-px h-6 bg-gray-200 mx-1"></div>
+                      <button onClick={() => handleToggleNavVisibility(pref.id)} className={`p-2 rounded-xl transition-colors ${pref.visible ? 'text-green-600 hover:bg-green-50' : 'text-gray-400 hover:bg-gray-200'}`}>
+                        {pref.visible ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+            
+            <div className="flex space-x-3 pt-2">
+              <button onClick={() => setShowNavEditModal(false)} className="flex-1 bg-gray-100 text-gray-600 py-4 rounded-2xl font-black uppercase tracking-widest text-[10px] hover:bg-gray-200 transition-colors">Cancel</button>
+              <button onClick={handleSaveNavPreferences} className="flex-1 bg-indigo-600 text-white py-4 rounded-2xl font-black uppercase tracking-widest text-[10px] hover:bg-indigo-700 transition-colors shadow-xl shadow-indigo-100">Save Changes</button>
+            </div>
+          </div>
+        </div>
+      )}
     </BrowserRouter>
     </PinProtectionProvider>
     </TestEnvironmentProvider>
