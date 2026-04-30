@@ -1023,16 +1023,17 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
                 );
               })}
             </nav>
-            <div className="px-4 py-2 mb-2">
-              <button 
-                onClick={() => { setTempNavPrefs(navPreferences); setShowNavEditModal(true); }} 
-                className={`w-full flex items-center justify-center ${isSidebarOpen ? 'space-x-2' : ''} bg-gray-100 hover:bg-gray-200 text-gray-600 p-2 rounded-full text-xs font-bold uppercase tracking-wider transition-colors`}
-                title="Customize Menu"
-              >
-                <SlidersHorizontal className="w-4 h-4" />
-                {isSidebarOpen && <span>Edit Menu</span>}
-              </button>
-            </div>
+            {isSidebarOpen && (
+              <div className="flex justify-center px-4 mb-4 mt-2">
+                <button 
+                  onClick={() => { setTempNavPrefs(navPreferences); setShowNavEditModal(true); }} 
+                  className="bg-gray-100 hover:bg-gray-200 text-gray-500 px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest transition-colors"
+                  title="Customize Menu"
+                >
+                  Edit Menu
+                </button>
+              </div>
+            )}
             <div className="p-4 border-t border-gray-100">
               {isSidebarOpen ? (
                 <div className="space-y-2">
