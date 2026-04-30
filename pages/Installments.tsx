@@ -6,6 +6,7 @@ import { hasInstallmentPayments, deleteAllInstallmentPaymentsAndResetSchedules }
 import { getTransactionsByPaymentSchedule, getReceiptSignedUrl, updateTransaction, updateTransactionAndSyncSchedule } from '../src/services/transactionsService';
 import { combineDateWithCurrentTime } from '../src/utils/dateUtils';
 import type { SupabaseMonthlyPaymentSchedule, SupabaseTransaction } from '../src/types/supabase';
+import { supabase } from '../src/utils/supabaseClient';
 
 interface InstallmentsProps {
   installments: Installment[];
@@ -382,7 +383,14 @@ const Installments: React.FC<InstallmentsProps> = ({ installments, accounts, bil
         return { ...prev, [showCloseModal.id]: finalStatus };
       });
 
-      // 2. Direct DB update to bypass potential adapter omissions
+      // 2. Proceed with standard update first so it doesn't overwrite our explicit DB patch
+      await onUpdate?.({
+        ...showCloseModal,
+        isArchived: true,
+        archiveStatus: finalStatus
+      });
+
+      // 3. Direct DB update AFTER standard update to guarantee it sticks
       try {
         const isTestMode = localStorage.getItem('test_environment_enabled') === 'true';
         const tableName = isTestMode ? 'installments_test' : 'installments';
@@ -401,12 +409,6 @@ const Installments: React.FC<InstallmentsProps> = ({ installments, accounts, bil
         console.warn('[Installments] Failed to execute direct archive update:', err);
       }
 
-      // 3. Proceed with standard update (updates state and calls original service logic)
-      await onUpdate?.({
-        ...showCloseModal,
-        isArchived: true,
-        archiveStatus: finalStatus
-      });
       console.log('[Installments] Archive successful');
       setIsCompletedOpen(true); // Automatically expand the section to show the archived card
       setShowCloseModal(null);
