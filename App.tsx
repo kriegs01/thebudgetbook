@@ -910,8 +910,8 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
       <PinProtectionProvider>
         <TestModeBanner sidebarOpen={isSidebarOpen} />
         <BrowserRouter>
-        <div className="flex h-screen bg-gray-50 w-full overflow-hidden">
-        <aside className={`fixed inset-y-0 left-0 z-50 bg-white border-r border-gray-200 transition-all duration-300 ease-in-out ${isSidebarOpen ? 'w-64' : 'w-20'} overscroll-none`}> 
+        <div className="flex h-[100dvh] bg-gray-50 w-full overflow-hidden fixed inset-0">
+        <aside className={`fixed inset-y-0 left-0 z-50 bg-white border-r border-gray-200 transition-all duration-300 ease-in-out ${isSidebarOpen ? 'w-64' : 'hidden md:flex w-20'} overscroll-none`}> 
           <div className="flex flex-col h-full">
             <div className="flex items-center justify-between h-16 px-4 border-b border-gray-100">
               {isSidebarOpen && <span className="text-xl font-black bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">Budget Book</span>}
@@ -997,8 +997,8 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
             </div>
           </div>
         </aside>
-        <main className={`flex-1 bg-gray-50 transition-all duration-300 ease-in-out ${isSidebarOpen ? 'ml-64' : 'ml-20'} h-screen flex flex-col overflow-hidden`}> 
-          <div className="p-8 w-full flex-1 overflow-auto overscroll-none touch-pan-y" style={{ WebkitOverflowScrolling: 'touch' }}>
+        <main className={`flex-1 bg-gray-50 transition-all duration-300 ease-in-out ${isSidebarOpen ? 'md:ml-64' : 'md:ml-20'} h-full flex flex-col overflow-hidden`}> 
+          <div className="p-4 md:p-8 w-full flex-1 overflow-auto overscroll-none touch-pan-y" style={{ WebkitOverflowScrolling: 'touch' }}>
             <Routes>
               <Route path="/" element={<Dashboard accounts={accounts} budget={budgetItems} installments={installments} transactions={transactions} budgetSetups={budgetSetups} userProfile={userProfile} />} />
               <Route path="/budget" element={

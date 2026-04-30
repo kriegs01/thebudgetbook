@@ -267,6 +267,9 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
   const [setupData, setSetupData] = useState<{ [key: string]: CategorizedSetupItem[] }>({});
   const [removedIds, setRemovedIds] = useState<Set<string>>(new Set());
   
+  // Ref to track if user is currently interacting with an input to prevent sync-jumps
+  const isFocusedRef = useRef(false);
+
   // PROTOTYPE: Track excluded installments (by default all are included)
   const [excludedInstallmentIds, setExcludedInstallmentIds] = useState<Set<string>>(new Set());
 
@@ -2240,6 +2243,8 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                       step="0.01"
                       value={projectedSalary} 
                       onChange={(e) => setProjectedSalary(e.target.value)} 
+                      onFocus={() => { isFocusedRef.current = true; }}
+                      onBlur={() => { isFocusedRef.current = false; }}
                       disabled={isReadOnly}
                       className="bg-transparent border-none text-sm font-black text-gray-900 w-28 text-right outline-none focus:bg-indigo-50 rounded px-1 disabled:opacity-60 disabled:cursor-not-allowed"
                       aria-label="Projected Salary"
@@ -2258,6 +2263,8 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                       step="0.01"
                       value={actualSalary} 
                       onChange={(e) => setActualSalary(e.target.value)} 
+                      onFocus={() => { isFocusedRef.current = true; }}
+                      onBlur={() => { isFocusedRef.current = false; }}
                       disabled={isReadOnly}
                       placeholder="Enter actual"
                       className="bg-transparent border-none text-sm font-black text-gray-900 w-28 text-right outline-none focus:bg-indigo-50 rounded px-1 placeholder:text-gray-300 disabled:opacity-60 disabled:cursor-not-allowed"
@@ -2438,6 +2445,8 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                                 type="number" 
                                 value={item.amount} 
                                 onChange={(e) => handleSetupUpdate(cat.name, item.id, 'amount', e.target.value)} 
+                              onFocus={() => { isFocusedRef.current = true; }}
+                              onBlur={() => { isFocusedRef.current = false; }}
                                 disabled={isReadOnly}
                                 className="bg-transparent border-none text-sm font-black w-24 disabled:cursor-default" 
                               />
@@ -2610,7 +2619,12 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                         <tr key={item.id} className={`${item.included ? 'bg-white' : 'bg-gray-50 opacity-60'}`}>
                           <td className="p-4 pl-10"><input type="text" value={item.name} onChange={(e) => handleSetupUpdate(cat.name, item.id, 'name', e.target.value)} disabled={isReadOnly} className="bg-transparent border-none text-sm font-bold w-full disabled:cursor-default" /></td>
                           <td className="p-4">
-                            <div className="flex items-center space-x-1"><span className="text-gray-400 font-bold">₱</span><input type="number" value={item.amount} onChange={(e) => handleSetupUpdate(cat.name, item.id, 'amount', e.target.value)} disabled={isReadOnly} className="bg-transparent border-none text-sm font-black w-24 disabled:cursor-default" /></div>
+                            <div className="flex items-center space-x-1"><span className="text-gray-400 font-bold">₱</span><input type="number" value={item.amount} 
+                              onChange={(e) => handleSetupUpdate(cat.name, item.id, 'amount', e.target.value)} 
+                              onFocus={() => { isFocusedRef.current = true; }}
+                              onBlur={() => { isFocusedRef.current = false; }}
+                              disabled={isReadOnly} className="bg-transparent border-none text-sm font-black w-24 disabled:cursor-default" 
+                            /></div>
                           </td>
                           <td className="p-4 text-center">
                             <div className="flex items-center justify-center space-x-2">
