@@ -1899,19 +1899,19 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
     const renderSetupRow = (setup: SavedBudgetSetup) => {
       const remaining = calculateBudgetRemaining(setup);
       return (
-      <tr key={setup.id} className="hover:bg-gray-50/50 transition-colors group">
+      <tr key={setup.id} className="hover:bg-gray-50/50 dark:hover:bg-gray-800/50 transition-colors group">
         <td className="p-8 pl-12">
           <div className="flex items-center space-x-5">
-            <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shadow-sm ${setup.isArchived ? 'bg-amber-50 text-amber-500' : 'bg-indigo-50 text-indigo-600 shadow-indigo-50/50'}`}>
+            <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shadow-sm ${setup.isArchived ? 'bg-amber-50 dark:bg-amber-900/20 text-amber-500' : 'bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400 shadow-indigo-50/50'}`}>
               {setup.isArchived ? <Archive className="w-6 h-6" /> : <FileText className="w-6 h-6" />}
             </div>
-            <span className="text-base font-black text-gray-900 tracking-tight">{setup.month}</span>
+            <span className="text-base font-black text-gray-900 dark:text-gray-100 tracking-tight">{setup.month}</span>
           </div>
         </td>
-        <td className="p-8"><span className="text-[10px] font-black text-gray-500 bg-gray-100/80 px-4 py-1.5 rounded-full uppercase tracking-widest">{setup.timing}</span></td>
-        <td className="p-8"><span className="text-base font-black text-gray-900 tracking-tight">{formatCurrency(setup.totalAmount)}</span></td>
+        <td className="p-8"><span className="text-[10px] font-black text-gray-500 dark:text-gray-400 bg-gray-100/80 dark:bg-gray-800 px-4 py-1.5 rounded-full uppercase tracking-widest">{setup.timing}</span></td>
+        <td className="p-8"><span className="text-base font-black text-gray-900 dark:text-gray-100 tracking-tight">{formatCurrency(setup.totalAmount)}</span></td>
         <td className="p-8">
-          <span className={`text-base font-black tracking-tight ${remaining >= 0 ? 'text-green-600' : 'text-red-500'}`}>
+          <span className={`text-base font-black tracking-tight ${remaining >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-500 dark:text-red-400'}`}>
             {formatCurrency(remaining)}
           </span>
         </td>
@@ -1983,8 +1983,8 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
       <div className="space-y-8 animate-in fade-in duration-500 w-full">
         <div className="flex items-center justify-between">
           <div>
-            <h2 className="text-3xl font-black text-gray-900 tracking-tight uppercase">BUDGET</h2>
-            <p className="text-xs text-gray-400 font-bold uppercase tracking-[0.2em] mt-1">Review your monthly budget history</p>
+            <h2 className="text-3xl font-black text-gray-900 dark:text-gray-100 tracking-tight uppercase">BUDGET</h2>
+            <p className="text-xs text-gray-400 dark:text-gray-500 font-bold uppercase tracking-[0.2em] mt-1">Review your monthly budget history</p>
           </div>
           <button type="button" onClick={handleOpenNew} className="flex items-center space-x-3 bg-indigo-600 text-white px-8 py-4 rounded-[1.5rem] font-black uppercase tracking-widest text-xs hover:bg-indigo-700 shadow-xl transition-all">
             <Plus className="w-5 h-5" />
@@ -2018,7 +2018,7 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                   {activeSetups.length > 0 ? (
                     activeSetups.map(renderSetupRow)
                   ) : (
-                    <tr><td colSpan={6} className="p-24 text-center text-gray-400 font-bold uppercase tracking-widest">No history found</td></tr>
+                    <tr><td colSpan={6} className="p-24 text-center text-gray-400 dark:text-gray-500 font-bold uppercase tracking-widest">No history found</td></tr>
                   )}
                 </tbody>
               </table>
@@ -2037,7 +2037,7 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
               >
                 <div className="flex items-center space-x-3">
                   <Archive className="w-5 h-5 text-amber-500" />
-                  <span className="text-xs font-black text-amber-700 uppercase tracking-[0.25em]">Archived Budgets ({archivedSetups.length})</span>
+                  <span className="text-xs font-black text-amber-700 dark:text-amber-500 uppercase tracking-[0.25em]">Archived Budgets ({archivedSetups.length})</span>
                 </div>
                 <ChevronDown className={`w-5 h-5 text-amber-400 transition-transform ${showArchived ? 'rotate-180' : ''}`} />
               </button>
@@ -2128,13 +2128,13 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
     <div className="space-y-8 animate-in slide-in-from-right-4 duration-500 pb-20 w-full">
       <div className="flex flex-col space-y-6">
         <div className="flex items-center justify-between">
-          <button onClick={() => setView('summary')} className="flex flex-col text-left group">
-            <span className="text-[10px] uppercase font-black tracking-[0.2em] text-gray-400 group-hover:text-indigo-400">Back to</span>
-            <span className="text-sm font-black tracking-tight text-gray-600 group-hover:text-indigo-600">Summary</span>
+          <button onClick={() => setView('summary')} className="flex flex-col text-left group transition-colors">
+            <span className="text-[10px] uppercase font-black tracking-[0.2em] text-gray-400 dark:text-gray-500 group-hover:text-indigo-400 dark:group-hover:text-indigo-300">Back to</span>
+            <span className="text-sm font-black tracking-tight text-gray-600 dark:text-gray-300 group-hover:text-indigo-600 dark:group-hover:text-indigo-400">Summary</span>
           </button>
           <div className="text-center">
-            <h2 className="text-2xl font-black text-gray-900 tracking-tighter uppercase">BUDGET SETUP</h2>
-            <p className="text-xs text-gray-400 font-bold uppercase tracking-widest mt-1">{isReadOnly ? 'Archived — Read Only' : 'Configure Recurring Expenses'}</p>
+            <h2 className="text-2xl font-black text-gray-900 dark:text-gray-100 tracking-tighter uppercase">BUDGET SETUP</h2>
+            <p className="text-xs text-gray-400 dark:text-gray-500 font-bold uppercase tracking-widest mt-1">{isReadOnly ? 'Archived — Read Only' : 'Configure Recurring Expenses'}</p>
           </div>
           <div className="flex items-center space-x-3">
             {/* Autosave Status Indicator */}
@@ -2143,7 +2143,7 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                 {autoSaveStatus === 'saving' && (
                   <>
                     <div className="w-4 h-4 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
-                    <span className="text-gray-600">Saving...</span>
+                    <span className="text-gray-600 dark:text-gray-300">Saving...</span>
                   </>
                 )}
                 {autoSaveStatus === 'saved' && (
@@ -2206,7 +2206,7 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
             <option value="2/2">2/2</option>
           </select>
           {legacyMode && (
-            <span className="text-[10px] font-black text-gray-400 bg-gray-100 px-4 py-2 rounded-full uppercase tracking-widest">Legacy Budget</span>
+            <span className="text-[10px] font-black text-gray-400 dark:text-gray-500 bg-gray-100 dark:bg-gray-800 px-4 py-2 rounded-full uppercase tracking-widest">Legacy Budget</span>
           )}
         </div>
       </div>
@@ -3517,15 +3517,15 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
 
 const ConfirmDialog: React.FC<{ show: boolean; title: string; message: string; onConfirm: () => void; onClose: () => void }> = ({ title, message, onConfirm, onClose }) => (
   <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-in fade-in">
-    <div className="bg-white rounded-[2.5rem] w-full max-w-sm p-10 shadow-2xl animate-in zoom-in-95 flex flex-col items-center text-center">
-      <div className="w-16 h-16 bg-red-50 text-red-600 rounded-3xl flex items-center justify-center mb-6">
+    <div className="bg-white dark:bg-gray-900 rounded-[2.5rem] w-full max-w-sm p-10 shadow-2xl animate-in zoom-in-95 flex flex-col items-center text-center transition-colors">
+      <div className="w-16 h-16 bg-red-50 dark:bg-red-900/20 text-red-600 rounded-3xl flex items-center justify-center mb-6">
         <AlertTriangle className="w-8 h-8" />
       </div>
-      <h3 className="text-xl font-black text-gray-900 mb-2 uppercase tracking-tight">{title}</h3>
-      <p className="text-sm text-gray-500 mb-8 font-medium leading-relaxed">{message}</p>
+      <h3 className="text-xl font-black text-gray-900 dark:text-gray-100 mb-2 uppercase tracking-tight">{title}</h3>
+      <p className="text-sm text-gray-500 dark:text-gray-400 mb-8 font-medium leading-relaxed">{message}</p>
       <div className="flex flex-col w-full space-y-3">
         <button onClick={onConfirm} className="w-full bg-red-600 text-white py-4 rounded-2xl font-black uppercase tracking-widest text-[10px] hover:bg-red-700 transition-all">Proceed</button>
-        <button onClick={onClose} className="w-full bg-gray-100 text-gray-500 py-4 rounded-2xl font-black uppercase tracking-widest text-[10px] hover:bg-gray-200 transition-all">Cancel</button>
+        <button onClick={onClose} className="w-full bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-300 py-4 rounded-2xl font-black uppercase tracking-widest text-[10px] hover:bg-gray-200 dark:hover:bg-gray-700 transition-all">Cancel</button>
       </div>
     </div>
   </div>
