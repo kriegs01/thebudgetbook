@@ -305,17 +305,24 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
   useEffect(() => {
     const existingSetup = savedSetups.find(s => s.month === selectedMonth && s.timing === selectedTiming);
     if (existingSetup && existingSetup.data) {
-      // Load salary data from setup if available
-      if (existingSetup.data._projectedSalary !== undefined) {
-        setProjectedSalary(existingSetup.data._projectedSalary);
-      } else {
-        setProjectedSalary('11000');
+      // QA: Prevent unnecessary state updates if data matches current local state
+      // This stops the "pulling away" jump in PWAs after autosave reloads the list
+      const incomingData = existingSetup.data;
+      const currentDataStr = JSON.stringify(setupData);
+      const incomingDataStr = JSON.stringify(Object.fromEntries(
+        Object.entries(incomingData).filter(([key]) => !key.startsWith('_'))
+      ));
+
+      if (currentDataStr !== incomingDataStr) {
+        setSetupData(incomingData as any);
       }
-      if (existingSetup.data._actualSalary !== undefined) {
-        setActualSalary(existingSetup.data._actualSalary);
-      } else {
-        setActualSalary('');
-      }
+
+      // Only update salary fields if they actually changed
+      const newProjected = incomingData._projectedSalary ?? '11000';
+      const newActual = incomingData._actualSalary ?? '';
+      if (newProjected !== projectedSalary) setProjectedSalary(newProjected);
+      if (newActual !== actualSalary) setActualSalary(newActual);
+
       // Restore excluded installment IDs from persisted setup data
       if (Array.isArray(existingSetup.data._excludedInstallmentIds)) {
         setExcludedInstallmentIds(new Set(existingSetup.data._excludedInstallmentIds));
@@ -335,7 +342,7 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
       setExcludedInstallmentIds(new Set());
       setExcludedWalletIds(new Set());
     }
-  }, [selectedMonth, selectedTiming, savedSetups]);
+  }, [selectedMonth, selectedTiming, savedSetups]); // Keep savedSetups so we sync across devices, but logic above prevents jitters
 
   // Load transactions for matching payment status
   // Only loads once on mount to avoid excessive DB queries
