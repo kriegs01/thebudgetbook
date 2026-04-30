@@ -180,6 +180,7 @@ const AppContent: React.FC = () => {
 
 const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<void> }> = ({ user, userProfile, signOut }) => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [accountsLoading, setAccountsLoading] = useState(true);
   const [accountsError, setAccountsError] = useState<string | null>(null);
@@ -1034,11 +1035,283 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
                 </button>
               </div>
             )}
-            <div className="p-4 border-t border-gray-100">
+            <div className="p-3 border-t border-gray-100">
               {isSidebarOpen ? (
+                <div>
+                  {isUserMenuOpen && (
+                    <div className="pb-2">
+                      <button
+                        onClick={async () => {
+                          try {
+                            await signOut();
+                          } catch (error) {
+                            console.error('Logout error:', error);
+                          }
+                        }}
+                        className="w-full flex items-center space-x-3 py-2 px-3 text-sm font-medium text-red-600 hover:bg-red-50 rounded-lg transition-all"
+                      >
+                        <LogOut className="w-4 h-4" />
+                        <span>Logout</span>
+                      </button>
+                    </div>
+                  )}
+                  <button onClick={() => setIsUserMenuOpen(prev => !prev)} className="w-full flex items-center justify-between p-2 hover:bg-gray-100 rounded-xl transition-colors">
+                    <div className="flex items-center space-x-3">
+                      <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 font-bold">
+                        {userProfile ? 
+                          `${userProfile.first_name.charAt(0)}${userProfile.last_name.charAt(0)}`.toUpperCase() :
+                          user?.email?.charAt(0).toUpperCase() || 'U'
+                        }
+                      </div>
+                      <div className="flex-1 overflow-hidden text-left">
+                        <p className="text-sm font-semibold text-gray-900 truncate">
+                          {userProfile ? 
+                            `${userProfile.first_name} ${userProfile.last_name}` :
+                            user?.email?.split('@')[0] || 'User'
+                          }
+                        </p>
+                        <p className="text-xs text-gray-500 truncate">{user?.email || ''}</p>
+                      </div>
+                    </div>
+                    <ChevronUp className={`w-5 h-5 text-gray-400 transition-transform duration-200 ${!isUserMenuOpen && 'rotate-180'}`} />
+                  </button>
+                </div>
+              ) : (
                 <div className="space-y-2">
-                  <div className="flex items-center space-x-3 p-2 bg-gray-50 rounded-xl">
-                    <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 font-bold">
+                  <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 font-bold mx-auto">
+                    {userProfile ? 
+                      `${userProfile.first_name.charAt(0)}${userProfile.last_name.charAt(0)}`.toUpperCase() :
+                      user?.email?.charAt(0).toUpperCase() || 'U'
+                    }
+                  </div>
+                  <button
+                    onClick={async () => {
+                      try {
+                        await signOut();
+                      } catch (error) {
+                        console.error('Logout error:', error);
+                      }
+                    }}
+                    className="w-full py-2 text-red-600 hover:bg-red-50 rounded-lg flex items-center justify-center transition-all"
+                    title="Logout"
+                  >
+                    <LogOut className="w-5 h-5" />
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        </aside>
+        <main className={`flex-1 bg-gray-50 transition-all duration-300 ease-in-out ${isSidebarOpen ? 'md:ml-64' : 'md:ml-20'} h-full flex flex-col overflow-hidden`}> 
+          <div className="p-4 md:p-8 w-full flex-1 overflow-auto overscroll-none touch-pan-y" style={{ WebkitOverflowScrolling: 'touch' }}>
+            <Routes>
+              <Route path="/" element={<Dashboard accounts={accounts} budget={budgetItems} installments={installments} transactions={transactions} budgetSetups={budgetSetups} userProfile={userProfile} />} />
+              <Route path="/budget" element={
+                <Budget
+                  items={budgetItems} 
+                  accounts={accounts} 
+                  billers={billers}
+                  categories={categories}
+                  savedSetups={budgetSetups}
+                  setSavedSetups={setBudgetSetups}
+                  onAdd={(item) => setBudgetItems(prev => [...prev, item])}
+                  onUpdateBiller={handleUpdateBiller}
+                  onUpdateInstallment={handleUpdateInstallment}
+                  installments={installments}
+                  onMoveToTrash={async (setup) => {
+                    // Delete from Supabase
+                    const { error } = await deleteBudgetSetupFrontend(setup.id);
+                    if (error) {
+                      console.error('Error deleting budget setup:', error);
+                      alert('Failed to delete budget setup. Please try again.');
+                    } else {
+                      // Update local state
+                      setBudgetSetups(prev => prev.filter(s => s.id !== setup.id));
+                      setTrashSetups(prev => [...prev, setup]);
+                    }
+                  }}
+                  onReloadSetups={reloadBudgetSetups}
+                  onReloadBillers={reloadBillers}
+                  onTransactionCreated={handleTransactionCreated}
+                  onTransactionDeleted={handleTransactionDeleted}
+                  onArchiveBudget={async (setup) => {
+                    const { data, error } = await archiveBudgetSetup(setup.id);
+                    if (error) {
+                      console.error('Error archiving budget setup:', error);
+                      throw error;
+                    }
+                    if (data) {
+                      setBudgetSetups(prev => prev.map(s => s.id === data.id ? data : s));
+                    }
+                  }}
+                  onReopenBudget={async (setup) => {
+                    const { data, error } = await reopenBudgetSetup(setup.id);
+                    if (error) {
+                      console.error('Error reopening budget setup:', error);
+                      throw error;
+                    }
+                    if (data) {
+                      setBudgetSetups(prev => prev.map(s => s.id === data.id ? data : s));
+                    }
+                  }}
+                />
+              } />
+              <Route path="/billers" element={
+                <Billers
+                  billers={billers}
+                  installments={installments}
+                  onAdd={handleAddBiller}
+                  accounts={accounts}
+                  categories={categories}
+                  onUpdate={handleUpdateBiller}
+                  onDelete={handleDeleteBiller}
+                  onPayBiller={handlePayBiller}
+                  loading={billersLoading}
+                  error={billersError}
+                />
+              } />
+              <Route path="/installments" element={
+                <Installments
+                  installments={installments}
+                  accounts={accounts}
+                  billers={billers}
+                  onAdd={handleAddInstallment}
+                  onUpdate={handleUpdateInstallment}
+                  onDelete={handleDeleteInstallment}
+                  onPayInstallment={handlePayInstallment}
+                  loading={installmentsLoading}
+                  error={installmentsError}
+                />
+              } />
+              <Route path="/accounts" element={
+                <Accounts
+                  accounts={accounts}
+                  onAdd={handleAddAccount}
+                  onEdit={handleEditAccount}
+                  onDelete={handleDeleteAccount}
+                  onDeactivate={async (id, when) => {
+                    // For now, just mark as inactive or remove - can be enhanced later
+                    if (when === 'now') {
+                      await handleDeleteAccount(id);
+                    }
+                  }}
+                  loading={accountsLoading}
+                  error={accountsError}
+                />
+              } />
+              <Route path="/accounts/view" element={<AccountFilteredTransactions accounts={accounts} onTransactionCreated={reloadAccounts} />} />
+              <Route path="/accounts/statement" element={<StatementPage accounts={accounts} />} />
+              <Route path="/savings" element={
+                <Savings
+                  jars={savings}
+                  accounts={accounts}
+                  onAdd={handleAddSavings}
+                  onDelete={handleDeleteSavings}
+                  loading={savingsLoading}
+                  error={savingsError}
+                />
+              } />
+              <Route path="/wallets" element={<WalletsPage accounts={accounts} />} />
+              <Route path="/wallets/view" element={<WalletView accounts={accounts} />} />
+              <Route path="/settings" element={
+                <SettingsPage 
+                  currency={currency}
+                  setCurrency={setCurrency}
+                  categories={categories}
+                  setCategories={setCategories}
+                  onResetAll={handleResetAll}
+                  billers={billers}
+                  installments={installments}
+                  onUpdateBiller={handleUpdateBiller}
+                />
+              } />
+              <Route path="/trash" element={
+                <TrashPage
+                  items={trashSetups}
+                  onRestore={(setup) => {
+                    setTrashSetups(prev => prev.filter(s => s.id !== setup.id));
+                    setBudgetSetups(prev => [setup, ...prev]);
+                  }}
+                  onDeletePermanently={(id) => {
+                    setTrashSetups(prev => prev.filter(s => s.id !== id));
+                  }}
+                />
+              } />
+              <Route path="/transactions" element={
+                <TransactionsPage 
+                  onTransactionDeleted={handleTransactionDeleted}
+                  onTransactionCreated={handleTransactionCreated}
+                  refreshKey={txRefreshKey}
+                />
+              } />
+              <Route path="/supabase-demo" element={
+                <SupabaseDemo />
+              } />
+              <Route path="/update-password" element={<UpdatePassword />} />
+              {/* Add additional routes/pages as needed */}
+            </Routes>
+          </div>
+        </main>
+      </div>
+
+      {/* Navigation Edit Modal */}
+      {showNavEditModal && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md">
+          <div className="bg-white rounded-[2.5rem] w-full max-w-md p-8 shadow-2xl relative flex flex-col max-h-[85vh] animate-in zoom-in-95">
+            <button onClick={() => setShowNavEditModal(false)} className="absolute right-6 top-6 p-2 hover:bg-gray-100 rounded-full transition-colors">
+              <X className="w-5 h-5 text-gray-400" />
+            </button>
+            <h2 className="text-2xl font-black text-gray-900 mb-2 uppercase tracking-tight">Edit Menu</h2>
+            <p className="text-gray-500 text-sm mb-6 font-medium">Reorder pages or hide the ones you don't use often.</p>
+            
+            <div className="flex-1 overflow-y-auto space-y-2 mb-6 pr-2">
+              {tempNavPrefs.map((pref, idx) => {
+                const item = NAV_ITEMS.find(n => n.id === pref.id);
+                if (!item) return null;
+                return (
+                  <div key={pref.id} className={`flex items-center justify-between p-3 rounded-2xl border transition-all ${pref.visible ? 'bg-white border-gray-200' : 'bg-gray-50 border-transparent opacity-60'}`}>
+                    <div className="flex items-center space-x-3">
+                      <div className={`p-2 rounded-xl ${pref.visible ? 'bg-indigo-50 text-indigo-600' : 'bg-gray-200 text-gray-500'}`}>
+                        {item.icon}
+                      </div>
+                      <span className="font-bold text-gray-800">{item.label}</span>
+                    </div>
+                    <div className="flex items-center space-x-1">
+                      <button onClick={() => handleMoveNavUp(idx)} disabled={idx === 0} className="p-2 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-xl disabled:opacity-30 transition-colors"><ArrowUp className="w-4 h-4" /></button>
+                      <button onClick={() => handleMoveNavDown(idx)} disabled={idx === tempNavPrefs.length - 1} className="p-2 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-xl disabled:opacity-30 transition-colors"><ArrowDown className="w-4 h-4" /></button>
+                      <div className="w-px h-6 bg-gray-200 mx-1"></div>
+                      <button onClick={() => handleToggleNavVisibility(pref.id)} className={`p-2 rounded-xl transition-colors ${pref.visible ? 'text-green-600 hover:bg-green-50' : 'text-gray-400 hover:bg-gray-200'}`}>
+                        {pref.visible ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+            
+            <div className="flex space-x-3 pt-2">
+              <button onClick={() => setShowNavEditModal(false)} className="flex-1 bg-gray-100 text-gray-600 py-4 rounded-2xl font-black uppercase tracking-widest text-[10px] hover:bg-gray-200 transition-colors">Cancel</button>
+              <button onClick={handleSaveNavPreferences} className="flex-1 bg-indigo-600 text-white py-4 rounded-2xl font-black uppercase tracking-widest text-[10px] hover:bg-indigo-700 transition-colors shadow-xl shadow-indigo-100">Save Changes</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </BrowserRouter>
+    </PinProtectionProvider>
+    </TestEnvironmentProvider>
+  );
+};
+
+// Main App component with Auth Provider
+const App: React.FC = () => {
+  return (
+    <AuthProvider>
+      <AppContent />
+    </AuthProvider>
+  );
+};
+
+export default App;
                       {userProfile ? 
                         `${userProfile.first_name.charAt(0)}${userProfile.last_name.charAt(0)}`.toUpperCase() :
                         user?.email?.charAt(0).toUpperCase() || 'U'
