@@ -369,6 +369,7 @@ const Installments: React.FC<InstallmentsProps> = ({ installments, accounts, bil
     if (!showCloseModal || isSubmitting) return;
 
     setIsSubmitting(true);
+    console.log('[Installments] Starting archive process for:', showCloseModal.name);
     try {
       const currentPaid = dbPaidAmounts.get(showCloseModal.id) ?? showCloseModal.paidAmount;
       const isPaid = currentPaid >= showCloseModal.totalAmount;
@@ -380,6 +381,8 @@ const Installments: React.FC<InstallmentsProps> = ({ installments, accounts, bil
         isArchived: true,
         archiveStatus: finalStatus
       });
+      console.log('[Installments] Archive successful');
+      setIsCompletedOpen(true); // Automatically expand the section to show the archived card
       setShowCloseModal(null);
     } catch (error) {
       console.error('Failed to archive installment:', error);
@@ -962,6 +965,14 @@ const Installments: React.FC<InstallmentsProps> = ({ installments, accounts, bil
                 <div className="flex space-x-4 pt-4">
                   <button type="button" onClick={() => setShowCloseModal(null)} className="flex-1 bg-gray-100 py-4 rounded-2xl font-bold text-gray-500">Cancel</button>
                   <button type="submit" className="flex-1 bg-gray-900 text-white py-4 rounded-2xl font-bold hover:bg-black shadow-xl">Archive</button>
+                  <button type="button" disabled={isSubmitting} onClick={() => setShowCloseModal(null)} className="flex-1 bg-gray-100 py-4 rounded-2xl font-bold text-gray-500 disabled:opacity-50">Cancel</button>
+                  <button 
+                    type="submit" 
+                    disabled={isSubmitting}
+                    className="flex-1 bg-gray-900 text-white py-4 rounded-2xl font-bold hover:bg-black shadow-xl disabled:bg-gray-400 disabled:cursor-not-allowed transition-all flex items-center justify-center space-x-2"
+                  >
+                    {isSubmitting ? <span>Archiving...</span> : <span>Archive</span>}
+                  </button>
                 </div>
               </form>
             </div>
