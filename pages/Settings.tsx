@@ -764,10 +764,10 @@ const Settings: React.FC<SettingsProps> = ({ currency, setCurrency, categories, 
       icon: <SlidersHorizontal className="w-5 h-5" />,
       content: (
         <div className="space-y-4 pt-2">
-          <div className="flex items-center justify-between p-4 bg-gray-50 rounded-2xl border border-gray-200">
+          <div className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-800/50 rounded-2xl border border-gray-200 dark:border-gray-700 transition-colors">
             <div>
-              <h4 className="font-black text-sm text-gray-900 uppercase mb-1">Dark Mode</h4>
-              <p className="text-xs text-gray-500">
+              <h4 className="font-black text-sm text-gray-900 dark:text-gray-100 uppercase mb-1 transition-colors">Dark Mode</h4>
+              <p className="text-xs text-gray-500 dark:text-gray-400 transition-colors">
                 Current Theme: <span className={`font-bold ${theme === 'dark' ? 'text-indigo-600' : 'text-amber-500'}`}>
                   {theme === 'dark' ? 'DARK' : 'LIGHT'}
                 </span>
@@ -1374,8 +1374,8 @@ const Settings: React.FC<SettingsProps> = ({ currency, setCurrency, categories, 
 
   return (
     <div className="max-w-3xl mx-auto space-y-4 animate-in slide-in-from-right-4 duration-500 pb-20">
-      <div className="bg-white rounded-[3rem] border border-gray-100 shadow-sm overflow-hidden">
-        <div className="p-6 md:p-8 border-b border-gray-100 flex items-center space-x-6 bg-gray-50/30">
+      <div className="bg-white dark:bg-gray-900 rounded-[3rem] border border-gray-100 dark:border-gray-800 shadow-sm overflow-hidden transition-colors">
+        <div className="p-6 md:p-8 border-b border-gray-100 dark:border-gray-800 flex items-center space-x-6 bg-gray-50/30 dark:bg-gray-800/30 transition-colors">
           <div className="w-16 h-16 md:w-20 md:h-20 rounded-2xl bg-gradient-to-br from-indigo-500 to-blue-600 flex items-center justify-center text-white text-2xl md:text-3xl font-black shadow-2xl">
             {userProfile ? 
               `${userProfile.first_name.charAt(0)}${userProfile.last_name.charAt(0)}`.toUpperCase() :
@@ -1383,23 +1383,23 @@ const Settings: React.FC<SettingsProps> = ({ currency, setCurrency, categories, 
             }
           </div>
           <div>
-            <h2 className="text-2xl md:text-3xl font-black text-gray-900 uppercase tracking-tight">Settings</h2>
-            <p className="text-gray-500 font-medium">Personal Financial Profile & App Configuration</p>
+            <h2 className="text-2xl md:text-3xl font-black text-gray-900 dark:text-gray-100 uppercase tracking-tight transition-colors">Settings</h2>
+            <p className="text-gray-500 dark:text-gray-400 font-medium transition-colors">Personal Financial Profile & App Configuration</p>
           </div>
         </div>
 
-        <div className="divide-y divide-gray-50">
+        <div className="divide-y divide-gray-50 dark:divide-gray-800 transition-colors">
           {sections.map((section) => (
             <div key={section.id} className="p-2">
               <button 
                 onClick={() => toggleSection(section.id)}
-                className="w-full flex items-center justify-between p-4 md:p-5 rounded-[1.5rem] hover:bg-gray-50 transition-colors"
+                className="w-full flex items-center justify-between p-4 md:p-5 rounded-[1.5rem] hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors"
               >
                 <div className="flex items-center space-x-4 md:space-x-6">
-                  <div className="p-3 bg-gray-100 text-gray-500 rounded-2xl">
+                  <div className="p-3 bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400 rounded-2xl transition-colors">
                     {section.icon}
                   </div>
-                  <span className="font-black text-lg text-gray-700 uppercase tracking-tight">{section.label}</span>
+                  <span className="font-black text-lg text-gray-700 dark:text-gray-200 uppercase tracking-tight transition-colors">{section.label}</span>
                 </div>
                 {openSection === section.id ? <ChevronDown className="w-6 h-6 text-gray-400" /> : <ChevronRight className="w-6 h-6 text-gray-400" />}
               </button>
