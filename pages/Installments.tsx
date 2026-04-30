@@ -733,8 +733,8 @@ const Installments: React.FC<InstallmentsProps> = ({ installments, accounts, bil
     );
   };
 
-  const activeInstallmentsList = installments.filter(i => !i.isArchived);
-  const archivedInstallmentsList = installments.filter(i => i.isArchived);
+  const activeInstallmentsList = installments.filter(i => i.isArchived !== true);
+  const archivedInstallmentsList = installments.filter(i => i.isArchived === true);
 
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
@@ -963,8 +963,6 @@ const Installments: React.FC<InstallmentsProps> = ({ installments, accounts, bil
                 </div>
 
                 <div className="flex space-x-4 pt-4">
-                  <button type="button" onClick={() => setShowCloseModal(null)} className="flex-1 bg-gray-100 py-4 rounded-2xl font-bold text-gray-500">Cancel</button>
-                  <button type="submit" className="flex-1 bg-gray-900 text-white py-4 rounded-2xl font-bold hover:bg-black shadow-xl">Archive</button>
                   <button type="button" disabled={isSubmitting} onClick={() => setShowCloseModal(null)} className="flex-1 bg-gray-100 py-4 rounded-2xl font-bold text-gray-500 disabled:opacity-50">Cancel</button>
                   <button 
                     type="submit" 
