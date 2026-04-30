@@ -209,18 +209,18 @@ const Accounts: React.FC<AccountsProps> = ({ accounts, onAdd, onDelete, onEdit, 
     const usedPercentSafe = usedPercent < 0 ? 0 : usedPercent;
 
     return (
-      <div key={acc.id} className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 hover:border-indigo-200 transition-all relative group overflow-hidden">
+      <div key={acc.id} className="bg-white dark:bg-gray-900 p-6 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800 hover:border-indigo-200 dark:hover:border-indigo-400 transition-all relative group overflow-hidden">
         <div className={`absolute top-0 right-0 w-24 h-24 -mr-8 -mt-8 rounded-full opacity-5 ${isCredit ? 'bg-purple-500' : 'bg-green-500'}`}></div>
         
         <div className="flex justify-between items-start mb-6">
-          <div className={`p-3 rounded-xl ${isCredit ? 'bg-purple-50 text-purple-600' : 'bg-green-50 text-green-600'}`}>
+          <div className={`p-3 rounded-xl transition-colors ${isCredit ? 'bg-purple-50 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400' : 'bg-green-50 dark:bg-green-900/30 text-green-600 dark:text-green-400'}`}>
             {isCredit ? <CreditCard className="w-6 h-6" /> : <Landmark className="w-6 h-6" />}
           </div>
 
           <div className="relative">
             <button
               onClick={(e) => { e.stopPropagation(); setOpenMenuId(openMenuId === acc.id ? null : acc.id); }}
-              className="p-2 text-gray-400 hover:text-gray-600 rounded-xl transition-all"
+              className="p-2 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 rounded-xl transition-all"
               aria-label="More options"
             >
               <MoreVertical className="w-4 h-4" />
@@ -228,24 +228,24 @@ const Accounts: React.FC<AccountsProps> = ({ accounts, onAdd, onDelete, onEdit, 
 
             {openMenuId === acc.id && (
               <div 
-                className="absolute right-0 mt-2 w-44 bg-white rounded-xl shadow-lg border border-gray-100 z-50"
+                className="absolute right-0 mt-2 w-44 bg-white dark:bg-gray-900 rounded-xl shadow-lg border border-gray-100 dark:border-gray-800 z-50 transition-colors"
                 onClick={(e) => e.stopPropagation()}
               >
                 <button
                   onClick={(e) => { e.stopPropagation(); setOpenMenuId(null); openEditModal(acc); }}
-                  className="w-full text-left px-4 py-3 hover:bg-gray-50 flex items-center space-x-3 text-sm"
+                  className="w-full text-left px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-800 text-gray-700 dark:text-gray-300 flex items-center space-x-3 text-sm transition-colors"
                 >
                   <span>Edit</span>
                 </button>
                 <button
                   onClick={(e) => { e.stopPropagation(); setOpenMenuId(null); openDeactivateDialog(acc.id); }}
-                  className="w-full text-left px-4 py-3 hover:bg-gray-50 flex items-center space-x-3 text-sm"
+                  className="w-full text-left px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-800 text-gray-700 dark:text-gray-300 flex items-center space-x-3 text-sm transition-colors"
                 >
                   <span>Deactivate</span>
                 </button>
                 <button
                   onClick={(e) => { e.stopPropagation(); setOpenMenuId(null); handleDeleteTrigger(acc.id, acc.bank); }}
-                  className="w-full text-left px-4 py-3 hover:bg-gray-50 flex items-center space-x-3 text-sm text-red-600"
+                  className="w-full text-left px-4 py-3 hover:bg-red-50 dark:hover:bg-red-900/20 flex items-center space-x-3 text-sm text-red-600 dark:text-red-400 transition-colors"
                 >
                   <span>Delete</span>
                 </button>
@@ -257,10 +257,10 @@ const Accounts: React.FC<AccountsProps> = ({ accounts, onAdd, onDelete, onEdit, 
         <div className="mb-4">
           <div className="flex items-center justify-between">
             <div>
-              <h3 className="text-lg font-bold text-gray-900 leading-tight">{acc.bank}</h3>
-              <p className="text-xs text-gray-400 font-medium uppercase tracking-wider">{acc.classification}</p>
+              <h3 className="text-lg font-bold text-gray-900 dark:text-gray-100 leading-tight transition-colors">{acc.bank}</h3>
+              <p className="text-xs text-gray-400 dark:text-gray-500 font-medium uppercase tracking-wider transition-colors">{acc.classification}</p>
             </div>
-            <span className="text-[10px] font-bold px-2 py-0.5 rounded uppercase bg-green-100 text-green-700 flex items-center gap-1">
+            <span className="text-[10px] font-bold px-2 py-0.5 rounded uppercase bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 flex items-center gap-1 transition-colors">
               <Power className="w-3 h-3" />Active
             </span>
           </div>
@@ -270,11 +270,11 @@ const Accounts: React.FC<AccountsProps> = ({ accounts, onAdd, onDelete, onEdit, 
         {isCredit && (
           <div className="mb-4">
             <div className="flex items-center justify-between mb-2">
-              <p className="text-xs text-gray-400 font-medium">Credit Limit</p>
-              <p className="text-sm font-semibold text-gray-800">{formatCurrency(creditLimit)}</p>
+              <p className="text-xs text-gray-400 dark:text-gray-500 font-medium transition-colors">Credit Limit</p>
+              <p className="text-sm font-semibold text-gray-800 dark:text-gray-200 transition-colors">{formatCurrency(creditLimit)}</p>
             </div>
 
-            <div className="w-full bg-gray-100 rounded-full h-3 overflow-hidden">
+            <div className="w-full bg-gray-100 dark:bg-gray-800 rounded-full h-3 overflow-hidden transition-colors">
               <div
                 className={`h-3 rounded-full ${usedPercentSafe >= 90 ? 'bg-red-500' : 'bg-purple-600'}`}
                 style={{ width: `${usedPercentSafe}%`, transition: 'width 300ms ease' }}
@@ -285,7 +285,7 @@ const Accounts: React.FC<AccountsProps> = ({ accounts, onAdd, onDelete, onEdit, 
               />
             </div>
 
-            <div className="flex items-center justify-between mt-2 text-[11px] text-gray-500">
+            <div className="flex items-center justify-between mt-2 text-[11px] text-gray-500 dark:text-gray-400 transition-colors">
               <span>Used</span>
               <span className="font-medium">{usedPercentSafe}%</span>
             </div>
@@ -294,16 +294,16 @@ const Accounts: React.FC<AccountsProps> = ({ accounts, onAdd, onDelete, onEdit, 
 
         <div className="space-y-4">
           <div>
-            <p className="text-xs text-gray-400 font-medium">Balance</p>
-            <p className={`text-2xl font-bold text-gray-900`}>{formatCurrency(acc.balance)}</p>
+            <p className="text-xs text-gray-400 dark:text-gray-500 font-medium transition-colors">Balance</p>
+            <p className={`text-2xl font-bold text-gray-900 dark:text-gray-100 transition-colors`}>{formatCurrency(acc.balance)}</p>
           </div>
           {isCredit && acc.billingDate && (
-            <p className="text-xs text-gray-400">
+            <p className="text-xs text-gray-400 dark:text-gray-500 transition-colors">
               Statement: {new Date(acc.billingDate).getDate()}{ordinalSuffix(new Date(acc.billingDate).getDate())} each month
             </p>
           )}
           {isCredit && acc.billingDate && acc.dueDate && (
-            <p className="text-xs text-gray-400">
+            <p className="text-xs text-gray-400 dark:text-gray-500 transition-colors">
               Due: {new Date(acc.dueDate).getDate()} days after → ~{getDueDayForDisplay(new Date(acc.billingDate).getDate(), new Date(acc.dueDate).getDate())}
             </p>
           )}
@@ -317,7 +317,7 @@ const Accounts: React.FC<AccountsProps> = ({ accounts, onAdd, onDelete, onEdit, 
               <Link
                 to={`/accounts/statement?account=${acc.id}`}
                 onClick={(e) => e.stopPropagation()}
-                className="bg-purple-100 text-purple-700 px-3 py-2 rounded-xl text-sm font-semibold hover:bg-purple-200 transition"
+                className="bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-400 px-3 py-2 rounded-xl text-sm font-semibold hover:bg-purple-200 dark:hover:bg-purple-900/50 transition-colors"
                 aria-label={`View ${acc.bank} statement`}
               >
                 View Statement
@@ -326,7 +326,7 @@ const Accounts: React.FC<AccountsProps> = ({ accounts, onAdd, onDelete, onEdit, 
             <Link
               to={`/accounts/view?account=${acc.id}`}
               onClick={(e) => e.stopPropagation()}
-              className="bg-gray-100 text-gray-700 px-3 py-2 rounded-xl text-sm font-semibold hover:bg-gray-200 transition"
+              className="bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 px-3 py-2 rounded-xl text-sm font-semibold hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
               aria-label={`View ${acc.bank} transactions`}
             >
               View
@@ -369,10 +369,10 @@ const Accounts: React.FC<AccountsProps> = ({ accounts, onAdd, onDelete, onEdit, 
       {!loading && (
       <>
       <div className="flex items-center justify-between">
-        <h2 className="text-3xl font-black text-gray-900 uppercase">ACCOUNTS</h2>
+        <h2 className="text-3xl font-black text-gray-900 dark:text-gray-100 uppercase transition-colors">ACCOUNTS</h2>
         <div className="flex items-center space-x-4">
-          <Link to="/transactions" className="px-4 py-2 rounded-lg bg-gray-100 text-gray-800 hover:bg-gray-200">Transactions</Link>
-          <button onClick={openAddModal} className="bg-indigo-600 text-white px-6 py-2.5 rounded-xl font-bold hover:bg-indigo-700 transition-all shadow-lg flex items-center space-x-2">
+          <Link to="/transactions" className="px-4 py-2 rounded-lg bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors">Transactions</Link>
+          <button onClick={openAddModal} className="bg-indigo-600 text-white px-6 py-2.5 rounded-xl font-bold hover:bg-indigo-700 transition-all shadow-lg dark:shadow-none flex items-center space-x-2">
             <Plus className="w-5 h-5" />
             <span>Add Account</span>
           </button>
@@ -382,14 +382,14 @@ const Accounts: React.FC<AccountsProps> = ({ accounts, onAdd, onDelete, onEdit, 
       {/* Empty State */}
       {debitAccounts.length === 0 && creditAccounts.length === 0 && (
         <div className="text-center py-12">
-          <div className="inline-flex items-center justify-center w-20 h-20 rounded-full bg-gray-100 mb-4">
-            <Landmark className="w-10 h-10 text-gray-400" />
+          <div className="inline-flex items-center justify-center w-20 h-20 rounded-full bg-gray-100 dark:bg-gray-800 mb-4 transition-colors">
+            <Landmark className="w-10 h-10 text-gray-400 dark:text-gray-500 transition-colors" />
           </div>
-          <h3 className="text-xl font-bold text-gray-900 mb-2">No Accounts Yet</h3>
-          <p className="text-gray-500 mb-6">Get started by adding your first account</p>
+          <h3 className="text-xl font-bold text-gray-900 dark:text-gray-100 mb-2 transition-colors">No Accounts Yet</h3>
+          <p className="text-gray-500 dark:text-gray-400 mb-6 transition-colors">Get started by adding your first account</p>
           <button 
             onClick={openAddModal}
-            className="inline-flex items-center space-x-2 bg-indigo-600 text-white px-6 py-3 rounded-2xl font-bold hover:bg-indigo-700 shadow-lg"
+            className="inline-flex items-center space-x-2 bg-indigo-600 text-white px-6 py-3 rounded-2xl font-bold hover:bg-indigo-700 shadow-lg dark:shadow-none transition-all"
           >
             <Plus className="w-5 h-5" />
             <span>Add Your First Account</span>
@@ -400,11 +400,11 @@ const Accounts: React.FC<AccountsProps> = ({ accounts, onAdd, onDelete, onEdit, 
       <section>
         <button 
           onClick={() => setIsDebitOpen(!isDebitOpen)}
-          className="flex items-center space-x-2 mb-6 text-gray-700 hover:text-gray-900 font-bold text-lg"
+          className="flex items-center space-x-2 mb-6 text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100 font-bold text-lg transition-colors"
         >
           {isDebitOpen ? <ChevronDown className="w-5 h-5" /> : <ChevronRight className="w-5 h-5" />}
-          <TrendingUp className="w-5 h-5 text-green-500" />
-          <h3 className="text-xl font-bold text-gray-800 uppercase tracking-widest text-sm">Debit & Assets ({debitAccounts.length})</h3>
+          <TrendingUp className="w-5 h-5 text-green-500 dark:text-green-400 transition-colors" />
+          <h3 className="text-xl font-bold text-gray-800 dark:text-gray-200 uppercase tracking-widest text-sm transition-colors">Debit & Assets ({debitAccounts.length})</h3>
         </button>
         {isDebitOpen && (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -416,11 +416,11 @@ const Accounts: React.FC<AccountsProps> = ({ accounts, onAdd, onDelete, onEdit, 
       <section>
         <button 
           onClick={() => setIsCreditOpen(!isCreditOpen)}
-          className="flex items-center space-x-2 mb-6 text-gray-700 hover:text-gray-900 font-bold text-lg"
+          className="flex items-center space-x-2 mb-6 text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100 font-bold text-lg transition-colors"
         >
           {isCreditOpen ? <ChevronDown className="w-5 h-5" /> : <ChevronRight className="w-5 h-5" />}
-          <CreditCard className="w-5 h-5 text-purple-500" />
-          <h3 className="text-xl font-bold text-gray-800 uppercase tracking-widest text-sm">Credit & Liabilities ({creditAccounts.length})</h3>
+          <CreditCard className="w-5 h-5 text-purple-500 dark:text-purple-400 transition-colors" />
+          <h3 className="text-xl font-bold text-gray-800 dark:text-gray-200 uppercase tracking-widest text-sm transition-colors">Credit & Liabilities ({creditAccounts.length})</h3>
         </button>
         {isCreditOpen && (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -433,22 +433,22 @@ const Accounts: React.FC<AccountsProps> = ({ accounts, onAdd, onDelete, onEdit, 
 
       {showModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-md">
-          <div className="bg-white rounded-3xl w-full max-w-2xl overflow-hidden shadow-2xl flex flex-col md:flex-row">
-            <div className="bg-gray-900 md:w-1/3 p-8 text-white flex flex-col justify-between">
+          <div className="bg-white dark:bg-gray-900 rounded-3xl w-full max-w-2xl overflow-hidden shadow-2xl flex flex-col md:flex-row transition-colors">
+            <div className="bg-gray-900 dark:bg-gray-950 md:w-1/3 p-8 text-white flex flex-col justify-between transition-colors">
               <div>
                 <Landmark className="w-12 h-12 mb-6 text-indigo-400" />
-                <h2 className="text-2xl font-black mb-2 uppercase">{editingId ? 'Edit Account' : 'Connect Account'}</h2>
+                <h2 className="text-2xl font-black mb-2 uppercase text-white">{editingId ? 'Edit Account' : 'Connect Account'}</h2>
               </div>
             </div>
-            <form onSubmit={handleSubmit} className="p-8 flex-1 bg-white space-y-6">
+            <form onSubmit={handleSubmit} className="p-8 flex-1 bg-white dark:bg-gray-900 space-y-6 transition-colors">
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-xs font-bold text-gray-400 uppercase mb-1">Bank Name</label>
-                  <input required type="text" value={formData.bank} onChange={(e) => setFormData({...formData, bank: e.target.value})} className="w-full border border-gray-100 rounded-lg px-3 py-2" />
+                  <label className="block text-xs font-bold text-gray-400 dark:text-gray-500 uppercase mb-1 transition-colors">Bank Name</label>
+                  <input required type="text" value={formData.bank} onChange={(e) => setFormData({...formData, bank: e.target.value})} className="w-full bg-transparent text-gray-900 dark:text-gray-100 border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 outline-none focus:border-indigo-500 transition-colors" />
                 </div>
                 <div>
-                  <label className="block text-xs font-bold text-gray-400 uppercase mb-1">Type</label>
-                  <select value={formData.type} onChange={(e) => setFormData({...formData, type: e.target.value as 'Debit' | 'Credit'})} className="w-full border border-gray-100 rounded-lg px-3 py-2">
+                  <label className="block text-xs font-bold text-gray-400 dark:text-gray-500 uppercase mb-1 transition-colors">Type</label>
+                  <select value={formData.type} onChange={(e) => setFormData({...formData, type: e.target.value as 'Debit' | 'Credit'})} className="w-full bg-transparent text-gray-900 dark:text-gray-100 border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 outline-none focus:border-indigo-500 transition-colors">
                     <option value="Debit">Debit</option>
                     <option value="Credit">Credit</option>
                   </select>
@@ -457,8 +457,8 @@ const Accounts: React.FC<AccountsProps> = ({ accounts, onAdd, onDelete, onEdit, 
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-xs font-bold text-gray-400 uppercase mb-1">Classification</label>
-                  <select value={formData.classification} onChange={(e) => setFormData({...formData, classification: e.target.value as AccountClassification})} className="w-full border border-gray-100 rounded-lg px-3 py-2">
+                  <label className="block text-xs font-bold text-gray-400 dark:text-gray-500 uppercase mb-1 transition-colors">Classification</label>
+                  <select value={formData.classification} onChange={(e) => setFormData({...formData, classification: e.target.value as AccountClassification})} className="w-full bg-transparent text-gray-900 dark:text-gray-100 border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 outline-none focus:border-indigo-500 transition-colors">
                     <option>Checking</option>
                     <option>Savings</option>
                     <option>Investment</option>
@@ -467,8 +467,8 @@ const Accounts: React.FC<AccountsProps> = ({ accounts, onAdd, onDelete, onEdit, 
                   </select>
                 </div>
                 <div>
-                  <label className="block text-xs font-bold text-gray-400 uppercase mb-1">Opening Balance</label>
-                  <input required type="number" value={formData.balance} onChange={(e) => setFormData({...formData, balance: e.target.value})} className="w-full border border-gray-100 rounded-lg px-3 py-2" />
+                  <label className="block text-xs font-bold text-gray-400 dark:text-gray-500 uppercase mb-1 transition-colors">Opening Balance</label>
+                  <input required type="number" value={formData.balance} onChange={(e) => setFormData({...formData, balance: e.target.value})} className="w-full bg-transparent text-gray-900 dark:text-gray-100 border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 outline-none focus:border-indigo-500 transition-colors" />
                 </div>
               </div>
 
@@ -476,16 +476,16 @@ const Accounts: React.FC<AccountsProps> = ({ accounts, onAdd, onDelete, onEdit, 
                 <>
                   <div className="grid grid-cols-3 gap-4">
                     <div>
-                      <label className="block text-xs font-bold text-gray-400 uppercase mb-1">Credit Limit</label>
-                      <input type="number" value={formData.creditLimit} onChange={(e) => setFormData({...formData, creditLimit: e.target.value})} className="w-full border border-gray-100 rounded-lg px-3 py-2" />
+                      <label className="block text-xs font-bold text-gray-400 dark:text-gray-500 uppercase mb-1 transition-colors">Credit Limit</label>
+                      <input type="number" value={formData.creditLimit} onChange={(e) => setFormData({...formData, creditLimit: e.target.value})} className="w-full bg-transparent text-gray-900 dark:text-gray-100 border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 outline-none focus:border-indigo-500 transition-colors" />
                     </div>
                     <div>
-                      <label className="block text-xs font-bold text-gray-400 uppercase mb-1">Statement Day <span className="normal-case font-normal text-gray-400">(day bill cuts)</span></label>
-                      <input type="number" min="1" max="31" placeholder="e.g. 12" value={formData.billingDate} onChange={(e) => setFormData({...formData, billingDate: e.target.value})} className="w-full border border-gray-100 rounded-lg px-3 py-2" />
+                      <label className="block text-xs font-bold text-gray-400 dark:text-gray-500 uppercase mb-1 transition-colors">Statement Day <span className="normal-case font-normal text-gray-400 dark:text-gray-500">(day bill cuts)</span></label>
+                      <input type="number" min="1" max="31" placeholder="e.g. 12" value={formData.billingDate} onChange={(e) => setFormData({...formData, billingDate: e.target.value})} className="w-full bg-transparent text-gray-900 dark:text-gray-100 border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 outline-none focus:border-indigo-500 transition-colors" />
                     </div>
                     <div>
-                      <label className="block text-xs font-bold text-gray-400 uppercase mb-1">Days to Pay <span className="normal-case font-normal text-gray-400">(grace period)</span></label>
-                      <input type="number" min="1" max="60" placeholder="e.g. 21" value={formData.dueDate} onChange={(e) => setFormData({...formData, dueDate: e.target.value})} className="w-full border border-gray-100 rounded-lg px-3 py-2" />
+                      <label className="block text-xs font-bold text-gray-400 dark:text-gray-500 uppercase mb-1 transition-colors">Days to Pay <span className="normal-case font-normal text-gray-400 dark:text-gray-500">(grace period)</span></label>
+                      <input type="number" min="1" max="60" placeholder="e.g. 21" value={formData.dueDate} onChange={(e) => setFormData({...formData, dueDate: e.target.value})} className="w-full bg-transparent text-gray-900 dark:text-gray-100 border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 outline-none focus:border-indigo-500 transition-colors" />
                     </div>
                   </div>
                   {formData.billingDate && formData.dueDate && (() => {
@@ -494,7 +494,7 @@ const Accounts: React.FC<AccountsProps> = ({ accounts, onAdd, onDelete, onEdit, 
                     if (isNaN(statementDay) || isNaN(daysToPay)) return null;
                     const displayStr = getDueDayForDisplay(statementDay, daysToPay);
                     return (
-                      <p className="text-xs text-purple-600 mt-2">
+                      <p className="text-xs text-purple-600 dark:text-purple-400 mt-2 transition-colors">
                         📅 Statement cuts on the {statementDay}{ordinalSuffix(statementDay)} · Due ~{displayStr}
                       </p>
                     );
@@ -503,8 +503,8 @@ const Accounts: React.FC<AccountsProps> = ({ accounts, onAdd, onDelete, onEdit, 
               )}
 
               <div className="flex space-x-4 pt-4">
-                <button type="button" onClick={() => { setShowModal(false); resetForm(); }} className="flex-1 bg-gray-100 py-4 rounded-xl font-bold text-gray-500">Cancel</button>
-                <button type="submit" className="flex-1 bg-indigo-600 text-white py-4 rounded-xl font-bold hover:bg-indigo-700">{editingId ? 'Save Changes' : 'Add Account'}</button>
+                <button type="button" onClick={() => { setShowModal(false); resetForm(); }} className="flex-1 bg-gray-100 dark:bg-gray-800 py-4 rounded-xl font-bold text-gray-500 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors">Cancel</button>
+                <button type="submit" className="flex-1 bg-indigo-600 text-white py-4 rounded-xl font-bold hover:bg-indigo-700 transition-colors">{editingId ? 'Save Changes' : 'Add Account'}</button>
               </div>
             </form>
           </div>
@@ -543,31 +543,31 @@ const DeactivateDialog: React.FC<{
 
   return (
     <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-in fade-in">
-      <div className="bg-white rounded-[2.5rem] w-full max-w-md p-8 shadow-2xl animate-in zoom-in-95">
-        <h3 className="text-xl font-black text-gray-900 mb-2 uppercase tracking-tight">Deactivate Account</h3>
-        <p className="text-sm text-gray-500 mb-6 font-medium leading-relaxed">Choose whether to deactivate the account now or schedule deactivation for a later month and year.</p>
+      <div className="bg-white dark:bg-gray-900 rounded-[2.5rem] w-full max-w-md p-8 shadow-2xl animate-in zoom-in-95 transition-colors">
+        <h3 className="text-xl font-black text-gray-900 dark:text-gray-100 mb-2 uppercase tracking-tight transition-colors">Deactivate Account</h3>
+        <p className="text-sm text-gray-500 dark:text-gray-400 mb-6 font-medium leading-relaxed transition-colors">Choose whether to deactivate the account now or schedule deactivation for a later month and year.</p>
 
         <div className="space-y-4">
           <button onClick={onNow} className="w-full bg-red-600 text-white py-3 rounded-2xl font-black uppercase tracking-widest hover:bg-red-700 transition-all">
             Deactivate Now
           </button>
 
-          <div className="p-4 border border-gray-100 rounded-xl">
-            <p className="text-sm text-gray-600 mb-2 font-medium">Deactivate on</p>
+          <div className="p-4 border border-gray-100 dark:border-gray-800 rounded-xl transition-colors">
+            <p className="text-sm text-gray-600 dark:text-gray-300 mb-2 font-medium transition-colors">Deactivate on</p>
             <div className="flex space-x-2">
-              <select value={month} onChange={(e) => onChangeMonth(parseInt(e.target.value, 10))} className="flex-1 border border-gray-100 rounded-lg px-3 py-2">
+              <select value={month} onChange={(e) => onChangeMonth(parseInt(e.target.value, 10))} className="flex-1 bg-transparent text-gray-900 dark:text-gray-100 border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 outline-none focus:border-indigo-500 transition-colors">
                 {monthNames.map((mName, idx) => <option key={idx} value={idx}>{mName}</option>)}
               </select>
-              <select value={year} onChange={(e) => onChangeYear(parseInt(e.target.value, 10))} className="w-28 border border-gray-100 rounded-lg px-3 py-2">
+              <select value={year} onChange={(e) => onChangeYear(parseInt(e.target.value, 10))} className="w-28 bg-transparent text-gray-900 dark:text-gray-100 border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 outline-none focus:border-indigo-500 transition-colors">
                 {years.map(y => <option key={y} value={y}>{y}</option>)}
               </select>
             </div>
             <div className="mt-4">
-              <button onClick={onSchedule} className="w-full bg-indigo-600 text-white py-2 rounded-xl font-bold hover:bg-indigo-700">Schedule Deactivation</button>
+              <button onClick={onSchedule} className="w-full bg-indigo-600 text-white py-2 rounded-xl font-bold hover:bg-indigo-700 transition-colors">Schedule Deactivation</button>
             </div>
           </div>
 
-          <button onClick={onClose} className="w-full bg-gray-100 text-gray-600 py-3 rounded-2xl font-black uppercase tracking-widest hover:bg-gray-200 transition-all">
+          <button onClick={onClose} className="w-full bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 py-3 rounded-2xl font-black uppercase tracking-widest hover:bg-gray-200 dark:hover:bg-gray-700 transition-all">
             Cancel
           </button>
         </div>
@@ -578,17 +578,17 @@ const DeactivateDialog: React.FC<{
 
 const ConfirmDialog: React.FC<{ show: boolean; title: string; message: string; onConfirm: () => void; onClose: () => void }> = ({ title, message, onConfirm, onClose }) => (
   <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-in fade-in">
-    <div className="bg-white rounded-[2.5rem] w-full max-w-sm p-10 shadow-2xl animate-in zoom-in-95 flex flex-col items-center text-center">
-      <div className="w-16 h-16 bg-red-50 text-red-600 rounded-3xl flex items-center justify-center mb-6">
+    <div className="bg-white dark:bg-gray-900 rounded-[2.5rem] w-full max-w-sm p-10 shadow-2xl animate-in zoom-in-95 flex flex-col items-center text-center transition-colors">
+      <div className="w-16 h-16 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 rounded-3xl flex items-center justify-center mb-6 transition-colors">
         <AlertTriangle className="w-8 h-8" />
       </div>
-      <h3 className="text-xl font-black text-gray-900 mb-2 uppercase tracking-tight">{title}</h3>
-      <p className="text-sm text-gray-500 mb-8 font-medium leading-relaxed">{message}</p>
+      <h3 className="text-xl font-black text-gray-900 dark:text-gray-100 mb-2 uppercase tracking-tight transition-colors">{title}</h3>
+      <p className="text-sm text-gray-500 dark:text-gray-400 mb-8 font-medium leading-relaxed transition-colors">{message}</p>
       <div className="flex flex-col w-full space-y-3">
-        <button onClick={onConfirm} className="w-full bg-red-600 text-white py-4 rounded-2xl font-black uppercase tracking-widest text-[10px] hover:bg-red-700 transition-all shadow-lg shadow-red-100">
+        <button onClick={onConfirm} className="w-full bg-red-600 text-white py-4 rounded-2xl font-black uppercase tracking-widest text-[10px] hover:bg-red-700 transition-all shadow-lg shadow-red-100 dark:shadow-none">
           Proceed
         </button>
-        <button onClick={onClose} className="w-full bg-gray-100 text-gray-500 py-4 rounded-2xl font-black uppercase tracking-widest text-[10px] hover:bg-gray-200 transition-all">
+        <button onClick={onClose} className="w-full bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-300 py-4 rounded-2xl font-black uppercase tracking-widest text-[10px] hover:bg-gray-200 dark:hover:bg-gray-700 transition-all">
           Cancel
         </button>
       </div>
