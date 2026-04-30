@@ -733,8 +733,8 @@ const Installments: React.FC<InstallmentsProps> = ({ installments, accounts, bil
     );
   };
 
-  const activeInstallmentsList = installments.filter(i => i.isArchived !== true);
-  const archivedInstallmentsList = installments.filter(i => i.isArchived === true);
+  const activeInstallmentsList = installments.filter(i => !i.isArchived);
+  const archivedInstallmentsList = installments.filter(i => !!i.isArchived);
 
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
