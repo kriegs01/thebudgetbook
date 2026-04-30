@@ -362,12 +362,12 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ onTransactionDelete
         : `${filterPaymentMethods.size} selected`;
 
   return (
-    <div className="min-h-screen bg-gray-50 p-8">
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-950 p-8 transition-colors duration-200">
       <div className="max-w-6xl mx-auto">
         <div className="mb-6 flex items-center justify-between">
-          <h1 className="text-2xl font-black text-gray-900">Transactions</h1>
+          <h1 className="text-2xl font-black text-gray-900 dark:text-gray-100">Transactions</h1>
           <div className="flex items-center space-x-3">
-            <a href="/" className="px-3 py-2 rounded-lg bg-white shadow-sm">Back</a>
+            <a href="/" className="px-3 py-2 rounded-lg bg-white dark:bg-gray-900 dark:border-gray-800 border dark:text-gray-200 shadow-sm transition-colors">Back</a>
             <button onClick={() => setShowForm(true)} className="px-4 py-2 bg-indigo-600 text-white rounded-lg flex items-center space-x-2 hover:bg-indigo-700">
               <Plus className="w-4 h-4" />
               <span>Add Transaction</span>
@@ -376,7 +376,7 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ onTransactionDelete
         </div>
 
         {/* ── Filter Bar ──────────────────────────────────────────────────── */}
-        <div className="bg-white rounded-2xl shadow-sm p-4 mb-4">
+        <div className="bg-white dark:bg-gray-900 dark:border-gray-800 border rounded-2xl shadow-sm p-4 mb-4 transition-colors">
           <div className="flex flex-wrap items-end gap-3">
             <Filter className="w-4 h-4 text-gray-400 self-center mb-1 shrink-0" />
             <div className="flex flex-col gap-1">
@@ -387,7 +387,7 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ onTransactionDelete
                 min={FILTER_MIN_DATE}
                 max={filterEndDate}
                 onChange={e => setFilterStartDate(e.target.value)}
-                className="bg-gray-50 rounded-xl px-3 py-2 text-sm font-bold border-transparent outline-none focus:ring-2 focus:ring-indigo-400"
+                className="bg-gray-50 dark:bg-gray-800 dark:text-gray-100 rounded-xl px-3 py-2 text-sm font-bold border-transparent outline-none focus:ring-2 focus:ring-indigo-400 transition-colors"
               />
             </div>
             <div className="flex flex-col gap-1">
@@ -397,7 +397,7 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ onTransactionDelete
                 value={filterEndDate}
                 min={filterStartDate}
                 onChange={e => setFilterEndDate(e.target.value)}
-                className="bg-gray-50 rounded-xl px-3 py-2 text-sm font-bold border-transparent outline-none focus:ring-2 focus:ring-indigo-400"
+                className="bg-gray-50 dark:bg-gray-800 dark:text-gray-100 rounded-xl px-3 py-2 text-sm font-bold border-transparent outline-none focus:ring-2 focus:ring-indigo-400 transition-colors"
               />
             </div>
             <div className="flex flex-col gap-1 relative" ref={pmDropdownRef}>
@@ -405,22 +405,22 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ onTransactionDelete
               <button
                 type="button"
                 onClick={() => setShowPaymentMethodDropdown(p => !p)}
-                className="flex items-center gap-2 bg-gray-50 rounded-xl px-3 py-2 text-sm font-bold border-transparent outline-none focus:ring-2 focus:ring-indigo-400 min-w-[140px] justify-between"
+                className="flex items-center gap-2 bg-gray-50 dark:bg-gray-800 dark:text-gray-100 rounded-xl px-3 py-2 text-sm font-bold border-transparent outline-none focus:ring-2 focus:ring-indigo-400 min-w-[140px] justify-between transition-colors"
               >
                 <span>{pmFilterLabel}</span>
                 <ChevronDown className="w-4 h-4 text-gray-400 shrink-0" />
               </button>
               {showPaymentMethodDropdown && (
-                <div className="absolute top-full left-0 mt-1 z-30 bg-white rounded-xl shadow-lg border border-gray-100 min-w-[180px] py-2">
+                <div className="absolute top-full left-0 mt-1 z-30 bg-white dark:bg-gray-900 rounded-xl shadow-lg border border-gray-100 dark:border-gray-800 min-w-[180px] py-2 transition-colors">
                   {accounts.map(a => (
-                    <label key={a.id} className="flex items-center gap-2 px-4 py-2 cursor-pointer hover:bg-gray-50">
+                    <label key={a.id} className="flex items-center gap-2 px-4 py-2 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
                       <input
                         type="checkbox"
                         checked={filterPaymentMethods.has(a.id)}
                         onChange={() => togglePaymentMethodFilter(a.id)}
                         className="rounded"
                       />
-                      <span className="text-sm font-medium text-gray-700">{a.bank}</span>
+                      <span className="text-sm font-medium text-gray-700 dark:text-gray-300">{a.bank}</span>
                     </label>
                   ))}
                   {accounts.length === 0 && (
@@ -432,7 +432,7 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ onTransactionDelete
             <button
               type="button"
               onClick={resetFilters}
-              className="self-end px-3 py-2 text-xs font-bold text-gray-500 hover:text-indigo-600 bg-gray-100 hover:bg-indigo-50 rounded-xl transition-colors"
+              className="self-end px-3 py-2 text-xs font-bold text-gray-500 hover:text-indigo-600 bg-gray-100 dark:bg-gray-800 dark:hover:bg-indigo-900/30 hover:bg-indigo-50 rounded-xl transition-colors"
             >
               Reset
             </button>
@@ -448,9 +448,9 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ onTransactionDelete
           </div>
         </div>
 
-        <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
-          <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
-            <h2 className="text-sm font-bold uppercase text-gray-600 tracking-widest">All transactions</h2>
+        <div className="bg-white dark:bg-gray-900 dark:border-gray-800 border rounded-2xl shadow-sm overflow-hidden transition-colors">
+          <div className="px-6 py-4 border-b border-gray-100 dark:border-gray-800 flex items-center justify-between transition-colors">
+            <h2 className="text-sm font-bold uppercase text-gray-600 dark:text-gray-400 tracking-widest">All transactions</h2>
             <div className="flex items-center gap-2">
               <div className="text-sm text-gray-500">{filteredTransactions.length} items</div>
               {/* Batch delete trash icon — shown only when ≥1 selected */}
@@ -515,7 +515,7 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ onTransactionDelete
                       return (
                         <tr
                           key={tx.id}
-                          className={`border-t border-gray-100 group ${isSelectMode && selectedIds.has(tx.id) ? 'bg-indigo-50' : ''}`}
+                      className={`border-t border-gray-100 dark:border-gray-800 group transition-colors ${isSelectMode && selectedIds.has(tx.id) ? 'bg-indigo-50 dark:bg-indigo-900/30' : 'hover:bg-gray-50 dark:hover:bg-gray-800/50'}`}
                         >
                           {isSelectMode && (
                             <td className="px-4 py-3">
@@ -528,13 +528,13 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ onTransactionDelete
                               />
                             </td>
                           )}
-                          <td className="px-4 py-3"><div className="text-sm font-medium text-gray-900">{tx.name}</div></td>
+                      <td className="px-4 py-3"><div className="text-sm font-medium text-gray-900 dark:text-gray-100">{tx.name}</div></td>
                           <td className="px-4 py-3">
-                            <div className="text-sm text-gray-900">{new Date(tx.date).toLocaleDateString()}</div>
+                        <div className="text-sm text-gray-900 dark:text-gray-100">{new Date(tx.date).toLocaleDateString()}</div>
                             <div className="text-xs text-gray-400">{new Date(tx.date).toLocaleTimeString()}</div>
                           </td>
-                          <td className="px-4 py-3"><div className={`text-sm font-semibold ${tx.amount > 0 ? 'text-red-600' : 'text-green-600'}`}>{formatCurrency(-tx.amount)}</div></td>
-                          <td className="px-4 py-3"><div className="text-sm text-gray-700">{pm ? pm.bank : tx.paymentMethodId}</div></td>
+                      <td className="px-4 py-3"><div className={`text-sm font-semibold ${tx.amount > 0 ? 'text-red-600 dark:text-red-400' : 'text-green-600 dark:text-green-400'}`}>{formatCurrency(-tx.amount)}</div></td>
+                      <td className="px-4 py-3"><div className="text-sm text-gray-700 dark:text-gray-300">{pm ? pm.bank : tx.paymentMethodId}</div></td>
                           <td className="px-4 py-3 text-center">
                             <div className="flex items-center justify-center gap-1">
                               <button
@@ -581,8 +581,8 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ onTransactionDelete
         {/* QA: Consistent Transaction Form - with receipt upload, exclude credit accounts */}
         {showForm && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-md">
-            <div className="w-full max-w-md bg-white rounded-3xl p-10 shadow-2xl relative">
-              <h2 className="text-2xl font-black text-gray-900 mb-2">{editingTxId ? 'Edit Transaction' : 'Add New Transaction'}</h2>
+          <div className="w-full max-w-md bg-white dark:bg-gray-900 rounded-3xl p-10 shadow-2xl relative transition-colors">
+            <h2 className="text-2xl font-black text-gray-900 dark:text-gray-100 mb-2">{editingTxId ? 'Edit Transaction' : 'Add New Transaction'}</h2>
               <p className="text-gray-500 text-sm mb-8">{editingTxId ? 'Update the transaction details below' : 'Record a payment transaction'}</p>
               <form onSubmit={onSubmit} className="space-y-6">
                 <div>
@@ -592,7 +592,7 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ onTransactionDelete
                     onChange={e => setForm(f => ({ ...f, name: e.target.value }))} 
                     required 
                     placeholder="e.g. Groceries, Gas, etc."
-                    className="w-full bg-gray-50 border-transparent rounded-2xl p-4 outline-none font-bold focus:ring-2 focus:ring-indigo-500 transition-all" 
+                  className="w-full bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-transparent rounded-2xl p-4 outline-none font-bold focus:ring-2 focus:ring-indigo-500 transition-all" 
                   />
                 </div>
                 
@@ -607,7 +607,7 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ onTransactionDelete
                       value={form.amount} 
                       onChange={e => setForm(f => ({ ...f, amount: e.target.value }))} 
                       required 
-                      className="w-full bg-gray-50 border-transparent rounded-2xl p-4 pl-8 outline-none text-xl font-black focus:ring-2 focus:ring-indigo-500 transition-all" 
+                    className="w-full bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-transparent rounded-2xl p-4 pl-8 outline-none text-xl font-black focus:ring-2 focus:ring-indigo-500 transition-all" 
                     />
                   </div>
                 </div>
@@ -620,7 +620,7 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ onTransactionDelete
                       value={form.date} 
                       onChange={e => setForm(f => ({ ...f, date: e.target.value }))} 
                       required 
-                      className="w-full bg-gray-50 border-transparent rounded-2xl p-4 outline-none font-bold text-sm" 
+                    className="w-full bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-transparent rounded-2xl p-4 outline-none font-bold text-sm" 
                     />
                   </div>
                   <div>
@@ -631,7 +631,7 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ onTransactionDelete
                       <select 
                         value={form.paymentMethodId} 
                         onChange={e => setForm(f => ({ ...f, paymentMethodId: e.target.value }))} 
-                        className="w-full bg-gray-50 border-transparent rounded-2xl p-4 outline-none font-bold text-sm appearance-none"
+                      className="w-full bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-transparent rounded-2xl p-4 outline-none font-bold text-sm appearance-none"
                       >
                       {accounts.filter(a => a.classification !== 'Credit Card').map(a => <option key={a.id} value={a.id}>{a.bank}</option>)}
                       </select>
@@ -648,7 +648,7 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ onTransactionDelete
                       className="absolute inset-0 opacity-0 cursor-pointer"
                       onChange={e => setReceiptFile(e.target.files?.[0] ?? null)}
                     />
-                    <div className="w-full bg-gray-50 border-2 border-dashed border-gray-200 rounded-2xl p-6 text-center text-sm text-gray-500 hover:border-indigo-300 hover:bg-indigo-50 transition-all flex flex-col items-center">
+                  <div className="w-full bg-gray-50 dark:bg-gray-800 border-2 border-dashed border-gray-200 dark:border-gray-700 rounded-2xl p-6 text-center text-sm text-gray-500 hover:border-indigo-300 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 transition-all flex flex-col items-center">
                       <span className="font-bold">{receiptFile ? receiptFile.name : 'Click or drag to upload receipt'}</span>
                     </div>
                   </div>
