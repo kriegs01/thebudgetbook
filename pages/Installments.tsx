@@ -378,7 +378,11 @@ const Installments: React.FC<InstallmentsProps> = ({ installments, accounts, bil
       const finalStatus = isPaid ? 'completed' : closeTagging;
 
       // 1. Force immediate UI update to make it disappear from active list
-      setDbArchiveStatus(prev => ({ ...prev, [showCloseModal.id]: finalStatus }));
+      setDbArchiveStatus(prev => {
+        const next = { ...prev, [showCloseModal.id]: finalStatus };
+        localStorage.setItem('installments_archive_status', JSON.stringify(next));
+        return next;
+      });
 
       // 2. Direct DB update to bypass potential adapter omissions
       try {
@@ -391,6 +395,10 @@ const Installments: React.FC<InstallmentsProps> = ({ installments, accounts, bil
             archive_status: finalStatus 
           })
           .eq('id', showCloseModal.id);
+          
+        if (dbError) {
+          console.warn('[Installments] DB update error (columns likely missing). Falling back to local storage:', dbError);
+        }
       } catch (err) {
         console.warn('[Installments] Failed to execute direct archive update:', err);
       }
@@ -461,16 +469,21 @@ const Installments: React.FC<InstallmentsProps> = ({ installments, accounts, bil
           .in('id', installments.map(i => i.id));
           
         if (!error && data) {
-          const statuses: Record<string, string> = {};
+          const statuses: Record<string, string> = { ...localStatuses };
           data.forEach(row => {
             if (row.is_archived === true || row.is_archived === 'true') {
               statuses[row.id] = row.archive_status || 'completed';
             }
           });
           setDbArchiveStatus(statuses);
+          localStorage.setItem('installments_archive_status', JSON.stringify(statuses));
+        } else {
+          console.warn('[Installments] Failed to load DB archive status. Using local storage fallback.', error);
+          setDbArchiveStatus(localStatuses);
         }
       } catch (e) {
         console.warn('[Installments] Failed to load DB archive status', e);
+        setDbArchiveStatus(localStatuses);
       }
     };
     loadArchiveStatus();
