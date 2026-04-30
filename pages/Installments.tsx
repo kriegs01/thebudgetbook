@@ -364,6 +364,31 @@ const Installments: React.FC<InstallmentsProps> = ({ installments, accounts, bil
     setOpenMenuId(null);
   };
 
+  const handleCloseSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!showCloseModal || isSubmitting) return;
+
+    setIsSubmitting(true);
+    try {
+      const currentPaid = dbPaidAmounts.get(showCloseModal.id) ?? showCloseModal.paidAmount;
+      const isPaid = currentPaid >= showCloseModal.totalAmount;
+      
+      const finalStatus = isPaid ? 'completed' : closeTagging;
+
+      await onUpdate?.({
+        ...showCloseModal,
+        isArchived: true,
+        archiveStatus: finalStatus
+      });
+      setShowCloseModal(null);
+    } catch (error) {
+      console.error('Failed to archive installment:', error);
+      alert('Failed to archive installment. Please try again.');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   // Load total paid amounts from payment schedules for all installments
   useEffect(() => {
     const loadAllPaidAmounts = async () => {
