@@ -1159,6 +1159,7 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
     // Calculate installments total (same logic as categorySummary)
     const installmentsTotal = installments
       .filter(inst => {
+        if (inst.isArchived) return false;
         const timingMatch = !inst.timing || inst.timing === selectedTiming;
         const scheduleForMonth = getPaymentSchedule('installment', inst.id, selectedMonth, selectedYear);
         const isActiveForPeriod = scheduleForMonth !== undefined || shouldShowInstallment(inst, selectedMonth, selectedYear);
@@ -1351,6 +1352,7 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
     // Calculate installments total (same logic as categorySummary)
     const installmentsTotal = installments
       .filter(inst => {
+        if (inst.isArchived) return false;
         const timingMatch = !inst.timing || inst.timing === selectedTiming;
         const scheduleForMonth = getPaymentSchedule('installment', inst.id, selectedMonth, selectedYear);
         const isActiveForPeriod = scheduleForMonth !== undefined || shouldShowInstallment(inst, selectedMonth, selectedYear);
@@ -2071,6 +2073,7 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
     .filter(cat => {
       const catItems = setupData[cat.name] || [];
       const hasLoansData = cat.name === 'Loans' && installments.some(inst => {
+      if (inst.isArchived) return false;
         const timingMatch = !inst.timing || inst.timing === selectedTiming;
         const scheduleForMonth = getPaymentSchedule('installment', inst.id, selectedMonth, selectedYear);
         const isActiveForPeriod = scheduleForMonth !== undefined || shouldShowInstallment(inst, selectedMonth, selectedYear);
@@ -2088,6 +2091,7 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
       if (cat.name === 'Loans') {
         installmentsTotal = installments
           .filter(inst => {
+            if (inst.isArchived) return false;
             const timingMatch = !inst.timing || inst.timing === selectedTiming;
             const scheduleForMonth = getPaymentSchedule('installment', inst.id, selectedMonth, selectedYear);
             const isActiveForPeriod = scheduleForMonth !== undefined || shouldShowInstallment(inst, selectedMonth, selectedYear);
@@ -2526,6 +2530,7 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
           let relevantInstallments: Installment[] = [];
           if (cat.name === 'Loans') {
             relevantInstallments = installments.filter(inst => {
+              if (inst.isArchived) return false;
               // Filter by timing (if set, must match selected timing)
               const timingMatch = !inst.timing || inst.timing === selectedTiming;
               // Use schedule existence when available; fall back to date-based check for older installments

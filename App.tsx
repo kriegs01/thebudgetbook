@@ -112,6 +112,8 @@ const installmentToSupabase = (installment: Installment) => {
     term_duration: termDurationNum,
     paid_amount: installment.paidAmount,
     account_id: installment.accountId,
+    is_archived: installment.isArchived ?? false,
+    archive_status: installment.archiveStatus ?? null,
   };
 };
 
@@ -124,6 +126,8 @@ const supabaseToInstallment = (supabaseInstallment: any): Installment => ({
   termDuration: `${supabaseInstallment.term_duration} months`,
   paidAmount: supabaseInstallment.paid_amount,
   accountId: supabaseInstallment.account_id,
+  isArchived: supabaseInstallment.is_archived,
+  archiveStatus: supabaseInstallment.archive_status,
 });
 
 // Helper function to convert UI SavingsJar to Supabase format
