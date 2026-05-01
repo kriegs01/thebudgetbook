@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react';
-import { Plus, Info, Eye, ZoomIn, ZoomOut, Download, X, Pencil, Trash2, CheckSquare, Square, ChevronDown, Filter, AlertTriangle } from 'lucide-react';
+import { Plus, Info, Eye, ZoomIn, ZoomOut, Download, X, Pencil, Trash2, CheckSquare, Square, ChevronDown, Filter, AlertTriangle, ArrowUpFromLine, ArrowDownToLine, ArrowLeftRight, Landmark, CreditCard } from 'lucide-react';
 import { PinProtectedAction } from '../src/components/PinProtectedAction';
-import { getAllTransactions, createTransaction, updateTransaction, deleteTransactionAndRevertSchedule, uploadTransactionReceipt, getReceiptSignedUrl, batchDeleteTransactions } from '../src/services/transactionsService';
+import { getAllTransactions, createTransaction, updateTransaction, deleteTransactionAndRevertSchedule, uploadTransactionReceipt, getReceiptSignedUrl, batchDeleteTransactions, createTransfer } from '../src/services/transactionsService';
 import { getAllAccountsFrontend } from '../src/services/accountsService';
 import { combineDateWithCurrentTime, getTodayIso, getFirstDayOfCurrentYearIso, getLastDayOfCurrentYearIso } from '../src/utils/dateUtils';
 
@@ -25,6 +25,14 @@ const todayIso = getTodayIso;
 const formatCurrency = (val: number) =>
   new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP', minimumFractionDigits: 2 }).format(val);
 
+const TRANSACTION_TYPES = [
+  { id: 'payment', label: 'Payment', icon: <CreditCard className="w-5 h-5" />, x: -90, y: 0 },
+  { id: 'withdraw', label: 'Withdrawal', icon: <ArrowUpFromLine className="w-5 h-5" />, x: -83, y: -34 },
+  { id: 'cash_in', label: 'Cash In', icon: <ArrowDownToLine className="w-5 h-5" />, x: -64, y: -64 },
+  { id: 'transfer', label: 'Transfer', icon: <ArrowLeftRight className="w-5 h-5" />, x: -34, y: -83 },
+  { id: 'loan', label: 'Loan', icon: <Landmark className="w-5 h-5" />, x: 0, y: -90 },
+];
+
 interface TransactionsPageProps {
   onTransactionDeleted?: () => void;
   onTransactionCreated?: () => void;
@@ -40,6 +48,8 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ onTransactionDelete
 
   const headerRef = useRef<HTMLDivElement>(null);
   const [showFloatingAdd, setShowFloatingAdd] = useState(false);
+  const [showTypeModal, setShowTypeModal] = useState(false);
+  const [showFabMenu, setShowFabMenu] = useState(false);
 
   // Transaction details modal
   const [selectedTx, setSelectedTx] = useState<Transaction | null>(null);
@@ -56,7 +66,9 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ onTransactionDelete
     name: '',
     date: todayIso(),
     amount: '',
-    paymentMethodId: ''
+    paymentMethodId: '',
+    transactionType: 'payment',
+    transferToAccountId: ''
   });
 
   // ── Filter state ──────────────────────────────────────────────────────────
@@ -197,11 +209,26 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ onTransactionDelete
 
   // ── Form helpers ──────────────────────────────────────────────────────────
 
+  const openAddForm = (type: string) => {
+    setForm({
+      name: '',
+      date: todayIso(),
+      amount: '',
+      paymentMethodId: accounts[0]?.id ?? '',
+      transactionType: type,
+      transferToAccountId: ''
+    });
+    setReceiptFile(null);
+    setShowTypeModal(false);
+    setShowFabMenu(false);
+    setShowForm(true);
+  };
+
   const closeForm = () => {
     setShowForm(false);
     setEditingTxId(null);
     setReceiptFile(null);
-    setForm({ name: '', date: todayIso(), amount: '', paymentMethodId: accounts[0]?.id ?? '' });
+    setForm({ name: '', date: todayIso(), amount: '', paymentMethodId: accounts[0]?.id ?? '', transactionType: 'payment', transferToAccountId: '' });
   };
 
   const openEditForm = (tx: Transaction) => {
@@ -209,8 +236,10 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ onTransactionDelete
     setForm({
       name: tx.name,
       date: new Date(tx.date).toISOString().split('T')[0],
-      amount: tx.amount.toString(),
-      paymentMethodId: tx.paymentMethodId
+      amount: Math.abs(tx.amount).toString(), // Absolute value makes editing easier
+      paymentMethodId: tx.paymentMethodId,
+      transactionType: tx.transaction_type || 'payment',
+      transferToAccountId: ''
     });
     setReceiptFile(null);
     setShowForm(true);
@@ -218,7 +247,39 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ onTransactionDelete
 
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    // Transfer creation logic (uses specialized service)
+    if (form.transactionType === 'transfer' && !editingTxId) {
+      if (!form.paymentMethodId || !form.transferToAccountId || !form.amount || !form.date) return;
+      try {
+        const { error } = await createTransfer(
+          form.paymentMethodId,
+          form.transferToAccountId,
+          parseFloat(form.amount),
+          combineDateWithCurrentTime(form.date)
+        );
+        if (error) throw error;
+        await loadData();
+        if (onTransactionCreated) onTransactionCreated();
+        closeForm();
+        return;
+      } catch (error) {
+        console.error('Error creating transfer:', error);
+        alert('Failed to process transfer. Please try again.');
+        return;
+      }
+    }
+
+    // Standard transaction creation/update logic
     if (!form.name || !form.date || !form.amount || !form.paymentMethodId) return;
+
+    // Apply correct positive/negative sign based on transaction type
+    let finalAmount = parseFloat(form.amount);
+    if (form.transactionType === 'cash_in') {
+      finalAmount = -Math.abs(finalAmount); // Money in (negative reduces debt / increases asset internally)
+    } else if (['withdraw', 'payment', 'loan'].includes(form.transactionType)) {
+      finalAmount = Math.abs(finalAmount); // Money out
+    }
     
     try {
       if (editingTxId) {
@@ -226,8 +287,9 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ onTransactionDelete
         const updates = {
           name: form.name,
           date: combineDateWithCurrentTime(form.date),
-          amount: parseFloat(form.amount),
-          payment_method_id: form.paymentMethodId
+          amount: finalAmount,
+          payment_method_id: form.paymentMethodId,
+          transaction_type: form.transactionType
         };
         const { error } = await updateTransaction(editingTxId, updates);
         if (error) {
@@ -251,8 +313,9 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ onTransactionDelete
         const transaction = {
           name: form.name,
           date: combineDateWithCurrentTime(form.date),
-          amount: parseFloat(form.amount),
+          amount: finalAmount,
           payment_method_id: form.paymentMethodId,
+          transaction_type: form.transactionType
         };
         
         const { data, error } = await createTransaction(transaction);
@@ -400,7 +463,7 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ onTransactionDelete
           <h1 className="text-2xl font-black text-gray-900 dark:text-gray-100">Transactions</h1>
           <div className="flex items-center space-x-3">
             <a href="/" className="px-3 py-2 rounded-lg bg-white dark:bg-gray-900 dark:border-gray-800 border dark:text-gray-200 shadow-sm transition-colors">Back</a>
-            <button onClick={() => setShowForm(true)} className="px-4 py-2 bg-indigo-600 text-white rounded-lg flex items-center space-x-2 hover:bg-indigo-700">
+            <button onClick={() => setShowTypeModal(true)} className="px-4 py-2 bg-indigo-600 text-white rounded-lg flex items-center space-x-2 hover:bg-indigo-700 shadow-sm transition-all">
               <Plus className="w-4 h-4" />
               <span>Add Transaction</span>
             </button>
@@ -620,19 +683,41 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ onTransactionDelete
         {showForm && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-md">
           <div className="w-full max-w-md bg-white dark:bg-gray-900 rounded-3xl p-10 shadow-2xl relative transition-colors">
-            <h2 className="text-2xl font-black text-gray-900 dark:text-gray-100 mb-2">{editingTxId ? 'Edit Transaction' : 'Add New Transaction'}</h2>
+            <h2 className="text-2xl font-black text-gray-900 dark:text-gray-100 mb-2">
+              {editingTxId ? 'Edit Transaction' : `Add New ${TRANSACTION_TYPES.find(t => t.id === form.transactionType)?.label || 'Transaction'}`}
+            </h2>
               <p className="text-gray-500 text-sm mb-8">{editingTxId ? 'Update the transaction details below' : 'Record a payment transaction'}</p>
               <form onSubmit={onSubmit} className="space-y-6">
-                <div>
-                  <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Name</label>
-                  <input 
-                    value={form.name} 
-                    onChange={e => setForm(f => ({ ...f, name: e.target.value }))} 
-                    required 
-                    placeholder="e.g. Groceries, Gas, etc."
-                  className="w-full bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-transparent rounded-2xl p-4 outline-none font-bold focus:ring-2 focus:ring-indigo-500 transition-all" 
-                  />
-                </div>
+                {/* Conditional Name Field — Hide for Transfers since they auto-generate names */}
+                {(form.transactionType !== 'transfer' || editingTxId) && (
+                  <div>
+                    <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Name</label>
+                    <input 
+                      value={form.name} 
+                      onChange={e => setForm(f => ({ ...f, name: e.target.value }))} 
+                      required 
+                      placeholder="e.g. Groceries, Gas, etc."
+                      className="w-full bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-transparent rounded-2xl p-4 outline-none font-bold focus:ring-2 focus:ring-indigo-500 transition-all" 
+                    />
+                  </div>
+                )}
+
+                {/* Special "Transfer To" Account Dropdown (Only for new transfers) */}
+                {form.transactionType === 'transfer' && !editingTxId && (
+                  <div>
+                    <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2 text-indigo-500">Transfer To</label>
+                    <select 
+                      value={form.transferToAccountId} 
+                      onChange={e => setForm(f => ({ ...f, transferToAccountId: e.target.value }))} 
+                      className="w-full min-w-0 bg-indigo-50 dark:bg-indigo-900/20 text-indigo-700 dark:text-indigo-300 border-transparent rounded-2xl px-3 py-4 outline-none font-bold text-sm appearance-none transition-colors"
+                    >
+                      <option value="">Select Destination Account</option>
+                      {accounts.filter(a => a.id !== form.paymentMethodId && a.classification !== 'Credit Card').map(a => (
+                        <option key={a.id} value={a.id}>{a.bank}</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
                 
                 <div>
                   <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Amount</label>
@@ -662,7 +747,7 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ onTransactionDelete
                     />
                   </div>
                   <div>
-                    <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Payment Method</label>
+                    <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">{form.transactionType === 'transfer' && !editingTxId ? 'Transfer From' : 'Payment Method'}</label>
                     {accounts.length === 0 ? (
                       <div className="text-xs text-red-600 p-4">No payment methods available</div>
                     ) : (
@@ -694,7 +779,9 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ onTransactionDelete
 
                 <div className="flex space-x-4 pt-4">
                   <button type="button" onClick={closeForm} className="flex-1 bg-gray-100 dark:bg-gray-800 py-4 rounded-2xl font-bold text-gray-500 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors">Cancel</button>
-                  <button type="submit" disabled={accounts.length === 0} className="flex-1 bg-green-600 text-white py-4 rounded-2xl font-bold hover:bg-green-700 shadow-xl shadow-green-100 dark:shadow-none transition-all">{editingTxId ? 'Update Transaction' : 'Submit Payment'}</button>
+                  <button type="submit" disabled={accounts.length === 0 || (form.transactionType === 'transfer' && !editingTxId && !form.transferToAccountId)} className="flex-1 bg-green-600 text-white py-4 rounded-2xl font-bold hover:bg-green-700 shadow-xl shadow-green-100 dark:shadow-none transition-all disabled:opacity-50">
+                    {editingTxId ? 'Update' : form.transactionType === 'transfer' ? 'Complete Transfer' : 'Submit'}
+                  </button>
                 </div>
               </form>
             </div>
@@ -866,15 +953,75 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ onTransactionDelete
         </div>
       )}
 
-      {/* Floating Squircle Add Button */}
+      {/* Type Selection Modal for Top Button */}
+      {showTypeModal && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md animate-in fade-in">
+          <div className="w-full max-w-lg bg-white dark:bg-gray-900 rounded-[2.5rem] p-10 shadow-2xl relative transition-colors animate-in zoom-in-95">
+            <button onClick={() => setShowTypeModal(false)} className="absolute top-6 right-6 text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors" aria-label="Close">
+              <X className="w-5 h-5" />
+            </button>
+            <h2 className="text-2xl font-black text-gray-900 dark:text-gray-100 mb-2 uppercase tracking-tight">Transaction Type</h2>
+            <p className="text-gray-500 dark:text-gray-400 text-sm mb-8 font-medium">Select the type of transaction you want to record</p>
+            
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+              {TRANSACTION_TYPES.map(type => (
+                <button 
+                  key={type.id} 
+                  onClick={() => openAddForm(type.id)} 
+                  className="flex flex-col items-center justify-center p-6 bg-gray-50 dark:bg-gray-800/50 rounded-3xl hover:bg-indigo-50 dark:hover:bg-indigo-900/30 hover:shadow-md text-gray-700 dark:text-gray-300 hover:text-indigo-600 dark:hover:text-indigo-400 transition-all border border-transparent hover:border-indigo-100 dark:hover:border-indigo-800 group"
+                >
+                  <div className="mb-4 p-4 bg-white dark:bg-gray-900 rounded-full shadow-sm group-hover:scale-110 transition-transform duration-300">
+                    {type.icon}
+                  </div>
+                  <span className="font-bold text-sm">{type.label}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Floating Action Button (FAB) with Fan Layout */}
       {showFloatingAdd && (
-        <button
-          onClick={() => setShowForm(true)}
-          className="fixed bottom-8 right-8 z-40 w-14 h-14 bg-indigo-600 text-white rounded-2xl shadow-xl flex items-center justify-center hover:bg-indigo-700 hover:-translate-y-1 transition-all animate-in fade-in zoom-in duration-300"
-          aria-label="Add Transaction"
-        >
-          <Plus className="w-6 h-6" />
-        </button>
+        <div className="fixed bottom-8 right-8 z-40 animate-in fade-in zoom-in duration-300">
+          {/* Backdrop when fan is open */}
+          {showFabMenu && <div className="fixed inset-0 z-30" onClick={() => setShowFabMenu(false)} />}
+          
+          <div className="relative z-40 flex items-center justify-center">
+            {/* Fan Items Container */}
+            <div className={`absolute inset-0 pointer-events-none`}>
+              {TRANSACTION_TYPES.map((item, index) => (
+                <div 
+                  key={item.id}
+                  className={`absolute inset-0 flex items-center justify-center transition-all duration-300 ease-out ${showFabMenu ? 'opacity-100' : 'opacity-0 scale-50'}`}
+                  style={{ 
+                    transform: showFabMenu ? `translate(${item.x}px, ${item.y}px)` : 'translate(0px, 0px)',
+                    transitionDelay: showFabMenu ? `${index * 40}ms` : '0ms'
+                  }}
+                >
+                  <button 
+                    onClick={() => openAddForm(item.id)}
+                    className="w-12 h-12 bg-white dark:bg-gray-800 text-indigo-600 dark:text-indigo-400 rounded-full shadow-lg border border-gray-100 dark:border-gray-700 flex items-center justify-center hover:scale-110 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 transition-all pointer-events-auto group relative"
+                  >
+                    {item.icon}
+                    <span className="absolute right-full mr-3 px-3 py-1.5 bg-gray-900 dark:bg-gray-100 text-white dark:text-gray-900 text-[10px] font-black uppercase tracking-widest rounded-xl opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap shadow-sm pointer-events-none">
+                      {item.label}
+                    </span>
+                  </button>
+                </div>
+              ))}
+            </div>
+            
+            {/* Main FAB */}
+            <button
+              onClick={() => setShowFabMenu(!showFabMenu)}
+              className={`relative z-10 w-14 h-14 bg-indigo-600 text-white rounded-2xl shadow-xl flex items-center justify-center hover:bg-indigo-700 transition-all duration-300 ${showFabMenu ? 'rotate-[135deg] bg-indigo-700 shadow-indigo-600/50' : 'hover:-translate-y-1'}`}
+              aria-label="Add Transaction"
+            >
+              <Plus className="w-6 h-6" />
+            </button>
+          </div>
+        </div>
       )}
 
       {confirmModal.show && <ConfirmDialog {...confirmModal} onClose={() => setConfirmModal(p => ({ ...p, show: false }))} />}
