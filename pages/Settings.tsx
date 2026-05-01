@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ChevronDown, ChevronRight, Hash, Globe, Bell, Lock, Trash2, AlertTriangle, RotateCcw, Plus, X, Database, Copy, Shield, User, Mail, Key, MoreVertical, Check } from 'lucide-react';
+import { ChevronDown, ChevronRight, Hash, Globe, Bell, Lock, Trash2, AlertTriangle, RotateCcw, Plus, X, Database, Copy, Shield, User, Mail, Key, MoreVertical, Check, SlidersHorizontal } from 'lucide-react';
 import { BudgetCategory, Biller, Installment } from '../types';
 import { useTestEnvironment } from '../src/contexts/TestEnvironmentContext';
 import { useAuth } from '../src/contexts/AuthContext';
@@ -17,6 +17,8 @@ interface SettingsProps {
   billers?: Biller[];
   installments?: Installment[];
   onUpdateBiller?: (biller: Biller) => Promise<void>;
+  theme?: 'light' | 'dark';
+  onToggleTheme?: () => void;
 }
 
 const SETTING_MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
@@ -68,7 +70,7 @@ interface DeleteConflict {
 
 // ─── Component ───────────────────────────────────────────────────────────────
 
-const Settings: React.FC<SettingsProps> = ({ currency, setCurrency, categories, setCategories, onResetAll, billers = [], installments = [], onUpdateBiller }) => {
+const Settings: React.FC<SettingsProps> = ({ currency, setCurrency, categories, setCategories, onResetAll, billers = [], installments = [], onUpdateBiller, theme = 'light', onToggleTheme }) => {
   const [openSection, setOpenSection] = useState<string | null>(null);
   const [newCatName, setNewCatName] = useState('');
   const [showAddCat, setShowAddCat] = useState(false);
@@ -614,7 +616,7 @@ const Settings: React.FC<SettingsProps> = ({ currency, setCurrency, categories, 
       content: (
         <div className="space-y-4 pt-2">
           {/* User Info Display */}
-          <div className="flex items-center space-x-4 p-4 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-2xl border border-blue-100">
+          <div className="flex items-center space-x-4 p-4 bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 rounded-2xl border border-blue-100 dark:border-blue-800/30 transition-colors">
             <div className="w-16 h-16 rounded-full bg-blue-500 flex items-center justify-center text-white text-2xl font-bold">
               {userProfile ? 
                 `${userProfile.first_name.charAt(0)}${userProfile.last_name.charAt(0)}`.toUpperCase() :
@@ -622,51 +624,51 @@ const Settings: React.FC<SettingsProps> = ({ currency, setCurrency, categories, 
               }
             </div>
             <div className="flex-1">
-              <h3 className="text-lg font-bold text-gray-900">
+              <h3 className="text-lg font-bold text-gray-900 dark:text-gray-100 transition-colors">
                 {userProfile ? `${userProfile.first_name} ${userProfile.last_name}` : 'User'}
               </h3>
-              <p className="text-sm text-gray-600">{user?.email || ''}</p>
+              <p className="text-sm text-gray-600 dark:text-gray-400 transition-colors">{user?.email || ''}</p>
             </div>
           </div>
 
           {/* Messages */}
           {updateMessage && (
-            <div className="p-4 bg-green-50 border border-green-200 rounded-xl">
-              <p className="text-sm text-green-800">{updateMessage}</p>
+            <div className="p-4 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800/30 rounded-xl transition-colors">
+              <p className="text-sm text-green-800 dark:text-green-400">{updateMessage}</p>
             </div>
           )}
           {updateError && (
-            <div className="p-4 bg-red-50 border border-red-200 rounded-xl">
-              <p className="text-sm text-red-800">{updateError}</p>
+            <div className="p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800/30 rounded-xl transition-colors">
+              <p className="text-sm text-red-800 dark:text-red-400">{updateError}</p>
             </div>
           )}
 
           {/* Update Name */}
-          <div className="p-4 bg-white rounded-2xl border border-gray-200 space-y-3">
+          <div className="p-4 bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-800 space-y-3 transition-colors">
             <div className="flex items-center space-x-2 mb-4">
-              <User className="w-5 h-5 text-gray-600" />
-              <h4 className="text-sm font-bold text-gray-900 uppercase">Update Name</h4>
+              <User className="w-5 h-5 text-gray-600 dark:text-gray-400" />
+              <h4 className="text-sm font-bold text-gray-900 dark:text-gray-100 uppercase transition-colors">Update Name</h4>
             </div>
             
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="block text-xs font-medium text-gray-600 mb-2">First Name</label>
+                <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-2 transition-colors">First Name</label>
                 <input
                   type="text"
                   value={editFirstName}
                   onChange={(e) => setEditFirstName(e.target.value)}
                   placeholder={userProfile?.first_name || 'First Name'}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="w-full px-4 py-3 bg-transparent text-gray-900 dark:text-gray-100 border border-gray-300 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all placeholder:text-gray-400 dark:placeholder:text-gray-500"
                 />
               </div>
               <div>
-                <label className="block text-xs font-medium text-gray-600 mb-2">Last Name</label>
+                <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-2 transition-colors">Last Name</label>
                 <input
                   type="text"
                   value={editLastName}
                   onChange={(e) => setEditLastName(e.target.value)}
                   placeholder={userProfile?.last_name || 'Last Name'}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="w-full px-4 py-3 bg-transparent text-gray-900 dark:text-gray-100 border border-gray-300 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all placeholder:text-gray-400 dark:placeholder:text-gray-500"
                 />
               </div>
             </div>
@@ -681,22 +683,22 @@ const Settings: React.FC<SettingsProps> = ({ currency, setCurrency, categories, 
           </div>
 
           {/* Update Email */}
-          <div className="p-4 bg-white rounded-2xl border border-gray-200 space-y-3">
+          <div className="p-4 bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-800 space-y-3 transition-colors">
             <div className="flex items-center space-x-2 mb-4">
-              <Mail className="w-5 h-5 text-gray-600" />
-              <h4 className="text-sm font-bold text-gray-900 uppercase">Update Email</h4>
+              <Mail className="w-5 h-5 text-gray-600 dark:text-gray-400" />
+              <h4 className="text-sm font-bold text-gray-900 dark:text-gray-100 uppercase transition-colors">Update Email</h4>
             </div>
 
             <div>
-              <label className="block text-xs font-medium text-gray-600 mb-2">New Email Address</label>
+              <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-2 transition-colors">New Email Address</label>
               <input
                 type="email"
                 value={newEmail}
                 onChange={(e) => setNewEmail(e.target.value)}
                 placeholder={user?.email || 'new@email.com'}
-                className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                className="w-full px-4 py-3 bg-transparent text-gray-900 dark:text-gray-100 border border-gray-300 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all placeholder:text-gray-400 dark:placeholder:text-gray-500"
               />
-              <p className="text-xs text-gray-500 mt-2">
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-2 transition-colors">
                 You'll receive a confirmation link at your new email address
               </p>
             </div>
@@ -711,36 +713,36 @@ const Settings: React.FC<SettingsProps> = ({ currency, setCurrency, categories, 
           </div>
 
           {/* Update Password */}
-          <div className="p-4 bg-white rounded-2xl border border-gray-200 space-y-3">
+          <div className="p-4 bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-800 space-y-3 transition-colors">
             <div className="flex items-center space-x-2 mb-4">
-              <Key className="w-5 h-5 text-gray-600" />
-              <h4 className="text-sm font-bold text-gray-900 uppercase">Change Password</h4>
+              <Key className="w-5 h-5 text-gray-600 dark:text-gray-400" />
+              <h4 className="text-sm font-bold text-gray-900 dark:text-gray-100 uppercase transition-colors">Change Password</h4>
             </div>
 
             <div className="space-y-3">
               <div>
-                <label className="block text-xs font-medium text-gray-600 mb-2">New Password</label>
+                <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-2 transition-colors">New Password</label>
                 <input
                   type="password"
                   value={newPassword}
                   onChange={(e) => setNewPassword(e.target.value)}
                   placeholder="••••••••"
-                  className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="w-full px-4 py-3 bg-transparent text-gray-900 dark:text-gray-100 border border-gray-300 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all placeholder:text-gray-400 dark:placeholder:text-gray-500"
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-medium text-gray-600 mb-2">Confirm New Password</label>
+                <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-2 transition-colors">Confirm New Password</label>
                 <input
                   type="password"
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
                   placeholder="••••••••"
-                  className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="w-full px-4 py-3 bg-transparent text-gray-900 dark:text-gray-100 border border-gray-300 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all placeholder:text-gray-400 dark:placeholder:text-gray-500"
                 />
               </div>
 
-              <p className="text-xs text-gray-500">
+              <p className="text-xs text-gray-500 dark:text-gray-400 transition-colors">
                 Password must be at least 6 characters long
               </p>
             </div>
@@ -751,6 +753,37 @@ const Settings: React.FC<SettingsProps> = ({ currency, setCurrency, categories, 
               className="w-full px-4 py-3 bg-blue-600 text-white rounded-xl font-medium hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
             >
               {isUpdating ? 'Updating...' : 'Change Password'}
+            </button>
+          </div>
+        </div>
+      )
+    },
+    {
+      id: 'general',
+      label: 'General',
+      icon: <SlidersHorizontal className="w-5 h-5" />,
+      content: (
+        <div className="space-y-4 pt-2">
+          <div className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-800/50 rounded-2xl border border-gray-200 dark:border-gray-700 transition-colors">
+            <div>
+              <h4 className="font-black text-sm text-gray-900 dark:text-gray-100 uppercase mb-1 transition-colors">Dark Mode</h4>
+              <p className="text-xs text-gray-500 dark:text-gray-400 transition-colors">
+                Current Theme: <span className={`font-bold ${theme === 'dark' ? 'text-indigo-600' : 'text-amber-500'}`}>
+                  {theme === 'dark' ? 'DARK' : 'LIGHT'}
+                </span>
+              </p>
+            </div>
+            <button
+              onClick={onToggleTheme}
+              className={`relative inline-flex h-8 w-16 items-center rounded-full transition-colors ${
+                theme === 'dark' ? 'bg-indigo-600' : 'bg-gray-300'
+              }`}
+            >
+              <span
+                className={`inline-block h-6 w-6 transform rounded-full bg-white transition-transform ${
+                  theme === 'dark' ? 'translate-x-9' : 'translate-x-1'
+                }`}
+              />
             </button>
           </div>
         </div>
@@ -1238,11 +1271,11 @@ const Settings: React.FC<SettingsProps> = ({ currency, setCurrency, categories, 
       content: (
         <div className="space-y-4 pt-2">
           <div>
-            <label className="block text-xs font-bold text-gray-400 uppercase mb-1">Base Currency</label>
+            <label className="block text-xs font-bold text-gray-400 dark:text-gray-500 uppercase mb-1 transition-colors">Base Currency</label>
             <select 
               value={currency} 
               onChange={(e) => setCurrency(e.target.value)}
-              className="w-full bg-gray-50 border-gray-200 rounded-xl p-3 outline-none focus:ring-2 focus:ring-indigo-500"
+              className="w-full bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-200 dark:border-gray-700 rounded-xl p-3 outline-none focus:ring-2 focus:ring-indigo-500 transition-colors"
             >
               <option value="PHP">PHP - Philippine Peso (₱)</option>
               <option value="USD">USD - US Dollar ($)</option>
@@ -1266,12 +1299,12 @@ const Settings: React.FC<SettingsProps> = ({ currency, setCurrency, categories, 
       icon: <Database className="w-5 h-5" />,
       content: (
         <div className="space-y-4 pt-2">
-          <div className="bg-blue-50 border border-blue-200 rounded-2xl p-4">
+          <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800/30 rounded-2xl p-4 transition-colors">
             <div className="flex items-start space-x-3">
-              <AlertTriangle className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />
+              <AlertTriangle className="w-5 h-5 text-blue-600 dark:text-blue-400 flex-shrink-0 mt-0.5 transition-colors" />
               <div>
-                <h4 className="text-sm font-bold text-blue-900 mb-1">About Test Environment</h4>
-                <p className="text-xs text-blue-700 leading-relaxed">
+                <h4 className="text-sm font-bold text-blue-900 dark:text-blue-300 mb-1 transition-colors">About Test Environment</h4>
+                <p className="text-xs text-blue-700 dark:text-blue-400 leading-relaxed transition-colors">
                   Test mode uses separate database tables (_test suffix) so you can safely experiment 
                   with new features without affecting your production data. Changes in test mode will 
                   not impact your actual financial records.
@@ -1280,11 +1313,11 @@ const Settings: React.FC<SettingsProps> = ({ currency, setCurrency, categories, 
             </div>
           </div>
 
-          <div className="flex items-center justify-between p-4 bg-gray-50 rounded-2xl border border-gray-200">
+          <div className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-800/50 rounded-2xl border border-gray-200 dark:border-gray-700 transition-colors">
             <div>
-              <h4 className="font-black text-sm text-gray-900 uppercase mb-1">Test Mode</h4>
-              <p className="text-xs text-gray-500">
-                Current Environment: <span className={`font-bold ${isTestMode ? 'text-orange-600' : 'text-green-600'}`}>
+              <h4 className="font-black text-sm text-gray-900 dark:text-gray-100 uppercase mb-1 transition-colors">Test Mode</h4>
+              <p className="text-xs text-gray-500 dark:text-gray-400 transition-colors">
+                Current Environment: <span className={`font-bold ${isTestMode ? 'text-orange-600 dark:text-orange-500' : 'text-green-600 dark:text-green-500'}`}>
                   {isTestMode ? 'TEST' : 'PRODUCTION'}
                 </span>
               </p>
@@ -1341,8 +1374,8 @@ const Settings: React.FC<SettingsProps> = ({ currency, setCurrency, categories, 
 
   return (
     <div className="max-w-3xl mx-auto space-y-4 animate-in slide-in-from-right-4 duration-500 pb-20">
-      <div className="bg-white rounded-[3rem] border border-gray-100 shadow-sm overflow-hidden">
-        <div className="p-6 md:p-8 border-b border-gray-100 flex items-center space-x-6 bg-gray-50/30">
+      <div className="bg-white dark:bg-gray-900 rounded-[3rem] border border-gray-100 dark:border-gray-800 shadow-sm overflow-hidden transition-colors">
+        <div className="p-6 md:p-8 border-b border-gray-100 dark:border-gray-800 flex items-center space-x-6 bg-gray-50/30 dark:bg-gray-800/30 transition-colors">
           <div className="w-16 h-16 md:w-20 md:h-20 rounded-2xl bg-gradient-to-br from-indigo-500 to-blue-600 flex items-center justify-center text-white text-2xl md:text-3xl font-black shadow-2xl">
             {userProfile ? 
               `${userProfile.first_name.charAt(0)}${userProfile.last_name.charAt(0)}`.toUpperCase() :
@@ -1350,23 +1383,23 @@ const Settings: React.FC<SettingsProps> = ({ currency, setCurrency, categories, 
             }
           </div>
           <div>
-            <h2 className="text-2xl md:text-3xl font-black text-gray-900 uppercase tracking-tight">Settings</h2>
-            <p className="text-gray-500 font-medium">Personal Financial Profile & App Configuration</p>
+            <h2 className="text-2xl md:text-3xl font-black text-gray-900 dark:text-gray-100 uppercase tracking-tight transition-colors">Settings</h2>
+            <p className="text-gray-500 dark:text-gray-400 font-medium transition-colors">Personal Financial Profile & App Configuration</p>
           </div>
         </div>
 
-        <div className="divide-y divide-gray-50">
+        <div className="divide-y divide-gray-50 dark:divide-gray-800 transition-colors">
           {sections.map((section) => (
             <div key={section.id} className="p-2">
               <button 
                 onClick={() => toggleSection(section.id)}
-                className="w-full flex items-center justify-between p-4 md:p-5 rounded-[1.5rem] hover:bg-gray-50 transition-colors"
+                className="w-full flex items-center justify-between p-4 md:p-5 rounded-[1.5rem] hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors"
               >
                 <div className="flex items-center space-x-4 md:space-x-6">
-                  <div className="p-3 bg-gray-100 text-gray-500 rounded-2xl">
+                  <div className="p-3 bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400 rounded-2xl transition-colors">
                     {section.icon}
                   </div>
-                  <span className="font-black text-lg text-gray-700 uppercase tracking-tight">{section.label}</span>
+                  <span className="font-black text-lg text-gray-700 dark:text-gray-200 uppercase tracking-tight transition-colors">{section.label}</span>
                 </div>
                 {openSection === section.id ? <ChevronDown className="w-6 h-6 text-gray-400" /> : <ChevronRight className="w-6 h-6 text-gray-400" />}
               </button>
@@ -1380,10 +1413,10 @@ const Settings: React.FC<SettingsProps> = ({ currency, setCurrency, categories, 
         </div>
       </div>
 
-      <div className="bg-red-50/50 rounded-[3rem] border border-red-100 p-6 md:p-8">
+      <div className="bg-red-50/50 dark:bg-red-900/10 rounded-[3rem] border border-red-100 dark:border-red-900/30 p-6 md:p-8 transition-colors mt-8">
         <button 
           onClick={() => setIsDangerZoneOpen(!isDangerZoneOpen)}
-          className="w-full flex items-center justify-between text-red-600 group"
+          className="w-full flex items-center justify-between text-red-600 dark:text-red-500 group transition-colors"
         >
           <div className="flex items-center space-x-4">
             <AlertTriangle className="w-8 h-8 group-hover:scale-110 transition-transform" />
@@ -1394,10 +1427,10 @@ const Settings: React.FC<SettingsProps> = ({ currency, setCurrency, categories, 
 
         {isDangerZoneOpen && (
           <div className="mt-6 grid grid-cols-1 md:grid-cols-2 gap-4 animate-in slide-in-from-top-4 duration-300">
-            <div className="bg-white p-6 rounded-[2rem] border border-red-100 flex flex-col justify-between">
+            <div className="bg-white dark:bg-gray-900 p-6 rounded-[2rem] border border-red-100 dark:border-red-900/30 flex flex-col justify-between transition-colors">
               <div>
-                <h4 className="text-red-700 font-black uppercase text-sm mb-2">Reset All Data</h4>
-                <p className="text-red-600/70 text-xs mb-6 font-medium">Wipe all entries on all pages. Your app will return to an empty state.</p>
+                <h4 className="text-red-700 dark:text-red-400 font-black uppercase text-sm mb-2 transition-colors">Reset All Data</h4>
+                <p className="text-red-600/70 dark:text-red-500/70 text-xs mb-6 font-medium transition-colors">Wipe all entries on all pages. Your app will return to an empty state.</p>
               </div>
               <PinProtectedAction
                 featureId="danger_zone"
@@ -1406,7 +1439,7 @@ const Settings: React.FC<SettingsProps> = ({ currency, setCurrency, categories, 
               >
                 <button 
                   onClick={(e) => e.preventDefault()}
-                  className="flex items-center justify-center space-x-3 w-full py-4 bg-red-600 text-white rounded-2xl font-black uppercase tracking-widest text-[10px] hover:bg-red-700 transition-all shadow-xl shadow-red-100"
+                  className="flex items-center justify-center space-x-3 w-full py-4 bg-red-600 text-white rounded-2xl font-black uppercase tracking-widest text-[10px] hover:bg-red-700 transition-all shadow-xl shadow-red-100 dark:shadow-none"
                 >
                   <RotateCcw className="w-5 h-5" />
                   <span>🔒 Reset Everything</span>

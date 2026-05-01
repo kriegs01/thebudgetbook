@@ -582,19 +582,19 @@ const AccountFilteredTransactions: React.FC<AccountFilteredTransactionsProps> = 
     if (!type || type === 'payment') return null;
     
     const badges: Record<string, { color: string; label: string }> = {
-      withdraw: { color: 'bg-red-100 text-red-700', label: 'Withdraw' },
-      transfer: { color: 'bg-blue-100 text-blue-700', label: 'Transfer' },
-      loan: { color: 'bg-orange-100 text-orange-700', label: 'Loan' },
-      cash_in: { color: 'bg-green-100 text-green-700', label: 'Cash In' },
-      loan_payment: { color: 'bg-purple-100 text-purple-700', label: 'Loan Payment' },
-      credit_payment: { color: 'bg-teal-100 text-teal-700', label: 'Card Payment' },
+      withdraw: { color: 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400', label: 'Withdraw' },
+      transfer: { color: 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400', label: 'Transfer' },
+      loan: { color: 'bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-400', label: 'Loan' },
+      cash_in: { color: 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400', label: 'Cash In' },
+      loan_payment: { color: 'bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-400', label: 'Loan Payment' },
+      credit_payment: { color: 'bg-teal-100 dark:bg-teal-900/30 text-teal-700 dark:text-teal-400', label: 'Card Payment' },
     };
     
     const badge = badges[type];
     if (!badge) return null;
     
     return (
-      <span className={`text-xs px-2 py-1 rounded-full font-semibold ${badge.color}`}>
+      <span className={`text-xs px-2 py-1 rounded-full font-semibold transition-colors ${badge.color}`}>
         {badge.label}
       </span>
     );
@@ -606,70 +606,70 @@ const AccountFilteredTransactions: React.FC<AccountFilteredTransactionsProps> = 
   );
 
   return (
-    <div className="min-h-screen bg-gray-50 p-8">
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-950 p-8 transition-colors">
       <div className="max-w-4xl mx-auto">
         <div className="mb-6 flex items-center space-x-4">
-          <Link to="/accounts" className="p-2 rounded-lg bg-white shadow-sm hover:bg-gray-100">
-            <ArrowLeft className="w-5 h-5 text-gray-700" />
+          <Link to="/accounts" className="p-2 rounded-lg bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-800 shadow-sm hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
+            <ArrowLeft className="w-5 h-5 text-gray-700 dark:text-gray-300" />
           </Link>
-          <h1 className="text-2xl font-black text-gray-900">
+          <h1 className="text-2xl font-black text-gray-900 dark:text-gray-100 transition-colors">
             {account ? account.bank : `Account ${accountId}`}
           </h1>
         </div>
 
         {/* Success/Error Message */}
         {message && (
-          <div className={`mb-4 p-4 rounded-xl ${message.type === 'success' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
+          <div className={`mb-4 p-4 rounded-xl transition-colors ${message.type === 'success' ? 'bg-green-100 dark:bg-green-900/20 text-green-800 dark:text-green-300' : 'bg-red-100 dark:bg-red-900/20 text-red-800 dark:text-red-300'}`}>
             {message.text}
           </div>
         )}
 
         {/* ── Filter Bar ──────────────────────────────────────────────────── */}
-        <div className="bg-white rounded-2xl shadow-sm p-4 mb-4">
+        <div className="bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-800 rounded-2xl shadow-sm p-4 mb-4 transition-colors">
           <div className="flex flex-wrap items-end gap-3">
-            <Filter className="w-4 h-4 text-gray-400 self-center mb-1 shrink-0" />
+            <Filter className="w-4 h-4 text-gray-400 dark:text-gray-500 self-center mb-1 shrink-0" />
             <div className="flex flex-col gap-1">
-              <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Start Date</label>
+              <label className="text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest">Start Date</label>
               <input
                 type="date"
                 value={filterStartDate}
                 min={FILTER_MIN_DATE}
                 max={filterEndDate}
                 onChange={e => setFilterStartDate(e.target.value)}
-                className="bg-gray-50 rounded-xl px-3 py-2 text-sm font-bold border-transparent outline-none focus:ring-2 focus:ring-indigo-400"
+                className="bg-gray-50 dark:bg-gray-800 dark:text-gray-100 rounded-xl px-3 py-2 text-sm font-bold border-transparent outline-none focus:ring-2 focus:ring-indigo-400 transition-colors"
               />
             </div>
             <div className="flex flex-col gap-1">
-              <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">End Date</label>
+              <label className="text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest">End Date</label>
               <input
                 type="date"
                 value={filterEndDate}
                 min={filterStartDate}
                 onChange={e => setFilterEndDate(e.target.value)}
-                className="bg-gray-50 rounded-xl px-3 py-2 text-sm font-bold border-transparent outline-none focus:ring-2 focus:ring-indigo-400"
+                className="bg-gray-50 dark:bg-gray-800 dark:text-gray-100 rounded-xl px-3 py-2 text-sm font-bold border-transparent outline-none focus:ring-2 focus:ring-indigo-400 transition-colors"
               />
             </div>
             <div className="flex flex-col gap-1 relative" ref={typeDropdownRef}>
-              <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Transaction Type</label>
+              <label className="text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest">Transaction Type</label>
               <button
                 type="button"
                 onClick={() => setShowTypeDropdown(p => !p)}
-                className="flex items-center gap-2 bg-gray-50 rounded-xl px-3 py-2 text-sm font-bold border-transparent outline-none focus:ring-2 focus:ring-indigo-400 min-w-[140px] justify-between"
+                className="flex items-center gap-2 bg-gray-50 dark:bg-gray-800 dark:text-gray-100 rounded-xl px-3 py-2 text-sm font-bold border-transparent outline-none focus:ring-2 focus:ring-indigo-400 min-w-[140px] justify-between transition-colors"
               >
-                <span>{typeFilterLabel}</span>
-                <ChevronDown className="w-4 h-4 text-gray-400 shrink-0" />
+                <span className="transition-colors">{typeFilterLabel}</span>
+                <ChevronDown className="w-4 h-4 text-gray-400 dark:text-gray-500 shrink-0" />
               </button>
               {showTypeDropdown && (
-                <div className="absolute top-full left-0 mt-1 z-30 bg-white rounded-xl shadow-lg border border-gray-100 min-w-[180px] py-2">
+                <div className="absolute top-full left-0 mt-1 z-30 bg-white dark:bg-gray-900 rounded-xl shadow-lg border border-gray-100 dark:border-gray-800 min-w-[180px] py-2 transition-colors">
                   {TRANSACTION_TYPE_OPTIONS.map(opt => (
-                    <label key={opt.value} className="flex items-center gap-2 px-4 py-2 cursor-pointer hover:bg-gray-50">
+                    <label key={opt.value} className="flex items-center gap-2 px-4 py-2 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
                       <input
                         type="checkbox"
                         checked={filterTypes.has(opt.value)}
                         onChange={() => toggleTypeFilter(opt.value)}
                         className="rounded"
                       />
-                      <span className="text-sm font-medium text-gray-700">{opt.label}</span>
+                      <span className="text-sm font-medium text-gray-700 dark:text-gray-300">{opt.label}</span>
                     </label>
                   ))}
                 </div>
@@ -678,7 +678,7 @@ const AccountFilteredTransactions: React.FC<AccountFilteredTransactionsProps> = 
             <button
               type="button"
               onClick={resetFilters}
-              className="self-end px-3 py-2 text-xs font-bold text-gray-500 hover:text-indigo-600 bg-gray-100 hover:bg-indigo-50 rounded-xl transition-colors"
+              className="self-end px-3 py-2 text-xs font-bold text-gray-500 dark:text-gray-400 hover:text-indigo-600 dark:hover:text-indigo-400 bg-gray-100 dark:bg-gray-800 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 rounded-xl transition-colors"
             >
               Reset
             </button>
@@ -687,46 +687,46 @@ const AccountFilteredTransactions: React.FC<AccountFilteredTransactionsProps> = 
 
         {/* ── Dashboard ───────────────────────────────────────────────────── */}
         <div className="grid grid-cols-3 gap-4 mb-4">
-          <div className="bg-indigo-600 rounded-2xl shadow-sm p-4 text-white">
+          <div className="bg-indigo-600 rounded-2xl shadow-sm p-4 text-white transition-colors">
             <p className="text-[10px] font-black uppercase tracking-widest text-indigo-200 mb-1">Current Balance</p>
             <p className="text-2xl font-black">{formatCurrency(currentBalance)}</p>
             <p className="text-[10px] text-indigo-300 mt-1">All time</p>
           </div>
-          <div className="bg-white rounded-2xl shadow-sm p-4">
-            <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-1">Total In</p>
-            <p className="text-2xl font-black text-green-600">{formatCurrency(totalIn)}</p>
-            <p className="text-[10px] text-gray-400 mt-1">Based on filter</p>
+          <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-sm p-4 transition-colors">
+            <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 dark:text-gray-500 mb-1">Total In</p>
+            <p className="text-2xl font-black text-green-600 dark:text-green-400">{formatCurrency(totalIn)}</p>
+            <p className="text-[10px] text-gray-400 dark:text-gray-500 mt-1">Based on filter</p>
           </div>
-          <div className="bg-white rounded-2xl shadow-sm p-4">
-            <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-1">Total Out</p>
-            <p className="text-2xl font-black text-red-600">{formatCurrency(totalOut)}</p>
-            <p className="text-[10px] text-gray-400 mt-1">Based on filter</p>
+          <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-sm p-4 transition-colors">
+            <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 dark:text-gray-500 mb-1">Total Out</p>
+            <p className="text-2xl font-black text-red-600 dark:text-red-400">{formatCurrency(totalOut)}</p>
+            <p className="text-[10px] text-gray-400 dark:text-gray-500 mt-1">Based on filter</p>
           </div>
         </div>
 
         {/* ── Credit Summary (credit accounts only) ───────────────────────── */}
         {account?.type === 'Credit' && account.creditLimit != null && creditUtilization && (
           <div className="grid grid-cols-3 gap-4 mb-4">
-            <div className="bg-white rounded-2xl shadow-sm p-4">
-              <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-1">Credit Limit</p>
-              <p className="text-xl font-black text-gray-900">{formatCurrency(account.creditLimit)}</p>
+            <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-sm p-4 transition-colors">
+              <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 dark:text-gray-500 mb-1">Credit Limit</p>
+              <p className="text-xl font-black text-gray-900 dark:text-gray-100">{formatCurrency(account.creditLimit)}</p>
             </div>
-            <div className="bg-white rounded-2xl shadow-sm p-4">
-              <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-1">Outstanding Balance</p>
-              <p className="text-xl font-black text-red-600">{formatCurrency(creditUtilization.currentOutstanding)}</p>
+            <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-sm p-4 transition-colors">
+              <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 dark:text-gray-500 mb-1">Outstanding Balance</p>
+              <p className="text-xl font-black text-red-600 dark:text-red-400">{formatCurrency(creditUtilization.currentOutstanding)}</p>
             </div>
-            <div className="bg-white rounded-2xl shadow-sm p-4">
-              <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-1">Available Credit</p>
-              <p className="text-xl font-black text-green-600">{formatCurrency(creditUtilization.availableCredit ?? 0)}</p>
+            <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-sm p-4 transition-colors">
+              <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 dark:text-gray-500 mb-1">Available Credit</p>
+              <p className="text-xl font-black text-green-600 dark:text-green-400">{formatCurrency(creditUtilization.availableCredit ?? 0)}</p>
             </div>
           </div>
         )}
 
-        <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
-          <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
-            <h2 className="text-sm font-bold uppercase text-gray-600 tracking-widest">Transactions</h2>
+        <div className="bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-800 rounded-2xl shadow-sm overflow-hidden transition-colors">
+          <div className="px-6 py-4 border-b border-gray-100 dark:border-gray-800 flex items-center justify-between transition-colors">
+            <h2 className="text-sm font-bold uppercase text-gray-600 dark:text-gray-400 tracking-widest">Transactions</h2>
             <div className="flex items-center gap-2">
-              <div className="text-sm text-gray-500">{filteredTransactions.length} items</div>
+              <div className="text-sm text-gray-500 dark:text-gray-400">{filteredTransactions.length} items</div>
 
               {/* ── Action icon buttons (Debit only) + Select + Trash ─────── */}
               {account?.type === 'Debit' && (
@@ -772,7 +772,7 @@ const AccountFilteredTransactions: React.FC<AccountFilteredTransactionsProps> = 
                     className={`w-9 h-9 flex items-center justify-center rounded-xl transition-colors border ${
                       isSelectMode
                         ? 'bg-indigo-600 text-white border-indigo-600'
-                        : 'border-gray-300 text-gray-500 hover:border-indigo-400 hover:text-indigo-600'
+                        : 'border-gray-300 dark:border-gray-600 text-gray-500 dark:text-gray-400 hover:border-indigo-400 dark:hover:border-indigo-500 hover:text-indigo-600 dark:hover:text-indigo-400'
                     }`}
                   >
                     {isSelectMode ? <CheckSquare className="w-4 h-4" /> : <Square className="w-4 h-4" />}
@@ -814,7 +814,7 @@ const AccountFilteredTransactions: React.FC<AccountFilteredTransactionsProps> = 
                     className={`w-9 h-9 flex items-center justify-center rounded-xl transition-colors border ${
                       isSelectMode
                         ? 'bg-indigo-600 text-white border-indigo-600'
-                        : 'border-gray-300 text-gray-500 hover:border-indigo-400 hover:text-indigo-600'
+                        : 'border-gray-300 dark:border-gray-600 text-gray-500 dark:text-gray-400 hover:border-indigo-400 dark:hover:border-indigo-500 hover:text-indigo-600 dark:hover:text-indigo-400'
                     }`}
                   >
                     {isSelectMode ? <CheckSquare className="w-4 h-4" /> : <Square className="w-4 h-4" />}
@@ -860,11 +860,11 @@ const AccountFilteredTransactions: React.FC<AccountFilteredTransactionsProps> = 
                         />
                       </th>
                     )}
-                    <th className="px-4 py-3 text-xs text-gray-500 uppercase tracking-wider">Name</th>
-                    <th className="px-4 py-3 text-xs text-gray-500 uppercase tracking-wider">Type</th>
-                    <th className="px-4 py-3 text-xs text-gray-500 uppercase tracking-wider">Date</th>
-                    <th className="px-4 py-3 text-xs text-gray-500 uppercase tracking-wider">Amount</th>
-                    <th className="px-4 py-3 text-xs text-gray-500 uppercase tracking-wider text-center">Actions</th>
+                      <th className="px-4 py-3 text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wider">Name</th>
+                      <th className="px-4 py-3 text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wider">Type</th>
+                      <th className="px-4 py-3 text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wider">Date</th>
+                      <th className="px-4 py-3 text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wider">Amount</th>
+                      <th className="px-4 py-3 text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wider text-center">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -873,7 +873,7 @@ const AccountFilteredTransactions: React.FC<AccountFilteredTransactionsProps> = 
                     return (
                       <tr
                         key={tx.id}
-                        className={`border-t border-gray-100 group ${isSelectMode && selectedIds.has(tx.id) ? 'bg-indigo-50' : ''}`}
+                        className={`border-t border-gray-100 dark:border-gray-800 group transition-colors ${isSelectMode && selectedIds.has(tx.id) ? 'bg-indigo-50 dark:bg-indigo-900/30' : 'hover:bg-gray-50 dark:hover:bg-gray-800/50'}`}
                       >
                         {isSelectMode && (
                           <td className="px-4 py-3">
@@ -886,11 +886,11 @@ const AccountFilteredTransactions: React.FC<AccountFilteredTransactionsProps> = 
                             />
                           </td>
                         )}
-                        <td className="px-4 py-3"><div className="text-sm font-medium text-gray-900">{tx.name}</div></td>
+                        <td className="px-4 py-3"><div className="text-sm font-medium text-gray-900 dark:text-gray-100">{tx.name}</div></td>
                         <td className="px-4 py-3">{getTransactionTypeBadge(tx.transaction_type)}</td>
-                        <td className="px-4 py-3"><div className="text-sm text-gray-500">{new Date(tx.date).toLocaleDateString()}</div></td>
+                        <td className="px-4 py-3"><div className="text-sm text-gray-500 dark:text-gray-400">{new Date(tx.date).toLocaleDateString()}</div></td>
                         <td className="px-4 py-3">
-                          <div className={`text-sm font-semibold ${tx.amount > 0 ? 'text-red-600' : 'text-green-600'}`}>
+                          <div className={`text-sm font-semibold ${tx.amount > 0 ? 'text-red-600 dark:text-red-400' : 'text-green-600 dark:text-green-400'}`}>
                             {formatCurrency(-tx.amount)}
                           </div>
                         </td>
@@ -900,7 +900,7 @@ const AccountFilteredTransactions: React.FC<AccountFilteredTransactionsProps> = 
                               onClick={() => setSelectedTx(tx)}
                               title="View details"
                               aria-label="View transaction details"
-                              className="text-gray-300 hover:text-indigo-500 hover:bg-indigo-50 rounded-full p-1.5 transition-all"
+                              className="text-gray-400 dark:text-gray-500 hover:text-indigo-500 dark:hover:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 rounded-full p-1.5 transition-all"
                             >
                               <Info className="w-4 h-4" />
                             </button>
@@ -908,7 +908,7 @@ const AccountFilteredTransactions: React.FC<AccountFilteredTransactionsProps> = 
                               onClick={() => openEditTxModal(tx)}
                               title="Edit transaction"
                               aria-label="Edit transaction"
-                              className="text-gray-300 hover:text-indigo-500 hover:bg-indigo-50 rounded-full p-1.5 transition-all"
+                              className="text-gray-400 dark:text-gray-500 hover:text-indigo-500 dark:hover:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 rounded-full p-1.5 transition-all"
                             >
                               <Pencil className="w-4 h-4" />
                             </button>
@@ -916,7 +916,7 @@ const AccountFilteredTransactions: React.FC<AccountFilteredTransactionsProps> = 
                               onClick={() => handleDeleteTx(tx)}
                               title="Delete transaction"
                               aria-label="Delete transaction"
-                              className="text-gray-300 hover:text-red-500 hover:bg-red-50 rounded-full p-1.5 transition-all"
+                              className="text-gray-400 dark:text-gray-500 hover:text-red-500 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-full p-1.5 transition-all"
                             >
                               <Trash2 className="w-4 h-4" />
                             </button>
@@ -936,7 +936,7 @@ const AccountFilteredTransactions: React.FC<AccountFilteredTransactionsProps> = 
                     );
                   })}
                   {filteredTransactions.length === 0 && (
-                    <tr><td colSpan={isSelectMode ? 6 : 5} className="px-4 py-6 text-center text-gray-400">
+                    <tr><td colSpan={isSelectMode ? 6 : 5} className="px-4 py-6 text-center text-gray-400 dark:text-gray-500">
                       {transactions.length === 0 ? 'No transactions for this account.' : 'No transactions match the current filter.'}
                     </td></tr>
                   )}
@@ -951,9 +951,9 @@ const AccountFilteredTransactions: React.FC<AccountFilteredTransactionsProps> = 
       {/* ── Batch Delete Confirmation Modal ─────────────────────────────────── */}
       {showBatchConfirm && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-md">
-          <div className="w-full max-w-sm bg-white rounded-3xl p-8 shadow-2xl">
-            <h2 className="text-xl font-black text-gray-900 mb-3">Confirm Deletion</h2>
-            <p className="text-sm text-gray-600 mb-6">
+          <div className="w-full max-w-sm bg-white dark:bg-gray-900 rounded-3xl p-8 shadow-2xl transition-colors">
+            <h2 className="text-xl font-black text-gray-900 dark:text-gray-100 mb-3">Confirm Deletion</h2>
+            <p className="text-sm text-gray-600 dark:text-gray-400 mb-6">
               You are deleting <span className="font-black text-red-600">{selectedIds.size}</span> transaction{selectedIds.size !== 1 ? 's' : ''}, and this will be irreversible. Do you want to proceed?
             </p>
             <div className="flex gap-4">
@@ -961,7 +961,7 @@ const AccountFilteredTransactions: React.FC<AccountFilteredTransactionsProps> = 
                 type="button"
                 onClick={() => setShowBatchConfirm(false)}
                 disabled={isBatchDeleting}
-                className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 py-3 rounded-2xl font-bold transition-colors"
+                className="flex-1 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 py-3 rounded-2xl font-bold transition-colors"
               >
                 Cancel
               </button>
@@ -981,25 +981,25 @@ const AccountFilteredTransactions: React.FC<AccountFilteredTransactionsProps> = 
       {/* Withdraw Modal */}
       {showWithdrawModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-md">
-          <div className="w-full max-w-md bg-white rounded-3xl p-10 shadow-2xl relative">
-            <h2 className="text-2xl font-black text-gray-900 mb-2">Withdraw</h2>
-            <p className="text-gray-500 text-sm mb-8">Record a withdrawal from this account</p>
+          <div className="w-full max-w-md bg-white dark:bg-gray-900 rounded-3xl p-10 shadow-2xl relative transition-colors">
+            <h2 className="text-2xl font-black text-gray-900 dark:text-gray-100 mb-2">Withdraw</h2>
+            <p className="text-gray-500 dark:text-gray-400 text-sm mb-8">Record a withdrawal from this account</p>
             <form onSubmit={handleWithdrawSubmit} className="space-y-6">
               <div>
-                <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">For What?</label>
+                <label className="block text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-2">For What?</label>
                 <input 
                   value={withdrawForm.forWhat} 
                   onChange={e => setWithdrawForm(f => ({ ...f, forWhat: e.target.value }))} 
                   required 
                   placeholder="e.g. ATM Withdrawal"
-                  className="w-full bg-gray-50 border-transparent rounded-2xl p-4 outline-none font-bold focus:ring-2 focus:ring-red-500 transition-all" 
+                  className="w-full bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-transparent rounded-2xl p-4 outline-none font-bold focus:ring-2 focus:ring-red-500 transition-all" 
                 />
               </div>
               
               <div>
-                <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Amount</label>
+                <label className="block text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-2">Amount</label>
                 <div className="relative">
-                  <span className="absolute left-4 top-1/2 -translate-y-1/2 font-bold text-gray-400">₱</span>
+                  <span className="absolute left-4 top-1/2 -translate-y-1/2 font-bold text-gray-400 dark:text-gray-500">₱</span>
                   <input 
                     type="number" 
                     step="0.01" 
@@ -1007,19 +1007,19 @@ const AccountFilteredTransactions: React.FC<AccountFilteredTransactionsProps> = 
                     value={withdrawForm.amount} 
                     onChange={e => setWithdrawForm(f => ({ ...f, amount: e.target.value }))} 
                     required 
-                    className="w-full bg-gray-50 border-transparent rounded-2xl p-4 pl-8 outline-none text-xl font-black focus:ring-2 focus:ring-red-500 transition-all" 
+                    className="w-full bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-transparent rounded-2xl p-4 pl-8 outline-none text-xl font-black focus:ring-2 focus:ring-red-500 transition-all" 
                   />
                 </div>
               </div>
 
               <div>
-                <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Date</label>
+                <label className="block text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-2">Date</label>
                 <input 
                   type="date" 
                   value={withdrawForm.date} 
                   onChange={e => setWithdrawForm(f => ({ ...f, date: e.target.value }))} 
                   required 
-                  className="w-full bg-gray-50 border-transparent rounded-2xl p-4 outline-none font-bold text-sm" 
+                  className="w-full bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-transparent rounded-2xl p-4 outline-none font-bold text-sm transition-colors" 
                 />
               </div>
 
@@ -1027,7 +1027,7 @@ const AccountFilteredTransactions: React.FC<AccountFilteredTransactionsProps> = 
                 <button
                   type="button"
                   onClick={() => setShowWithdrawModal(false)}
-                  className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 py-4 rounded-2xl font-bold transition-colors"
+                  className="flex-1 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 py-4 rounded-2xl font-bold transition-colors"
                   disabled={isSubmitting}
                 >
                   Cancel
@@ -1048,14 +1048,14 @@ const AccountFilteredTransactions: React.FC<AccountFilteredTransactionsProps> = 
       {/* Transfer Modal */}
       {showTransferModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-md">
-          <div className="w-full max-w-md bg-white rounded-3xl p-10 shadow-2xl relative">
-            <h2 className="text-2xl font-black text-gray-900 mb-2">Transfer</h2>
-            <p className="text-gray-500 text-sm mb-8">Transfer money to another account</p>
+          <div className="w-full max-w-md bg-white dark:bg-gray-900 rounded-3xl p-10 shadow-2xl relative transition-colors">
+            <h2 className="text-2xl font-black text-gray-900 dark:text-gray-100 mb-2">Transfer</h2>
+            <p className="text-gray-500 dark:text-gray-400 text-sm mb-8">Transfer money to another account</p>
             <form onSubmit={handleTransferSubmit} className="space-y-6">
               <div>
-                <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Amount</label>
+                <label className="block text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-2">Amount</label>
                 <div className="relative">
-                  <span className="absolute left-4 top-1/2 -translate-y-1/2 font-bold text-gray-400">₱</span>
+                  <span className="absolute left-4 top-1/2 -translate-y-1/2 font-bold text-gray-400 dark:text-gray-500">₱</span>
                   <input 
                     type="number" 
                     step="0.01" 
@@ -1063,13 +1063,13 @@ const AccountFilteredTransactions: React.FC<AccountFilteredTransactionsProps> = 
                     value={transferForm.amount} 
                     onChange={e => setTransferForm(f => ({ ...f, amount: e.target.value }))} 
                     required 
-                    className="w-full bg-gray-50 border-transparent rounded-2xl p-4 pl-8 outline-none text-xl font-black focus:ring-2 focus:ring-blue-500 transition-all" 
+                    className="w-full bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-transparent rounded-2xl p-4 pl-8 outline-none text-xl font-black focus:ring-2 focus:ring-blue-500 transition-all" 
                   />
                 </div>
               </div>
 
               <div>
-                <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Receiving Account</label>
+                <label className="block text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-2">Receiving Account</label>
                 {transferAccountOptions.length === 0 ? (
                   <div className="text-xs text-red-600 p-4 bg-red-50 rounded-xl">No other debit accounts available</div>
                 ) : (
@@ -1077,7 +1077,7 @@ const AccountFilteredTransactions: React.FC<AccountFilteredTransactionsProps> = 
                     value={transferForm.receivingAccountId} 
                     onChange={e => setTransferForm(f => ({ ...f, receivingAccountId: e.target.value }))} 
                     required
-                    className="w-full bg-gray-50 border-transparent rounded-2xl p-4 outline-none font-bold text-sm appearance-none"
+                    className="w-full bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-transparent rounded-2xl p-4 outline-none font-bold text-sm appearance-none transition-colors"
                   >
                     <option value="">Select account...</option>
                     {transferAccountOptions.map(a => <option key={a.id} value={a.id}>{a.bank}</option>)}
@@ -1086,13 +1086,13 @@ const AccountFilteredTransactions: React.FC<AccountFilteredTransactionsProps> = 
               </div>
 
               <div>
-                <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Date</label>
+                <label className="block text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-2">Date</label>
                 <input 
                   type="date" 
                   value={transferForm.date} 
                   onChange={e => setTransferForm(f => ({ ...f, date: e.target.value }))} 
                   required 
-                  className="w-full bg-gray-50 border-transparent rounded-2xl p-4 outline-none font-bold text-sm" 
+                  className="w-full bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-transparent rounded-2xl p-4 outline-none font-bold text-sm transition-colors" 
                 />
               </div>
 
@@ -1100,7 +1100,7 @@ const AccountFilteredTransactions: React.FC<AccountFilteredTransactionsProps> = 
                 <button
                   type="button"
                   onClick={() => setShowTransferModal(false)}
-                  className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 py-4 rounded-2xl font-bold transition-colors"
+                  className="flex-1 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 py-4 rounded-2xl font-bold transition-colors"
                   disabled={isSubmitting}
                 >
                   Cancel
@@ -1121,25 +1121,25 @@ const AccountFilteredTransactions: React.FC<AccountFilteredTransactionsProps> = 
       {/* Loan Modal */}
       {showLoanModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-md">
-          <div className="w-full max-w-md bg-white rounded-3xl p-10 shadow-2xl relative">
-            <h2 className="text-2xl font-black text-gray-900 mb-2">Loan</h2>
-            <p className="text-gray-500 text-sm mb-8">Record money lent out</p>
+          <div className="w-full max-w-md bg-white dark:bg-gray-900 rounded-3xl p-10 shadow-2xl relative transition-colors">
+            <h2 className="text-2xl font-black text-gray-900 dark:text-gray-100 mb-2">Loan</h2>
+            <p className="text-gray-500 dark:text-gray-400 text-sm mb-8">Record money lent out</p>
             <form onSubmit={handleLoanSubmit} className="space-y-6">
               <div>
-                <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">What?</label>
+                <label className="block text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-2">What?</label>
                 <input 
                   value={loanForm.what} 
                   onChange={e => setLoanForm(f => ({ ...f, what: e.target.value }))} 
                   required 
                   placeholder="e.g. John Doe, Emergency Loan"
-                  className="w-full bg-gray-50 border-transparent rounded-2xl p-4 outline-none font-bold focus:ring-2 focus:ring-orange-500 transition-all" 
+                  className="w-full bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-transparent rounded-2xl p-4 outline-none font-bold focus:ring-2 focus:ring-orange-500 transition-all" 
                 />
               </div>
               
               <div>
-                <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Amount</label>
+                <label className="block text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-2">Amount</label>
                 <div className="relative">
-                  <span className="absolute left-4 top-1/2 -translate-y-1/2 font-bold text-gray-400">₱</span>
+                  <span className="absolute left-4 top-1/2 -translate-y-1/2 font-bold text-gray-400 dark:text-gray-500">₱</span>
                   <input 
                     type="number" 
                     step="0.01" 
@@ -1147,19 +1147,19 @@ const AccountFilteredTransactions: React.FC<AccountFilteredTransactionsProps> = 
                     value={loanForm.amount} 
                     onChange={e => setLoanForm(f => ({ ...f, amount: e.target.value }))} 
                     required 
-                    className="w-full bg-gray-50 border-transparent rounded-2xl p-4 pl-8 outline-none text-xl font-black focus:ring-2 focus:ring-orange-500 transition-all" 
+                    className="w-full bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-transparent rounded-2xl p-4 pl-8 outline-none text-xl font-black focus:ring-2 focus:ring-orange-500 transition-all" 
                   />
                 </div>
               </div>
 
               <div>
-                <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Date</label>
+                <label className="block text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-2">Date</label>
                 <input 
                   type="date" 
                   value={loanForm.date} 
                   onChange={e => setLoanForm(f => ({ ...f, date: e.target.value }))} 
                   required 
-                  className="w-full bg-gray-50 border-transparent rounded-2xl p-4 outline-none font-bold text-sm" 
+                  className="w-full bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-transparent rounded-2xl p-4 outline-none font-bold text-sm transition-colors" 
                 />
               </div>
 
@@ -1167,7 +1167,7 @@ const AccountFilteredTransactions: React.FC<AccountFilteredTransactionsProps> = 
                 <button
                   type="button"
                   onClick={() => setShowLoanModal(false)}
-                  className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 py-4 rounded-2xl font-bold transition-colors"
+                  className="flex-1 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 py-4 rounded-2xl font-bold transition-colors"
                   disabled={isSubmitting}
                 >
                   Cancel
@@ -1188,14 +1188,14 @@ const AccountFilteredTransactions: React.FC<AccountFilteredTransactionsProps> = 
       {/* Cash In Modal */}
       {showCashInModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-md">
-          <div className="w-full max-w-md bg-white rounded-3xl p-10 shadow-2xl relative">
-            <h2 className="text-2xl font-black text-gray-900 mb-2">Cash In</h2>
-            <p className="text-gray-500 text-sm mb-8">Add money to this account</p>
+          <div className="w-full max-w-md bg-white dark:bg-gray-900 rounded-3xl p-10 shadow-2xl relative transition-colors">
+            <h2 className="text-2xl font-black text-gray-900 dark:text-gray-100 mb-2">Cash In</h2>
+            <p className="text-gray-500 dark:text-gray-400 text-sm mb-8">Add money to this account</p>
             <form onSubmit={handleCashInSubmit} className="space-y-6">
               <div>
-                <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Amount</label>
+                <label className="block text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-2">Amount</label>
                 <div className="relative">
-                  <span className="absolute left-4 top-1/2 -translate-y-1/2 font-bold text-gray-400">₱</span>
+                  <span className="absolute left-4 top-1/2 -translate-y-1/2 font-bold text-gray-400 dark:text-gray-500">₱</span>
                   <input 
                     type="number" 
                     step="0.01" 
@@ -1203,30 +1203,30 @@ const AccountFilteredTransactions: React.FC<AccountFilteredTransactionsProps> = 
                     value={cashInForm.amount} 
                     onChange={e => setCashInForm(f => ({ ...f, amount: e.target.value }))} 
                     required 
-                    className="w-full bg-gray-50 border-transparent rounded-2xl p-4 pl-8 outline-none text-xl font-black focus:ring-2 focus:ring-green-500 transition-all" 
+                    className="w-full bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-transparent rounded-2xl p-4 pl-8 outline-none text-xl font-black focus:ring-2 focus:ring-green-500 transition-all" 
                   />
                 </div>
               </div>
 
               <div>
-                <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Date</label>
+                <label className="block text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-2">Date</label>
                 <input 
                   type="date" 
                   value={cashInForm.date} 
                   onChange={e => setCashInForm(f => ({ ...f, date: e.target.value }))} 
                   required 
-                  className="w-full bg-gray-50 border-transparent rounded-2xl p-4 outline-none font-bold text-sm" 
+                  className="w-full bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-transparent rounded-2xl p-4 outline-none font-bold text-sm transition-colors" 
                 />
               </div>
 
               <div>
-                <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Notes (Optional)</label>
+                <label className="block text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-2">Notes (Optional)</label>
                 <textarea
                   value={cashInForm.notes} 
                   onChange={e => setCashInForm(f => ({ ...f, notes: e.target.value }))} 
                   placeholder="e.g. Salary, Bonus, etc."
                   rows={3}
-                  className="w-full bg-gray-50 border-transparent rounded-2xl p-4 outline-none font-bold text-sm focus:ring-2 focus:ring-green-500 transition-all resize-none" 
+                  className="w-full bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-transparent rounded-2xl p-4 outline-none font-bold text-sm focus:ring-2 focus:ring-green-500 transition-all resize-none" 
                 />
               </div>
 
@@ -1234,7 +1234,7 @@ const AccountFilteredTransactions: React.FC<AccountFilteredTransactionsProps> = 
                 <button
                   type="button"
                   onClick={() => setShowCashInModal(false)}
-                  className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 py-4 rounded-2xl font-bold transition-colors"
+                  className="flex-1 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 py-4 rounded-2xl font-bold transition-colors"
                   disabled={isSubmitting}
                 >
                   Cancel
@@ -1255,30 +1255,30 @@ const AccountFilteredTransactions: React.FC<AccountFilteredTransactionsProps> = 
       {/* Loan Payment Modal */}
       {showLoanPaymentModal && selectedLoan && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-md">
-          <div className="w-full max-w-md bg-white rounded-3xl p-10 shadow-2xl relative">
-            <h2 className="text-2xl font-black text-gray-900 mb-2">Receive Loan Payment</h2>
-            <p className="text-gray-500 text-sm mb-4">Record payment received for: {selectedLoan.name}</p>
+          <div className="w-full max-w-md bg-white dark:bg-gray-900 rounded-3xl p-10 shadow-2xl relative transition-colors">
+            <h2 className="text-2xl font-black text-gray-900 dark:text-gray-100 mb-2">Receive Loan Payment</h2>
+            <p className="text-gray-500 dark:text-gray-400 text-sm mb-4">Record payment received for: {selectedLoan.name}</p>
             
-            <div className="mb-6 p-4 bg-gray-50 rounded-xl">
+            <div className="mb-6 p-4 bg-gray-50 dark:bg-gray-800/50 rounded-xl transition-colors">
               <div className="flex justify-between mb-2">
-                <span className="text-sm text-gray-600">Original Loan:</span>
-                <span className="text-sm font-bold">{formatCurrency(Math.abs(selectedLoan.amount))}</span>
+                <span className="text-sm text-gray-600 dark:text-gray-400">Original Loan:</span>
+                <span className="text-sm font-bold text-gray-900 dark:text-gray-100">{formatCurrency(Math.abs(selectedLoan.amount))}</span>
               </div>
               <div className="flex justify-between mb-2">
-                <span className="text-sm text-gray-600">Total Paid:</span>
-                <span className="text-sm font-bold text-green-600">{formatCurrency(selectedLoan.totalPaid || 0)}</span>
+                <span className="text-sm text-gray-600 dark:text-gray-400">Total Paid:</span>
+                <span className="text-sm font-bold text-green-600 dark:text-green-400">{formatCurrency(selectedLoan.totalPaid || 0)}</span>
               </div>
-              <div className="flex justify-between pt-2 border-t border-gray-200">
-                <span className="text-sm font-bold text-gray-900">Remaining Balance:</span>
-                <span className="text-sm font-bold text-orange-600">{formatCurrency(selectedLoan.remainingBalance || 0)}</span>
+              <div className="flex justify-between pt-2 border-t border-gray-200 dark:border-gray-700">
+                <span className="text-sm font-bold text-gray-900 dark:text-gray-100">Remaining Balance:</span>
+                <span className="text-sm font-bold text-orange-600 dark:text-orange-400">{formatCurrency(selectedLoan.remainingBalance || 0)}</span>
               </div>
             </div>
 
             <form onSubmit={handleLoanPaymentSubmit} className="space-y-6">
               <div>
-                <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Amount Received</label>
+                <label className="block text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-2">Amount Received</label>
                 <div className="relative">
-                  <span className="absolute left-4 top-1/2 -translate-y-1/2 font-bold text-gray-400">₱</span>
+                  <span className="absolute left-4 top-1/2 -translate-y-1/2 font-bold text-gray-400 dark:text-gray-500">₱</span>
                   <input 
                     type="number" 
                     step="0.01" 
@@ -1287,19 +1287,19 @@ const AccountFilteredTransactions: React.FC<AccountFilteredTransactionsProps> = 
                     value={loanPaymentForm.amount} 
                     onChange={e => setLoanPaymentForm(f => ({ ...f, amount: e.target.value }))} 
                     required 
-                    className="w-full bg-gray-50 border-transparent rounded-2xl p-4 pl-8 outline-none text-xl font-black focus:ring-2 focus:ring-purple-500 transition-all" 
+                    className="w-full bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-transparent rounded-2xl p-4 pl-8 outline-none text-xl font-black focus:ring-2 focus:ring-purple-500 transition-all" 
                   />
                 </div>
               </div>
 
               <div>
-                <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Date</label>
+                <label className="block text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-2">Date</label>
                 <input 
                   type="date" 
                   value={loanPaymentForm.date} 
                   onChange={e => setLoanPaymentForm(f => ({ ...f, date: e.target.value }))} 
                   required 
-                  className="w-full bg-gray-50 border-transparent rounded-2xl p-4 outline-none font-bold text-sm" 
+                  className="w-full bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-transparent rounded-2xl p-4 outline-none font-bold text-sm transition-colors" 
                 />
               </div>
 
@@ -1310,7 +1310,7 @@ const AccountFilteredTransactions: React.FC<AccountFilteredTransactionsProps> = 
                     setShowLoanPaymentModal(false);
                     setSelectedLoan(null);
                   }}
-                  className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 py-4 rounded-2xl font-bold transition-colors"
+                  className="flex-1 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 py-4 rounded-2xl font-bold transition-colors"
                   disabled={isSubmitting}
                 >
                   Cancel
@@ -1331,24 +1331,24 @@ const AccountFilteredTransactions: React.FC<AccountFilteredTransactionsProps> = 
       {/* Credit Card Payment Modal */}
       {showCardPaymentModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-md">
-          <div className="w-full max-w-md bg-white rounded-3xl p-10 shadow-2xl relative">
-            <h2 className="text-2xl font-black text-gray-900 mb-2">Make Credit Card Payment</h2>
-            <p className="text-gray-500 text-sm mb-8">Record a payment to reduce your credit card balance</p>
+          <div className="w-full max-w-md bg-white dark:bg-gray-900 rounded-3xl p-10 shadow-2xl relative transition-colors">
+            <h2 className="text-2xl font-black text-gray-900 dark:text-gray-100 mb-2">Make Credit Card Payment</h2>
+            <p className="text-gray-500 dark:text-gray-400 text-sm mb-8">Record a payment to reduce your credit card balance</p>
             <form onSubmit={handleCardPaymentSubmit} className="space-y-6">
               <div>
-                <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Payment Name (Optional)</label>
+                <label className="block text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-2">Payment Name (Optional)</label>
                 <input
                   value={cardPaymentForm.name}
                   onChange={e => setCardPaymentForm(f => ({ ...f, name: e.target.value }))}
                   placeholder="Credit Card Payment"
-                  className="w-full bg-gray-50 border-transparent rounded-2xl p-4 outline-none font-bold focus:ring-2 focus:ring-teal-500 transition-all"
+                  className="w-full bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-transparent rounded-2xl p-4 outline-none font-bold focus:ring-2 focus:ring-teal-500 transition-all"
                 />
               </div>
 
               <div>
-                <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Amount</label>
+                <label className="block text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-2">Amount</label>
                 <div className="relative">
-                  <span className="absolute left-4 top-1/2 -translate-y-1/2 font-bold text-gray-400">₱</span>
+                  <span className="absolute left-4 top-1/2 -translate-y-1/2 font-bold text-gray-400 dark:text-gray-500">₱</span>
                   <input
                     type="number"
                     step="0.01"
@@ -1356,30 +1356,30 @@ const AccountFilteredTransactions: React.FC<AccountFilteredTransactionsProps> = 
                     value={cardPaymentForm.amount}
                     onChange={e => setCardPaymentForm(f => ({ ...f, amount: e.target.value }))}
                     required
-                    className="w-full bg-gray-50 border-transparent rounded-2xl p-4 pl-8 outline-none text-xl font-black focus:ring-2 focus:ring-teal-500 transition-all"
+                    className="w-full bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-transparent rounded-2xl p-4 pl-8 outline-none text-xl font-black focus:ring-2 focus:ring-teal-500 transition-all"
                   />
                 </div>
               </div>
 
               <div>
-                <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Date</label>
+                <label className="block text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-2">Date</label>
                 <input
                   type="date"
                   value={cardPaymentForm.date}
                   onChange={e => setCardPaymentForm(f => ({ ...f, date: e.target.value }))}
                   required
-                  className="w-full bg-gray-50 border-transparent rounded-2xl p-4 outline-none font-bold text-sm"
+                  className="w-full bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-transparent rounded-2xl p-4 outline-none font-bold text-sm transition-colors"
                 />
               </div>
 
               <div>
-                <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Notes (Optional)</label>
+                <label className="block text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-2">Notes (Optional)</label>
                 <textarea
                   value={cardPaymentForm.notes}
                   onChange={e => setCardPaymentForm(f => ({ ...f, notes: e.target.value }))}
                   placeholder="e.g. Full payment, minimum payment, etc."
                   rows={3}
-                  className="w-full bg-gray-50 border-transparent rounded-2xl p-4 outline-none font-bold text-sm focus:ring-2 focus:ring-teal-500 transition-all resize-none"
+                  className="w-full bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-transparent rounded-2xl p-4 outline-none font-bold text-sm focus:ring-2 focus:ring-teal-500 transition-all resize-none"
                 />
               </div>
 
@@ -1387,7 +1387,7 @@ const AccountFilteredTransactions: React.FC<AccountFilteredTransactionsProps> = 
                 <button
                   type="button"
                   onClick={() => setShowCardPaymentModal(false)}
-                  className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 py-4 rounded-2xl font-bold transition-colors"
+                  className="flex-1 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 py-4 rounded-2xl font-bold transition-colors"
                   disabled={isSubmitting}
                 >
                   Cancel
@@ -1408,24 +1408,24 @@ const AccountFilteredTransactions: React.FC<AccountFilteredTransactionsProps> = 
       {/* Edit Transaction Modal */}
       {showEditTxModal && editingViewTx && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-md">
-          <div className="w-full max-w-md bg-white rounded-3xl p-10 shadow-2xl relative">
-            <h2 className="text-2xl font-black text-gray-900 mb-2">Edit Transaction</h2>
-            <p className="text-gray-500 text-sm mb-8">Update the transaction details below</p>
+          <div className="w-full max-w-md bg-white dark:bg-gray-900 rounded-3xl p-10 shadow-2xl relative transition-colors">
+            <h2 className="text-2xl font-black text-gray-900 dark:text-gray-100 mb-2">Edit Transaction</h2>
+            <p className="text-gray-500 dark:text-gray-400 text-sm mb-8">Update the transaction details below</p>
             <form onSubmit={handleEditTxSubmit} className="space-y-6">
               <div>
-                <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Name</label>
+                <label className="block text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-2">Name</label>
                 <input
                   value={editTxForm.name}
                   onChange={e => setEditTxForm(f => ({ ...f, name: e.target.value }))}
                   required
-                  className="w-full bg-gray-50 border-transparent rounded-2xl p-4 outline-none font-bold focus:ring-2 focus:ring-indigo-500 transition-all"
+                  className="w-full bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-transparent rounded-2xl p-4 outline-none font-bold focus:ring-2 focus:ring-indigo-500 transition-all"
                 />
               </div>
 
               <div>
-                <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Amount</label>
+                <label className="block text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-2">Amount</label>
                 <div className="relative">
-                  <span className="absolute left-4 top-1/2 -translate-y-1/2 font-bold text-gray-400">₱</span>
+                  <span className="absolute left-4 top-1/2 -translate-y-1/2 font-bold text-gray-400 dark:text-gray-500">₱</span>
                   <input
                     type="number"
                     step="0.01"
@@ -1433,19 +1433,19 @@ const AccountFilteredTransactions: React.FC<AccountFilteredTransactionsProps> = 
                     value={editTxForm.amount}
                     onChange={e => setEditTxForm(f => ({ ...f, amount: e.target.value }))}
                     required
-                    className="w-full bg-gray-50 border-transparent rounded-2xl p-4 pl-8 outline-none text-xl font-black focus:ring-2 focus:ring-indigo-500 transition-all"
+                    className="w-full bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-transparent rounded-2xl p-4 pl-8 outline-none text-xl font-black focus:ring-2 focus:ring-indigo-500 transition-all"
                   />
                 </div>
               </div>
 
               <div>
-                <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Date</label>
+                <label className="block text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-2">Date</label>
                 <input
                   type="date"
                   value={editTxForm.date}
                   onChange={e => setEditTxForm(f => ({ ...f, date: e.target.value }))}
                   required
-                  className="w-full bg-gray-50 border-transparent rounded-2xl p-4 outline-none font-bold text-sm"
+                  className="w-full bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-transparent rounded-2xl p-4 outline-none font-bold text-sm transition-colors"
                 />
               </div>
 
@@ -1453,7 +1453,7 @@ const AccountFilteredTransactions: React.FC<AccountFilteredTransactionsProps> = 
                 <button
                   type="button"
                   onClick={() => { setShowEditTxModal(false); setEditingViewTx(null); }}
-                  className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 py-4 rounded-2xl font-bold transition-colors"
+                  className="flex-1 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 py-4 rounded-2xl font-bold transition-colors"
                   disabled={isSubmitting}
                 >
                   Cancel

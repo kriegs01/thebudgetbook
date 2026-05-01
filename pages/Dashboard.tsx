@@ -11,6 +11,7 @@ interface DashboardProps {
   transactions?: Transaction[];
   budgetSetups?: SavedBudgetSetup[];
   userProfile?: SupabaseUserProfile | null;
+  theme?: 'light' | 'dark';
 }
 
 interface PeriodProjection {
@@ -26,7 +27,16 @@ interface MonthlyAverage {
   avgRemaining: number;
 }
 
-const Dashboard: React.FC<DashboardProps> = ({ accounts, budget, installments, transactions = [], budgetSetups = [], userProfile }) => {
+const Dashboard: React.FC<DashboardProps> = ({ accounts, budget, installments, transactions = [], budgetSetups = [], userProfile, theme }) => {
+  const isDarkMode = theme === 'dark';
+  const tickColor = isDarkMode ? '#6b7280' : '#94a3b8'; // gray-500 dark, gray-400 light
+  const gridColor = isDarkMode ? '#374151' : '#f1f5f9'; // gray-700 dark, gray-100 light
+  const tooltipBg = isDarkMode ? '#1f2937' : '#ffffff';
+  const tooltipColor = isDarkMode ? '#d1d5db' : '#374151';
+  const labelListIncomeColor = isDarkMode ? '#34d399' : '#059669'; // emerald-400 dark, green-700 light
+  const labelListBudgetColor = isDarkMode ? '#fcd34d' : '#D97706'; // amber-300 dark, amber-600 light
+  const labelListRemainingColor = isDarkMode ? '#93c5fd' : '#2563EB'; // blue-300 dark, blue-600 light
+
   // NEW: State for date range
   const getCurrentMonth = () => {
     const today = new Date();
@@ -200,54 +210,54 @@ const Dashboard: React.FC<DashboardProps> = ({ accounts, budget, installments, t
     <div className="space-y-8 animate-in fade-in duration-500">
       {/* Greeting Header */}
       <div className="mb-2">
-        <h1 className="text-3xl font-bold text-gray-900">
+        <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100">
           Hello, {userProfile?.first_name || 'there'}!
         </h1>
       </div>
       
       {/* Top Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
+        <div className="bg-white dark:bg-gray-900 p-6 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800">
           <div className="flex items-center justify-between mb-4">
-            <div className="p-3 bg-blue-50 text-blue-600 rounded-xl">
+            <div className="p-3 bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 rounded-xl">
               <Landmark className="w-6 h-6" />
             </div>
             <span className="text-xs font-medium text-green-600 bg-green-50 px-2 py-1 rounded-full">+2.5%</span>
           </div>
-          <h3 className="text-gray-500 text-sm font-medium">Total Balance</h3>
-          <p className="text-2xl font-bold mt-1">{formatCurrency(totalBalance)}</p>
+          <h3 className="text-gray-500 dark:text-gray-400 text-sm font-medium">Total Balance</h3>
+          <p className="text-2xl font-bold mt-1 dark:text-gray-100">{formatCurrency(totalBalance)}</p>
         </div>
 
-        <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
+        <div className="bg-white dark:bg-gray-900 p-6 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800">
           <div className="flex items-center justify-between mb-4">
-            <div className="p-3 bg-indigo-50 text-indigo-600 rounded-xl">
+            <div className="p-3 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 rounded-xl">
               <TrendingUp className="w-6 h-6" />
             </div>
             <span className="text-xs font-medium text-red-600 bg-red-50 px-2 py-1 rounded-full">+12%</span>
           </div>
-          <h3 className="text-gray-500 text-sm font-medium">Monthly Budget Used</h3>
-          <p className="text-2xl font-bold mt-1">{formatCurrency(monthlySpending)}</p>
+          <h3 className="text-gray-500 dark:text-gray-400 text-sm font-medium">Monthly Budget Used</h3>
+          <p className="text-2xl font-bold mt-1 dark:text-gray-100">{formatCurrency(monthlySpending)}</p>
         </div>
 
-        <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
+        <div className="bg-white dark:bg-gray-900 p-6 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800">
           <div className="flex items-center justify-between mb-4">
-            <div className="p-3 bg-purple-50 text-purple-600 rounded-xl">
+            <div className="p-3 bg-purple-50 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 rounded-xl">
               <TrendingDown className="w-6 h-6" />
             </div>
             <span className="text-xs font-medium text-green-600 bg-green-50 px-2 py-1 rounded-full">-5%</span>
           </div>
-          <h3 className="text-gray-500 text-sm font-medium">Credit Utilization</h3>
-          <p className="text-2xl font-bold mt-1">{formatCurrency(totalDebt)}</p>
+          <h3 className="text-gray-500 dark:text-gray-400 text-sm font-medium">Credit Utilization</h3>
+          <p className="text-2xl font-bold mt-1 dark:text-gray-100">{formatCurrency(totalDebt)}</p>
         </div>
       </div>
 
       {/* Budget Projections Section */}
-      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-        <div className="p-6 border-b border-gray-100">
+      <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800 overflow-hidden">
+        <div className="p-6 border-b border-gray-100 dark:border-gray-800">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-2">
               <TrendingUp className="w-5 h-5 text-blue-600" />
-              <h3 className="text-lg font-bold">Budget Projections</h3>
+              <h3 className="text-lg font-bold dark:text-gray-100">Budget Projections</h3>
             </div>
             {/* Date range selector */}
             <div className="flex gap-2">
@@ -255,66 +265,66 @@ const Dashboard: React.FC<DashboardProps> = ({ accounts, budget, installments, t
                 type="month" 
                 value={startDate}
                 onChange={(e) => setStartDate(e.target.value)}
-                className="text-sm border rounded-lg px-3 py-1"
+                className="text-sm border dark:border-gray-700 rounded-lg px-3 py-1 dark:bg-gray-800 dark:text-gray-200"
               />
-              <span className="self-center text-gray-500">to</span>
+              <span className="self-center text-gray-500 dark:text-gray-400">to</span>
               <input 
                 type="month" 
                 value={endDate}
                 onChange={(e) => setEndDate(e.target.value)}
-                className="text-sm border rounded-lg px-3 py-1"
+                className="text-sm border dark:border-gray-700 rounded-lg px-3 py-1 dark:bg-gray-800 dark:text-gray-200"
               />
             </div>
           </div>
         </div>
 
         {/* Summary Cards */}
-        <div className="p-6 bg-gray-50 border-b border-gray-100">
+        <div className="p-6 bg-gray-50 dark:bg-gray-800/50 border-b border-gray-100 dark:border-gray-800">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             {/* Card 1: Avg Period Remaining */}
-            <div className="bg-white p-4 rounded-xl shadow-sm">
+            <div className="bg-white dark:bg-gray-800 p-4 rounded-xl shadow-sm">
               <div className="flex items-center justify-between mb-2">
-                <span className="text-xs text-gray-600 font-medium">Avg Period</span>
+                <span className="text-xs text-gray-600 dark:text-gray-300 font-medium">Avg Period</span>
                 <Calendar className="w-4 h-4 text-blue-600" />
               </div>
               <p className={`text-lg font-bold ${avgPeriodRemaining >= 0 ? 'text-green-600' : 'text-red-600'}`}>
                 {formatCurrency(avgPeriodRemaining)}
               </p>
-              <p className="text-[10px] text-gray-500 mt-1">Per timing period</p>
+              <p className="text-[10px] text-gray-500 dark:text-gray-400 mt-1">Per timing period</p>
             </div>
 
             {/* Card 2: Monthly Average */}
-            <div className="bg-white p-4 rounded-xl shadow-sm">
+            <div className="bg-white dark:bg-gray-800 p-4 rounded-xl shadow-sm">
               <div className="flex items-center justify-between mb-2">
-                <span className="text-xs text-gray-600 font-medium">Monthly Avg</span>
+                <span className="text-xs text-gray-600 dark:text-gray-300 font-medium">Monthly Avg</span>
                 <TrendingUp className="w-4 h-4 text-purple-600" />
               </div>
               <p className={`text-lg font-bold ${avgMonthlyRemaining >= 0 ? 'text-green-600' : 'text-red-600'}`}>
                 {formatCurrency(avgMonthlyRemaining)}
               </p>
-              <p className="text-[10px] text-gray-500 mt-1">Per month</p>
+              <p className="text-[10px] text-gray-500 dark:text-gray-400 mt-1">Per month</p>
             </div>
 
             {/* Card 3: Best Month */}
-            <div className="bg-white p-4 rounded-xl shadow-sm">
+            <div className="bg-white dark:bg-gray-800 p-4 rounded-xl shadow-sm">
               <div className="flex items-center justify-between mb-2">
-                <span className="text-xs text-gray-600 font-medium">Best Month</span>
+                <span className="text-xs text-gray-600 dark:text-gray-300 font-medium">Best Month</span>
                 <TrendingUp className="w-4 h-4 text-green-600" />
               </div>
               {bestMonth ? (
                 <>
                   <p className="text-lg font-bold text-green-600">{formatCurrency(bestMonth.avgRemaining)}</p>
-                  <p className="text-[10px] text-gray-500 mt-1">{bestMonth.month}</p>
+                  <p className="text-[10px] text-gray-500 dark:text-gray-400 mt-1">{bestMonth.month}</p>
                 </>
               ) : (
-                <p className="text-sm text-gray-400">No data</p>
+                <p className="text-sm text-gray-400 dark:text-gray-500">No data</p>
               )}
             </div>
 
             {/* Card 4: Worst Month */}
-            <div className="bg-white p-4 rounded-xl shadow-sm">
+            <div className="bg-white dark:bg-gray-800 p-4 rounded-xl shadow-sm">
               <div className="flex items-center justify-between mb-2">
-                <span className="text-xs text-gray-600 font-medium">Worst Month</span>
+                <span className="text-xs text-gray-600 dark:text-gray-300 font-medium">Worst Month</span>
                 <TrendingDown className="w-4 h-4 text-red-600" />
               </div>
               {worstMonth ? (
@@ -322,10 +332,10 @@ const Dashboard: React.FC<DashboardProps> = ({ accounts, budget, installments, t
                   <p className={`text-lg font-bold ${worstMonth.avgRemaining >= 0 ? 'text-yellow-600' : 'text-red-600'}`}>
                     {formatCurrency(worstMonth.avgRemaining)}
                   </p>
-                  <p className="text-[10px] text-gray-500 mt-1">{worstMonth.month}</p>
+                  <p className="text-[10px] text-gray-500 dark:text-gray-400 mt-1">{worstMonth.month}</p>
                 </>
               ) : (
-                <p className="text-sm text-gray-400">No data</p>
+                <p className="text-sm text-gray-400 dark:text-gray-500">No data</p>
               )}
             </div>
           </div>
@@ -336,26 +346,26 @@ const Dashboard: React.FC<DashboardProps> = ({ accounts, budget, installments, t
           <div className="h-80">
             {periodProjections.length > 0 ? (
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={periodProjections} margin={{ top: 20, right: 10, left: 0, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                <BarChart data={periodProjections} margin={{ top: 20, right: 10, left: -20, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={gridColor} />
                   <XAxis 
                     dataKey="period" 
                     axisLine={false}
                     tickLine={false}
-                    tick={{fill: '#94a3b8', fontSize: 11}}
+                    tick={{fill: tickColor, fontSize: 11}}
                     angle={0}
                     height={40}
                   />
                   <YAxis 
                     axisLine={false}
                     tickLine={false}
-                    tick={{fill: '#94a3b8', fontSize: 12}}
+                    tick={{fill: tickColor, fontSize: 12}}
                     tickFormatter={(value) => formatCurrency(value)}
                     domain={[0, 'dataMax + 25%']}
                   />
                   <Tooltip 
                     formatter={(value: number) => formatCurrency(value)}
-                    contentStyle={{borderRadius: '12px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)'}}
+                    contentStyle={{borderRadius: '12px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)', backgroundColor: tooltipBg, color: tooltipColor}}
                   />
                   <Legend />
                   <Bar 
@@ -368,7 +378,7 @@ const Dashboard: React.FC<DashboardProps> = ({ accounts, budget, installments, t
                       dataKey="income" 
                       position="top" 
                       formatter={(value: number) => formatCurrency(value)}
-                      style={{ fill: '#059669', fontSize: '11px', fontWeight: 'bold' }}
+                      style={{ fill: labelListIncomeColor, fontSize: '11px', fontWeight: 'bold' }}
                     />
                   </Bar>
                   <Bar 
@@ -381,7 +391,7 @@ const Dashboard: React.FC<DashboardProps> = ({ accounts, budget, installments, t
                       dataKey="totalBudget" 
                       position="top" 
                       formatter={(value: number) => formatCurrency(value)}
-                      style={{ fill: '#D97706', fontSize: '11px', fontWeight: 'bold' }}
+                      style={{ fill: labelListBudgetColor, fontSize: '11px', fontWeight: 'bold' }}
                     />
                   </Bar>
                   <Bar 
@@ -394,7 +404,7 @@ const Dashboard: React.FC<DashboardProps> = ({ accounts, budget, installments, t
                       dataKey="remaining" 
                       position="top" 
                       formatter={(value: number) => formatCurrency(value)}
-                      style={{ fill: '#2563EB', fontSize: '11px', fontWeight: 'bold' }}
+                      style={{ fill: labelListRemainingColor, fontSize: '11px', fontWeight: 'bold' }}
                     />
                   </Bar>
                 </BarChart>
@@ -402,8 +412,8 @@ const Dashboard: React.FC<DashboardProps> = ({ accounts, budget, installments, t
             ) : (
               <div className="flex items-center justify-center h-full text-center">
                 <div>
-                  <p className="text-gray-500 mb-2">No budget setups found</p>
-                  <p className="text-sm text-gray-400">Create budget setups to see projections</p>
+                  <p className="text-gray-500 dark:text-gray-400 mb-2">No budget setups found</p>
+                  <p className="text-sm text-gray-400 dark:text-gray-500">Create budget setups to see projections</p>
                 </div>
               </div>
             )}
@@ -413,23 +423,23 @@ const Dashboard: React.FC<DashboardProps> = ({ accounts, budget, installments, t
 
       {/* Charts Section */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        <div className="lg:col-span-2 bg-white p-8 rounded-2xl shadow-sm border border-gray-100">
+        <div className="lg:col-span-2 bg-white dark:bg-gray-900 p-8 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800">
           <div className="flex items-center justify-between mb-8">
-            <h3 className="text-lg font-bold">Spending Activity</h3>
-            <select className="bg-gray-50 border-none rounded-lg text-sm p-2 focus:ring-0">
+            <h3 className="text-lg font-bold dark:text-gray-100">Spending Activity</h3>
+            <select className="bg-gray-50 dark:bg-gray-800 dark:text-gray-200 border-none rounded-lg text-sm p-2 focus:ring-0">
               <option>This Week</option>
               <option>Last Week</option>
             </select>
           </div>
           <div className="h-64">
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={chartData}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 12}} dy={10} />
-                <YAxis axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 12}} />
+              <BarChart data={chartData} margin={{ left: -20 }}>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={gridColor} />
+                <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fill: tickColor, fontSize: 12}} dy={10} />
+                <YAxis axisLine={false} tickLine={false} tick={{fill: tickColor, fontSize: 12}} />
                 <Tooltip 
-                  cursor={{fill: '#f8fafc'}}
-                  contentStyle={{borderRadius: '12px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)'}}
+                  cursor={{fill: isDarkMode ? '#374151' : '#f8fafc'}}
+                  contentStyle={{borderRadius: '12px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)', backgroundColor: tooltipBg, color: tooltipColor}}
                 />
                 <Bar dataKey="spend" fill="#3B82F6" radius={[4, 4, 0, 0]} barSize={32} />
               </BarChart>
@@ -437,8 +447,8 @@ const Dashboard: React.FC<DashboardProps> = ({ accounts, budget, installments, t
           </div>
         </div>
 
-        <div className="bg-white p-8 rounded-2xl shadow-sm border border-gray-100">
-          <h3 className="text-lg font-bold mb-8">Categories</h3>
+        <div className="bg-white dark:bg-gray-900 p-8 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800">
+          <h3 className="text-lg font-bold mb-8 dark:text-gray-100">Categories</h3>
           <div className="h-64">
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
@@ -455,7 +465,7 @@ const Dashboard: React.FC<DashboardProps> = ({ accounts, budget, installments, t
                     <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                   ))}
                 </Pie>
-                <Tooltip />
+                <Tooltip contentStyle={{borderRadius: '12px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)', backgroundColor: tooltipBg, color: tooltipColor}} />
               </PieChart>
             </ResponsiveContainer>
           </div>
@@ -464,9 +474,9 @@ const Dashboard: React.FC<DashboardProps> = ({ accounts, budget, installments, t
               <div key={i} className="flex items-center justify-between text-sm">
                 <div className="flex items-center">
                   <div className="w-3 h-3 rounded-full mr-2" style={{backgroundColor: COLORS[i % COLORS.length]}}></div>
-                  <span className="text-gray-600">{cat.name}</span>
+                  <span className="text-gray-600 dark:text-gray-300">{cat.name}</span>
                 </div>
-                <span className="font-semibold">{formatCurrency(cat.value)}</span>
+                <span className="font-semibold dark:text-gray-100">{formatCurrency(cat.value)}</span>
               </div>
             ))}
           </div>
@@ -477,10 +487,10 @@ const Dashboard: React.FC<DashboardProps> = ({ accounts, budget, installments, t
       <div className="space-y-6">
         {/* Credit Accounts Utilization */}
         {creditAccounts.length > 0 && (
-          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-            <div className="p-6 border-b border-gray-100 flex items-center space-x-2">
+          <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800 overflow-hidden">
+            <div className="p-6 border-b border-gray-100 dark:border-gray-800 flex items-center space-x-2">
               <CreditCard className="w-5 h-5 text-purple-600" />
-              <h3 className="text-lg font-bold">Credit Accounts Utilization</h3>
+              <h3 className="text-lg font-bold dark:text-gray-100">Credit Accounts Utilization</h3>
             </div>
             <div className="p-6 space-y-4">
               {creditAccounts.map((account) => {
@@ -490,24 +500,24 @@ const Dashboard: React.FC<DashboardProps> = ({ accounts, budget, installments, t
                 const available = creditLimit - used;
                 
                 return (
-                  <div key={account.id} className="bg-gray-50 p-4 rounded-xl">
+                  <div key={account.id} className="bg-gray-50 dark:bg-gray-800/50 p-4 rounded-xl">
                     <div className="flex items-center justify-between mb-3">
                       <div>
-                        <h4 className="font-bold text-gray-900">{account.bank}</h4>
-                        <p className="text-xs text-gray-500">{account.classification}</p>
+                        <h4 className="font-bold text-gray-900 dark:text-gray-100">{account.bank}</h4>
+                        <p className="text-xs text-gray-500 dark:text-gray-400">{account.classification}</p>
                       </div>
                       <div className="text-right">
-                        <p className="text-xs text-gray-500">Used / Limit</p>
-                        <p className="font-bold text-gray-900">{formatCurrency(used)} / {formatCurrency(creditLimit)}</p>
+                        <p className="text-xs text-gray-500 dark:text-gray-400">Used / Limit</p>
+                        <p className="font-bold text-gray-900 dark:text-gray-100">{formatCurrency(used)} / {formatCurrency(creditLimit)}</p>
                       </div>
                     </div>
-                    <div className="w-full bg-gray-200 rounded-full h-3 overflow-hidden mb-2">
+                    <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-3 overflow-hidden mb-2">
                       <div
                         className={`h-3 rounded-full transition-all ${usedPercent >= 90 ? 'bg-red-500' : usedPercent >= 70 ? 'bg-yellow-500' : 'bg-purple-600'}`}
                         style={{ width: `${usedPercent}%` }}
                       />
                     </div>
-                    <div className="flex items-center justify-between text-xs text-gray-600">
+                    <div className="flex items-center justify-between text-xs text-gray-600 dark:text-gray-300">
                       <span>{usedPercent}% utilized</span>
                       <span className="text-green-600 font-medium">{formatCurrency(available)} available</span>
                     </div>
@@ -520,10 +530,10 @@ const Dashboard: React.FC<DashboardProps> = ({ accounts, budget, installments, t
 
         {/* Debit Accounts Stats */}
         {debitAccounts.length > 0 && (
-          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-            <div className="p-6 border-b border-gray-100 flex items-center space-x-2">
+          <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800 overflow-hidden">
+            <div className="p-6 border-b border-gray-100 dark:border-gray-800 flex items-center space-x-2">
               <Wallet className="w-5 h-5 text-green-600" />
-              <h3 className="text-lg font-bold">Debit Accounts Overview</h3>
+              <h3 className="text-lg font-bold dark:text-gray-100">Debit Accounts Overview</h3>
             </div>
             <div className="p-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {debitAccounts.map((account) => {
@@ -535,31 +545,31 @@ const Dashboard: React.FC<DashboardProps> = ({ accounts, budget, installments, t
                 const isOverdraft = percentSpent > 100;
                 
                 return (
-                  <div key={account.id} className="bg-gray-50 p-4 rounded-xl">
+                  <div key={account.id} className="bg-gray-50 dark:bg-gray-800/50 p-4 rounded-xl">
                     <div className="flex items-center justify-between mb-3">
                       <div>
-                        <h4 className="font-bold text-gray-900">{account.bank}</h4>
-                        <p className="text-xs text-gray-500">{account.classification}</p>
+                        <h4 className="font-bold text-gray-900 dark:text-gray-100">{account.bank}</h4>
+                        <p className="text-xs text-gray-500 dark:text-gray-400">{account.classification}</p>
                       </div>
                     </div>
                     <div className="space-y-2">
                       <div className="flex items-center justify-between text-sm">
-                        <span className="text-gray-600">Balance</span>
-                        <span className="font-bold text-gray-900">{formatCurrency(balance)}</span>
+                        <span className="text-gray-600 dark:text-gray-300">Balance</span>
+                        <span className="font-bold text-gray-900 dark:text-gray-100">{formatCurrency(balance)}</span>
                       </div>
                       <div className="flex items-center justify-between text-sm">
-                        <span className="text-gray-600">Monthly Expense</span>
+                        <span className="text-gray-600 dark:text-gray-300">Monthly Expense</span>
                         <span className="font-bold text-red-600">{formatCurrency(monthlyExpense)}</span>
                       </div>
                       {balance > 0 && (
                         <div className="mt-2">
-                          <div className="flex items-center justify-between text-xs text-gray-600 mb-1">
+                          <div className="flex items-center justify-between text-xs text-gray-600 dark:text-gray-300 mb-1">
                             <span>Spent this month</span>
                             <span className={`font-medium ${isOverdraft ? 'text-red-600' : ''}`}>
                               {isOverdraft ? 'OVERDRAFT' : `${percentSpent}%`}
                             </span>
                           </div>
-                          <div className="w-full bg-gray-200 rounded-full h-2 overflow-hidden">
+                          <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2 overflow-hidden">
                             <div
                               className={`h-2 rounded-full transition-all ${isOverdraft ? 'bg-red-600' : percentSpent >= 90 ? 'bg-red-500' : percentSpent >= 70 ? 'bg-yellow-500' : 'bg-green-600'}`}
                               style={{ width: `${Math.min(percentSpent, 100)}%` }}
@@ -577,31 +587,31 @@ const Dashboard: React.FC<DashboardProps> = ({ accounts, budget, installments, t
       </div>
 
       {/* Recent Activity */}
-      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-        <div className="p-6 border-b border-gray-100 flex items-center justify-between">
-          <h3 className="text-lg font-bold">Recent Transactions</h3>
+      <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800 overflow-hidden">
+        <div className="p-6 border-b border-gray-100 dark:border-gray-800 flex items-center justify-between">
+          <h3 className="text-lg font-bold dark:text-gray-100">Recent Transactions</h3>
           <button className="text-blue-600 text-sm font-medium hover:underline">View All</button>
         </div>
-        <div className="divide-y divide-gray-50">
+        <div className="divide-y divide-gray-50 dark:divide-gray-800">
           {transactions.slice(0, 5).map((transaction) => {
             const account = accounts.find(a => a.id === transaction.paymentMethodId);
             return (
-              <div key={transaction.id} className="p-4 flex items-center justify-between hover:bg-gray-50 transition-colors">
+              <div key={transaction.id} className="p-4 flex items-center justify-between hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
                 <div className="flex items-center space-x-4">
-                  <div className="w-10 h-10 rounded-full bg-blue-50 flex items-center justify-center text-blue-600">
+                  <div className="w-10 h-10 rounded-full bg-blue-50 dark:bg-blue-900/30 flex items-center justify-center text-blue-600 dark:text-blue-400">
                     <ArrowUpRight className="w-5 h-5" />
                   </div>
                   <div>
-                    <p className="font-semibold text-gray-900">{transaction.name}</p>
-                    <p className="text-xs text-gray-500">{new Date(transaction.date).toLocaleDateString()} • {account?.bank || 'Unknown Account'}</p>
+                    <p className="font-semibold text-gray-900 dark:text-gray-100">{transaction.name}</p>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">{new Date(transaction.date).toLocaleDateString()} • {account?.bank || 'Unknown Account'}</p>
                   </div>
                 </div>
-                <p className="font-bold text-gray-900">-{formatCurrency(transaction.amount)}</p>
+                <p className="font-bold text-gray-900 dark:text-gray-100">-{formatCurrency(transaction.amount)}</p>
               </div>
             );
           })}
           {transactions.length === 0 && (
-            <div className="p-8 text-center text-gray-400">
+            <div className="p-8 text-center text-gray-400 dark:text-gray-500">
               No transactions yet. Start recording your expenses!
             </div>
           )}

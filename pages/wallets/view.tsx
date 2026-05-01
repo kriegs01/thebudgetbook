@@ -71,7 +71,7 @@ const WalletView: React.FC<WalletViewProps> = ({ accounts }) => {
       <div className="flex items-center justify-center py-20">
         <div className="text-center">
           <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600 mb-4"></div>
-          <p className="text-gray-600 font-medium">Loading wallet...</p>
+          <p className="text-gray-600 dark:text-gray-400 font-medium transition-colors">Loading wallet...</p>
         </div>
       </div>
     );
@@ -79,9 +79,9 @@ const WalletView: React.FC<WalletViewProps> = ({ accounts }) => {
 
   if (error || !wallet) {
     return (
-      <div className="max-w-3xl mx-auto py-12 text-center">
-        <p className="text-gray-500">{error || 'Wallet not found.'}</p>
-        <Link to="/wallets" className="mt-4 inline-flex items-center space-x-2 text-indigo-600 font-bold hover:underline">
+      <div className="max-w-3xl mx-auto py-12 text-center transition-colors">
+        <p className="text-gray-500 dark:text-gray-400 transition-colors">{error || 'Wallet not found.'}</p>
+        <Link to="/wallets" className="mt-4 inline-flex items-center space-x-2 text-indigo-600 dark:text-indigo-400 font-bold hover:underline transition-colors">
           <ArrowLeft className="w-4 h-4" />
           <span>Back to Wallets</span>
         </Link>
@@ -95,73 +95,73 @@ const WalletView: React.FC<WalletViewProps> = ({ accounts }) => {
       <div className="flex items-center space-x-4">
         <Link
           to="/wallets"
-          className="p-2 rounded-xl bg-white shadow-sm border border-gray-100 hover:bg-gray-50 transition-colors"
+          className="p-2 rounded-xl bg-white dark:bg-gray-900 shadow-sm border border-gray-100 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
         >
-          <ArrowLeft className="w-5 h-5 text-gray-700" />
+          <ArrowLeft className="w-5 h-5 text-gray-700 dark:text-gray-300 transition-colors" />
         </Link>
         <div>
-          <h1 className="text-3xl font-black text-gray-900 uppercase">{wallet.name}</h1>
-          <p className="text-gray-500 text-sm">Wallet detail</p>
+          <h1 className="text-3xl font-black text-gray-900 dark:text-gray-100 uppercase transition-colors">{wallet.name}</h1>
+          <p className="text-gray-500 dark:text-gray-400 text-sm transition-colors">Wallet detail</p>
         </div>
       </div>
 
       {/* Wallet info card */}
-      <div className="bg-white rounded-3xl shadow-sm border border-gray-100 p-8">
+      <div className="bg-white dark:bg-gray-900 rounded-3xl shadow-sm border border-gray-100 dark:border-gray-800 p-8 transition-colors">
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
           <div>
-            <p className="text-xs font-black text-gray-400 uppercase tracking-widest mb-1">Wallet Name</p>
+            <p className="text-xs font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-1 transition-colors">Wallet Name</p>
             <div className="flex items-center space-x-2">
-              <div className="w-8 h-8 bg-indigo-50 rounded-lg flex items-center justify-center">
-                <WalletCards className="w-4 h-4 text-indigo-600" />
+              <div className="w-8 h-8 bg-indigo-50 dark:bg-indigo-900/30 rounded-lg flex items-center justify-center transition-colors">
+                <WalletCards className="w-4 h-4 text-indigo-600 dark:text-indigo-400 transition-colors" />
               </div>
-              <p className="text-lg font-black text-gray-900">{wallet.name}</p>
+              <p className="text-lg font-black text-gray-900 dark:text-gray-100 transition-colors">{wallet.name}</p>
             </div>
           </div>
           <div>
-            <p className="text-xs font-black text-gray-400 uppercase tracking-widest mb-1">Monthly Target</p>
-            <p className="text-2xl font-black text-indigo-600">{formatCurrency(wallet.amount)}</p>
+            <p className="text-xs font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-1 transition-colors">Monthly Target</p>
+            <p className="text-2xl font-black text-indigo-600 dark:text-indigo-400 transition-colors">{formatCurrency(wallet.amount)}</p>
           </div>
           <div>
-            <p className="text-xs font-black text-gray-400 uppercase tracking-widest mb-1">Linked Account</p>
-            <p className="text-lg font-bold text-gray-700">{getAccountName(wallet.accountId)}</p>
+            <p className="text-xs font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-1 transition-colors">Linked Account</p>
+            <p className="text-lg font-bold text-gray-700 dark:text-gray-300 transition-colors">{getAccountName(wallet.accountId)}</p>
           </div>
         </div>
       </div>
 
       {/* Top-ups list */}
-      <div className="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden">
-        <div className="px-8 py-5 border-b border-gray-100 flex items-center justify-between">
-          <h2 className="text-xs font-black text-gray-900 uppercase tracking-[0.25em]">Top-ups</h2>
-          <span className="text-sm text-gray-400">{topUps.length} transaction{topUps.length !== 1 ? 's' : ''}</span>
+      <div className="bg-white dark:bg-gray-900 rounded-3xl shadow-sm border border-gray-100 dark:border-gray-800 overflow-hidden transition-colors">
+        <div className="px-8 py-5 border-b border-gray-100 dark:border-gray-800 flex items-center justify-between transition-colors">
+          <h2 className="text-xs font-black text-gray-900 dark:text-gray-100 uppercase tracking-[0.25em] transition-colors">Top-ups</h2>
+          <span className="text-sm text-gray-400 dark:text-gray-500 transition-colors">{topUps.length} transaction{topUps.length !== 1 ? 's' : ''}</span>
         </div>
 
         {topUps.length === 0 ? (
           <div className="px-8 py-12 text-center">
-            <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-gray-100 mb-4">
-              <WalletCards className="w-8 h-8 text-gray-400" />
+            <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-gray-100 dark:bg-gray-800 mb-4 transition-colors">
+              <WalletCards className="w-8 h-8 text-gray-400 dark:text-gray-500 transition-colors" />
             </div>
-            <p className="text-gray-500 font-medium">No top-ups yet.</p>
-            <p className="text-gray-400 text-sm mt-1">Top-ups made to this stash will appear here.</p>
+            <p className="text-gray-500 dark:text-gray-400 font-medium transition-colors">No top-ups yet.</p>
+            <p className="text-gray-400 dark:text-gray-500 text-sm mt-1 transition-colors">Top-ups made to this stash will appear here.</p>
           </div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-left">
               <thead>
-                <tr className="text-[10px] font-black text-gray-400 uppercase border-b border-gray-50 bg-gray-50">
+                <tr className="text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase border-b border-gray-50 dark:border-gray-800/50 bg-gray-50 dark:bg-gray-800/50 transition-colors">
                   <th className="px-6 py-4">Description</th>
                   <th className="px-6 py-4">Date</th>
                   <th className="px-6 py-4">Amount</th>
                   <th className="px-6 py-4">Notes</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-50">
+              <tbody className="divide-y divide-gray-50 dark:divide-gray-800/50 transition-colors">
                 {topUps.map((tx) => (
-                  <tr key={tx.id} className="hover:bg-gray-50 transition-colors">
+                  <tr key={tx.id} className="hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
                     <td className="px-6 py-4">
-                      <span className="font-bold text-gray-900">{tx.name}</span>
+                      <span className="font-bold text-gray-900 dark:text-gray-100 transition-colors">{tx.name}</span>
                     </td>
                     <td className="px-6 py-4">
-                      <span className="text-sm text-gray-500">
+                      <span className="text-sm text-gray-500 dark:text-gray-400 transition-colors">
                         {new Date(tx.date).toLocaleDateString('en-PH', {
                           year: 'numeric',
                           month: 'short',
@@ -170,10 +170,10 @@ const WalletView: React.FC<WalletViewProps> = ({ accounts }) => {
                       </span>
                     </td>
                     <td className="px-6 py-4">
-                      <span className="font-black text-indigo-600">{formatCurrency(Math.abs(tx.amount))}</span>
+                      <span className="font-black text-indigo-600 dark:text-indigo-400 transition-colors">{formatCurrency(Math.abs(tx.amount))}</span>
                     </td>
                     <td className="px-6 py-4">
-                      <span className="text-sm text-gray-500">{tx.notes || '—'}</span>
+                      <span className="text-sm text-gray-500 dark:text-gray-400 transition-colors">{tx.notes || '—'}</span>
                     </td>
                   </tr>
                 ))}

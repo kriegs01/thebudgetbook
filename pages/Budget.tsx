@@ -1899,19 +1899,19 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
     const renderSetupRow = (setup: SavedBudgetSetup) => {
       const remaining = calculateBudgetRemaining(setup);
       return (
-      <tr key={setup.id} className="hover:bg-gray-50/50 transition-colors group">
+      <tr key={setup.id} className="hover:bg-gray-50/50 dark:hover:bg-gray-800/50 transition-colors group">
         <td className="p-8 pl-12">
           <div className="flex items-center space-x-5">
-            <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shadow-sm ${setup.isArchived ? 'bg-amber-50 text-amber-500' : 'bg-indigo-50 text-indigo-600 shadow-indigo-50/50'}`}>
+            <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shadow-sm ${setup.isArchived ? 'bg-amber-50 dark:bg-amber-900/20 text-amber-500' : 'bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400 shadow-indigo-50/50'}`}>
               {setup.isArchived ? <Archive className="w-6 h-6" /> : <FileText className="w-6 h-6" />}
             </div>
-            <span className="text-base font-black text-gray-900 tracking-tight">{setup.month}</span>
+            <span className="text-base font-black text-gray-900 dark:text-gray-100 tracking-tight">{setup.month}</span>
           </div>
         </td>
-        <td className="p-8"><span className="text-[10px] font-black text-gray-500 bg-gray-100/80 px-4 py-1.5 rounded-full uppercase tracking-widest">{setup.timing}</span></td>
-        <td className="p-8"><span className="text-base font-black text-gray-900 tracking-tight">{formatCurrency(setup.totalAmount)}</span></td>
+        <td className="p-8"><span className="text-[10px] font-black text-gray-500 dark:text-gray-400 bg-gray-100/80 dark:bg-gray-800 px-4 py-1.5 rounded-full uppercase tracking-widest">{setup.timing}</span></td>
+        <td className="p-8"><span className="text-base font-black text-gray-900 dark:text-gray-100 tracking-tight">{formatCurrency(setup.totalAmount)}</span></td>
         <td className="p-8">
-          <span className={`text-base font-black tracking-tight ${remaining >= 0 ? 'text-green-600' : 'text-red-500'}`}>
+          <span className={`text-base font-black tracking-tight ${remaining >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-500 dark:text-red-400'}`}>
             {formatCurrency(remaining)}
           </span>
         </td>
@@ -1983,8 +1983,8 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
       <div className="space-y-8 animate-in fade-in duration-500 w-full">
         <div className="flex items-center justify-between">
           <div>
-            <h2 className="text-3xl font-black text-gray-900 tracking-tight uppercase">BUDGET</h2>
-            <p className="text-xs text-gray-400 font-bold uppercase tracking-[0.2em] mt-1">Review your monthly budget history</p>
+            <h2 className="text-3xl font-black text-gray-900 dark:text-gray-100 tracking-tight uppercase">BUDGET</h2>
+            <p className="text-xs text-gray-400 dark:text-gray-500 font-bold uppercase tracking-[0.2em] mt-1">Review your monthly budget history</p>
           </div>
           <button type="button" onClick={handleOpenNew} className="flex items-center space-x-3 bg-indigo-600 text-white px-8 py-4 rounded-[1.5rem] font-black uppercase tracking-widest text-xs hover:bg-indigo-700 shadow-xl transition-all">
             <Plus className="w-5 h-5" />
@@ -2000,12 +2000,12 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
         )}
 
         {/* Active budgets */}
-        <div className="bg-white/40 backdrop-blur-xl rounded-[3rem] shadow-sm border border-gray-100 p-2 w-full">
-          <div className="bg-white rounded-[2.5rem] overflow-hidden w-full">
+        <div className="bg-white/40 dark:bg-gray-900/40 backdrop-blur-xl rounded-[3rem] shadow-sm border border-gray-100 dark:border-gray-800 p-2 w-full transition-colors">
+          <div className="bg-white dark:bg-gray-900 rounded-[2.5rem] overflow-hidden w-full transition-colors">
             <div className="overflow-x-auto w-full">
               <table className="w-full text-left">
                 <thead>
-                  <tr className="border-b border-gray-50">
+                  <tr className="border-b border-gray-50 dark:border-gray-800/50">
                     <th className="p-8 pl-12 text-[10px] font-black text-gray-400 uppercase tracking-[0.3em]">Month</th>
                     <th className="p-8 text-[10px] font-black text-gray-400 uppercase tracking-[0.3em]">Timing</th>
                     <th className="p-8 text-[10px] font-black text-gray-400 uppercase tracking-[0.3em]">Total Budget</th>
@@ -2014,11 +2014,11 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                     <th className="p-6 pr-8 text-center text-[10px] font-black text-gray-400 uppercase tracking-[0.3em]">Actions</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-gray-50">
+                <tbody className="divide-y divide-gray-50 dark:divide-gray-800/50">
                   {activeSetups.length > 0 ? (
                     activeSetups.map(renderSetupRow)
                   ) : (
-                    <tr><td colSpan={6} className="p-24 text-center text-gray-400 font-bold uppercase tracking-widest">No history found</td></tr>
+                    <tr><td colSpan={6} className="p-24 text-center text-gray-400 dark:text-gray-500 font-bold uppercase tracking-widest">No history found</td></tr>
                   )}
                 </tbody>
               </table>
@@ -2028,24 +2028,24 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
 
         {/* Archived budgets – collapsible */}
         {archivedSetups.length > 0 && (
-          <div className="bg-white/40 backdrop-blur-xl rounded-[3rem] shadow-sm border border-amber-100 p-2 w-full">
-            <div className="bg-white rounded-[2.5rem] overflow-hidden w-full">
+          <div className="bg-white/40 dark:bg-gray-900/40 backdrop-blur-xl rounded-[3rem] shadow-sm border border-amber-100 dark:border-amber-900/30 p-2 w-full transition-colors">
+            <div className="bg-white dark:bg-gray-900 rounded-[2.5rem] overflow-hidden w-full transition-colors">
               <button
                 type="button"
                 onClick={() => setShowArchived(prev => !prev)}
-                className="w-full flex items-center justify-between p-8 pl-12 pr-12 hover:bg-amber-50/40 transition-colors rounded-[2.5rem]"
+                className="w-full flex items-center justify-between p-8 pl-12 pr-12 hover:bg-amber-50/40 dark:hover:bg-amber-900/20 transition-colors rounded-[2.5rem]"
               >
                 <div className="flex items-center space-x-3">
                   <Archive className="w-5 h-5 text-amber-500" />
-                  <span className="text-xs font-black text-amber-700 uppercase tracking-[0.25em]">Archived Budgets ({archivedSetups.length})</span>
+                  <span className="text-xs font-black text-amber-700 dark:text-amber-500 uppercase tracking-[0.25em]">Archived Budgets ({archivedSetups.length})</span>
                 </div>
                 <ChevronDown className={`w-5 h-5 text-amber-400 transition-transform ${showArchived ? 'rotate-180' : ''}`} />
               </button>
               {showArchived && (
-                <div className="overflow-x-auto w-full border-t border-amber-50">
+                <div className="overflow-x-auto w-full border-t border-amber-50 dark:border-amber-900/20">
                   <table className="w-full text-left">
                     <thead>
-                      <tr className="border-b border-amber-50">
+                      <tr className="border-b border-amber-50 dark:border-amber-900/20">
                         <th className="p-8 pl-12 text-[10px] font-black text-gray-400 uppercase tracking-[0.3em]">Month</th>
                         <th className="p-8 text-[10px] font-black text-gray-400 uppercase tracking-[0.3em]">Timing</th>
                         <th className="p-8 text-[10px] font-black text-gray-400 uppercase tracking-[0.3em]">Total Budget</th>
@@ -2054,7 +2054,7 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                         <th className="p-6 pr-8 text-center text-[10px] font-black text-gray-400 uppercase tracking-[0.3em]">Actions</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-amber-50">
+                    <tbody className="divide-y divide-amber-50 dark:divide-amber-900/20">
                       {archivedSetups.map(renderSetupRow)}
                     </tbody>
                   </table>
@@ -2128,13 +2128,13 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
     <div className="space-y-8 animate-in slide-in-from-right-4 duration-500 pb-20 w-full">
       <div className="flex flex-col space-y-6">
         <div className="flex items-center justify-between">
-          <button onClick={() => setView('summary')} className="flex flex-col text-left group">
-            <span className="text-[10px] uppercase font-black tracking-[0.2em] text-gray-400 group-hover:text-indigo-400">Back to</span>
-            <span className="text-sm font-black tracking-tight text-gray-600 group-hover:text-indigo-600">Summary</span>
+          <button onClick={() => setView('summary')} className="flex flex-col text-left group transition-colors">
+            <span className="text-[10px] uppercase font-black tracking-[0.2em] text-gray-400 dark:text-gray-500 group-hover:text-indigo-400 dark:group-hover:text-indigo-300">Back to</span>
+            <span className="text-sm font-black tracking-tight text-gray-600 dark:text-gray-300 group-hover:text-indigo-600 dark:group-hover:text-indigo-400">Summary</span>
           </button>
           <div className="text-center">
-            <h2 className="text-2xl font-black text-gray-900 tracking-tighter uppercase">BUDGET SETUP</h2>
-            <p className="text-xs text-gray-400 font-bold uppercase tracking-widest mt-1">{isReadOnly ? 'Archived — Read Only' : 'Configure Recurring Expenses'}</p>
+            <h2 className="text-2xl font-black text-gray-900 dark:text-gray-100 tracking-tighter uppercase">BUDGET SETUP</h2>
+            <p className="text-xs text-gray-400 dark:text-gray-500 font-bold uppercase tracking-widest mt-1">{isReadOnly ? 'Archived — Read Only' : 'Configure Recurring Expenses'}</p>
           </div>
           <div className="flex items-center space-x-3">
             {/* Autosave Status Indicator */}
@@ -2143,7 +2143,7 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                 {autoSaveStatus === 'saving' && (
                   <>
                     <div className="w-4 h-4 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
-                    <span className="text-gray-600">Saving...</span>
+                    <span className="text-gray-600 dark:text-gray-300">Saving...</span>
                   </>
                 )}
                 {autoSaveStatus === 'saved' && (
@@ -2198,15 +2198,15 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
         )}
 
         <div className="flex justify-center items-center space-x-6">
-          <select value={selectedMonth} onChange={(e) => setSelectedMonth(e.target.value)} disabled={isReadOnly} className="bg-white border border-gray-100 rounded-[1.5rem] px-8 py-4 font-black text-indigo-600 shadow-sm outline-none disabled:opacity-60 disabled:cursor-not-allowed">
+          <select value={selectedMonth} onChange={(e) => setSelectedMonth(e.target.value)} disabled={isReadOnly} className="bg-white dark:bg-gray-900 dark:border-gray-800 border border-gray-100 rounded-[1.5rem] px-8 py-4 font-black text-indigo-600 dark:text-indigo-400 shadow-sm outline-none disabled:opacity-60 disabled:cursor-not-allowed transition-colors">
             {MONTHS.map(m => <option key={m} value={m}>{m}</option>)}
           </select>
-          <select value={selectedTiming} onChange={(e) => setSelectedTiming(e.target.value as '1/2' | '2/2')} disabled={isReadOnly} className="bg-white border border-gray-100 rounded-[1.5rem] px-8 py-4 font-black text-indigo-600 shadow-sm outline-none disabled:opacity-60 disabled:cursor-not-allowed">
+          <select value={selectedTiming} onChange={(e) => setSelectedTiming(e.target.value as '1/2' | '2/2')} disabled={isReadOnly} className="bg-white dark:bg-gray-900 dark:border-gray-800 border border-gray-100 rounded-[1.5rem] px-8 py-4 font-black text-indigo-600 dark:text-indigo-400 shadow-sm outline-none disabled:opacity-60 disabled:cursor-not-allowed transition-colors">
             <option value="1/2">1/2</option>
             <option value="2/2">2/2</option>
           </select>
           {legacyMode && (
-            <span className="text-[10px] font-black text-gray-400 bg-gray-100 px-4 py-2 rounded-full uppercase tracking-widest">Legacy Budget</span>
+            <span className="text-[10px] font-black text-gray-400 dark:text-gray-500 bg-gray-100 dark:bg-gray-800 px-4 py-2 rounded-full uppercase tracking-widest">Legacy Budget</span>
           )}
         </div>
       </div>
@@ -2214,33 +2214,33 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
       {/* Budget Summary and Month Summary side-by-side */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
         {/* Budget Summary - Compact Version */}
-        <div className="bg-white rounded-[3rem] shadow-sm border border-gray-100 overflow-hidden w-full">
-          <div className="p-4 border-b border-gray-50 bg-gray-50/30"><h3 className="text-xs font-black text-gray-900 uppercase tracking-[0.25em]">BUDGET SUMMARY</h3></div>
+        <div className="bg-white dark:bg-gray-900 rounded-[3rem] shadow-sm border border-gray-100 dark:border-gray-800 overflow-hidden w-full transition-colors">
+          <div className="p-4 border-b border-gray-50 dark:border-gray-800/50 bg-gray-50/30 dark:bg-gray-800/30"><h3 className="text-xs font-black text-gray-900 dark:text-gray-100 uppercase tracking-[0.25em]">BUDGET SUMMARY</h3></div>
           <table className="w-full text-left">
-            <thead><tr className="text-[10px] font-black text-gray-400 uppercase border-b border-gray-50"><th className="p-3 pl-6">Category</th><th className="p-3 pr-6 text-right">Amount</th></tr></thead>
-            <tbody className="divide-y divide-gray-50">
+            <thead><tr className="text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase border-b border-gray-50 dark:border-gray-800/50"><th className="p-3 pl-6">Category</th><th className="p-3 pr-6 text-right">Amount</th></tr></thead>
+            <tbody className="divide-y divide-gray-50 dark:divide-gray-800/50">
               {categorySummary.map((item) => (
-                <tr key={item.category}><td className="p-3 pl-6 font-bold text-gray-700 text-sm">{item.category}</td><td className="p-3 pr-6 text-right font-black text-gray-900 text-sm">{formatCurrency(item.total)}</td></tr>
+                <tr key={item.category}><td className="p-3 pl-6 font-bold text-gray-700 dark:text-gray-300 text-sm">{item.category}</td><td className="p-3 pr-6 text-right font-black text-gray-900 dark:text-gray-100 text-sm">{formatCurrency(item.total)}</td></tr>
               ))}
               {stashTotal > 0 && (
-                <tr><td className="p-3 pl-6 font-bold text-gray-700 text-sm">Stash</td><td className="p-3 pr-6 text-right font-black text-gray-900 text-sm">{formatCurrency(stashTotal)}</td></tr>
+                <tr><td className="p-3 pl-6 font-bold text-gray-700 dark:text-gray-300 text-sm">Stash</td><td className="p-3 pr-6 text-right font-black text-gray-900 dark:text-gray-100 text-sm">{formatCurrency(stashTotal)}</td></tr>
               )}
-              <tr className="bg-indigo-50/30"><td className="p-3 pl-6 text-xs font-black text-indigo-600 uppercase">Grand Total</td><td className="p-3 pr-6 text-right text-lg font-black text-indigo-600">{formatCurrency(grandTotal)}</td></tr>
+              <tr className="bg-indigo-50/30 dark:bg-indigo-900/20"><td className="p-3 pl-6 text-xs font-black text-indigo-600 dark:text-indigo-400 uppercase">Grand Total</td><td className="p-3 pr-6 text-right text-lg font-black text-indigo-600 dark:text-indigo-400">{formatCurrency(grandTotal)}</td></tr>
             </tbody>
           </table>
         </div>
 
         {/* Month Summary - New Component */}
-        <div className="bg-white rounded-[3rem] shadow-sm border border-gray-100 overflow-hidden w-full">
-          <div className="p-4 border-b border-gray-50 bg-gray-50/30"><h3 className="text-xs font-black text-gray-900 uppercase tracking-[0.25em]">MONTH SUMMARY</h3></div>
+        <div className="bg-white dark:bg-gray-900 rounded-[3rem] shadow-sm border border-gray-100 dark:border-gray-800 overflow-hidden w-full transition-colors">
+          <div className="p-4 border-b border-gray-50 dark:border-gray-800/50 bg-gray-50/30 dark:bg-gray-800/30"><h3 className="text-xs font-black text-gray-900 dark:text-gray-100 uppercase tracking-[0.25em]">MONTH SUMMARY</h3></div>
           <table className="w-full text-left">
-            <thead><tr className="text-[10px] font-black text-gray-400 uppercase border-b border-gray-50"><th className="p-3 pl-6">Item</th><th className="p-3 pr-6 text-right">Amount</th></tr></thead>
-            <tbody className="divide-y divide-gray-50">
+            <thead><tr className="text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase border-b border-gray-50 dark:border-gray-800/50"><th className="p-3 pl-6">Item</th><th className="p-3 pr-6 text-right">Amount</th></tr></thead>
+            <tbody className="divide-y divide-gray-50 dark:divide-gray-800/50">
               <tr>
-                <td className="p-3 pl-6 font-bold text-gray-700 text-sm">Projected Salary</td>
+                <td className="p-3 pl-6 font-bold text-gray-700 dark:text-gray-300 text-sm">Projected Salary</td>
                 <td className="p-3 pr-6 text-right">
                   <div className="flex items-center justify-end space-x-1">
-                    <span className="text-gray-400 font-bold text-sm">₱</span>
+                    <span className="text-gray-400 dark:text-gray-500 font-bold text-sm">₱</span>
                     <input 
                       type="number" 
                       min="0"
@@ -2250,17 +2250,17 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                       onFocus={() => { isFocusedRef.current = true; }}
                       onBlur={() => { isFocusedRef.current = false; }}
                       disabled={isReadOnly}
-                      className="bg-transparent border-none text-sm font-black text-gray-900 w-28 text-right outline-none focus:bg-indigo-50 rounded px-1 disabled:opacity-60 disabled:cursor-not-allowed"
+                      className="bg-transparent border-none text-sm font-black text-gray-900 dark:text-gray-100 w-28 text-right outline-none focus:bg-indigo-50 dark:focus:bg-indigo-900/30 rounded px-1 disabled:opacity-60 disabled:cursor-not-allowed"
                       aria-label="Projected Salary"
                     />
                   </div>
                 </td>
               </tr>
               <tr>
-                <td className="p-3 pl-6 font-bold text-gray-700 text-sm">Actual Salary</td>
+                <td className="p-3 pl-6 font-bold text-gray-700 dark:text-gray-300 text-sm">Actual Salary</td>
                 <td className="p-3 pr-6 text-right">
                   <div className="flex items-center justify-end space-x-1">
-                    <span className="text-gray-400 font-bold text-sm">₱</span>
+                    <span className="text-gray-400 dark:text-gray-500 font-bold text-sm">₱</span>
                     <input 
                       type="number" 
                       min="0"
@@ -2271,17 +2271,17 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                       onBlur={() => { isFocusedRef.current = false; }}
                       disabled={isReadOnly}
                       placeholder="Enter actual"
-                      className="bg-transparent border-none text-sm font-black text-gray-900 w-28 text-right outline-none focus:bg-indigo-50 rounded px-1 placeholder:text-gray-300 disabled:opacity-60 disabled:cursor-not-allowed"
+                      className="bg-transparent border-none text-sm font-black text-gray-900 dark:text-gray-100 w-28 text-right outline-none focus:bg-indigo-50 dark:focus:bg-indigo-900/30 rounded px-1 placeholder:text-gray-300 dark:placeholder:text-gray-600 disabled:opacity-60 disabled:cursor-not-allowed"
                       aria-label="Actual Salary"
                     />
                   </div>
                 </td>
               </tr>
               <tr>
-                <td className="p-3 pl-6 font-bold text-gray-700 text-sm">Total Spend</td>
-                <td className="p-3 pr-6 text-right font-black text-gray-900 text-sm">{formatCurrency(totalSpend)}</td>
+                <td className="p-3 pl-6 font-bold text-gray-700 dark:text-gray-300 text-sm">Total Spend</td>
+                <td className="p-3 pr-6 text-right font-black text-gray-900 dark:text-gray-100 text-sm">{formatCurrency(totalSpend)}</td>
               </tr>
-              <tr className={`${remaining >= 0 ? 'bg-green-50/30' : 'bg-red-50/30'}`}>
+              <tr className={`${remaining >= 0 ? 'bg-green-50/30 dark:bg-green-900/10' : 'bg-red-50/30 dark:bg-red-900/10'}`}>
                 <td className="p-3 pl-6 text-xs font-black uppercase">Remaining</td>
                 <td className={`p-3 pr-6 text-right text-lg font-black ${remaining >= 0 ? 'text-green-600' : 'text-red-600'}`}>{formatCurrency(remaining)}</td>
               </tr>
@@ -2293,9 +2293,9 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
       {/* Category Tables - Full Width and Stacked for FIXED, UTILITIES, LOANS, SUBSCRIPTIONS, PURCHASES */}
       <div className="space-y-6">
         {/* Stash section - wallets from the wallets table */}
-        <div className="bg-white rounded-[3rem] shadow-sm border border-gray-100 overflow-hidden w-full">
-          <div className="p-8 border-b border-gray-50 bg-gray-50/30 flex justify-between items-center">
-            <h3 className="text-xs font-black text-gray-900 uppercase tracking-[0.25em]">Stash</h3>
+        <div className="bg-white dark:bg-gray-900 rounded-[3rem] shadow-sm border border-gray-100 dark:border-gray-800 overflow-hidden w-full transition-colors">
+          <div className="p-8 border-b border-gray-50 dark:border-gray-800/50 bg-gray-50/30 dark:bg-gray-800/30 flex justify-between items-center transition-colors">
+            <h3 className="text-xs font-black text-gray-900 dark:text-gray-100 uppercase tracking-[0.25em]">Stash</h3>
             <div className="flex items-center space-x-3">
               {stashStatusMsg && (
                 <span className={`text-xs font-bold px-3 py-1 rounded-xl ${stashStatusMsg.type === 'success' ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'}`}>
@@ -2316,7 +2316,7 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
             ) : (
               <table className="w-full text-left">
                 <thead>
-                  <tr className="text-[10px] font-black text-gray-400 uppercase border-b border-gray-50">
+                  <tr className="text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase border-b border-gray-50 dark:border-gray-800/50">
                     <th className="p-4 pl-10">Name</th>
                     <th className="p-4">Target</th>
                     <th className="p-4">Account</th>
@@ -2325,7 +2325,7 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                     <th className="p-4 pr-10 text-right"></th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-gray-50">
+                <tbody className="divide-y divide-gray-50 dark:divide-gray-800/50">
                   {wallets.map((wallet) => {
                     const linkedAccount = accounts.find(a => a.id === wallet.accountId);
                     const { funded, isFunded } = getStashAggregates(wallet);
@@ -2333,15 +2333,15 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                     const isOverFunded = funded > wallet.amount && wallet.amount > 0;
                     const isExactlyFunded = funded === wallet.amount && wallet.amount > 0;
                     return (
-                      <tr key={wallet.id} className={`${isIncluded ? 'bg-white' : 'bg-gray-50 opacity-60'}`}>
+                      <tr key={wallet.id} className={`${isIncluded ? 'bg-white dark:bg-gray-900' : 'bg-gray-50 dark:bg-gray-800/50 opacity-60'}`}>
                         <td className="p-4 pl-10">
-                          <span className="text-sm font-bold text-gray-900">{wallet.name}</span>
+                          <span className="text-sm font-bold text-gray-900 dark:text-gray-100">{wallet.name}</span>
                         </td>
                         <td className="p-4">
                           <span className="text-sm font-black text-indigo-600">{formatCurrency(wallet.amount)}</span>
                         </td>
                         <td className="p-4">
-                          <span className="text-sm text-gray-600">
+                          <span className="text-sm text-gray-600 dark:text-gray-400">
                             {linkedAccount ? `${linkedAccount.bank} (${linkedAccount.classification})` : wallet.accountId}
                           </span>
                         </td>
@@ -2410,10 +2410,10 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
           const canAddItems = !isReadOnly && (cat.flexiMode ?? true) && isCategoryActiveForBudget(cat, selectedYear, selectedMonth);
           const isLegacyCategory = isCategoryLegacyForBudget(cat, selectedYear, selectedMonth);
           return (
-            <div key={cat.id} className="bg-white rounded-[3rem] shadow-sm border border-gray-100 overflow-hidden w-full">
-              <div className="p-8 border-b border-gray-50 bg-gray-50/30 flex justify-between items-center">
+            <div key={cat.id} className="bg-white dark:bg-gray-900 rounded-[3rem] shadow-sm border border-gray-100 dark:border-gray-800 overflow-hidden w-full transition-colors">
+              <div className="p-8 border-b border-gray-50 dark:border-gray-800/50 bg-gray-50/30 dark:bg-gray-800/30 flex justify-between items-center transition-colors">
                 <div className="flex items-center space-x-2">
-                  <h3 className="text-xs font-black text-gray-900 uppercase tracking-[0.25em]">{cat.name}</h3>
+                  <h3 className="text-xs font-black text-gray-900 dark:text-gray-100 uppercase tracking-[0.25em]">{cat.name}</h3>
                   {isLegacyCategory && <span className="text-[9px] font-black text-amber-600 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full uppercase tracking-wider" aria-label="Legacy category — use Stash for new savings/allowance items" title="This category is legacy. Use Stash for new savings/allowance items.">Legacy</span>}
                 </div>
                 <span className="text-lg font-black text-indigo-600">{formatCurrency(items.filter(i => i.included).reduce((s, i) => s + (parseFloat(i.amount) || 0), 0))}</span>
@@ -2421,7 +2421,7 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
               <div className="overflow-x-auto">
                 <table className="w-full text-left">
                   <thead>
-                    <tr className="text-[10px] font-black text-gray-400 uppercase border-b border-gray-50">
+                    <tr className="text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase border-b border-gray-50 dark:border-gray-800/50">
                       <th className="p-4 pl-10">Name</th>
                       <th className="p-4">Amount</th>
                       <th className="p-4">Account</th>
@@ -2429,22 +2429,22 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                       <th className="p-4 pr-10 text-right"></th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-gray-50">
+                  <tbody className="divide-y divide-gray-50 dark:divide-gray-800/50">
                     {items.length > 0 ? items.map((item) => {
                       return (
-                        <tr key={item.id} className={`${item.included ? 'bg-white' : 'bg-gray-50 opacity-60'}`}>
+                        <tr key={item.id} className={`${item.included ? 'bg-white dark:bg-gray-900' : 'bg-gray-50 dark:bg-gray-800/50 opacity-60'}`}>
                           <td className="p-4 pl-10">
                             <input 
                               type="text" 
                               value={item.name} 
                               onChange={(e) => handleSetupUpdate(cat.name, item.id, 'name', e.target.value)} 
                               disabled={isReadOnly}
-                              className="bg-transparent border-none text-sm font-bold w-full disabled:cursor-default" 
+                              className="bg-transparent border-none text-sm font-bold w-full disabled:cursor-default dark:text-gray-100" 
                             />
                           </td>
                           <td className="p-4">
                             <div className="flex items-center space-x-1">
-                              <span className="text-gray-400 font-bold">₱</span>
+                              <span className="text-gray-400 dark:text-gray-500 font-bold">₱</span>
                               <input 
                                 type="number" 
                                 value={item.amount} 
@@ -2452,7 +2452,7 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                               onFocus={() => { isFocusedRef.current = true; }}
                               onBlur={() => { isFocusedRef.current = false; }}
                                 disabled={isReadOnly}
-                                className="bg-transparent border-none text-sm font-black w-24 disabled:cursor-default" 
+                                className="bg-transparent border-none text-sm font-black w-24 disabled:cursor-default dark:text-gray-100" 
                               />
                             </div>
                           </td>
@@ -2461,7 +2461,7 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                               value={item.accountId || ''} 
                               onChange={(e) => handleSetupUpdate(cat.name, item.id, 'accountId', e.target.value)}
                               disabled={isReadOnly}
-                              className="bg-gray-50 border border-gray-200 rounded-lg px-3 py-1.5 text-xs font-bold text-gray-700 outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 disabled:opacity-60 disabled:cursor-not-allowed"
+                              className="bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-1.5 text-xs font-bold text-gray-700 dark:text-gray-300 outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 disabled:opacity-60 disabled:cursor-not-allowed"
                             >
                               <option value="">Select Account</option>
                               {accounts.filter(acc => acc.type === 'Debit').map(acc => (
@@ -2561,10 +2561,10 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
           const categoryTotal = itemsTotal + installmentsTotal;
           
           return (
-            <div key={cat.id} className="bg-white rounded-[3rem] shadow-sm border border-gray-100 overflow-hidden w-full">
-              <div className="p-8 border-b border-gray-50 bg-gray-50/30 flex justify-between items-center">
+            <div key={cat.id} className="bg-white dark:bg-gray-900 rounded-[3rem] shadow-sm border border-gray-100 dark:border-gray-800 overflow-hidden w-full transition-colors">
+              <div className="p-8 border-b border-gray-50 dark:border-gray-800/50 bg-gray-50/30 dark:bg-gray-800/30 flex justify-between items-center transition-colors">
                 <div className="flex items-center space-x-2">
-                  <h3 className="text-xs font-black text-gray-900 uppercase tracking-[0.25em]">{cat.name}</h3>
+                  <h3 className="text-xs font-black text-gray-900 dark:text-gray-100 uppercase tracking-[0.25em]">{cat.name}</h3>
                   {isLegacyCategory && <span className="text-[9px] font-black text-amber-600 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full uppercase tracking-wider">Legacy</span>}
                 </div>
                 <span className="text-lg font-black text-indigo-600">{formatCurrency(categoryTotal)}</span>
@@ -2572,14 +2572,14 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
               <div className="overflow-x-auto">
                 <table className="w-full text-left">
                   <thead>
-                    <tr className="text-[10px] font-black text-gray-400 uppercase border-b border-gray-50">
+                    <tr className="text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase border-b border-gray-50 dark:border-gray-800/50">
                       <th className="p-4 pl-10">Name</th>
                       <th className="p-4">Amount</th>
                       <th className="p-4 text-center">Actions</th>
                       <th className="p-4 pr-10 text-right"></th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-gray-50">
+                  <tbody className="divide-y divide-gray-50 dark:divide-gray-800/50">
                     {items.length > 0 ? items.map((item) => {
                       let isPaid = false, isPartial = false, linkedBiller, paymentSchedule;
                       const isBiller = item.isBiller || billers.some(b => b.id === item.id);
@@ -2621,14 +2621,14 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                         isPaid = checkIfPaidByTransaction(item.name, item.amount, selectedMonth);
                       }
                       return (
-                        <tr key={item.id} className={`${item.included ? 'bg-white' : 'bg-gray-50 opacity-60'}`}>
-                          <td className="p-4 pl-10"><input type="text" value={item.name} onChange={(e) => handleSetupUpdate(cat.name, item.id, 'name', e.target.value)} disabled={isReadOnly} className="bg-transparent border-none text-sm font-bold w-full disabled:cursor-default" /></td>
+                        <tr key={item.id} className={`${item.included ? 'bg-white dark:bg-gray-900' : 'bg-gray-50 dark:bg-gray-800/50 opacity-60'}`}>
+                          <td className="p-4 pl-10"><input type="text" value={item.name} onChange={(e) => handleSetupUpdate(cat.name, item.id, 'name', e.target.value)} disabled={isReadOnly} className="bg-transparent border-none text-sm font-bold w-full disabled:cursor-default dark:text-gray-100" /></td>
                           <td className="p-4">
-                            <div className="flex items-center space-x-1"><span className="text-gray-400 font-bold">₱</span><input type="number" value={item.amount} 
+                            <div className="flex items-center space-x-1"><span className="text-gray-400 dark:text-gray-500 font-bold">₱</span><input type="number" value={item.amount} 
                               onChange={(e) => handleSetupUpdate(cat.name, item.id, 'amount', e.target.value)} 
                               onFocus={() => { isFocusedRef.current = true; }}
                               onBlur={() => { isFocusedRef.current = false; }}
-                              disabled={isReadOnly} className="bg-transparent border-none text-sm font-black w-24 disabled:cursor-default" 
+                              disabled={isReadOnly} className="bg-transparent border-none text-sm font-black w-24 disabled:cursor-default dark:text-gray-100" 
                             /></div>
                           </td>
                           <td className="p-4 text-center">
@@ -2815,10 +2815,10 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                               : null;
 
                           return (
-                            <tr key={`installment-${installment.id}`} className={`${isIncluded ? 'bg-blue-50/30' : 'bg-gray-50 opacity-60'}`}>
+                            <tr key={`installment-${installment.id}`} className={`${isIncluded ? 'bg-blue-50/30 dark:bg-blue-900/10' : 'bg-gray-50 dark:bg-gray-800/50 opacity-60'}`}>
                               <td className="p-4 pl-10">
                                 <div className="flex items-center gap-2">
-                                  <span className="text-sm font-bold text-gray-900">{installment.name}</span>
+                                  <span className="text-sm font-bold text-gray-900 dark:text-gray-100">{installment.name}</span>
                                   <span className="text-[9px] font-bold px-2 py-0.5 bg-blue-100 rounded text-blue-600">
                                     INSTALLMENT {installment.timing ? `• ${installment.timing}` : ''}
                                   </span>
@@ -2831,7 +2831,7 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                               </td>
                               <td className="p-4">
                                 <div className="flex items-center space-x-1">
-                                  <span className="text-gray-400 font-bold">₱</span>
+                                  <span className="text-gray-400 dark:text-gray-500 font-bold">₱</span>
                                   <span className="text-sm font-black">{formatCurrency(installment.monthlyAmount).replace('₱', '')}</span>
                                 </div>
                               </td>
@@ -2958,10 +2958,10 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
             if (!relevantCycle || relevantCycle.transactionCount === 0) return null;
             
             return (
-              <div key={`cc-${account.id}`} className="bg-white rounded-[3rem] shadow-sm border border-gray-100 overflow-hidden w-full">
-                <div className="p-8 border-b border-gray-50 bg-gray-50/30 flex justify-between items-center">
+              <div key={`cc-${account.id}`} className="bg-white dark:bg-gray-900 rounded-[3rem] shadow-sm border border-gray-100 dark:border-gray-800 overflow-hidden w-full transition-colors">
+                <div className="p-8 border-b border-gray-50 dark:border-gray-800/50 bg-gray-50/30 dark:bg-gray-800/30 flex justify-between items-center transition-colors">
                   <div>
-                    <h3 className="text-xs font-black text-gray-900 uppercase tracking-[0.25em]">Credit Card Purchases</h3>
+                    <h3 className="text-xs font-black text-gray-900 dark:text-gray-100 uppercase tracking-[0.25em]">Credit Card Purchases</h3>
                     <p className="text-[10px] text-gray-500 font-medium mt-1">{account.bank} • {relevantCycle.cycleLabel}</p>
                   </div>
                   <span className="text-lg font-black text-purple-600">{formatCurrency(relevantCycle.totalAmount)}</span>
@@ -2969,18 +2969,18 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                 <div className="overflow-x-auto">
                   <table className="w-full text-left">
                     <thead>
-                      <tr className="text-[10px] font-black text-gray-400 uppercase border-b border-gray-50">
+                      <tr className="text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase border-b border-gray-50 dark:border-gray-800/50">
                         <th className="p-4 pl-10">Transaction</th>
                         <th className="p-4">Date</th>
                         <th className="p-4">Amount</th>
                         <th className="p-4 pr-10 text-right"></th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-gray-50">
+                    <tbody className="divide-y divide-gray-50 dark:divide-gray-800/50">
                       {relevantCycle.transactions.map((tx) => (
-                        <tr key={tx.id} className="bg-purple-50/20">
+                        <tr key={tx.id} className="bg-purple-50/20 dark:bg-purple-900/10">
                           <td className="p-4 pl-10">
-                            <span className="text-sm font-bold text-gray-900">{tx.name}</span>
+                            <span className="text-sm font-bold text-gray-900 dark:text-gray-100">{tx.name}</span>
                           </td>
                           <td className="p-4">
                             <span className="text-xs text-gray-500 font-medium">
@@ -2989,7 +2989,7 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                           </td>
                           <td className="p-4">
                             <div className="flex items-center space-x-1">
-                              <span className="text-gray-400 font-bold">₱</span>
+                              <span className="text-gray-400 dark:text-gray-500 font-bold">₱</span>
                               <span className="text-sm font-black">{formatCurrency(tx.amount).replace('₱', '')}</span>
                             </div>
                           </td>
@@ -3016,13 +3016,13 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                           </td>
                         </tr>
                       ))}
-                      <tr className="bg-purple-100/30">
-                        <td colSpan={2} className="p-4 pl-10 text-xs font-black text-gray-700 uppercase">
+                      <tr className="bg-purple-100/30 dark:bg-purple-900/20">
+                        <td colSpan={2} className="p-4 pl-10 text-xs font-black text-gray-700 dark:text-gray-300 uppercase">
                           Total Regular Purchases
                         </td>
                         <td className="p-4">
                           <div className="flex items-center space-x-1">
-                            <span className="text-gray-400 font-bold">₱</span>
+                            <span className="text-gray-400 dark:text-gray-500 font-bold">₱</span>
                             <span className="text-sm font-black text-purple-600">{formatCurrency(relevantCycle.totalAmount).replace('₱', '')}</span>
                           </div>
                         </td>
@@ -3034,7 +3034,7 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                       </tr>
                     </tbody>
                   </table>
-                  <div className="p-4 border-t border-gray-50 bg-gray-50/50">
+                  <div className="p-4 border-t border-gray-50 dark:border-gray-800/50 bg-gray-50/50 dark:bg-gray-800/30">
                     <p className="text-[10px] text-gray-500 font-medium text-center">
                       <span className="font-bold">PROTOTYPE:</span> Regular credit card purchases are auto-aggregated from transactions. 
                       Excludes installment payments.
@@ -3060,17 +3060,17 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
               const canAddItems = !isReadOnly && (cat.flexiMode ?? true) && isCategoryActiveForBudget(cat, selectedYear, selectedMonth);
               const isLegacyCategory = isCategoryLegacyForBudget(cat, selectedYear, selectedMonth);
               return (
-                <div key={cat.id} className="bg-white rounded-[3rem] shadow-sm border border-gray-100 overflow-hidden flex flex-col">
-                  <div className="p-8 border-b border-gray-50 bg-gray-50/30 flex justify-between items-center">
+                <div key={cat.id} className="bg-white dark:bg-gray-900 rounded-[3rem] shadow-sm border border-gray-100 dark:border-gray-800 overflow-hidden flex flex-col transition-colors">
+                  <div className="p-8 border-b border-gray-50 dark:border-gray-800/50 bg-gray-50/30 dark:bg-gray-800/30 flex justify-between items-center transition-colors">
                     <div className="flex items-center space-x-2">
-                      <h3 className="text-xs font-black text-gray-900 uppercase tracking-[0.25em]">{cat.name}</h3>
+                      <h3 className="text-xs font-black text-gray-900 dark:text-gray-100 uppercase tracking-[0.25em]">{cat.name}</h3>
                       {isLegacyCategory && <span className="text-[9px] font-black text-amber-600 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full uppercase tracking-wider">Legacy</span>}
                     </div>
                     <span className="text-lg font-black text-indigo-600">{formatCurrency(items.filter(i => i.included).reduce((s, i) => s + (parseFloat(i.amount) || 0), 0))}</span>
                   </div>
                   <div className="overflow-x-auto">
                     <table className="w-full text-left">
-                      <tbody className="divide-y divide-gray-50">
+                      <tbody className="divide-y divide-gray-50 dark:divide-gray-800/50">
                         {items.map((item) => {
                           let isPaid = false, linkedBiller, schedule;
                           const isBiller = item.isBiller || billers.some(b => b.id === item.id);
@@ -3091,10 +3091,10 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                             isPaid = checkIfPaidByTransaction(item.name, item.amount, selectedMonth);
                           }
                           return (
-                            <tr key={item.id} className={`${item.included ? 'bg-white' : 'bg-gray-50 opacity-60'}`}>
-                              <td className="p-4 pl-10"><input type="text" value={item.name} onChange={(e) => handleSetupUpdate(cat.name, item.id, 'name', e.target.value)} className="bg-transparent border-none text-sm font-bold w-full" /></td>
+                            <tr key={item.id} className={`${item.included ? 'bg-white dark:bg-gray-900' : 'bg-gray-50 dark:bg-gray-800/50 opacity-60'}`}>
+                              <td className="p-4 pl-10"><input type="text" value={item.name} onChange={(e) => handleSetupUpdate(cat.name, item.id, 'name', e.target.value)} className="bg-transparent border-none text-sm font-bold w-full dark:text-gray-100" /></td>
                               <td className="p-4">
-                                <div className="flex items-center space-x-1"><span className="text-gray-400 font-bold">₱</span><input type="number" value={item.amount} onChange={(e) => handleSetupUpdate(cat.name, item.id, 'amount', e.target.value)} className="bg-transparent border-none text-sm font-black w-24" /></div>
+                                <div className="flex items-center space-x-1"><span className="text-gray-400 dark:text-gray-500 font-bold">₱</span><input type="number" value={item.amount} onChange={(e) => handleSetupUpdate(cat.name, item.id, 'amount', e.target.value)} className="bg-transparent border-none text-sm font-black w-24 dark:text-gray-100" /></div>
                               </td>
                               <td className="p-4 text-center">
                                 <div className="flex items-center justify-center space-x-2">
@@ -3174,18 +3174,18 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                 <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Amount</label>
                 <div className="relative">
                   <span className="absolute left-4 top-1/2 -translate-y-1/2 font-bold text-gray-400">₱</span>
-                  <input required type="number" step="0.01" value={payFormData.amount} onChange={(e) => setPayFormData({...payFormData, amount: e.target.value})} className="w-full bg-gray-50 border-transparent rounded-2xl p-4 pl-8 outline-none text-xl font-black focus:ring-2 focus:ring-indigo-500 transition-all" />
+                  <input required type="number" step="0.01" value={payFormData.amount} onChange={(e) => setPayFormData({...payFormData, amount: e.target.value})} className="w-full bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-transparent rounded-2xl p-4 pl-8 outline-none text-xl font-black focus:ring-2 focus:ring-indigo-500 transition-all" />
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Date Paid</label>
-                  <input required type="date" value={payFormData.datePaid} onChange={(e) => setPayFormData({...payFormData, datePaid: e.target.value})} className="w-full bg-gray-50 border-transparent rounded-2xl p-4 outline-none font-bold text-sm" />
+                  <input required type="date" value={payFormData.datePaid} onChange={(e) => setPayFormData({...payFormData, datePaid: e.target.value})} className="w-full min-w-0 bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-transparent rounded-2xl px-3 py-4 outline-none font-bold text-sm transition-colors" />
                 </div>
                 <div>
                   <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Payment Method</label>
-                  <select value={payFormData.accountId} onChange={(e) => setPayFormData({...payFormData, accountId: e.target.value})} className="w-full bg-gray-50 border-transparent rounded-2xl p-4 outline-none font-bold text-sm appearance-none">
+                  <select value={payFormData.accountId} onChange={(e) => setPayFormData({...payFormData, accountId: e.target.value})} className="w-full min-w-0 bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-transparent rounded-2xl px-3 py-4 outline-none font-bold text-sm appearance-none transition-colors">
                     {accounts.map(acc => <option key={acc.id} value={acc.id}>{acc.bank} ({acc.classification})</option>)}
                   </select>
                 </div>
@@ -3195,15 +3195,15 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                 <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Upload Receipt (Optional)</label>
                 <div className="relative">
                   <input type="file" className="absolute inset-0 opacity-0 cursor-pointer" onChange={(e) => { const f = e.target.files?.[0] || null; setPayReceiptFile(f); setPayFormData({...payFormData, receipt: f?.name || ''}); }} />
-                  <div className="w-full bg-gray-50 border-2 border-dashed border-gray-200 rounded-2xl p-6 text-center text-sm text-gray-500 hover:border-indigo-300 hover:bg-indigo-50 transition-all flex flex-col items-center">
+                  <div className="w-full bg-gray-50 dark:bg-gray-800 border-2 border-dashed border-gray-200 dark:border-gray-700 rounded-2xl p-6 text-center text-sm text-gray-500 hover:border-indigo-300 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 transition-all flex flex-col items-center">
                     <Upload className="w-8 h-8 mb-2 text-indigo-400" />
                     <span className="font-bold">{payFormData.receipt || 'Click or drag to upload receipt'}</span>
                   </div>
                 </div>
               </div>
               <div className="flex space-x-4 pt-4">
-                <button type="button" onClick={() => setShowPayModal(null)} className="flex-1 bg-gray-100 py-4 rounded-2xl font-bold text-gray-500">Cancel</button>
-                <button type="submit" className="flex-1 bg-green-600 text-white py-4 rounded-2xl font-bold hover:bg-green-700 shadow-xl shadow-green-100">
+                <button type="button" onClick={() => setShowPayModal(null)} className="flex-1 bg-gray-100 dark:bg-gray-800 py-4 rounded-2xl font-bold text-gray-500 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors">Cancel</button>
+                <button type="submit" className="flex-1 bg-green-600 text-white py-4 rounded-2xl font-bold hover:bg-green-700 shadow-xl shadow-green-100 dark:shadow-none transition-all">
                   {payFormData.transactionId ? 'Update Payment' : 'Submit Payment'}
                 </button>
               </div>
@@ -3215,11 +3215,11 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
       {/* QA: Consistent Transaction Form Modal - with receipt upload */}
       {showTransactionModal && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md animate-in fade-in">
-          <div className="bg-white rounded-3xl w-full max-w-md p-10 shadow-2xl animate-in zoom-in-95 relative">
+          <div className="bg-white dark:bg-gray-900 rounded-3xl w-full max-w-md p-10 shadow-2xl animate-in zoom-in-95 relative transition-colors">
             <button onClick={() => setShowTransactionModal(false)} className="absolute right-6 top-6 p-2 hover:bg-gray-100 rounded-full transition-colors">
               <X className="w-6 h-6 text-gray-400" />
             </button>
-            <h2 className="text-2xl font-black text-gray-900 mb-2">
+            <h2 className="text-2xl font-black text-gray-900 dark:text-gray-100 mb-2">
               {transactionFormData.id ? `Edit Payment` : `Pay ${transactionFormData.name || 'Item'}`}
             </h2>
             <p className="text-gray-500 text-sm mb-8">
@@ -3239,12 +3239,12 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                     step="0.01" 
                     value={transactionFormData.amount} 
                     onChange={(e) => setTransactionFormData({...transactionFormData, amount: e.target.value})} 
-                    className="w-full bg-gray-50 border-transparent rounded-2xl p-4 pl-8 outline-none text-xl font-black focus:ring-2 focus:ring-indigo-500 transition-all" 
+                    className="w-full bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-transparent rounded-2xl p-4 pl-8 outline-none text-xl font-black focus:ring-2 focus:ring-indigo-500 transition-all" 
                   />
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Date Paid</label>
                   <input 
@@ -3252,7 +3252,7 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                     type="date" 
                     value={transactionFormData.date} 
                     onChange={(e) => setTransactionFormData({...transactionFormData, date: e.target.value})} 
-                    className="w-full bg-gray-50 border-transparent rounded-2xl p-4 outline-none font-bold text-sm" 
+                    className="w-full min-w-0 bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-transparent rounded-2xl px-3 py-4 outline-none font-bold text-sm transition-colors" 
                   />
                 </div>
                 <div>
@@ -3260,7 +3260,7 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                   <select 
                     value={transactionFormData.accountId} 
                     onChange={(e) => setTransactionFormData({...transactionFormData, accountId: e.target.value})} 
-                    className="w-full bg-gray-50 border-transparent rounded-2xl p-4 outline-none font-bold text-sm appearance-none"
+                    className="w-full min-w-0 bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-transparent rounded-2xl px-3 py-4 outline-none font-bold text-sm appearance-none transition-colors"
                   >
                     {accounts.map(acc => <option key={acc.id} value={acc.id}>{acc.bank} ({acc.classification})</option>)}
                   </select>
@@ -3271,7 +3271,7 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                 <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Upload Receipt (Optional)</label>
                 <div className="relative">
                   <input type="file" className="absolute inset-0 opacity-0 cursor-pointer" />
-                  <div className="w-full bg-gray-50 border-2 border-dashed border-gray-200 rounded-2xl p-6 text-center text-sm text-gray-500 hover:border-indigo-300 hover:bg-indigo-50 transition-all flex flex-col items-center">
+                  <div className="w-full bg-gray-50 dark:bg-gray-800 border-2 border-dashed border-gray-200 dark:border-gray-700 rounded-2xl p-6 text-center text-sm text-gray-500 hover:border-indigo-300 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 transition-all flex flex-col items-center">
                     <Upload className="w-8 h-8 mb-2 text-indigo-400" />
                     <span className="font-bold">Click or drag to upload receipt</span>
                   </div>
@@ -3279,8 +3279,8 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
               </div>
 
               <div className="flex space-x-4 pt-4">
-                <button type="button" onClick={() => setShowTransactionModal(false)} className="flex-1 bg-gray-100 py-4 rounded-2xl font-bold text-gray-500">Cancel</button>
-                <button type="submit" className="flex-1 bg-green-600 text-white py-4 rounded-2xl font-bold hover:bg-green-700 shadow-xl shadow-green-100">
+                <button type="button" onClick={() => setShowTransactionModal(false)} className="flex-1 bg-gray-100 dark:bg-gray-800 py-4 rounded-2xl font-bold text-gray-500 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors">Cancel</button>
+                <button type="submit" className="flex-1 bg-green-600 text-white py-4 rounded-2xl font-bold hover:bg-green-700 shadow-xl shadow-green-100 dark:shadow-none transition-all">
                   {transactionFormData.id ? 'Update Payment' : 'Submit Payment'}
                 </button>
               </div>
@@ -3517,15 +3517,15 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
 
 const ConfirmDialog: React.FC<{ show: boolean; title: string; message: string; onConfirm: () => void; onClose: () => void }> = ({ title, message, onConfirm, onClose }) => (
   <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-in fade-in">
-    <div className="bg-white rounded-[2.5rem] w-full max-w-sm p-10 shadow-2xl animate-in zoom-in-95 flex flex-col items-center text-center">
-      <div className="w-16 h-16 bg-red-50 text-red-600 rounded-3xl flex items-center justify-center mb-6">
+    <div className="bg-white dark:bg-gray-900 rounded-[2.5rem] w-full max-w-sm p-10 shadow-2xl animate-in zoom-in-95 flex flex-col items-center text-center transition-colors">
+      <div className="w-16 h-16 bg-red-50 dark:bg-red-900/20 text-red-600 rounded-3xl flex items-center justify-center mb-6">
         <AlertTriangle className="w-8 h-8" />
       </div>
-      <h3 className="text-xl font-black text-gray-900 mb-2 uppercase tracking-tight">{title}</h3>
-      <p className="text-sm text-gray-500 mb-8 font-medium leading-relaxed">{message}</p>
+      <h3 className="text-xl font-black text-gray-900 dark:text-gray-100 mb-2 uppercase tracking-tight">{title}</h3>
+      <p className="text-sm text-gray-500 dark:text-gray-400 mb-8 font-medium leading-relaxed">{message}</p>
       <div className="flex flex-col w-full space-y-3">
         <button onClick={onConfirm} className="w-full bg-red-600 text-white py-4 rounded-2xl font-black uppercase tracking-widest text-[10px] hover:bg-red-700 transition-all">Proceed</button>
-        <button onClick={onClose} className="w-full bg-gray-100 text-gray-500 py-4 rounded-2xl font-black uppercase tracking-widest text-[10px] hover:bg-gray-200 transition-all">Cancel</button>
+        <button onClick={onClose} className="w-full bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-300 py-4 rounded-2xl font-black uppercase tracking-widest text-[10px] hover:bg-gray-200 dark:hover:bg-gray-700 transition-all">Cancel</button>
       </div>
     </div>
   </div>
