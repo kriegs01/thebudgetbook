@@ -232,6 +232,69 @@ export default function PeoplePage() {
             </div>
           </div>
         </div>
+
+        {/* ── Receive Loan Payment Modal ─────────────────────────────────── */}
+        {showLoanPaymentModal && selectedLoan && (
+          <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in">
+            <div className="bg-white dark:bg-gray-900 rounded-[2.5rem] w-full max-w-sm p-8 shadow-2xl relative transition-colors animate-in zoom-in-95">
+              <h2 className="text-xl font-black text-gray-900 dark:text-gray-100 mb-1 uppercase tracking-tight">Receive Payment</h2>
+              <p className="text-sm text-gray-500 dark:text-gray-400 mb-6 font-medium">Record payment for: {selectedLoan.name}</p>
+              
+              <div className="mb-6 p-4 bg-gray-50 dark:bg-gray-800/50 rounded-2xl transition-colors">
+                <div className="flex justify-between mb-2">
+                  <span className="text-sm text-gray-600 dark:text-gray-400">Original Loan:</span>
+                  <span className="text-sm font-bold text-gray-900 dark:text-gray-100">{formatCurrency(Math.abs(selectedLoan.amount))}</span>
+                </div>
+                <div className="flex justify-between mb-2">
+                  <span className="text-sm text-gray-600 dark:text-gray-400">Total Paid:</span>
+                  <span className="text-sm font-bold text-green-600 dark:text-green-400">{formatCurrency(selectedLoan.totalPaid || 0)}</span>
+                </div>
+                <div className="flex justify-between pt-2 border-t border-gray-200 dark:border-gray-700">
+                  <span className="text-sm font-bold text-gray-900 dark:text-gray-100">Remaining:</span>
+                  <span className="text-sm font-bold text-orange-600 dark:text-orange-400">{formatCurrency(selectedLoan.remainingBalance || 0)}</span>
+                </div>
+              </div>
+
+              <form onSubmit={handleLoanPaymentSubmit} className="space-y-4">
+                <div>
+                  <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Amount Received</label>
+                  <div className="relative">
+                    <span className="absolute left-4 top-1/2 -translate-y-1/2 font-bold text-gray-400 dark:text-gray-500">₱</span>
+                    <input 
+                      autoFocus
+                      type="number" 
+                      step="0.01" 
+                      min="0.01"
+                      max={selectedLoan.remainingBalance || undefined}
+                      required
+                      value={loanPaymentForm.amount}
+                      onChange={e => setLoanPaymentForm(f => ({ ...f, amount: e.target.value }))}
+                      className="w-full bg-gray-50 dark:bg-gray-800 border-transparent text-gray-900 dark:text-gray-100 rounded-2xl p-4 pl-8 text-xl font-black outline-none focus:ring-2 focus:ring-purple-500 transition-all placeholder:text-gray-400"
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Date</label>
+                  <input 
+                    type="date" 
+                    required
+                    value={loanPaymentForm.date}
+                    onChange={e => setLoanPaymentForm(f => ({ ...f, date: e.target.value }))}
+                    className="w-full bg-gray-50 dark:bg-gray-800 border-transparent text-gray-900 dark:text-gray-100 rounded-2xl p-4 text-sm font-bold outline-none focus:ring-2 focus:ring-purple-500 transition-all"
+                  />
+                </div>
+                <div className="flex gap-3 pt-2">
+                  <button type="button" onClick={() => { setShowLoanPaymentModal(false); setSelectedLoan(null); }} className="flex-1 bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 py-4 rounded-2xl font-black uppercase tracking-widest text-[10px] hover:bg-gray-200 dark:hover:bg-gray-700 transition-all disabled:opacity-50">
+                    Cancel
+                  </button>
+                  <button type="submit" disabled={isSubmitting || !loanPaymentForm.amount} className="flex-1 bg-purple-600 text-white py-4 rounded-2xl font-black uppercase tracking-widest text-[10px] hover:bg-purple-700 transition-all shadow-lg shadow-purple-200 dark:shadow-none disabled:opacity-50">
+                    {isSubmitting ? 'Saving...' : 'Record Payment'}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
       </div>
     );
   }
@@ -396,69 +459,6 @@ export default function PeoplePage() {
               <button type="submit" disabled={isSubmitting || !newPersonName.trim()} className="w-full bg-indigo-600 text-white py-4 rounded-2xl font-black uppercase tracking-widest text-[10px] hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-100 dark:shadow-none disabled:opacity-50">
                 {isSubmitting ? 'Adding...' : 'Save Person'}
               </button>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* ── Receive Loan Payment Modal ─────────────────────────────────── */}
-      {showLoanPaymentModal && selectedLoan && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in">
-          <div className="bg-white dark:bg-gray-900 rounded-[2.5rem] w-full max-w-sm p-8 shadow-2xl relative transition-colors animate-in zoom-in-95">
-            <h2 className="text-xl font-black text-gray-900 dark:text-gray-100 mb-1 uppercase tracking-tight">Receive Payment</h2>
-            <p className="text-sm text-gray-500 dark:text-gray-400 mb-6 font-medium">Record payment for: {selectedLoan.name}</p>
-            
-            <div className="mb-6 p-4 bg-gray-50 dark:bg-gray-800/50 rounded-2xl transition-colors">
-              <div className="flex justify-between mb-2">
-                <span className="text-sm text-gray-600 dark:text-gray-400">Original Loan:</span>
-                <span className="text-sm font-bold text-gray-900 dark:text-gray-100">{formatCurrency(Math.abs(selectedLoan.amount))}</span>
-              </div>
-              <div className="flex justify-between mb-2">
-                <span className="text-sm text-gray-600 dark:text-gray-400">Total Paid:</span>
-                <span className="text-sm font-bold text-green-600 dark:text-green-400">{formatCurrency(selectedLoan.totalPaid || 0)}</span>
-              </div>
-              <div className="flex justify-between pt-2 border-t border-gray-200 dark:border-gray-700">
-                <span className="text-sm font-bold text-gray-900 dark:text-gray-100">Remaining:</span>
-                <span className="text-sm font-bold text-orange-600 dark:text-orange-400">{formatCurrency(selectedLoan.remainingBalance || 0)}</span>
-              </div>
-            </div>
-
-            <form onSubmit={handleLoanPaymentSubmit} className="space-y-4">
-              <div>
-                <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Amount Received</label>
-                <div className="relative">
-                  <span className="absolute left-4 top-1/2 -translate-y-1/2 font-bold text-gray-400 dark:text-gray-500">₱</span>
-                  <input 
-                    autoFocus
-                    type="number" 
-                    step="0.01" 
-                    min="0.01"
-                    max={selectedLoan.remainingBalance || undefined}
-                    required
-                    value={loanPaymentForm.amount}
-                    onChange={e => setLoanPaymentForm(f => ({ ...f, amount: e.target.value }))}
-                    className="w-full bg-gray-50 dark:bg-gray-800 border-transparent text-gray-900 dark:text-gray-100 rounded-2xl p-4 pl-8 text-xl font-black outline-none focus:ring-2 focus:ring-purple-500 transition-all placeholder:text-gray-400"
-                  />
-                </div>
-              </div>
-              <div>
-                <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Date</label>
-                <input 
-                  type="date" 
-                  required
-                  value={loanPaymentForm.date}
-                  onChange={e => setLoanPaymentForm(f => ({ ...f, date: e.target.value }))}
-                  className="w-full bg-gray-50 dark:bg-gray-800 border-transparent text-gray-900 dark:text-gray-100 rounded-2xl p-4 text-sm font-bold outline-none focus:ring-2 focus:ring-purple-500 transition-all"
-                />
-              </div>
-              <div className="flex gap-3 pt-2">
-                <button type="button" onClick={() => { setShowLoanPaymentModal(false); setSelectedLoan(null); }} className="flex-1 bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 py-4 rounded-2xl font-black uppercase tracking-widest text-[10px] hover:bg-gray-200 dark:hover:bg-gray-700 transition-all disabled:opacity-50">
-                  Cancel
-                </button>
-                <button type="submit" disabled={isSubmitting || !loanPaymentForm.amount} className="flex-1 bg-purple-600 text-white py-4 rounded-2xl font-black uppercase tracking-widest text-[10px] hover:bg-purple-700 transition-all shadow-lg shadow-purple-200 dark:shadow-none disabled:opacity-50">
-                  {isSubmitting ? 'Saving...' : 'Record Payment'}
-                </button>
-              </div>
             </form>
           </div>
         </div>
