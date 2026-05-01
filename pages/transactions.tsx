@@ -871,7 +871,7 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ onTransactionDelete
                 )}
 
                 {/* Borrower Field for Loan Transactions */}
-                {form.transactionType === 'loan' && (
+                {form.transactionType === 'loan' && userProfile?.settings?.peopleEnabled && (
                   <div>
                     <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Borrower (Optional)</label>
                     <select

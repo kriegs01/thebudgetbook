@@ -787,6 +787,92 @@ const Settings: React.FC<SettingsProps> = ({ currency, setCurrency, categories, 
               />
             </button>
           </div>
+
+          {/* People & Shared Tracking Toggle */}
+          <div className="p-4 bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-800 space-y-4 transition-colors">
+            <div className="flex items-center justify-between">
+              <div>
+                <h4 className="font-black text-sm text-gray-900 dark:text-gray-100 uppercase mb-1 transition-colors">People Tracking</h4>
+                <p className="text-xs text-gray-500 dark:text-gray-400 transition-colors">
+                  Enable tracking for shared payments, loans, and reports with specific people.
+                </p>
+              </div>
+              <button
+                onClick={async () => {
+                  if (!user) return;
+                  const newSettings = { ...userProfile?.settings, peopleEnabled: !userProfile?.settings?.peopleEnabled };
+                  await updateUserProfile(user.id, { settings: newSettings });
+                  await refreshProfile();
+                }}
+                className={`relative inline-flex h-8 w-16 items-center rounded-full transition-colors ${
+                  userProfile?.settings?.peopleEnabled ? 'bg-indigo-600' : 'bg-gray-300'
+                }`}
+              >
+                <span
+                  className={`inline-block h-6 w-6 transform rounded-full bg-white transition-transform ${
+                    userProfile?.settings?.peopleEnabled ? 'translate-x-9' : 'translate-x-1'
+                  }`}
+                />
+              </button>
+            </div>
+
+            {/* People List Manager - Only visible if enabled */}
+            {userProfile?.settings?.peopleEnabled && (
+              <div className="pt-4 border-t border-gray-100 dark:border-gray-800 space-y-3">
+                <h4 className="text-sm font-bold text-gray-900 dark:text-gray-100 uppercase transition-colors">Your People</h4>
+                {userProfile?.settings?.people && userProfile.settings.people.length > 0 ? (
+                  <div className="space-y-2">
+                    {userProfile.settings.people.map((person, index) => (
+                      <div key={index} className="flex items-center justify-between bg-gray-50 dark:bg-gray-800 rounded-xl p-3">
+                        <span className="text-sm font-medium text-gray-900 dark:text-gray-100">{person}</span>
+                        <button
+                          onClick={async () => {
+                            if (!user) return;
+                            const updatedPeople = userProfile.settings?.people?.filter(p => p !== person) || [];
+                            const newSettings = { ...userProfile.settings, people: updatedPeople };
+                            await updateUserProfile(user.id, { settings: newSettings });
+                            await refreshProfile();
+                          }}
+                          className="text-red-500 hover:text-red-600 p-1 rounded-full hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+                          title={`Remove ${person}`}
+                        >
+                          <X className="w-4 h-4" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-sm text-gray-500 dark:text-gray-400 italic">No people added yet.</p>
+                )}
+                <div className="flex gap-2 mt-4">
+                  <input
+                    type="text"
+                    value={personInput}
+                    onChange={(e) => setPersonInput(e.target.value)}
+                    placeholder="Add new person name"
+                    className="flex-1 px-4 py-3 bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-gray-100 border border-gray-200 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all placeholder:text-gray-400 dark:placeholder:text-gray-500"
+                  />
+                  <button
+                    onClick={async () => {
+                      if (!user) return;
+                      const trimmedName = personInput.trim();
+                      if (trimmedName && userProfile && !userProfile.settings?.people?.includes(trimmedName)) {
+                        const updatedPeople = [...(userProfile.settings?.people || []), trimmedName];
+                        const newSettings = { ...userProfile.settings, people: updatedPeople };
+                        await updateUserProfile(user.id, { settings: newSettings });
+                        await refreshProfile();
+                        setPersonInput('');
+                      }
+                    }}
+                    disabled={!personInput.trim()}
+                    className="px-4 py-3 bg-indigo-600 text-white rounded-xl font-bold hover:bg-indigo-700 disabled:opacity-50 transition-all"
+                  >
+                    <Plus className="w-5 h-5" />
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       )
     },

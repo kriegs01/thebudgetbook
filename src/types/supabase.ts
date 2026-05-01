@@ -15,6 +15,7 @@ export interface SupabaseUserProfile {
   created_at: string; // timestamptz
   updated_at: string; // timestamptz
   settings?: {
+    peopleEnabled?: boolean; // Toggle for the People feature
     people?: string[]; // General configuration for user contacts
   } | null;
 }
