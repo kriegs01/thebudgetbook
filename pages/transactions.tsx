@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import { Plus, Info, Eye, ZoomIn, ZoomOut, Download, X, Pencil, Trash2, CheckSquare, Square, ChevronDown, Filter } from 'lucide-react';
+import { PinProtectedAction } from '../src/components/PinProtectedAction';
 import { getAllTransactions, createTransaction, updateTransaction, deleteTransactionAndRevertSchedule, uploadTransactionReceipt, getReceiptSignedUrl, batchDeleteTransactions } from '../src/services/transactionsService';
 import { getAllAccountsFrontend } from '../src/services/accountsService';
 import { combineDateWithCurrentTime, getTodayIso, getFirstDayOfCurrentYearIso, getLastDayOfCurrentYearIso } from '../src/utils/dateUtils';
@@ -553,14 +554,20 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ onTransactionDelete
                               >
                                 <Pencil className="w-4 h-4" />
                               </button>
+                            <PinProtectedAction
+                              featureId="transaction_deletions"
+                              onVerified={() => removeTx(tx.id, tx.name)}
+                              actionLabel="Delete Transaction"
+                            >
                               <button
-                                onClick={() => removeTx(tx.id, tx.name)}
+                                onClick={(e) => e.preventDefault()}
                                 title="Delete transaction"
                                 aria-label="Delete transaction"
                                 className="text-gray-300 hover:text-red-500 hover:bg-red-50 rounded-full p-1.5 transition-all"
                               >
                                 <Trash2 className="w-4 h-4" />
                               </button>
+                            </PinProtectedAction>
                             </div>
                           </td>
                         </tr>
@@ -681,14 +688,20 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ onTransactionDelete
               >
                 Cancel
               </button>
+            <PinProtectedAction
+              featureId="transaction_deletions"
+              onVerified={handleBatchDelete}
+              actionLabel="Delete Multiple Transactions"
+            >
               <button
                 type="button"
-                onClick={handleBatchDelete}
+                onClick={(e) => e.preventDefault()}
                 disabled={isBatchDeleting}
                 className="flex-1 bg-red-500 hover:bg-red-600 text-white py-3 rounded-2xl font-bold transition-colors disabled:opacity-50"
               >
                 {isBatchDeleting ? 'Deleting…' : 'Yes, Delete'}
               </button>
+            </PinProtectedAction>
             </div>
           </div>
         </div>

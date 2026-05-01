@@ -3409,13 +3409,19 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                       </div>
                       <div className="flex items-center space-x-3">
                         <span className="text-sm font-black text-indigo-600">{formatCurrency(Math.abs(tx.amount))}</span>
-                        <button
-                          onClick={() => handleDeleteStashTopUp(tx.id, tx.amount)}
-                          aria-label={`Delete top-up of ${formatCurrency(Math.abs(tx.amount))} from ${new Date(tx.date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}`}
-                          className="text-red-400 hover:text-red-600 p-1.5 rounded-xl hover:bg-red-50 transition-colors"
+                        <PinProtectedAction
+                          featureId="transaction_deletions"
+                          onVerified={() => handleDeleteStashTopUp(tx.id, tx.amount)}
+                          actionLabel="Delete Top-up"
                         >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
+                          <button
+                            onClick={(e) => e.preventDefault()}
+                            aria-label={`Delete top-up of ${formatCurrency(Math.abs(tx.amount))} from ${new Date(tx.date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}`}
+                            className="text-red-400 hover:text-red-600 p-1.5 rounded-xl hover:bg-red-50 transition-colors"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </PinProtectedAction>
                       </div>
                     </div>
                   ))}
@@ -3473,13 +3479,19 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                         </div>
                       )}
                       <div className="flex justify-end pt-1">
-                        <button
-                          onClick={() => handleDeleteScheduleTx(tx.id)}
-                          title="Delete payment record"
-                          className="flex items-center space-x-1 px-3 py-1.5 rounded-xl bg-red-50 text-red-600 hover:bg-red-100 transition-colors text-xs font-bold"
+                        <PinProtectedAction
+                          featureId="transaction_deletions"
+                          onVerified={() => handleDeleteScheduleTx(tx.id)}
+                          actionLabel="Delete Payment Record"
                         >
-                          <Trash2 className="w-3.5 h-3.5" /><span>Delete</span>
-                        </button>
+                          <button
+                            onClick={(e) => e.preventDefault()}
+                            title="Delete payment record"
+                            className="flex items-center space-x-1 px-3 py-1.5 rounded-xl bg-red-50 text-red-600 hover:bg-red-100 transition-colors text-xs font-bold"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" /><span>Delete</span>
+                          </button>
+                        </PinProtectedAction>
                       </div>
                     </div>
                   );

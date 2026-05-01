@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
+import { PinProtectedAction } from '../src/components/PinProtectedAction';
 import { Account, ViewMode, AccountClassification } from '../types';
 import {
   Plus,
@@ -585,9 +586,15 @@ const ConfirmDialog: React.FC<{ show: boolean; title: string; message: string; o
       <h3 className="text-xl font-black text-gray-900 dark:text-gray-100 mb-2 uppercase tracking-tight transition-colors">{title}</h3>
       <p className="text-sm text-gray-500 dark:text-gray-400 mb-8 font-medium leading-relaxed transition-colors">{message}</p>
       <div className="flex flex-col w-full space-y-3">
-        <button onClick={onConfirm} className="w-full bg-red-600 text-white py-4 rounded-2xl font-black uppercase tracking-widest text-[10px] hover:bg-red-700 transition-all shadow-lg shadow-red-100 dark:shadow-none">
-          Proceed
-        </button>
+        <PinProtectedAction
+          featureId="account_deletions"
+          onVerified={onConfirm}
+          actionLabel="Delete Account"
+        >
+          <button onClick={(e) => e.preventDefault()} className="w-full bg-red-600 text-white py-4 rounded-2xl font-black uppercase tracking-widest text-[10px] hover:bg-red-700 transition-all shadow-lg shadow-red-100 dark:shadow-none">
+            Proceed
+          </button>
+        </PinProtectedAction>
         <button onClick={onClose} className="w-full bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-300 py-4 rounded-2xl font-black uppercase tracking-widest text-[10px] hover:bg-gray-200 dark:hover:bg-gray-700 transition-all">
           Cancel
         </button>
