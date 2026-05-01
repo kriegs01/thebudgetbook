@@ -12,7 +12,8 @@ import {
   AlertTriangle,
   Power,
   ChevronDown,
-  ChevronRight
+  ChevronRight,
+  PowerOff
 } from 'lucide-react';
 import { getDueDayForDisplay, ordinalSuffix } from '../src/utils/billingCycles';
 
@@ -218,6 +219,8 @@ const Accounts: React.FC<AccountsProps> = ({ accounts, onAdd, onDelete, onEdit, 
     // If credit limit is 0 or undefined, treat progress as 0 to avoid division by zero
     const usedPercent = creditLimit > 0 ? Math.min(100, Math.round((acc.balance / creditLimit) * 100)) : 0;
     const usedPercentSafe = usedPercent < 0 ? 0 : usedPercent;
+    const isActive = (acc as any).isActive !== false;
+    const deactivationDate = (acc as any).deactivationDate;
 
     return (
       <div key={acc.id} className="bg-white dark:bg-gray-900 p-6 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800 hover:border-indigo-200 dark:hover:border-indigo-400 transition-all relative group overflow-hidden">
@@ -248,12 +251,14 @@ const Accounts: React.FC<AccountsProps> = ({ accounts, onAdd, onDelete, onEdit, 
                 >
                   <span>Edit</span>
                 </button>
-                <button
-                  onClick={(e) => { e.stopPropagation(); setOpenMenuId(null); openDeactivateDialog(acc.id); }}
-                  className="w-full text-left px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-800 text-gray-700 dark:text-gray-300 flex items-center space-x-3 text-sm transition-colors"
-                >
-                  <span>Deactivate</span>
-                </button>
+            {isActive && (
+              <button
+                onClick={(e) => { e.stopPropagation(); setOpenMenuId(null); openDeactivateDialog(acc.id); }}
+                className="w-full text-left px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-800 text-gray-700 dark:text-gray-300 flex items-center space-x-3 text-sm transition-colors"
+              >
+                <span>Deactivate</span>
+              </button>
+            )}
                 <button
                   onClick={(e) => { e.stopPropagation(); setOpenMenuId(null); handleDeleteTrigger(acc.id, acc.bank); }}
                   className="w-full text-left px-4 py-3 hover:bg-red-50 dark:hover:bg-red-900/20 flex items-center space-x-3 text-sm text-red-600 dark:text-red-400 transition-colors"
@@ -271,9 +276,9 @@ const Accounts: React.FC<AccountsProps> = ({ accounts, onAdd, onDelete, onEdit, 
               <h3 className="text-lg font-bold text-gray-900 dark:text-gray-100 leading-tight transition-colors">{acc.bank}</h3>
               <p className="text-xs text-gray-400 dark:text-gray-500 font-medium uppercase tracking-wider transition-colors">{acc.classification}</p>
             </div>
-            <span className="text-[10px] font-bold px-2 py-0.5 rounded uppercase bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 flex items-center gap-1 transition-colors">
-              <Power className="w-3 h-3" />Active
-            </span>
+          <span className={`text-[10px] font-bold px-2 py-0.5 rounded uppercase flex items-center gap-1 transition-colors ${isActive ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400' : 'bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400'}`}>
+            {isActive ? <><Power className="w-3 h-3" />Active</> : <><PowerOff className="w-3 h-3" />Inactive</>}
+          </span>
           </div>
         </div>
 
@@ -308,6 +313,11 @@ const Accounts: React.FC<AccountsProps> = ({ accounts, onAdd, onDelete, onEdit, 
             <p className="text-xs text-gray-400 dark:text-gray-500 font-medium transition-colors">Balance</p>
             <p className={`text-2xl font-bold text-gray-900 dark:text-gray-100 transition-colors`}>{formatCurrency(acc.balance)}</p>
           </div>
+      {isActive && deactivationDate && (
+        <p className="text-xs text-orange-500 font-medium transition-colors">
+          Scheduled to deactivate: {monthNames[deactivationDate.month]} {deactivationDate.year}
+        </p>
+      )}
           {isCredit && acc.billingDate && (
             <p className="text-xs text-gray-400 dark:text-gray-500 transition-colors">
               Statement: {new Date(acc.billingDate).getDate()}{ordinalSuffix(new Date(acc.billingDate).getDate())} each month

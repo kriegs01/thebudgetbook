@@ -49,6 +49,8 @@ const accountToSupabase = (account: Account) => ({
   credit_limit: account.creditLimit ?? null,
   billing_date: account.billingDate ?? null,
   due_date: account.dueDate ?? null,
+  is_active: (account as any).isActive !== false,
+  deactivation_date: (account as any).deactivationDate ?? null,
 });
 
 // Helper function to convert Supabase Account to UI format
@@ -61,6 +63,8 @@ const supabaseToAccount = (supabaseAccount: any): Account => ({
   creditLimit: supabaseAccount.credit_limit,
   billingDate: supabaseAccount.billing_date,
   dueDate: supabaseAccount.due_date,
+  isActive: supabaseAccount.is_active ?? true,
+  deactivationDate: supabaseAccount.deactivation_date,
 });
 
 // Helper function to convert UI Biller to Supabase format
@@ -1242,9 +1246,13 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
                   onEdit={handleEditAccount}
                   onDelete={handleDeleteAccount}
                   onDeactivate={async (id, when) => {
-                    // For now, just mark as inactive or remove - can be enhanced later
-                    if (when === 'now') {
-                      await handleDeleteAccount(id);
+                    const accountToDeactivate = accounts.find(a => a.id === id);
+                    if (accountToDeactivate) {
+                      if (when === 'now') {
+                        await handleEditAccount({ ...accountToDeactivate, isActive: false } as any);
+                      } else {
+                        await handleEditAccount({ ...accountToDeactivate, deactivationDate: when } as any);
+                      }
                     }
                   }}
                   loading={accountsLoading}

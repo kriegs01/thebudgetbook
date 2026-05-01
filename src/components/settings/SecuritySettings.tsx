@@ -32,6 +32,7 @@ export const SecuritySettings: React.FC = () => {
     { id: 'danger_zone', label: 'Danger Zone (Reset All Data)', defaultEnabled: true },
     { id: 'test_environment', label: 'Test Environment Operations', defaultEnabled: true },
     { id: 'account_deletions', label: 'Account Deletions', defaultEnabled: false },
+    { id: 'account_deactivations', label: 'Account Deactivations', defaultEnabled: false },
     { id: 'transaction_deletions', label: 'Transaction Deletions', defaultEnabled: false },
     { id: 'budget_modifications', label: 'Budget Modifications', defaultEnabled: false },
   ];
