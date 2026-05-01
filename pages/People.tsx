@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Users, Plus, LayoutGrid, List, MoreVertical, Trash2, ArrowRight, ArrowLeft, X, AlertTriangle, User, Landmark, ArrowUpFromLine, ArrowDownToLine, ArrowLeftRight } from 'lucide-react';
+import { Users, Plus, LayoutGrid, List, MoreVertical, Trash2, ArrowRight, ArrowLeft, X, AlertTriangle, User, Landmark, ArrowUpFromLine, ArrowDownToLine, ArrowLeftRight, BanknoteArrowDown } from 'lucide-react';
 import { getAllPeople, createPerson, deletePerson } from '../src/services/peopleService';
-import { getAllTransactions } from '../src/services/transactionsService';
+import { getAllTransactions, createTransaction } from '../src/services/transactionsService';
 import type { SupabasePerson, SupabaseTransaction } from '../src/types/supabase';
 
 const formatCurrency = (val: number) =>
@@ -19,6 +19,10 @@ export default function PeoplePage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const [confirmModal, setConfirmModal] = useState<{show: boolean; id: string; name: string} | null>(null);
+
+  const [showLoanPaymentModal, setShowLoanPaymentModal] = useState(false);
+  const [selectedLoan, setSelectedLoan] = useState<any | null>(null);
+  const [loanPaymentForm, setLoanPaymentForm] = useState({ amount: '', date: new Date().toISOString().split('T')[0] });
 
   const loadData = useCallback(async () => {
     setIsLoading(true);
@@ -69,6 +73,33 @@ export default function PeoplePage() {
     } else {
       setPeople(prev => prev.filter(p => p.id !== confirmModal.id));
       setConfirmModal(null);
+    }
+  };
+
+  const handleLoanPaymentSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedLoan) return;
+    
+    setIsSubmitting(true);
+    const { error } = await createTransaction({
+      name: 'Loan Payment Received',
+      date: new Date(loanPaymentForm.date).toISOString(),
+      amount: -Math.abs(parseFloat(loanPaymentForm.amount)), // Negative - money coming in
+      payment_method_id: selectedLoan.payment_method_id,
+      transaction_type: 'loan_payment',
+      notes: `Payment for: ${selectedLoan.name}`,
+      payment_schedule_id: null,
+      related_transaction_id: selectedLoan.id,
+    });
+    setIsSubmitting(false);
+
+    if (error) {
+      alert('Failed to record loan payment. Please try again.');
+    } else {
+      setShowLoanPaymentModal(false);
+      setSelectedLoan(null);
+      setLoanPaymentForm({ amount: '', date: new Date().toISOString().split('T')[0] });
+      loadData();
     }
   };
 
@@ -144,6 +175,15 @@ export default function PeoplePage() {
                 if (tx.transaction_type === 'transfer') TxIcon = ArrowLeftRight;
                 if (tx.transaction_type === 'loan') TxIcon = Landmark;
 
+                let remainingBalance = 0;
+                let totalPaid = 0;
+                if (tx.transaction_type === 'loan') {
+                  totalPaid = transactions
+                    .filter(t => t.related_transaction_id === tx.id && t.transaction_type === 'loan_payment')
+                    .reduce((sum, t) => sum + Math.abs(t.amount), 0);
+                  remainingBalance = Math.abs(tx.amount) - totalPaid;
+                }
+
                 return (
                   <div key={tx.id} className="p-5 md:p-6 flex items-center justify-between hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
                     <div className="flex items-center space-x-4">
@@ -155,13 +195,28 @@ export default function PeoplePage() {
                         <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{new Date(tx.date).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })} · {new Date(tx.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</p>
                       </div>
                     </div>
-                    <div className="text-right">
-                      <p className={`text-sm font-black ${isMoneyOut ? 'text-red-600 dark:text-red-400' : 'text-green-600 dark:text-green-400'}`}>
-                        {formatCurrency(Math.abs(tx.amount))}
-                      </p>
-                      <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-1">
-                        {tx.transaction_type === 'loan' ? 'Loan Given' : tx.transaction_type?.replace('_', ' ') || 'Payment'}
-                      </p>
+                    <div className="text-right flex flex-col items-end gap-2">
+                      <div>
+                        <p className={`text-sm font-black ${isMoneyOut ? 'text-red-600 dark:text-red-400' : 'text-green-600 dark:text-green-400'}`}>
+                          {formatCurrency(Math.abs(tx.amount))}
+                        </p>
+                        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-1">
+                          {tx.transaction_type === 'loan' ? 'Loan Given' : tx.transaction_type?.replace('_', ' ') || 'Payment'}
+                        </p>
+                      </div>
+                      {tx.transaction_type === 'loan' && remainingBalance > 0 && (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setSelectedLoan({ ...tx, remainingBalance, totalPaid });
+                            setShowLoanPaymentModal(true);
+                          }}
+                          className="flex items-center gap-1.5 px-3 py-1.5 bg-purple-50 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 rounded-xl text-xs font-bold hover:bg-purple-100 dark:hover:bg-purple-900/50 transition-colors"
+                        >
+                          <BanknoteArrowDown className="w-3.5 h-3.5" />
+                          Collect
+                        </button>
+                      )}
                     </div>
                   </div>
                 );
@@ -341,6 +396,69 @@ export default function PeoplePage() {
               <button type="submit" disabled={isSubmitting || !newPersonName.trim()} className="w-full bg-indigo-600 text-white py-4 rounded-2xl font-black uppercase tracking-widest text-[10px] hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-100 dark:shadow-none disabled:opacity-50">
                 {isSubmitting ? 'Adding...' : 'Save Person'}
               </button>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ── Receive Loan Payment Modal ─────────────────────────────────── */}
+      {showLoanPaymentModal && selectedLoan && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in">
+          <div className="bg-white dark:bg-gray-900 rounded-[2.5rem] w-full max-w-sm p-8 shadow-2xl relative transition-colors animate-in zoom-in-95">
+            <h2 className="text-xl font-black text-gray-900 dark:text-gray-100 mb-1 uppercase tracking-tight">Receive Payment</h2>
+            <p className="text-sm text-gray-500 dark:text-gray-400 mb-6 font-medium">Record payment for: {selectedLoan.name}</p>
+            
+            <div className="mb-6 p-4 bg-gray-50 dark:bg-gray-800/50 rounded-2xl transition-colors">
+              <div className="flex justify-between mb-2">
+                <span className="text-sm text-gray-600 dark:text-gray-400">Original Loan:</span>
+                <span className="text-sm font-bold text-gray-900 dark:text-gray-100">{formatCurrency(Math.abs(selectedLoan.amount))}</span>
+              </div>
+              <div className="flex justify-between mb-2">
+                <span className="text-sm text-gray-600 dark:text-gray-400">Total Paid:</span>
+                <span className="text-sm font-bold text-green-600 dark:text-green-400">{formatCurrency(selectedLoan.totalPaid || 0)}</span>
+              </div>
+              <div className="flex justify-between pt-2 border-t border-gray-200 dark:border-gray-700">
+                <span className="text-sm font-bold text-gray-900 dark:text-gray-100">Remaining:</span>
+                <span className="text-sm font-bold text-orange-600 dark:text-orange-400">{formatCurrency(selectedLoan.remainingBalance || 0)}</span>
+              </div>
+            </div>
+
+            <form onSubmit={handleLoanPaymentSubmit} className="space-y-4">
+              <div>
+                <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Amount Received</label>
+                <div className="relative">
+                  <span className="absolute left-4 top-1/2 -translate-y-1/2 font-bold text-gray-400 dark:text-gray-500">₱</span>
+                  <input 
+                    autoFocus
+                    type="number" 
+                    step="0.01" 
+                    min="0.01"
+                    max={selectedLoan.remainingBalance || undefined}
+                    required
+                    value={loanPaymentForm.amount}
+                    onChange={e => setLoanPaymentForm(f => ({ ...f, amount: e.target.value }))}
+                    className="w-full bg-gray-50 dark:bg-gray-800 border-transparent text-gray-900 dark:text-gray-100 rounded-2xl p-4 pl-8 text-xl font-black outline-none focus:ring-2 focus:ring-purple-500 transition-all placeholder:text-gray-400"
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Date</label>
+                <input 
+                  type="date" 
+                  required
+                  value={loanPaymentForm.date}
+                  onChange={e => setLoanPaymentForm(f => ({ ...f, date: e.target.value }))}
+                  className="w-full bg-gray-50 dark:bg-gray-800 border-transparent text-gray-900 dark:text-gray-100 rounded-2xl p-4 text-sm font-bold outline-none focus:ring-2 focus:ring-purple-500 transition-all"
+                />
+              </div>
+              <div className="flex gap-3 pt-2">
+                <button type="button" onClick={() => { setShowLoanPaymentModal(false); setSelectedLoan(null); }} className="flex-1 bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 py-4 rounded-2xl font-black uppercase tracking-widest text-[10px] hover:bg-gray-200 dark:hover:bg-gray-700 transition-all disabled:opacity-50">
+                  Cancel
+                </button>
+                <button type="submit" disabled={isSubmitting || !loanPaymentForm.amount} className="flex-1 bg-purple-600 text-white py-4 rounded-2xl font-black uppercase tracking-widest text-[10px] hover:bg-purple-700 transition-all shadow-lg shadow-purple-200 dark:shadow-none disabled:opacity-50">
+                  {isSubmitting ? 'Saving...' : 'Record Payment'}
+                </button>
+              </div>
             </form>
           </div>
         </div>
