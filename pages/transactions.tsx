@@ -17,7 +17,7 @@ type Transaction = {
   receiptUrl?: string | null;
 };
 
-type AccountOption = { id: string; bank: string; classification?: string };
+type AccountOption = { id: string; bank: string; classification?: string; type?: string };
 
 // Use the utility function from dateUtils
 const todayIso = getTodayIso;
@@ -123,7 +123,7 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ onTransactionDelete
       if (accountsResult.error) {
         console.error('Error loading accounts:', accountsResult.error);
       } else if (accountsResult.data) {
-        setAccounts(accountsResult.data.map(a => ({ id: a.id, bank: a.bank, classification: a.classification })));
+        setAccounts(accountsResult.data.map(a => ({ id: a.id, bank: a.bank, classification: a.classification, type: a.type })));
       }
 
       if (transactionsResult.error) {
@@ -181,9 +181,10 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ onTransactionDelete
   useEffect(() => {
     // Set default paymentMethodId when accounts are loaded and form hasn't been touched
     if (accounts.length > 0 && !form.paymentMethodId) {
-      setForm(f => ({ ...f, paymentMethodId: accounts[0].id }));
+      const defaultAcc = accounts.find(a => form.transactionType === 'payment' ? a.classification !== 'Credit Card' : a.type !== 'Credit') || accounts[0];
+      setForm(f => ({ ...f, paymentMethodId: defaultAcc?.id ?? '' }));
     }
-  }, [accounts, form.paymentMethodId]);
+  }, [accounts, form.paymentMethodId, form.transactionType]);
 
   // Generate a fresh signed URL whenever the Transaction Details modal opens
   useEffect(() => {
@@ -215,7 +216,7 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ onTransactionDelete
       name: '',
       date: todayIso(),
       amount: '',
-      paymentMethodId: accounts[0]?.id ?? '',
+      paymentMethodId: accounts.find(a => type === 'payment' ? a.classification !== 'Credit Card' : a.type !== 'Credit')?.id ?? (accounts[0]?.id ?? ''),
       transactionType: type,
       transferToAccountId: ''
     });
@@ -709,19 +710,40 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ onTransactionDelete
               </button>
             )}
             <h2 className={`text-2xl font-black text-gray-900 dark:text-gray-100 mb-2 ${formSource === 'top' && !editingTxId ? 'mt-6' : ''}`}>
-              {editingTxId ? 'Edit Transaction' : `Add New ${TRANSACTION_TYPES.find(t => t.id === form.transactionType)?.label || 'Transaction'}`}
+            {editingTxId ? 'Edit Transaction' : 
+              form.transactionType === 'withdraw' ? 'Withdraw Funds' :
+              form.transactionType === 'cash_in' ? 'Cash In' :
+              form.transactionType === 'transfer' ? 'Transfer Funds' :
+              form.transactionType === 'loan' ? 'Record Loan' :
+              `Add New ${TRANSACTION_TYPES.find(t => t.id === form.transactionType)?.label || 'Transaction'}`
+            }
             </h2>
-              <p className="text-gray-500 text-sm mb-8">{editingTxId ? 'Update the transaction details below' : 'Record a payment transaction'}</p>
+          <p className="text-gray-500 text-sm mb-8">
+            {editingTxId ? 'Update the transaction details below' : 
+              form.transactionType === 'withdraw' ? 'Record an ATM withdrawal or cash out' :
+              form.transactionType === 'cash_in' ? 'Record incoming funds' :
+              form.transactionType === 'transfer' ? 'Move money between accounts' :
+              form.transactionType === 'loan' ? 'Record money lent out' :
+              'Record a payment transaction'
+            }
+          </p>
               <form onSubmit={onSubmit} className="space-y-6">
                 {/* Conditional Name Field — Hide for Transfers since they auto-generate names */}
                 {(form.transactionType !== 'transfer' || editingTxId) && (
                   <div>
-                    <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Name</label>
+                <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">
+                  {['withdraw', 'cash_in', 'loan', 'transfer'].includes(form.transactionType) ? 'Label' : 'Name'}
+                </label>
                     <input 
                       value={form.name} 
                       onChange={e => setForm(f => ({ ...f, name: e.target.value }))} 
                       required 
-                      placeholder="e.g. Groceries, Gas, etc."
+                  placeholder={
+                    form.transactionType === 'withdraw' ? 'e.g. ATM Withdrawal' :
+                    form.transactionType === 'cash_in' ? 'e.g. Salary, Deposit' :
+                    form.transactionType === 'loan' ? 'e.g. Loan to John' :
+                    'e.g. Groceries, Gas, etc.'
+                  }
                       className="w-full bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-transparent rounded-2xl p-4 outline-none font-bold focus:ring-2 focus:ring-indigo-500 transition-all" 
                     />
                   </div>
@@ -737,7 +759,7 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ onTransactionDelete
                       className="w-full min-w-0 bg-indigo-50 dark:bg-indigo-900/20 text-indigo-700 dark:text-indigo-300 border-transparent rounded-2xl px-3 py-4 outline-none font-bold text-sm appearance-none transition-colors"
                     >
                       <option value="">Select Destination Account</option>
-                      {accounts.filter(a => a.id !== form.paymentMethodId && a.classification !== 'Credit Card').map(a => (
+                  {accounts.filter(a => a.id !== form.paymentMethodId && a.type !== 'Credit').map(a => (
                         <option key={a.id} value={a.id}>{a.bank}</option>
                       ))}
                     </select>
@@ -762,7 +784,9 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ onTransactionDelete
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Date Paid</label>
+                <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">
+                  {['withdraw', 'cash_in', 'loan', 'transfer'].includes(form.transactionType) ? 'Date' : 'Date Paid'}
+                </label>
                     <input 
                       type="date" 
                       value={form.date} 
@@ -772,21 +796,28 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ onTransactionDelete
                     />
                   </div>
                   <div>
-                    <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">{form.transactionType === 'transfer' && !editingTxId ? 'Transfer From' : 'Payment Method'}</label>
+                <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">
+                  {form.transactionType === 'transfer' && !editingTxId 
+                    ? 'Transfer From' 
+                    : ['withdraw', 'cash_in', 'loan'].includes(form.transactionType)
+                      ? 'Account'
+                      : 'Payment Method'}
+                </label>
                     {accounts.length === 0 ? (
-                      <div className="text-xs text-red-600 p-4">No payment methods available</div>
+                  <div className="text-xs text-red-600 p-4">No accounts available</div>
                     ) : (
                       <select 
                         value={form.paymentMethodId} 
                         onChange={e => setForm(f => ({ ...f, paymentMethodId: e.target.value }))} 
                       className="w-full min-w-0 bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-transparent rounded-2xl px-3 py-4 outline-none font-bold text-sm appearance-none transition-colors"
                       >
-                      {accounts.filter(a => a.classification !== 'Credit Card').map(a => <option key={a.id} value={a.id}>{a.bank}</option>)}
+                  {accounts.filter(a => form.transactionType === 'payment' ? a.classification !== 'Credit Card' : a.type !== 'Credit').map(a => <option key={a.id} value={a.id}>{a.bank}</option>)}
                       </select>
                     )}
                   </div>
                 </div>
 
+            {form.transactionType === 'payment' && (
                 <div>
                   <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Upload Receipt (Optional)</label>
                   <div className="relative">
@@ -801,6 +832,7 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ onTransactionDelete
                     </div>
                   </div>
                 </div>
+            )}
 
                 <div className="flex space-x-4 pt-4">
                   <button type="button" onClick={closeForm} className="flex-1 bg-gray-100 dark:bg-gray-800 py-4 rounded-2xl font-bold text-gray-500 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors">Cancel</button>
