@@ -196,13 +196,22 @@ export default function PeoplePage() {
                       </div>
                     </div>
                     <div className="text-right flex flex-col items-end gap-2">
-                      <div>
+                      <div className="flex flex-col items-end">
                         <p className={`text-sm font-black ${isMoneyOut ? 'text-red-600 dark:text-red-400' : 'text-green-600 dark:text-green-400'}`}>
                           {formatCurrency(Math.abs(tx.amount))}
                         </p>
                         <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-1">
                           {tx.transaction_type === 'loan' ? 'Loan Given' : tx.transaction_type?.replace('_', ' ') || 'Payment'}
                         </p>
+                        {tx.transaction_type === 'loan' && totalPaid > 0 && (
+                          <span className={`mt-1.5 text-[9px] font-bold px-2 py-0.5 rounded uppercase tracking-widest ${
+                            remainingBalance <= 0 
+                              ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400' 
+                              : 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400'
+                          }`}>
+                            {remainingBalance <= 0 ? 'Fully Paid' : `Partially Paid: ${formatCurrency(totalPaid)}`}
+                          </span>
+                        )}
                       </div>
                       {tx.transaction_type === 'loan' && remainingBalance > 0 && (
                         <button
