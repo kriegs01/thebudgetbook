@@ -1248,10 +1248,24 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
                   onDeactivate={async (id, when) => {
                     const accountToDeactivate = accounts.find(a => a.id === id);
                     if (accountToDeactivate) {
-                      if (when === 'now') {
-                        await handleEditAccount({ ...accountToDeactivate, isActive: false } as any);
-                      } else {
-                        await handleEditAccount({ ...accountToDeactivate, deactivationDate: when } as any);
+                      try {
+                        const isTestMode = localStorage.getItem('test_environment_enabled') === 'true';
+                        const tableName = isTestMode ? 'accounts_test' : 'accounts';
+                        
+                        let updatePayload: any = {};
+                        if (when === 'now') {
+                          updatePayload = { is_active: false };
+                        } else {
+                          updatePayload = { deactivation_date: when };
+                        }
+                        
+                        const { error } = await supabase.from(tableName).update(updatePayload).eq('id', id);
+                        if (error) throw error;
+                        
+                        await reloadAccounts();
+                      } catch (err) {
+                        console.error('Failed to deactivate account:', err);
+                        alert('Failed to deactivate account. Please try again.');
                       }
                     }
                   }}

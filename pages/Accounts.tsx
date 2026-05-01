@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { PinProtectedAction } from '../src/components/PinProtectedAction';
 import { Account, ViewMode, AccountClassification } from '../types';
+import { supabase } from '../src/utils/supabaseClient';
 import {
   Plus,
   Landmark,
@@ -209,7 +210,7 @@ const Accounts: React.FC<AccountsProps> = ({ accounts, onAdd, onDelete, onEdit, 
 
   const confirmDeactivateScheduled = async () => {
     if (!deactivateState.accountId) return;
-    onDeactivate?.(deactivateState.accountId, { month: deactivateState.month, year: deactivateState.year });
+    await onDeactivate?.(deactivateState.accountId, { month: deactivateState.month, year: deactivateState.year });
     setDeactivateState({ show: false, accountId: null, month: 0, year: 0 });
   };
 
@@ -534,6 +535,8 @@ const Accounts: React.FC<AccountsProps> = ({ accounts, onAdd, onDelete, onEdit, 
 
       {deactivateState.show && (
         <DeactivateDialog
+          accountId={deactivateState.accountId!}
+          accounts={accounts}
           month={deactivateState.month}
           year={deactivateState.year}
           onChangeMonth={(m) => setDeactivateState(s => ({ ...s, month: m }))}
@@ -573,17 +576,67 @@ const Accounts: React.FC<AccountsProps> = ({ accounts, onAdd, onDelete, onEdit, 
 };
 
 const DeactivateDialog: React.FC<{
+  accountId: string;
+  accounts: Account[];
   month: number;
   year: number;
   onChangeMonth: (m: number) => void;
   onChangeYear: (y: number) => void;
   onClose: () => void;
-  onNow: () => void;
-  onSchedule: () => void;
-}> = ({ month, year, onChangeMonth, onChangeYear, onClose, onNow, onSchedule }) => {
+  onNow: () => Promise<void>;
+  onSchedule: () => Promise<void>;
+}> = ({ accountId, accounts, month, year, onChangeMonth, onChangeYear, onClose, onNow, onSchedule }) => {
   const now = new Date();
   const currentYear = now.getFullYear();
   const years = Array.from({ length: 6 }, (_, i) => currentYear + i);
+
+  const [linkedWallets, setLinkedWallets] = useState<any[]>([]);
+  const [reassignAccountId, setReassignAccountId] = useState('');
+  const [isLoadingWallets, setIsLoadingWallets] = useState(true);
+  const [isProcessing, setIsProcessing] = useState(false);
+
+  useEffect(() => {
+    const fetchWallets = async () => {
+      setIsLoadingWallets(true);
+      try {
+        const isTestMode = localStorage.getItem('test_environment_enabled') === 'true';
+        const tableName = isTestMode ? 'wallets_test' : 'wallets';
+        const { data, error } = await supabase.from(tableName).select('*').eq('account_id', accountId);
+        if (!error && data) setLinkedWallets(data);
+      } catch (e) {
+        console.error(e);
+      } finally {
+        setIsLoadingWallets(false);
+      }
+    };
+    if (accountId) fetchWallets();
+  }, [accountId]);
+
+  const handleAction = async (action: 'now' | 'schedule') => {
+    if (linkedWallets.length > 0 && !reassignAccountId) {
+      alert('Please select a new account for the linked wallets before proceeding.');
+      return;
+    }
+    setIsProcessing(true);
+    try {
+      if (linkedWallets.length > 0 && reassignAccountId) {
+        const isTestMode = localStorage.getItem('test_environment_enabled') === 'true';
+        const tableName = isTestMode ? 'wallets_test' : 'wallets';
+        for (const w of linkedWallets) {
+          await supabase.from(tableName).update({ account_id: reassignAccountId }).eq('id', w.id);
+        }
+      }
+      if (action === 'now') await onNow();
+      else await onSchedule();
+    } catch (e) {
+      console.error(e);
+      alert('Failed to process deactivation.');
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const eligibleAccounts = accounts.filter(a => a.id !== accountId && a.type !== 'Credit');
 
   return (
     <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-in fade-in">
@@ -591,14 +644,39 @@ const DeactivateDialog: React.FC<{
         <h3 className="text-xl font-black text-gray-900 dark:text-gray-100 mb-2 uppercase tracking-tight transition-colors">Deactivate Account</h3>
         <p className="text-sm text-gray-500 dark:text-gray-400 mb-6 font-medium leading-relaxed transition-colors">Choose whether to deactivate the account now or schedule deactivation for a later month and year.</p>
 
+        {!isLoadingWallets && linkedWallets.length > 0 && (
+          <div className="mb-6 bg-orange-50 border border-orange-200 rounded-xl p-4 transition-colors">
+            <div className="flex items-center space-x-2 mb-2">
+              <AlertTriangle className="w-4 h-4 text-orange-500" />
+              <p className="text-xs font-bold text-orange-800">Wallets Linked</p>
+            </div>
+            <p className="text-xs text-orange-700 mb-3">
+              This account has {linkedWallets.length} linked wallet(s). Please select a new debit account to reassign them to.
+            </p>
+            <select 
+              value={reassignAccountId} 
+              onChange={(e) => setReassignAccountId(e.target.value)} 
+              className="w-full bg-white border border-orange-200 rounded-lg px-3 py-2 text-sm font-bold text-gray-700 outline-none focus:ring-2 focus:ring-orange-400 transition-colors"
+            >
+              <option value="">-- Select New Account --</option>
+              {eligibleAccounts.map(a => (
+                <option key={a.id} value={a.id}>{a.bank} ({a.classification})</option>
+              ))}
+            </select>
+            {eligibleAccounts.length === 0 && (
+              <p className="text-[10px] text-red-500 mt-1 font-bold">No other debit accounts available to receive wallets.</p>
+            )}
+          </div>
+        )}
+
         <div className="space-y-4">
           <PinProtectedAction
             featureId="account_deactivations"
-            onVerified={onNow}
+            onVerified={() => handleAction('now')}
             actionLabel="Deactivate Account"
           >
-            <button onClick={(e) => e.preventDefault()} className="w-full bg-red-600 text-white py-3 rounded-2xl font-black uppercase tracking-widest hover:bg-red-700 transition-all">
-              Deactivate Now
+            <button onClick={(e) => e.preventDefault()} disabled={isProcessing} className="w-full bg-red-600 text-white py-3 rounded-2xl font-black uppercase tracking-widest hover:bg-red-700 transition-all disabled:opacity-50">
+              {isProcessing ? 'Processing...' : 'Deactivate Now'}
             </button>
           </PinProtectedAction>
 
@@ -615,15 +693,15 @@ const DeactivateDialog: React.FC<{
             <div className="mt-4">
             <PinProtectedAction
               featureId="account_deactivations"
-              onVerified={onSchedule}
+              onVerified={() => handleAction('schedule')}
               actionLabel="Schedule Deactivation"
             >
-              <button onClick={(e) => e.preventDefault()} className="w-full bg-indigo-600 text-white py-2 rounded-xl font-bold hover:bg-indigo-700 transition-colors">Schedule Deactivation</button>
+              <button onClick={(e) => e.preventDefault()} disabled={isProcessing} className="w-full bg-indigo-600 text-white py-2 rounded-xl font-bold hover:bg-indigo-700 transition-colors disabled:opacity-50">{isProcessing ? 'Processing...' : 'Schedule Deactivation'}</button>
             </PinProtectedAction>
             </div>
           </div>
 
-          <button onClick={onClose} className="w-full bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 py-3 rounded-2xl font-black uppercase tracking-widest hover:bg-gray-200 dark:hover:bg-gray-700 transition-all">
+          <button onClick={onClose} disabled={isProcessing} className="w-full bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 py-3 rounded-2xl font-black uppercase tracking-widest hover:bg-gray-200 dark:hover:bg-gray-700 transition-all disabled:opacity-50">
             Cancel
           </button>
         </div>
