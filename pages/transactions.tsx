@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import { Plus, Info, Eye, ZoomIn, ZoomOut, Download, X, ArrowLeft, Pencil, Trash2, CheckSquare, Square, ChevronDown, Filter, AlertTriangle, ArrowUpFromLine, ArrowDownToLine, ArrowLeftRight, Landmark, CreditCard } from 'lucide-react';
 import { PinProtectedAction } from '../src/components/PinProtectedAction';
+import { useAuth } from '../src/contexts/AuthContext';
 import { getAllTransactions, createTransaction, updateTransaction, deleteTransactionAndRevertSchedule, uploadTransactionReceipt, getReceiptSignedUrl, batchDeleteTransactions, createTransfer } from '../src/services/transactionsService';
 import { getAllAccountsFrontend } from '../src/services/accountsService';
 import { combineDateWithCurrentTime, getTodayIso, getFirstDayOfCurrentYearIso, getLastDayOfCurrentYearIso } from '../src/utils/dateUtils';
@@ -14,6 +15,7 @@ type Transaction = {
   amount: number;
   paymentMethodId: string; // account id
   transaction_type?: string | null;
+  borrower_name?: string | null;
   receiptUrl?: string | null;
 };
 
@@ -40,6 +42,8 @@ interface TransactionsPageProps {
 }
 
 const TransactionsPage: React.FC<TransactionsPageProps> = ({ onTransactionDeleted, onTransactionCreated, refreshKey }) => {
+  const { userProfile } = useAuth();
+
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [accounts, setAccounts] = useState<AccountOption[]>([]);
   const [showForm, setShowForm] = useState(false);
@@ -69,7 +73,8 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ onTransactionDelete
     amount: '',
     paymentMethodId: '',
     transactionType: 'payment',
-    transferToAccountId: ''
+    transferToAccountId: '',
+    borrowerName: '' // New field for loan transactions
   });
 
   // ── Filter state ──────────────────────────────────────────────────────────
@@ -136,6 +141,7 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ onTransactionDelete
           amount: t.amount,
           paymentMethodId: t.payment_method_id,
           transaction_type: t.transaction_type ?? null,
+          borrower_name: t.borrower_name ?? null,
           receiptUrl: t.receipt_url ?? null,
         })));
       }
@@ -218,7 +224,8 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ onTransactionDelete
       amount: '',
       paymentMethodId: accounts.find(a => type === 'payment' ? a.classification !== 'Credit Card' : a.type !== 'Credit')?.id ?? (accounts[0]?.id ?? ''),
       transactionType: type,
-      transferToAccountId: ''
+      transferToAccountId: '',
+      borrowerName: ''
     });
     setReceiptFile(null);
     setShowTypeModal(false);
@@ -234,8 +241,8 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ onTransactionDelete
     setShowForm(false);
     setEditingTxId(null);
     setFormSource(null);
-    setReceiptFile(null);
-    setForm({ name: '', date: todayIso(), amount: '', paymentMethodId: accounts[0]?.id ?? '', transactionType: 'payment', transferToAccountId: '' });
+    setReceiptFile(null); // Clear receipt file
+    setForm({ name: '', date: todayIso(), amount: '', paymentMethodId: accounts[0]?.id ?? '', transactionType: 'payment', transferToAccountId: '', borrowerName: '' });
   };
 
   const openEditForm = (tx: Transaction) => {
@@ -247,7 +254,8 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ onTransactionDelete
       amount: Math.abs(tx.amount).toString(), // Absolute value makes editing easier
       paymentMethodId: tx.paymentMethodId,
       transactionType: tx.transaction_type || 'payment',
-      transferToAccountId: ''
+      transferToAccountId: '',
+      borrowerName: tx.borrower_name || ''
     });
     setReceiptFile(null);
     setShowForm(true);
@@ -289,7 +297,7 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ onTransactionDelete
       finalAmount = Math.abs(finalAmount); // Money out
     }
     
-    try {
+    try { // eslint-disable-next-line
       if (editingTxId) {
         // Edit mode: update existing transaction
         const updates = {
@@ -297,7 +305,8 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ onTransactionDelete
           date: combineDateWithCurrentTime(form.date),
           amount: finalAmount,
           payment_method_id: form.paymentMethodId,
-          transaction_type: form.transactionType
+          transaction_type: form.transactionType,
+          borrower_name: form.transactionType === 'loan' ? form.borrowerName || null : null
         };
         const { error } = await updateTransaction(editingTxId, updates);
         if (error) {
@@ -323,7 +332,8 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ onTransactionDelete
           date: combineDateWithCurrentTime(form.date),
           amount: finalAmount,
           payment_method_id: form.paymentMethodId,
-          transaction_type: form.transactionType
+          transaction_type: form.transactionType,
+          borrower_name: form.transactionType === 'loan' ? form.borrowerName || null : null
         };
         
         const { data, error } = await createTransaction(transaction);
@@ -860,6 +870,26 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ onTransactionDelete
                   </div>
                 )}
 
+                {/* Borrower Field for Loan Transactions */}
+                {form.transactionType === 'loan' && (
+                  <div>
+                    <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Borrower (Optional)</label>
+                    <select
+                      value={form.borrowerName}
+                      onChange={e => setForm(f => ({ ...f, borrowerName: e.target.value }))}
+                      className="w-full min-w-0 bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-transparent rounded-2xl px-3 py-4 outline-none font-bold text-sm appearance-none transition-colors"
+                    >
+                      <option value="">Select Borrower</option>
+                      {userProfile?.settings?.people?.map((person, index) => (
+                        <option key={index} value={person}>{person}</option>
+                      ))}
+                    </select>
+                    {(!userProfile?.settings?.people || userProfile.settings.people.length === 0) && (
+                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">Add people in Settings to see them here.</p>
+                    )}
+                  </div>
+                )}
+
             {form.transactionType === 'payment' && (
                 <div>
                   <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Upload Receipt (Optional)</label>
@@ -960,6 +990,10 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ onTransactionDelete
                 <div className="flex justify-between">
                   <dt className="text-[10px] font-black text-gray-400 uppercase tracking-widest self-center">Payment Method</dt>
                   <dd className="text-sm text-gray-700">{pm ? pm.bank : selectedTx.paymentMethodId}</dd>
+                </div>
+                <div className="flex justify-between">
+                  <dt className="text-[10px] font-black text-gray-400 uppercase tracking-widest self-center">Borrower</dt>
+                  <dd className="text-sm text-gray-700">{selectedTx.borrower_name || 'N/A'}</dd>
                 </div>
               </dl>
 

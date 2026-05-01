@@ -14,6 +14,9 @@ export interface SupabaseUserProfile {
   last_name: string;
   created_at: string; // timestamptz
   updated_at: string; // timestamptz
+  settings?: {
+    people?: string[]; // General configuration for user contacts
+  } | null;
 }
 
 export interface SupabaseAccount {
@@ -77,6 +80,7 @@ export interface SupabaseTransaction {
   transaction_type: 'payment' | 'withdraw' | 'transfer' | 'loan' | 'cash_in' | 'loan_payment' | 'credit_payment'; // NEW
   notes: string | null; // NEW
   related_transaction_id: string | null; // NEW - links transfer pairs and loan payments
+  borrower_name: string | null; // Optional tracking for the associated person
   receipt_url: string | null; // URL of receipt image in Supabase Storage
   user_id: string | null; // uuid, references auth.users(id)
   wallet_id: string | null; // uuid, nullable - links stash top-up transactions to a wallet
@@ -142,10 +146,11 @@ export type CreateSavingsInput = Omit<SupabaseSavings, 'id' | 'user_id'>;
 export type UpdateSavingsInput = Partial<CreateSavingsInput>;
 
 // Required fields only; newer columns that may not exist in all DB environments are optional
-export type CreateTransactionInput = Omit<SupabaseTransaction, 'id' | 'user_id' | 'transaction_type' | 'notes' | 'related_transaction_id' | 'receipt_url' | 'wallet_id'> & {
+export type CreateTransactionInput = Omit<SupabaseTransaction, 'id' | 'user_id' | 'transaction_type' | 'notes' | 'related_transaction_id' | 'borrower_name' | 'receipt_url' | 'wallet_id'> & {
   transaction_type?: SupabaseTransaction['transaction_type'];
   notes?: string | null;
   related_transaction_id?: string | null;
+  borrower_name?: string | null;
   receipt_url?: string | null;
   wallet_id?: string | null;
 };

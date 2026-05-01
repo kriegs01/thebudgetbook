@@ -1,12 +1,12 @@
 import React, { useState } from 'react';
-import { ChevronDown, ChevronRight, Hash, Globe, Bell, Lock, Trash2, AlertTriangle, RotateCcw, Plus, X, Database, Copy, Shield, User, Mail, Key, MoreVertical, Check, SlidersHorizontal } from 'lucide-react';
-import { BudgetCategory, Biller, Installment } from '../types';
+import { ChevronDown, ChevronRight, Hash, Globe, Bell, Lock, Trash2, AlertTriangle, RotateCcw, Plus, X, Database, Copy, Shield, User, Users, Mail, Key, MoreVertical, Check, SlidersHorizontal } from 'lucide-react';
+import { BudgetCategory, Biller, Installment, SupabaseUserProfile } from '../types';
 import { useTestEnvironment } from '../src/contexts/TestEnvironmentContext';
 import { useAuth } from '../src/contexts/AuthContext';
 import { supabase } from '../src/utils/supabaseClient';
 import { SecuritySettings } from '../src/components/settings/SecuritySettings';
 import { PinProtectedAction } from '../src/components/PinProtectedAction';
-import { updateUserEmail, updateUserPassword } from '../src/services/userProfileService';
+import { updateUserEmail, updateUserPassword, updateUserProfile } from '../src/services/userProfileService';
 
 interface SettingsProps {
   currency: string;
@@ -416,6 +416,7 @@ const Settings: React.FC<SettingsProps> = ({ currency, setCurrency, categories, 
   const [updateMessage, setUpdateMessage] = useState('');
   const [updateError, setUpdateError] = useState('');
   const [isUpdating, setIsUpdating] = useState(false);
+  const [personInput, setPersonInput] = useState('');
 
   // Test Environment state
   const { isTestMode, setTestMode } = useTestEnvironment();
