@@ -1,5 +1,6 @@
-import React from 'react';
-import { FileText, ArrowLeft, RefreshCw, Trash2 } from 'lucide-react';
+import React, { useState } from 'react';
+import { FileText, ArrowLeft, RefreshCw, Trash2, AlertTriangle } from 'lucide-react';
+import { PinProtectedAction } from '../src/components/PinProtectedAction';
 
 interface TrashProps {
   items: any[];
@@ -8,6 +9,13 @@ interface TrashProps {
 }
 
 const Trash: React.FC<TrashProps> = ({ items, onRestore, onDeletePermanently }) => {
+  const [confirmModal, setConfirmModal] = useState<{
+    show: boolean;
+    title: string;
+    message: string;
+    onConfirm: () => void;
+  }>({ show: false, title: '', message: '', onConfirm: () => {} });
+
   const formatCurrency = (val: number) => {
     return new Intl.NumberFormat('en-PH', { 
       style: 'currency', 
@@ -70,17 +78,29 @@ const Trash: React.FC<TrashProps> = ({ items, onRestore, onDeletePermanently }) 
                             <RefreshCw className="w-3.5 h-3.5" />
                             <span>Restore</span>
                           </button>
-                          <button 
-                            onClick={() => {
-                              if (window.confirm('Permanently delete this budget entry? This cannot be undone.')) {
-                                onDeletePermanently(item.id);
-                              }
+                          <PinProtectedAction
+                            featureId="budget_modifications"
+                            onVerified={() => {
+                              setConfirmModal({
+                                show: true,
+                                title: 'Delete Permanently',
+                                message: 'Are you sure you want to permanently delete this budget entry? This cannot be undone.',
+                                onConfirm: () => {
+                                  setConfirmModal(prev => ({ ...prev, show: false }));
+                                  onDeletePermanently(item.id);
+                                }
+                              });
                             }}
                             className="p-3 text-gray-300 hover:text-red-600 hover:bg-red-50 rounded-2xl transition-all"
                             title="Delete Permanently"
+                            actionLabel="Delete Permanently"
                           >
                             <Trash2 className="w-5 h-5" />
                           </button>
+                            <button onClick={(e) => e.preventDefault()} className="p-3 text-gray-300 hover:text-red-600 hover:bg-red-50 rounded-2xl transition-all" title="Delete Permanently">
+                              <Trash2 className="w-5 h-5" />
+                            </button>
+                          </PinProtectedAction>
                         </div>
                       </td>
                     </tr>
@@ -102,8 +122,26 @@ const Trash: React.FC<TrashProps> = ({ items, onRestore, onDeletePermanently }) 
           </div>
         </div>
       </div>
+
+  {confirmModal.show && <ConfirmDialog {...confirmModal} onClose={() => setConfirmModal(p => ({ ...p, show: false }))} />}
     </div>
   );
 };
+
+const ConfirmDialog: React.FC<{ show: boolean; title: string; message: string; onConfirm: () => void; onClose: () => void }> = ({ title, message, onConfirm, onClose }) => (
+  <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-in fade-in">
+    <div className="bg-white rounded-[2.5rem] w-full max-w-sm p-10 shadow-2xl animate-in zoom-in-95 flex flex-col items-center text-center">
+      <div className="w-16 h-16 bg-red-50 text-red-600 rounded-3xl flex items-center justify-center mb-6">
+        <AlertTriangle className="w-8 h-8" />
+      </div>
+      <h3 className="text-xl font-black text-gray-900 mb-2 uppercase tracking-tight">{title}</h3>
+      <p className="text-sm text-gray-500 mb-8 font-medium leading-relaxed">{message}</p>
+      <div className="flex flex-col w-full space-y-3">
+        <button onClick={onConfirm} className="w-full bg-red-600 text-white py-4 rounded-2xl font-black uppercase tracking-widest text-[10px] hover:bg-red-700 transition-all shadow-lg shadow-red-100">Proceed</button>
+        <button onClick={onClose} className="w-full bg-gray-100 text-gray-500 py-4 rounded-2xl font-black uppercase tracking-widest text-[10px] hover:bg-gray-200 transition-all">Cancel</button>
+      </div>
+    </div>
+  </div>
+);
 
 export default Trash;
