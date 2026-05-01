@@ -6,6 +6,8 @@ interface PinProtectionSettings {
   session_timeout: number; // minutes
   max_attempts: number;
   lockout_duration: number; // minutes
+  transaction_deletion_frequency: 'one-time' | 'everytime';
+  feature_frequencies?: Record<string, 'one-time' | 'everytime'>;
 }
 
 interface SessionState {
@@ -38,6 +40,7 @@ interface PinProtectionContextType {
   removePin: (currentPin: string) => Promise<boolean>;
   verifyPin: (pin: string) => Promise<boolean>;
   isFeatureProtected: (featureId: string) => boolean;
+  requiresVerificationEverytime: (featureId: string) => boolean;
   isSessionActive: () => boolean;
   extendSession: () => void;
   lockOut: () => void;
@@ -58,6 +61,8 @@ const DEFAULT_SETTINGS: PinProtectionSettings = {
   session_timeout: 5,
   max_attempts: 3,
   lockout_duration: 1,
+  transaction_deletion_frequency: 'one-time',
+  feature_frequencies: {},
 };
 
 const DEFAULT_PROTECTED_FEATURES = ['danger_zone', 'test_environment'];
@@ -95,6 +100,14 @@ export const PinProtectionProvider: React.FC<{ children: ReactNode }> = ({ child
         // We lock the session here to ensure the PIN must be entered again.
         if (!sessionStorage.getItem('pin_tab_session')) {
           parsed.session = { authenticated: false, expires_at: null };
+        }
+
+        // Ensure new settings exist for backward compatibility
+        if (!parsed.settings.transaction_deletion_frequency) {
+          parsed.settings.transaction_deletion_frequency = 'one-time';
+        }
+        if (!parsed.settings.feature_frequencies) {
+          parsed.settings.feature_frequencies = {};
         }
         
         return parsed;
@@ -371,6 +384,24 @@ export const PinProtectionProvider: React.FC<{ children: ReactNode }> = ({ child
     return isPinEnabled() && pinData.protected_features.includes(featureId);
   };
 
+  const requiresVerificationEverytime = (featureId: string): boolean => {
+    // Force everytime for high-risk features
+    if (featureId === 'danger_zone' || featureId === 'test_environment') {
+      return true;
+    }
+    
+    // Look up generalized feature frequency
+    if (pinData.settings.feature_frequencies && pinData.settings.feature_frequencies[featureId]) {
+      return pinData.settings.feature_frequencies[featureId] === 'everytime';
+    }
+
+    // Fallback for transaction_deletions backward compatibility
+    if (featureId === 'transaction_deletions') {
+      return pinData.settings.transaction_deletion_frequency === 'everytime';
+    }
+    return false;
+  };
+
   const isSessionActive = (): boolean => {
     if (!pinData.session.authenticated || !pinData.session.expires_at) {
       return false;
@@ -489,6 +520,7 @@ export const PinProtectionProvider: React.FC<{ children: ReactNode }> = ({ child
         removePin,
         verifyPin,
         isFeatureProtected,
+        requiresVerificationEverytime,
         isSessionActive,
         extendSession,
         lockOut,
