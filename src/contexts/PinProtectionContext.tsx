@@ -164,14 +164,18 @@ export const PinProtectionProvider: React.FC<{ children: ReactNode }> = ({ child
           if (data) {
             const dbPinHash = data.pin_hash || '';
                 const dbFeatures = (data as any).pin_protected_features;
+                  const dbSettings = (data as any).pin_settings;
             setPinData(prev => {
                   const newFeatures = Array.isArray(dbFeatures) ? dbFeatures : (prev.protected_features.length > 0 ? prev.protected_features : DEFAULT_PROTECTED_FEATURES);
-                  if (dbPinHash !== prev.pin_hash || JSON.stringify(newFeatures) !== JSON.stringify(prev.protected_features)) {
+                    const newSettings = dbSettings && Object.keys(dbSettings).length > 0 ? { ...DEFAULT_SETTINGS, ...dbSettings } : prev.settings;
+                    
+                    if (dbPinHash !== prev.pin_hash || JSON.stringify(newFeatures) !== JSON.stringify(prev.protected_features) || JSON.stringify(newSettings) !== JSON.stringify(prev.settings)) {
                 return {
                   ...prev,
                   pin_hash: dbPinHash,
                   enabled: !!dbPinHash,
-                      protected_features: newFeatures,
+                    protected_features: newFeatures,
+                    settings: newSettings,
                 };
               }
               return prev;
@@ -546,13 +550,26 @@ export const PinProtectionProvider: React.FC<{ children: ReactNode }> = ({ child
   };
 
   const updateSettings = (settings: Partial<PinProtectionSettings>): void => {
-    setPinData(prev => ({
-      ...prev,
-      settings: {
+    setPinData(prev => {
+      const newSettings = {
         ...prev.settings,
         ...settings,
-      },
-    }));
+      };
+
+      // Save to database in the background
+      supabase.auth.getUser().then(({ data: { user } }) => {
+        if (user) {
+          updateUserProfile(user.id, { pin_settings: newSettings } as any).catch(err => 
+            console.error('Failed to sync settings to database:', err)
+          );
+        }
+      });
+
+      return {
+        ...prev,
+        settings: newSettings,
+      };
+    });
   };
 
   const getLastChangedDate = (): string | null => {
