@@ -767,7 +767,27 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ onTransactionDelete
 
                 {form.transactionType === 'transfer' && !editingTxId ? (
                   <>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 relative">
+                      {/* Swap Accounts Button */}
+                      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 mt-0 sm:mt-3 flex items-center justify-center pointer-events-none z-10">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setForm(f => {
+                              const newFrom = f.transferToAccountId || accounts.find(a => a.type !== 'Credit' && a.id !== f.paymentMethodId)?.id || f.paymentMethodId;
+                              return {
+                                ...f,
+                                paymentMethodId: newFrom,
+                                transferToAccountId: f.paymentMethodId
+                              };
+                            });
+                          }}
+                          className="pointer-events-auto w-10 h-10 rounded-full bg-gray-100 dark:bg-gray-800 border-4 border-white dark:border-gray-900 flex items-center justify-center text-gray-500 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/50 transition-all shadow-sm"
+                          title="Swap accounts"
+                        >
+                          <ArrowLeftRight className="w-4 h-4 rotate-90 sm:rotate-0" />
+                        </button>
+                      </div>
                       <div>
                         <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Transfer From</label>
                         {accounts.length === 0 ? (
