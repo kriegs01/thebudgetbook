@@ -16,7 +16,6 @@ export interface SupabaseUserProfile {
   updated_at: string; // timestamptz
   settings?: {
     peopleEnabled?: boolean; // Toggle for the People feature
-    people?: string[]; // General configuration for user contacts
   } | null;
 }
 
@@ -32,6 +31,14 @@ export interface SupabaseAccount {
   due_date: string | null; // date, nullable
   created_at: string; // timestamptz, default now()
   user_id: string | null; // uuid, references auth.users(id)
+}
+
+export interface SupabasePerson {
+  id: string; // uuid
+  name: string;
+  user_id: string; // uuid, references auth.users(id)
+  created_at: string; // timestamptz
+  updated_at: string; // timestamptz
 }
 
 export interface SupabaseBiller {
@@ -136,6 +143,9 @@ export interface SupabaseMonthlyPaymentSchedule {
 
 export type CreateAccountInput = Omit<SupabaseAccount, 'id' | 'created_at' | 'user_id'>;
 export type UpdateAccountInput = Partial<CreateAccountInput>;
+
+export type CreatePersonInput = Omit<SupabasePerson, 'id' | 'created_at' | 'updated_at' | 'user_id'>;
+export type UpdatePersonInput = Partial<CreatePersonInput>;
 
 export type CreateBillerInput = Omit<SupabaseBiller, 'id' | 'user_id'>;
 export type UpdateBillerInput = Partial<CreateBillerInput>;

@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { ChevronDown, ChevronRight, Hash, Globe, Bell, Lock, Trash2, AlertTriangle, RotateCcw, Plus, X, Database, Copy, Shield, User, Users, Mail, Key, MoreVertical, Check, SlidersHorizontal } from 'lucide-react';
 import { BudgetCategory, Biller, Installment, SupabaseUserProfile } from '../types';
 import { useTestEnvironment } from '../src/contexts/TestEnvironmentContext';
+import { getAllPeople, createPerson, deletePerson } from '../src/services/peopleService';
+import type { SupabasePerson } from '../src/types/supabase';
 import { useAuth } from '../src/contexts/AuthContext';
 import { supabase } from '../src/utils/supabaseClient';
 import { SecuritySettings } from '../src/components/settings/SecuritySettings';
@@ -419,10 +421,19 @@ const Settings: React.FC<SettingsProps> = ({ currency, setCurrency, categories, 
   const [personInput, setPersonInput] = useState('');
   const [isPeopleEnabled, setIsPeopleEnabled] = useState(!!userProfile?.settings?.peopleEnabled);
   const [isTogglingPeople, setIsTogglingPeople] = useState(false);
+  const [peopleList, setPeopleList] = useState<SupabasePerson[]>([]);
 
   useEffect(() => {
     setIsPeopleEnabled(!!userProfile?.settings?.peopleEnabled);
   }, [userProfile?.settings?.peopleEnabled]);
+
+  useEffect(() => {
+    if (isPeopleEnabled && user) {
+      getAllPeople().then(({ data }) => {
+        if (data) setPeopleList(data);
+      });
+    }
+  }, [isPeopleEnabled, user]);
 
   // Test Environment state
   const { isTestMode, setTestMode } = useTestEnvironment();
@@ -840,24 +851,20 @@ const Settings: React.FC<SettingsProps> = ({ currency, setCurrency, categories, 
           {isPeopleEnabled && (
               <div className="pt-4 border-t border-gray-100 dark:border-gray-800 space-y-3">
                 <h4 className="text-sm font-bold text-gray-900 dark:text-gray-100 uppercase transition-colors">Your People</h4>
-                {userProfile?.settings?.people && userProfile.settings.people.length > 0 ? (
+                {peopleList.length > 0 ? (
                   <div className="space-y-2">
-                    {userProfile.settings.people.map((person, index) => (
-                      <div key={index} className="flex items-center justify-between bg-gray-50 dark:bg-gray-800 rounded-xl p-3">
-                        <span className="text-sm font-medium text-gray-900 dark:text-gray-100">{person}</span>
+                    {peopleList.map((person) => (
+                      <div key={person.id} className="flex items-center justify-between bg-gray-50 dark:bg-gray-800 rounded-xl p-3">
+                        <span className="text-sm font-medium text-gray-900 dark:text-gray-100">{person.name}</span>
                         <button
                           onClick={async () => {
-                            if (!user) return;
-                            const updatedPeople = userProfile.settings?.people?.filter(p => p !== person) || [];
-                            const newSettings = { ...(userProfile?.settings || {}), people: updatedPeople };
-                            
-                            const { error } = await updateUserProfile(user.id, { settings: newSettings });
-                            if (error) throw error;
-                            
-                            await refreshProfile();
+                            const { error } = await deletePerson(person.id);
+                            if (!error) {
+                              setPeopleList(peopleList.filter(p => p.id !== person.id));
+                            }
                           }}
                           className="text-red-500 hover:text-red-600 p-1 rounded-full hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
-                          title={`Remove ${person}`}
+                          title={`Remove ${person.name}`}
                         >
                           <X className="w-4 h-4" />
                         </button>
@@ -879,15 +886,12 @@ const Settings: React.FC<SettingsProps> = ({ currency, setCurrency, categories, 
                     onClick={async () => {
                       if (!user) return;
                       const trimmedName = personInput.trim();
-                      if (trimmedName && userProfile && !userProfile.settings?.people?.includes(trimmedName)) {
-                        const updatedPeople = [...(userProfile.settings?.people || []), trimmedName];
-                        const newSettings = { ...(userProfile?.settings || {}), people: updatedPeople };
-                        
-                        const { error } = await updateUserProfile(user.id, { settings: newSettings });
+                      if (trimmedName && !peopleList.some(p => p.name.toLowerCase() === trimmedName.toLowerCase())) {
+                        const { data, error } = await createPerson({ name: trimmedName });
                         if (error) {
                           console.error('Failed to add person:', error);
-                        } else {
-                          await refreshProfile();
+                        } else if (data) {
+                          setPeopleList([...peopleList, data]);
                           setPersonInput('');
                         }
                       }

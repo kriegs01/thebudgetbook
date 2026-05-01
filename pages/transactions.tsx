@@ -4,6 +4,8 @@ import { PinProtectedAction } from '../src/components/PinProtectedAction';
 import { useAuth } from '../src/contexts/AuthContext';
 import { getAllTransactions, createTransaction, updateTransaction, deleteTransactionAndRevertSchedule, uploadTransactionReceipt, getReceiptSignedUrl, batchDeleteTransactions, createTransfer } from '../src/services/transactionsService';
 import { getAllAccountsFrontend } from '../src/services/accountsService';
+import { getAllPeople } from '../src/services/peopleService';
+import type { SupabasePerson } from '../src/types/supabase';
 import { combineDateWithCurrentTime, getTodayIso, getFirstDayOfCurrentYearIso, getLastDayOfCurrentYearIso } from '../src/utils/dateUtils';
 
 const FILTER_MIN_DATE = '2025-01-01';
@@ -46,6 +48,7 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ onTransactionDelete
 
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [accounts, setAccounts] = useState<AccountOption[]>([]);
+  const [people, setPeople] = useState<SupabasePerson[]>([]);
   const [showForm, setShowForm] = useState(false);
   const [editingTxId, setEditingTxId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -120,9 +123,10 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ onTransactionDelete
   const loadData = useCallback(async () => {
     setIsLoading(true);
     try {
-      const [accountsResult, transactionsResult] = await Promise.all([
+      const [accountsResult, transactionsResult, peopleResult] = await Promise.all([
         getAllAccountsFrontend(),
         getAllTransactions(),
+        getAllPeople()
       ]);
 
       if (accountsResult.error) {
@@ -144,6 +148,12 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ onTransactionDelete
           borrower_name: t.borrower_name ?? null,
           receiptUrl: t.receipt_url ?? null,
         })));
+      }
+      
+      if (peopleResult.error) {
+        console.error('Error loading people:', peopleResult.error);
+      } else if (peopleResult.data) {
+        setPeople(peopleResult.data);
       }
     } catch (error) {
       console.error('Error loading data:', error);
@@ -880,11 +890,11 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ onTransactionDelete
                       className="w-full min-w-0 bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-transparent rounded-2xl px-3 py-4 outline-none font-bold text-sm appearance-none transition-colors"
                     >
                       <option value="">Select Borrower</option>
-                      {userProfile?.settings?.people?.map((person, index) => (
-                        <option key={index} value={person}>{person}</option>
+                      {people.map((person) => (
+                        <option key={person.id} value={person.name}>{person.name}</option>
                       ))}
                     </select>
-                    {(!userProfile?.settings?.people || userProfile.settings.people.length === 0) && (
+                    {people.length === 0 && (
                       <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">Add people in Settings to see them here.</p>
                     )}
                   </div>
