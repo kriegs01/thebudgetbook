@@ -127,15 +127,15 @@ export const PinProtectionProvider: React.FC<{ children: ReactNode }> = ({ child
           const { data } = await getUserProfile(user.id);
           if (data) {
             const dbPinHash = data.pin_hash || '';
+                const dbFeatures = (data as any).pin_protected_features;
             setPinData(prev => {
-              if (dbPinHash !== prev.pin_hash) {
+                  const newFeatures = Array.isArray(dbFeatures) ? dbFeatures : (prev.protected_features.length > 0 ? prev.protected_features : DEFAULT_PROTECTED_FEATURES);
+                  if (dbPinHash !== prev.pin_hash || JSON.stringify(newFeatures) !== JSON.stringify(prev.protected_features)) {
                 return {
                   ...prev,
                   pin_hash: dbPinHash,
                   enabled: !!dbPinHash,
-                  protected_features: prev.protected_features.length > 0 
-                    ? prev.protected_features 
-                    : DEFAULT_PROTECTED_FEATURES,
+                      protected_features: newFeatures,
                 };
               }
               return prev;
@@ -208,7 +208,10 @@ export const PinProtectionProvider: React.FC<{ children: ReactNode }> = ({ child
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (user) {
-        await updateUserProfile(user.id, { pin_hash: hashedPin });
+        await updateUserProfile(user.id, { 
+          pin_hash: hashedPin,
+          pin_protected_features: DEFAULT_PROTECTED_FEATURES
+        } as any);
       }
     } catch (err) {
       console.error('Failed to save PIN to database:', err);
@@ -279,7 +282,10 @@ export const PinProtectionProvider: React.FC<{ children: ReactNode }> = ({ child
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (user) {
-        await updateUserProfile(user.id, { pin_hash: '' });
+        await updateUserProfile(user.id, { 
+          pin_hash: '',
+          pin_protected_features: [] 
+        } as any);
       }
     } catch (err) {
       console.error('Failed to clear PIN from database:', err);
@@ -401,11 +407,21 @@ export const PinProtectionProvider: React.FC<{ children: ReactNode }> = ({ child
     return pinData.protected_features;
   };
 
-  const setProtectedFeatures = (features: string[]): void => {
+  const setProtectedFeatures = async (features: string[]): Promise<void> => {
     setPinData(prev => ({
       ...prev,
       protected_features: features,
     }));
+
+    // Save to database
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        await updateUserProfile(user.id, { pin_protected_features: features } as any);
+      }
+    } catch (err) {
+      console.error('Failed to sync protected features to database:', err);
+    }
   };
 
   const togglePinProtection = (enabled: boolean): void => {
