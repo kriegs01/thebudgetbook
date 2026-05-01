@@ -34,6 +34,7 @@ import StatementPage from './pages/accounts/statement';
 import Savings from './pages/Savings';
 import WalletsPage from './pages/Wallets';
 import WalletView from './pages/wallets/view';
+import PeoplePage from './pages/People';
 import SettingsPage from './pages/Settings';
 import TrashPage from './pages/Trash';
 import SupabaseDemo from './pages/SupabaseDemo';
