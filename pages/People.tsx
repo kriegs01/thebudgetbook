@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Users, Plus, LayoutGrid, List, MoreVertical, Trash2, ArrowRight, X, AlertTriangle, User, Landmark } from 'lucide-react';
+import { Users, Plus, LayoutGrid, List, MoreVertical, Trash2, ArrowRight, ArrowLeft, X, AlertTriangle, User, Landmark, ArrowUpFromLine, ArrowDownToLine, ArrowLeftRight } from 'lucide-react';
 import { getAllPeople, createPerson, deletePerson } from '../src/services/peopleService';
 import { getAllTransactions } from '../src/services/transactionsService';
 import type { SupabasePerson, SupabaseTransaction } from '../src/types/supabase';
@@ -14,6 +14,7 @@ export default function PeoplePage() {
   const [isLoading, setIsLoading] = useState(true);
   
   const [showAddModal, setShowAddModal] = useState(false);
+  const [selectedPerson, setSelectedPerson] = useState<string | null>(null);
   const [newPersonName, setNewPersonName] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -83,6 +84,102 @@ export default function PeoplePage() {
       totalLoanAmount
     };
   };
+
+  if (selectedPerson) {
+    const personStats = getPersonStats(selectedPerson);
+    const personTxs = transactions
+      .filter(t => t.borrower_name === selectedPerson)
+      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    
+    return (
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-950 p-4 md:p-8 transition-colors duration-200">
+        <div className="max-w-4xl mx-auto space-y-6 animate-in slide-in-from-right-8 duration-300 pb-20">
+          <div className="flex items-center space-x-4 mb-6">
+            <button 
+              onClick={() => setSelectedPerson(null)}
+              className="p-3 bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-800 rounded-full hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors shadow-sm"
+            >
+              <ArrowLeft className="w-5 h-5 text-gray-600 dark:text-gray-400" />
+            </button>
+            <div className="flex items-center gap-4">
+              <div className="w-12 h-12 rounded-full bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 font-black text-lg flex items-center justify-center border border-indigo-100 dark:border-indigo-800">
+                {selectedPerson.substring(0, 2).toUpperCase()}
+              </div>
+              <h1 className="text-2xl md:text-3xl font-black text-gray-900 dark:text-gray-100 uppercase tracking-tight">{selectedPerson}</h1>
+            </div>
+          </div>
+
+          {/* Stats Cards */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="bg-white dark:bg-gray-900 p-6 rounded-[2rem] border border-gray-100 dark:border-gray-800 shadow-sm">
+              <div className="flex items-center space-x-3 mb-4">
+                <div className="p-3 bg-indigo-50 dark:bg-indigo-900/30 rounded-xl text-indigo-600 dark:text-indigo-400">
+                  <Landmark className="w-6 h-6" />
+                </div>
+                <h3 className="text-sm font-bold text-gray-600 dark:text-gray-400 uppercase tracking-widest">Total Loans</h3>
+              </div>
+              <p className="text-3xl font-black text-gray-900 dark:text-gray-100">{formatCurrency(personStats.totalLoanAmount)}</p>
+            </div>
+            
+            <div className="bg-white dark:bg-gray-900 p-6 rounded-[2rem] border border-gray-100 dark:border-gray-800 shadow-sm">
+              <div className="flex items-center space-x-3 mb-4">
+                <div className="p-3 bg-blue-50 dark:bg-blue-900/30 rounded-xl text-blue-600 dark:text-blue-400">
+                  <List className="w-6 h-6" />
+                </div>
+                <h3 className="text-sm font-bold text-gray-600 dark:text-gray-400 uppercase tracking-widest">Transactions</h3>
+              </div>
+              <p className="text-3xl font-black text-gray-900 dark:text-gray-100">{personStats.txCount}</p>
+            </div>
+          </div>
+
+          {/* Transactions List */}
+          <div className="bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-800 rounded-[2.5rem] shadow-sm overflow-hidden">
+            <div className="p-6 md:p-8 border-b border-gray-100 dark:border-gray-800 flex items-center justify-between">
+              <h2 className="text-base font-black text-gray-900 dark:text-gray-100 uppercase tracking-widest">Transaction History</h2>
+            </div>
+            <div className="divide-y divide-gray-50 dark:divide-gray-800/50">
+              {personTxs.length > 0 ? personTxs.map(tx => {
+                const isMoneyOut = tx.amount > 0;
+                let TxIcon = isMoneyOut ? ArrowUpFromLine : ArrowDownToLine;
+                if (tx.transaction_type === 'transfer') TxIcon = ArrowLeftRight;
+                if (tx.transaction_type === 'loan') TxIcon = Landmark;
+
+                return (
+                  <div key={tx.id} className="p-5 md:p-6 flex items-center justify-between hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
+                    <div className="flex items-center space-x-4">
+                      <div className={`p-3 rounded-2xl ${isMoneyOut ? 'bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400' : 'bg-green-50 dark:bg-green-900/20 text-green-600 dark:text-green-400'}`}>
+                        <TxIcon className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <p className="text-sm font-bold text-gray-900 dark:text-gray-100">{tx.name}</p>
+                        <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{new Date(tx.date).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })} · {new Date(tx.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</p>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <p className={`text-sm font-black ${isMoneyOut ? 'text-red-600 dark:text-red-400' : 'text-green-600 dark:text-green-400'}`}>
+                        {formatCurrency(Math.abs(tx.amount))}
+                      </p>
+                      <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-1">
+                        {tx.transaction_type === 'loan' ? 'Loan Given' : tx.transaction_type?.replace('_', ' ') || 'Payment'}
+                      </p>
+                    </div>
+                  </div>
+                );
+              }) : (
+                <div className="py-20 text-center">
+                  <div className="w-16 h-16 bg-gray-50 dark:bg-gray-800 rounded-full flex items-center justify-center mx-auto mb-4 text-gray-400">
+                    <List className="w-8 h-8" />
+                  </div>
+                  <h3 className="text-lg font-black text-gray-900 dark:text-gray-100 uppercase tracking-widest mb-1">No transactions</h3>
+                  <p className="text-sm text-gray-500 dark:text-gray-400 font-medium">This person hasn't been linked to any transactions yet.</p>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-950 p-4 md:p-8 transition-colors duration-200">
@@ -167,6 +264,13 @@ export default function PeoplePage() {
                       <span className="text-xs font-bold bg-indigo-100 dark:bg-indigo-900/50 text-indigo-700 dark:text-indigo-300 px-2 py-0.5 rounded-full">{stats.txCount}</span>
                     </div>
                   </div>
+                  
+                  <button 
+                    onClick={() => setSelectedPerson(person.name)}
+                    className="w-full mt-4 bg-gray-50 dark:bg-gray-800/80 text-gray-700 dark:text-gray-300 py-3 rounded-xl text-xs font-black uppercase tracking-widest hover:bg-indigo-50 dark:hover:bg-indigo-900/30 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors"
+                  >
+                    View Profile
+                  </button>
                 </div>
               );
             })}
@@ -191,6 +295,12 @@ export default function PeoplePage() {
                       <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Total Loans</p>
                       <p className="text-sm font-bold text-gray-900 dark:text-gray-100">{formatCurrency(stats.totalLoanAmount)}</p>
                     </div>
+                    <button 
+                      onClick={() => setSelectedPerson(person.name)}
+                      className="text-xs font-bold text-indigo-600 bg-indigo-50 dark:bg-indigo-900/30 dark:text-indigo-400 px-4 py-2 rounded-xl hover:bg-indigo-100 dark:hover:bg-indigo-900/50 transition-colors uppercase tracking-widest"
+                    >
+                      View
+                    </button>
                     <button 
                       onClick={() => setConfirmModal({ show: true, id: person.id, name: person.name })}
                       className="text-gray-300 hover:text-red-500 p-2 rounded-full hover:bg-red-50 dark:hover:bg-red-900/20 transition-all"
