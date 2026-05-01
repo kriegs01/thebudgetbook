@@ -56,8 +56,8 @@ export const createUserProfile = async (profile: CreateUserProfileInput) => {
 export const updateUserProfile = async (userId: string, updates: UpdateUserProfileInput) => {
   try {
     // Validate that we have the required fields
-    if (!updates.first_name && !updates.last_name) {
-      throw new Error('At least first_name or last_name is required');
+    if (Object.keys(updates).length === 0) {
+      throw new Error('No updates provided');
     }
 
     // First, try to update the existing profile
@@ -74,12 +74,18 @@ export const updateUserProfile = async (userId: string, updates: UpdateUserProfi
     if (!data || data.length === 0) {
       console.log('[UserProfile] No profile found, creating new profile for user:', userId);
       
+      // If creating a profile for the first time, a name is strictly required
+      if (!updates.first_name && !updates.last_name) {
+        throw new Error('Profile does not exist yet. Please save your profile name before updating security settings.');
+      }
+
       // Create a new profile with the updates
       // Use provided values or empty strings as fallback
       const createResult = await createUserProfile({
         user_id: userId,
         first_name: updates.first_name || '',
         last_name: updates.last_name || '',
+        ...updates
       });
 
       return createResult;
