@@ -3202,8 +3202,8 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                 </div>
               </div>
               <div className="flex space-x-4 pt-4">
-                <button type="button" onClick={() => setShowPayModal(null)} className="flex-1 bg-gray-100 py-4 rounded-2xl font-bold text-gray-500">Cancel</button>
-                <button type="submit" className="flex-1 bg-green-600 text-white py-4 rounded-2xl font-bold hover:bg-green-700 shadow-xl shadow-green-100">
+                <button type="button" onClick={() => setShowPayModal(null)} className="flex-1 bg-gray-100 dark:bg-gray-800 py-4 rounded-2xl font-bold text-gray-500 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors">Cancel</button>
+                <button type="submit" className="flex-1 bg-green-600 text-white py-4 rounded-2xl font-bold hover:bg-green-700 shadow-xl shadow-green-100 dark:shadow-none transition-all">
                   {payFormData.transactionId ? 'Update Payment' : 'Submit Payment'}
                 </button>
               </div>
@@ -3279,8 +3279,8 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
               </div>
 
               <div className="flex space-x-4 pt-4">
-                <button type="button" onClick={() => setShowTransactionModal(false)} className="flex-1 bg-gray-100 py-4 rounded-2xl font-bold text-gray-500">Cancel</button>
-                <button type="submit" className="flex-1 bg-green-600 text-white py-4 rounded-2xl font-bold hover:bg-green-700 shadow-xl shadow-green-100">
+                <button type="button" onClick={() => setShowTransactionModal(false)} className="flex-1 bg-gray-100 dark:bg-gray-800 py-4 rounded-2xl font-bold text-gray-500 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors">Cancel</button>
+                <button type="submit" className="flex-1 bg-green-600 text-white py-4 rounded-2xl font-bold hover:bg-green-700 shadow-xl shadow-green-100 dark:shadow-none transition-all">
                   {transactionFormData.id ? 'Update Payment' : 'Submit Payment'}
                 </button>
               </div>

@@ -655,8 +655,8 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ onTransactionDelete
                 </div>
 
                 <div className="flex space-x-4 pt-4">
-                  <button type="button" onClick={closeForm} className="flex-1 bg-gray-100 py-4 rounded-2xl font-bold text-gray-500">Cancel</button>
-                  <button type="submit" disabled={accounts.length === 0} className="flex-1 bg-green-600 text-white py-4 rounded-2xl font-bold hover:bg-green-700 shadow-xl shadow-green-100">{editingTxId ? 'Update Transaction' : 'Submit Payment'}</button>
+                  <button type="button" onClick={closeForm} className="flex-1 bg-gray-100 dark:bg-gray-800 py-4 rounded-2xl font-bold text-gray-500 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors">Cancel</button>
+                  <button type="submit" disabled={accounts.length === 0} className="flex-1 bg-green-600 text-white py-4 rounded-2xl font-bold hover:bg-green-700 shadow-xl shadow-green-100 dark:shadow-none transition-all">{editingTxId ? 'Update Transaction' : 'Submit Payment'}</button>
                 </div>
               </form>
             </div>
