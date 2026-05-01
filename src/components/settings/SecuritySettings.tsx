@@ -4,6 +4,7 @@ import { usePinProtection } from '../../hooks/usePinProtection';
 import { SetPinModal } from '../modals/SetPinModal';
 import { ChangePinModal } from '../modals/ChangePinModal';
 import { VerifyPinModal } from '../modals/VerifyPinModal';
+import { useAuth } from '../../contexts/AuthContext';
 
 export const SecuritySettings: React.FC = () => {
   const {
@@ -18,6 +19,8 @@ export const SecuritySettings: React.FC = () => {
     removePin,
   } = usePinProtection();
 
+  const { userProfile } = useAuth();
+
   const [showSetPinModal, setShowSetPinModal] = useState(false);
   const [showChangePinModal, setShowChangePinModal] = useState(false);
   const [showRemovePinModal, setShowRemovePinModal] = useState(false);
@@ -30,7 +33,7 @@ export const SecuritySettings: React.FC = () => {
 
   const featureOptions = [
     { id: 'danger_zone', label: 'Danger Zone (Reset All Data)', defaultEnabled: true },
-    { id: 'test_environment', label: 'Test Environment Operations', defaultEnabled: true },
+    ...((userProfile as any)?.role === 'admin' ? [{ id: 'test_environment', label: 'Test Environment Operations', defaultEnabled: true }] : []),
     { id: 'account_deletions', label: 'Account Deletions', defaultEnabled: false },
     { id: 'account_deactivations', label: 'Account Deactivations', defaultEnabled: false },
     { id: 'transaction_deletions', label: 'Transaction Deletions', defaultEnabled: false },
