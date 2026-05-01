@@ -487,13 +487,23 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ onTransactionDelete
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-950 p-8 transition-colors duration-200">
       <div className="max-w-6xl mx-auto">
-        <div ref={headerRef} className="mb-6 flex items-center justify-between">
-          <h1 className="text-2xl font-black text-gray-900 dark:text-gray-100">Transactions</h1>
-          <div className="flex items-center space-x-3">
-            <a href="/" className="px-3 py-2 rounded-lg bg-white dark:bg-gray-900 dark:border-gray-800 border dark:text-gray-200 shadow-sm transition-colors">Back</a>
-            <button onClick={() => setShowTypeModal(true)} className="px-4 py-2 bg-indigo-600 text-white rounded-lg flex items-center space-x-2 hover:bg-indigo-700 shadow-sm transition-all">
+        {/* ── Header & Controllers ───────────────────────────────────────── */}
+        <div ref={headerRef} className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white dark:bg-gray-900 p-6 md:p-8 rounded-[2.5rem] border border-gray-100 dark:border-gray-800 shadow-sm transition-colors mb-6">
+          <div className="flex items-center gap-5">
+            <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-indigo-500 to-blue-600 flex items-center justify-center text-white shadow-lg">
+              <ArrowLeftRight className="w-7 h-7" />
+            </div>
+            <div>
+              <h1 className="text-2xl md:text-3xl font-black text-gray-900 dark:text-gray-100 uppercase tracking-tight transition-colors">Transactions</h1>
+              <p className="text-gray-500 dark:text-gray-400 text-sm font-medium transition-colors">Track and manage all your financial activities</p>
+            </div>
+          </div>
+          
+          <div className="flex items-center gap-3 self-end sm:self-auto">
+            <a href="/" className="px-5 py-3 rounded-xl bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 font-bold hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors text-sm">Back</a>
+            <button onClick={() => setShowTypeModal(true)} className="flex items-center gap-2 bg-indigo-600 text-white px-5 py-3 rounded-xl font-bold hover:bg-indigo-700 transition-all shadow-md shadow-indigo-200 dark:shadow-none text-sm">
               <Plus className="w-4 h-4" />
-              <span>Add Transaction</span>
+              <span className="hidden sm:inline">Add Transaction</span>
             </button>
           </div>
         </div>
