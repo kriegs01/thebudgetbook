@@ -813,7 +813,9 @@ const Settings: React.FC<SettingsProps> = ({ currency, setCurrency, categories, 
                 setIsPeopleEnabled(newValue); // Optimistic UI
                 try {
                   const newSettings = { ...(userProfile?.settings || {}), peopleEnabled: newValue };
-                  await updateUserProfile(user.id, { settings: newSettings });
+                  const { error } = await updateUserProfile(user.id, { settings: newSettings });
+                  if (error) throw error;
+                  
                   await refreshProfile();
                 } catch (err) {
                   console.error('Failed to toggle people tracking:', err);
@@ -847,8 +849,11 @@ const Settings: React.FC<SettingsProps> = ({ currency, setCurrency, categories, 
                           onClick={async () => {
                             if (!user) return;
                             const updatedPeople = userProfile.settings?.people?.filter(p => p !== person) || [];
-                        const newSettings = { ...(userProfile?.settings || {}), people: updatedPeople };
-                            await updateUserProfile(user.id, { settings: newSettings });
+                            const newSettings = { ...(userProfile?.settings || {}), people: updatedPeople };
+                            
+                            const { error } = await updateUserProfile(user.id, { settings: newSettings });
+                            if (error) throw error;
+                            
                             await refreshProfile();
                           }}
                           className="text-red-500 hover:text-red-600 p-1 rounded-full hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
@@ -877,9 +882,14 @@ const Settings: React.FC<SettingsProps> = ({ currency, setCurrency, categories, 
                       if (trimmedName && userProfile && !userProfile.settings?.people?.includes(trimmedName)) {
                         const updatedPeople = [...(userProfile.settings?.people || []), trimmedName];
                         const newSettings = { ...(userProfile?.settings || {}), people: updatedPeople };
-                        await updateUserProfile(user.id, { settings: newSettings });
-                        await refreshProfile();
-                        setPersonInput('');
+                        
+                        const { error } = await updateUserProfile(user.id, { settings: newSettings });
+                        if (error) {
+                          console.error('Failed to add person:', error);
+                        } else {
+                          await refreshProfile();
+                          setPersonInput('');
+                        }
                       }
                     }}
                     disabled={!personInput.trim()}

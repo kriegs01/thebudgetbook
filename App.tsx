@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Menu, ChevronLeft, SlidersHorizontal, ArrowUp, ArrowDown, Eye, EyeOff, X, ChevronUp, LogOut, Lock } from 'lucide-react';
+import { Menu, ChevronLeft, SlidersHorizontal, ArrowUp, ArrowDown, Eye, EyeOff, X, ChevronUp, LogOut, Lock, Users } from 'lucide-react';
 import { BrowserRouter, Routes, Route, NavLink } from 'react-router-dom';
 import { NAV_ITEMS, INITIAL_BUDGET, DEFAULT_SETUP, INITIAL_CATEGORIES } from './constants';
 import { getAllBillersFrontend, createBillerFrontend, updateBillerFrontend, deleteBillerFrontend } from './src/services/billersService';
@@ -1082,6 +1082,22 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
                   </NavLink>
                 );
               })}
+              {/* People Page Link - Appears only when enabled in General Settings */}
+              {userProfile?.settings?.peopleEnabled && (
+                <NavLink
+                  to="/people"
+                  className={({ isActive }) =>
+                    `w-full flex items-center p-3 rounded-xl transition-colors ${
+                      isActive ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400' : 'text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800/50'
+                    }`
+                  }
+                >
+                  <div className={`${isSidebarOpen ? '' : 'mx-auto'} ${window.location.pathname === '/people' ? 'text-blue-600 dark:text-blue-400' : 'text-gray-400 dark:text-gray-500'} transition-colors`}>
+                    <Users className="w-5 h-5" />
+                  </div>
+                  {isSidebarOpen && <span className="ml-3 font-bold text-sm">People</span>}
+                </NavLink>
+              )}
             </nav>
             {isSidebarOpen && (
               <div className="flex justify-center px-4 mb-4 mt-2">
