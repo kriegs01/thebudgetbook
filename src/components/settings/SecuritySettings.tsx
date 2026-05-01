@@ -278,7 +278,7 @@ export const SecuritySettings: React.FC = () => {
             </p>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-y-6 gap-x-4">
             <div>
               <label className="block text-xs font-bold text-gray-400 uppercase mb-2">
                 Session Timeout
@@ -325,6 +325,43 @@ export const SecuritySettings: React.FC = () => {
                 <option value="5">5 minutes</option>
                 <option value="10">10 minutes</option>
                 <option value="30">30 minutes</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold text-gray-400 uppercase mb-2">
+                Standby Lock (Inactivity)
+              </label>
+              <select
+                value={settings.standby_timeout || 0}
+                onChange={(e) => updateSettings({ standby_timeout: parseInt(e.target.value) })}
+                className="w-full bg-white border-gray-200 rounded-xl p-3 text-xs font-medium outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="0">Off</option>
+                <option value="1">1 minute</option>
+                <option value="5">5 minutes</option>
+                <option value="10">10 minutes</option>
+                <option value="15">15 minutes</option>
+                <option value="30">30 minutes</option>
+                <option value="60">1 hour</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold text-gray-400 uppercase mb-2">
+                Auto-Logout (Inactivity)
+              </label>
+              <select
+                value={settings.auto_logout_timeout || 0}
+                onChange={(e) => updateSettings({ auto_logout_timeout: parseInt(e.target.value) })}
+                className="w-full bg-white border-gray-200 rounded-xl p-3 text-xs font-medium outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="0">Off</option>
+                <option value="5">5 minutes</option>
+                <option value="15">15 minutes</option>
+                <option value="30">30 minutes</option>
+                <option value="60">1 hour</option>
+                <option value="120">2 hours</option>
               </select>
             </div>
           </div>

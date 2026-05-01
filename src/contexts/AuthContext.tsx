@@ -182,10 +182,25 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     document.addEventListener('visibilitychange', handleVisibilityChange);
 
+    // Listen for Auto-Logout command from PinProtection background timer
+    const handleIdleLogout = async () => {
+      console.log('[Auth] Idle timeout reached. Logging out.');
+      localStorage.removeItem('pin_protection');
+      sessionStorage.removeItem('pin_tab_session');
+      const { error } = await supabase.auth.signOut();
+      if (!error) {
+        setSession(null);
+        setUser(null);
+        setUserProfile(null);
+      }
+    };
+    window.addEventListener('app_idle_logout', handleIdleLogout);
+
     return () => {
       mounted = false;
       subscription.unsubscribe();
       document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('app_idle_logout', handleIdleLogout);
     };
   }, []);
 

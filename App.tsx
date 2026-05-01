@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Menu, ChevronLeft, SlidersHorizontal, ArrowUp, ArrowDown, Eye, EyeOff, X, ChevronUp, LogOut } from 'lucide-react';
+import { Menu, ChevronLeft, SlidersHorizontal, ArrowUp, ArrowDown, Eye, EyeOff, X, ChevronUp, LogOut, Lock } from 'lucide-react';
 import { BrowserRouter, Routes, Route, NavLink } from 'react-router-dom';
 import { NAV_ITEMS, INITIAL_BUDGET, DEFAULT_SETUP, INITIAL_CATEGORIES } from './constants';
 import { getAllBillersFrontend, createBillerFrontend, updateBillerFrontend, deleteBillerFrontend } from './src/services/billersService';
@@ -18,7 +18,7 @@ import type { SupabaseTransaction } from './src/types/supabase';
 
 // Context
 import { TestEnvironmentProvider } from './src/contexts/TestEnvironmentContext';
-import { PinProtectionProvider } from './src/contexts/PinProtectionContext';
+import { PinProtectionProvider, usePinProtection } from './src/contexts/PinProtectionContext';
 import { AuthProvider, useAuth } from './src/contexts/AuthContext';
 import { TestModeBanner } from './src/components/TestModeBanner';
 
@@ -211,6 +211,8 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
   const [navPreferences, setNavPreferences] = useState<{id: string, visible: boolean}[]>([]);
   const [showNavEditModal, setShowNavEditModal] = useState(false);
   const [tempNavPrefs, setTempNavPrefs] = useState(navPreferences);
+
+  const { triggerStandbyLock, isPinEnabled } = usePinProtection();
 
   useEffect(() => {
     let initialPrefs = null;
@@ -1036,8 +1038,7 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
   };
 
   return (
-    <TestEnvironmentProvider>
-      <PinProtectionProvider>
+    <>
         <TestModeBanner sidebarOpen={isSidebarOpen} />
         <BrowserRouter>
         <div className="flex h-[100dvh] bg-gray-50 dark:bg-gray-950 w-full overflow-hidden fixed inset-0 transition-colors duration-200">
@@ -1087,7 +1088,16 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
               {isSidebarOpen ? (
                 <div>
                   {isUserMenuOpen && (
-                    <div className="pb-2">
+                    <div className="pb-2 space-y-1">
+                      {isPinEnabled() && (
+                        <button
+                          onClick={triggerStandbyLock}
+                          className="w-full flex items-center space-x-3 py-2 px-3 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors"
+                        >
+                          <Lock className="w-4 h-4" />
+                          <span>Lock App</span>
+                        </button>
+                      )}
                       <button
                         onClick={async () => {
                           try {
@@ -1127,7 +1137,16 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
               ) : (
                 <div className="flex flex-col items-center w-full">
                   {isUserMenuOpen && (
-                    <div className="pb-2 w-full">
+                    <div className="pb-2 w-full space-y-1">
+                      {isPinEnabled() && (
+                        <button
+                          onClick={triggerStandbyLock}
+                          className="w-full py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg flex items-center justify-center transition-colors"
+                          title="Lock App"
+                        >
+                          <Lock className="w-5 h-5" />
+                        </button>
+                      )}
                       <button
                         onClick={async () => {
                           try {
@@ -1373,17 +1392,20 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
         </div>
       )}
     </BrowserRouter>
-    </PinProtectionProvider>
-    </TestEnvironmentProvider>
+    </>
   );
 };
 
 // Main App component with Auth Provider
 const App: React.FC = () => {
   return (
-    <AuthProvider>
-      <AppContent />
-    </AuthProvider>
+    <TestEnvironmentProvider>
+      <PinProtectionProvider>
+        <AuthProvider>
+          <AppContent />
+        </AuthProvider>
+      </PinProtectionProvider>
+    </TestEnvironmentProvider>
   );
 };
 

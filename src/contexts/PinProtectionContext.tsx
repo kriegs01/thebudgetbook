@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { supabase } from '../utils/supabaseClient';
 import { updateUserProfile, getUserProfile } from '../services/userProfileService';
+import { Lock } from 'lucide-react';
 
 interface PinProtectionSettings {
   session_timeout: number; // minutes
@@ -8,11 +9,14 @@ interface PinProtectionSettings {
   lockout_duration: number; // minutes
   transaction_deletion_frequency: 'one-time' | 'everytime';
   feature_frequencies?: Record<string, 'one-time' | 'everytime'>;
+  standby_timeout?: number; // minutes (0 = off)
+  auto_logout_timeout?: number; // minutes (0 = off)
 }
 
 interface SessionState {
   authenticated: boolean;
   expires_at: string | null;
+  standby_locked: boolean;
 }
 
 interface LockoutState {
@@ -53,6 +57,7 @@ interface PinProtectionContextType {
   getLastChangedDate: () => string | null;
   getRemainingAttempts: () => number;
   getLockoutTimeRemaining: () => number; // seconds
+  triggerStandbyLock: () => void;
 }
 
 const PinProtectionContext = createContext<PinProtectionContextType | undefined>(undefined);
@@ -63,6 +68,8 @@ const DEFAULT_SETTINGS: PinProtectionSettings = {
   lockout_duration: 1,
   transaction_deletion_frequency: 'one-time',
   feature_frequencies: {},
+  standby_timeout: 0,
+  auto_logout_timeout: 0,
 };
 
 const DEFAULT_PROTECTED_FEATURES = ['danger_zone', 'test_environment'];
@@ -99,7 +106,7 @@ export const PinProtectionProvider: React.FC<{ children: ReactNode }> = ({ child
         // If the session storage flag is missing, this is a new tab or a closed/reopened tab.
         // We lock the session here to ensure the PIN must be entered again.
         if (!sessionStorage.getItem('pin_tab_session')) {
-          parsed.session = { authenticated: false, expires_at: null };
+          parsed.session = { authenticated: false, expires_at: null, standby_locked: false };
         }
 
         // Ensure new settings exist for backward compatibility
@@ -125,6 +132,7 @@ export const PinProtectionProvider: React.FC<{ children: ReactNode }> = ({ child
       session: {
         authenticated: false,
         expires_at: null,
+        standby_locked: false,
       },
       lockout: {
         locked: false,
@@ -178,6 +186,33 @@ export const PinProtectionProvider: React.FC<{ children: ReactNode }> = ({ child
     syncPinFromDb();
   }, []);
 
+  // Track global user activity for timeouts
+  useEffect(() => {
+    const updateActivity = () => {
+      localStorage.setItem('budget_last_activity', Date.now().toString());
+    };
+    let lastCall = 0;
+    const handleActivity = () => {
+      const now = Date.now();
+      if (now - lastCall > 1000) { // Throttle updates to max once per second
+        lastCall = now;
+        updateActivity();
+      }
+    };
+
+    const events = ['mousemove', 'keydown', 'click', 'touchstart', 'scroll'];
+    events.forEach(e => window.addEventListener(e, handleActivity));
+    
+    updateActivity(); // Initial ping
+
+    return () => {
+      events.forEach(e => window.removeEventListener(e, handleActivity));
+    };
+  }, []);
+
+  const [standbyPin, setStandbyPin] = useState('');
+  const [standbyError, setStandbyError] = useState(false);
+
   // Background timer to check session expiration and lockout
   useEffect(() => {
     const interval = setInterval(() => {
@@ -192,6 +227,7 @@ export const PinProtectionProvider: React.FC<{ children: ReactNode }> = ({ child
             session: {
               authenticated: false,
               expires_at: null,
+              standby_locked: prev.session.standby_locked,
             },
           }));
         }
@@ -211,10 +247,37 @@ export const PinProtectionProvider: React.FC<{ children: ReactNode }> = ({ child
           }));
         }
       }
+
+      // Check Inactivity for Standby & Auto-Logout
+      const lastActivityStr = localStorage.getItem('budget_last_activity');
+      const lastActivity = lastActivityStr ? parseInt(lastActivityStr, 10) : Date.now();
+      const idleTimeMinutes = (Date.now() - lastActivity) / 1000 / 60;
+
+      if (pinData.enabled && pinData.pin_hash) {
+        // Trigger Standby Lock
+        if (pinData.settings.standby_timeout && pinData.settings.standby_timeout > 0) {
+          if (idleTimeMinutes >= pinData.settings.standby_timeout && !pinData.session.standby_locked) {
+            setPinData(prev => ({ ...prev, session: { ...prev.session, standby_locked: true } }));
+          }
+        }
+        
+        // Trigger Auto Logout
+        if (pinData.settings.auto_logout_timeout && pinData.settings.auto_logout_timeout > 0) {
+          if (idleTimeMinutes >= pinData.settings.auto_logout_timeout) {
+            const logoutFired = sessionStorage.getItem('auto_logout_fired');
+            if (!logoutFired) {
+              sessionStorage.setItem('auto_logout_fired', 'true');
+              window.dispatchEvent(new CustomEvent('app_idle_logout'));
+            }
+          } else {
+            sessionStorage.removeItem('auto_logout_fired');
+          }
+        }
+      }
     }, 1000); // Check every second
 
     return () => clearInterval(interval);
-  }, [pinData.session, pinData.lockout]);
+  }, [pinData.session, pinData.lockout, pinData.enabled, pinData.pin_hash, pinData.settings]);
 
   const isPinEnabled = (): boolean => {
     return pinData.enabled && pinData.pin_hash !== '';
@@ -329,6 +392,7 @@ export const PinProtectionProvider: React.FC<{ children: ReactNode }> = ({ child
       session: {
         authenticated: false,
         expires_at: null,
+        standby_locked: false,
       },
       lockout: {
         locked: false,
@@ -510,6 +574,42 @@ export const PinProtectionProvider: React.FC<{ children: ReactNode }> = ({ child
     return Math.max(0, remaining);
   };
 
+  const triggerStandbyLock = (): void => {
+    if (isPinEnabled()) {
+      setPinData(prev => ({
+        ...prev,
+        session: { ...prev.session, standby_locked: true }
+      }));
+    }
+  };
+
+  const handleStandbySubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (isLockedOut()) return;
+    
+    const hashedPin = await hashPin(standbyPin);
+    if (hashedPin === pinData.pin_hash) {
+      setPinData(prev => ({
+        ...prev,
+        lockout: { locked: false, unlocks_at: null, failed_attempts: 0 },
+        session: { ...prev.session, standby_locked: false }
+      }));
+      setStandbyPin('');
+      setStandbyError(false);
+      extendSession();
+      localStorage.setItem('budget_last_activity', Date.now().toString());
+    } else {
+      setStandbyError(true);
+      setStandbyPin('');
+      const newFailedAttempts = pinData.lockout.failed_attempts + 1;
+      if (newFailedAttempts >= pinData.settings.max_attempts) {
+        lockOut();
+      } else {
+        setPinData(prev => ({ ...prev, lockout: { ...prev.lockout, failed_attempts: newFailedAttempts } }));
+      }
+    }
+  };
+
   return (
     <PinProtectionContext.Provider
       value={{
@@ -533,9 +633,40 @@ export const PinProtectionProvider: React.FC<{ children: ReactNode }> = ({ child
         getLastChangedDate,
         getRemainingAttempts,
         getLockoutTimeRemaining,
+        triggerStandbyLock,
       }}
     >
       {children}
+
+      {/* App Standby Lock Screen Overlay */}
+      {pinData.session.standby_locked && (
+        <div className="fixed inset-0 z-[9999] bg-gray-950/95 backdrop-blur-2xl flex flex-col items-center justify-center p-4 animate-in fade-in duration-500">
+          <div className="w-24 h-24 bg-indigo-500/20 text-indigo-400 rounded-full flex items-center justify-center mb-6 shadow-[0_0_50px_-10px_rgba(99,102,241,0.4)]">
+            <Lock className="w-12 h-12" />
+          </div>
+          <h2 className="text-3xl font-black text-white mb-2 uppercase tracking-[0.2em]">App Locked</h2>
+          <p className="text-gray-400 mb-10 font-medium tracking-wide">Please enter your PIN to resume</p>
+          
+          <form onSubmit={handleStandbySubmit} className="w-full max-w-xs space-y-6">
+            <div>
+              <input
+                type="password"
+                value={standbyPin}
+                onChange={(e) => { setStandbyPin(e.target.value); setStandbyError(false); }}
+                className={`w-full bg-gray-900 border-2 ${standbyError ? 'border-red-500 text-red-500' : 'border-gray-800 text-white focus:border-indigo-500'} rounded-2xl p-4 text-center text-3xl font-black tracking-[0.5em] outline-none transition-colors`}
+                placeholder="••••"
+                maxLength={6}
+                autoFocus
+              />
+              {standbyError && <p className="text-red-500 text-sm font-bold mt-3 text-center uppercase tracking-widest">Incorrect PIN</p>}
+              {isLockedOut() && <p className="text-red-500 text-sm font-bold mt-3 text-center uppercase tracking-widest">Too many attempts. Try again later.</p>}
+            </div>
+            <button type="submit" disabled={isLockedOut() || standbyPin.length < 4} className="w-full bg-indigo-600 text-white py-4 rounded-2xl font-black uppercase tracking-widest text-sm hover:bg-indigo-700 disabled:opacity-50 transition-colors shadow-lg shadow-indigo-900/50">
+              Unlock
+            </button>
+          </form>
+        </div>
+      )}
     </PinProtectionContext.Provider>
   );
 };
