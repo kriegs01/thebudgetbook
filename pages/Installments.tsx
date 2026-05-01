@@ -1085,14 +1085,14 @@ const Installments: React.FC<InstallmentsProps> = ({ installments, accounts, bil
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-2 transition-colors">Date Paid</label>
-                  <input required type="date" value={payFormData.datePaid} onChange={(e) => setPayFormData({...payFormData, datePaid: e.target.value})} className="w-full bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-transparent dark:border-gray-700 rounded-2xl p-4 outline-none font-bold text-sm transition-colors" />
+                  <input required type="date" value={payFormData.datePaid} onChange={(e) => setPayFormData({...payFormData, datePaid: e.target.value})} className="w-full min-w-0 bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-transparent dark:border-gray-700 rounded-2xl px-3 py-4 outline-none font-bold text-sm transition-colors" />
                 </div>
                 <div>
                   <label className="block text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-2 transition-colors">Payment Method</label>
-                  <select value={payFormData.accountId} onChange={(e) => setPayFormData({...payFormData, accountId: e.target.value})} className="w-full bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-transparent dark:border-gray-700 rounded-2xl p-4 outline-none font-bold text-sm appearance-none transition-colors">
+                  <select value={payFormData.accountId} onChange={(e) => setPayFormData({...payFormData, accountId: e.target.value})} className="w-full min-w-0 bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-transparent dark:border-gray-700 rounded-2xl px-3 py-4 outline-none font-bold text-sm appearance-none transition-colors">
                     {accounts.filter(acc => acc.classification !== 'Credit Card' && acc.type !== 'Credit').map(acc => <option key={acc.id} value={acc.id}>{acc.bank} ({acc.classification})</option>)}
                   </select>
                 </div>

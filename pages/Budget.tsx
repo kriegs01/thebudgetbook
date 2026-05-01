@@ -3178,14 +3178,14 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Date Paid</label>
-                  <input required type="date" value={payFormData.datePaid} onChange={(e) => setPayFormData({...payFormData, datePaid: e.target.value})} className="w-full bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-transparent rounded-2xl p-4 outline-none font-bold text-sm" />
+                  <input required type="date" value={payFormData.datePaid} onChange={(e) => setPayFormData({...payFormData, datePaid: e.target.value})} className="w-full min-w-0 bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-transparent rounded-2xl px-3 py-4 outline-none font-bold text-sm transition-colors" />
                 </div>
                 <div>
                   <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Payment Method</label>
-                  <select value={payFormData.accountId} onChange={(e) => setPayFormData({...payFormData, accountId: e.target.value})} className="w-full bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-transparent rounded-2xl p-4 outline-none font-bold text-sm appearance-none">
+                  <select value={payFormData.accountId} onChange={(e) => setPayFormData({...payFormData, accountId: e.target.value})} className="w-full min-w-0 bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-transparent rounded-2xl px-3 py-4 outline-none font-bold text-sm appearance-none transition-colors">
                     {accounts.map(acc => <option key={acc.id} value={acc.id}>{acc.bank} ({acc.classification})</option>)}
                   </select>
                 </div>
@@ -3244,7 +3244,7 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Date Paid</label>
                   <input 
@@ -3252,7 +3252,7 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                     type="date" 
                     value={transactionFormData.date} 
                     onChange={(e) => setTransactionFormData({...transactionFormData, date: e.target.value})} 
-                    className="w-full bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-transparent rounded-2xl p-4 outline-none font-bold text-sm" 
+                    className="w-full min-w-0 bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-transparent rounded-2xl px-3 py-4 outline-none font-bold text-sm transition-colors" 
                   />
                 </div>
                 <div>
@@ -3260,7 +3260,7 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                   <select 
                     value={transactionFormData.accountId} 
                     onChange={(e) => setTransactionFormData({...transactionFormData, accountId: e.target.value})} 
-                    className="w-full bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-transparent rounded-2xl p-4 outline-none font-bold text-sm appearance-none"
+                    className="w-full min-w-0 bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-transparent rounded-2xl px-3 py-4 outline-none font-bold text-sm appearance-none transition-colors"
                   >
                     {accounts.map(acc => <option key={acc.id} value={acc.id}>{acc.bank} ({acc.classification})</option>)}
                   </select>

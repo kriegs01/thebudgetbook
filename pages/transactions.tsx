@@ -612,7 +612,7 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ onTransactionDelete
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
                     <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Date Paid</label>
                     <input 
@@ -620,7 +620,7 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ onTransactionDelete
                       value={form.date} 
                       onChange={e => setForm(f => ({ ...f, date: e.target.value }))} 
                       required 
-                    className="w-full bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-transparent rounded-2xl p-4 outline-none font-bold text-sm" 
+                    className="w-full min-w-0 bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-transparent rounded-2xl px-3 py-4 outline-none font-bold text-sm transition-colors" 
                     />
                   </div>
                   <div>
@@ -631,7 +631,7 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ onTransactionDelete
                       <select 
                         value={form.paymentMethodId} 
                         onChange={e => setForm(f => ({ ...f, paymentMethodId: e.target.value }))} 
-                      className="w-full bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-transparent rounded-2xl p-4 outline-none font-bold text-sm appearance-none"
+                      className="w-full min-w-0 bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-transparent rounded-2xl px-3 py-4 outline-none font-bold text-sm appearance-none transition-colors"
                       >
                       {accounts.filter(a => a.classification !== 'Credit Card').map(a => <option key={a.id} value={a.id}>{a.bank}</option>)}
                       </select>
