@@ -86,7 +86,23 @@ export const createTransaction = async (transaction: CreateTransactionInput) => 
       .select()
       .single();
 
-    if (error) throw error;
+    if (error) {
+      if (error.code === 'PGRST204' && error.message && error.message.includes('borrower_name')) {
+        console.warn('borrower_name column not found in database. Retrying without it...');
+        const { borrower_name, ...txWithoutBorrower } = transaction;
+        
+        const { data: retryData, error: retryError } = await supabase
+          .from(getTableName('transactions'))
+          .insert([{ ...txWithoutBorrower, user_id: user.id }])
+          .select()
+          .single();
+          
+        if (retryError) throw retryError;
+        return { data: retryData, error: null };
+      }
+      throw error;
+    }
+
     return { data, error: null };
   } catch (error) {
     console.error('Error creating transaction:', error);
@@ -106,7 +122,24 @@ export const updateTransaction = async (id: string, updates: UpdateTransactionIn
       .select()
       .single();
 
-    if (error) throw error;
+    if (error) {
+      if (error.code === 'PGRST204' && error.message && error.message.includes('borrower_name')) {
+        console.warn('borrower_name column not found in database. Retrying without it...');
+        const { borrower_name, ...updatesWithoutBorrower } = updates;
+        
+        const { data: retryData, error: retryError } = await supabase
+          .from(getTableName('transactions'))
+          .update(updatesWithoutBorrower)
+          .eq('id', id)
+          .select()
+          .single();
+          
+        if (retryError) throw retryError;
+        return { data: retryData, error: null };
+      }
+      throw error;
+    }
+
     return { data, error: null };
   } catch (error) {
     console.error('Error updating transaction:', error);
