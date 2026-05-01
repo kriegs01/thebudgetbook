@@ -89,7 +89,15 @@ export const PinProtectionProvider: React.FC<{ children: ReactNode }> = ({ child
     const stored = localStorage.getItem(STORAGE_KEY);
     if (stored) {
       try {
-        return JSON.parse(stored);
+        const parsed = JSON.parse(stored);
+        
+        // If the session storage flag is missing, this is a new tab or a closed/reopened tab.
+        // We lock the session here to ensure the PIN must be entered again.
+        if (!sessionStorage.getItem('pin_tab_session')) {
+          parsed.session = { authenticated: false, expires_at: null };
+        }
+        
+        return parsed;
       } catch {
         // Invalid data, return default
       }
@@ -116,6 +124,13 @@ export const PinProtectionProvider: React.FC<{ children: ReactNode }> = ({ child
   // Auto-save to localStorage whenever pinData changes
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(pinData));
+    
+    // Sync session state to sessionStorage for tab-close detection
+    if (pinData.session.authenticated) {
+      sessionStorage.setItem('pin_tab_session', 'true');
+    } else {
+      sessionStorage.removeItem('pin_tab_session');
+    }
   }, [pinData]);
 
   // Sync PIN from DB on mount (handles new browser/device logins)

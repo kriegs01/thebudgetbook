@@ -146,6 +146,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           loadUserProfile(session.user.id);
         } else {
           setUserProfile(null);
+
+          // Reset PIN protection state when user is signed out or session expires
+          localStorage.removeItem('pin_protection');
+          sessionStorage.removeItem('pin_tab_session');
         }
 
         // Migrate data on first sign in
@@ -168,6 +172,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           setSession(null);
           setUser(null);
           setUserProfile(null);
+
+          // Reset PIN protection state
+          localStorage.removeItem('pin_protection');
+          sessionStorage.removeItem('pin_tab_session');
         }
       }
     };
@@ -234,6 +242,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const signOut = async () => {
     try {
+      // Clear PIN validity states explicitly on log out
+      localStorage.removeItem('pin_protection');
+      sessionStorage.removeItem('pin_tab_session');
+
       const { error } = await supabase.auth.signOut();
       if (error) throw error;
       setUserProfile(null);
