@@ -38,6 +38,9 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ onTransactionDelete
   const [editingTxId, setEditingTxId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
+  const headerRef = useRef<HTMLDivElement>(null);
+  const [showFloatingAdd, setShowFloatingAdd] = useState(false);
+
   // Transaction details modal
   const [selectedTx, setSelectedTx] = useState<Transaction | null>(null);
   // Signed URL for displaying a receipt (generated fresh each time the modal opens)
@@ -133,6 +136,20 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ onTransactionDelete
   useEffect(() => {
     loadData();
   }, [loadData]);
+
+  // Observer to show floating add button when scrolled past header
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        setShowFloatingAdd(!entry.isIntersecting);
+      },
+      { root: null, threshold: 0 }
+    );
+    if (headerRef.current) {
+      observer.observe(headerRef.current);
+    }
+    return () => observer.disconnect();
+  }, []);
 
   // Re-fetch transactions when the parent signals an external change (e.g. stash top-up
   // created/deleted from the Budget page). Uses a ref so the initial render is skipped.
@@ -379,7 +396,7 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ onTransactionDelete
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-950 p-8 transition-colors duration-200">
       <div className="max-w-6xl mx-auto">
-        <div className="mb-6 flex items-center justify-between">
+        <div ref={headerRef} className="mb-6 flex items-center justify-between">
           <h1 className="text-2xl font-black text-gray-900 dark:text-gray-100">Transactions</h1>
           <div className="flex items-center space-x-3">
             <a href="/" className="px-3 py-2 rounded-lg bg-white dark:bg-gray-900 dark:border-gray-800 border dark:text-gray-200 shadow-sm transition-colors">Back</a>
@@ -847,6 +864,17 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ onTransactionDelete
             </div>
           </div>
         </div>
+      )}
+
+      {/* Floating Squircle Add Button */}
+      {showFloatingAdd && (
+        <button
+          onClick={() => setShowForm(true)}
+          className="fixed bottom-8 right-8 z-40 w-14 h-14 bg-indigo-600 text-white rounded-2xl shadow-xl flex items-center justify-center hover:bg-indigo-700 hover:-translate-y-1 transition-all animate-in fade-in zoom-in duration-300"
+          aria-label="Add Transaction"
+        >
+          <Plus className="w-6 h-6" />
+        </button>
       )}
 
       {confirmModal.show && <ConfirmDialog {...confirmModal} onClose={() => setConfirmModal(p => ({ ...p, show: false }))} />}
