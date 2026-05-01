@@ -2037,17 +2037,17 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
 
       {showPayModal && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md animate-in fade-in">
-          <div className="bg-white rounded-3xl w-full max-w-md p-10 shadow-2xl animate-in zoom-in-95 relative">
-            <button onClick={() => setShowPayModal(null)} className="absolute right-6 top-6 p-2 hover:bg-gray-100 rounded-full transition-colors"><X className="w-6 h-6 text-gray-400" /></button>
-            <h2 className="text-2xl font-black text-gray-900 mb-2">Pay {showPayModal.biller.name}</h2>
+          <div className="bg-white dark:bg-gray-900 rounded-3xl w-full max-w-md p-10 shadow-2xl animate-in zoom-in-95 relative transition-colors">
+            <button onClick={() => setShowPayModal(null)} className="absolute right-6 top-6 p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full transition-colors"><X className="w-6 h-6 text-gray-400 dark:text-gray-500" /></button>
+            <h2 className="text-2xl font-black text-gray-900 dark:text-gray-100 mb-2 transition-colors">Pay {showPayModal.biller.name}</h2>
             <form onSubmit={handlePaySubmit} className="space-y-6 pt-4">
-              <div><label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Amount Paid</label><div className="relative"><span className="absolute left-4 top-1/2 -translate-y-1/2 font-bold text-gray-400">₱</span><input required type="number" value={payFormData.amount} onChange={(e) => setPayFormData(prev => ({...prev, amount: e.target.value}))} className="w-full bg-gray-50 border-transparent rounded-2xl p-4 pl-8 outline-none text-xl font-black focus:ring-2 focus:ring-indigo-500" /></div></div>
+              <div><label className="block text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-2 transition-colors">Amount Paid</label><div className="relative"><span className="absolute left-4 top-1/2 -translate-y-1/2 font-bold text-gray-400 dark:text-gray-500 transition-colors">₱</span><input required type="number" value={payFormData.amount} onChange={(e) => setPayFormData(prev => ({...prev, amount: e.target.value}))} className="w-full bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-transparent rounded-2xl p-4 pl-8 outline-none text-xl font-black focus:ring-2 focus:ring-indigo-500 transition-colors" /></div></div>
               
               <div>
-                <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Receipt Upload</label>
+                <label className="block text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-2 transition-colors">Receipt Upload</label>
                 <div className="relative">
                   <input type="file" className="absolute inset-0 opacity-0 cursor-pointer" onChange={(e) => { const f = e.target.files?.[0] || null; setPayReceiptFile(f); setPayFormData(prev => ({...prev, receipt: f?.name || ''})); }} />
-                  <div className="w-full bg-gray-50 border-2 border-dashed border-gray-200 rounded-2xl p-6 text-center text-sm text-gray-500 hover:border-indigo-300 hover:bg-indigo-50 transition-all flex flex-col items-center">
+                  <div className="w-full bg-gray-50 dark:bg-gray-800 border-2 border-dashed border-gray-200 dark:border-gray-700 rounded-2xl p-6 text-center text-sm text-gray-500 hover:border-indigo-300 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 transition-all flex flex-col items-center">
                     <Upload className="w-8 h-8 mb-2 text-indigo-400" />
                     <span className="font-bold">{payFormData.receipt || 'Click or drag to upload receipt'}</span>
                   </div>
@@ -2055,10 +2055,10 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
               </div>
 
               <div className="grid grid-cols-2 gap-4">
-                <div><label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Date Paid</label><input required type="date" value={payFormData.datePaid} onChange={(e) => setPayFormData(prev => ({...prev, datePaid: e.target.value}))} className="w-full bg-gray-50 border-transparent rounded-2xl p-4 outline-none font-bold text-sm" /></div>
-                <div><label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Payment Method</label><select value={payFormData.accountId} onChange={(e) => setPayFormData(prev => ({...prev, accountId: e.target.value}))} className="w-full bg-gray-50 border-transparent rounded-2xl p-4 outline-none font-bold text-sm appearance-none">{accounts.map(acc => <option key={acc.id} value={acc.id}>{acc.bank} ({acc.classification})</option>)}</select></div>
+                <div><label className="block text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-2 transition-colors">Date Paid</label><input required type="date" value={payFormData.datePaid} onChange={(e) => setPayFormData(prev => ({...prev, datePaid: e.target.value}))} className="w-full bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-transparent rounded-2xl p-4 outline-none font-bold text-sm transition-colors" /></div>
+                <div><label className="block text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-2 transition-colors">Payment Method</label><select value={payFormData.accountId} onChange={(e) => setPayFormData(prev => ({...prev, accountId: e.target.value}))} className="w-full bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-transparent rounded-2xl p-4 outline-none font-bold text-sm appearance-none transition-colors">{accounts.map(acc => <option key={acc.id} value={acc.id}>{acc.bank} ({acc.classification})</option>)}</select></div>
               </div>
-              <div className="flex space-x-4 pt-4"><button type="button" onClick={() => setShowPayModal(null)} className="flex-1 bg-gray-100 py-4 rounded-2xl font-bold text-gray-500">Cancel</button><button type="submit" className="flex-1 bg-green-600 text-white py-4 rounded-2xl font-bold hover:bg-green-700 shadow-xl">Submit Payment</button></div>
+              <div className="flex space-x-4 pt-4"><button type="button" onClick={() => setShowPayModal(null)} className="flex-1 bg-gray-100 dark:bg-gray-800 py-4 rounded-2xl font-bold text-gray-500 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors">Cancel</button><button type="submit" className="flex-1 bg-green-600 text-white py-4 rounded-2xl font-bold hover:bg-green-700 shadow-xl dark:shadow-none transition-all active:scale-95">Submit Payment</button></div>
             </form>
           </div>
         </div>
