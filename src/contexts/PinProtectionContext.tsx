@@ -1,4 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import { supabase } from '../utils/supabaseClient';
+import { updateUserProfile } from '../services/userProfileService';
 
 interface PinProtectionSettings {
   session_timeout: number; // minutes
@@ -169,6 +171,17 @@ export const PinProtectionProvider: React.FC<{ children: ReactNode }> = ({ child
 
     const now = new Date().toISOString();
     const hashedPin = await hashPin(pin);
+
+    // Save to database
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        await updateUserProfile(user.id, { pin_hash: hashedPin });
+      }
+    } catch (err) {
+      console.error('Failed to save PIN to database:', err);
+    }
+
     setPinData(prev => ({
       ...prev,
       pin_hash: hashedPin,
@@ -199,6 +212,17 @@ export const PinProtectionProvider: React.FC<{ children: ReactNode }> = ({ child
 
     const now = new Date().toISOString();
     const hashedPin = await hashPin(newPin);
+
+    // Save to database
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        await updateUserProfile(user.id, { pin_hash: hashedPin });
+      }
+    } catch (err) {
+      console.error('Failed to update PIN in database:', err);
+    }
+
     setPinData(prev => ({
       ...prev,
       pin_hash: hashedPin,
@@ -217,6 +241,16 @@ export const PinProtectionProvider: React.FC<{ children: ReactNode }> = ({ child
     // Use internal verification to avoid affecting lockout counter
     if (currentPin && !(await verifyPinInternal(currentPin))) {
       return false;
+    }
+
+    // Remove from database
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        await updateUserProfile(user.id, { pin_hash: '' });
+      }
+    } catch (err) {
+      console.error('Failed to clear PIN from database:', err);
     }
 
     setPinData(prev => ({
