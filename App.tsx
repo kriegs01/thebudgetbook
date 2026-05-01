@@ -1359,6 +1359,7 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
                   }}
                 />
               } />
+              <Route path="/people" element={<PeoplePage />} />
               <Route path="/transactions" element={
                 <TransactionsPage 
                   onTransactionDeleted={handleTransactionDeleted}
