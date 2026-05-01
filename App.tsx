@@ -17,7 +17,7 @@ import type { Biller, Account, Installment, SavingsJar, Transaction } from './ty
 import type { SupabaseTransaction } from './src/types/supabase';
 
 // Context
-import { TestEnvironmentProvider } from './src/contexts/TestEnvironmentContext';
+import { TestEnvironmentProvider, useTestEnvironment } from './src/contexts/TestEnvironmentContext';
 import { PinProtectionProvider, usePinProtection } from './src/contexts/PinProtectionContext';
 import { AuthProvider, useAuth } from './src/contexts/AuthContext';
 import { TestModeBanner } from './src/components/TestModeBanner';
@@ -265,6 +265,16 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
       document.documentElement.classList.remove('dark');
     }
   }, [theme]);
+
+  const { isTestMode, setTestMode } = useTestEnvironment();
+  
+  // Security fallback: Ensure non-admin users cannot be in test mode
+  useEffect(() => {
+    if (userProfile && (userProfile as any).role !== 'admin' && isTestMode) {
+      console.log('[App] Non-admin user detected in test mode. Disabling test mode.');
+      setTestMode(false);
+    }
+  }, [userProfile, isTestMode, setTestMode]);
 
   // Wallet state is managed internally by WalletsPage and WalletView (they fetch their own data)
   
