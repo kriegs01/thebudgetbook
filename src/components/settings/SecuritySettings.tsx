@@ -4,6 +4,7 @@ import { usePinProtection } from '../../hooks/usePinProtection';
 import { SetPinModal } from '../modals/SetPinModal';
 import { ChangePinModal } from '../modals/ChangePinModal';
 import { VerifyPinModal } from '../modals/VerifyPinModal';
+import { useAuth } from '../../contexts/AuthContext';
 
 export const SecuritySettings: React.FC = () => {
   const {
@@ -18,6 +19,8 @@ export const SecuritySettings: React.FC = () => {
     removePin,
   } = usePinProtection();
 
+  const { userProfile } = useAuth();
+
   const [showSetPinModal, setShowSetPinModal] = useState(false);
   const [showChangePinModal, setShowChangePinModal] = useState(false);
   const [showRemovePinModal, setShowRemovePinModal] = useState(false);
@@ -30,8 +33,9 @@ export const SecuritySettings: React.FC = () => {
 
   const featureOptions = [
     { id: 'danger_zone', label: 'Danger Zone (Reset All Data)', defaultEnabled: true },
-    { id: 'test_environment', label: 'Test Environment Operations', defaultEnabled: true },
+    ...((userProfile as any)?.role === 'admin' ? [{ id: 'test_environment', label: 'Test Environment Operations', defaultEnabled: true }] : []),
     { id: 'account_deletions', label: 'Account Deletions', defaultEnabled: false },
+    { id: 'account_deactivations', label: 'Account Deactivations', defaultEnabled: false },
     { id: 'transaction_deletions', label: 'Transaction Deletions', defaultEnabled: false },
     { id: 'budget_modifications', label: 'Budget Modifications', defaultEnabled: false },
   ];
@@ -176,34 +180,85 @@ export const SecuritySettings: React.FC = () => {
           </div>
 
           <div className="space-y-3">
-            {featureOptions.map(feature => (
-              <label
-                key={feature.id}
-                className={`flex items-center space-x-3 p-4 rounded-xl border-2 transition-all cursor-pointer ${
-                  isPinEnabled()
-                    ? protectedFeatures.includes(feature.id)
-                      ? 'border-blue-500 bg-blue-50'
-                      : 'border-gray-200 bg-white hover:border-gray-300'
-                    : 'border-gray-200 bg-gray-100 opacity-50 cursor-not-allowed'
-                }`}
-              >
-                <input
-                  type="checkbox"
-                  checked={protectedFeatures.includes(feature.id)}
-                  onChange={() => handleToggleFeature(feature.id)}
-                  disabled={!isPinEnabled()}
-                  className="w-5 h-5 text-blue-600 rounded focus:ring-2 focus:ring-blue-500"
-                />
-                <div className="flex-1">
-                  <span className="text-xs font-bold text-gray-900">{feature.label}</span>
-                  {feature.defaultEnabled && (
-                    <span className="ml-2 text-[10px] font-bold text-blue-600 bg-blue-100 px-2 py-0.5 rounded-full">
-                      RECOMMENDED
-                    </span>
+            {featureOptions.map(feature => {
+              const isSelected = protectedFeatures.includes(feature.id);
+              const isForceEverytime = feature.id === 'danger_zone' || feature.id === 'test_environment';
+              
+              const currentFreq = isForceEverytime 
+                ? 'everytime' 
+                : (settings.feature_frequencies?.[feature.id] || 
+                  (feature.id === 'transaction_deletions' ? settings.transaction_deletion_frequency : 'one-time'));
+
+              return (
+                <div key={feature.id} className={`p-4 rounded-xl border-2 transition-all ${
+                  isPinEnabled() 
+                    ? isSelected 
+                      ? 'border-blue-500 bg-blue-50/30' 
+                      : 'border-gray-200 bg-white hover:border-gray-300' 
+                    : 'border-gray-200 bg-gray-100 opacity-50'
+                }`}>
+                  <div className="flex items-center justify-between">
+                    <div className="flex flex-col">
+                      <span className="text-sm font-bold text-gray-900">{feature.label}</span>
+                      {feature.defaultEnabled && (
+                        <span className="mt-1 text-[10px] font-bold text-blue-600 bg-blue-100 px-2 py-0.5 rounded-full w-max">
+                          RECOMMENDED
+                        </span>
+                      )}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => handleToggleFeature(feature.id)}
+                      disabled={!isPinEnabled()}
+                      className={`relative inline-flex h-6 w-11 flex-shrink-0 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${
+                        isSelected ? 'bg-blue-600' : 'bg-gray-300'
+                      } ${!isPinEnabled() ? 'opacity-50 cursor-not-allowed' : ''}`}
+                    >
+                      <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${
+                        isSelected ? 'translate-x-6' : 'translate-x-1'
+                      }`} />
+                    </button>
+                  </div>
+                  
+                  {/* Inline Frequency Settings (Two Columns) */}
+                  {isSelected && isPinEnabled() && (
+                    <div className="mt-4 pt-4 border-t border-gray-200/60 flex items-center justify-between">
+                      <span className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Frequency:</span>
+                      <div className="flex items-center space-x-6">
+                        <label className={`flex items-center space-x-2 ${isForceEverytime ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer group'}`}>
+                          <input 
+                            type="radio" 
+                            name={`freq_${feature.id}`}
+                            value="one-time"
+                            checked={currentFreq === 'one-time'}
+                            onChange={() => {
+                              if (!isForceEverytime) updateSettings({ feature_frequencies: { ...(settings.feature_frequencies || {}), [feature.id]: 'one-time' } });
+                            }}
+                            disabled={!isPinEnabled() || isForceEverytime}
+                            className="w-4 h-4 mt-0.5 text-blue-600 border-gray-300 focus:ring-blue-500"
+                          />
+                          <span className="text-xs font-bold text-gray-700 group-hover:text-blue-700 transition-colors">One-Time</span>
+                        </label>
+                        <label className={`flex items-center space-x-2 ${isForceEverytime ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer group'}`}>
+                          <input 
+                            type="radio" 
+                            name={`freq_${feature.id}`}
+                            value="everytime"
+                            checked={currentFreq === 'everytime'}
+                            onChange={() => {
+                              if (!isForceEverytime) updateSettings({ feature_frequencies: { ...(settings.feature_frequencies || {}), [feature.id]: 'everytime' } });
+                            }}
+                            disabled={!isPinEnabled() || isForceEverytime}
+                            className="w-4 h-4 mt-0.5 text-blue-600 border-gray-300 focus:ring-blue-500"
+                          />
+                          <span className="text-xs font-bold text-gray-700 group-hover:text-blue-700 transition-colors">Every time</span>
+                        </label>
+                      </div>
+                    </div>
                   )}
                 </div>
-              </label>
-            ))}
+              );
+            })}
           </div>
 
           {!isPinEnabled() && (
@@ -226,7 +281,7 @@ export const SecuritySettings: React.FC = () => {
             </p>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-y-6 gap-x-4">
             <div>
               <label className="block text-xs font-bold text-gray-400 uppercase mb-2">
                 Session Timeout
@@ -273,6 +328,43 @@ export const SecuritySettings: React.FC = () => {
                 <option value="5">5 minutes</option>
                 <option value="10">10 minutes</option>
                 <option value="30">30 minutes</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold text-gray-400 uppercase mb-2">
+                Standby Lock (Inactivity)
+              </label>
+              <select
+                value={settings.standby_timeout || 0}
+                onChange={(e) => updateSettings({ standby_timeout: parseInt(e.target.value) })}
+                className="w-full bg-white border-gray-200 rounded-xl p-3 text-xs font-medium outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="0">Off</option>
+                <option value="1">1 minute</option>
+                <option value="5">5 minutes</option>
+                <option value="10">10 minutes</option>
+                <option value="15">15 minutes</option>
+                <option value="30">30 minutes</option>
+                <option value="60">1 hour</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold text-gray-400 uppercase mb-2">
+                Auto-Logout (Inactivity)
+              </label>
+              <select
+                value={settings.auto_logout_timeout || 0}
+                onChange={(e) => updateSettings({ auto_logout_timeout: parseInt(e.target.value) })}
+                className="w-full bg-white border-gray-200 rounded-xl p-3 text-xs font-medium outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="0">Off</option>
+                <option value="5">5 minutes</option>
+                <option value="15">15 minutes</option>
+                <option value="30">30 minutes</option>
+                <option value="60">1 hour</option>
+                <option value="120">2 hours</option>
               </select>
             </div>
           </div>

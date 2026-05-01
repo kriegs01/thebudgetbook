@@ -1,11 +1,12 @@
 import React, { useEffect, useState, useMemo, useRef } from 'react';
-import { ArrowLeft, Info, Eye, ZoomIn, ZoomOut, Download, X, Pencil, BanknoteArrowDown, Trash2, ArrowUpFromLine, ArrowDownToLine, ArrowLeftRight, Banknote, CheckSquare, Square, Filter, ChevronDown, CreditCard } from 'lucide-react';
+import { ArrowLeft, Info, Eye, ZoomIn, ZoomOut, Download, X, Pencil, BanknoteArrowDown, Trash2, ArrowUpFromLine, ArrowDownToLine, ArrowLeftRight, Banknote, CheckSquare, Square, Filter, ChevronDown, CreditCard, AlertTriangle } from 'lucide-react';
 import { useSearchParams, Link } from 'react-router-dom';
 import { Account } from '../../types';
 import { getTransactionsByPaymentMethod, createTransaction, updateTransaction, updateTransactionAndSyncSchedule, createTransfer, getLoanTransactionsWithPayments, getReceiptSignedUrl, deleteTransactionAndRevertSchedule, batchDeleteTransactions } from '../../src/services/transactionsService';
 import { combineDateWithCurrentTime, getFirstDayOfCurrentYearIso, getLastDayOfCurrentYearIso } from '../../src/utils/dateUtils';
 import type { SupabaseTransaction } from '../../src/types/supabase';
 import { computeCreditUtilization, type CreditUtilization } from '../../src/utils/accounts';
+import { PinProtectedAction } from '../../src/components/PinProtectedAction';
 
 const FILTER_MIN_DATE = '2025-01-01';
 
@@ -110,6 +111,12 @@ const AccountFilteredTransactions: React.FC<AccountFilteredTransactionsProps> = 
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [showBatchConfirm, setShowBatchConfirm] = useState(false);
   const [isBatchDeleting, setIsBatchDeleting] = useState(false);
+  const [confirmModal, setConfirmModal] = useState<{
+    show: boolean;
+    title: string;
+    message: string;
+    onConfirm: () => void;
+  }>({ show: false, title: '', message: '', onConfirm: () => {} });
 
   const loadTransactions = async () => {
     if (typeof window === "undefined" || !accountId) return;
@@ -527,16 +534,23 @@ const AccountFilteredTransactions: React.FC<AccountFilteredTransactionsProps> = 
   };
 
   const handleDeleteTx = async (tx: Transaction) => {
-    if (!window.confirm(`Delete transaction "${tx.name}"? This action cannot be undone.`)) return;
-    try {
-      const { error } = await deleteTransactionAndRevertSchedule(tx.id);
-      if (error) throw error;
-      await loadTransactions();
-      onTransactionCreated?.(); // Trigger account balance recalculation after delete
-    } catch (error) {
-      console.error('Error deleting transaction:', error);
-      alert('Failed to delete transaction. Please check your connection and try again.');
-    }
+    setConfirmModal({
+      show: true,
+      title: 'Delete Transaction',
+      message: `Are you sure you want to permanently delete "${tx.name}"? This action cannot be undone.`,
+      onConfirm: async () => {
+        setConfirmModal(prev => ({ ...prev, show: false }));
+        try {
+          const { error } = await deleteTransactionAndRevertSchedule(tx.id);
+          if (error) throw error;
+          await loadTransactions();
+          onTransactionCreated?.();
+        } catch (error) {
+          console.error('Error deleting transaction:', error);
+          alert('Failed to delete transaction. Please check your connection and try again.');
+        }
+      }
+    });
   };
 
   const openEditTxModal = (tx: Transaction) => {
@@ -912,14 +926,15 @@ const AccountFilteredTransactions: React.FC<AccountFilteredTransactionsProps> = 
                             >
                               <Pencil className="w-4 h-4" />
                             </button>
-                            <button
-                              onClick={() => handleDeleteTx(tx)}
-                              title="Delete transaction"
-                              aria-label="Delete transaction"
-                              className="text-gray-400 dark:text-gray-500 hover:text-red-500 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-full p-1.5 transition-all"
+                            <PinProtectedAction
+                              featureId="transaction_deletions"
+                              onVerified={() => handleDeleteTx(tx)}
+                              actionLabel="Delete Transaction"
                             >
-                              <Trash2 className="w-4 h-4" />
-                            </button>
+                              <button onClick={(e) => e.preventDefault()} title="Delete transaction" aria-label="Delete transaction" className="text-gray-400 dark:text-gray-500 hover:text-red-500 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-full p-1.5 transition-all">
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            </PinProtectedAction>
                             {account?.type === 'Debit' && tx.transaction_type === 'loan' && loanTx && (loanTx.remainingBalance ?? 0) > 0 && (
                               <button
                                 onClick={() => openLoanPaymentModal(loanTx)}
@@ -965,14 +980,15 @@ const AccountFilteredTransactions: React.FC<AccountFilteredTransactionsProps> = 
               >
                 Cancel
               </button>
-              <button
-                type="button"
-                onClick={handleBatchDelete}
-                disabled={isBatchDeleting}
-                className="flex-1 bg-red-500 hover:bg-red-600 text-white py-3 rounded-2xl font-bold transition-colors disabled:opacity-50"
+              <PinProtectedAction
+                featureId="transaction_deletions"
+                onVerified={handleBatchDelete}
+                actionLabel="Delete Selected Transactions"
               >
-                {isBatchDeleting ? 'Deleting…' : 'Yes, Delete'}
-              </button>
+                <button type="button" onClick={(e) => e.preventDefault()} disabled={isBatchDeleting} className="flex-1 bg-red-500 hover:bg-red-600 text-white py-3 rounded-2xl font-bold transition-colors disabled:opacity-50">
+                  {isBatchDeleting ? 'Deleting…' : 'Yes, Delete'}
+                </button>
+              </PinProtectedAction>
             </div>
           </div>
         </div>
@@ -1562,8 +1578,26 @@ const AccountFilteredTransactions: React.FC<AccountFilteredTransactionsProps> = 
           </div>
         </div>
       )}
+
+      {confirmModal.show && <ConfirmDialog {...confirmModal} onClose={() => setConfirmModal(p => ({ ...p, show: false }))} />}
     </div>
   );
 };
+
+const ConfirmDialog: React.FC<{ show: boolean; title: string; message: string; onConfirm: () => void; onClose: () => void }> = ({ title, message, onConfirm, onClose }) => (
+  <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-in fade-in">
+    <div className="bg-white dark:bg-gray-900 rounded-[2.5rem] w-full max-w-sm p-10 shadow-2xl animate-in zoom-in-95 flex flex-col items-center text-center transition-colors">
+      <div className="w-16 h-16 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 rounded-3xl flex items-center justify-center mb-6 transition-colors">
+        <AlertTriangle className="w-8 h-8" />
+      </div>
+      <h3 className="text-xl font-black text-gray-900 dark:text-gray-100 mb-2 uppercase tracking-tight transition-colors">{title}</h3>
+      <p className="text-sm text-gray-500 dark:text-gray-400 mb-8 font-medium leading-relaxed transition-colors">{message}</p>
+      <div className="flex flex-col w-full space-y-3">
+        <button onClick={onConfirm} className="w-full bg-red-600 text-white py-4 rounded-2xl font-black uppercase tracking-widest text-[10px] hover:bg-red-700 transition-all shadow-lg shadow-red-100 dark:shadow-none">Proceed</button>
+        <button onClick={onClose} className="w-full bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-300 py-4 rounded-2xl font-black uppercase tracking-widest text-[10px] hover:bg-gray-200 dark:hover:bg-gray-700 transition-all">Cancel</button>
+      </div>
+    </div>
+  </div>
+);
 
 export default AccountFilteredTransactions;

@@ -146,6 +146,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           loadUserProfile(session.user.id);
         } else {
           setUserProfile(null);
+
+          // Reset PIN protection state when user is signed out or session expires
+          localStorage.removeItem('pin_protection');
+          sessionStorage.removeItem('pin_tab_session');
         }
 
         // Migrate data on first sign in
@@ -168,16 +172,35 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           setSession(null);
           setUser(null);
           setUserProfile(null);
+
+          // Reset PIN protection state
+          localStorage.removeItem('pin_protection');
+          sessionStorage.removeItem('pin_tab_session');
         }
       }
     };
 
     document.addEventListener('visibilitychange', handleVisibilityChange);
 
+    // Listen for Auto-Logout command from PinProtection background timer
+    const handleIdleLogout = async () => {
+      console.log('[Auth] Idle timeout reached. Logging out.');
+      localStorage.removeItem('pin_protection');
+      sessionStorage.removeItem('pin_tab_session');
+      const { error } = await supabase.auth.signOut();
+      if (!error) {
+        setSession(null);
+        setUser(null);
+        setUserProfile(null);
+      }
+    };
+    window.addEventListener('app_idle_logout', handleIdleLogout);
+
     return () => {
       mounted = false;
       subscription.unsubscribe();
       document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('app_idle_logout', handleIdleLogout);
     };
   }, []);
 
@@ -234,6 +257,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const signOut = async () => {
     try {
+      // Clear PIN validity states explicitly on log out
+      localStorage.removeItem('pin_protection');
+      sessionStorage.removeItem('pin_tab_session');
+
       const { error } = await supabase.auth.signOut();
       if (error) throw error;
       setUserProfile(null);

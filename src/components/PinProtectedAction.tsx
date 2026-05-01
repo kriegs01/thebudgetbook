@@ -15,7 +15,7 @@ export const PinProtectedAction: React.FC<PinProtectedActionProps> = ({
   actionLabel,
   children,
 }) => {
-  const { isFeatureProtected, isSessionActive } = usePinProtection();
+  const { isFeatureProtected, isSessionActive, requiresVerificationEverytime } = usePinProtection();
   const [showVerifyModal, setShowVerifyModal] = useState(false);
 
   const handleClick = (e: React.MouseEvent) => {
@@ -24,8 +24,11 @@ export const PinProtectedAction: React.FC<PinProtectedActionProps> = ({
 
     // Check if this feature requires PIN protection
     if (isFeatureProtected(featureId)) {
+      // Check if this specific feature requires PIN entry every time
+      const requiresEverytime = requiresVerificationEverytime(featureId);
+
       // Check if session is already active
-      if (isSessionActive()) {
+      if (!requiresEverytime && isSessionActive()) {
         // Session is active, execute action immediately
         onVerified();
       } else {

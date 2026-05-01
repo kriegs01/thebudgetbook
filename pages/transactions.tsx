@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react';
-import { Plus, Info, Eye, ZoomIn, ZoomOut, Download, X, Pencil, Trash2, CheckSquare, Square, ChevronDown, Filter } from 'lucide-react';
+import { Plus, Info, Eye, ZoomIn, ZoomOut, Download, X, Pencil, Trash2, CheckSquare, Square, ChevronDown, Filter, AlertTriangle } from 'lucide-react';
+import { PinProtectedAction } from '../src/components/PinProtectedAction';
 import { getAllTransactions, createTransaction, updateTransaction, deleteTransactionAndRevertSchedule, uploadTransactionReceipt, getReceiptSignedUrl, batchDeleteTransactions } from '../src/services/transactionsService';
 import { getAllAccountsFrontend } from '../src/services/accountsService';
 import { combineDateWithCurrentTime, getTodayIso, getFirstDayOfCurrentYearIso, getLastDayOfCurrentYearIso } from '../src/utils/dateUtils';
@@ -67,6 +68,13 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ onTransactionDelete
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [showBatchConfirm, setShowBatchConfirm] = useState(false);
   const [isBatchDeleting, setIsBatchDeleting] = useState(false);
+
+  const [confirmModal, setConfirmModal] = useState<{
+    show: boolean;
+    title: string;
+    message: string;
+    onConfirm: () => void;
+  }>({ show: false, title: '', message: '', onConfirm: () => {} });
 
   // ── Derived: filtered transactions ────────────────────────────────────────
   const filteredTransactions = useMemo(() => {
@@ -269,25 +277,32 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ onTransactionDelete
   };
 
   const removeTx = async (id: string, name: string) => {
-    if (!window.confirm(`Delete transaction "${name}"? This action cannot be undone.`)) return;
-    try {
-      console.log('[Transactions Page] Deleting transaction with reversion:', id);
-      const { error } = await deleteTransactionAndRevertSchedule(id);
-      if (error) throw error;
-      
-      console.log('[Transactions Page] Transaction deleted successfully');
-      // Reload transactions after deletion
-      await loadData();
-      
-      // Notify parent if callback provided (for refreshing related data)
-      if (onTransactionDeleted) {
-        console.log('[Transactions Page] Notifying parent of transaction deletion');
-        onTransactionDeleted();
+    setConfirmModal({
+      show: true,
+      title: 'Delete Transaction',
+      message: `Are you sure you want to delete transaction "${name}"? This action cannot be undone.`,
+      onConfirm: async () => {
+        setConfirmModal(prev => ({ ...prev, show: false }));
+        try {
+          console.log('[Transactions Page] Deleting transaction with reversion:', id);
+          const { error } = await deleteTransactionAndRevertSchedule(id);
+          if (error) throw error;
+          
+          console.log('[Transactions Page] Transaction deleted successfully');
+          // Reload transactions after deletion
+          await loadData();
+          
+          // Notify parent if callback provided (for refreshing related data)
+          if (onTransactionDeleted) {
+            console.log('[Transactions Page] Notifying parent of transaction deletion');
+            onTransactionDeleted();
+          }
+        } catch (error) {
+          console.error('Error deleting transaction:', error);
+          alert('Failed to delete transaction. Please check your connection and try again.');
+        }
       }
-    } catch (error) {
-      console.error('Error deleting transaction:', error);
-      alert('Failed to delete transaction. Please check your connection and try again.');
-    }
+    });
   };
 
   // ── Select / batch-delete helpers ─────────────────────────────────────────
@@ -553,14 +568,20 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ onTransactionDelete
                               >
                                 <Pencil className="w-4 h-4" />
                               </button>
+                            <PinProtectedAction
+                              featureId="transaction_deletions"
+                              onVerified={() => removeTx(tx.id, tx.name)}
+                              actionLabel="Delete Transaction"
+                            >
                               <button
-                                onClick={() => removeTx(tx.id, tx.name)}
+                                onClick={(e) => e.preventDefault()}
                                 title="Delete transaction"
                                 aria-label="Delete transaction"
                                 className="text-gray-300 hover:text-red-500 hover:bg-red-50 rounded-full p-1.5 transition-all"
                               >
                                 <Trash2 className="w-4 h-4" />
                               </button>
+                            </PinProtectedAction>
                             </div>
                           </td>
                         </tr>
@@ -681,14 +702,20 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ onTransactionDelete
               >
                 Cancel
               </button>
+            <PinProtectedAction
+              featureId="transaction_deletions"
+              onVerified={handleBatchDelete}
+              actionLabel="Delete Multiple Transactions"
+            >
               <button
                 type="button"
-                onClick={handleBatchDelete}
+                onClick={(e) => e.preventDefault()}
                 disabled={isBatchDeleting}
                 className="flex-1 bg-red-500 hover:bg-red-600 text-white py-3 rounded-2xl font-bold transition-colors disabled:opacity-50"
               >
                 {isBatchDeleting ? 'Deleting…' : 'Yes, Delete'}
               </button>
+            </PinProtectedAction>
             </div>
           </div>
         </div>
@@ -821,8 +848,26 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ onTransactionDelete
           </div>
         </div>
       )}
+
+      {confirmModal.show && <ConfirmDialog {...confirmModal} onClose={() => setConfirmModal(p => ({ ...p, show: false }))} />}
     </div>
   );
 };
+
+const ConfirmDialog: React.FC<{ show: boolean; title: string; message: string; onConfirm: () => void; onClose: () => void }> = ({ title, message, onConfirm, onClose }) => (
+  <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-in fade-in">
+    <div className="bg-white dark:bg-gray-900 rounded-[2.5rem] w-full max-w-sm p-10 shadow-2xl animate-in zoom-in-95 flex flex-col items-center text-center transition-colors">
+      <div className="w-16 h-16 bg-red-50 dark:bg-red-900/20 text-red-600 rounded-3xl flex items-center justify-center mb-6">
+        <AlertTriangle className="w-8 h-8" />
+      </div>
+      <h3 className="text-xl font-black text-gray-900 dark:text-gray-100 mb-2 uppercase tracking-tight">{title}</h3>
+      <p className="text-sm text-gray-500 dark:text-gray-400 mb-8 font-medium leading-relaxed">{message}</p>
+      <div className="flex flex-col w-full space-y-3">
+        <button onClick={onConfirm} className="w-full bg-red-600 text-white py-4 rounded-2xl font-black uppercase tracking-widest text-[10px] hover:bg-red-700 transition-all">Proceed</button>
+        <button onClick={onClose} className="w-full bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-300 py-4 rounded-2xl font-black uppercase tracking-widest text-[10px] hover:bg-gray-200 dark:hover:bg-gray-700 transition-all">Cancel</button>
+      </div>
+    </div>
+  </div>
+);
 
 export default TransactionsPage;

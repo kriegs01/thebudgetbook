@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
+import { PinProtectedAction } from '../src/components/PinProtectedAction';
 import { Account, ViewMode, AccountClassification } from '../types';
+import { supabase } from '../src/utils/supabaseClient';
 import {
   Plus,
   Landmark,
@@ -11,7 +13,8 @@ import {
   AlertTriangle,
   Power,
   ChevronDown,
-  ChevronRight
+  ChevronRight,
+  PowerOff
 } from 'lucide-react';
 import { getDueDayForDisplay, ordinalSuffix } from '../src/utils/billingCycles';
 
@@ -82,6 +85,11 @@ const Accounts: React.FC<AccountsProps> = ({ accounts, onAdd, onDelete, onEdit, 
     month: 0,
     year: 0
   });
+  
+  const [deleteFailedModal, setDeleteFailedModal] = useState<{
+    show: boolean;
+    accountId: string;
+  }>({ show: false, accountId: '' });
 
   useEffect(() => {
     const now = new Date();
@@ -175,8 +183,13 @@ const Accounts: React.FC<AccountsProps> = ({ accounts, onAdd, onDelete, onEdit, 
       title: 'Remove Account',
       message: `Are you sure you want to permanently remove the account: "${bank}"? This might affect your recorded balances.`,
       onConfirm: async () => {
-        await onDelete?.(id);
-        setConfirmModal(p => ({ ...p, show: false }));
+          try {
+            await onDelete?.(id);
+            setConfirmModal(p => ({ ...p, show: false }));
+          } catch (err) {
+            setConfirmModal(p => ({ ...p, show: false }));
+            setDeleteFailedModal({ show: true, accountId: id });
+          }
       }
     });
   };
@@ -197,7 +210,7 @@ const Accounts: React.FC<AccountsProps> = ({ accounts, onAdd, onDelete, onEdit, 
 
   const confirmDeactivateScheduled = async () => {
     if (!deactivateState.accountId) return;
-    onDeactivate?.(deactivateState.accountId, { month: deactivateState.month, year: deactivateState.year });
+    await onDeactivate?.(deactivateState.accountId, { month: deactivateState.month, year: deactivateState.year });
     setDeactivateState({ show: false, accountId: null, month: 0, year: 0 });
   };
 
@@ -207,6 +220,8 @@ const Accounts: React.FC<AccountsProps> = ({ accounts, onAdd, onDelete, onEdit, 
     // If credit limit is 0 or undefined, treat progress as 0 to avoid division by zero
     const usedPercent = creditLimit > 0 ? Math.min(100, Math.round((acc.balance / creditLimit) * 100)) : 0;
     const usedPercentSafe = usedPercent < 0 ? 0 : usedPercent;
+    const isActive = (acc as any).isActive !== false;
+    const deactivationDate = (acc as any).deactivationDate;
 
     return (
       <div key={acc.id} className="bg-white dark:bg-gray-900 p-6 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800 hover:border-indigo-200 dark:hover:border-indigo-400 transition-all relative group overflow-hidden">
@@ -237,12 +252,14 @@ const Accounts: React.FC<AccountsProps> = ({ accounts, onAdd, onDelete, onEdit, 
                 >
                   <span>Edit</span>
                 </button>
-                <button
-                  onClick={(e) => { e.stopPropagation(); setOpenMenuId(null); openDeactivateDialog(acc.id); }}
-                  className="w-full text-left px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-800 text-gray-700 dark:text-gray-300 flex items-center space-x-3 text-sm transition-colors"
-                >
-                  <span>Deactivate</span>
-                </button>
+            {isActive && (
+              <button
+                onClick={(e) => { e.stopPropagation(); setOpenMenuId(null); openDeactivateDialog(acc.id); }}
+                className="w-full text-left px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-800 text-gray-700 dark:text-gray-300 flex items-center space-x-3 text-sm transition-colors"
+              >
+                <span>Deactivate</span>
+              </button>
+            )}
                 <button
                   onClick={(e) => { e.stopPropagation(); setOpenMenuId(null); handleDeleteTrigger(acc.id, acc.bank); }}
                   className="w-full text-left px-4 py-3 hover:bg-red-50 dark:hover:bg-red-900/20 flex items-center space-x-3 text-sm text-red-600 dark:text-red-400 transition-colors"
@@ -260,9 +277,9 @@ const Accounts: React.FC<AccountsProps> = ({ accounts, onAdd, onDelete, onEdit, 
               <h3 className="text-lg font-bold text-gray-900 dark:text-gray-100 leading-tight transition-colors">{acc.bank}</h3>
               <p className="text-xs text-gray-400 dark:text-gray-500 font-medium uppercase tracking-wider transition-colors">{acc.classification}</p>
             </div>
-            <span className="text-[10px] font-bold px-2 py-0.5 rounded uppercase bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 flex items-center gap-1 transition-colors">
-              <Power className="w-3 h-3" />Active
-            </span>
+          <span className={`text-[10px] font-bold px-2 py-0.5 rounded uppercase flex items-center gap-1 transition-colors ${isActive ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400' : 'bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400'}`}>
+            {isActive ? <><Power className="w-3 h-3" />Active</> : <><PowerOff className="w-3 h-3" />Inactive</>}
+          </span>
           </div>
         </div>
 
@@ -297,6 +314,11 @@ const Accounts: React.FC<AccountsProps> = ({ accounts, onAdd, onDelete, onEdit, 
             <p className="text-xs text-gray-400 dark:text-gray-500 font-medium transition-colors">Balance</p>
             <p className={`text-2xl font-bold text-gray-900 dark:text-gray-100 transition-colors`}>{formatCurrency(acc.balance)}</p>
           </div>
+      {isActive && deactivationDate && (
+        <p className="text-xs text-orange-500 font-medium transition-colors">
+          Scheduled to deactivate: {monthNames[deactivationDate.month]} {deactivationDate.year}
+        </p>
+      )}
           {isCredit && acc.billingDate && (
             <p className="text-xs text-gray-400 dark:text-gray-500 transition-colors">
               Statement: {new Date(acc.billingDate).getDate()}{ordinalSuffix(new Date(acc.billingDate).getDate())} each month
@@ -513,6 +535,8 @@ const Accounts: React.FC<AccountsProps> = ({ accounts, onAdd, onDelete, onEdit, 
 
       {deactivateState.show && (
         <DeactivateDialog
+          accountId={deactivateState.accountId!}
+          accounts={accounts}
           month={deactivateState.month}
           year={deactivateState.year}
           onChangeMonth={(m) => setDeactivateState(s => ({ ...s, month: m }))}
@@ -523,23 +547,96 @@ const Accounts: React.FC<AccountsProps> = ({ accounts, onAdd, onDelete, onEdit, 
         />
       )}
 
+      {deleteFailedModal.show && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-in fade-in">
+          <div className="bg-white dark:bg-gray-900 rounded-[2.5rem] w-full max-w-sm p-10 shadow-2xl animate-in zoom-in-95 flex flex-col items-center text-center transition-colors">
+            <div className="w-16 h-16 bg-orange-50 dark:bg-orange-900/20 text-orange-600 dark:text-orange-400 rounded-3xl flex items-center justify-center mb-6 transition-colors">
+              <AlertTriangle className="w-8 h-8" />
+            </div>
+            <h3 className="text-xl font-black text-gray-900 dark:text-gray-100 mb-2 uppercase tracking-tight transition-colors">Cannot Delete</h3>
+            <p className="text-sm text-gray-500 dark:text-gray-400 mb-8 font-medium leading-relaxed transition-colors">This account cannot be deleted because it has attached transactions, wallets, or schedules. Would you like to deactivate it instead?</p>
+            <div className="flex flex-col w-full space-y-3">
+              <button onClick={() => { 
+                setDeleteFailedModal({ show: false, accountId: '' }); 
+                openDeactivateDialog(deleteFailedModal.accountId); 
+              }} className="w-full bg-indigo-600 text-white py-4 rounded-2xl font-black uppercase tracking-widest text-[10px] hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-100 dark:shadow-none">
+                Deactivate Instead
+              </button>
+              <button onClick={() => setDeleteFailedModal({ show: false, accountId: '' })} className="w-full bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-300 py-4 rounded-2xl font-black uppercase tracking-widest text-[10px] hover:bg-gray-200 dark:hover:bg-gray-700 transition-all">
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {confirmModal.show && <ConfirmDialog {...confirmModal} onClose={() => setConfirmModal(p => ({ ...p, show: false }))} />}
     </div>
   );
 };
 
 const DeactivateDialog: React.FC<{
+  accountId: string;
+  accounts: Account[];
   month: number;
   year: number;
   onChangeMonth: (m: number) => void;
   onChangeYear: (y: number) => void;
   onClose: () => void;
-  onNow: () => void;
-  onSchedule: () => void;
-}> = ({ month, year, onChangeMonth, onChangeYear, onClose, onNow, onSchedule }) => {
+  onNow: () => Promise<void>;
+  onSchedule: () => Promise<void>;
+}> = ({ accountId, accounts, month, year, onChangeMonth, onChangeYear, onClose, onNow, onSchedule }) => {
   const now = new Date();
   const currentYear = now.getFullYear();
   const years = Array.from({ length: 6 }, (_, i) => currentYear + i);
+
+  const [linkedWallets, setLinkedWallets] = useState<any[]>([]);
+  const [reassignAccountId, setReassignAccountId] = useState('');
+  const [isLoadingWallets, setIsLoadingWallets] = useState(true);
+  const [isProcessing, setIsProcessing] = useState(false);
+
+  useEffect(() => {
+    const fetchWallets = async () => {
+      setIsLoadingWallets(true);
+      try {
+        const isTestMode = localStorage.getItem('test_environment_enabled') === 'true';
+        const tableName = isTestMode ? 'wallets_test' : 'wallets';
+        const { data, error } = await supabase.from(tableName).select('*').eq('account_id', accountId);
+        if (!error && data) setLinkedWallets(data);
+      } catch (e) {
+        console.error(e);
+      } finally {
+        setIsLoadingWallets(false);
+      }
+    };
+    if (accountId) fetchWallets();
+  }, [accountId]);
+
+  const handleAction = async (action: 'now' | 'schedule') => {
+    if (linkedWallets.length > 0 && !reassignAccountId) {
+      alert('Please select a new account for the linked wallets before proceeding.');
+      return;
+    }
+    setIsProcessing(true);
+    try {
+      if (linkedWallets.length > 0 && reassignAccountId) {
+        const isTestMode = localStorage.getItem('test_environment_enabled') === 'true';
+        const tableName = isTestMode ? 'wallets_test' : 'wallets';
+        for (const w of linkedWallets) {
+          await supabase.from(tableName).update({ account_id: reassignAccountId }).eq('id', w.id);
+        }
+      }
+      if (action === 'now') await onNow();
+      else await onSchedule();
+    } catch (e) {
+      console.error(e);
+      alert('Failed to process deactivation.');
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const eligibleAccounts = accounts.filter(a => a.id !== accountId && a.type !== 'Credit');
 
   return (
     <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-in fade-in">
@@ -547,10 +644,41 @@ const DeactivateDialog: React.FC<{
         <h3 className="text-xl font-black text-gray-900 dark:text-gray-100 mb-2 uppercase tracking-tight transition-colors">Deactivate Account</h3>
         <p className="text-sm text-gray-500 dark:text-gray-400 mb-6 font-medium leading-relaxed transition-colors">Choose whether to deactivate the account now or schedule deactivation for a later month and year.</p>
 
+        {!isLoadingWallets && linkedWallets.length > 0 && (
+          <div className="mb-6 bg-orange-50 border border-orange-200 rounded-xl p-4 transition-colors">
+            <div className="flex items-center space-x-2 mb-2">
+              <AlertTriangle className="w-4 h-4 text-orange-500" />
+              <p className="text-xs font-bold text-orange-800">Wallets Linked</p>
+            </div>
+            <p className="text-xs text-orange-700 mb-3">
+              This account has {linkedWallets.length} linked wallet(s). Please select a new debit account to reassign them to.
+            </p>
+            <select 
+              value={reassignAccountId} 
+              onChange={(e) => setReassignAccountId(e.target.value)} 
+              className="w-full bg-white border border-orange-200 rounded-lg px-3 py-2 text-sm font-bold text-gray-700 outline-none focus:ring-2 focus:ring-orange-400 transition-colors"
+            >
+              <option value="">-- Select New Account --</option>
+              {eligibleAccounts.map(a => (
+                <option key={a.id} value={a.id}>{a.bank} ({a.classification})</option>
+              ))}
+            </select>
+            {eligibleAccounts.length === 0 && (
+              <p className="text-[10px] text-red-500 mt-1 font-bold">No other debit accounts available to receive wallets.</p>
+            )}
+          </div>
+        )}
+
         <div className="space-y-4">
-          <button onClick={onNow} className="w-full bg-red-600 text-white py-3 rounded-2xl font-black uppercase tracking-widest hover:bg-red-700 transition-all">
-            Deactivate Now
-          </button>
+          <PinProtectedAction
+            featureId="account_deactivations"
+            onVerified={() => handleAction('now')}
+            actionLabel="Deactivate Account"
+          >
+            <button onClick={(e) => e.preventDefault()} disabled={isProcessing} className="w-full bg-red-600 text-white py-3 rounded-2xl font-black uppercase tracking-widest hover:bg-red-700 transition-all disabled:opacity-50">
+              {isProcessing ? 'Processing...' : 'Deactivate Now'}
+            </button>
+          </PinProtectedAction>
 
           <div className="p-4 border border-gray-100 dark:border-gray-800 rounded-xl transition-colors">
             <p className="text-sm text-gray-600 dark:text-gray-300 mb-2 font-medium transition-colors">Deactivate on</p>
@@ -563,11 +691,17 @@ const DeactivateDialog: React.FC<{
               </select>
             </div>
             <div className="mt-4">
-              <button onClick={onSchedule} className="w-full bg-indigo-600 text-white py-2 rounded-xl font-bold hover:bg-indigo-700 transition-colors">Schedule Deactivation</button>
+            <PinProtectedAction
+              featureId="account_deactivations"
+              onVerified={() => handleAction('schedule')}
+              actionLabel="Schedule Deactivation"
+            >
+              <button onClick={(e) => e.preventDefault()} disabled={isProcessing} className="w-full bg-indigo-600 text-white py-2 rounded-xl font-bold hover:bg-indigo-700 transition-colors disabled:opacity-50">{isProcessing ? 'Processing...' : 'Schedule Deactivation'}</button>
+            </PinProtectedAction>
             </div>
           </div>
 
-          <button onClick={onClose} className="w-full bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 py-3 rounded-2xl font-black uppercase tracking-widest hover:bg-gray-200 dark:hover:bg-gray-700 transition-all">
+          <button onClick={onClose} disabled={isProcessing} className="w-full bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 py-3 rounded-2xl font-black uppercase tracking-widest hover:bg-gray-200 dark:hover:bg-gray-700 transition-all disabled:opacity-50">
             Cancel
           </button>
         </div>
@@ -585,9 +719,15 @@ const ConfirmDialog: React.FC<{ show: boolean; title: string; message: string; o
       <h3 className="text-xl font-black text-gray-900 dark:text-gray-100 mb-2 uppercase tracking-tight transition-colors">{title}</h3>
       <p className="text-sm text-gray-500 dark:text-gray-400 mb-8 font-medium leading-relaxed transition-colors">{message}</p>
       <div className="flex flex-col w-full space-y-3">
-        <button onClick={onConfirm} className="w-full bg-red-600 text-white py-4 rounded-2xl font-black uppercase tracking-widest text-[10px] hover:bg-red-700 transition-all shadow-lg shadow-red-100 dark:shadow-none">
-          Proceed
-        </button>
+        <PinProtectedAction
+          featureId="account_deletions"
+          onVerified={onConfirm}
+          actionLabel="Delete Account"
+        >
+          <button onClick={(e) => e.preventDefault()} className="w-full bg-red-600 text-white py-4 rounded-2xl font-black uppercase tracking-widest text-[10px] hover:bg-red-700 transition-all shadow-lg shadow-red-100 dark:shadow-none">
+            Proceed
+          </button>
+        </PinProtectedAction>
         <button onClick={onClose} className="w-full bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-300 py-4 rounded-2xl font-black uppercase tracking-widest text-[10px] hover:bg-gray-200 dark:hover:bg-gray-700 transition-all">
           Cancel
         </button>

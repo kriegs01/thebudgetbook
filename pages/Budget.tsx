@@ -2,6 +2,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { BudgetItem, Account, Biller, PaymentSchedule, CategorizedSetupItem, SavedBudgetSetup, BudgetCategory, Installment, Wallet } from '../types';
 import { Plus, Check, ChevronDown, Trash2, Save, FileText, ArrowRight, Upload, CheckCircle2, X, AlertTriangle, Info, Eye, ZoomIn, ZoomOut, Download, Archive, RotateCcw, Lock } from 'lucide-react';
+import { PinProtectedAction } from '../src/components/PinProtectedAction';
 import { createBudgetSetupFrontend, updateBudgetSetupFrontend, archiveBudgetSetup, reopenBudgetSetup } from '../src/services/budgetSetupsService';
 import { IconSquircleButton } from '../src/components/IconSquircleButton';
 import { createTransaction, getAllTransactions, updateTransaction, updateTransactionAndSyncSchedule, createPaymentScheduleTransaction, uploadTransactionReceipt, getTransactionsByPaymentSchedule, getReceiptSignedUrl, deleteTransactionAndRevertSchedule, getAllStashTransactions } from '../src/services/transactionsService';
@@ -1100,21 +1101,28 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
    * The cascade-delete in deleteTransactionAndRevertSchedule also removes any linked
    * credit_payment counterpart on the associated credit account. */
   const handleDeleteScheduleTx = async (txId: string) => {
-    if (!window.confirm('Delete this payment record? This cannot be undone.')) return;
-    try {
-      const { error } = await deleteTransactionAndRevertSchedule(txId);
-      if (error) throw error;
-      // Reload the modal to reflect the deletion
-      if (schedulePaymentsModal?.scheduleId) {
-        await openSchedulePaymentsModal(schedulePaymentsModal.scheduleId, schedulePaymentsModal.label);
-      } else {
-        // For direct-payment modals (no scheduleId), just close — no reload needed
-        setSchedulePaymentsModal(null);
+    setConfirmModal({
+      show: true,
+      title: 'Delete Payment Record',
+      message: 'Are you sure you want to delete this payment record? This cannot be undone.',
+      onConfirm: async () => {
+        setConfirmModal(prev => ({ ...prev, show: false }));
+        try {
+          const { error } = await deleteTransactionAndRevertSchedule(txId);
+          if (error) throw error;
+          // Reload the modal to reflect the deletion
+          if (schedulePaymentsModal?.scheduleId) {
+            await openSchedulePaymentsModal(schedulePaymentsModal.scheduleId, schedulePaymentsModal.label);
+          } else {
+            // For direct-payment modals (no scheduleId), just close — no reload needed
+            setSchedulePaymentsModal(null);
+          }
+        } catch (err) {
+          console.error('[Budget] Error deleting schedule transaction:', err);
+          alert('Failed to delete transaction. Please try again.');
+        }
       }
-    } catch (err) {
-      console.error('[Budget] Error deleting schedule transaction:', err);
-      alert('Failed to delete transaction. Please try again.');
-    }
+    });
   };
 
   /**
@@ -1928,28 +1936,40 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
           <div className="flex justify-center items-center gap-2">
             {setup.isArchived ? (
               <>
-                <IconSquircleButton
-                  variant="reopen"
-                  onClick={() => handleReopenSetup(setup)}
-                  disabled={archiveSubmitting}
-                  aria-label="Reopen budget"
+                <PinProtectedAction
+                  featureId="budget_modifications"
+                  onVerified={() => handleReopenSetup(setup)}
+                  actionLabel="Reopen Budget"
                 >
-                  <RotateCcw className="w-4 h-4" />
-                </IconSquircleButton>
+                  <IconSquircleButton
+                    variant="reopen"
+                    onClick={(e) => e.preventDefault()}
+                    disabled={archiveSubmitting}
+                    aria-label="Reopen budget"
+                  >
+                    <RotateCcw className="w-4 h-4" />
+                  </IconSquircleButton>
+                </PinProtectedAction>
               </>
             ) : (
               <>
-                <IconSquircleButton
-                  variant="close"
-                  onClick={() => handleArchiveSetup(setup)}
-                  disabled={archiveSubmitting}
-                  aria-label="Close budget"
+                <PinProtectedAction
+                  featureId="budget_modifications"
+                  onVerified={() => handleArchiveSetup(setup)}
+                  actionLabel="Close Budget"
                 >
-                  <Archive className="w-4 h-4" />
-                </IconSquircleButton>
-                <IconSquircleButton
-                  variant="remove"
-                  onClick={() => {
+                  <IconSquircleButton
+                    variant="close"
+                    onClick={(e) => e.preventDefault()}
+                    disabled={archiveSubmitting}
+                    aria-label="Close budget"
+                  >
+                    <Archive className="w-4 h-4" />
+                  </IconSquircleButton>
+                </PinProtectedAction>
+                <PinProtectedAction
+                  featureId="budget_modifications"
+                  onVerified={() => {
                     setConfirmModal({
                       show: true,
                       title: 'Move to Trash',
@@ -1960,10 +1980,16 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                       }
                     });
                   }}
-                  aria-label="Remove budget"
+                  actionLabel="Remove Budget"
                 >
-                  <Trash2 className="w-4 h-4" />
-                </IconSquircleButton>
+                  <IconSquircleButton
+                    variant="remove"
+                    onClick={(e) => e.preventDefault()}
+                    aria-label="Remove budget"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </IconSquircleButton>
+                </PinProtectedAction>
               </>
             )}
             <IconSquircleButton
@@ -2161,30 +2187,36 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
               </div>
             )}
             {currentSetup && isReadOnly && (
-              <button
-                onClick={() => handleReopenSetup(currentSetup)}
-                disabled={archiveSubmitting}
-                className="flex items-center space-x-2 bg-indigo-50 text-indigo-700 px-6 py-3 rounded-2xl font-black uppercase tracking-widest text-xs hover:bg-indigo-100 transition-all disabled:opacity-50"
-              >
-                <RotateCcw className="w-4 h-4" />
-                <span>Reopen</span>
-              </button>
+              <PinProtectedAction featureId="budget_modifications" onVerified={() => handleReopenSetup(currentSetup)} actionLabel="Reopen Budget">
+                <button
+                  onClick={(e) => e.preventDefault()}
+                  disabled={archiveSubmitting}
+                  className="flex items-center space-x-2 bg-indigo-50 text-indigo-700 px-6 py-3 rounded-2xl font-black uppercase tracking-widest text-xs hover:bg-indigo-100 transition-all disabled:opacity-50"
+                >
+                  <RotateCcw className="w-4 h-4" />
+                  <span>Reopen</span>
+                </button>
+              </PinProtectedAction>
             )}
             {currentSetup && !isReadOnly && (
-              <button
-                onClick={() => handleArchiveSetup(currentSetup)}
-                disabled={archiveSubmitting}
-                className="flex items-center space-x-2 bg-amber-50 text-amber-700 px-6 py-3 rounded-2xl font-black uppercase tracking-widest text-xs hover:bg-amber-100 transition-all disabled:opacity-50"
-              >
-                <Archive className="w-4 h-4" />
-                <span>Close</span>
-              </button>
+              <PinProtectedAction featureId="budget_modifications" onVerified={() => handleArchiveSetup(currentSetup)} actionLabel="Close Budget">
+                <button
+                  onClick={(e) => e.preventDefault()}
+                  disabled={archiveSubmitting}
+                  className="flex items-center space-x-2 bg-amber-50 text-amber-700 px-6 py-3 rounded-2xl font-black uppercase tracking-widest text-xs hover:bg-amber-100 transition-all disabled:opacity-50"
+                >
+                  <Archive className="w-4 h-4" />
+                  <span>Close</span>
+                </button>
+              </PinProtectedAction>
             )}
             {!isReadOnly && (
-              <button onClick={handleSaveSetup} className="flex items-center space-x-3 bg-indigo-600 text-white px-8 py-3 rounded-2xl font-black uppercase tracking-widest text-xs hover:bg-indigo-700 shadow-xl">
-                <Save className="w-5 h-5" />
-                <span>Save</span>
-              </button>
+              <PinProtectedAction featureId="budget_modifications" onVerified={handleSaveSetup} actionLabel="Save Budget">
+                <button onClick={(e) => e.preventDefault()} className="flex items-center space-x-3 bg-indigo-600 text-white px-8 py-3 rounded-2xl font-black uppercase tracking-widest text-xs hover:bg-indigo-700 shadow-xl">
+                  <Save className="w-5 h-5" />
+                  <span>Save</span>
+                </button>
+              </PinProtectedAction>
             )}
           </div>
         </div>
@@ -3409,13 +3441,19 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                       </div>
                       <div className="flex items-center space-x-3">
                         <span className="text-sm font-black text-indigo-600">{formatCurrency(Math.abs(tx.amount))}</span>
-                        <button
-                          onClick={() => handleDeleteStashTopUp(tx.id, tx.amount)}
-                          aria-label={`Delete top-up of ${formatCurrency(Math.abs(tx.amount))} from ${new Date(tx.date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}`}
-                          className="text-red-400 hover:text-red-600 p-1.5 rounded-xl hover:bg-red-50 transition-colors"
+                        <PinProtectedAction
+                          featureId="transaction_deletions"
+                          onVerified={() => handleDeleteStashTopUp(tx.id, tx.amount)}
+                          actionLabel="Delete Top-up"
                         >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
+                          <button
+                            onClick={(e) => e.preventDefault()}
+                            aria-label={`Delete top-up of ${formatCurrency(Math.abs(tx.amount))} from ${new Date(tx.date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}`}
+                            className="text-red-400 hover:text-red-600 p-1.5 rounded-xl hover:bg-red-50 transition-colors"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </PinProtectedAction>
                       </div>
                     </div>
                   ))}
@@ -3473,13 +3511,19 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                         </div>
                       )}
                       <div className="flex justify-end pt-1">
-                        <button
-                          onClick={() => handleDeleteScheduleTx(tx.id)}
-                          title="Delete payment record"
-                          className="flex items-center space-x-1 px-3 py-1.5 rounded-xl bg-red-50 text-red-600 hover:bg-red-100 transition-colors text-xs font-bold"
+                        <PinProtectedAction
+                          featureId="transaction_deletions"
+                          onVerified={() => handleDeleteScheduleTx(tx.id)}
+                          actionLabel="Delete Payment Record"
                         >
-                          <Trash2 className="w-3.5 h-3.5" /><span>Delete</span>
-                        </button>
+                          <button
+                            onClick={(e) => e.preventDefault()}
+                            title="Delete payment record"
+                            className="flex items-center space-x-1 px-3 py-1.5 rounded-xl bg-red-50 text-red-600 hover:bg-red-100 transition-colors text-xs font-bold"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" /><span>Delete</span>
+                          </button>
+                        </PinProtectedAction>
                       </div>
                     </div>
                   );

@@ -1293,7 +1293,7 @@ const Settings: React.FC<SettingsProps> = ({ currency, setCurrency, categories, 
       icon: <Shield className="w-5 h-5" />,
       content: <SecuritySettings />
     },
-    {
+    ...((userProfile as any)?.role === 'admin' ? [{
       id: 'test-environment',
       label: 'Test Environment',
       icon: <Database className="w-5 h-5" />,
@@ -1369,7 +1369,7 @@ const Settings: React.FC<SettingsProps> = ({ currency, setCurrency, categories, 
           </div>
         </div>
       )
-    },
+    }] : []),
   ];
 
   return (

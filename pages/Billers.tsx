@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Biller, BillerAmountIncrease, Account, PaymentSchedule, BudgetCategory, Installment } from '../types';
 import { Plus, Calendar, Bell, ChevronDown, ChevronRight, Upload, CheckCircle2, X, ArrowLeft, Power, PowerOff, MoreVertical, Edit2, Eye, Trash2, AlertTriangle, Info, ZoomIn, ZoomOut, Download } from 'lucide-react';
+import { PinProtectedAction } from '../src/components/PinProtectedAction';
 import { getAllTransactions, getTransactionsByPaymentSchedule, getReceiptSignedUrl, updateTransaction, updateTransactionAndSyncSchedule, deleteTransactionAndRevertSchedule } from '../src/services/transactionsService';
 import { getPaymentSchedulesBySource } from '../src/services/paymentSchedulesService';
 import { combineDateWithCurrentTime } from '../src/utils/dateUtils';
@@ -326,19 +327,26 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
   /** Delete a payment transaction from the payment records modal.
    * Cascade-deletes any linked credit_payment counterpart automatically. */
   const handleDeleteBillerScheduleTx = async (txId: string) => {
-    if (!window.confirm('Delete this payment record? This cannot be undone.')) return;
-    try {
-      const { error } = await deleteTransactionAndRevertSchedule(txId);
-      if (error) throw error;
-      // Reload the modal and the schedule list to reflect the deletion
-      if (schedulePaymentsModal) {
-        await openSchedulePaymentsModal(schedulePaymentsModal.scheduleId, schedulePaymentsModal.label);
+    setConfirmModal({
+      show: true,
+      title: 'Delete Payment Record',
+      message: 'Are you sure you want to delete this payment record? This cannot be undone.',
+      onConfirm: async () => {
+        setConfirmModal(prev => ({ ...prev, show: false }));
+        try {
+          const { error } = await deleteTransactionAndRevertSchedule(txId);
+          if (error) throw error;
+          // Reload the modal and the schedule list to reflect the deletion
+          if (schedulePaymentsModal) {
+            await openSchedulePaymentsModal(schedulePaymentsModal.scheduleId, schedulePaymentsModal.label);
+          }
+          await loadPaymentSchedules();
+        } catch (err) {
+          console.error('[Billers] Error deleting schedule transaction:', err);
+          alert('Failed to delete transaction. Please try again.');
+        }
       }
-      await loadPaymentSchedules();
-    } catch (err) {
-      console.error('[Billers] Error deleting schedule transaction:', err);
-      alert('Failed to delete transaction. Please try again.');
-    }
+    });
   };
 
   /**
@@ -2109,13 +2117,19 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
                         >
                           <Edit2 className="w-3 h-3" />
                         </button>
-                        <button
-                          onClick={() => handleDeleteBillerScheduleTx(tx.id)}
-                          title="Delete payment record"
-                          className="ml-1 mt-1 text-[9px] font-black text-red-500 uppercase tracking-widest border border-red-100 px-2 py-1 rounded-lg hover:bg-red-50 transition-colors flex-shrink-0"
+                        <PinProtectedAction
+                          featureId="transaction_deletions"
+                          onVerified={() => handleDeleteBillerScheduleTx(tx.id)}
+                          actionLabel="Delete Payment Record"
                         >
-                          <Trash2 className="w-3 h-3" />
-                        </button>
+                          <button
+                            onClick={(e) => e.preventDefault()}
+                            title="Delete payment record"
+                            className="ml-1 mt-1 text-[9px] font-black text-red-500 uppercase tracking-widest border border-red-100 px-2 py-1 rounded-lg hover:bg-red-50 transition-colors flex-shrink-0"
+                          >
+                            <Trash2 className="w-3 h-3" />
+                          </button>
+                        </PinProtectedAction>
                       </div>
                       {tx.receiptUrl && (
                         <div className="flex items-center space-x-3 pt-1">

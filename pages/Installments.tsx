@@ -1,9 +1,11 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Installment, Account, ViewMode, Biller } from '../types';
 import { Plus, LayoutGrid, List, Wallet, Trash2, X, Upload, AlertTriangle, Edit2, Eye, MoreVertical, Info, ZoomIn, ZoomOut, Download, Archive, CheckCircle2, ChevronDown } from 'lucide-react';
+import { PinProtectedAction } from '../src/components/PinProtectedAction';
 import { getPaymentSchedulesBySource } from '../src/services/paymentSchedulesService';
 import { hasInstallmentPayments, deleteAllInstallmentPaymentsAndResetSchedules } from '../src/services/installmentsService';
 import { getTransactionsByPaymentSchedule, getReceiptSignedUrl, updateTransaction, updateTransactionAndSyncSchedule } from '../src/services/transactionsService';
+import { getTransactionsByPaymentSchedule, getReceiptSignedUrl, updateTransaction, updateTransactionAndSyncSchedule, deleteTransactionAndRevertSchedule } from '../src/services/transactionsService';
 import { combineDateWithCurrentTime } from '../src/utils/dateUtils';
 import type { SupabaseMonthlyPaymentSchedule, SupabaseTransaction } from '../src/types/supabase';
 import { supabase } from '../src/utils/supabaseClient';
@@ -155,6 +157,29 @@ const Installments: React.FC<InstallmentsProps> = ({ installments, accounts, bil
     } finally {
       setIsEditingScheduleTx(false);
     }
+  };
+
+  const handleDeleteInstallmentScheduleTx = async (txId: string) => {
+    setConfirmModal({
+      show: true,
+      title: 'Delete Payment Record',
+      message: 'Are you sure you want to delete this payment record? This cannot be undone.',
+      onConfirm: async () => {
+        setConfirmModal(prev => ({ ...prev, show: false }));
+        try {
+          const { error } = await deleteTransactionAndRevertSchedule(txId);
+          if (error) throw error;
+          // Reload the modal and the schedule list to reflect the deletion
+          if (schedulePaymentsModal) {
+            await openSchedulePaymentsModal(schedulePaymentsModal.scheduleId, schedulePaymentsModal.month);
+          }
+          await loadPaymentSchedulesForModal();
+        } catch (err) {
+          console.error('[Installments] Error deleting schedule transaction:', err);
+          alert('Failed to delete transaction. Please try again.');
+        }
+      }
+    });
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -1389,6 +1414,19 @@ const Installments: React.FC<InstallmentsProps> = ({ installments, accounts, bil
                         >
                           <Edit2 className="w-3 h-3" />
                         </button>
+                        <PinProtectedAction
+                          featureId="transaction_deletions"
+                          onVerified={() => handleDeleteInstallmentScheduleTx(tx.id)}
+                          actionLabel="Delete Payment Record"
+                        >
+                          <button
+                            onClick={(e) => e.preventDefault()}
+                            title="Delete payment record"
+                            className="ml-1 mt-1 text-[9px] font-black text-red-500 uppercase tracking-widest border border-red-100 px-2 py-1 rounded-lg hover:bg-red-50 transition-colors flex-shrink-0"
+                          >
+                            <Trash2 className="w-3 h-3" />
+                          </button>
+                        </PinProtectedAction>
                       </div>
                       {tx.receiptUrl && (
                         <div className="flex items-center space-x-3 pt-1">

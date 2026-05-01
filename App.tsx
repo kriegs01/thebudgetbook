@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Menu, ChevronLeft, SlidersHorizontal, ArrowUp, ArrowDown, Eye, EyeOff, X, ChevronUp, LogOut } from 'lucide-react';
+import { Menu, ChevronLeft, SlidersHorizontal, ArrowUp, ArrowDown, Eye, EyeOff, X, ChevronUp, LogOut, Lock } from 'lucide-react';
 import { BrowserRouter, Routes, Route, NavLink } from 'react-router-dom';
 import { NAV_ITEMS, INITIAL_BUDGET, DEFAULT_SETUP, INITIAL_CATEGORIES } from './constants';
 import { getAllBillersFrontend, createBillerFrontend, updateBillerFrontend, deleteBillerFrontend } from './src/services/billersService';
@@ -17,8 +17,8 @@ import type { Biller, Account, Installment, SavingsJar, Transaction } from './ty
 import type { SupabaseTransaction } from './src/types/supabase';
 
 // Context
-import { TestEnvironmentProvider } from './src/contexts/TestEnvironmentContext';
-import { PinProtectionProvider } from './src/contexts/PinProtectionContext';
+import { TestEnvironmentProvider, useTestEnvironment } from './src/contexts/TestEnvironmentContext';
+import { PinProtectionProvider, usePinProtection } from './src/contexts/PinProtectionContext';
 import { AuthProvider, useAuth } from './src/contexts/AuthContext';
 import { TestModeBanner } from './src/components/TestModeBanner';
 
@@ -49,6 +49,8 @@ const accountToSupabase = (account: Account) => ({
   credit_limit: account.creditLimit ?? null,
   billing_date: account.billingDate ?? null,
   due_date: account.dueDate ?? null,
+  is_active: (account as any).isActive !== false,
+  deactivation_date: (account as any).deactivationDate ?? null,
 });
 
 // Helper function to convert Supabase Account to UI format
@@ -61,6 +63,8 @@ const supabaseToAccount = (supabaseAccount: any): Account => ({
   creditLimit: supabaseAccount.credit_limit,
   billingDate: supabaseAccount.billing_date,
   dueDate: supabaseAccount.due_date,
+  isActive: supabaseAccount.is_active ?? true,
+  deactivationDate: supabaseAccount.deactivation_date,
 });
 
 // Helper function to convert UI Biller to Supabase format
@@ -208,6 +212,8 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
   const [showNavEditModal, setShowNavEditModal] = useState(false);
   const [tempNavPrefs, setTempNavPrefs] = useState(navPreferences);
 
+  const { triggerStandbyLock, isPinEnabled } = usePinProtection();
+
   useEffect(() => {
     let initialPrefs = null;
 
@@ -259,6 +265,16 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
       document.documentElement.classList.remove('dark');
     }
   }, [theme]);
+
+  const { isTestMode, setTestMode } = useTestEnvironment();
+  
+  // Security fallback: Ensure non-admin users cannot be in test mode
+  useEffect(() => {
+    if (userProfile && (userProfile as any).role !== 'admin' && isTestMode) {
+      console.log('[App] Non-admin user detected in test mode. Disabling test mode.');
+      setTestMode(false);
+    }
+  }, [userProfile, isTestMode, setTestMode]);
 
   // Wallet state is managed internally by WalletsPage and WalletView (they fetch their own data)
   
@@ -552,7 +568,7 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
     const { error } = await deleteAccountFrontend(id);
     if (error) {
       console.error('Error deleting account:', error);
-      alert('Failed to delete account. Please try again.');
+      throw new Error('Failed to delete account due to existing relationships.');
     } else {
       await reloadAccounts();
     }
@@ -1032,8 +1048,7 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
   };
 
   return (
-    <TestEnvironmentProvider>
-      <PinProtectionProvider>
+    <>
         <TestModeBanner sidebarOpen={isSidebarOpen} />
         <BrowserRouter>
         <div className="flex h-[100dvh] bg-gray-50 dark:bg-gray-950 w-full overflow-hidden fixed inset-0 transition-colors duration-200">
@@ -1083,7 +1098,16 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
               {isSidebarOpen ? (
                 <div>
                   {isUserMenuOpen && (
-                    <div className="pb-2">
+                    <div className="pb-2 space-y-1">
+                      {isPinEnabled() && (
+                        <button
+                          onClick={triggerStandbyLock}
+                          className="w-full flex items-center space-x-3 py-2 px-3 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors"
+                        >
+                          <Lock className="w-4 h-4" />
+                          <span>Lock App</span>
+                        </button>
+                      )}
                       <button
                         onClick={async () => {
                           try {
@@ -1123,7 +1147,16 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
               ) : (
                 <div className="flex flex-col items-center w-full">
                   {isUserMenuOpen && (
-                    <div className="pb-2 w-full">
+                    <div className="pb-2 w-full space-y-1">
+                      {isPinEnabled() && (
+                        <button
+                          onClick={triggerStandbyLock}
+                          className="w-full py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg flex items-center justify-center transition-colors"
+                          title="Lock App"
+                        >
+                          <Lock className="w-5 h-5" />
+                        </button>
+                      )}
                       <button
                         onClick={async () => {
                           try {
@@ -1242,9 +1275,27 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
                   onEdit={handleEditAccount}
                   onDelete={handleDeleteAccount}
                   onDeactivate={async (id, when) => {
-                    // For now, just mark as inactive or remove - can be enhanced later
-                    if (when === 'now') {
-                      await handleDeleteAccount(id);
+                    const accountToDeactivate = accounts.find(a => a.id === id);
+                    if (accountToDeactivate) {
+                      try {
+                        const isTestMode = localStorage.getItem('test_environment_enabled') === 'true';
+                        const tableName = isTestMode ? 'accounts_test' : 'accounts';
+                        
+                        let updatePayload: any = {};
+                        if (when === 'now') {
+                          updatePayload = { is_active: false };
+                        } else {
+                          updatePayload = { deactivation_date: when };
+                        }
+                        
+                        const { error } = await supabase.from(tableName).update(updatePayload).eq('id', id);
+                        if (error) throw error;
+                        
+                        await reloadAccounts();
+                      } catch (err) {
+                        console.error('Failed to deactivate account:', err);
+                        alert('Failed to deactivate account. Please try again.');
+                      }
                     }
                   }}
                   loading={accountsLoading}
@@ -1351,17 +1402,20 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
         </div>
       )}
     </BrowserRouter>
-    </PinProtectionProvider>
-    </TestEnvironmentProvider>
+    </>
   );
 };
 
 // Main App component with Auth Provider
 const App: React.FC = () => {
   return (
-    <AuthProvider>
-      <AppContent />
-    </AuthProvider>
+    <TestEnvironmentProvider>
+      <PinProtectionProvider>
+        <AuthProvider>
+          <AppContent />
+        </AuthProvider>
+      </PinProtectionProvider>
+    </TestEnvironmentProvider>
   );
 };
 
