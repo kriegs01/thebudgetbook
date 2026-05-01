@@ -749,23 +749,6 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ onTransactionDelete
                   </div>
                 )}
 
-                {/* Special "Transfer To" Account Dropdown (Only for new transfers) */}
-                {form.transactionType === 'transfer' && !editingTxId && (
-                  <div>
-                    <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2 text-indigo-500">Transfer To</label>
-                    <select 
-                      value={form.transferToAccountId} 
-                      onChange={e => setForm(f => ({ ...f, transferToAccountId: e.target.value }))} 
-                      className="w-full min-w-0 bg-indigo-50 dark:bg-indigo-900/20 text-indigo-700 dark:text-indigo-300 border-transparent rounded-2xl px-3 py-4 outline-none font-bold text-sm appearance-none transition-colors"
-                    >
-                      <option value="">Select Destination Account</option>
-                  {accounts.filter(a => a.id !== form.paymentMethodId && a.type !== 'Credit').map(a => (
-                        <option key={a.id} value={a.id}>{a.bank}</option>
-                      ))}
-                    </select>
-                  </div>
-                )}
-                
                 <div>
                   <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Amount</label>
                   <div className="relative">
@@ -782,40 +765,80 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ onTransactionDelete
                   </div>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div>
-                <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">
-                  {['withdraw', 'cash_in', 'loan', 'transfer'].includes(form.transactionType) ? 'Date' : 'Date Paid'}
-                </label>
-                    <input 
-                      type="date" 
-                      value={form.date} 
-                      onChange={e => setForm(f => ({ ...f, date: e.target.value }))} 
-                      required 
-                    className="w-full min-w-0 bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-transparent rounded-2xl px-3 py-4 outline-none font-bold text-sm transition-colors" 
-                    />
+                {form.transactionType === 'transfer' && !editingTxId ? (
+                  <>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Transfer From</label>
+                        {accounts.length === 0 ? (
+                          <div className="text-xs text-red-600 p-4">No accounts available</div>
+                        ) : (
+                          <select 
+                            value={form.paymentMethodId} 
+                            onChange={e => setForm(f => ({ ...f, paymentMethodId: e.target.value }))} 
+                            className="w-full min-w-0 bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-transparent rounded-2xl px-3 py-4 outline-none font-bold text-sm appearance-none transition-colors"
+                          >
+                            {accounts.filter(a => a.type !== 'Credit').map(a => <option key={a.id} value={a.id}>{a.bank}</option>)}
+                          </select>
+                        )}
+                      </div>
+                      <div>
+                        <label className="block text-[10px] font-black text-indigo-500 uppercase tracking-widest mb-2">Transfer To</label>
+                        <select 
+                          value={form.transferToAccountId} 
+                          onChange={e => setForm(f => ({ ...f, transferToAccountId: e.target.value }))} 
+                          className="w-full min-w-0 bg-indigo-50 dark:bg-indigo-900/20 text-indigo-700 dark:text-indigo-300 border-transparent rounded-2xl px-3 py-4 outline-none font-bold text-sm appearance-none transition-colors"
+                        >
+                          <option value="">Select Destination Account</option>
+                          {accounts.filter(a => a.id !== form.paymentMethodId && a.type !== 'Credit').map(a => (
+                            <option key={a.id} value={a.id}>{a.bank}</option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Date</label>
+                      <input 
+                        type="date" 
+                        value={form.date} 
+                        onChange={e => setForm(f => ({ ...f, date: e.target.value }))} 
+                        required 
+                        className="w-full min-w-0 bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-transparent rounded-2xl px-3 py-4 outline-none font-bold text-sm transition-colors" 
+                      />
+                    </div>
+                  </>
+                ) : (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">
+                        {['withdraw', 'cash_in', 'loan', 'transfer'].includes(form.transactionType) ? 'Date' : 'Date Paid'}
+                      </label>
+                      <input 
+                        type="date" 
+                        value={form.date} 
+                        onChange={e => setForm(f => ({ ...f, date: e.target.value }))} 
+                        required 
+                        className="w-full min-w-0 bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-transparent rounded-2xl px-3 py-4 outline-none font-bold text-sm transition-colors" 
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">
+                        {['withdraw', 'cash_in', 'loan', 'transfer'].includes(form.transactionType) ? 'Account' : 'Payment Method'}
+                      </label>
+                      {accounts.length === 0 ? (
+                        <div className="text-xs text-red-600 p-4">No accounts available</div>
+                      ) : (
+                        <select 
+                          value={form.paymentMethodId} 
+                          onChange={e => setForm(f => ({ ...f, paymentMethodId: e.target.value }))} 
+                          className="w-full min-w-0 bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-transparent rounded-2xl px-3 py-4 outline-none font-bold text-sm appearance-none transition-colors"
+                        >
+                          {accounts.filter(a => form.transactionType === 'payment' ? a.classification !== 'Credit Card' : a.type !== 'Credit').map(a => <option key={a.id} value={a.id}>{a.bank}</option>)}
+                        </select>
+                      )}
+                    </div>
                   </div>
-                  <div>
-                <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">
-                  {form.transactionType === 'transfer' && !editingTxId 
-                    ? 'Transfer From' 
-                    : ['withdraw', 'cash_in', 'loan'].includes(form.transactionType)
-                      ? 'Account'
-                      : 'Payment Method'}
-                </label>
-                    {accounts.length === 0 ? (
-                  <div className="text-xs text-red-600 p-4">No accounts available</div>
-                    ) : (
-                      <select 
-                        value={form.paymentMethodId} 
-                        onChange={e => setForm(f => ({ ...f, paymentMethodId: e.target.value }))} 
-                      className="w-full min-w-0 bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-transparent rounded-2xl px-3 py-4 outline-none font-bold text-sm appearance-none transition-colors"
-                      >
-                  {accounts.filter(a => form.transactionType === 'payment' ? a.classification !== 'Credit Card' : a.type !== 'Credit').map(a => <option key={a.id} value={a.id}>{a.bank}</option>)}
-                      </select>
-                    )}
-                  </div>
-                </div>
+                )}
 
             {form.transactionType === 'payment' && (
                 <div>
