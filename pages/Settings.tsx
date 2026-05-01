@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { ChevronDown, ChevronRight, Hash, Globe, Bell, Lock, Trash2, AlertTriangle, RotateCcw, Plus, X, Database, Copy, Shield, User, Users, Mail, Key, MoreVertical, Check, SlidersHorizontal } from 'lucide-react';
 import { BudgetCategory, Biller, Installment, SupabaseUserProfile } from '../types';
 import { useTestEnvironment } from '../src/contexts/TestEnvironmentContext';
@@ -417,6 +417,12 @@ const Settings: React.FC<SettingsProps> = ({ currency, setCurrency, categories, 
   const [updateError, setUpdateError] = useState('');
   const [isUpdating, setIsUpdating] = useState(false);
   const [personInput, setPersonInput] = useState('');
+  const [isPeopleEnabled, setIsPeopleEnabled] = useState(!!userProfile?.settings?.peopleEnabled);
+  const [isTogglingPeople, setIsTogglingPeople] = useState(false);
+
+  useEffect(() => {
+    setIsPeopleEnabled(!!userProfile?.settings?.peopleEnabled);
+  }, [userProfile?.settings?.peopleEnabled]);
 
   // Test Environment state
   const { isTestMode, setTestMode } = useTestEnvironment();
@@ -798,26 +804,38 @@ const Settings: React.FC<SettingsProps> = ({ currency, setCurrency, categories, 
                 </p>
               </div>
               <button
+              type="button"
+              disabled={isTogglingPeople}
                 onClick={async () => {
-                  if (!user) return;
-                  const newSettings = { ...userProfile?.settings, peopleEnabled: !userProfile?.settings?.peopleEnabled };
+                if (!user || isTogglingPeople) return;
+                setIsTogglingPeople(true);
+                const newValue = !isPeopleEnabled;
+                setIsPeopleEnabled(newValue); // Optimistic UI
+                try {
+                  const newSettings = { ...(userProfile?.settings || {}), peopleEnabled: newValue };
                   await updateUserProfile(user.id, { settings: newSettings });
                   await refreshProfile();
+                } catch (err) {
+                  console.error('Failed to toggle people tracking:', err);
+                  setIsPeopleEnabled(!newValue); // Revert on failure
+                } finally {
+                  setIsTogglingPeople(false);
+                }
                 }}
                 className={`relative inline-flex h-8 w-16 items-center rounded-full transition-colors ${
-                  userProfile?.settings?.peopleEnabled ? 'bg-indigo-600' : 'bg-gray-300'
-                }`}
+                isPeopleEnabled ? 'bg-indigo-600' : 'bg-gray-300'
+              } ${isTogglingPeople ? 'opacity-70 cursor-not-allowed' : ''}`}
               >
                 <span
                   className={`inline-block h-6 w-6 transform rounded-full bg-white transition-transform ${
-                    userProfile?.settings?.peopleEnabled ? 'translate-x-9' : 'translate-x-1'
+                  isPeopleEnabled ? 'translate-x-9' : 'translate-x-1'
                   }`}
                 />
               </button>
             </div>
 
             {/* People List Manager - Only visible if enabled */}
-            {userProfile?.settings?.peopleEnabled && (
+          {isPeopleEnabled && (
               <div className="pt-4 border-t border-gray-100 dark:border-gray-800 space-y-3">
                 <h4 className="text-sm font-bold text-gray-900 dark:text-gray-100 uppercase transition-colors">Your People</h4>
                 {userProfile?.settings?.people && userProfile.settings.people.length > 0 ? (
@@ -829,7 +847,7 @@ const Settings: React.FC<SettingsProps> = ({ currency, setCurrency, categories, 
                           onClick={async () => {
                             if (!user) return;
                             const updatedPeople = userProfile.settings?.people?.filter(p => p !== person) || [];
-                            const newSettings = { ...userProfile.settings, people: updatedPeople };
+                        const newSettings = { ...(userProfile?.settings || {}), people: updatedPeople };
                             await updateUserProfile(user.id, { settings: newSettings });
                             await refreshProfile();
                           }}
@@ -858,7 +876,7 @@ const Settings: React.FC<SettingsProps> = ({ currency, setCurrency, categories, 
                       const trimmedName = personInput.trim();
                       if (trimmedName && userProfile && !userProfile.settings?.people?.includes(trimmedName)) {
                         const updatedPeople = [...(userProfile.settings?.people || []), trimmedName];
-                        const newSettings = { ...userProfile.settings, people: updatedPeople };
+                        const newSettings = { ...(userProfile?.settings || {}), people: updatedPeople };
                         await updateUserProfile(user.id, { settings: newSettings });
                         await refreshProfile();
                         setPersonInput('');
