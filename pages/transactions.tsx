@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react';
-import { Plus, Info, Eye, ZoomIn, ZoomOut, Download, X, Pencil, Trash2, CheckSquare, Square, ChevronDown, Filter, AlertTriangle, ArrowUpFromLine, ArrowDownToLine, ArrowLeftRight, Landmark, CreditCard } from 'lucide-react';
+import { Plus, Info, Eye, ZoomIn, ZoomOut, Download, X, ArrowLeft, Pencil, Trash2, CheckSquare, Square, ChevronDown, Filter, AlertTriangle, ArrowUpFromLine, ArrowDownToLine, ArrowLeftRight, Landmark, CreditCard } from 'lucide-react';
 import { PinProtectedAction } from '../src/components/PinProtectedAction';
 import { getAllTransactions, createTransaction, updateTransaction, deleteTransactionAndRevertSchedule, uploadTransactionReceipt, getReceiptSignedUrl, batchDeleteTransactions, createTransfer } from '../src/services/transactionsService';
 import { getAllAccountsFrontend } from '../src/services/accountsService';
@@ -26,11 +26,11 @@ const formatCurrency = (val: number) =>
   new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP', minimumFractionDigits: 2 }).format(val);
 
 const TRANSACTION_TYPES = [
-  { id: 'payment', label: 'Payment', icon: <CreditCard className="w-5 h-5" />, x: -90, y: 0 },
-  { id: 'withdraw', label: 'Withdrawal', icon: <ArrowUpFromLine className="w-5 h-5" />, x: -83, y: -34 },
-  { id: 'cash_in', label: 'Cash In', icon: <ArrowDownToLine className="w-5 h-5" />, x: -64, y: -64 },
-  { id: 'transfer', label: 'Transfer', icon: <ArrowLeftRight className="w-5 h-5" />, x: -34, y: -83 },
-  { id: 'loan', label: 'Loan', icon: <Landmark className="w-5 h-5" />, x: 0, y: -90 },
+  { id: 'payment', label: 'Payment', icon: <CreditCard className="w-5 h-5" />, x: -130, y: 0 },
+  { id: 'withdraw', label: 'Withdrawal', icon: <ArrowUpFromLine className="w-5 h-5" />, x: -120, y: -50 },
+  { id: 'cash_in', label: 'Cash In', icon: <ArrowDownToLine className="w-5 h-5" />, x: -92, y: -92 },
+  { id: 'transfer', label: 'Transfer', icon: <ArrowLeftRight className="w-5 h-5" />, x: -50, y: -120 },
+  { id: 'loan', label: 'Loan', icon: <Landmark className="w-5 h-5" />, x: 0, y: -130 },
 ];
 
 interface TransactionsPageProps {
@@ -50,6 +50,7 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ onTransactionDelete
   const [showFloatingAdd, setShowFloatingAdd] = useState(false);
   const [showTypeModal, setShowTypeModal] = useState(false);
   const [showFabMenu, setShowFabMenu] = useState(false);
+  const [formSource, setFormSource] = useState<'top' | 'fab' | null>(null);
 
   // Transaction details modal
   const [selectedTx, setSelectedTx] = useState<Transaction | null>(null);
@@ -209,7 +210,7 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ onTransactionDelete
 
   // ── Form helpers ──────────────────────────────────────────────────────────
 
-  const openAddForm = (type: string) => {
+  const openAddForm = (type: string, source: 'top' | 'fab' = 'top') => {
     setForm({
       name: '',
       date: todayIso(),
@@ -220,19 +221,25 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ onTransactionDelete
     });
     setReceiptFile(null);
     setShowTypeModal(false);
-    setShowFabMenu(false);
+    
+    if (source === 'top') {
+      setShowFabMenu(false);
+    }
+    setFormSource(source);
     setShowForm(true);
   };
 
   const closeForm = () => {
     setShowForm(false);
     setEditingTxId(null);
+    setFormSource(null);
     setReceiptFile(null);
     setForm({ name: '', date: todayIso(), amount: '', paymentMethodId: accounts[0]?.id ?? '', transactionType: 'payment', transferToAccountId: '' });
   };
 
   const openEditForm = (tx: Transaction) => {
     setEditingTxId(tx.id);
+    setFormSource(null);
     setForm({
       name: tx.name,
       date: new Date(tx.date).toISOString().split('T')[0],
@@ -683,7 +690,25 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ onTransactionDelete
         {showForm && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-md">
           <div className="w-full max-w-md bg-white dark:bg-gray-900 rounded-3xl p-10 shadow-2xl relative transition-colors">
-            <h2 className="text-2xl font-black text-gray-900 dark:text-gray-100 mb-2">
+            {formSource === 'top' && !editingTxId && (
+              <button 
+                onClick={() => { setShowForm(false); setShowTypeModal(true); setFormSource(null); }} 
+                className="absolute left-6 top-6 p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full transition-colors"
+                aria-label="Back to type selection"
+              >
+                <ArrowLeft className="w-5 h-5 text-gray-400" />
+              </button>
+            )}
+            {(formSource === 'fab' || editingTxId) && (
+              <button 
+                onClick={closeForm} 
+                className="absolute right-6 top-6 p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full transition-colors"
+                aria-label="Close"
+              >
+                <X className="w-5 h-5 text-gray-400" />
+              </button>
+            )}
+            <h2 className={`text-2xl font-black text-gray-900 dark:text-gray-100 mb-2 ${formSource === 'top' && !editingTxId ? 'mt-6' : ''}`}>
               {editingTxId ? 'Edit Transaction' : `Add New ${TRANSACTION_TYPES.find(t => t.id === form.transactionType)?.label || 'Transaction'}`}
             </h2>
               <p className="text-gray-500 text-sm mb-8">{editingTxId ? 'Update the transaction details below' : 'Record a payment transaction'}</p>
@@ -967,7 +992,7 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ onTransactionDelete
               {TRANSACTION_TYPES.map(type => (
                 <button 
                   key={type.id} 
-                  onClick={() => openAddForm(type.id)} 
+                  onClick={() => openAddForm(type.id, 'top')} 
                   className="flex flex-col items-center justify-center p-6 bg-gray-50 dark:bg-gray-800/50 rounded-3xl hover:bg-indigo-50 dark:hover:bg-indigo-900/30 hover:shadow-md text-gray-700 dark:text-gray-300 hover:text-indigo-600 dark:hover:text-indigo-400 transition-all border border-transparent hover:border-indigo-100 dark:hover:border-indigo-800 group"
                 >
                   <div className="mb-4 p-4 bg-white dark:bg-gray-900 rounded-full shadow-sm group-hover:scale-110 transition-transform duration-300">
@@ -1000,7 +1025,7 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ onTransactionDelete
                   }}
                 >
                   <button 
-                    onClick={() => openAddForm(item.id)}
+                    onClick={() => openAddForm(item.id, 'fab')}
                     className="w-12 h-12 bg-white dark:bg-gray-800 text-indigo-600 dark:text-indigo-400 rounded-full shadow-lg border border-gray-100 dark:border-gray-700 flex items-center justify-center hover:scale-110 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 transition-all pointer-events-auto group relative"
                   >
                     {item.icon}
