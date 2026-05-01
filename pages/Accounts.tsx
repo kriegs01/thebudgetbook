@@ -83,6 +83,11 @@ const Accounts: React.FC<AccountsProps> = ({ accounts, onAdd, onDelete, onEdit, 
     month: 0,
     year: 0
   });
+  
+  const [deleteFailedModal, setDeleteFailedModal] = useState<{
+    show: boolean;
+    accountId: string;
+  }>({ show: false, accountId: '' });
 
   useEffect(() => {
     const now = new Date();
@@ -176,8 +181,13 @@ const Accounts: React.FC<AccountsProps> = ({ accounts, onAdd, onDelete, onEdit, 
       title: 'Remove Account',
       message: `Are you sure you want to permanently remove the account: "${bank}"? This might affect your recorded balances.`,
       onConfirm: async () => {
-        await onDelete?.(id);
-        setConfirmModal(p => ({ ...p, show: false }));
+          try {
+            await onDelete?.(id);
+            setConfirmModal(p => ({ ...p, show: false }));
+          } catch (err) {
+            setConfirmModal(p => ({ ...p, show: false }));
+            setDeleteFailedModal({ show: true, accountId: id });
+          }
       }
     });
   };
@@ -524,6 +534,29 @@ const Accounts: React.FC<AccountsProps> = ({ accounts, onAdd, onDelete, onEdit, 
         />
       )}
 
+      {deleteFailedModal.show && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-in fade-in">
+          <div className="bg-white dark:bg-gray-900 rounded-[2.5rem] w-full max-w-sm p-10 shadow-2xl animate-in zoom-in-95 flex flex-col items-center text-center transition-colors">
+            <div className="w-16 h-16 bg-orange-50 dark:bg-orange-900/20 text-orange-600 dark:text-orange-400 rounded-3xl flex items-center justify-center mb-6 transition-colors">
+              <AlertTriangle className="w-8 h-8" />
+            </div>
+            <h3 className="text-xl font-black text-gray-900 dark:text-gray-100 mb-2 uppercase tracking-tight transition-colors">Cannot Delete</h3>
+            <p className="text-sm text-gray-500 dark:text-gray-400 mb-8 font-medium leading-relaxed transition-colors">This account cannot be deleted because it has attached transactions, wallets, or schedules. Would you like to deactivate it instead?</p>
+            <div className="flex flex-col w-full space-y-3">
+              <button onClick={() => { 
+                setDeleteFailedModal({ show: false, accountId: '' }); 
+                openDeactivateDialog(deleteFailedModal.accountId); 
+              }} className="w-full bg-indigo-600 text-white py-4 rounded-2xl font-black uppercase tracking-widest text-[10px] hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-100 dark:shadow-none">
+                Deactivate Instead
+              </button>
+              <button onClick={() => setDeleteFailedModal({ show: false, accountId: '' })} className="w-full bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-300 py-4 rounded-2xl font-black uppercase tracking-widest text-[10px] hover:bg-gray-200 dark:hover:bg-gray-700 transition-all">
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {confirmModal.show && <ConfirmDialog {...confirmModal} onClose={() => setConfirmModal(p => ({ ...p, show: false }))} />}
     </div>
   );
@@ -549,9 +582,15 @@ const DeactivateDialog: React.FC<{
         <p className="text-sm text-gray-500 dark:text-gray-400 mb-6 font-medium leading-relaxed transition-colors">Choose whether to deactivate the account now or schedule deactivation for a later month and year.</p>
 
         <div className="space-y-4">
-          <button onClick={onNow} className="w-full bg-red-600 text-white py-3 rounded-2xl font-black uppercase tracking-widest hover:bg-red-700 transition-all">
-            Deactivate Now
-          </button>
+          <PinProtectedAction
+            featureId="account_deactivations"
+            onVerified={onNow}
+            actionLabel="Deactivate Account"
+          >
+            <button onClick={(e) => e.preventDefault()} className="w-full bg-red-600 text-white py-3 rounded-2xl font-black uppercase tracking-widest hover:bg-red-700 transition-all">
+              Deactivate Now
+            </button>
+          </PinProtectedAction>
 
           <div className="p-4 border border-gray-100 dark:border-gray-800 rounded-xl transition-colors">
             <p className="text-sm text-gray-600 dark:text-gray-300 mb-2 font-medium transition-colors">Deactivate on</p>
@@ -564,7 +603,13 @@ const DeactivateDialog: React.FC<{
               </select>
             </div>
             <div className="mt-4">
-              <button onClick={onSchedule} className="w-full bg-indigo-600 text-white py-2 rounded-xl font-bold hover:bg-indigo-700 transition-colors">Schedule Deactivation</button>
+            <PinProtectedAction
+              featureId="account_deactivations"
+              onVerified={onSchedule}
+              actionLabel="Schedule Deactivation"
+            >
+              <button onClick={(e) => e.preventDefault()} className="w-full bg-indigo-600 text-white py-2 rounded-xl font-bold hover:bg-indigo-700 transition-colors">Schedule Deactivation</button>
+            </PinProtectedAction>
             </div>
           </div>
 

@@ -552,7 +552,7 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
     const { error } = await deleteAccountFrontend(id);
     if (error) {
       console.error('Error deleting account:', error);
-      alert('Failed to delete account. Please try again.');
+      throw new Error('Failed to delete account due to existing relationships.');
     } else {
       await reloadAccounts();
     }
