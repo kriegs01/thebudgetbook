@@ -1,12 +1,14 @@
-import React, { useState } from 'react';
-import { ChevronDown, ChevronRight, Hash, Globe, Bell, Lock, Trash2, AlertTriangle, RotateCcw, Plus, X, Database, Copy, Shield, User, Mail, Key, MoreVertical, Check, SlidersHorizontal } from 'lucide-react';
-import { BudgetCategory, Biller, Installment } from '../types';
+import React, { useState, useEffect } from 'react';
+import { ChevronDown, ChevronRight, Hash, Globe, Bell, Lock, Trash2, AlertTriangle, RotateCcw, Plus, X, Database, Copy, Shield, User, Users, Mail, Key, MoreVertical, Check, SlidersHorizontal } from 'lucide-react';
+import { BudgetCategory, Biller, Installment, SupabaseUserProfile } from '../types';
 import { useTestEnvironment } from '../src/contexts/TestEnvironmentContext';
+import { getAllPeople, createPerson, deletePerson } from '../src/services/peopleService';
+import type { SupabasePerson } from '../src/types/supabase';
 import { useAuth } from '../src/contexts/AuthContext';
 import { supabase } from '../src/utils/supabaseClient';
 import { SecuritySettings } from '../src/components/settings/SecuritySettings';
 import { PinProtectedAction } from '../src/components/PinProtectedAction';
-import { updateUserEmail, updateUserPassword } from '../src/services/userProfileService';
+import { updateUserEmail, updateUserPassword, updateUserProfile } from '../src/services/userProfileService';
 
 interface SettingsProps {
   currency: string;
@@ -416,6 +418,22 @@ const Settings: React.FC<SettingsProps> = ({ currency, setCurrency, categories, 
   const [updateMessage, setUpdateMessage] = useState('');
   const [updateError, setUpdateError] = useState('');
   const [isUpdating, setIsUpdating] = useState(false);
+  const [personInput, setPersonInput] = useState('');
+  const [isPeopleEnabled, setIsPeopleEnabled] = useState(!!userProfile?.settings?.peopleEnabled);
+  const [isTogglingPeople, setIsTogglingPeople] = useState(false);
+  const [peopleList, setPeopleList] = useState<SupabasePerson[]>([]);
+
+  useEffect(() => {
+    setIsPeopleEnabled(!!userProfile?.settings?.peopleEnabled);
+  }, [userProfile?.settings?.peopleEnabled]);
+
+  useEffect(() => {
+    if (isPeopleEnabled && user) {
+      getAllPeople().then(({ data }) => {
+        if (data) setPeopleList(data);
+      });
+    }
+  }, [isPeopleEnabled, user]);
 
   // Test Environment state
   const { isTestMode, setTestMode } = useTestEnvironment();
@@ -785,6 +803,107 @@ const Settings: React.FC<SettingsProps> = ({ currency, setCurrency, categories, 
                 }`}
               />
             </button>
+          </div>
+
+          {/* People & Shared Tracking Toggle */}
+          <div className="p-4 bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-800 space-y-4 transition-colors">
+            <div className="flex items-center justify-between">
+              <div>
+                <h4 className="font-black text-sm text-gray-900 dark:text-gray-100 uppercase mb-1 transition-colors">People Tracking</h4>
+                <p className="text-xs text-gray-500 dark:text-gray-400 transition-colors">
+                  Enable tracking for shared payments, loans, and reports with specific people.
+                </p>
+              </div>
+              <button
+              type="button"
+              disabled={isTogglingPeople}
+                onClick={async () => {
+                if (!user || isTogglingPeople) return;
+                setIsTogglingPeople(true);
+                const newValue = !isPeopleEnabled;
+                setIsPeopleEnabled(newValue); // Optimistic UI
+                try {
+                  const newSettings = { ...(userProfile?.settings || {}), peopleEnabled: newValue };
+                  const { error } = await updateUserProfile(user.id, { settings: newSettings });
+                  if (error) throw error;
+                  
+                  await refreshProfile();
+                } catch (err) {
+                  console.error('Failed to toggle people tracking:', err);
+                  setIsPeopleEnabled(!newValue); // Revert on failure
+                } finally {
+                  setIsTogglingPeople(false);
+                }
+                }}
+                className={`relative inline-flex h-8 w-16 items-center rounded-full transition-colors ${
+                isPeopleEnabled ? 'bg-indigo-600' : 'bg-gray-300'
+              } ${isTogglingPeople ? 'opacity-70 cursor-not-allowed' : ''}`}
+              >
+                <span
+                  className={`inline-block h-6 w-6 transform rounded-full bg-white transition-transform ${
+                  isPeopleEnabled ? 'translate-x-9' : 'translate-x-1'
+                  }`}
+                />
+              </button>
+            </div>
+
+            {/* People List Manager - Only visible if enabled */}
+          {isPeopleEnabled && (
+              <div className="pt-4 border-t border-gray-100 dark:border-gray-800 space-y-3">
+                <h4 className="text-sm font-bold text-gray-900 dark:text-gray-100 uppercase transition-colors">Your People</h4>
+                {peopleList.length > 0 ? (
+                  <div className="space-y-2">
+                    {peopleList.map((person) => (
+                      <div key={person.id} className="flex items-center justify-between bg-gray-50 dark:bg-gray-800 rounded-xl p-3">
+                        <span className="text-sm font-medium text-gray-900 dark:text-gray-100">{person.name}</span>
+                        <button
+                          onClick={async () => {
+                            const { error } = await deletePerson(person.id);
+                            if (!error) {
+                              setPeopleList(peopleList.filter(p => p.id !== person.id));
+                            }
+                          }}
+                          className="text-red-500 hover:text-red-600 p-1 rounded-full hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+                          title={`Remove ${person.name}`}
+                        >
+                          <X className="w-4 h-4" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-sm text-gray-500 dark:text-gray-400 italic">No people added yet.</p>
+                )}
+                <div className="flex gap-2 mt-4">
+                  <input
+                    type="text"
+                    value={personInput}
+                    onChange={(e) => setPersonInput(e.target.value)}
+                    placeholder="Add new person name"
+                    className="flex-1 px-4 py-3 bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-gray-100 border border-gray-200 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all placeholder:text-gray-400 dark:placeholder:text-gray-500"
+                  />
+                  <button
+                    onClick={async () => {
+                      if (!user) return;
+                      const trimmedName = personInput.trim();
+                      if (trimmedName && !peopleList.some(p => p.name.toLowerCase() === trimmedName.toLowerCase())) {
+                        const { data, error } = await createPerson({ name: trimmedName });
+                        if (error) {
+                          console.error('Failed to add person:', error);
+                        } else if (data) {
+                          setPeopleList([...peopleList, data]);
+                          setPersonInput('');
+                        }
+                      }
+                    }}
+                    disabled={!personInput.trim()}
+                    className="px-4 py-3 bg-indigo-600 text-white rounded-xl font-bold hover:bg-indigo-700 disabled:opacity-50 transition-all"
+                  >
+                    <Plus className="w-5 h-5" />
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )

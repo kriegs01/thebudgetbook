@@ -14,6 +14,9 @@ export interface SupabaseUserProfile {
   last_name: string;
   created_at: string; // timestamptz
   updated_at: string; // timestamptz
+  settings?: {
+    peopleEnabled?: boolean; // Toggle for the People feature
+  } | null;
 }
 
 export interface SupabaseAccount {
@@ -28,6 +31,14 @@ export interface SupabaseAccount {
   due_date: string | null; // date, nullable
   created_at: string; // timestamptz, default now()
   user_id: string | null; // uuid, references auth.users(id)
+}
+
+export interface SupabasePerson {
+  id: string; // uuid
+  name: string;
+  user_id: string; // uuid, references auth.users(id)
+  created_at: string; // timestamptz
+  updated_at: string; // timestamptz
 }
 
 export interface SupabaseBiller {
@@ -77,6 +88,7 @@ export interface SupabaseTransaction {
   transaction_type: 'payment' | 'withdraw' | 'transfer' | 'loan' | 'cash_in' | 'loan_payment' | 'credit_payment'; // NEW
   notes: string | null; // NEW
   related_transaction_id: string | null; // NEW - links transfer pairs and loan payments
+  borrower_name: string | null; // Optional tracking for the associated person
   receipt_url: string | null; // URL of receipt image in Supabase Storage
   user_id: string | null; // uuid, references auth.users(id)
   wallet_id: string | null; // uuid, nullable - links stash top-up transactions to a wallet
@@ -132,6 +144,9 @@ export interface SupabaseMonthlyPaymentSchedule {
 export type CreateAccountInput = Omit<SupabaseAccount, 'id' | 'created_at' | 'user_id'>;
 export type UpdateAccountInput = Partial<CreateAccountInput>;
 
+export type CreatePersonInput = Omit<SupabasePerson, 'id' | 'created_at' | 'updated_at' | 'user_id'>;
+export type UpdatePersonInput = Partial<CreatePersonInput>;
+
 export type CreateBillerInput = Omit<SupabaseBiller, 'id' | 'user_id'>;
 export type UpdateBillerInput = Partial<CreateBillerInput>;
 
@@ -142,10 +157,11 @@ export type CreateSavingsInput = Omit<SupabaseSavings, 'id' | 'user_id'>;
 export type UpdateSavingsInput = Partial<CreateSavingsInput>;
 
 // Required fields only; newer columns that may not exist in all DB environments are optional
-export type CreateTransactionInput = Omit<SupabaseTransaction, 'id' | 'user_id' | 'transaction_type' | 'notes' | 'related_transaction_id' | 'receipt_url' | 'wallet_id'> & {
+export type CreateTransactionInput = Omit<SupabaseTransaction, 'id' | 'user_id' | 'transaction_type' | 'notes' | 'related_transaction_id' | 'borrower_name' | 'receipt_url' | 'wallet_id'> & {
   transaction_type?: SupabaseTransaction['transaction_type'];
   notes?: string | null;
   related_transaction_id?: string | null;
+  borrower_name?: string | null;
   receipt_url?: string | null;
   wallet_id?: string | null;
 };

@@ -1,8 +1,11 @@
 import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react';
-import { Plus, Info, Eye, ZoomIn, ZoomOut, Download, X, Pencil, Trash2, CheckSquare, Square, ChevronDown, Filter, AlertTriangle } from 'lucide-react';
+import { Plus, Info, Eye, ZoomIn, ZoomOut, Download, X, ArrowLeft, Pencil, Trash2, CheckSquare, Square, ChevronDown, Filter, AlertTriangle, ArrowUpFromLine, ArrowDownToLine, ArrowLeftRight, Landmark, CreditCard, FileText } from 'lucide-react';
 import { PinProtectedAction } from '../src/components/PinProtectedAction';
-import { getAllTransactions, createTransaction, updateTransaction, deleteTransactionAndRevertSchedule, uploadTransactionReceipt, getReceiptSignedUrl, batchDeleteTransactions } from '../src/services/transactionsService';
+import { useAuth } from '../src/contexts/AuthContext';
+import { getAllTransactions, createTransaction, updateTransaction, deleteTransactionAndRevertSchedule, uploadTransactionReceipt, getReceiptSignedUrl, batchDeleteTransactions, createTransfer } from '../src/services/transactionsService';
 import { getAllAccountsFrontend } from '../src/services/accountsService';
+import { getAllPeople } from '../src/services/peopleService';
+import type { SupabasePerson } from '../src/types/supabase';
 import { combineDateWithCurrentTime, getTodayIso, getFirstDayOfCurrentYearIso, getLastDayOfCurrentYearIso } from '../src/utils/dateUtils';
 
 const FILTER_MIN_DATE = '2025-01-01';
@@ -14,16 +17,25 @@ type Transaction = {
   amount: number;
   paymentMethodId: string; // account id
   transaction_type?: string | null;
+  borrower_name?: string | null;
   receiptUrl?: string | null;
 };
 
-type AccountOption = { id: string; bank: string; classification?: string };
+type AccountOption = { id: string; bank: string; classification?: string; type?: string };
 
 // Use the utility function from dateUtils
 const todayIso = getTodayIso;
 
 const formatCurrency = (val: number) =>
   new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP', minimumFractionDigits: 2 }).format(val);
+
+const TRANSACTION_TYPES = [
+  { id: 'payment', label: 'Payment', icon: <CreditCard className="w-5 h-5" />, x: -130, y: 0 },
+  { id: 'withdraw', label: 'Withdrawal', icon: <ArrowUpFromLine className="w-5 h-5" />, x: -120, y: -50 },
+  { id: 'cash_in', label: 'Cash In', icon: <ArrowDownToLine className="w-5 h-5" />, x: -92, y: -92 },
+  { id: 'transfer', label: 'Transfer', icon: <ArrowLeftRight className="w-5 h-5" />, x: -50, y: -120 },
+  { id: 'loan', label: 'Loan', icon: <Landmark className="w-5 h-5" />, x: 0, y: -130 },
+];
 
 interface TransactionsPageProps {
   onTransactionDeleted?: () => void;
@@ -32,11 +44,20 @@ interface TransactionsPageProps {
 }
 
 const TransactionsPage: React.FC<TransactionsPageProps> = ({ onTransactionDeleted, onTransactionCreated, refreshKey }) => {
+  const { userProfile } = useAuth();
+
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [accounts, setAccounts] = useState<AccountOption[]>([]);
+  const [people, setPeople] = useState<SupabasePerson[]>([]);
   const [showForm, setShowForm] = useState(false);
   const [editingTxId, setEditingTxId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+
+  const headerRef = useRef<HTMLDivElement>(null);
+  const [showFloatingAdd, setShowFloatingAdd] = useState(false);
+  const [showTypeModal, setShowTypeModal] = useState(false);
+  const [showFabMenu, setShowFabMenu] = useState(false);
+  const [formSource, setFormSource] = useState<'top' | 'fab' | null>(null);
 
   // Transaction details modal
   const [selectedTx, setSelectedTx] = useState<Transaction | null>(null);
@@ -53,7 +74,10 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ onTransactionDelete
     name: '',
     date: todayIso(),
     amount: '',
-    paymentMethodId: ''
+    paymentMethodId: '',
+    transactionType: 'payment',
+    transferToAccountId: '',
+    borrowerName: '' // New field for loan transactions
   });
 
   // ── Filter state ──────────────────────────────────────────────────────────
@@ -99,15 +123,16 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ onTransactionDelete
   const loadData = useCallback(async () => {
     setIsLoading(true);
     try {
-      const [accountsResult, transactionsResult] = await Promise.all([
+      const [accountsResult, transactionsResult, peopleResult] = await Promise.all([
         getAllAccountsFrontend(),
         getAllTransactions(),
+        getAllPeople()
       ]);
 
       if (accountsResult.error) {
         console.error('Error loading accounts:', accountsResult.error);
       } else if (accountsResult.data) {
-        setAccounts(accountsResult.data.map(a => ({ id: a.id, bank: a.bank, classification: a.classification })));
+        setAccounts(accountsResult.data.map(a => ({ id: a.id, bank: a.bank, classification: a.classification, type: a.type })));
       }
 
       if (transactionsResult.error) {
@@ -120,8 +145,15 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ onTransactionDelete
           amount: t.amount,
           paymentMethodId: t.payment_method_id,
           transaction_type: t.transaction_type ?? null,
+          borrower_name: t.borrower_name ?? null,
           receiptUrl: t.receipt_url ?? null,
         })));
+      }
+      
+      if (peopleResult.error) {
+        console.error('Error loading people:', peopleResult.error);
+      } else if (peopleResult.data) {
+        setPeople(peopleResult.data);
       }
     } catch (error) {
       console.error('Error loading data:', error);
@@ -133,6 +165,20 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ onTransactionDelete
   useEffect(() => {
     loadData();
   }, [loadData]);
+
+  // Observer to show floating add button when scrolled past header
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        setShowFloatingAdd(!entry.isIntersecting);
+      },
+      { root: null, threshold: 0 }
+    );
+    if (headerRef.current) {
+      observer.observe(headerRef.current);
+    }
+    return () => observer.disconnect();
+  }, []);
 
   // Re-fetch transactions when the parent signals an external change (e.g. stash top-up
   // created/deleted from the Budget page). Uses a ref so the initial render is skipped.
@@ -151,9 +197,10 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ onTransactionDelete
   useEffect(() => {
     // Set default paymentMethodId when accounts are loaded and form hasn't been touched
     if (accounts.length > 0 && !form.paymentMethodId) {
-      setForm(f => ({ ...f, paymentMethodId: accounts[0].id }));
+      const defaultAcc = accounts.find(a => form.transactionType === 'payment' ? a.classification !== 'Credit Card' : a.type !== 'Credit') || accounts[0];
+      setForm(f => ({ ...f, paymentMethodId: defaultAcc?.id ?? '' }));
     }
-  }, [accounts, form.paymentMethodId]);
+  }, [accounts, form.paymentMethodId, form.transactionType]);
 
   // Generate a fresh signed URL whenever the Transaction Details modal opens
   useEffect(() => {
@@ -180,20 +227,45 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ onTransactionDelete
 
   // ── Form helpers ──────────────────────────────────────────────────────────
 
+  const openAddForm = (type: string, source: 'top' | 'fab' = 'top') => {
+    setForm({
+      name: '',
+      date: todayIso(),
+      amount: '',
+      paymentMethodId: accounts.find(a => type === 'payment' ? a.classification !== 'Credit Card' : a.type !== 'Credit')?.id ?? (accounts[0]?.id ?? ''),
+      transactionType: type,
+      transferToAccountId: '',
+      borrowerName: ''
+    });
+    setReceiptFile(null);
+    setShowTypeModal(false);
+    
+    if (source === 'top') {
+      setShowFabMenu(false);
+    }
+    setFormSource(source);
+    setShowForm(true);
+  };
+
   const closeForm = () => {
     setShowForm(false);
     setEditingTxId(null);
-    setReceiptFile(null);
-    setForm({ name: '', date: todayIso(), amount: '', paymentMethodId: accounts[0]?.id ?? '' });
+    setFormSource(null);
+    setReceiptFile(null); // Clear receipt file
+    setForm({ name: '', date: todayIso(), amount: '', paymentMethodId: accounts[0]?.id ?? '', transactionType: 'payment', transferToAccountId: '', borrowerName: '' });
   };
 
   const openEditForm = (tx: Transaction) => {
     setEditingTxId(tx.id);
+    setFormSource(null);
     setForm({
       name: tx.name,
       date: new Date(tx.date).toISOString().split('T')[0],
-      amount: tx.amount.toString(),
-      paymentMethodId: tx.paymentMethodId
+      amount: Math.abs(tx.amount).toString(), // Absolute value makes editing easier
+      paymentMethodId: tx.paymentMethodId,
+      transactionType: tx.transaction_type || 'payment',
+      transferToAccountId: '',
+      borrowerName: tx.borrower_name || ''
     });
     setReceiptFile(null);
     setShowForm(true);
@@ -201,16 +273,50 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ onTransactionDelete
 
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!form.name || !form.date || !form.amount || !form.paymentMethodId) return;
     
-    try {
+    // Transfer creation logic (uses specialized service)
+    if (form.transactionType === 'transfer' && !editingTxId) {
+      if (!form.paymentMethodId || !form.transferToAccountId || !form.amount || !form.date) return;
+      try {
+        const { error } = await createTransfer(
+          form.paymentMethodId,
+          form.transferToAccountId,
+          parseFloat(form.amount),
+          combineDateWithCurrentTime(form.date)
+        );
+        if (error) throw error;
+        await loadData();
+        if (onTransactionCreated) onTransactionCreated();
+        closeForm();
+        return;
+      } catch (error) {
+        console.error('Error creating transfer:', error);
+        alert('Failed to process transfer. Please try again.');
+        return;
+      }
+    }
+
+    // Standard transaction creation/update logic
+    if (!form.name || !form.date || !form.amount || !form.paymentMethodId) return;
+
+    // Apply correct positive/negative sign based on transaction type
+    let finalAmount = parseFloat(form.amount);
+    if (form.transactionType === 'cash_in') {
+      finalAmount = -Math.abs(finalAmount); // Money in (negative reduces debt / increases asset internally)
+    } else if (['withdraw', 'payment', 'loan'].includes(form.transactionType)) {
+      finalAmount = Math.abs(finalAmount); // Money out
+    }
+    
+    try { // eslint-disable-next-line
       if (editingTxId) {
         // Edit mode: update existing transaction
         const updates = {
           name: form.name,
           date: combineDateWithCurrentTime(form.date),
-          amount: parseFloat(form.amount),
-          payment_method_id: form.paymentMethodId
+          amount: finalAmount,
+          payment_method_id: form.paymentMethodId,
+          transaction_type: form.transactionType,
+          borrower_name: form.transactionType === 'loan' ? form.borrowerName || null : null
         };
         const { error } = await updateTransaction(editingTxId, updates);
         if (error) {
@@ -234,8 +340,10 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ onTransactionDelete
         const transaction = {
           name: form.name,
           date: combineDateWithCurrentTime(form.date),
-          amount: parseFloat(form.amount),
+          amount: finalAmount,
           payment_method_id: form.paymentMethodId,
+          transaction_type: form.transactionType,
+          borrower_name: form.transactionType === 'loan' ? form.borrowerName || null : null
         };
         
         const { data, error } = await createTransaction(transaction);
@@ -379,13 +487,23 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ onTransactionDelete
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-950 p-8 transition-colors duration-200">
       <div className="max-w-6xl mx-auto">
-        <div className="mb-6 flex items-center justify-between">
-          <h1 className="text-2xl font-black text-gray-900 dark:text-gray-100">Transactions</h1>
-          <div className="flex items-center space-x-3">
-            <a href="/" className="px-3 py-2 rounded-lg bg-white dark:bg-gray-900 dark:border-gray-800 border dark:text-gray-200 shadow-sm transition-colors">Back</a>
-            <button onClick={() => setShowForm(true)} className="px-4 py-2 bg-indigo-600 text-white rounded-lg flex items-center space-x-2 hover:bg-indigo-700">
+        {/* ── Header & Controllers ───────────────────────────────────────── */}
+        <div ref={headerRef} className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white dark:bg-gray-900 p-6 md:p-8 rounded-[2.5rem] border border-gray-100 dark:border-gray-800 shadow-sm transition-colors mb-6">
+          <div className="flex items-center gap-5">
+            <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-indigo-500 to-blue-600 flex items-center justify-center text-white shadow-lg">
+              <FileText className="w-7 h-7" />
+            </div>
+            <div>
+              <h1 className="text-2xl md:text-3xl font-black text-gray-900 dark:text-gray-100 uppercase tracking-tight transition-colors">Transactions</h1>
+              <p className="text-gray-500 dark:text-gray-400 text-sm font-medium transition-colors">Track and manage all your financial activities</p>
+            </div>
+          </div>
+          
+          <div className="flex items-center gap-3 self-end sm:self-auto">
+            <a href="/" className="px-5 py-3 rounded-xl bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 font-bold hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors text-sm">Back</a>
+            <button onClick={() => setShowTypeModal(true)} className="flex items-center gap-2 bg-indigo-600 text-white px-5 py-3 rounded-xl font-bold hover:bg-indigo-700 transition-all shadow-md shadow-indigo-200 dark:shadow-none text-sm">
               <Plus className="w-4 h-4" />
-              <span>Add Transaction</span>
+              <span className="hidden sm:inline">Add Transaction</span>
             </button>
           </div>
         </div>
@@ -603,20 +721,64 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ onTransactionDelete
         {showForm && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-md">
           <div className="w-full max-w-md bg-white dark:bg-gray-900 rounded-3xl p-10 shadow-2xl relative transition-colors">
-            <h2 className="text-2xl font-black text-gray-900 dark:text-gray-100 mb-2">{editingTxId ? 'Edit Transaction' : 'Add New Transaction'}</h2>
-              <p className="text-gray-500 text-sm mb-8">{editingTxId ? 'Update the transaction details below' : 'Record a payment transaction'}</p>
+            {formSource === 'top' && !editingTxId && (
+              <button 
+                onClick={() => { setShowForm(false); setShowTypeModal(true); setFormSource(null); }} 
+                className="absolute left-6 top-6 p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full transition-colors"
+                aria-label="Back to type selection"
+              >
+                <ArrowLeft className="w-5 h-5 text-gray-400" />
+              </button>
+            )}
+            {(formSource === 'fab' || editingTxId) && (
+              <button 
+                onClick={closeForm} 
+                className="absolute right-6 top-6 p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full transition-colors"
+                aria-label="Close"
+              >
+                <X className="w-5 h-5 text-gray-400" />
+              </button>
+            )}
+            <h2 className={`text-2xl font-black text-gray-900 dark:text-gray-100 mb-2 ${formSource === 'top' && !editingTxId ? 'mt-6' : ''}`}>
+            {editingTxId ? 'Edit Transaction' : 
+              form.transactionType === 'withdraw' ? 'Withdraw Funds' :
+              form.transactionType === 'cash_in' ? 'Cash In' :
+              form.transactionType === 'transfer' ? 'Transfer Funds' :
+              form.transactionType === 'loan' ? 'Record Loan' :
+              `Add New ${TRANSACTION_TYPES.find(t => t.id === form.transactionType)?.label || 'Transaction'}`
+            }
+            </h2>
+          <p className="text-gray-500 text-sm mb-8">
+            {editingTxId ? 'Update the transaction details below' : 
+              form.transactionType === 'withdraw' ? 'Record an ATM withdrawal or cash out' :
+              form.transactionType === 'cash_in' ? 'Record incoming funds' :
+              form.transactionType === 'transfer' ? 'Move money between accounts' :
+              form.transactionType === 'loan' ? 'Record money lent out' :
+              'Record a payment transaction'
+            }
+          </p>
               <form onSubmit={onSubmit} className="space-y-6">
-                <div>
-                  <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Name</label>
-                  <input 
-                    value={form.name} 
-                    onChange={e => setForm(f => ({ ...f, name: e.target.value }))} 
-                    required 
-                    placeholder="e.g. Groceries, Gas, etc."
-                  className="w-full bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-transparent rounded-2xl p-4 outline-none font-bold focus:ring-2 focus:ring-indigo-500 transition-all" 
-                  />
-                </div>
-                
+                {/* Conditional Name Field — Hide for Transfers since they auto-generate names */}
+                {(form.transactionType !== 'transfer' || editingTxId) && (
+                  <div>
+                <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">
+                  {['withdraw', 'cash_in', 'loan', 'transfer'].includes(form.transactionType) ? 'Label' : 'Name'}
+                </label>
+                    <input 
+                      value={form.name} 
+                      onChange={e => setForm(f => ({ ...f, name: e.target.value }))} 
+                      required 
+                  placeholder={
+                    form.transactionType === 'withdraw' ? 'e.g. ATM Withdrawal' :
+                    form.transactionType === 'cash_in' ? 'e.g. Salary, Deposit' :
+                    form.transactionType === 'loan' ? 'e.g. Loan to John' :
+                    'e.g. Groceries, Gas, etc.'
+                  }
+                      className="w-full bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-transparent rounded-2xl p-4 outline-none font-bold focus:ring-2 focus:ring-indigo-500 transition-all" 
+                    />
+                  </div>
+                )}
+
                 <div>
                   <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Amount</label>
                   <div className="relative">
@@ -633,33 +795,122 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ onTransactionDelete
                   </div>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Date Paid</label>
-                    <input 
-                      type="date" 
-                      value={form.date} 
-                      onChange={e => setForm(f => ({ ...f, date: e.target.value }))} 
-                      required 
-                    className="w-full min-w-0 bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-transparent rounded-2xl px-3 py-4 outline-none font-bold text-sm transition-colors" 
-                    />
+                {form.transactionType === 'transfer' && !editingTxId ? (
+                  <>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 relative">
+                      {/* Swap Accounts Button */}
+                      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 mt-0 sm:mt-3 flex items-center justify-center pointer-events-none z-10">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setForm(f => {
+                              const newFrom = f.transferToAccountId || accounts.find(a => a.type !== 'Credit' && a.id !== f.paymentMethodId)?.id || f.paymentMethodId;
+                              return {
+                                ...f,
+                                paymentMethodId: newFrom,
+                                transferToAccountId: f.paymentMethodId
+                              };
+                            });
+                          }}
+                          className="pointer-events-auto w-10 h-10 rounded-full bg-gray-100 dark:bg-gray-800 border-4 border-white dark:border-gray-900 flex items-center justify-center text-gray-500 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/50 transition-all shadow-sm"
+                          title="Swap accounts"
+                        >
+                          <ArrowLeftRight className="w-4 h-4 rotate-90 sm:rotate-0" />
+                        </button>
+                      </div>
+                      <div>
+                        <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Transfer From</label>
+                        {accounts.length === 0 ? (
+                          <div className="text-xs text-red-600 p-4">No accounts available</div>
+                        ) : (
+                          <select 
+                            value={form.paymentMethodId} 
+                            onChange={e => setForm(f => ({ ...f, paymentMethodId: e.target.value }))} 
+                            className="w-full min-w-0 bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-transparent rounded-2xl px-3 py-4 outline-none font-bold text-sm appearance-none transition-colors"
+                          >
+                            {accounts.filter(a => a.type !== 'Credit').map(a => <option key={a.id} value={a.id}>{a.bank}</option>)}
+                          </select>
+                        )}
+                      </div>
+                      <div>
+                        <label className="block text-[10px] font-black text-indigo-500 uppercase tracking-widest mb-2">Transfer To</label>
+                        <select 
+                          value={form.transferToAccountId} 
+                          onChange={e => setForm(f => ({ ...f, transferToAccountId: e.target.value }))} 
+                          className="w-full min-w-0 bg-indigo-50 dark:bg-indigo-900/20 text-indigo-700 dark:text-indigo-300 border-transparent rounded-2xl px-3 py-4 outline-none font-bold text-sm appearance-none transition-colors"
+                        >
+                          <option value="">Select Destination Account</option>
+                          {accounts.filter(a => a.id !== form.paymentMethodId && a.type !== 'Credit').map(a => (
+                            <option key={a.id} value={a.id}>{a.bank}</option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Date</label>
+                      <input 
+                        type="date" 
+                        value={form.date} 
+                        onChange={e => setForm(f => ({ ...f, date: e.target.value }))} 
+                        required 
+                        className="w-full min-w-0 bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-transparent rounded-2xl px-3 py-4 outline-none font-bold text-sm transition-colors" 
+                      />
+                    </div>
+                  </>
+                ) : (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">
+                        {['withdraw', 'cash_in', 'loan', 'transfer'].includes(form.transactionType) ? 'Date' : 'Date Paid'}
+                      </label>
+                      <input 
+                        type="date" 
+                        value={form.date} 
+                        onChange={e => setForm(f => ({ ...f, date: e.target.value }))} 
+                        required 
+                        className="w-full min-w-0 bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-transparent rounded-2xl px-3 py-4 outline-none font-bold text-sm transition-colors" 
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">
+                        {['withdraw', 'cash_in', 'loan', 'transfer'].includes(form.transactionType) ? 'Account' : 'Payment Method'}
+                      </label>
+                      {accounts.length === 0 ? (
+                        <div className="text-xs text-red-600 p-4">No accounts available</div>
+                      ) : (
+                        <select 
+                          value={form.paymentMethodId} 
+                          onChange={e => setForm(f => ({ ...f, paymentMethodId: e.target.value }))} 
+                          className="w-full min-w-0 bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-transparent rounded-2xl px-3 py-4 outline-none font-bold text-sm appearance-none transition-colors"
+                        >
+                          {accounts.filter(a => form.transactionType === 'payment' ? a.classification !== 'Credit Card' : a.type !== 'Credit').map(a => <option key={a.id} value={a.id}>{a.bank}</option>)}
+                        </select>
+                      )}
+                    </div>
                   </div>
+                )}
+
+                {/* Borrower Field for Loan Transactions */}
+                {form.transactionType === 'loan' && userProfile?.settings?.peopleEnabled && (
                   <div>
-                    <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Payment Method</label>
-                    {accounts.length === 0 ? (
-                      <div className="text-xs text-red-600 p-4">No payment methods available</div>
-                    ) : (
-                      <select 
-                        value={form.paymentMethodId} 
-                        onChange={e => setForm(f => ({ ...f, paymentMethodId: e.target.value }))} 
+                    <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Borrower (Optional)</label>
+                    <select
+                      value={form.borrowerName}
+                      onChange={e => setForm(f => ({ ...f, borrowerName: e.target.value }))}
                       className="w-full min-w-0 bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-transparent rounded-2xl px-3 py-4 outline-none font-bold text-sm appearance-none transition-colors"
-                      >
-                      {accounts.filter(a => a.classification !== 'Credit Card').map(a => <option key={a.id} value={a.id}>{a.bank}</option>)}
-                      </select>
+                    >
+                      <option value="">Select Borrower</option>
+                      {people.map((person) => (
+                        <option key={person.id} value={person.name}>{person.name}</option>
+                      ))}
+                    </select>
+                    {people.length === 0 && (
+                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">Add people in Settings to see them here.</p>
                     )}
                   </div>
-                </div>
+                )}
 
+            {form.transactionType === 'payment' && (
                 <div>
                   <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Upload Receipt (Optional)</label>
                   <div className="relative">
@@ -674,10 +925,13 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ onTransactionDelete
                     </div>
                   </div>
                 </div>
+            )}
 
                 <div className="flex space-x-4 pt-4">
                   <button type="button" onClick={closeForm} className="flex-1 bg-gray-100 dark:bg-gray-800 py-4 rounded-2xl font-bold text-gray-500 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors">Cancel</button>
-                  <button type="submit" disabled={accounts.length === 0} className="flex-1 bg-green-600 text-white py-4 rounded-2xl font-bold hover:bg-green-700 shadow-xl shadow-green-100 dark:shadow-none transition-all">{editingTxId ? 'Update Transaction' : 'Submit Payment'}</button>
+                  <button type="submit" disabled={accounts.length === 0 || (form.transactionType === 'transfer' && !editingTxId && !form.transferToAccountId)} className="flex-1 bg-green-600 text-white py-4 rounded-2xl font-bold hover:bg-green-700 shadow-xl shadow-green-100 dark:shadow-none transition-all disabled:opacity-50">
+                    {editingTxId ? 'Update' : form.transactionType === 'transfer' ? 'Complete Transfer' : 'Submit'}
+                  </button>
                 </div>
               </form>
             </div>
@@ -756,6 +1010,10 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ onTransactionDelete
                 <div className="flex justify-between">
                   <dt className="text-[10px] font-black text-gray-400 uppercase tracking-widest self-center">Payment Method</dt>
                   <dd className="text-sm text-gray-700">{pm ? pm.bank : selectedTx.paymentMethodId}</dd>
+                </div>
+                <div className="flex justify-between">
+                  <dt className="text-[10px] font-black text-gray-400 uppercase tracking-widest self-center">Borrower</dt>
+                  <dd className="text-sm text-gray-700">{selectedTx.borrower_name || 'N/A'}</dd>
                 </div>
               </dl>
 
@@ -845,6 +1103,77 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ onTransactionDelete
                 style={{ width: `${zoom * 100}%`, height: 'auto', transition: 'width 0.2s' }}
               />
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Type Selection Modal for Top Button */}
+      {showTypeModal && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md animate-in fade-in">
+          <div className="w-full max-w-lg bg-white dark:bg-gray-900 rounded-[2.5rem] p-10 shadow-2xl relative transition-colors animate-in zoom-in-95">
+            <button onClick={() => setShowTypeModal(false)} className="absolute top-6 right-6 text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors" aria-label="Close">
+              <X className="w-5 h-5" />
+            </button>
+            <h2 className="text-2xl font-black text-gray-900 dark:text-gray-100 mb-2 uppercase tracking-tight">Transaction Type</h2>
+            <p className="text-gray-500 dark:text-gray-400 text-sm mb-8 font-medium">Select the type of transaction you want to record</p>
+            
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+              {TRANSACTION_TYPES.map(type => (
+                <button 
+                  key={type.id} 
+                  onClick={() => openAddForm(type.id, 'top')} 
+                  className="flex flex-col items-center justify-center p-6 bg-gray-50 dark:bg-gray-800/50 rounded-3xl hover:bg-indigo-50 dark:hover:bg-indigo-900/30 hover:shadow-md text-gray-700 dark:text-gray-300 hover:text-indigo-600 dark:hover:text-indigo-400 transition-all border border-transparent hover:border-indigo-100 dark:hover:border-indigo-800 group"
+                >
+                  <div className="mb-4 p-4 bg-white dark:bg-gray-900 rounded-full shadow-sm group-hover:scale-110 transition-transform duration-300">
+                    {type.icon}
+                  </div>
+                  <span className="font-bold text-sm">{type.label}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Floating Action Button (FAB) with Fan Layout */}
+      {showFloatingAdd && (
+        <div className="fixed bottom-8 right-8 z-40 animate-in fade-in zoom-in duration-300">
+          {/* Backdrop when fan is open */}
+          {showFabMenu && <div className="fixed inset-0 z-30" onClick={() => setShowFabMenu(false)} />}
+          
+          <div className="relative z-40 flex items-center justify-center">
+            {/* Fan Items Container */}
+            <div className={`absolute inset-0 pointer-events-none`}>
+              {TRANSACTION_TYPES.map((item, index) => (
+                <div 
+                  key={item.id}
+                  className={`absolute inset-0 flex items-center justify-center transition-all duration-300 ease-out ${showFabMenu ? 'opacity-100' : 'opacity-0 scale-50'}`}
+                  style={{ 
+                    transform: showFabMenu ? `translate(${item.x}px, ${item.y}px)` : 'translate(0px, 0px)',
+                    transitionDelay: showFabMenu ? `${index * 40}ms` : '0ms'
+                  }}
+                >
+                  <button 
+                    onClick={() => openAddForm(item.id, 'fab')}
+                    className="w-12 h-12 bg-white dark:bg-gray-800 text-indigo-600 dark:text-indigo-400 rounded-full shadow-lg border border-gray-100 dark:border-gray-700 flex items-center justify-center hover:scale-110 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 transition-all pointer-events-auto group relative"
+                  >
+                    {item.icon}
+                    <span className="absolute right-full mr-3 px-3 py-1.5 bg-gray-900 dark:bg-gray-100 text-white dark:text-gray-900 text-[10px] font-black uppercase tracking-widest rounded-xl opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap shadow-sm pointer-events-none">
+                      {item.label}
+                    </span>
+                  </button>
+                </div>
+              ))}
+            </div>
+            
+            {/* Main FAB */}
+            <button
+              onClick={() => setShowFabMenu(!showFabMenu)}
+              className={`relative z-10 w-14 h-14 bg-indigo-600 text-white rounded-2xl shadow-xl flex items-center justify-center hover:bg-indigo-700 transition-all duration-300 ${showFabMenu ? 'rotate-[135deg] bg-indigo-700 shadow-indigo-600/50' : 'hover:-translate-y-1'}`}
+              aria-label="Add Transaction"
+            >
+              <Plus className="w-6 h-6" />
+            </button>
           </div>
         </div>
       )}
