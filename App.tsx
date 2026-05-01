@@ -1121,25 +1121,33 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
                   </button>
                 </div>
               ) : (
-                <div className="space-y-2">
-                  <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 font-bold mx-auto">
+                <div className="flex flex-col items-center w-full">
+                  {isUserMenuOpen && (
+                    <div className="pb-2 w-full">
+                      <button
+                        onClick={async () => {
+                          try {
+                            await signOut();
+                          } catch (error) {
+                            console.error('Logout error:', error);
+                          }
+                        }}
+                        className="w-full py-2 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg flex items-center justify-center transition-colors"
+                        title="Logout"
+                      >
+                        <LogOut className="w-5 h-5" />
+                      </button>
+                    </div>
+                  )}
+                  <button 
+                    onClick={() => setIsUserMenuOpen(prev => !prev)} 
+                    className="w-10 h-10 rounded-full bg-blue-100 hover:bg-blue-200 flex items-center justify-center text-blue-600 font-bold mx-auto transition-colors"
+                    title="User Menu"
+                  >
                     {userProfile ? 
                       `${userProfile.first_name.charAt(0)}${userProfile.last_name.charAt(0)}`.toUpperCase() :
                       user?.email?.charAt(0).toUpperCase() || 'U'
                     }
-                  </div>
-                  <button
-                    onClick={async () => {
-                      try {
-                        await signOut();
-                      } catch (error) {
-                        console.error('Logout error:', error);
-                      }
-                    }}
-                    className="w-full py-2 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg flex items-center justify-center transition-colors"
-                    title="Logout"
-                  >
-                    <LogOut className="w-5 h-5" />
                   </button>
                 </div>
               )}
