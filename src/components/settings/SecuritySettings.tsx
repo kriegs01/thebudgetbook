@@ -225,7 +225,7 @@ export const SecuritySettings: React.FC = () => {
                         <label className={`flex items-center space-x-2 ${isForceEverytime ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer group'}`}>
                           <input 
                             type="radio" 
-                            name="tx_del_freq" 
+                            name={`freq_${feature.id}`}
                             value="one-time"
                             checked={currentFreq === 'one-time'}
                             onChange={() => {
@@ -239,7 +239,7 @@ export const SecuritySettings: React.FC = () => {
                         <label className={`flex items-center space-x-2 ${isForceEverytime ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer group'}`}>
                           <input 
                             type="radio" 
-                            name="tx_del_freq" 
+                            name={`freq_${feature.id}`}
                             value="everytime"
                             checked={currentFreq === 'everytime'}
                             onChange={() => {
