@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react';
-import { Plus, Info, Eye, ZoomIn, ZoomOut, Download, X, Pencil, Trash2, CheckSquare, Square, ChevronDown, Filter } from 'lucide-react';
+import { Plus, Info, Eye, ZoomIn, ZoomOut, Download, X, Pencil, Trash2, CheckSquare, Square, ChevronDown, Filter, AlertTriangle } from 'lucide-react';
 import { PinProtectedAction } from '../src/components/PinProtectedAction';
 import { getAllTransactions, createTransaction, updateTransaction, deleteTransactionAndRevertSchedule, uploadTransactionReceipt, getReceiptSignedUrl, batchDeleteTransactions } from '../src/services/transactionsService';
 import { getAllAccountsFrontend } from '../src/services/accountsService';
@@ -68,6 +68,13 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ onTransactionDelete
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [showBatchConfirm, setShowBatchConfirm] = useState(false);
   const [isBatchDeleting, setIsBatchDeleting] = useState(false);
+
+  const [confirmModal, setConfirmModal] = useState<{
+    show: boolean;
+    title: string;
+    message: string;
+    onConfirm: () => void;
+  }>({ show: false, title: '', message: '', onConfirm: () => {} });
 
   // ── Derived: filtered transactions ────────────────────────────────────────
   const filteredTransactions = useMemo(() => {
@@ -270,25 +277,32 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ onTransactionDelete
   };
 
   const removeTx = async (id: string, name: string) => {
-    if (!window.confirm(`Delete transaction "${name}"? This action cannot be undone.`)) return;
-    try {
-      console.log('[Transactions Page] Deleting transaction with reversion:', id);
-      const { error } = await deleteTransactionAndRevertSchedule(id);
-      if (error) throw error;
-      
-      console.log('[Transactions Page] Transaction deleted successfully');
-      // Reload transactions after deletion
-      await loadData();
-      
-      // Notify parent if callback provided (for refreshing related data)
-      if (onTransactionDeleted) {
-        console.log('[Transactions Page] Notifying parent of transaction deletion');
-        onTransactionDeleted();
+    setConfirmModal({
+      show: true,
+      title: 'Delete Transaction',
+      message: `Are you sure you want to delete transaction "${name}"? This action cannot be undone.`,
+      onConfirm: async () => {
+        setConfirmModal(prev => ({ ...prev, show: false }));
+        try {
+          console.log('[Transactions Page] Deleting transaction with reversion:', id);
+          const { error } = await deleteTransactionAndRevertSchedule(id);
+          if (error) throw error;
+          
+          console.log('[Transactions Page] Transaction deleted successfully');
+          // Reload transactions after deletion
+          await loadData();
+          
+          // Notify parent if callback provided (for refreshing related data)
+          if (onTransactionDeleted) {
+            console.log('[Transactions Page] Notifying parent of transaction deletion');
+            onTransactionDeleted();
+          }
+        } catch (error) {
+          console.error('Error deleting transaction:', error);
+          alert('Failed to delete transaction. Please check your connection and try again.');
+        }
       }
-    } catch (error) {
-      console.error('Error deleting transaction:', error);
-      alert('Failed to delete transaction. Please check your connection and try again.');
-    }
+    });
   };
 
   // ── Select / batch-delete helpers ─────────────────────────────────────────

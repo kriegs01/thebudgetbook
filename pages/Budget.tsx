@@ -1101,21 +1101,28 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
    * The cascade-delete in deleteTransactionAndRevertSchedule also removes any linked
    * credit_payment counterpart on the associated credit account. */
   const handleDeleteScheduleTx = async (txId: string) => {
-    if (!window.confirm('Delete this payment record? This cannot be undone.')) return;
-    try {
-      const { error } = await deleteTransactionAndRevertSchedule(txId);
-      if (error) throw error;
-      // Reload the modal to reflect the deletion
-      if (schedulePaymentsModal?.scheduleId) {
-        await openSchedulePaymentsModal(schedulePaymentsModal.scheduleId, schedulePaymentsModal.label);
-      } else {
-        // For direct-payment modals (no scheduleId), just close — no reload needed
-        setSchedulePaymentsModal(null);
+    setConfirmModal({
+      show: true,
+      title: 'Delete Payment Record',
+      message: 'Are you sure you want to delete this payment record? This cannot be undone.',
+      onConfirm: async () => {
+        setConfirmModal(prev => ({ ...prev, show: false }));
+        try {
+          const { error } = await deleteTransactionAndRevertSchedule(txId);
+          if (error) throw error;
+          // Reload the modal to reflect the deletion
+          if (schedulePaymentsModal?.scheduleId) {
+            await openSchedulePaymentsModal(schedulePaymentsModal.scheduleId, schedulePaymentsModal.label);
+          } else {
+            // For direct-payment modals (no scheduleId), just close — no reload needed
+            setSchedulePaymentsModal(null);
+          }
+        } catch (err) {
+          console.error('[Budget] Error deleting schedule transaction:', err);
+          alert('Failed to delete transaction. Please try again.');
+        }
       }
-    } catch (err) {
-      console.error('[Budget] Error deleting schedule transaction:', err);
-      alert('Failed to delete transaction. Please try again.');
-    }
+    });
   };
 
   /**

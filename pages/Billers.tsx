@@ -327,19 +327,26 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
   /** Delete a payment transaction from the payment records modal.
    * Cascade-deletes any linked credit_payment counterpart automatically. */
   const handleDeleteBillerScheduleTx = async (txId: string) => {
-    if (!window.confirm('Delete this payment record? This cannot be undone.')) return;
-    try {
-      const { error } = await deleteTransactionAndRevertSchedule(txId);
-      if (error) throw error;
-      // Reload the modal and the schedule list to reflect the deletion
-      if (schedulePaymentsModal) {
-        await openSchedulePaymentsModal(schedulePaymentsModal.scheduleId, schedulePaymentsModal.label);
+    setConfirmModal({
+      show: true,
+      title: 'Delete Payment Record',
+      message: 'Are you sure you want to delete this payment record? This cannot be undone.',
+      onConfirm: async () => {
+        setConfirmModal(prev => ({ ...prev, show: false }));
+        try {
+          const { error } = await deleteTransactionAndRevertSchedule(txId);
+          if (error) throw error;
+          // Reload the modal and the schedule list to reflect the deletion
+          if (schedulePaymentsModal) {
+            await openSchedulePaymentsModal(schedulePaymentsModal.scheduleId, schedulePaymentsModal.label);
+          }
+          await loadPaymentSchedules();
+        } catch (err) {
+          console.error('[Billers] Error deleting schedule transaction:', err);
+          alert('Failed to delete transaction. Please try again.');
+        }
       }
-      await loadPaymentSchedules();
-    } catch (err) {
-      console.error('[Billers] Error deleting schedule transaction:', err);
-      alert('Failed to delete transaction. Please try again.');
-    }
+    });
   };
 
   /**
