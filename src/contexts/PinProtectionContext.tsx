@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { supabase } from '../utils/supabaseClient';
-import { updateUserProfile } from '../services/userProfileService';
+import { updateUserProfile, getUserProfile } from '../services/userProfileService';
 
 interface PinProtectionSettings {
   session_timeout: number; // minutes
@@ -117,6 +117,38 @@ export const PinProtectionProvider: React.FC<{ children: ReactNode }> = ({ child
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(pinData));
   }, [pinData]);
+
+  // Sync PIN from DB on mount (handles new browser/device logins)
+  useEffect(() => {
+    const syncPinFromDb = async () => {
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) {
+          const { data } = await getUserProfile(user.id);
+          if (data) {
+            const dbPinHash = data.pin_hash || '';
+            setPinData(prev => {
+              if (dbPinHash !== prev.pin_hash) {
+                return {
+                  ...prev,
+                  pin_hash: dbPinHash,
+                  enabled: !!dbPinHash,
+                  protected_features: prev.protected_features.length > 0 
+                    ? prev.protected_features 
+                    : DEFAULT_PROTECTED_FEATURES,
+                };
+              }
+              return prev;
+            });
+          }
+        }
+      } catch (err) {
+        console.error('Failed to sync PIN from database:', err);
+      }
+    };
+
+    syncPinFromDb();
+  }, []);
 
   // Background timer to check session expiration and lockout
   useEffect(() => {
