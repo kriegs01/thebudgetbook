@@ -421,11 +421,14 @@ const Settings: React.FC<SettingsProps> = ({ currency, setCurrency, categories, 
   const [personInput, setPersonInput] = useState('');
   const [isPeopleEnabled, setIsPeopleEnabled] = useState(!!userProfile?.settings?.peopleEnabled);
   const [isTogglingPeople, setIsTogglingPeople] = useState(false);
+  const [isPeoplePageEnabled, setIsPeoplePageEnabled] = useState(!!userProfile?.settings?.usePeoplePage);
+  const [isTogglingPeoplePage, setIsTogglingPeoplePage] = useState(false);
   const [peopleList, setPeopleList] = useState<SupabasePerson[]>([]);
 
   useEffect(() => {
     setIsPeopleEnabled(!!userProfile?.settings?.peopleEnabled);
-  }, [userProfile?.settings?.peopleEnabled]);
+    setIsPeoplePageEnabled(!!userProfile?.settings?.usePeoplePage);
+  }, [userProfile?.settings?.peopleEnabled, userProfile?.settings?.usePeoplePage]);
 
   useEffect(() => {
     if (isPeopleEnabled && user) {
@@ -850,6 +853,45 @@ const Settings: React.FC<SettingsProps> = ({ currency, setCurrency, categories, 
             {/* People List Manager - Only visible if enabled */}
           {isPeopleEnabled && (
               <div className="pt-4 border-t border-gray-100 dark:border-gray-800 space-y-3">
+                <div className="flex items-center justify-between mb-5">
+                  <div>
+                    <h4 className="font-black text-sm text-gray-900 dark:text-gray-100 uppercase mb-1 transition-colors">Use People Page</h4>
+                    <p className="text-xs text-gray-500 dark:text-gray-400 transition-colors">
+                      Show the People page in the navigation menu.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    disabled={isTogglingPeoplePage}
+                    onClick={async () => {
+                      if (!user || isTogglingPeoplePage) return;
+                      setIsTogglingPeoplePage(true);
+                      const newValue = !isPeoplePageEnabled;
+                      setIsPeoplePageEnabled(newValue); // Optimistic UI
+                      try {
+                        const newSettings = { ...(userProfile?.settings || {}), usePeoplePage: newValue };
+                        const { error } = await updateUserProfile(user.id, { settings: newSettings });
+                        if (error) throw error;
+                        
+                        await refreshProfile();
+                      } catch (err) {
+                        console.error('Failed to toggle people page:', err);
+                        setIsPeoplePageEnabled(!newValue); // Revert on failure
+                      } finally {
+                        setIsTogglingPeoplePage(false);
+                      }
+                    }}
+                    className={`relative inline-flex h-8 w-16 items-center rounded-full transition-colors ${
+                      isPeoplePageEnabled ? 'bg-indigo-600' : 'bg-gray-300'
+                    } ${isTogglingPeoplePage ? 'opacity-70 cursor-not-allowed' : ''}`}
+                  >
+                    <span
+                      className={`inline-block h-6 w-6 transform rounded-full bg-white transition-transform ${
+                        isPeoplePageEnabled ? 'translate-x-9' : 'translate-x-1'
+                      }`}
+                    />
+                  </button>
+                </div>
                 <h4 className="text-sm font-bold text-gray-900 dark:text-gray-100 uppercase transition-colors">Your People</h4>
                 {peopleList.length > 0 ? (
                   <div className="space-y-2">

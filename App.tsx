@@ -215,6 +215,19 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
 
   const { triggerStandbyLock, isPinEnabled } = usePinProtection();
 
+  const effectiveNavItems = React.useMemo(() => {
+    const items = [...NAV_ITEMS];
+    if (userProfile?.settings?.usePeoplePage && !items.find(i => i.id === 'people')) {
+      items.push({
+        id: 'people',
+        label: 'People',
+        path: '/people',
+        icon: <Users className="w-5 h-5" />
+      });
+    }
+    return items;
+  }, [userProfile?.settings?.usePeoplePage]);
+
   useEffect(() => {
     let initialPrefs = null;
 
@@ -236,14 +249,15 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
 
     if (!initialPrefs || !Array.isArray(initialPrefs)) {
       console.log('[App] Setting default nav preferences.');
-      initialPrefs = NAV_ITEMS.map(item => ({ id: item.id, visible: true }));
+      initialPrefs = effectiveNavItems.map(item => ({ id: item.id, visible: true }));
     }
 
-    // Merge with hardcoded NAV_ITEMS to include any new items from constants.ts
+    // Merge with hardcoded effectiveNavItems to include any new items from constants.ts
     const currentNavIds = new Set(initialPrefs.map((p: any) => p.id));
-    const newItems = NAV_ITEMS.filter(n => !currentNavIds.has(n.id)).map(n => ({ id: n.id, visible: true }));
-    setNavPreferences([...initialPrefs, ...newItems]);
-  }, [userProfile]);
+    const newItems = effectiveNavItems.filter(n => !currentNavIds.has(n.id)).map(n => ({ id: n.id, visible: true }));
+    const combinedPrefs = [...initialPrefs, ...newItems].filter(p => effectiveNavItems.some(n => n.id === p.id));
+    setNavPreferences(combinedPrefs);
+  }, [userProfile, effectiveNavItems]);
 
   // Theme Initialization and Synchronization
   useEffect(() => {
@@ -1063,7 +1077,7 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
             </div>
             <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
               {navPreferences.filter(pref => pref.visible).map((pref) => {
-                const item = NAV_ITEMS.find(n => n.id === pref.id);
+                const item = effectiveNavItems.find(n => n.id === pref.id);
                 if (!item) return null;
                 return (
                   <NavLink
@@ -1083,22 +1097,6 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
                   </NavLink>
                 );
               })}
-              {/* People Page Link - Appears only when enabled in General Settings */}
-              {userProfile?.settings?.peopleEnabled && (
-                <NavLink
-                  to="/people"
-                  className={({ isActive }) =>
-                    `w-full flex items-center p-3 rounded-xl transition-colors ${
-                      isActive ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400' : 'text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800/50'
-                    }`
-                  }
-                >
-                  <div className={`${isSidebarOpen ? '' : 'mx-auto'} ${window.location.pathname === '/people' ? 'text-blue-600 dark:text-blue-400' : 'text-gray-400 dark:text-gray-500'} transition-colors`}>
-                    <Users className="w-5 h-5" />
-                  </div>
-                  {isSidebarOpen && <span className="ml-3 font-bold text-sm">People</span>}
-                </NavLink>
-              )}
             </nav>
             {isSidebarOpen && (
               <div className="flex justify-center px-4 mb-4 mt-2">
@@ -1389,7 +1387,7 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
             
             <div className="flex-1 overflow-y-auto space-y-2 mb-6 pr-2">
               {tempNavPrefs.map((pref, idx) => {
-                const item = NAV_ITEMS.find(n => n.id === pref.id);
+                const item = effectiveNavItems.find(n => n.id === pref.id);
                 if (!item) return null;
                 return (
                   <div key={pref.id} className={`flex items-center justify-between p-3 rounded-2xl border transition-all ${pref.visible ? 'bg-white dark:bg-gray-900 border-gray-200 dark:border-gray-700' : 'bg-gray-50 dark:bg-gray-800/50 border-transparent opacity-60'}`}>
