@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Users, Plus, LayoutGrid, List, MoreVertical, Trash2, ArrowRight, ArrowLeft, X, AlertTriangle, User, Landmark, ArrowUpFromLine, ArrowDownToLine, ArrowLeftRight, BanknoteArrowDown } from 'lucide-react';
+import { Users, Plus, LayoutGrid, List, MoreVertical, Trash2, ArrowRight, ArrowLeft, X, AlertTriangle, User, Landmark, ArrowUpFromLine, ArrowDownToLine, ArrowLeftRight, BanknoteArrowDown, ChevronDown, ChevronUp, Edit2 } from 'lucide-react';
 import { getAllPeople, createPerson, deletePerson } from '../src/services/peopleService';
-import { getAllTransactions, createTransaction } from '../src/services/transactionsService';
+import { getAllTransactions, createTransaction, deleteTransaction, updateTransaction } from '../src/services/transactionsService';
 import type { SupabasePerson, SupabaseTransaction } from '../src/types/supabase';
+import { combineDateWithCurrentTime } from '../src/utils/dateUtils';
 
 const formatCurrency = (val: number) =>
   new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP', minimumFractionDigits: 2 }).format(val);
@@ -23,6 +24,11 @@ export default function PeoplePage() {
   const [showLoanPaymentModal, setShowLoanPaymentModal] = useState(false);
   const [selectedLoan, setSelectedLoan] = useState<any | null>(null);
   const [loanPaymentForm, setLoanPaymentForm] = useState({ amount: '', date: new Date().toISOString().split('T')[0] });
+  
+  const [expandedTxIds, setExpandedTxIds] = useState<Set<string>>(new Set());
+  const [openMenuId, setOpenMenuId] = useState<string | null>(null);
+  const [editTxModal, setEditTxModal] = useState<{id: string, name: string, amount: string, date: string} | null>(null);
+  const [txConfirmModal, setTxConfirmModal] = useState<{show: boolean; id: string; name: string} | null>(null);
 
   const loadData = useCallback(async () => {
     setIsLoading(true);
@@ -83,7 +89,7 @@ export default function PeoplePage() {
     setIsSubmitting(true);
     const { error } = await createTransaction({
       name: 'Loan Payment Received',
-      date: new Date(loanPaymentForm.date).toISOString(),
+      date: combineDateWithCurrentTime(loanPaymentForm.date),
       amount: -Math.abs(parseFloat(loanPaymentForm.amount)), // Negative - money coming in
       payment_method_id: selectedLoan.payment_method_id,
       transaction_type: 'loan_payment',
@@ -100,6 +106,46 @@ export default function PeoplePage() {
       setShowLoanPaymentModal(false);
       setSelectedLoan(null);
       setLoanPaymentForm({ amount: '', date: new Date().toISOString().split('T')[0] });
+      loadData();
+    }
+  };
+
+  const toggleExpand = (id: string) => {
+    setExpandedTxIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const handleDeleteTx = async () => {
+    if (!txConfirmModal) return;
+    setIsSubmitting(true);
+    const { error } = await deleteTransaction(txConfirmModal.id);
+    setIsSubmitting(false);
+    if (error) {
+      alert('Failed to delete payment.');
+    } else {
+      loadData();
+    }
+    setTxConfirmModal(null);
+  };
+
+  const handleEditTxSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editTxModal) return;
+    setIsSubmitting(true);
+    const { error } = await updateTransaction(editTxModal.id, {
+      name: editTxModal.name,
+      amount: -Math.abs(parseFloat(editTxModal.amount)), // payments are negative
+      date: combineDateWithCurrentTime(editTxModal.date)
+    });
+    setIsSubmitting(false);
+    if (error) {
+      alert('Failed to update payment.');
+    } else {
+      setEditTxModal(null);
       loadData();
     }
   };
@@ -179,75 +225,121 @@ export default function PeoplePage() {
               <h2 className="text-base font-black text-gray-900 dark:text-gray-100 uppercase tracking-widest">Transaction History</h2>
             </div>
             <div className="divide-y divide-gray-50 dark:divide-gray-800/50">
-              {personTxs.length > 0 ? personTxs.map(tx => {
-                const isMoneyOut = tx.amount > 0;
-                let TxIcon = isMoneyOut ? ArrowUpFromLine : ArrowDownToLine;
-                if (tx.transaction_type === 'transfer') TxIcon = ArrowLeftRight;
-                if (tx.transaction_type === 'loan') TxIcon = Landmark;
+              {(() => {
+                const mainTxs = personTxs.filter(t => t.transaction_type !== 'loan_payment' || !t.related_transaction_id);
+                return mainTxs.length > 0 ? mainTxs.map(tx => {
+                  const isMoneyOut = tx.amount > 0;
+                  let TxIcon = isMoneyOut ? ArrowUpFromLine : ArrowDownToLine;
+                  if (tx.transaction_type === 'transfer') TxIcon = ArrowLeftRight;
+                  if (tx.transaction_type === 'loan') TxIcon = Landmark;
 
-                let remainingBalance = 0;
-                let totalPaid = 0;
-                if (tx.transaction_type === 'loan') {
-                  totalPaid = transactions
-                    .filter(t => t.related_transaction_id === tx.id && t.transaction_type === 'loan_payment')
-                    .reduce((sum, t) => sum + Math.abs(t.amount), 0);
-                  remainingBalance = Math.abs(tx.amount) - totalPaid;
-                }
+                  const payments = tx.transaction_type === 'loan' 
+                    ? personTxs.filter(t => t.related_transaction_id === tx.id && t.transaction_type === 'loan_payment')
+                    : [];
+                  const isExpanded = expandedTxIds.has(tx.id);
 
-                return (
-                  <div key={tx.id} className="p-5 md:p-6 flex items-center justify-between hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
-                    <div className="flex items-center space-x-4">
-                      <div className={`p-3 rounded-2xl ${isMoneyOut ? 'bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400' : 'bg-green-50 dark:bg-green-900/20 text-green-600 dark:text-green-400'}`}>
-                        <TxIcon className="w-5 h-5" />
+                  let remainingBalance = 0;
+                  let totalPaid = 0;
+                  if (tx.transaction_type === 'loan') {
+                    totalPaid = payments.reduce((sum, t) => sum + Math.abs(t.amount), 0);
+                    remainingBalance = Math.abs(tx.amount) - totalPaid;
+                  }
+
+                  return (
+                    <div key={tx.id} className={`flex flex-col hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors ${payments.length > 0 ? 'cursor-pointer' : ''}`} onClick={() => payments.length > 0 && toggleExpand(tx.id)}>
+                      <div className="p-5 md:p-6 flex items-center justify-between">
+                        <div className="flex items-center space-x-4">
+                          <div className={`p-3 rounded-2xl ${isMoneyOut ? 'bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400' : 'bg-green-50 dark:bg-green-900/20 text-green-600 dark:text-green-400'}`}>
+                            <TxIcon className="w-5 h-5" />
+                          </div>
+                          <div>
+                            <p className="text-sm font-bold text-gray-900 dark:text-gray-100">{tx.name}</p>
+                            <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{new Date(tx.date).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })} · {new Date(tx.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</p>
+                            {payments.length > 0 && (
+                              <div className="flex items-center text-[10px] text-indigo-500 font-bold mt-1.5">
+                                {isExpanded ? <ChevronUp className="w-3 h-3 mr-1" /> : <ChevronDown className="w-3 h-3 mr-1" />}
+                                {payments.length} payment(s)
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                        <div className="text-right flex flex-col items-end gap-2">
+                          <div className="flex flex-col items-end">
+                            <p className={`text-sm font-black ${isMoneyOut ? 'text-red-600 dark:text-red-400' : 'text-green-600 dark:text-green-400'}`}>
+                              {formatCurrency(Math.abs(tx.amount))}
+                            </p>
+                            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-1">
+                              {tx.transaction_type === 'loan' ? 'Loan Given' : tx.transaction_type?.replace('_', ' ') || 'Payment'}
+                            </p>
+                            {tx.transaction_type === 'loan' && totalPaid > 0 && (
+                              <span className={`mt-1.5 text-[9px] font-bold px-2 py-0.5 rounded uppercase tracking-widest ${
+                                remainingBalance <= 0 
+                                  ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400' 
+                                  : 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400'
+                              }`}>
+                                {remainingBalance <= 0 ? 'Fully Paid' : `Partially Paid: ${formatCurrency(totalPaid)}`}
+                              </span>
+                            )}
+                          </div>
+                          {tx.transaction_type === 'loan' && remainingBalance > 0 && (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setSelectedLoan({ ...tx, remainingBalance, totalPaid });
+                                setShowLoanPaymentModal(true);
+                              }}
+                              className="flex items-center gap-1.5 px-3 py-1.5 bg-purple-50 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 rounded-xl text-xs font-bold hover:bg-purple-100 dark:hover:bg-purple-900/50 transition-colors"
+                            >
+                              <BanknoteArrowDown className="w-3.5 h-3.5" />
+                              Collect
+                            </button>
+                          )}
+                        </div>
                       </div>
-                      <div>
-                        <p className="text-sm font-bold text-gray-900 dark:text-gray-100">{tx.name}</p>
-                        <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{new Date(tx.date).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })} · {new Date(tx.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</p>
-                      </div>
-                    </div>
-                    <div className="text-right flex flex-col items-end gap-2">
-                      <div className="flex flex-col items-end">
-                        <p className={`text-sm font-black ${isMoneyOut ? 'text-red-600 dark:text-red-400' : 'text-green-600 dark:text-green-400'}`}>
-                          {formatCurrency(Math.abs(tx.amount))}
-                        </p>
-                        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-1">
-                          {tx.transaction_type === 'loan' ? 'Loan Given' : tx.transaction_type?.replace('_', ' ') || 'Payment'}
-                        </p>
-                        {tx.transaction_type === 'loan' && totalPaid > 0 && (
-                          <span className={`mt-1.5 text-[9px] font-bold px-2 py-0.5 rounded uppercase tracking-widest ${
-                            remainingBalance <= 0 
-                              ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400' 
-                              : 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400'
-                          }`}>
-                            {remainingBalance <= 0 ? 'Fully Paid' : `Partially Paid: ${formatCurrency(totalPaid)}`}
-                          </span>
-                        )}
-                      </div>
-                      {tx.transaction_type === 'loan' && remainingBalance > 0 && (
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setSelectedLoan({ ...tx, remainingBalance, totalPaid });
-                            setShowLoanPaymentModal(true);
-                          }}
-                          className="flex items-center gap-1.5 px-3 py-1.5 bg-purple-50 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 rounded-xl text-xs font-bold hover:bg-purple-100 dark:hover:bg-purple-900/50 transition-colors"
-                        >
-                          <BanknoteArrowDown className="w-3.5 h-3.5" />
-                          Collect
-                        </button>
+                      
+                      {isExpanded && payments.length > 0 && (
+                        <div className="px-5 md:px-6 pb-6 pt-1 bg-gray-50/50 dark:bg-gray-800/20" onClick={e => e.stopPropagation()}>
+                          <div className="border-l-2 border-gray-200 dark:border-gray-700 pl-4 space-y-4">
+                            {payments.map(payment => (
+                              <div key={payment.id} className="flex justify-between items-center group relative">
+                                <div>
+                                  <p className="text-sm font-bold text-gray-800 dark:text-gray-200">{payment.name}</p>
+                                  <p className="text-[10px] text-gray-500 dark:text-gray-400 mt-0.5">{new Date(payment.date).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })} · {new Date(payment.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</p>
+                                </div>
+                                <div className="flex items-center gap-3">
+                                  <span className="text-sm font-black text-green-600 dark:text-green-400">+{formatCurrency(Math.abs(payment.amount))}</span>
+                                  <div className="relative">
+                                    <button onClick={(e) => { e.stopPropagation(); setOpenMenuId(openMenuId === payment.id ? null : payment.id); }} className="opacity-0 group-hover:opacity-100 p-1.5 text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-lg transition-all">
+                                      <MoreVertical className="w-4 h-4"/>
+                                    </button>
+                                    {openMenuId === payment.id && (
+                                      <>
+                                        <div className="fixed inset-0 z-[10]" onClick={(e) => { e.stopPropagation(); setOpenMenuId(null); }}></div>
+                                        <div className="absolute right-0 top-full mt-1 w-32 bg-white dark:bg-gray-900 rounded-xl shadow-xl border border-gray-100 dark:border-gray-800 py-1 z-[20]" onClick={e => e.stopPropagation()}>
+                                          <button onClick={() => { setEditTxModal({id: payment.id, name: payment.name, amount: Math.abs(payment.amount).toString(), date: payment.date.split('T')[0]}); setOpenMenuId(null); }} className="w-full text-left px-4 py-2 text-xs text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 flex items-center gap-2"><Edit2 className="w-3.5 h-3.5"/> Edit</button>
+                                          <button onClick={() => { setTxConfirmModal({show: true, id: payment.id, name: payment.name}); setOpenMenuId(null); }} className="w-full text-left px-4 py-2 text-xs text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 flex items-center gap-2"><Trash2 className="w-3.5 h-3.5"/> Delete</button>
+                                        </div>
+                                      </>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
                       )}
                     </div>
+                  );
+                }) : (
+                  <div className="py-20 text-center">
+                    <div className="w-16 h-16 bg-gray-50 dark:bg-gray-800 rounded-full flex items-center justify-center mx-auto mb-4 text-gray-400">
+                      <List className="w-8 h-8" />
+                    </div>
+                    <h3 className="text-lg font-black text-gray-900 dark:text-gray-100 uppercase tracking-widest mb-1">No transactions</h3>
+                    <p className="text-sm text-gray-500 dark:text-gray-400 font-medium">This person hasn't been linked to any transactions yet.</p>
                   </div>
-                );
-              }) : (
-                <div className="py-20 text-center">
-                  <div className="w-16 h-16 bg-gray-50 dark:bg-gray-800 rounded-full flex items-center justify-center mx-auto mb-4 text-gray-400">
-                    <List className="w-8 h-8" />
-                  </div>
-                  <h3 className="text-lg font-black text-gray-900 dark:text-gray-100 uppercase tracking-widest mb-1">No transactions</h3>
-                  <p className="text-sm text-gray-500 dark:text-gray-400 font-medium">This person hasn't been linked to any transactions yet.</p>
-                </div>
-              )}
+                )}
+              })()}
             </div>
           </div>
         </div>
@@ -311,6 +403,74 @@ export default function PeoplePage() {
                   </button>
                 </div>
               </form>
+            </div>
+          </div>
+        )}
+
+        {/* ── Edit Transaction Modal ─────────────────────────────────────── */}
+        {editTxModal && (
+          <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in">
+            <div className="bg-white dark:bg-gray-900 rounded-[2.5rem] w-full max-w-sm p-8 shadow-2xl relative transition-colors animate-in zoom-in-95">
+              <h2 className="text-xl font-black text-gray-900 dark:text-gray-100 mb-1 uppercase tracking-tight">Edit Payment</h2>
+              <p className="text-sm text-gray-500 dark:text-gray-400 mb-6 font-medium">Update the payment details below.</p>
+              <form onSubmit={handleEditTxSubmit} className="space-y-4">
+                <div>
+                  <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Name</label>
+                  <input 
+                    type="text" required value={editTxModal.name}
+                    onChange={e => setEditTxModal(f => f ? ({ ...f, name: e.target.value }) : null)}
+                    className="w-full bg-gray-50 dark:bg-gray-800 border-transparent text-gray-900 dark:text-gray-100 rounded-2xl p-4 text-sm font-bold outline-none focus:ring-2 focus:ring-indigo-500 transition-all placeholder:text-gray-400"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Amount</label>
+                  <div className="relative">
+                    <span className="absolute left-4 top-1/2 -translate-y-1/2 font-bold text-gray-400 dark:text-gray-500">₱</span>
+                    <input 
+                      type="number" step="0.01" min="0.01" required value={editTxModal.amount}
+                      onChange={e => setEditTxModal(f => f ? ({ ...f, amount: e.target.value }) : null)}
+                      className="w-full bg-gray-50 dark:bg-gray-800 border-transparent text-gray-900 dark:text-gray-100 rounded-2xl p-4 pl-8 text-xl font-black outline-none focus:ring-2 focus:ring-indigo-500 transition-all placeholder:text-gray-400"
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Date</label>
+                  <input 
+                    type="date" required value={editTxModal.date}
+                    onChange={e => setEditTxModal(f => f ? ({ ...f, date: e.target.value }) : null)}
+                    className="w-full bg-gray-50 dark:bg-gray-800 border-transparent text-gray-900 dark:text-gray-100 rounded-2xl p-4 text-sm font-bold outline-none focus:ring-2 focus:ring-indigo-500 transition-all"
+                  />
+                </div>
+                <div className="flex gap-3 pt-2">
+                  <button type="button" onClick={() => setEditTxModal(null)} className="flex-1 bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 py-4 rounded-2xl font-black uppercase tracking-widest text-[10px] hover:bg-gray-200 dark:hover:bg-gray-700 transition-all disabled:opacity-50">
+                    Cancel
+                  </button>
+                  <button type="submit" disabled={isSubmitting || !editTxModal.amount} className="flex-1 bg-indigo-600 text-white py-4 rounded-2xl font-black uppercase tracking-widest text-[10px] hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-200 dark:shadow-none disabled:opacity-50">
+                    {isSubmitting ? 'Saving...' : 'Save'}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
+
+        {/* ── Delete Transaction Modal ─────────────────────────────────────── */}
+        {txConfirmModal && txConfirmModal.show && (
+          <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in">
+            <div className="bg-white dark:bg-gray-900 rounded-[2.5rem] w-full max-w-sm p-8 shadow-2xl relative transition-colors animate-in zoom-in-95 flex flex-col items-center text-center">
+              <div className="w-16 h-16 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 rounded-3xl flex items-center justify-center mb-6 transition-colors">
+                <AlertTriangle className="w-8 h-8" />
+              </div>
+              <h3 className="text-xl font-black text-gray-900 dark:text-gray-100 mb-2 uppercase tracking-tight transition-colors">Delete Payment</h3>
+              <p className="text-sm text-gray-500 dark:text-gray-400 mb-8 font-medium leading-relaxed transition-colors">Are you sure you want to delete payment "{txConfirmModal.name}"? This action cannot be undone.</p>
+              <div className="flex flex-col w-full space-y-3">
+                <button onClick={handleDeleteTx} disabled={isSubmitting} className="w-full bg-red-600 text-white py-4 rounded-2xl font-black uppercase tracking-widest text-[10px] hover:bg-red-700 transition-all shadow-lg shadow-red-100 dark:shadow-none disabled:opacity-50">
+                  {isSubmitting ? 'Deleting...' : 'Proceed'}
+                </button>
+                <button onClick={() => setTxConfirmModal(null)} disabled={isSubmitting} className="w-full bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-300 py-4 rounded-2xl font-black uppercase tracking-widest text-[10px] hover:bg-gray-200 dark:hover:bg-gray-700 transition-all disabled:opacity-50">
+                  Cancel
+                </button>
+              </div>
             </div>
           </div>
         )}
