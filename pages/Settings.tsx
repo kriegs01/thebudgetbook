@@ -957,21 +957,21 @@ const Settings: React.FC<SettingsProps> = ({ currency, setCurrency, categories, 
       content: (
         <div className="space-y-4 pt-2">
           {categories.map(cat => (
-            <div key={cat.id} className={`p-4 rounded-[2rem] border ${cat.active === false ? 'bg-amber-50/40 border-amber-100' : 'bg-gray-50 border-gray-100'}`}>
+            <div key={cat.id} className={`p-4 rounded-[2rem] border transition-colors ${cat.active === false ? 'bg-amber-50/40 border-amber-100 dark:bg-amber-900/10 dark:border-amber-900/30' : 'bg-gray-50 border-gray-100 dark:bg-gray-800/50 dark:border-gray-700'}`}>
               {/* Category header: name + badges + three-dot menu */}
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2 flex-wrap">
-                  <span className="text-sm font-black text-gray-900 uppercase tracking-widest">{cat.name}</span>
+                  <span className="text-sm font-black text-gray-900 dark:text-gray-100 uppercase tracking-widest transition-colors">{cat.name}</span>
                   {cat.deactivatedAt && (
-                    <span className="text-[9px] font-black text-amber-600 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full uppercase tracking-wider">Legacy</span>
+                    <span className="text-[9px] font-black text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/30 border border-amber-200 dark:border-amber-800/50 px-2 py-0.5 rounded-full uppercase tracking-wider transition-colors">Legacy</span>
                   )}
                   {cat.flexiMode === false && (
-                    <span className="text-[9px] font-black text-gray-400 bg-gray-100 border border-gray-200 px-2 py-0.5 rounded-full uppercase tracking-wider">Data Only</span>
+                    <span className="text-[9px] font-black text-gray-400 dark:text-gray-500 bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 px-2 py-0.5 rounded-full uppercase tracking-wider transition-colors">Data Only</span>
                   )}
                 </div>
                 <button
                   onClick={() => openCatSettings(cat)}
-                  className="text-gray-400 hover:text-gray-700 transition-colors p-1 rounded-lg hover:bg-gray-100"
+                  className="text-gray-400 dark:text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 transition-colors p-1 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800"
                   title="Category settings"
                 >
                   <MoreVertical className="w-4 h-4" />
@@ -981,12 +981,12 @@ const Settings: React.FC<SettingsProps> = ({ currency, setCurrency, categories, 
               <div className="flex items-center gap-3 mt-2">
                 <button
                   onClick={() => openCatSettings(cat)}
-                  className="text-[10px] font-bold text-gray-400 hover:text-indigo-500 transition-colors"
+                  className="text-[10px] font-bold text-gray-400 hover:text-indigo-500 dark:hover:text-indigo-400 transition-colors"
                 >
                   {cat.subcategories.length} subcategor{cat.subcategories.length === 1 ? 'y' : 'ies'}
                 </button>
-                <span className="text-gray-200">·</span>
-                <span className="text-[10px] font-bold text-gray-400">
+                <span className="text-gray-200 dark:text-gray-700 transition-colors">·</span>
+                <span className="text-[10px] font-bold text-gray-400 dark:text-gray-500 transition-colors">
                   Flexi: {cat.flexiMode === false ? 'Off' : 'On'}
                 </span>
               </div>
@@ -994,7 +994,7 @@ const Settings: React.FC<SettingsProps> = ({ currency, setCurrency, categories, 
           ))}
 
           {showAddCat ? (
-            <form onSubmit={handleAddCategory} className="p-4 border-2 border-dashed border-indigo-200 rounded-[2rem] bg-indigo-50/30 space-y-4 animate-in zoom-in-95">
+            <form onSubmit={handleAddCategory} className="p-4 border-2 border-dashed border-indigo-200 dark:border-indigo-800/50 rounded-[2rem] bg-indigo-50/30 dark:bg-indigo-900/20 space-y-4 animate-in zoom-in-95 transition-colors">
                <input 
                 required
                 autoFocus
@@ -1002,17 +1002,17 @@ const Settings: React.FC<SettingsProps> = ({ currency, setCurrency, categories, 
                 placeholder="Category Name (e.g. Utilities)" 
                 value={newCatName}
                 onChange={(e) => setNewCatName(e.target.value)}
-                className="w-full bg-white border-transparent rounded-2xl p-4 text-sm font-bold outline-none focus:ring-2 focus:ring-indigo-500"
+                className="w-full bg-white dark:bg-gray-900 border-transparent rounded-2xl p-4 text-sm font-bold outline-none focus:ring-2 focus:ring-indigo-500 dark:text-gray-100 transition-colors"
               />
               <div className="flex space-x-2">
-                <button type="button" onClick={() => setShowAddCat(false)} className="flex-1 bg-white text-gray-500 py-3 rounded-xl font-bold text-xs uppercase">Cancel</button>
-                <button type="submit" className="flex-1 bg-indigo-600 text-white py-3 rounded-xl font-bold text-xs uppercase shadow-lg shadow-indigo-100">Add Category</button>
+                <button type="button" onClick={() => setShowAddCat(false)} className="flex-1 bg-white dark:bg-gray-800 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700 py-3 rounded-xl font-bold text-xs uppercase transition-colors">Cancel</button>
+                <button type="submit" className="flex-1 bg-indigo-600 text-white py-3 rounded-xl font-bold text-xs uppercase shadow-lg shadow-indigo-100 dark:shadow-none hover:bg-indigo-700 transition-colors">Add Category</button>
               </div>
             </form>
           ) : (
             <button 
               onClick={() => setShowAddCat(true)}
-              className="w-full p-4 border-2 border-dashed border-gray-200 rounded-[2rem] text-gray-400 text-xs font-black uppercase tracking-widest hover:border-indigo-400 hover:text-indigo-500 transition-all flex items-center justify-center space-x-2"
+              className="w-full p-4 border-2 border-dashed border-gray-200 dark:border-gray-700 rounded-[2rem] text-gray-400 dark:text-gray-500 text-xs font-black uppercase tracking-widest hover:border-indigo-400 dark:hover:border-indigo-500 hover:text-indigo-500 dark:hover:text-indigo-400 transition-all flex items-center justify-center space-x-2"
             >
               <Plus className="w-4 h-4" />
               <span>Create New Category</span>
@@ -1039,14 +1039,14 @@ const Settings: React.FC<SettingsProps> = ({ currency, setCurrency, categories, 
 
             return (
               <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-end justify-center sm:items-center p-4" onClick={closeCatSettings}>
-                <div className="bg-white rounded-[2rem] shadow-2xl w-full max-w-sm p-6 space-y-5 max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+                <div className="bg-white dark:bg-gray-900 rounded-[2rem] shadow-2xl w-full max-w-sm p-6 space-y-5 max-h-[90vh] overflow-y-auto transition-colors" onClick={e => e.stopPropagation()}>
                   {/* Modal header */}
                   <div className="flex items-center justify-between">
                     <div>
-                      <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Category Settings</p>
-                      <h3 className="text-base font-black text-gray-900 uppercase tracking-widest mt-0.5">{catSettingsModal.catName}</h3>
+                      <p className="text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest transition-colors">Category Settings</p>
+                      <h3 className="text-base font-black text-gray-900 dark:text-gray-100 uppercase tracking-widest mt-0.5 transition-colors">{catSettingsModal.catName}</h3>
                     </div>
-                    <button onClick={closeCatSettings} className="text-gray-300 hover:text-gray-600 transition-colors">
+                    <button onClick={closeCatSettings} className="text-gray-300 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-400 transition-colors">
                       <X className="w-5 h-5" />
                     </button>
                   </div>
@@ -1058,8 +1058,8 @@ const Settings: React.FC<SettingsProps> = ({ currency, setCurrency, categories, 
                       onClick={() => setShowSubcatSection(p => !p)}
                       className="flex items-center justify-between w-full"
                     >
-                      <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Subcategories</p>
-                      <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform ${showSubcatSection ? 'rotate-180' : ''}`} />
+                      <p className="text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest transition-colors">Subcategories</p>
+                      <ChevronDown className={`w-4 h-4 text-gray-400 dark:text-gray-500 transition-transform ${showSubcatSection ? 'rotate-180' : ''}`} />
                     </button>
 
                     {showSubcatSection && (
@@ -1068,12 +1068,12 @@ const Settings: React.FC<SettingsProps> = ({ currency, setCurrency, categories, 
                         {localSubcats.length > 0 && (
                           <div className="flex flex-wrap gap-1.5">
                             {localSubcats.map(sub => (
-                              <div key={sub} className="flex items-center gap-1.5 px-3 py-1 bg-gray-100 rounded-full">
-                                <span className="text-[10px] font-bold text-gray-600">{sub}</span>
+                              <div key={sub} className="flex items-center gap-1.5 px-3 py-1 bg-gray-100 dark:bg-gray-800 rounded-full transition-colors">
+                                <span className="text-[10px] font-bold text-gray-600 dark:text-gray-300 transition-colors">{sub}</span>
                                 <button
                                   type="button"
                                   onClick={() => setLocalSubcats(prev => prev.filter(s => s !== sub))}
-                                  className="text-gray-400 hover:text-red-500 transition-colors"
+                                  className="text-gray-400 dark:text-gray-500 hover:text-red-500 dark:hover:text-red-400 transition-colors"
                                 >
                                   <X className="w-3 h-3" />
                                 </button>
@@ -1082,7 +1082,7 @@ const Settings: React.FC<SettingsProps> = ({ currency, setCurrency, categories, 
                           </div>
                         )}
                         {localSubcats.length === 0 && (
-                          <p className="text-[10px] text-gray-400 italic">No subcategories yet.</p>
+                          <p className="text-[10px] text-gray-400 dark:text-gray-500 italic transition-colors">No subcategories yet.</p>
                         )}
 
                         {/* Add new subcategory */}
@@ -1102,7 +1102,7 @@ const Settings: React.FC<SettingsProps> = ({ currency, setCurrency, categories, 
                                 }
                               }
                             }}
-                            className="flex-1 bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 text-xs font-bold text-gray-700 outline-none focus:ring-2 focus:ring-indigo-400"
+                            className="flex-1 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-3 py-2 text-xs font-bold text-gray-700 dark:text-gray-300 outline-none focus:ring-2 focus:ring-indigo-400 transition-colors"
                           />
                           <button
                             type="button"
@@ -1124,14 +1124,14 @@ const Settings: React.FC<SettingsProps> = ({ currency, setCurrency, categories, 
 
                   {/* Deactivation date picker */}
                   <div className="space-y-2">
-                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">
+                    <p className="text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest transition-colors">
                       {isDeactivated ? 'Deactivated From' : 'Deactivate From'}
                     </p>
                     <div className="flex gap-2">
                       <select
                         value={catSettingsDraftMonth ?? ''}
                         onChange={e => setCatSettingsDraftMonth(e.target.value === '' ? null : Number(e.target.value))}
-                        className="flex-1 bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 text-xs font-bold text-gray-700 outline-none focus:ring-2 focus:ring-indigo-400"
+                        className="flex-1 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-3 py-2 text-xs font-bold text-gray-700 dark:text-gray-300 outline-none focus:ring-2 focus:ring-indigo-400 transition-colors"
                       >
                         <option value="">— Month —</option>
                         {SETTING_MONTHS.map((m, i) => (
@@ -1141,7 +1141,7 @@ const Settings: React.FC<SettingsProps> = ({ currency, setCurrency, categories, 
                       <select
                         value={catSettingsDraftYear ?? ''}
                         onChange={e => setCatSettingsDraftYear(e.target.value === '' ? null : Number(e.target.value))}
-                        className="w-24 bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 text-xs font-bold text-gray-700 outline-none focus:ring-2 focus:ring-indigo-400"
+                        className="w-24 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-3 py-2 text-xs font-bold text-gray-700 dark:text-gray-300 outline-none focus:ring-2 focus:ring-indigo-400 transition-colors"
                       >
                         <option value="">— Year —</option>
                         {years.map(y => (
@@ -1149,12 +1149,12 @@ const Settings: React.FC<SettingsProps> = ({ currency, setCurrency, categories, 
                         ))}
                       </select>
                     </div>
-                    <p className="text-[9px] text-gray-400">From this month onwards the category will no longer appear in new budgets.</p>
+                    <p className="text-[9px] text-gray-400 dark:text-gray-500 transition-colors">From this month onwards the category will no longer appear in new budgets.</p>
                     {catSettingsDraftMonth !== null && catSettingsDraftYear !== null && (
                       <button
                         type="button"
                         onClick={() => { setCatSettingsDraftMonth(null); setCatSettingsDraftYear(null); }}
-                        className="text-[9px] text-red-400 hover:text-red-600 font-bold uppercase tracking-widest transition-colors"
+                        className="text-[9px] text-red-400 dark:text-red-500 hover:text-red-600 dark:hover:text-red-400 font-bold uppercase tracking-widest transition-colors"
                       >
                         Remove deactivation
                       </button>
@@ -1166,11 +1166,11 @@ const Settings: React.FC<SettingsProps> = ({ currency, setCurrency, categories, 
                     <button
                       type="button"
                       onClick={() => setShowReactivationPicker(p => !p)}
-                      className="flex items-center justify-between w-full bg-gray-50 rounded-2xl px-4 py-3 hover:bg-gray-100 transition-colors"
+                      className="flex items-center justify-between w-full bg-gray-50 dark:bg-gray-800/80 rounded-2xl px-4 py-3 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
                     >
                       <div className="text-left">
-                        <p className="text-xs font-black text-gray-700 uppercase tracking-widest">Reactivation</p>
-                        <p className="text-[9px] text-gray-400 mt-0.5">
+                        <p className="text-xs font-black text-gray-700 dark:text-gray-200 uppercase tracking-widest transition-colors">Reactivation</p>
+                        <p className="text-[9px] text-gray-400 dark:text-gray-500 mt-0.5 transition-colors">
                           {hasReactivation && cat.reactivatedFrom
                             ? `Scheduled: ${SETTING_MONTHS[parseInt(cat.reactivatedFrom.split('-')[1], 10) - 1]} ${cat.reactivatedFrom.split('-')[0]}`
                             : showReactivationPicker
@@ -1178,7 +1178,7 @@ const Settings: React.FC<SettingsProps> = ({ currency, setCurrency, categories, 
                               : 'Tap to schedule reactivation'}
                         </p>
                       </div>
-                      <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform ${showReactivationPicker ? 'rotate-180' : ''}`} />
+                      <ChevronDown className={`w-4 h-4 text-gray-400 dark:text-gray-500 transition-transform ${showReactivationPicker ? 'rotate-180' : ''}`} />
                     </button>
 
                     {showReactivationPicker && (
@@ -1187,21 +1187,21 @@ const Settings: React.FC<SettingsProps> = ({ currency, setCurrency, categories, 
                           <select
                             value={reactDraftMonth ?? ''}
                             onChange={e => setReactDraftMonth(e.target.value === '' ? null : Number(e.target.value))}
-                            className="flex-1 bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 text-xs font-bold text-gray-700 outline-none focus:ring-2 focus:ring-green-400"
+                            className="flex-1 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-3 py-2 text-xs font-bold text-gray-700 dark:text-gray-300 outline-none focus:ring-2 focus:ring-green-400 transition-colors"
                           >
                             <option value="">— Month —</option>
                             {SETTING_MONTHS.map((m, i) => {
                               const candidate = new Date(reactDraftYear ?? new Date().getFullYear(), i, 1);
                               const disabled = deactDate !== null && candidate <= deactDate;
                               return (
-                                <option key={m} value={i + 1} disabled={disabled}>{m}{disabled ? ' ✕' : ''}</option>
+                                <option key={m} value={i + 1} disabled={disabled} className={disabled ? 'text-gray-300 dark:text-gray-600' : ''}>{m}{disabled ? ' ✕' : ''}</option>
                               );
                             })}
                           </select>
                           <select
                             value={reactDraftYear ?? ''}
                             onChange={e => setReactDraftYear(e.target.value === '' ? null : Number(e.target.value))}
-                            className="w-24 bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 text-xs font-bold text-gray-700 outline-none focus:ring-2 focus:ring-green-400"
+                            className="w-24 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-3 py-2 text-xs font-bold text-gray-700 dark:text-gray-300 outline-none focus:ring-2 focus:ring-green-400 transition-colors"
                           >
                             <option value="">— Year —</option>
                             {years.map(y => (
@@ -1220,7 +1220,7 @@ const Settings: React.FC<SettingsProps> = ({ currency, setCurrency, categories, 
                         <button
                           type="button"
                           onClick={() => { setShowReactivationPicker(false); setReactDraftMonth(null); setReactDraftYear(null); }}
-                          className="text-[9px] text-gray-400 hover:text-red-500 font-bold uppercase tracking-widest"
+                          className="text-[9px] text-gray-400 dark:text-gray-500 hover:text-red-500 dark:hover:text-red-400 font-bold uppercase tracking-widest transition-colors"
                         >
                           Remove reactivation date
                         </button>
@@ -1229,14 +1229,14 @@ const Settings: React.FC<SettingsProps> = ({ currency, setCurrency, categories, 
                   </div>
 
                   {/* Flexi Mode toggle */}
-                  <div className="flex items-center justify-between bg-gray-50 rounded-2xl px-4 py-3">
+                  <div className="flex items-center justify-between bg-gray-50 dark:bg-gray-800/80 rounded-2xl px-4 py-3 transition-colors">
                     <div>
-                      <p className="text-xs font-black text-gray-700 uppercase tracking-widest">Flexi Mode</p>
-                      <p className="text-[9px] text-gray-400 mt-0.5">{catSettingsDraftFlexi ? 'ON — manual items can be added' : 'OFF — data-only, no Add Item'}</p>
+                      <p className="text-xs font-black text-gray-700 dark:text-gray-200 uppercase tracking-widest transition-colors">Flexi Mode</p>
+                      <p className="text-[9px] text-gray-400 dark:text-gray-500 mt-0.5 transition-colors">{catSettingsDraftFlexi ? 'ON — manual items can be added' : 'OFF — data-only, no Add Item'}</p>
                     </div>
                     <button
                       onClick={() => setCatSettingsDraftFlexi(f => !f)}
-                      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${catSettingsDraftFlexi ? 'bg-indigo-500' : 'bg-gray-300'}`}
+                      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${catSettingsDraftFlexi ? 'bg-indigo-500' : 'bg-gray-300 dark:bg-gray-600'}`}
                     >
                       <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${catSettingsDraftFlexi ? 'translate-x-6' : 'translate-x-1'}`} />
                     </button>
@@ -1253,7 +1253,7 @@ const Settings: React.FC<SettingsProps> = ({ currency, setCurrency, categories, 
                   {/* Delete */}
                   <button
                     onClick={() => { closeCatSettings(); handleDeleteCategory(catSettingsModal.catId, catSettingsModal.catName); }}
-                    className="w-full py-3 rounded-xl font-black text-xs uppercase tracking-widest border border-red-100 text-red-400 hover:bg-red-50 hover:text-red-600 transition-colors flex items-center justify-center gap-2"
+                    className="w-full py-3 rounded-xl font-black text-xs uppercase tracking-widest border border-red-100 dark:border-red-900/30 text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 hover:text-red-600 dark:hover:text-red-400 transition-colors flex items-center justify-center gap-2"
                   >
                     <Trash2 className="w-3.5 h-3.5" />
                     Delete Category
@@ -1266,22 +1266,22 @@ const Settings: React.FC<SettingsProps> = ({ currency, setCurrency, categories, 
           {/* Deactivation Conflicts Modal */}
           {deactConflictModal && (
             <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-end justify-center sm:items-center p-4">
-              <div className="bg-white rounded-[2rem] shadow-2xl w-full max-w-md p-6 space-y-5 max-h-[90vh] overflow-y-auto">
+              <div className="bg-white dark:bg-gray-900 rounded-[2rem] shadow-2xl w-full max-w-md p-6 space-y-5 max-h-[90vh] overflow-y-auto transition-colors">
                 <div className="flex items-start justify-between">
                   <div>
                     <p className="text-[10px] font-black text-amber-500 uppercase tracking-widest">Deactivation Conflict</p>
-                    <h3 className="text-base font-black text-gray-900 mt-0.5">
+                    <h3 className="text-base font-black text-gray-900 dark:text-gray-100 mt-0.5 transition-colors">
                       Deactivate "{deactConflictModal.catName}"
                     </h3>
                   </div>
-                  <button onClick={() => setDeactConflictModal(null)} className="text-gray-300 hover:text-gray-600">
+                  <button onClick={() => setDeactConflictModal(null)} className="text-gray-300 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-400 transition-colors">
                     <X className="w-5 h-5" />
                   </button>
                 </div>
 
-                <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 flex gap-3">
+                <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800/30 rounded-2xl p-4 flex gap-3 transition-colors">
                   <AlertTriangle className="w-4 h-4 text-amber-500 flex-shrink-0 mt-0.5" />
-                  <p className="text-xs text-amber-700 font-medium">
+                  <p className="text-xs text-amber-700 dark:text-amber-400 font-medium transition-colors">
                     The following items are still active at or after the proposed deactivation date.
                     To proceed, either cancel and adjust them manually, or use "Align &amp; Deactivate"
                     to automatically set their end date to <strong>{deactConflictModal.lastActiveLabel}</strong>.
@@ -1290,12 +1290,12 @@ const Settings: React.FC<SettingsProps> = ({ currency, setCurrency, categories, 
 
                 <div className="space-y-2">
                   {deactConflictModal.conflicts.map(c => (
-                    <div key={c.id} className="flex items-center justify-between bg-gray-50 rounded-2xl px-4 py-3">
+                    <div key={c.id} className="flex items-center justify-between bg-gray-50 dark:bg-gray-800/80 rounded-2xl px-4 py-3 transition-colors">
                       <div>
-                        <p className="text-xs font-black text-gray-800">{c.name}</p>
+                        <p className="text-xs font-black text-gray-800 dark:text-gray-200 transition-colors">{c.name}</p>
                         <p className="text-[9px] text-gray-400 uppercase tracking-wider">{c.type}</p>
                       </div>
-                      <span className="text-[9px] font-bold text-red-500 bg-red-50 px-2 py-1 rounded-full">{c.lastActiveLabel}</span>
+                      <span className="text-[9px] font-bold text-red-500 dark:text-red-400 bg-red-50 dark:bg-red-900/20 px-2 py-1 rounded-full transition-colors">{c.lastActiveLabel}</span>
                     </div>
                   ))}
                 </div>
@@ -1307,7 +1307,7 @@ const Settings: React.FC<SettingsProps> = ({ currency, setCurrency, categories, 
                 <div className="flex gap-3">
                   <button
                     onClick={() => setDeactConflictModal(null)}
-                    className="flex-1 py-3 rounded-xl font-black text-xs uppercase tracking-widest border border-gray-200 text-gray-500 hover:bg-gray-50 transition-colors"
+                    className="flex-1 py-3 rounded-xl font-black text-xs uppercase tracking-widest border border-gray-200 dark:border-gray-700 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
                     disabled={deactConflictSaving}
                   >
                     Cancel
@@ -1333,20 +1333,20 @@ const Settings: React.FC<SettingsProps> = ({ currency, setCurrency, categories, 
             const otherCategories = categories.filter(c => c.id !== deleteModal.catId && c.active !== false);
             return (
               <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-end justify-center sm:items-center p-4">
-                <div className="bg-white rounded-[2rem] shadow-2xl w-full max-w-md p-6 space-y-5 max-h-[90vh] overflow-y-auto">
+                <div className="bg-white dark:bg-gray-900 rounded-[2rem] shadow-2xl w-full max-w-md p-6 space-y-5 max-h-[90vh] overflow-y-auto transition-colors">
                   <div className="flex items-start justify-between">
                     <div>
                       <p className="text-[10px] font-black text-red-400 uppercase tracking-widest">Delete Category</p>
-                      <h3 className="text-base font-black text-gray-900 mt-0.5">"{deleteModal.catName}"</h3>
+                      <h3 className="text-base font-black text-gray-900 dark:text-gray-100 mt-0.5 transition-colors">"{deleteModal.catName}"</h3>
                     </div>
-                    <button onClick={() => setDeleteModal(null)} className="text-gray-300 hover:text-gray-600">
+                    <button onClick={() => setDeleteModal(null)} className="text-gray-300 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-400 transition-colors">
                       <X className="w-5 h-5" />
                     </button>
                   </div>
 
-                  <div className="bg-red-50 border border-red-100 rounded-2xl p-4 flex gap-3">
+                  <div className="bg-red-50 dark:bg-red-900/20 border border-red-100 dark:border-red-800/30 rounded-2xl p-4 flex gap-3 transition-colors">
                     <AlertTriangle className="w-4 h-4 text-red-400 flex-shrink-0 mt-0.5" />
-                    <p className="text-xs text-red-600 font-medium">
+                    <p className="text-xs text-red-600 dark:text-red-400 font-medium transition-colors">
                       This category still has items assigned to it.
                       Reassignable billers must be moved to another category before deletion.
                       Loans/Installments are locked and must be handled in their own screens.
@@ -1357,15 +1357,15 @@ const Settings: React.FC<SettingsProps> = ({ currency, setCurrency, categories, 
                     <div className="space-y-2">
                       <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Reassign Billers</p>
                       {reassignableConflicts.map(c => (
-                        <div key={c.id} className="flex items-center justify-between gap-3 bg-gray-50 rounded-2xl px-4 py-3">
+                        <div key={c.id} className="flex items-center justify-between gap-3 bg-gray-50 dark:bg-gray-800/80 rounded-2xl px-4 py-3 transition-colors">
                           <div className="min-w-0 flex-1">
-                            <p className="text-xs font-black text-gray-800 truncate">{c.name}</p>
+                            <p className="text-xs font-black text-gray-800 dark:text-gray-200 truncate transition-colors">{c.name}</p>
                             <p className="text-[9px] text-gray-400 uppercase tracking-wider">{c.currentCategory}</p>
                           </div>
                           <select
                             value={c.newCategoryId ?? ''}
                             onChange={e => handleDeleteReassignChange(c.id, e.target.value)}
-                            className="bg-white border border-gray-200 rounded-xl px-2 py-1.5 text-xs font-bold text-gray-700 outline-none focus:ring-2 focus:ring-red-300 max-w-[140px]"
+                            className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl px-2 py-1.5 text-xs font-bold text-gray-700 dark:text-gray-300 outline-none focus:ring-2 focus:ring-red-300 dark:focus:ring-red-500/50 max-w-[140px] transition-colors"
                           >
                             <option value="">Select…</option>
                             {otherCategories.map(oc => (
@@ -1381,12 +1381,12 @@ const Settings: React.FC<SettingsProps> = ({ currency, setCurrency, categories, 
                     <div className="space-y-2">
                       <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Locked Items</p>
                       {lockedConflicts.map(c => (
-                        <div key={c.id} className="flex items-center justify-between bg-orange-50 border border-orange-100 rounded-2xl px-4 py-3">
+                        <div key={c.id} className="flex items-center justify-between bg-orange-50 dark:bg-orange-900/10 border border-orange-100 dark:border-orange-800/30 rounded-2xl px-4 py-3 transition-colors">
                           <div>
-                            <p className="text-xs font-black text-gray-800">{c.name}</p>
+                            <p className="text-xs font-black text-gray-800 dark:text-gray-200 transition-colors">{c.name}</p>
                             <p className="text-[9px] text-orange-500 uppercase tracking-wider">{c.type} — Locked</p>
                           </div>
-                          <span className="text-[9px] font-bold text-orange-500 bg-orange-100 px-2 py-1 rounded-full">Must handle separately</span>
+                          <span className="text-[9px] font-bold text-orange-500 dark:text-orange-400 bg-orange-100 dark:bg-orange-900/30 px-2 py-1 rounded-full transition-colors">Must handle separately</span>
                         </div>
                       ))}
                       <p className="text-[9px] text-orange-500 font-bold">
@@ -1403,7 +1403,7 @@ const Settings: React.FC<SettingsProps> = ({ currency, setCurrency, categories, 
                   <div className="flex gap-3">
                     <button
                       onClick={() => setDeleteModal(null)}
-                      className="flex-1 py-3 rounded-xl font-black text-xs uppercase tracking-widest border border-gray-200 text-gray-500 hover:bg-gray-50 transition-colors"
+                      className="flex-1 py-3 rounded-xl font-black text-xs uppercase tracking-widest border border-gray-200 dark:border-gray-700 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
                       disabled={deleteSaving}
                     >
                       Cancel
