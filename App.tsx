@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Menu, ChevronLeft, SlidersHorizontal, ArrowUp, ArrowDown, Eye, EyeOff, X, ChevronUp, LogOut, Lock, Users } from 'lucide-react';
 import { BrowserRouter, Routes, Route, NavLink } from 'react-router-dom';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { NAV_ITEMS, INITIAL_BUDGET, DEFAULT_SETUP, INITIAL_CATEGORIES } from './constants';
 import { getAllBillersFrontend, createBillerFrontend, updateBillerFrontend, deleteBillerFrontend } from './src/services/billersService';
 import { getAllAccountsFrontend, createAccountFrontend, updateAccountFrontend, deleteAccountFrontend } from './src/services/accountsService';
@@ -40,6 +41,7 @@ import TrashPage from './pages/Trash';
 import SupabaseDemo from './pages/SupabaseDemo';
 import Auth from './pages/Auth';
 import UpdatePassword from './pages/update-password';
+import { useTransactions } from './src/hooks/useTransactions';
 
 // Helper function to convert UI Account to Supabase format
 const accountToSupabase = (account: Account) => ({
@@ -159,6 +161,8 @@ const formatTransaction = (supabaseTransaction: SupabaseTransaction): Transactio
   paymentMethodId: supabaseTransaction.payment_method_id,
 });
 
+const queryClient = new QueryClient();
+
 // Main App Content (Protected)
 const AppContent: React.FC = () => {
   const { user, userProfile, loading: authLoading, signOut } = useAuth();
@@ -203,11 +207,12 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
   const [savings, setSavings] = useState<SavingsJar[]>([]);
   const [savingsLoading, setSavingsLoading] = useState(true);
   const [savingsError, setSavingsError] = useState<string | null>(null);
-  const [transactions, setTransactions] = useState<Transaction[]>([]);
-  const [transactionsLoading, setTransactionsLoading] = useState(true);
-  // Counter incremented whenever a transaction is created or deleted so TransactionsPage
-  // can detect the change and refresh its own independent state.
-  const [txRefreshKey, setTxRefreshKey] = useState(0);
+
+  const { data: txData, isLoading: transactionsLoading } = useTransactions();
+  const transactions = txData?.formatted || [];
+  const rawTransactions = txData?.raw || [];
+
+  const [rawAccounts, setRawAccounts] = useState<Account[]>([]);
   const [currency, setCurrency] = useState('PHP');
   const [categories, setCategories] = useState(INITIAL_CATEGORIES);
   const [theme, setTheme] = useState<'light' | 'dark'>('light');
@@ -339,38 +344,18 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
       setBillersLoading(false);
     };
 
-    const fetchAccountsAndTransactions = async () => {
+    const fetchAccounts = async () => {
       setAccountsLoading(true);
-      setTransactionsLoading(true);
       setAccountsError(null);
 
-      // Fetch accounts and transactions in parallel - a single set of Supabase calls
-      const [accountsResult, transactionsResult] = await Promise.allSettled([
-        getAllAccountsFrontend(),
-        getAllTransactions(),
-      ]);
+      const { data, error } = await getAllAccountsFrontend();
 
-      const accountsData = accountsResult.status === 'fulfilled' ? accountsResult.value : { data: null, error: accountsResult.reason };
-      const transactionsData = transactionsResult.status === 'fulfilled' ? transactionsResult.value : { data: null, error: transactionsResult.reason };
-
-      // Set transactions state
-      if (transactionsData.error) {
-        console.error('Error loading transactions:', transactionsData.error);
-        setTransactions([]);
-      } else {
-        setTransactions((transactionsData.data || []).map(formatTransaction));
-      }
-      setTransactionsLoading(false);
-
-      // Set accounts with calculated balances using the already-fetched transactions
-      if (accountsData.error) {
-        console.error('Error loading accounts:', accountsData.error);
+      if (error) {
+        console.error('Error loading accounts:', error);
         setAccountsError('Failed to load accounts from database');
-        setAccounts([]);
+        setRawAccounts([]);
       } else {
-        const fetchedAccounts = accountsData.data || [];
-        const fetchedTransactions = transactionsData.data || [];
-        setAccounts(recalculateAllAccountBalances(fetchedAccounts, fetchedTransactions));
+        setRawAccounts(data || []);
       }
       setAccountsLoading(false);
     };
@@ -427,11 +412,20 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
     };
 
     fetchBillers();
-    fetchAccountsAndTransactions();
+    fetchAccounts();
     fetchInstallments();
     fetchSavings();
     fetchBudgetSetups();
   }, []);
+
+  // Auto-recalculate account balances whenever accounts or transactions update!
+  useEffect(() => {
+    if (rawAccounts.length > 0) {
+      setAccounts(recalculateAllAccountBalances(rawAccounts, rawTransactions));
+    } else {
+      setAccounts([]);
+    }
+  }, [rawAccounts, rawTransactions]);
 
   // Reload functions for each entity
   const reloadBillers = async () => {
@@ -446,20 +440,12 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
   };
 
   const reloadAccounts = async () => {
-    const [accountsResult, transactionsResult] = await Promise.allSettled([
-      getAllAccountsFrontend(),
-      getAllTransactions(),
-    ]);
-    const accountsData = accountsResult.status === 'fulfilled' ? accountsResult.value : { data: null, error: accountsResult.reason };
-    const transactionsData = transactionsResult.status === 'fulfilled' ? transactionsResult.value : { data: null, error: transactionsResult.reason };
-    if (transactionsData.error) {
-      console.error('Error reloading transactions:', transactionsData.error);
-    }
-    if (accountsData.error) {
-      console.error('Error reloading accounts:', accountsData.error);
+    const { data, error } = await getAllAccountsFrontend();
+    if (error) {
+      console.error('Error reloading accounts:', error);
       setAccountsError('Failed to reload accounts from database');
     } else {
-      setAccounts(recalculateAllAccountBalances(accountsData.data || [], transactionsData.data || []));
+      setRawAccounts(data || []);
       setAccountsError(null);
     }
   };
@@ -486,16 +472,6 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
     }
   };
 
-  const reloadTransactions = async () => {
-    const { data, error } = await getAllTransactions();
-    if (error) {
-      console.error('Error reloading transactions:', error);
-    } else {
-      const formattedTransactions = (data || []).map(formatTransaction);
-      setTransactions(formattedTransactions);
-    }
-  };
-
   const reloadBudgetSetups = async () => {
     const { data, error } = await getAllBudgetSetupsFrontend();
     if (error) {
@@ -506,42 +482,6 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
       setBudgetSetupsError(null);
     }
   };
-
-  // Real-time subscription for transaction changes
-  // This enables instant balance updates when transactions are created/deleted
-  useEffect(() => {
-    console.log('[App] Setting up real-time subscription for transactions');
-    
-    // Create a channel for listening to transactions table changes
-    const channel = supabase
-      .channel('transactions-realtime')
-      .on(
-        'postgres_changes',
-        {
-          event: '*', // Listen to all events (INSERT, UPDATE, DELETE)
-          schema: 'public',
-          table: 'transactions'
-        },
-        (payload) => {
-          console.log('[App] Transaction changed via real-time:', payload.eventType, payload);
-          
-          // Reload accounts to recalculate balances in real-time
-          reloadAccounts();
-          
-          // Also reload transactions list if needed
-          reloadTransactions();
-        }
-      )
-      .subscribe((status) => {
-        console.log('[App] Real-time subscription status:', status);
-      });
-
-    // Cleanup subscription when component unmounts
-    return () => {
-      console.log('[App] Cleaning up real-time subscription');
-      supabase.removeChannel(channel);
-    };
-  }, []); // Empty dependency array - only set up once
 
   const handleAddBiller = async (newBiller: Biller) => {
     const { data, error } = await createBillerFrontend(newBiller);
@@ -775,7 +715,6 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
 
       // Reload installments and transactions to get fresh data
       await reloadInstallments();
-      await reloadTransactions();
 
       console.log('[App] Installment payment processed successfully');
     } catch (error) {
@@ -951,7 +890,6 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
 
       console.log('[App] Payment processed successfully, reloading billers and transactions');
       await reloadBillers();
-      await reloadTransactions();
     } catch (err) {
       console.error('[App] Error processing biller payment:', err);
       throw err;
@@ -963,11 +901,9 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
    * This triggers a reload of accounts, installments and transactions to reflect status changes in UI
    */
   const handleTransactionDeleted = async () => {
-    console.log('[App] Transaction deleted, reloading accounts, installments and transactions to reflect changes');
+    console.log('[App] Transaction deleted, reloading accounts and installments to reflect changes');
     await reloadAccounts(); // Reload accounts to recalculate balances
     await reloadInstallments();
-    await reloadTransactions();
-    setTxRefreshKey(k => k + 1); // Signal TransactionsPage to refresh its own state
   };
 
   /**
@@ -975,10 +911,8 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
    * This triggers a reload of accounts to recalculate balances
    */
   const handleTransactionCreated = async () => {
-    console.log('[App] Transaction created, reloading accounts and transactions to recalculate balances');
+    console.log('[App] Transaction created, reloading accounts to recalculate balances');
     await reloadAccounts(); // Reload accounts to recalculate balances
-    await reloadTransactions(); // Keep App-level transactions state (Dashboard) in sync
-    setTxRefreshKey(k => k + 1); // Signal TransactionsPage to refresh its own state
   };
 
 
@@ -1398,9 +1332,10 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
               <Route path="/people" element={<PeoplePage />} />
               <Route path="/transactions" element={
                 <TransactionsPage 
+                  transactions={transactions}
+                  loading={transactionsLoading}
                   onTransactionDeleted={handleTransactionDeleted}
                   onTransactionCreated={handleTransactionCreated}
-                  refreshKey={txRefreshKey}
                 />
               } />
               <Route path="/supabase-demo" element={
@@ -1463,11 +1398,13 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
 // Main App component with Auth Provider
 const App: React.FC = () => {
   return (
-    <TestEnvironmentProvider>
-      <AuthProvider>
-        <AppContent />
-      </AuthProvider>
-    </TestEnvironmentProvider>
+    <QueryClientProvider client={queryClient}>
+      <TestEnvironmentProvider>
+        <AuthProvider>
+          <AppContent />
+        </AuthProvider>
+      </TestEnvironmentProvider>
+    </QueryClientProvider>
   );
 };
 
