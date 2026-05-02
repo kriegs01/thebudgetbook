@@ -180,7 +180,11 @@ const AppContent: React.FC = () => {
   }
 
   // User is authenticated, show main app
-  return <MainApp user={user} userProfile={userProfile} signOut={signOut} />;
+  return (
+    <PinProtectionProvider>
+      <MainApp user={user} userProfile={userProfile} signOut={signOut} />
+    </PinProtectionProvider>
+  );
 };
 
 const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<void> }> = ({ user, userProfile, signOut }) => {
@@ -1460,11 +1464,9 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
 const App: React.FC = () => {
   return (
     <TestEnvironmentProvider>
-      <PinProtectionProvider>
-        <AuthProvider>
-          <AppContent />
-        </AuthProvider>
-      </PinProtectionProvider>
+      <AuthProvider>
+        <AppContent />
+      </AuthProvider>
     </TestEnvironmentProvider>
   );
 };
