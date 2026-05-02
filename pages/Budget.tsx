@@ -662,6 +662,15 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
   
   const [transactionFormData, setTransactionFormData] = useState(getDefaultTransactionFormData());
 
+  // Salary Cash-In state
+  const [showSalaryModal, setShowSalaryModal] = useState(false);
+  const [salaryFormData, setSalaryFormData] = useState({
+    name: 'Salary',
+    amount: '',
+    date: new Date().toISOString().split('T')[0],
+    accountId: ''
+  });
+
   const [confirmModal, setConfirmModal] = useState<{
     show: boolean;
     title: string;
@@ -1586,6 +1595,34 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
     }
   };
 
+  const handleSalaryCashIn = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    const amount = parseFloat(salaryFormData.amount);
+    if (isNaN(amount) || amount <= 0) return;
+
+    const transaction = {
+      name: salaryFormData.name,
+      // Negative amount: cash_in = money IN to the linked account (adds to balance per sign convention)
+      amount: -Math.abs(amount),
+      date: combineDateWithCurrentTime(salaryFormData.date),
+      payment_method_id: salaryFormData.accountId,
+      transaction_type: 'cash_in' as const
+    };
+
+    try {
+      const { error } = await createTransaction(transaction);
+      if (error) throw error;
+      
+      setShowSalaryModal(false);
+      await reloadTransactions();
+      if (onTransactionCreated) onTransactionCreated();
+    } catch (error) {
+      console.error('[Budget] Error creating salary transaction:', error);
+      alert('Failed to record salary. Please try again.');
+    }
+  };
+
   // REFACTOR: Handle Pay modal submission - uses payment schedules
   const handlePaySubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -2151,7 +2188,18 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
   const actualSalaryValue = actualSalary.trim() !== '' ? parseFloat(actualSalary) : null;
   const projectedSalaryValue = parseFloat(projectedSalary) || 0;
   const salaryToUse = actualSalaryValue !== null && !isNaN(actualSalaryValue) ? actualSalaryValue : projectedSalaryValue;
-  const remaining = salaryToUse - totalSpend;
+  
+  // Calculate Other Income (Side gigs, bonuses, etc.)
+  const currentMonthIndex = MONTHS.indexOf(selectedMonth);
+  const otherIncomeTxs = transactions.filter(tx => {
+    if (tx.transaction_type !== 'cash_in') return false;
+    if (tx.name.trim().toLowerCase() === 'salary') return false; // Skip the main salary, already handled
+    const txDate = new Date(tx.date);
+    return txDate.getMonth() === currentMonthIndex && txDate.getFullYear() === selectedYear;
+  });
+  const totalOtherIncome = otherIncomeTxs.reduce((sum, tx) => sum + Math.abs(tx.amount), 0);
+
+  const remaining = salaryToUse + totalOtherIncome - totalSpend;
 
   // Determine read-only state for the current setup
   const currentSetup = savedSetups.find(s => s.month === selectedMonth && s.timing === selectedTiming);
@@ -2301,21 +2349,67 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
               <tr>
                 <td className="p-3 pl-6 font-bold text-gray-700 dark:text-gray-300 text-sm">Actual Salary</td>
                 <td className="p-3 pr-6 text-right">
-                  <div className="flex items-center justify-end space-x-1">
-                    <span className="text-gray-400 dark:text-gray-500 font-bold text-sm">₱</span>
-                    <input 
-                      type="number" 
-                      min="0"
-                      step="0.01"
-                      value={actualSalary} 
-                      onChange={(e) => setActualSalary(e.target.value)} 
-                      onFocus={() => { isFocusedRef.current = true; }}
-                      onBlur={() => { isFocusedRef.current = false; }}
-                      disabled={isReadOnly}
-                      placeholder="Enter actual"
-                      className="bg-transparent border-none text-sm font-black text-gray-900 dark:text-gray-100 w-28 text-right outline-none focus:bg-indigo-50 dark:focus:bg-indigo-900/30 rounded px-1 placeholder:text-gray-300 dark:placeholder:text-gray-600 disabled:opacity-60 disabled:cursor-not-allowed"
-                      aria-label="Actual Salary"
-                    />
+                  <div className="flex items-center justify-end space-x-2">
+                    <div className="flex items-center space-x-1">
+                      <span className="text-gray-400 dark:text-gray-500 font-bold text-sm">₱</span>
+                      <input 
+                        type="number" 
+                        min="0"
+                        step="0.01"
+                        value={actualSalary} 
+                        onChange={(e) => setActualSalary(e.target.value)} 
+                        onFocus={() => { isFocusedRef.current = true; }}
+                        onBlur={() => { isFocusedRef.current = false; }}
+                        disabled={isReadOnly}
+                        placeholder="Enter actual"
+                        className="bg-transparent border-none text-sm font-black text-gray-900 dark:text-gray-100 w-28 text-right outline-none focus:bg-indigo-50 dark:focus:bg-indigo-900/30 rounded px-1 placeholder:text-gray-300 dark:placeholder:text-gray-600 disabled:opacity-60 disabled:cursor-not-allowed"
+                        aria-label="Actual Salary"
+                      />
+                    </div>
+                    {!isReadOnly && (
+                      <button
+                        onClick={() => {
+                          const debitAccounts = accounts.filter(a => a.type === 'Debit');
+                          setSalaryFormData({
+                            name: 'Salary',
+                            amount: actualSalary || projectedSalary || '',
+                            date: new Date().toISOString().split('T')[0],
+                            accountId: debitAccounts[0]?.id || ''
+                          });
+                          setShowSalaryModal(true);
+                        }}
+                        className="p-1.5 bg-green-50 dark:bg-green-900/20 text-green-600 dark:text-green-400 rounded-lg hover:bg-green-100 dark:hover:bg-green-900/40 transition-colors shadow-sm"
+                        title="Record as Cash In transaction"
+                      >
+                        <WalletIcon className="w-4 h-4" />
+                      </button>
+                    )}
+                  </div>
+                </td>
+              </tr>
+              <tr>
+                <td className="p-3 pl-6 font-bold text-gray-700 dark:text-gray-300 text-sm">Other Income</td>
+                <td className="p-3 pr-6 text-right">
+                  <div className="flex items-center justify-end space-x-2">
+                    <span className="text-sm font-black text-gray-900 dark:text-gray-100">{formatCurrency(totalOtherIncome)}</span>
+                    {!isReadOnly && (
+                      <button
+                        onClick={() => {
+                          const debitAccounts = accounts.filter(a => a.type === 'Debit');
+                          setSalaryFormData({
+                            name: '', // Empty so user can type "Side Gig", "Bonus", etc.
+                            amount: '',
+                            date: new Date().toISOString().split('T')[0],
+                            accountId: debitAccounts[0]?.id || ''
+                          });
+                          setShowSalaryModal(true);
+                        }}
+                        className="p-1.5 bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400 rounded-lg hover:bg-indigo-100 dark:hover:bg-indigo-900/40 transition-colors shadow-sm"
+                        title="Record Other Income"
+                      >
+                        <Plus className="w-4 h-4" />
+                      </button>
+                    )}
                   </div>
                 </td>
               </tr>
@@ -3564,6 +3658,54 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
           </div>
         </div>
       )}
+
+      {/* Salary Cash In Modal */}
+      {showSalaryModal && (
+        <div className="fixed inset-0 z-[150] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md animate-in fade-in" onClick={() => setShowSalaryModal(false)}>
+          <div className="bg-white dark:bg-gray-900 rounded-3xl w-full max-w-md p-10 shadow-2xl animate-in zoom-in-95 relative transition-colors" onClick={e => e.stopPropagation()}>
+            <button onClick={() => setShowSalaryModal(false)} className="absolute right-6 top-6 p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full transition-colors">
+              <X className="w-6 h-6 text-gray-400" />
+            </button>
+            <h2 className="text-2xl font-black text-gray-900 dark:text-gray-100 mb-2">Record Income</h2>
+            <p className="text-gray-500 text-sm mb-8">Add this income to your account balance</p>
+            
+            <form onSubmit={handleSalaryCashIn} className="space-y-6">
+              <div>
+                <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Transaction Name</label>
+                <input required type="text" value={salaryFormData.name} onChange={(e) => setSalaryFormData({...salaryFormData, name: e.target.value})} className="w-full bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-transparent rounded-2xl p-4 outline-none font-bold focus:ring-2 focus:ring-indigo-500 transition-all" />
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Amount</label>
+                <div className="relative">
+                  <span className="absolute left-4 top-1/2 -translate-y-1/2 font-bold text-gray-400">₱</span>
+                  <input required type="number" min="0.01" step="0.01" value={salaryFormData.amount} onChange={(e) => setSalaryFormData({...salaryFormData, amount: e.target.value})} className="w-full bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-transparent rounded-2xl p-4 pl-8 outline-none text-xl font-black focus:ring-2 focus:ring-indigo-500 transition-all" />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Date Received</label>
+                  <input required type="date" value={salaryFormData.date} onChange={(e) => setSalaryFormData({...salaryFormData, date: e.target.value})} className="w-full min-w-0 bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-transparent rounded-2xl px-3 py-4 outline-none font-bold text-sm transition-colors" />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Deposit Account</label>
+                  <select required value={salaryFormData.accountId} onChange={(e) => setSalaryFormData({...salaryFormData, accountId: e.target.value})} className="w-full min-w-0 bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-transparent rounded-2xl px-3 py-4 outline-none font-bold text-sm appearance-none transition-colors">
+                    <option value="" disabled>Select Account</option>
+                    {accounts.filter(a => a.type === 'Debit').map(acc => <option key={acc.id} value={acc.id}>{acc.bank} ({acc.classification})</option>)}
+                  </select>
+                </div>
+              </div>
+
+              <div className="flex space-x-4 pt-4">
+                <button type="button" onClick={() => setShowSalaryModal(false)} className="flex-1 bg-gray-100 dark:bg-gray-800 py-4 rounded-2xl font-bold text-gray-500 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors">Cancel</button>
+                <button type="submit" className="flex-1 bg-green-600 text-white py-4 rounded-2xl font-bold hover:bg-green-700 shadow-xl shadow-green-100 dark:shadow-none transition-all">Record Income</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
       {confirmModal.show && <ConfirmDialog {...confirmModal} onClose={() => setConfirmModal(p => ({ ...p, show: false }))} />}
     </div>
   );
