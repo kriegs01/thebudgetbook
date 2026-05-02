@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { BudgetItem, Account, Biller, PaymentSchedule, CategorizedSetupItem, SavedBudgetSetup, BudgetCategory, Installment, Wallet } from '../types';
-import { Plus, Check, ChevronDown, Trash2, Save, FileText, Wallet as WalletIcon, ArrowRight, ArrowLeft, Upload, CheckCircle2, X, AlertTriangle, Info, Eye, ZoomIn, ZoomOut, Download, Archive, RotateCcw, Lock } from 'lucide-react';
+import { Plus, Check, ChevronDown, Trash2, Save, FileText, Wallet as WalletIcon, ArrowRight, ArrowLeft, Upload, CheckCircle2, X, AlertTriangle, Info, Eye, ZoomIn, ZoomOut, Download, Archive, RotateCcw, Lock, List } from 'lucide-react';
 import { PinProtectedAction } from '../src/components/PinProtectedAction';
 import { createBudgetSetupFrontend, updateBudgetSetupFrontend, archiveBudgetSetup, reopenBudgetSetup } from '../src/services/budgetSetupsService';
 import { IconSquircleButton } from '../src/components/IconSquircleButton';
@@ -2200,16 +2200,22 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
   
   // Calculate Other Income (Side gigs, bonuses, etc.)
   const currentMonthIndex = MONTHS.indexOf(selectedMonth);
-  const otherIncomeTxs = transactions.filter(tx => {
+  const allIncomeTxs = transactions.filter(tx => {
     if (tx.transaction_type !== 'cash_in') return false;
-    const nameLower = tx.name.trim().toLowerCase();
-    if (nameLower === 'salary' || nameLower === 'income') return false; // Skip the main income, already handled
     const txDate = new Date(tx.date);
     return txDate.getMonth() === currentMonthIndex && txDate.getFullYear() === selectedYear;
   });
-  const totalOtherIncome = otherIncomeTxs.reduce((sum, tx) => sum + Math.abs(tx.amount), 0);
 
-  const remaining = salaryToUse + totalOtherIncome - totalSpend;
+  const otherIncomeTxs = allIncomeTxs.filter(tx => {
+    const nameLower = tx.name.trim().toLowerCase();
+    return nameLower !== 'salary' && nameLower !== 'income';
+  });
+
+  const totalOtherIncome = otherIncomeTxs.reduce((sum, tx) => sum + Math.abs(tx.amount), 0);
+  const hasIncomeRecords = allIncomeTxs.length > 0;
+  const netIncome = salaryToUse + totalOtherIncome;
+
+  const remaining = netIncome - totalSpend;
 
   // Determine read-only state for the current setup
   const currentSetup = savedSetups.find(s => s.month === selectedMonth && s.timing === selectedTiming);
