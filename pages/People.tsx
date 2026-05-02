@@ -90,6 +90,7 @@ export default function PeoplePage() {
       notes: `Payment for: ${selectedLoan.name}`,
       payment_schedule_id: null,
       related_transaction_id: selectedLoan.id,
+      borrower_name: selectedPerson,
     });
     setIsSubmitting(false);
 
@@ -105,21 +106,30 @@ export default function PeoplePage() {
 
   // Get aggregate stats from transactions
   const getPersonStats = (personName: string) => {
-    const personTxs = transactions.filter(t => t.borrower_name === personName);
+    const personTxs = transactions.filter(t => 
+      t.borrower_name === personName || 
+      (t.transaction_type === 'loan_payment' && t.related_transaction_id && transactions.some(l => l.id === t.related_transaction_id && l.borrower_name === personName))
+    );
     const activeLoans = personTxs.filter(t => t.transaction_type === 'loan');
-    const totalLoanAmount = activeLoans.reduce((sum, t) => sum + Number(t.amount || 0), 0);
+    const totalLoanGiven = activeLoans.reduce((sum, t) => sum + Number(t.amount || 0), 0);
+    
+    const loanPayments = personTxs.filter(t => t.transaction_type === 'loan_payment');
+    const totalPaid = loanPayments.reduce((sum, t) => sum + Math.abs(Number(t.amount || 0)), 0);
     
     return {
       txCount: personTxs.length,
       loanCount: activeLoans.length,
-      totalLoanAmount
+      totalLoanAmount: Math.max(0, totalLoanGiven - totalPaid)
     };
   };
 
   if (selectedPerson) {
     const personStats = getPersonStats(selectedPerson);
     const personTxs = transactions
-      .filter(t => t.borrower_name === selectedPerson)
+      .filter(t => 
+        t.borrower_name === selectedPerson || 
+        (t.transaction_type === 'loan_payment' && t.related_transaction_id && transactions.some(l => l.id === t.related_transaction_id && l.borrower_name === selectedPerson))
+      )
       .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
     
     return (
