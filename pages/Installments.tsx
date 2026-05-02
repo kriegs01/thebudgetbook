@@ -378,10 +378,10 @@ const Installments: React.FC<InstallmentsProps> = ({ installments, accounts, bil
     
     setEditFormData({
       name: item.name,
-      totalAmount: item.totalAmount.toString(),
-      monthlyAmount: item.monthlyAmount.toString(),
+      totalAmount: item.totalAmount.toFixed(2),
+      monthlyAmount: item.monthlyAmount.toFixed(2),
       termDuration: termDurationNumeric,
-      paidAmount: item.paidAmount.toString(),
+      paidAmount: item.paidAmount.toFixed(2),
       accountId: item.accountId,
       startDate: item.startDate || '',
       billerId: item.billerId || '',
@@ -1417,7 +1417,7 @@ const Installments: React.FC<InstallmentsProps> = ({ installments, accounts, bil
                         </div>
                         </div>
                         <button
-                          onClick={() => { setEditingScheduleTx(tx); setEditScheduleTxForm({ name: tx.name, amount: Math.abs(tx.amount).toString(), date: tx.date.split('T')[0] }); }}
+                          onClick={() => { setEditingScheduleTx(tx); setEditScheduleTxForm({ name: tx.name, amount: Math.abs(tx.amount).toFixed(2), date: tx.date.split('T')[0] }); }}
                           className="ml-3 mt-1 text-[9px] font-black text-indigo-600 uppercase tracking-widest border border-indigo-100 px-2 py-1 rounded-lg hover:bg-indigo-50 transition-colors flex-shrink-0"
                         >
                           <Edit2 className="w-3 h-3" />

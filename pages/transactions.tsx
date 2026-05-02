@@ -231,7 +231,7 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ transactions, loadi
     setForm({
       name: tx.name,
       date: new Date(tx.date).toISOString().split('T')[0],
-      amount: Math.abs(tx.amount).toString(), // Absolute value makes editing easier
+      amount: Math.abs(tx.amount).toFixed(2), // Absolute value makes editing easier
       paymentMethodId: tx.paymentMethodId,
       transactionType: tx.transaction_type || 'payment',
       transferToAccountId: '',

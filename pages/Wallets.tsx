@@ -61,7 +61,7 @@ const WalletsPage: React.FC<WalletsPageProps> = ({ accounts }) => {
 
   const openEditModal = (wallet: Wallet) => {
     setEditingWallet(wallet);
-    setFormData({ name: wallet.name, amount: String(wallet.amount), accountId: wallet.accountId });
+    setFormData({ name: wallet.name, amount: wallet.amount.toFixed(2), accountId: wallet.accountId });
     setFormError(null);
     setShowModal(true);
   };

@@ -364,7 +364,7 @@ export default function PeoplePage() {
                                       <>
                                         <div className="fixed inset-0 z-[10]" onClick={(e) => { e.stopPropagation(); setOpenMenuId(null); }}></div>
                                         <div className="absolute right-0 top-full mt-1 w-32 bg-white dark:bg-gray-900 rounded-xl shadow-xl border border-gray-100 dark:border-gray-800 py-1 z-[20]" onClick={e => e.stopPropagation()}>
-                                          <button onClick={() => { setEditTxModal({id: payment.id, name: payment.name, amount: Math.abs(payment.amount).toString(), date: payment.date.split('T')[0]}); setOpenMenuId(null); }} className="w-full text-left px-4 py-2 text-xs text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 flex items-center gap-2"><Edit2 className="w-3.5 h-3.5"/> Edit</button>
+                                      <button onClick={() => { setEditTxModal({id: payment.id, name: payment.name, amount: Math.abs(payment.amount).toFixed(2), date: payment.date.split('T')[0]}); setOpenMenuId(null); }} className="w-full text-left px-4 py-2 text-xs text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 flex items-center gap-2"><Edit2 className="w-3.5 h-3.5"/> Edit</button>
                                           <button onClick={() => { setTxConfirmModal({show: true, id: payment.id, name: payment.name}); setOpenMenuId(null); }} className="w-full text-left px-4 py-2 text-xs text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 flex items-center gap-2"><Trash2 className="w-3.5 h-3.5"/> Delete</button>
                                         </div>
                                       </>

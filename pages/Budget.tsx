@@ -728,7 +728,7 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                 // QA: For Loans billers, use linked installment monthly amounts first
                 const instAmount = getLinkedInstallmentsAmount(biller);
                 if (instAmount !== null) {
-                  return { ...item, amount: instAmount.toString() };
+                  return { ...item, amount: instAmount.toFixed(2) };
                 }
                 const schedule = biller.schedules.find(s => s.month === selectedMonth);
                 if (schedule) {
@@ -740,7 +740,7 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                   );
                   return {
                     ...item,
-                    amount: calculatedAmount.toString()
+                    amount: calculatedAmount.toFixed(2)
                   };
                 }
               }
@@ -781,7 +781,7 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
               return {
                 id: b.id,
                 name: b.name,
-                amount: amount.toString(),
+                amount: amount.toFixed(2),
                 included: true,
                 timing: b.timing,
                 isBiller: true
@@ -2732,7 +2732,7 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                                           transactionId: isPartial ? '' : (existingTx?.id || ''),
                                           amount: isPartial
                                             ? Math.max(0, parseFloat(item.amount) - paymentSchedule.amount_paid).toFixed(2)
-                                            : existingTx?.amount.toString() || item.amount,
+                                          : existingTx?.amount.toFixed(2) || item.amount,
                                           receipt: (!isPartial && existingTx) ? 'Receipt on file' : '',
                                           datePaid: (!isPartial && existingTx) ? new Date(existingTx.date).toISOString().split('T')[0] : today,
                                           accountId: existingTx?.payment_method_id || payFormData.accountId
@@ -2913,7 +2913,7 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                                           date: new Date().toISOString().split('T')[0],
                                           amount: isPartial && installmentSchedule
                                             ? Math.max(0, installmentSchedule.expected_amount - installmentSchedule.amount_paid).toFixed(2)
-                                            : installment.monthlyAmount.toString(),
+                                          : installment.monthlyAmount.toFixed(2),
                                           accountId: installment.accountId || accounts[0]?.id || '',
                                           paymentScheduleId: installmentSchedule?.id || '' // FIX: Pass schedule ID
                                         });
@@ -3045,7 +3045,7 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                                   id: tx.id,
                                   name: tx.name,
                                   date: dateStr,
-                                  amount: tx.amount.toString(),
+                                amount: tx.amount.toFixed(2),
                                   accountId: tx.payment_method_id,
                                   paymentScheduleId: tx.payment_schedule_id || '' // FIX: Preserve schedule ID when editing
                                 });
@@ -3164,7 +3164,7 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                                             setShowPayModal({biller: linkedBiller, schedule}); 
                                             setPayFormData({
                                               transactionId: existingTx?.id || '',
-                                              amount: existingTx?.amount.toString() || schedule.expectedAmount.toString(),
+                                            amount: existingTx?.amount.toFixed(2) || schedule.expectedAmount.toFixed(2),
                                               receipt: existingTx ? 'Receipt on file' : '',
                                               datePaid: existingTx ? new Date(existingTx.date).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
                                               accountId: existingTx?.payment_method_id || payFormData.accountId

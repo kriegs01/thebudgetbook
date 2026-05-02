@@ -168,9 +168,9 @@ const Accounts: React.FC<AccountsProps> = ({ accounts, onAdd, onDelete, onEdit, 
     setFormData({
       bank: acc.bank,
       classification: acc.classification,
-      balance: String(acc.openingBalance ?? 0), // Use opening balance seed, not calculated running balance
+      balance: (acc.openingBalance ?? 0).toFixed(2), // Use opening balance seed, not calculated running balance
       type: acc.type,
-      creditLimit: acc.creditLimit ? String(acc.creditLimit) : '',
+      creditLimit: acc.creditLimit ? acc.creditLimit.toFixed(2) : '',
       billingDate: acc.billingDate ? String(new Date(acc.billingDate).getDate()) : '',
       dueDate: acc.dueDate ? String(new Date(acc.dueDate).getDate()) : ''
     });

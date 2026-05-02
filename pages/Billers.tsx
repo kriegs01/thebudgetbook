@@ -870,7 +870,7 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
       name: biller.name, 
       category: biller.category, 
       dueDate: biller.dueDate, 
-      expectedAmount: biller.expectedAmount.toString(),
+      expectedAmount: biller.expectedAmount.toFixed(2),
       actMonth: biller.activationDate.month,
       actDay: biller.activationDate.day || '',
       actYear: biller.activationDate.year,
@@ -890,7 +890,7 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
         return {
           effectiveMonth: MONTHS[monthIdx] ?? MONTHS[0],
           effectiveYear: yearStr,
-          amount: inc.amount.toString(),
+          amount: inc.amount.toFixed(2),
         };
       })
     );
@@ -1237,7 +1237,7 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
                                 <button 
                                   onClick={() => { 
                                     setShowPayModal({ biller: detailedBiller, schedule: legacySched, expectedAmount: calculatedAmount }); 
-                                    setPayFormData({ ...payFormData, amount: displayAmount.toString(), receipt: '' }); 
+                                setPayFormData({ ...payFormData, amount: displayAmount.toFixed(2), receipt: '' }); 
                                   }} 
                                   className="bg-indigo-600 text-white px-6 py-2 rounded-xl font-bold hover:bg-indigo-700 text-xs transition-all"
                                 >
@@ -1334,7 +1334,7 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
                                 <button 
                                   onClick={() => { 
                                     setShowPayModal({ biller: detailedBiller, schedule: sched, expectedAmount: calculatedAmount }); 
-                                    setPayFormData({ ...payFormData, amount: displayAmount.toString(), receipt: '' }); 
+                                setPayFormData({ ...payFormData, amount: displayAmount.toFixed(2), receipt: '' }); 
                                   }} 
                                   className="bg-indigo-600 text-white px-6 py-2 rounded-xl font-bold hover:bg-indigo-700 text-xs transition-all"
                                 >
@@ -2141,7 +2141,7 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
                         </div>
                         </div>
                         <button
-                          onClick={() => { setEditingScheduleTx(tx); setEditScheduleTxForm({ name: tx.name, amount: Math.abs(tx.amount).toString(), date: tx.date.split('T')[0] }); }}
+                      onClick={() => { setEditingScheduleTx(tx); setEditScheduleTxForm({ name: tx.name, amount: Math.abs(tx.amount).toFixed(2), date: tx.date.split('T')[0] }); }}
                           className="ml-3 mt-1 text-[9px] font-black text-indigo-600 uppercase tracking-widest border border-indigo-100 px-2 py-1 rounded-lg hover:bg-indigo-50 transition-colors flex-shrink-0"
                         >
                           <Edit2 className="w-3 h-3" />
