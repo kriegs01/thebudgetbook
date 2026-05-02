@@ -666,6 +666,7 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
 
   // Salary Cash-In state
   const [showSalaryModal, setShowSalaryModal] = useState(false);
+  const [showIncomeRecordsModal, setShowIncomeRecordsModal] = useState(false);
   const [salaryFormData, setSalaryFormData] = useState({
     name: 'Income',
     amount: '',
