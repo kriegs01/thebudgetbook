@@ -1498,12 +1498,19 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
     try {
       let transactionData, transactionError;
       
+      let finalAmount = parseFloat(transactionFormData.amount);
+      if (transactionFormData.transactionType === 'cash_in' || transactionFormData.transactionType === 'loan_payment') {
+        finalAmount = -Math.abs(finalAmount);
+      } else {
+        finalAmount = Math.abs(finalAmount);
+      }
+
       if (isEditing) {
         // Update existing transaction and recalculate the linked payment schedule
         const transaction = {
           name: transactionFormData.name,
           date: combineDateWithCurrentTime(transactionFormData.date),
-          amount: parseFloat(transactionFormData.amount),
+          amount: finalAmount,
           payment_method_id: transactionFormData.accountId
         };
         const result = await updateTransactionAndSyncSchedule(transactionFormData.id, transaction);
@@ -1517,7 +1524,7 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
           {
             name: transactionFormData.name,
             date: combineDateWithCurrentTime(transactionFormData.date),
-            amount: parseFloat(transactionFormData.amount),
+            amount: finalAmount,
             paymentMethodId: transactionFormData.accountId
           }
         );
@@ -1531,7 +1538,7 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
             paymentScheduleId,
             {
               transactionName: transactionFormData.name,
-              amountPaid: parseFloat(transactionFormData.amount),
+              amountPaid: Math.abs(finalAmount),
               datePaid: transactionFormData.date,
               accountId: transactionFormData.accountId,
               receipt: undefined
@@ -1566,7 +1573,7 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
         const transaction = {
           name: transactionFormData.name,
           date: combineDateWithCurrentTime(transactionFormData.date),
-          amount: parseFloat(transactionFormData.amount),
+          amount: finalAmount,
           payment_method_id: transactionFormData.accountId
         };
         const result = await createTransaction(transaction);
