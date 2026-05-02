@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { Menu, ChevronLeft, SlidersHorizontal, ArrowUp, ArrowDown, Eye, EyeOff, X, ChevronUp, LogOut, Lock, Users } from 'lucide-react';
 import { BrowserRouter, Routes, Route, NavLink } from 'react-router-dom';
+import { QueryClient, QueryClientProvider, useQueryClient } from '@tanstack/react-query';
 import { NAV_ITEMS, INITIAL_BUDGET, DEFAULT_SETUP, INITIAL_CATEGORIES } from './constants';
 import { getAllBillersFrontend, createBillerFrontend, updateBillerFrontend, deleteBillerFrontend } from './src/services/billersService';
 import { getAllAccountsFrontend, createAccountFrontend, updateAccountFrontend, deleteAccountFrontend } from './src/services/accountsService';
 import { getAllInstallmentsFrontend, createInstallmentFrontend, updateInstallmentFrontend, deleteInstallmentFrontend } from './src/services/installmentsService';
-import { getAllSavingsFrontend, createSavingsFrontend, updateSavingsFrontend, deleteSavingsFrontend } from './src/services/savingsService';
 import { getAllBudgetSetupsFrontend, deleteBudgetSetupFrontend, archiveBudgetSetup, reopenBudgetSetup } from './src/services/budgetSetupsService';
 import { getPaymentSchedulesBySource } from './src/services/paymentSchedulesService';
 import { getAllTransactions, createTransaction, createPaymentScheduleTransaction, uploadTransactionReceipt, updateTransaction } from './src/services/transactionsService';
@@ -13,7 +13,8 @@ import { recordPayment } from './src/services/paymentSchedulesService';
 import { supabase } from './src/utils/supabaseClient';
 import { combineDateWithCurrentTime } from './src/utils/dateUtils';
 import { recalculateAllAccountBalances } from './src/utils/accountBalanceCalculator';
-import type { Biller, Account, Installment, SavingsJar, Transaction } from './types';
+import { updateUserProfile } from './src/services/userProfileService';
+import type { Biller, Account, Installment, Transaction } from './types';
 import type { SupabaseTransaction } from './src/types/supabase';
 
 // Context
@@ -31,15 +32,16 @@ import Installments from './pages/Installments';
 import Accounts from './pages/Accounts';
 import AccountFilteredTransactions from './pages/accounts/view';
 import StatementPage from './pages/accounts/statement';
-import Savings from './pages/Savings';
 import WalletsPage from './pages/Wallets';
 import WalletView from './pages/wallets/view';
 import PeoplePage from './pages/People';
 import SettingsPage from './pages/Settings';
-import TrashPage from './pages/Trash';
 import SupabaseDemo from './pages/SupabaseDemo';
 import Auth from './pages/Auth';
 import UpdatePassword from './pages/update-password';
+import { useTransactions } from './src/hooks/useTransactions';
+import { useAccounts } from './src/hooks/useAccounts';
+import { SetupWizard } from './src/components/SetupWizard';
 
 // Helper function to convert UI Account to Supabase format
 const accountToSupabase = (account: Account) => ({
@@ -159,9 +161,12 @@ const formatTransaction = (supabaseTransaction: SupabaseTransaction): Transactio
   paymentMethodId: supabaseTransaction.payment_method_id,
 });
 
+const queryClient = new QueryClient();
+
 // Main App Content (Protected)
 const AppContent: React.FC = () => {
   const { user, userProfile, loading: authLoading, signOut } = useAuth();
+  const queryClient = useQueryClient();
 
   // Show auth page if not authenticated
   if (authLoading) {
@@ -180,15 +185,17 @@ const AppContent: React.FC = () => {
   }
 
   // User is authenticated, show main app
-  return <MainApp user={user} userProfile={userProfile} signOut={signOut} />;
+  return (
+    <PinProtectionProvider>
+      <MainApp user={user} userProfile={userProfile} signOut={signOut} />
+    </PinProtectionProvider>
+  );
 };
 
 const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<void> }> = ({ user, userProfile, signOut }) => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
   const [accounts, setAccounts] = useState<Account[]>([]);
-  const [accountsLoading, setAccountsLoading] = useState(true);
-  const [accountsError, setAccountsError] = useState<string | null>(null);
   const [budgetItems, setBudgetItems] = useState(INITIAL_BUDGET);
   const [billers, setBillers] = useState<Biller[]>([]);
   const [billersLoading, setBillersLoading] = useState(true);
@@ -196,17 +203,61 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
   const [installments, setInstallments] = useState<Installment[]>([]);
   const [installmentsLoading, setInstallmentsLoading] = useState(true);
   const [installmentsError, setInstallmentsError] = useState<string | null>(null);
-  const [savings, setSavings] = useState<SavingsJar[]>([]);
-  const [savingsLoading, setSavingsLoading] = useState(true);
-  const [savingsError, setSavingsError] = useState<string | null>(null);
-  const [transactions, setTransactions] = useState<Transaction[]>([]);
-  const [transactionsLoading, setTransactionsLoading] = useState(true);
-  // Counter incremented whenever a transaction is created or deleted so TransactionsPage
-  // can detect the change and refresh its own independent state.
-  const [txRefreshKey, setTxRefreshKey] = useState(0);
+
+  const { data: txData, isLoading: transactionsLoading } = useTransactions();
+  const transactions = txData?.formatted || [];
+  const rawTransactions = txData?.raw || [];
+
+  const { data: rawAccounts = [], isLoading: accountsLoading, error: accountsQueryError } = useAccounts();
+  const accountsError = accountsQueryError ? (accountsQueryError as Error).message : null;
+
   const [currency, setCurrency] = useState('PHP');
   const [categories, setCategories] = useState(INITIAL_CATEGORIES);
   const [theme, setTheme] = useState<'light' | 'dark'>('light');
+  
+  // Wizard State
+  const [showWizard, setShowWizard] = useState(false);
+
+  // Load Custom Categories from User Profile
+  useEffect(() => {
+    if (userProfile?.settings?.categories && Array.isArray(userProfile.settings.categories)) {
+      setCategories(userProfile.settings.categories);
+    } else {
+      setCategories(INITIAL_CATEGORIES); // Fallback for new accounts
+    }
+
+    // Intercept New Users for Setup Wizard
+    if (userProfile) {
+      const isSetupCompleted = userProfile.settings?.setupCompleted;
+      const hasCustomCategories = userProfile.settings?.categories && userProfile.settings.categories.length > 0;
+      
+      if (!isSetupCompleted && !hasCustomCategories) {
+        setShowWizard(true);
+      } else {
+        setShowWizard(false);
+      }
+    }
+  }, [userProfile]);
+
+  // Lifted Budget Setups State - now loaded from Supabase
+  const [budgetSetups, setBudgetSetups] = useState<any[]>([]);
+  const [budgetSetupsLoading, setBudgetSetupsLoading] = useState(true);
+  const [budgetSetupsError, setBudgetSetupsError] = useState<string | null>(null);
+
+  // Splash Screen State
+  const [showSplash, setShowSplash] = useState(true);
+  const [minSplashTimeElapsed, setMinSplashTimeElapsed] = useState(false);
+
+  useEffect(() => {
+    const timer = setTimeout(() => setMinSplashTimeElapsed(true), 3000); // 3 seconds buffer
+    return () => clearTimeout(timer);
+  }, []);
+
+  const isDataLoading = accountsLoading || transactionsLoading || billersLoading || installmentsLoading || budgetSetupsLoading;
+
+  useEffect(() => {
+    if (!isDataLoading && minSplashTimeElapsed) setShowSplash(false);
+  }, [isDataLoading, minSplashTimeElapsed]);
 
   // Navigation Customization State
   const [navPreferences, setNavPreferences] = useState<{id: string, visible: boolean}[]>([]);
@@ -216,7 +267,13 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
   const { triggerStandbyLock, isPinEnabled } = usePinProtection();
 
   const effectiveNavItems = React.useMemo(() => {
-    const items = [...NAV_ITEMS];
+    // Filter out savings and trash items from the menu
+    const items = [...NAV_ITEMS].filter(item => 
+      item.path !== '/savings' && 
+      item.path !== '/trash' &&
+      item.id?.toLowerCase() !== 'savings' &&
+      item.id?.toLowerCase() !== 'trash'
+    );
     if (userProfile?.settings?.usePeoplePage && !items.find(i => i.id === 'people')) {
       items.push({
         id: 'people',
@@ -293,14 +350,6 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
 
   // Wallet state is managed internally by WalletsPage and WalletView (they fetch their own data)
   
-  // Lifted Budget Setups State - now loaded from Supabase
-  const [budgetSetups, setBudgetSetups] = useState([]);
-  const [budgetSetupsLoading, setBudgetSetupsLoading] = useState(true);
-  const [budgetSetupsError, setBudgetSetupsError] = useState<string | null>(null);
-
-  // Shared Trash State
-  const [trashSetups, setTrashSetups] = useState([]);
-
   // Load all data from Supabase on component mount
   useEffect(() => {
     const fetchBillers = async () => {
@@ -320,42 +369,6 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
       setBillersLoading(false);
     };
 
-    const fetchAccountsAndTransactions = async () => {
-      setAccountsLoading(true);
-      setTransactionsLoading(true);
-      setAccountsError(null);
-
-      // Fetch accounts and transactions in parallel - a single set of Supabase calls
-      const [accountsResult, transactionsResult] = await Promise.allSettled([
-        getAllAccountsFrontend(),
-        getAllTransactions(),
-      ]);
-
-      const accountsData = accountsResult.status === 'fulfilled' ? accountsResult.value : { data: null, error: accountsResult.reason };
-      const transactionsData = transactionsResult.status === 'fulfilled' ? transactionsResult.value : { data: null, error: transactionsResult.reason };
-
-      // Set transactions state
-      if (transactionsData.error) {
-        console.error('Error loading transactions:', transactionsData.error);
-        setTransactions([]);
-      } else {
-        setTransactions((transactionsData.data || []).map(formatTransaction));
-      }
-      setTransactionsLoading(false);
-
-      // Set accounts with calculated balances using the already-fetched transactions
-      if (accountsData.error) {
-        console.error('Error loading accounts:', accountsData.error);
-        setAccountsError('Failed to load accounts from database');
-        setAccounts([]);
-      } else {
-        const fetchedAccounts = accountsData.data || [];
-        const fetchedTransactions = transactionsData.data || [];
-        setAccounts(recalculateAllAccountBalances(fetchedAccounts, fetchedTransactions));
-      }
-      setAccountsLoading(false);
-    };
-
     const fetchInstallments = async () => {
       setInstallmentsLoading(true);
       setInstallmentsError(null);
@@ -371,23 +384,6 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
       }
       
       setInstallmentsLoading(false);
-    };
-
-    const fetchSavings = async () => {
-      setSavingsLoading(true);
-      setSavingsError(null);
-      
-      const { data, error } = await getAllSavingsFrontend();
-      
-      if (error) {
-        console.error('Error loading savings:', error);
-        setSavingsError('Failed to load savings from database');
-        setSavings([]);
-      } else {
-        setSavings(data || []);
-      }
-      
-      setSavingsLoading(false);
     };
 
     const fetchBudgetSetups = async () => {
@@ -408,11 +404,40 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
     };
 
     fetchBillers();
-    fetchAccountsAndTransactions();
     fetchInstallments();
-    fetchSavings();
     fetchBudgetSetups();
   }, []);
+
+  // Auto-recalculate account balances whenever accounts or transactions update!
+  useEffect(() => {
+    if (rawAccounts.length > 0) {
+      setAccounts(recalculateAllAccountBalances(rawAccounts, rawTransactions));
+    } else {
+      setAccounts([]);
+    }
+  }, [rawAccounts, rawTransactions]);
+
+  // Setup Wizard Completion Handler
+  const handleCompleteWizard = async (wizardCategories: BudgetCategory[], newAccount: Account | null) => {
+    if (newAccount) {
+      await handleAddAccount(newAccount);
+    }
+    
+    const newSettings = {
+      ...(userProfile?.settings || {}),
+      categories: wizardCategories,
+      setupCompleted: true
+    };
+    
+    try {
+      await updateUserProfile(user.id, { settings: newSettings });
+      setCategories(wizardCategories);
+      setShowWizard(false);
+    } catch (err) {
+      console.error('Failed to complete setup wizard:', err);
+      alert('Failed to save your setup. Please check your connection and try again.');
+    }
+  };
 
   // Reload functions for each entity
   const reloadBillers = async () => {
@@ -427,22 +452,7 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
   };
 
   const reloadAccounts = async () => {
-    const [accountsResult, transactionsResult] = await Promise.allSettled([
-      getAllAccountsFrontend(),
-      getAllTransactions(),
-    ]);
-    const accountsData = accountsResult.status === 'fulfilled' ? accountsResult.value : { data: null, error: accountsResult.reason };
-    const transactionsData = transactionsResult.status === 'fulfilled' ? transactionsResult.value : { data: null, error: transactionsResult.reason };
-    if (transactionsData.error) {
-      console.error('Error reloading transactions:', transactionsData.error);
-    }
-    if (accountsData.error) {
-      console.error('Error reloading accounts:', accountsData.error);
-      setAccountsError('Failed to reload accounts from database');
-    } else {
-      setAccounts(recalculateAllAccountBalances(accountsData.data || [], transactionsData.data || []));
-      setAccountsError(null);
-    }
+    await queryClient.invalidateQueries({ queryKey: ['accounts'] });
   };
 
   const reloadInstallments = async () => {
@@ -456,27 +466,6 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
     }
   };
 
-  const reloadSavings = async () => {
-    const { data, error } = await getAllSavingsFrontend();
-    if (error) {
-      console.error('Error reloading savings:', error);
-      setSavingsError('Failed to reload savings from database');
-    } else {
-      setSavings(data || []);
-      setSavingsError(null);
-    }
-  };
-
-  const reloadTransactions = async () => {
-    const { data, error } = await getAllTransactions();
-    if (error) {
-      console.error('Error reloading transactions:', error);
-    } else {
-      const formattedTransactions = (data || []).map(formatTransaction);
-      setTransactions(formattedTransactions);
-    }
-  };
-
   const reloadBudgetSetups = async () => {
     const { data, error } = await getAllBudgetSetupsFrontend();
     if (error) {
@@ -487,42 +476,6 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
       setBudgetSetupsError(null);
     }
   };
-
-  // Real-time subscription for transaction changes
-  // This enables instant balance updates when transactions are created/deleted
-  useEffect(() => {
-    console.log('[App] Setting up real-time subscription for transactions');
-    
-    // Create a channel for listening to transactions table changes
-    const channel = supabase
-      .channel('transactions-realtime')
-      .on(
-        'postgres_changes',
-        {
-          event: '*', // Listen to all events (INSERT, UPDATE, DELETE)
-          schema: 'public',
-          table: 'transactions'
-        },
-        (payload) => {
-          console.log('[App] Transaction changed via real-time:', payload.eventType, payload);
-          
-          // Reload accounts to recalculate balances in real-time
-          reloadAccounts();
-          
-          // Also reload transactions list if needed
-          reloadTransactions();
-        }
-      )
-      .subscribe((status) => {
-        console.log('[App] Real-time subscription status:', status);
-      });
-
-    // Cleanup subscription when component unmounts
-    return () => {
-      console.log('[App] Cleaning up real-time subscription');
-      supabase.removeChannel(channel);
-    };
-  }, []); // Empty dependency array - only set up once
 
   const handleAddBiller = async (newBiller: Biller) => {
     const { data, error } = await createBillerFrontend(newBiller);
@@ -756,7 +709,6 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
 
       // Reload installments and transactions to get fresh data
       await reloadInstallments();
-      await reloadTransactions();
 
       console.log('[App] Installment payment processed successfully');
     } catch (error) {
@@ -932,7 +884,6 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
 
       console.log('[App] Payment processed successfully, reloading billers and transactions');
       await reloadBillers();
-      await reloadTransactions();
     } catch (err) {
       console.error('[App] Error processing biller payment:', err);
       throw err;
@@ -944,11 +895,9 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
    * This triggers a reload of accounts, installments and transactions to reflect status changes in UI
    */
   const handleTransactionDeleted = async () => {
-    console.log('[App] Transaction deleted, reloading accounts, installments and transactions to reflect changes');
+    console.log('[App] Transaction deleted, reloading accounts and installments to reflect changes');
     await reloadAccounts(); // Reload accounts to recalculate balances
     await reloadInstallments();
-    await reloadTransactions();
-    setTxRefreshKey(k => k + 1); // Signal TransactionsPage to refresh its own state
   };
 
   /**
@@ -956,33 +905,10 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
    * This triggers a reload of accounts to recalculate balances
    */
   const handleTransactionCreated = async () => {
-    console.log('[App] Transaction created, reloading accounts and transactions to recalculate balances');
+    console.log('[App] Transaction created, reloading accounts to recalculate balances');
     await reloadAccounts(); // Reload accounts to recalculate balances
-    await reloadTransactions(); // Keep App-level transactions state (Dashboard) in sync
-    setTxRefreshKey(k => k + 1); // Signal TransactionsPage to refresh its own state
   };
 
-
-  // Savings handlers
-  const handleAddSavings = async (newSavings: SavingsJar) => {
-    const { data, error } = await createSavingsFrontend(newSavings);
-    if (error) {
-      console.error('Error creating savings jar:', error);
-      alert('Failed to create savings jar. Please try again.');
-    } else {
-      await reloadSavings();
-    }
-  };
-
-  const handleDeleteSavings = async (id: string) => {
-    const { error } = await deleteSavingsFrontend(id);
-    if (error) {
-      console.error('Error deleting savings jar:', error);
-      alert('Failed to delete savings jar. Please try again.');
-    } else {
-      await reloadSavings();
-    }
-  };
 
   const handleResetAll = () => {
     const confirmation = window.confirm(
@@ -993,8 +919,6 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
       setBudgetItems([]);
       setBillers([]);
       setInstallments([]);
-      setSavings([]);
-      setTrashSetups([]);
       setBudgetSetups([]);
     }
   };
@@ -1062,8 +986,28 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
     }
   };
 
+  if (showSplash) {
+    return (
+      <div className="fixed inset-0 z-[9999] flex flex-col items-center justify-center bg-gradient-to-br from-blue-50 via-white to-purple-50 dark:from-gray-950 dark:via-gray-900 dark:to-gray-950 transition-colors duration-300">
+        <div className="text-center animate-in fade-in zoom-in duration-700">
+          <div className="w-24 h-24 bg-white dark:bg-gray-900 rounded-3xl shadow-2xl flex items-center justify-center mx-auto mb-8 relative overflow-hidden border border-gray-100 dark:border-gray-800">
+            <div className="absolute inset-0 bg-blue-50/50 dark:bg-blue-900/10 animate-pulse"></div>
+            <div className="w-10 h-10 border-4 border-blue-100 dark:border-gray-800 border-t-blue-600 dark:border-t-blue-500 rounded-full animate-spin relative z-10"></div>
+          </div>
+          <h1 className="text-3xl font-black bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent mb-4 tracking-tight">
+            Budget Book
+          </h1>
+          <p className="text-gray-500 dark:text-gray-400 font-medium text-sm max-w-[260px] mx-auto leading-relaxed animate-pulse">
+            Loading your financial data and preparing your dashboard...
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <>
+        {showWizard && <SetupWizard onComplete={handleCompleteWizard} />}
         <TestModeBanner sidebarOpen={isSidebarOpen} />
         <BrowserRouter>
         <div className="flex h-[100dvh] bg-gray-50 dark:bg-gray-950 w-full overflow-hidden fixed inset-0 transition-colors duration-200">
@@ -1227,7 +1171,6 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
                     } else {
                       // Update local state
                       setBudgetSetups(prev => prev.filter(s => s.id !== setup.id));
-                      setTrashSetups(prev => [...prev, setup]);
                     }
                   }}
                   onReloadSetups={reloadBudgetSetups}
@@ -1319,16 +1262,6 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
               } />
               <Route path="/accounts/view" element={<AccountFilteredTransactions accounts={accounts} onTransactionCreated={reloadAccounts} />} />
               <Route path="/accounts/statement" element={<StatementPage accounts={accounts} />} />
-              <Route path="/savings" element={
-                <Savings
-                  jars={savings}
-                  accounts={accounts}
-                  onAdd={handleAddSavings}
-                  onDelete={handleDeleteSavings}
-                  loading={savingsLoading}
-                  error={savingsError}
-                />
-              } />
               <Route path="/wallets" element={<WalletsPage accounts={accounts} />} />
               <Route path="/wallets/view" element={<WalletView accounts={accounts} />} />
               <Route path="/settings" element={
@@ -1345,24 +1278,13 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
                   onToggleTheme={handleToggleTheme}
                 />
               } />
-              <Route path="/trash" element={
-                <TrashPage
-                  items={trashSetups}
-                  onRestore={(setup) => {
-                    setTrashSetups(prev => prev.filter(s => s.id !== setup.id));
-                    setBudgetSetups(prev => [setup, ...prev]);
-                  }}
-                  onDeletePermanently={(id) => {
-                    setTrashSetups(prev => prev.filter(s => s.id !== id));
-                  }}
-                />
-              } />
               <Route path="/people" element={<PeoplePage />} />
               <Route path="/transactions" element={
                 <TransactionsPage 
+                  transactions={transactions}
+                  loading={transactionsLoading}
                   onTransactionDeleted={handleTransactionDeleted}
                   onTransactionCreated={handleTransactionCreated}
-                  refreshKey={txRefreshKey}
                 />
               } />
               <Route path="/supabase-demo" element={
@@ -1425,13 +1347,13 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
 // Main App component with Auth Provider
 const App: React.FC = () => {
   return (
-    <TestEnvironmentProvider>
-      <PinProtectionProvider>
+    <QueryClientProvider client={queryClient}>
+      <TestEnvironmentProvider>
         <AuthProvider>
           <AppContent />
         </AuthProvider>
-      </PinProtectionProvider>
-    </TestEnvironmentProvider>
+      </TestEnvironmentProvider>
+    </QueryClientProvider>
   );
 };
 

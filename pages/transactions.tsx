@@ -2,7 +2,7 @@ import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react'
 import { Plus, Info, Eye, ZoomIn, ZoomOut, Download, X, ArrowLeft, Pencil, Trash2, CheckSquare, Square, ChevronDown, Filter, AlertTriangle, ArrowUpFromLine, ArrowDownToLine, ArrowLeftRight, Landmark, CreditCard, FileText } from 'lucide-react';
 import { PinProtectedAction } from '../src/components/PinProtectedAction';
 import { useAuth } from '../src/contexts/AuthContext';
-import { getAllTransactions, createTransaction, updateTransaction, deleteTransactionAndRevertSchedule, uploadTransactionReceipt, getReceiptSignedUrl, batchDeleteTransactions, createTransfer } from '../src/services/transactionsService';
+import { createTransaction, updateTransaction, deleteTransactionAndRevertSchedule, uploadTransactionReceipt, getReceiptSignedUrl, batchDeleteTransactions, createTransfer } from '../src/services/transactionsService';
 import { getAllAccountsFrontend } from '../src/services/accountsService';
 import { getAllPeople } from '../src/services/peopleService';
 import type { SupabasePerson } from '../src/types/supabase';
@@ -38,15 +38,15 @@ const TRANSACTION_TYPES = [
 ];
 
 interface TransactionsPageProps {
+  transactions: Transaction[];
+  loading?: boolean;
   onTransactionDeleted?: () => void;
   onTransactionCreated?: () => void;
-  refreshKey?: number; // Increment to trigger a live data refresh from outside
 }
 
-const TransactionsPage: React.FC<TransactionsPageProps> = ({ onTransactionDeleted, onTransactionCreated, refreshKey }) => {
+const TransactionsPage: React.FC<TransactionsPageProps> = ({ transactions, loading = false, onTransactionDeleted, onTransactionCreated }) => {
   const { userProfile } = useAuth();
 
-  const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [accounts, setAccounts] = useState<AccountOption[]>([]);
   const [people, setPeople] = useState<SupabasePerson[]>([]);
   const [showForm, setShowForm] = useState(false);
@@ -123,9 +123,8 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ onTransactionDelete
   const loadData = useCallback(async () => {
     setIsLoading(true);
     try {
-      const [accountsResult, transactionsResult, peopleResult] = await Promise.all([
+      const [accountsResult, peopleResult] = await Promise.all([
         getAllAccountsFrontend(),
-        getAllTransactions(),
         getAllPeople()
       ]);
 
@@ -135,21 +134,6 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ onTransactionDelete
         setAccounts(accountsResult.data.map(a => ({ id: a.id, bank: a.bank, classification: a.classification, type: a.type })));
       }
 
-      if (transactionsResult.error) {
-        console.error('Error loading transactions:', transactionsResult.error);
-      } else if (transactionsResult.data) {
-        setTransactions(transactionsResult.data.map(t => ({
-          id: t.id,
-          name: t.name,
-          date: t.date,
-          amount: t.amount,
-          paymentMethodId: t.payment_method_id,
-          transaction_type: t.transaction_type ?? null,
-          borrower_name: t.borrower_name ?? null,
-          receiptUrl: t.receipt_url ?? null,
-        })));
-      }
-      
       if (peopleResult.error) {
         console.error('Error loading people:', peopleResult.error);
       } else if (peopleResult.data) {
@@ -179,20 +163,6 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ onTransactionDelete
     }
     return () => observer.disconnect();
   }, []);
-
-  // Re-fetch transactions when the parent signals an external change (e.g. stash top-up
-  // created/deleted from the Budget page). Uses a ref so the initial render is skipped.
-  const prevRefreshKey = useRef<number | undefined>();
-  useEffect(() => {
-    if (prevRefreshKey.current === undefined) {
-      prevRefreshKey.current = refreshKey;
-      return;
-    }
-    if (prevRefreshKey.current !== refreshKey) {
-      prevRefreshKey.current = refreshKey;
-      loadData();
-    }
-  }, [refreshKey, loadData]);
 
   useEffect(() => {
     // Set default paymentMethodId when accounts are loaded and form hasn't been touched
@@ -261,7 +231,7 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ onTransactionDelete
     setForm({
       name: tx.name,
       date: new Date(tx.date).toISOString().split('T')[0],
-      amount: Math.abs(tx.amount).toString(), // Absolute value makes editing easier
+      amount: Math.abs(tx.amount).toFixed(2), // Absolute value makes editing easier
       paymentMethodId: tx.paymentMethodId,
       transactionType: tx.transaction_type || 'payment',
       transferToAccountId: '',
@@ -500,7 +470,6 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ onTransactionDelete
           </div>
           
           <div className="flex items-center gap-3 self-end sm:self-auto">
-            <a href="/" className="px-5 py-3 rounded-xl bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 font-bold hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors text-sm">Back</a>
             <button onClick={() => setShowTypeModal(true)} className="flex items-center gap-2 bg-indigo-600 text-white px-5 py-3 rounded-xl font-bold hover:bg-indigo-700 transition-all shadow-md shadow-indigo-200 dark:shadow-none text-sm">
               <Plus className="w-4 h-4" />
               <span className="hidden sm:inline">Add Transaction</span>
@@ -616,7 +585,7 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ onTransactionDelete
           </div>
 
           <div className="p-4">
-            {isLoading ? (
+            {isLoading || loading ? (
               <div className="text-center py-8 text-gray-500">Loading transactions...</div>
             ) : (
               <div className="w-full overflow-x-auto">

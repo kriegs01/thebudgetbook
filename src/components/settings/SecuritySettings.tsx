@@ -84,12 +84,12 @@ export const SecuritySettings: React.FC = () => {
   return (
     <div className="space-y-6 pt-2">
       {/* Information Banner */}
-      <div className="bg-blue-50 border border-blue-200 rounded-2xl p-6">
+      <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800/30 rounded-2xl p-6 transition-colors">
         <div className="flex items-start space-x-3">
-          <Shield className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />
+          <Shield className="w-5 h-5 text-blue-600 dark:text-blue-400 flex-shrink-0 mt-0.5 transition-colors" />
           <div>
-            <h4 className="text-sm font-bold text-blue-900 mb-1">About PIN Protection</h4>
-            <p className="text-xs text-blue-700 leading-relaxed">
+            <h4 className="text-sm font-bold text-blue-900 dark:text-blue-300 mb-1 transition-colors">About PIN Protection</h4>
+            <p className="text-xs text-blue-700 dark:text-blue-400 leading-relaxed transition-colors">
               Secure sensitive features with a 4-6 digit PIN. Once enabled, selected features 
               will require PIN verification before execution. Your session stays unlocked for 
               your configured timeout period.
@@ -99,12 +99,12 @@ export const SecuritySettings: React.FC = () => {
       </div>
 
       {/* PIN Protection Card */}
-      <div className="p-6 bg-gray-50 rounded-2xl border border-gray-200 space-y-4">
+      <div className="p-6 bg-gray-50 dark:bg-gray-800/50 rounded-2xl border border-gray-200 dark:border-gray-700 space-y-4 transition-colors">
         <div className="flex items-center justify-between">
           <div>
-            <h4 className="font-black text-sm text-gray-900 uppercase mb-1">PIN Protection</h4>
+            <h4 className="font-black text-sm text-gray-900 dark:text-gray-100 uppercase mb-1 transition-colors">PIN Protection</h4>
             <div className="flex items-center space-x-2">
-              <span className="text-xs text-gray-500 font-medium">Status:</span>
+              <span className="text-xs text-gray-500 dark:text-gray-400 font-medium transition-colors">Status:</span>
               {isPinSet() ? (
                 <span className="flex items-center space-x-1 text-green-600 text-xs font-bold">
                   <CheckCircle className="w-3.5 h-3.5" />
@@ -118,7 +118,7 @@ export const SecuritySettings: React.FC = () => {
               )}
             </div>
             {lastChanged && (
-              <p className="text-[10px] text-gray-400 mt-1">
+              <p className="text-[10px] text-gray-400 dark:text-gray-500 mt-1 transition-colors">
                 Last changed: {formatDate(lastChanged)}
               </p>
             )}
@@ -171,10 +171,10 @@ export const SecuritySettings: React.FC = () => {
 
       {/* Protected Features Card */}
       {isPinSet() && (
-        <div className="p-6 bg-gray-50 rounded-2xl border border-gray-200 space-y-4">
+        <div className="p-6 bg-gray-50 dark:bg-gray-800/50 rounded-2xl border border-gray-200 dark:border-gray-700 space-y-4 transition-colors">
           <div>
-            <h4 className="font-black text-sm text-gray-900 uppercase mb-1">Protected Features</h4>
-            <p className="text-xs text-gray-500 font-medium">
+            <h4 className="font-black text-sm text-gray-900 dark:text-gray-100 uppercase mb-1 transition-colors">Protected Features</h4>
+            <p className="text-xs text-gray-500 dark:text-gray-400 font-medium transition-colors">
               Select which features require PIN verification
             </p>
           </div>
@@ -193,15 +193,15 @@ export const SecuritySettings: React.FC = () => {
                 <div key={feature.id} className={`p-4 rounded-xl border-2 transition-all ${
                   isPinEnabled() 
                     ? isSelected 
-                      ? 'border-blue-500 bg-blue-50/30' 
-                      : 'border-gray-200 bg-white hover:border-gray-300' 
-                    : 'border-gray-200 bg-gray-100 opacity-50'
+                      ? 'border-blue-500 bg-blue-50/30 dark:bg-blue-900/20' 
+                      : 'border-gray-200 bg-white hover:border-gray-300 dark:border-gray-700 dark:bg-gray-900 dark:hover:border-gray-600' 
+                    : 'border-gray-200 bg-gray-100 opacity-50 dark:border-gray-700 dark:bg-gray-800'
                 }`}>
                   <div className="flex items-center justify-between">
                     <div className="flex flex-col">
-                      <span className="text-sm font-bold text-gray-900">{feature.label}</span>
+                      <span className="text-sm font-bold text-gray-900 dark:text-gray-100 transition-colors">{feature.label}</span>
                       {feature.defaultEnabled && (
-                        <span className="mt-1 text-[10px] font-bold text-blue-600 bg-blue-100 px-2 py-0.5 rounded-full w-max">
+                        <span className="mt-1 text-[10px] font-bold text-blue-600 bg-blue-100 dark:text-blue-400 dark:bg-blue-900/30 px-2 py-0.5 rounded-full w-max transition-colors">
                           RECOMMENDED
                         </span>
                       )}
@@ -211,7 +211,7 @@ export const SecuritySettings: React.FC = () => {
                       onClick={() => handleToggleFeature(feature.id)}
                       disabled={!isPinEnabled()}
                       className={`relative inline-flex h-6 w-11 flex-shrink-0 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${
-                        isSelected ? 'bg-blue-600' : 'bg-gray-300'
+                        isSelected ? 'bg-blue-600' : 'bg-gray-300 dark:bg-gray-600'
                       } ${!isPinEnabled() ? 'opacity-50 cursor-not-allowed' : ''}`}
                     >
                       <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${
@@ -222,8 +222,8 @@ export const SecuritySettings: React.FC = () => {
                   
                   {/* Inline Frequency Settings (Two Columns) */}
                   {isSelected && isPinEnabled() && (
-                    <div className="mt-4 pt-4 border-t border-gray-200/60 flex items-center justify-between">
-                      <span className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Frequency:</span>
+                    <div className="mt-4 pt-4 border-t border-gray-200/60 dark:border-gray-700 flex items-center justify-between transition-colors">
+                      <span className="text-[10px] font-black text-gray-500 dark:text-gray-400 uppercase tracking-widest transition-colors">Frequency:</span>
                       <div className="flex items-center space-x-6">
                         <label className={`flex items-center space-x-2 ${isForceEverytime ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer group'}`}>
                           <input 
@@ -237,7 +237,7 @@ export const SecuritySettings: React.FC = () => {
                             disabled={!isPinEnabled() || isForceEverytime}
                             className="w-4 h-4 mt-0.5 text-blue-600 border-gray-300 focus:ring-blue-500"
                           />
-                          <span className="text-xs font-bold text-gray-700 group-hover:text-blue-700 transition-colors">One-Time</span>
+                          <span className="text-xs font-bold text-gray-700 dark:text-gray-300 group-hover:text-blue-700 dark:group-hover:text-blue-400 transition-colors">One-Time</span>
                         </label>
                         <label className={`flex items-center space-x-2 ${isForceEverytime ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer group'}`}>
                           <input 
@@ -251,7 +251,7 @@ export const SecuritySettings: React.FC = () => {
                             disabled={!isPinEnabled() || isForceEverytime}
                             className="w-4 h-4 mt-0.5 text-blue-600 border-gray-300 focus:ring-blue-500"
                           />
-                          <span className="text-xs font-bold text-gray-700 group-hover:text-blue-700 transition-colors">Every time</span>
+                          <span className="text-xs font-bold text-gray-700 dark:text-gray-300 group-hover:text-blue-700 dark:group-hover:text-blue-400 transition-colors">Every time</span>
                         </label>
                       </div>
                     </div>
@@ -262,8 +262,8 @@ export const SecuritySettings: React.FC = () => {
           </div>
 
           {!isPinEnabled() && (
-            <div className="bg-orange-50 border border-orange-200 rounded-xl p-4">
-              <p className="text-xs text-orange-700 font-medium text-center">
+            <div className="bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800/30 rounded-xl p-4 transition-colors">
+              <p className="text-xs text-orange-700 dark:text-orange-400 font-medium text-center transition-colors">
                 Enable PIN protection to configure protected features
               </p>
             </div>
@@ -273,23 +273,23 @@ export const SecuritySettings: React.FC = () => {
 
       {/* Advanced Settings Card */}
       {isPinSet() && isPinEnabled() && (
-        <div className="p-6 bg-gray-50 rounded-2xl border border-gray-200 space-y-4">
+        <div className="p-6 bg-gray-50 dark:bg-gray-800/50 rounded-2xl border border-gray-200 dark:border-gray-700 space-y-4 transition-colors">
           <div>
-            <h4 className="font-black text-sm text-gray-900 uppercase mb-1">Advanced Settings</h4>
-            <p className="text-xs text-gray-500 font-medium">
+            <h4 className="font-black text-sm text-gray-900 dark:text-gray-100 uppercase mb-1 transition-colors">Advanced Settings</h4>
+            <p className="text-xs text-gray-500 dark:text-gray-400 font-medium transition-colors">
               Configure security parameters
             </p>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-y-6 gap-x-4">
             <div>
-              <label className="block text-xs font-bold text-gray-400 uppercase mb-2">
+              <label className="block text-xs font-bold text-gray-400 dark:text-gray-500 uppercase mb-2 transition-colors">
                 Session Timeout
               </label>
               <select
                 value={settings.session_timeout}
                 onChange={(e) => updateSettings({ session_timeout: parseInt(e.target.value) })}
-                className="w-full bg-white border-gray-200 rounded-xl p-3 text-xs font-medium outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full bg-white dark:bg-gray-900 border-gray-200 dark:border-gray-700 text-gray-900 dark:text-gray-100 rounded-xl p-3 text-xs font-medium outline-none focus:ring-2 focus:ring-blue-500 transition-colors"
               >
                 <option value="1">1 minute</option>
                 <option value="5">5 minutes</option>
@@ -301,13 +301,13 @@ export const SecuritySettings: React.FC = () => {
             </div>
 
             <div>
-              <label className="block text-xs font-bold text-gray-400 uppercase mb-2">
+              <label className="block text-xs font-bold text-gray-400 dark:text-gray-500 uppercase mb-2 transition-colors">
                 Max Failed Attempts
               </label>
               <select
                 value={settings.max_attempts}
                 onChange={(e) => updateSettings({ max_attempts: parseInt(e.target.value) })}
-                className="w-full bg-white border-gray-200 rounded-xl p-3 text-xs font-medium outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full bg-white dark:bg-gray-900 border-gray-200 dark:border-gray-700 text-gray-900 dark:text-gray-100 rounded-xl p-3 text-xs font-medium outline-none focus:ring-2 focus:ring-blue-500 transition-colors"
               >
                 <option value="3">3 attempts</option>
                 <option value="5">5 attempts</option>
@@ -316,13 +316,13 @@ export const SecuritySettings: React.FC = () => {
             </div>
 
             <div>
-              <label className="block text-xs font-bold text-gray-400 uppercase mb-2">
+              <label className="block text-xs font-bold text-gray-400 dark:text-gray-500 uppercase mb-2 transition-colors">
                 Lockout Duration
               </label>
               <select
                 value={settings.lockout_duration}
                 onChange={(e) => updateSettings({ lockout_duration: parseInt(e.target.value) })}
-                className="w-full bg-white border-gray-200 rounded-xl p-3 text-xs font-medium outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full bg-white dark:bg-gray-900 border-gray-200 dark:border-gray-700 text-gray-900 dark:text-gray-100 rounded-xl p-3 text-xs font-medium outline-none focus:ring-2 focus:ring-blue-500 transition-colors"
               >
                 <option value="1">1 minute</option>
                 <option value="5">5 minutes</option>
@@ -332,13 +332,13 @@ export const SecuritySettings: React.FC = () => {
             </div>
 
             <div>
-              <label className="block text-xs font-bold text-gray-400 uppercase mb-2">
+              <label className="block text-xs font-bold text-gray-400 dark:text-gray-500 uppercase mb-2 transition-colors">
                 Standby Lock (Inactivity)
               </label>
               <select
                 value={settings.standby_timeout || 0}
                 onChange={(e) => updateSettings({ standby_timeout: parseInt(e.target.value) })}
-                className="w-full bg-white border-gray-200 rounded-xl p-3 text-xs font-medium outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full bg-white dark:bg-gray-900 border-gray-200 dark:border-gray-700 text-gray-900 dark:text-gray-100 rounded-xl p-3 text-xs font-medium outline-none focus:ring-2 focus:ring-blue-500 transition-colors"
               >
                 <option value="0">Off</option>
                 <option value="1">1 minute</option>
@@ -351,13 +351,13 @@ export const SecuritySettings: React.FC = () => {
             </div>
 
             <div>
-              <label className="block text-xs font-bold text-gray-400 uppercase mb-2">
+              <label className="block text-xs font-bold text-gray-400 dark:text-gray-500 uppercase mb-2 transition-colors">
                 Auto-Logout (Inactivity)
               </label>
               <select
                 value={settings.auto_logout_timeout || 0}
                 onChange={(e) => updateSettings({ auto_logout_timeout: parseInt(e.target.value) })}
-                className="w-full bg-white border-gray-200 rounded-xl p-3 text-xs font-medium outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full bg-white dark:bg-gray-900 border-gray-200 dark:border-gray-700 text-gray-900 dark:text-gray-100 rounded-xl p-3 text-xs font-medium outline-none focus:ring-2 focus:ring-blue-500 transition-colors"
               >
                 <option value="0">Off</option>
                 <option value="5">5 minutes</option>
@@ -398,14 +398,14 @@ export const SecuritySettings: React.FC = () => {
       {/* Confirm Remove Dialog */}
       {confirmRemove && (
         <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-in fade-in">
-          <div className="bg-white rounded-[2.5rem] w-full max-w-sm p-10 shadow-2xl animate-in zoom-in-95 flex flex-col items-center text-center">
-            <div className="w-16 h-16 bg-red-50 text-red-600 rounded-3xl flex items-center justify-center mb-6">
+          <div className="bg-white dark:bg-gray-900 dark:border dark:border-gray-800 rounded-[2.5rem] w-full max-w-sm p-10 shadow-2xl animate-in zoom-in-95 flex flex-col items-center text-center transition-colors">
+            <div className="w-16 h-16 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 rounded-3xl flex items-center justify-center mb-6 transition-colors">
               <AlertTriangle className="w-8 h-8" />
             </div>
-            <h3 className="text-xl font-black text-gray-900 mb-2 uppercase tracking-tight">
+            <h3 className="text-xl font-black text-gray-900 dark:text-gray-100 mb-2 uppercase tracking-tight transition-colors">
               Remove PIN Protection?
             </h3>
-            <p className="text-sm text-gray-500 mb-8 font-medium leading-relaxed">
+            <p className="text-sm text-gray-500 dark:text-gray-400 mb-8 font-medium leading-relaxed transition-colors">
               This will disable PIN protection and remove all security settings. 
               Protected features will be accessible without verification.
             </p>
@@ -423,7 +423,7 @@ export const SecuritySettings: React.FC = () => {
                   setConfirmRemove(false);
                   setVerifiedForRemoval(false);
                 }}
-                className="w-full bg-gray-100 text-gray-500 py-4 rounded-2xl font-black uppercase tracking-widest text-[10px] hover:bg-gray-200 transition-all"
+                className="w-full bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-300 py-4 rounded-2xl font-black uppercase tracking-widest text-[10px] hover:bg-gray-200 dark:hover:bg-gray-700 transition-all"
               >
                 Cancel
               </button>

@@ -61,7 +61,7 @@ const WalletsPage: React.FC<WalletsPageProps> = ({ accounts }) => {
 
   const openEditModal = (wallet: Wallet) => {
     setEditingWallet(wallet);
-    setFormData({ name: wallet.name, amount: String(wallet.amount), accountId: wallet.accountId });
+    setFormData({ name: wallet.name, amount: wallet.amount.toFixed(2), accountId: wallet.accountId });
     setFormError(null);
     setShowModal(true);
   };
@@ -159,25 +159,29 @@ const WalletsPage: React.FC<WalletsPageProps> = ({ accounts }) => {
 
       {!loading && (
         <>
-          {/* Header */}
-          <div className="flex items-center justify-between flex-wrap gap-4">
-            <div>
-              <h2 className="text-3xl font-black text-gray-900 dark:text-gray-100 uppercase transition-colors">Wallet</h2>
-              <p className="text-gray-500 dark:text-gray-400 text-sm transition-colors">Configure your stashes — savings, allowance, shared expenses, and more.</p>
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white dark:bg-gray-900 p-6 md:p-8 rounded-[2.5rem] border border-gray-100 dark:border-gray-800 shadow-sm transition-colors">
+            <div className="flex items-center gap-5">
+              <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-indigo-500 to-blue-600 flex items-center justify-center text-white shadow-lg">
+                <WalletCards className="w-7 h-7" />
+              </div>
+              <div>
+                <h1 className="text-2xl md:text-3xl font-black text-gray-900 dark:text-gray-100 uppercase tracking-tight transition-colors">Wallets</h1>
+                <p className="text-gray-500 dark:text-gray-400 text-sm font-medium transition-colors">Configure your stashes — savings, allowance, shared expenses, and more.</p>
+              </div>
             </div>
-            <div className="flex items-center space-x-3">
-              {/* View toggle */}
-              <div className="flex items-center bg-gray-100 dark:bg-gray-800 rounded-xl p-1 space-x-1 transition-colors">
+            
+            <div className="flex items-center gap-3 self-end sm:self-auto">
+              <div className="flex items-center bg-gray-50 dark:bg-gray-800 rounded-xl p-1 space-x-1 transition-colors">
                 <button
                   onClick={() => setViewMode('card')}
-                  className={`p-2 rounded-lg transition-colors ${viewMode === 'card' ? 'bg-white dark:bg-gray-700 shadow text-indigo-600 dark:text-indigo-400' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'}`}
+                  className={`p-2 rounded-lg transition-colors ${viewMode === 'card' ? 'bg-white dark:bg-gray-700 shadow-sm text-indigo-600 dark:text-indigo-400' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'}`}
                   title="Card view"
                 >
                   <LayoutGrid className="w-4 h-4" />
                 </button>
                 <button
                   onClick={() => setViewMode('list')}
-                  className={`p-2 rounded-lg transition-colors ${viewMode === 'list' ? 'bg-white dark:bg-gray-700 shadow text-indigo-600 dark:text-indigo-400' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'}`}
+                  className={`p-2 rounded-lg transition-colors ${viewMode === 'list' ? 'bg-white dark:bg-gray-700 shadow-sm text-indigo-600 dark:text-indigo-400' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'}`}
                   title="List view"
                 >
                   <List className="w-4 h-4" />
@@ -185,10 +189,10 @@ const WalletsPage: React.FC<WalletsPageProps> = ({ accounts }) => {
               </div>
               <button
                 onClick={openAddModal}
-                className="bg-indigo-600 text-white px-6 py-2.5 rounded-xl font-bold hover:bg-indigo-700 shadow-lg flex items-center space-x-2"
+                className="flex items-center gap-2 bg-indigo-600 text-white px-5 py-3 rounded-xl font-bold hover:bg-indigo-700 transition-all shadow-md shadow-indigo-200 dark:shadow-none text-sm"
               >
-                <Plus className="w-5 h-5" />
-                <span>Add Wallet</span>
+                <Plus className="w-4 h-4" />
+                <span className="hidden sm:inline">Add Wallet</span>
               </button>
             </div>
           </div>
