@@ -277,6 +277,8 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
   // Month Summary State - stored in Supabase with setup data
   const [projectedSalary, setProjectedSalary] = useState<string>('11000');
   const [actualSalary, setActualSalary] = useState<string>('');
+  const [isProjectedFocused, setIsProjectedFocused] = useState(false);
+  const [isActualFocused, setIsActualFocused] = useState(false);
 
   // Transactions state - used for matching payments
   const [transactions, setTransactions] = useState<SupabaseTransaction[]>([]);
@@ -665,7 +667,7 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
   // Salary Cash-In state
   const [showSalaryModal, setShowSalaryModal] = useState(false);
   const [salaryFormData, setSalaryFormData] = useState({
-    name: 'Salary',
+    name: 'Income',
     amount: '',
     date: new Date().toISOString().split('T')[0],
     accountId: ''
@@ -2193,7 +2195,8 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
   const currentMonthIndex = MONTHS.indexOf(selectedMonth);
   const otherIncomeTxs = transactions.filter(tx => {
     if (tx.transaction_type !== 'cash_in') return false;
-    if (tx.name.trim().toLowerCase() === 'salary') return false; // Skip the main salary, already handled
+    const nameLower = tx.name.trim().toLowerCase();
+    if (nameLower === 'salary' || nameLower === 'income') return false; // Skip the main income, already handled
     const txDate = new Date(tx.date);
     return txDate.getMonth() === currentMonthIndex && txDate.getFullYear() === selectedYear;
   });
@@ -2327,51 +2330,73 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
             <thead><tr className="text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase border-b border-gray-50 dark:border-gray-800/50"><th className="p-3 pl-6">Item</th><th className="p-3 pr-6 text-right">Amount</th></tr></thead>
             <tbody className="divide-y divide-gray-50 dark:divide-gray-800/50">
               <tr>
-                <td className="p-3 pl-6 font-bold text-gray-700 dark:text-gray-300 text-sm">Projected Salary</td>
+                <td className="p-3 pl-6 font-bold text-gray-700 dark:text-gray-300 text-sm">Projected Income</td>
                 <td className="p-3 pr-6 text-right">
-                  <div className="flex items-center justify-end space-x-1">
-                    <span className="text-gray-400 dark:text-gray-500 font-bold text-sm">₱</span>
-                    <input 
-                      type="number" 
-                      min="0"
-                      step="0.01"
-                      value={projectedSalary} 
-                      onChange={(e) => setProjectedSalary(e.target.value)} 
-                      onFocus={() => { isFocusedRef.current = true; }}
-                      onBlur={() => { isFocusedRef.current = false; }}
-                      disabled={isReadOnly}
-                      className="bg-transparent border-none text-sm font-black text-gray-900 dark:text-gray-100 w-28 text-right outline-none focus:bg-indigo-50 dark:focus:bg-indigo-900/30 rounded px-1 disabled:opacity-60 disabled:cursor-not-allowed"
-                      aria-label="Projected Salary"
-                    />
+                  <div className="flex items-center justify-end">
+                    {!isProjectedFocused ? (
+                      <span 
+                        className={`text-sm font-black text-gray-900 dark:text-gray-100 ${!isReadOnly ? 'cursor-pointer hover:text-indigo-600 dark:hover:text-indigo-400' : ''} transition-colors`}
+                        onClick={() => !isReadOnly && setIsProjectedFocused(true)}
+                      >
+                        {formatCurrency(parseFloat(projectedSalary || '0'))}
+                      </span>
+                    ) : (
+                      <div className="flex items-center justify-end space-x-1">
+                        <span className="text-gray-400 dark:text-gray-500 font-bold text-sm">₱</span>
+                        <input 
+                          autoFocus
+                          type="number" 
+                          min="0"
+                          step="0.01"
+                          value={projectedSalary} 
+                          onChange={(e) => setProjectedSalary(e.target.value)} 
+                          onFocus={() => { isFocusedRef.current = true; }}
+                          onBlur={() => { isFocusedRef.current = false; setIsProjectedFocused(false); }}
+                          disabled={isReadOnly}
+                          className="bg-transparent border-none text-sm font-black text-gray-900 dark:text-gray-100 w-28 text-right outline-none focus:bg-indigo-50 dark:focus:bg-indigo-900/30 rounded px-1 disabled:opacity-60 disabled:cursor-not-allowed"
+                          aria-label="Projected Income"
+                        />
+                      </div>
+                    )}
                   </div>
                 </td>
               </tr>
               <tr>
-                <td className="p-3 pl-6 font-bold text-gray-700 dark:text-gray-300 text-sm">Actual Salary</td>
+                <td className="p-3 pl-6 font-bold text-gray-700 dark:text-gray-300 text-sm">Actual Income</td>
                 <td className="p-3 pr-6 text-right">
                   <div className="flex items-center justify-end space-x-2">
-                    <div className="flex items-center space-x-1">
-                      <span className="text-gray-400 dark:text-gray-500 font-bold text-sm">₱</span>
-                      <input 
-                        type="number" 
-                        min="0"
-                        step="0.01"
-                        value={actualSalary} 
-                        onChange={(e) => setActualSalary(e.target.value)} 
-                        onFocus={() => { isFocusedRef.current = true; }}
-                        onBlur={() => { isFocusedRef.current = false; }}
-                        disabled={isReadOnly}
-                        placeholder="Enter actual"
-                        className="bg-transparent border-none text-sm font-black text-gray-900 dark:text-gray-100 w-28 text-right outline-none focus:bg-indigo-50 dark:focus:bg-indigo-900/30 rounded px-1 placeholder:text-gray-300 dark:placeholder:text-gray-600 disabled:opacity-60 disabled:cursor-not-allowed"
-                        aria-label="Actual Salary"
-                      />
-                    </div>
+                    {!isActualFocused ? (
+                      <span 
+                        className={`text-sm font-black ${actualSalary ? 'text-gray-900 dark:text-gray-100' : 'text-gray-400 dark:text-gray-500 italic'} ${!isReadOnly ? 'cursor-pointer hover:text-indigo-600 dark:hover:text-indigo-400' : ''} transition-colors`}
+                        onClick={() => !isReadOnly && setIsActualFocused(true)}
+                      >
+                        {actualSalary ? formatCurrency(parseFloat(actualSalary)) : 'Click to add...'}
+                      </span>
+                    ) : (
+                      <div className="flex items-center justify-end space-x-1">
+                        <span className="text-gray-400 dark:text-gray-500 font-bold text-sm">₱</span>
+                        <input 
+                          autoFocus
+                          type="number" 
+                          min="0"
+                          step="0.01"
+                          value={actualSalary} 
+                          onChange={(e) => setActualSalary(e.target.value)} 
+                          onFocus={() => { isFocusedRef.current = true; }}
+                          onBlur={() => { isFocusedRef.current = false; setIsActualFocused(false); }}
+                          disabled={isReadOnly}
+                          placeholder="Enter actual"
+                          className="bg-transparent border-none text-sm font-black text-gray-900 dark:text-gray-100 w-28 text-right outline-none focus:bg-indigo-50 dark:focus:bg-indigo-900/30 rounded px-1 placeholder:text-gray-300 dark:placeholder:text-gray-600 disabled:opacity-60 disabled:cursor-not-allowed"
+                          aria-label="Actual Income"
+                        />
+                      </div>
+                    )}
                     {!isReadOnly && (
                       <button
                         onClick={() => {
                           const debitAccounts = accounts.filter(a => a.type === 'Debit');
                           setSalaryFormData({
-                            name: 'Salary',
+                            name: 'Income',
                             amount: actualSalary || projectedSalary || '',
                             date: new Date().toISOString().split('T')[0],
                             accountId: debitAccounts[0]?.id || ''
@@ -3702,6 +3727,117 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                 <button type="submit" className="flex-1 bg-green-600 text-white py-4 rounded-2xl font-bold hover:bg-green-700 shadow-xl shadow-green-100 dark:shadow-none transition-all">Record Income</button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Income Records Modal */}
+      {showIncomeRecordsModal && (
+        <div className="fixed inset-0 z-[150] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md animate-in fade-in" onClick={() => setShowIncomeRecordsModal(false)}>
+          <div className="bg-white dark:bg-gray-900 rounded-3xl w-full max-w-lg p-8 shadow-2xl relative max-h-[85vh] overflow-y-auto transition-colors" onClick={e => e.stopPropagation()}>
+            <button onClick={() => setShowIncomeRecordsModal(false)} className="absolute top-6 right-6 p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full transition-colors">
+              <X className="w-5 h-5 text-gray-400 dark:text-gray-500" />
+            </button>
+            <div className="flex items-center justify-between mb-6">
+              <div>
+                <h2 className="text-2xl font-black text-gray-900 dark:text-gray-100 mb-1">Income Records</h2>
+                <p className="text-gray-500 dark:text-gray-400 text-sm">{selectedMonth} {selectedYear}</p>
+              </div>
+              <button
+                onClick={() => {
+                  setShowIncomeRecordsModal(false);
+                  const debitAccounts = accounts.filter(a => a.type === 'Debit');
+                  setSalaryFormData({
+                    name: '',
+                    amount: '',
+                    date: new Date().toISOString().split('T')[0],
+                    accountId: debitAccounts[0]?.id || ''
+                  });
+                  setShowSalaryModal(true);
+                }}
+                className="flex items-center gap-2 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 px-4 py-2 rounded-xl font-bold hover:bg-indigo-100 dark:hover:bg-indigo-900/50 transition-colors text-sm"
+              >
+                <Plus className="w-4 h-4" />
+                Add Income
+              </button>
+            </div>
+
+            {allIncomeTxs.length === 0 ? (
+              <div className="text-center py-8 text-gray-400 dark:text-gray-500 italic">No income records found.</div>
+            ) : (
+              <div className="space-y-4">
+                {allIncomeTxs.map(tx => {
+                  const pmName = accounts.find(a => a.id === tx.payment_method_id)?.bank || tx.payment_method_id;
+                  return (
+                    <div key={tx.id} className="bg-gray-50 dark:bg-gray-800/50 rounded-2xl p-4 space-y-2 transition-colors">
+                      <div className="flex justify-between items-start">
+                        <div className="space-y-2 flex-1">
+                          <div className="flex justify-between">
+                            <span className="text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest">Name</span>
+                            <span className="text-sm font-bold text-gray-900 dark:text-gray-100">{tx.name}</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest">Amount</span>
+                            <span className="text-sm font-bold text-green-600 dark:text-green-400">{formatCurrency(Math.abs(tx.amount))}</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest">Deposit To</span>
+                            <span className="text-sm text-gray-700 dark:text-gray-300">{pmName}</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest">Date</span>
+                            <span className="text-sm text-gray-700 dark:text-gray-300">{new Date(tx.date).toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' })}</span>
+                          </div>
+                        </div>
+                        <div className="flex flex-col items-end pl-4 space-y-2">
+                          <button
+                            onClick={() => { 
+                              setTransactionFormData({
+                                id: tx.id,
+                                name: tx.name,
+                                amount: Math.abs(tx.amount).toFixed(2),
+                                date: tx.date.split('T')[0],
+                                accountId: tx.payment_method_id,
+                                paymentScheduleId: tx.payment_schedule_id || '',
+                                transactionType: tx.transaction_type || 'cash_in'
+                              });
+                              setShowIncomeRecordsModal(false);
+                              setShowTransactionModal(true);
+                            }}
+                            className="text-[9px] font-black text-indigo-600 dark:text-indigo-400 uppercase tracking-widest border border-indigo-100 dark:border-indigo-900/30 px-2 py-1 rounded-lg hover:bg-indigo-50 dark:hover:bg-indigo-900/50 transition-colors"
+                          >
+                            Edit
+                          </button>
+                          <PinProtectedAction
+                            featureId="transaction_deletions"
+                            onVerified={async () => {
+                              try {
+                                const { error } = await deleteTransactionAndRevertSchedule(tx.id);
+                                if (error) throw error;
+                                await reloadTransactions();
+                                if (onTransactionDeleted) onTransactionDeleted();
+                              } catch (err) {
+                                console.error('[Budget] Error deleting income transaction:', err);
+                                alert('Failed to delete transaction. Please try again.');
+                              }
+                            }}
+                            actionLabel="Delete Income Record"
+                          >
+                            <button
+                              onClick={(e) => e.preventDefault()}
+                              title="Delete income record"
+                              className="text-[9px] font-black text-red-500 dark:text-red-400 uppercase tracking-widest border border-red-100 dark:border-red-900/30 px-2 py-1 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/50 transition-colors"
+                            >
+                              Delete
+                            </button>
+                          </PinProtectedAction>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
         </div>
       )}
