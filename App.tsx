@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Menu, ChevronLeft, SlidersHorizontal, ArrowUp, ArrowDown, Eye, EyeOff, X, ChevronUp, LogOut, Lock, Users } from 'lucide-react';
 import { BrowserRouter, Routes, Route, NavLink } from 'react-router-dom';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { QueryClient, QueryClientProvider, useQueryClient } from '@tanstack/react-query';
 import { NAV_ITEMS, INITIAL_BUDGET, DEFAULT_SETUP, INITIAL_CATEGORIES } from './constants';
 import { getAllBillersFrontend, createBillerFrontend, updateBillerFrontend, deleteBillerFrontend } from './src/services/billersService';
 import { getAllAccountsFrontend, createAccountFrontend, updateAccountFrontend, deleteAccountFrontend } from './src/services/accountsService';
@@ -42,6 +42,7 @@ import SupabaseDemo from './pages/SupabaseDemo';
 import Auth from './pages/Auth';
 import UpdatePassword from './pages/update-password';
 import { useTransactions } from './src/hooks/useTransactions';
+import { useAccounts } from './src/hooks/useAccounts';
 
 // Helper function to convert UI Account to Supabase format
 const accountToSupabase = (account: Account) => ({
@@ -166,6 +167,7 @@ const queryClient = new QueryClient();
 // Main App Content (Protected)
 const AppContent: React.FC = () => {
   const { user, userProfile, loading: authLoading, signOut } = useAuth();
+  const queryClient = useQueryClient();
 
   // Show auth page if not authenticated
   if (authLoading) {
@@ -195,8 +197,6 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
   const [accounts, setAccounts] = useState<Account[]>([]);
-  const [accountsLoading, setAccountsLoading] = useState(true);
-  const [accountsError, setAccountsError] = useState<string | null>(null);
   const [budgetItems, setBudgetItems] = useState(INITIAL_BUDGET);
   const [billers, setBillers] = useState<Biller[]>([]);
   const [billersLoading, setBillersLoading] = useState(true);
@@ -212,7 +212,9 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
   const transactions = txData?.formatted || [];
   const rawTransactions = txData?.raw || [];
 
-  const [rawAccounts, setRawAccounts] = useState<Account[]>([]);
+  const { data: rawAccounts = [], isLoading: accountsLoading, error: accountsQueryError } = useAccounts();
+  const accountsError = accountsQueryError ? (accountsQueryError as Error).message : null;
+
   const [currency, setCurrency] = useState('PHP');
   const [categories, setCategories] = useState(INITIAL_CATEGORIES);
   const [theme, setTheme] = useState<'light' | 'dark'>('light');
@@ -344,22 +346,6 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
       setBillersLoading(false);
     };
 
-    const fetchAccounts = async () => {
-      setAccountsLoading(true);
-      setAccountsError(null);
-
-      const { data, error } = await getAllAccountsFrontend();
-
-      if (error) {
-        console.error('Error loading accounts:', error);
-        setAccountsError('Failed to load accounts from database');
-        setRawAccounts([]);
-      } else {
-        setRawAccounts(data || []);
-      }
-      setAccountsLoading(false);
-    };
-
     const fetchInstallments = async () => {
       setInstallmentsLoading(true);
       setInstallmentsError(null);
@@ -412,7 +398,6 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
     };
 
     fetchBillers();
-    fetchAccounts();
     fetchInstallments();
     fetchSavings();
     fetchBudgetSetups();
@@ -440,14 +425,7 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
   };
 
   const reloadAccounts = async () => {
-    const { data, error } = await getAllAccountsFrontend();
-    if (error) {
-      console.error('Error reloading accounts:', error);
-      setAccountsError('Failed to reload accounts from database');
-    } else {
-      setRawAccounts(data || []);
-      setAccountsError(null);
-    }
+    await queryClient.invalidateQueries({ queryKey: ['accounts'] });
   };
 
   const reloadInstallments = async () => {
