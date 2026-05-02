@@ -1617,7 +1617,8 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
       amount: -Math.abs(amount),
       date: combineDateWithCurrentTime(salaryFormData.date),
       payment_method_id: salaryFormData.accountId,
-      transaction_type: 'cash_in' as const
+      transaction_type: 'cash_in' as const,
+      notes: `Income Record - ${selectedTiming}`
     };
 
     try {
@@ -2203,8 +2204,28 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
   const currentMonthIndex = MONTHS.indexOf(selectedMonth);
   const allIncomeTxs = transactions.filter(tx => {
     if (tx.transaction_type !== 'cash_in') return false;
+    
+    // Only include explicitly tagged income records, or legacy entries named "Salary"/"Income"
+    const isTaggedIncome = tx.notes?.startsWith('Income Record');
+    const nameLower = tx.name.trim().toLowerCase();
+    const isLegacyIncome = nameLower === 'salary' || nameLower === 'income';
+    
+    if (!isTaggedIncome && !isLegacyIncome) return false;
+
     const txDate = new Date(tx.date);
-    return txDate.getMonth() === currentMonthIndex && txDate.getFullYear() === selectedYear;
+    if (txDate.getMonth() !== currentMonthIndex || txDate.getFullYear() !== selectedYear) return false;
+
+    // Filter strictly by the selected timing period (1/2 or 2/2)
+    let matchesTiming = false;
+    if (tx.notes?.includes(' - 1/2') || tx.notes?.includes(' - 2/2')) {
+      matchesTiming = tx.notes.includes(` - ${selectedTiming}`);
+    } else {
+      // Fallback for older legacy entries: Split the month at the 15th
+      const estimatedTiming = txDate.getDate() <= 15 ? '1/2' : '2/2';
+      matchesTiming = estimatedTiming === selectedTiming;
+    }
+
+    return matchesTiming;
   });
 
   const otherIncomeTxs = allIncomeTxs.filter(tx => {
