@@ -220,14 +220,14 @@ export default function PeoplePage() {
           </div>
 
           {/* Transactions List */}
-          <div className="bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-800 rounded-[2.5rem] shadow-sm overflow-hidden">
+          <div className="bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-800 rounded-[2.5rem] shadow-sm">
             <div className="p-6 md:p-8 border-b border-gray-100 dark:border-gray-800 flex items-center justify-between">
               <h2 className="text-base font-black text-gray-900 dark:text-gray-100 uppercase tracking-widest">Transaction History</h2>
             </div>
             <div className="divide-y divide-gray-50 dark:divide-gray-800/50">
               {(() => {
                 const mainTxs = personTxs.filter(t => t.transaction_type !== 'loan_payment' || !t.related_transaction_id);
-                return mainTxs.length > 0 ? mainTxs.map(tx => {
+                return mainTxs.length > 0 ? mainTxs.map((tx, index) => {
                   const isMoneyOut = tx.amount > 0;
                   let TxIcon = isMoneyOut ? ArrowUpFromLine : ArrowDownToLine;
                   if (tx.transaction_type === 'transfer') TxIcon = ArrowLeftRight;
@@ -246,7 +246,7 @@ export default function PeoplePage() {
                   }
 
                   return (
-                    <div key={tx.id} className={`flex flex-col hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors ${payments.length > 0 ? 'cursor-pointer' : ''}`} onClick={() => payments.length > 0 && toggleExpand(tx.id)}>
+                    <div key={tx.id} className={`flex flex-col hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors ${payments.length > 0 ? 'cursor-pointer' : ''} ${index === mainTxs.length - 1 ? 'rounded-b-[2.5rem]' : ''}`} onClick={() => payments.length > 0 && toggleExpand(tx.id)}>
                       <div className="p-5 md:p-6 flex items-center justify-between">
                         <div className="flex items-center space-x-4">
                           <div className={`p-3 rounded-2xl ${isMoneyOut ? 'bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400' : 'bg-green-50 dark:bg-green-900/20 text-green-600 dark:text-green-400'}`}>
@@ -298,7 +298,7 @@ export default function PeoplePage() {
                       </div>
                       
                       {isExpanded && payments.length > 0 && (
-                        <div className="px-5 md:px-6 pb-6 pt-1 bg-gray-50/50 dark:bg-gray-800/20" onClick={e => e.stopPropagation()}>
+                        <div className={`px-5 md:px-6 pb-6 pt-1 bg-gray-50/50 dark:bg-gray-800/20 ${index === mainTxs.length - 1 ? 'rounded-b-[2.5rem]' : ''}`} onClick={e => e.stopPropagation()}>
                           <div className="border-l-2 border-gray-200 dark:border-gray-700 pl-4 space-y-4">
                             {payments.map(payment => (
                               <div key={payment.id} className="flex justify-between items-center group relative">
