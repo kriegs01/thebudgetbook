@@ -268,7 +268,12 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
 
   const effectiveNavItems = React.useMemo(() => {
     // Filter out savings and trash items from the menu
-    const items = [...NAV_ITEMS].filter(item => item.id !== 'savings' && item.id !== 'trash');
+    const items = [...NAV_ITEMS].filter(item => 
+      item.path !== '/savings' && 
+      item.path !== '/trash' &&
+      item.id?.toLowerCase() !== 'savings' &&
+      item.id?.toLowerCase() !== 'trash'
+    );
     if (userProfile?.settings?.usePeoplePage && !items.find(i => i.id === 'people')) {
       items.push({
         id: 'people',
