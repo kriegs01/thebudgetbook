@@ -19,7 +19,7 @@ export default function PeoplePage() {
   const [newPersonName, setNewPersonName] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const [confirmModal, setConfirmModal] = useState<{show: boolean; id: string; name: string} | null>(null);
+  const [confirmModal, setConfirmModal] = useState<{show: boolean; id: string; name: string; hasTransactions?: boolean} | null>(null);
 
   const [showLoanPaymentModal, setShowLoanPaymentModal] = useState(false);
   const [selectedLoan, setSelectedLoan] = useState<any | null>(null);
@@ -70,15 +70,41 @@ export default function PeoplePage() {
     }
   };
 
+  const handleDeleteTrigger = (id: string, name: string) => {
+    const hasTransactions = transactions.some(t => 
+      t.borrower_name === name || 
+      (t.transaction_type === 'loan_payment' && t.related_transaction_id && transactions.some(l => l.id === t.related_transaction_id && l.borrower_name === name))
+    );
+    setConfirmModal({ show: true, id, name, hasTransactions });
+  };
+
   const handleDelete = async () => {
     if (!confirmModal) return;
     
-    const { error } = await deletePerson(confirmModal.id);
-    if (error) {
+    setIsSubmitting(true);
+    try {
+      if (confirmModal.hasTransactions) {
+        const personTxs = transactions.filter(t => t.borrower_name === confirmModal.name);
+        for (const tx of personTxs) {
+          await updateTransaction(tx.id, { borrower_name: null });
+        }
+      }
+      
+      const { error } = await deletePerson(confirmModal.id);
+      if (error) {
+        alert('Failed to delete person.');
+      } else {
+        setPeople(prev => prev.filter(p => p.id !== confirmModal.id));
+        setConfirmModal(null);
+        if (confirmModal.hasTransactions) {
+          loadData();
+        }
+      }
+    } catch (e) {
+      console.error('Error deleting person:', e);
       alert('Failed to delete person.');
-    } else {
-      setPeople(prev => prev.filter(p => p.id !== confirmModal.id));
-      setConfirmModal(null);
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -538,7 +564,7 @@ export default function PeoplePage() {
               return (
                 <div key={person.id} className="bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-800 rounded-[2rem] p-6 hover:shadow-lg transition-all group relative overflow-hidden">
                   <button 
-                    onClick={() => setConfirmModal({ show: true, id: person.id, name: person.name })}
+                    onClick={() => handleDeleteTrigger(person.id, person.name)}
                     className="absolute top-4 right-4 p-2 text-gray-300 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-full opacity-0 group-hover:opacity-100 transition-all"
                   >
                     <Trash2 className="w-4 h-4" />
@@ -599,7 +625,7 @@ export default function PeoplePage() {
                       View
                     </button>
                     <button 
-                      onClick={() => setConfirmModal({ show: true, id: person.id, name: person.name })}
+                      onClick={() => handleDeleteTrigger(person.id, person.name)}
                       className="text-gray-300 hover:text-red-500 p-2 rounded-full hover:bg-red-50 dark:hover:bg-red-900/20 transition-all"
                     >
                       <Trash2 className="w-4 h-4" />
@@ -639,6 +665,37 @@ export default function PeoplePage() {
                 {isSubmitting ? 'Adding...' : 'Save Person'}
               </button>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* ── Delete Person Modal ─────────────────────────────────────── */}
+      {confirmModal && confirmModal.show && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in">
+          <div className="bg-white dark:bg-gray-900 rounded-[2.5rem] w-full max-w-sm p-8 shadow-2xl relative transition-colors animate-in zoom-in-95 flex flex-col items-center text-center">
+            <div className="w-16 h-16 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 rounded-3xl flex items-center justify-center mb-6 transition-colors">
+              <AlertTriangle className="w-8 h-8" />
+            </div>
+            <h3 className="text-xl font-black text-gray-900 dark:text-gray-100 mb-2 uppercase tracking-tight transition-colors">Delete Person</h3>
+            
+            {confirmModal.hasTransactions ? (
+              <p className="text-sm text-gray-500 dark:text-gray-400 mb-8 font-medium leading-relaxed transition-colors">
+                "{confirmModal.name}" has associated loan transactions. Deleting them will unassign them from these transactions. Do you wish to proceed?
+              </p>
+            ) : (
+              <p className="text-sm text-gray-500 dark:text-gray-400 mb-8 font-medium leading-relaxed transition-colors">
+                Are you sure you want to delete "{confirmModal.name}"? This action cannot be undone.
+              </p>
+            )}
+            
+            <div className="flex flex-col w-full space-y-3">
+              <button onClick={handleDelete} disabled={isSubmitting} className="w-full bg-red-600 text-white py-4 rounded-2xl font-black uppercase tracking-widest text-[10px] hover:bg-red-700 transition-all shadow-lg shadow-red-100 dark:shadow-none disabled:opacity-50">
+                {isSubmitting ? 'Deleting...' : (confirmModal.hasTransactions ? 'Unassign & Delete' : 'Proceed')}
+              </button>
+              <button onClick={() => setConfirmModal(null)} disabled={isSubmitting} className="w-full bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-300 py-4 rounded-2xl font-black uppercase tracking-widest text-[10px] hover:bg-gray-200 dark:hover:bg-gray-700 transition-all disabled:opacity-50">
+                Keep Person
+              </button>
+            </div>
           </div>
         </div>
       )}
