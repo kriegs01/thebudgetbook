@@ -271,40 +271,62 @@ export default function PeoplePage() {
                     remainingBalance = Math.abs(tx.amount) - totalPaid;
                   }
 
+                  let amountColorClass = isMoneyOut ? 'text-red-600 dark:text-red-400' : 'text-green-600 dark:text-green-400';
+                  let statusBadge = null;
+
+                  if (tx.transaction_type === 'loan') {
+                    if (remainingBalance <= 0) {
+                      amountColorClass = 'text-green-500 dark:text-green-400 line-through decoration-2 opacity-60';
+                      statusBadge = <span className="text-[9px] font-black uppercase tracking-widest text-green-600 bg-green-100 dark:bg-green-900/30 px-2 py-0.5 rounded">Fully Paid</span>;
+                    } else if (totalPaid > 0) {
+                      amountColorClass = 'text-red-600 dark:text-red-400';
+                      statusBadge = <span className="text-[9px] font-black uppercase tracking-widest text-amber-600 bg-amber-100 dark:bg-amber-900/30 px-2 py-0.5 rounded">Partial</span>;
+                    } else {
+                      amountColorClass = 'text-red-600 dark:text-red-400';
+                      statusBadge = <span className="text-[9px] font-black uppercase tracking-widest text-red-600 bg-red-100 dark:bg-red-900/30 px-2 py-0.5 rounded">Unpaid</span>;
+                    }
+                  } else {
+                    const typeLabel = tx.transaction_type?.replace('_', ' ') || 'Payment';
+                    statusBadge = <span className="text-[9px] font-black uppercase tracking-widest text-gray-500 bg-gray-100 dark:bg-gray-800 px-2 py-0.5 rounded">{typeLabel}</span>;
+                  }
+
                   return (
                     <div key={tx.id} className={`flex flex-col hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors ${payments.length > 0 ? 'cursor-pointer' : ''} ${index === mainTxs.length - 1 ? 'rounded-b-[2.5rem]' : ''}`} onClick={() => payments.length > 0 && toggleExpand(tx.id)}>
-                      <div className="p-5 md:p-6 flex items-center justify-between">
-                        <div className="flex items-center space-x-4">
-                          <div className={`p-3 rounded-2xl ${isMoneyOut ? 'bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400' : 'bg-green-50 dark:bg-green-900/20 text-green-600 dark:text-green-400'}`}>
-                            <TxIcon className="w-5 h-5" />
+                      <div className="p-4 md:p-5 flex items-center justify-between gap-3">
+                        <div className="flex items-center space-x-3 min-w-0">
+                          <div className={`p-2.5 rounded-xl flex-shrink-0 ${isMoneyOut ? 'bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400' : 'bg-green-50 dark:bg-green-900/20 text-green-600 dark:text-green-400'}`}>
+                            <TxIcon className="w-4 h-4" />
                           </div>
-                          <div>
-                            <p className="text-sm font-bold text-gray-900 dark:text-gray-100">{tx.name}</p>
-                            <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{new Date(tx.date).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })} · {new Date(tx.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</p>
-                            {payments.length > 0 && (
-                              <div className="flex items-center text-[10px] text-indigo-500 font-bold mt-1.5">
-                                {isExpanded ? <ChevronUp className="w-3 h-3 mr-1" /> : <ChevronDown className="w-3 h-3 mr-1" />}
-                                {payments.length} payment(s)
-                              </div>
-                            )}
+                          <div className="flex flex-col min-w-0">
+                            <div className="flex items-center gap-2">
+                              <p className="text-base font-black text-gray-900 dark:text-gray-100 truncate">{tx.name}</p>
+                              {statusBadge}
+                            </div>
+                            <div className="flex items-center gap-2 mt-0.5">
+                              <p className="text-[10px] text-gray-500 dark:text-gray-400 font-medium">
+                                {new Date(tx.date).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })}
+                              </p>
+                              {payments.length > 0 && (
+                                <>
+                                  <span className="text-gray-300 dark:text-gray-600">•</span>
+                                  <div className="flex items-center text-[10px] text-indigo-500 font-bold">
+                                    {isExpanded ? <ChevronUp className="w-3 h-3 mr-0.5" /> : <ChevronDown className="w-3 h-3 mr-0.5" />}
+                                    {payments.length} payment(s)
+                                  </div>
+                                </>
+                              )}
+                            </div>
                           </div>
                         </div>
-                        <div className="text-right flex flex-col items-end gap-2">
+                        <div className="text-right flex flex-col items-end gap-1.5 flex-shrink-0">
                           <div className="flex flex-col items-end">
-                            <p className={`text-sm font-black ${isMoneyOut ? 'text-red-600 dark:text-red-400' : 'text-green-600 dark:text-green-400'}`}>
+                            <p className={`text-base font-black ${amountColorClass}`}>
                               {formatCurrency(Math.abs(tx.amount))}
                             </p>
-                            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-1">
-                              {tx.transaction_type === 'loan' ? 'Loan Given' : tx.transaction_type?.replace('_', ' ') || 'Payment'}
-                            </p>
-                            {tx.transaction_type === 'loan' && totalPaid > 0 && (
-                              <span className={`mt-1.5 text-[9px] font-bold px-2 py-0.5 rounded uppercase tracking-widest ${
-                                remainingBalance <= 0 
-                                  ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400' 
-                                  : 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400'
-                              }`}>
-                                {remainingBalance <= 0 ? 'Fully Paid' : `Partially Paid: ${formatCurrency(totalPaid)}`}
-                              </span>
+                            {tx.transaction_type === 'loan' && totalPaid > 0 && remainingBalance > 0 && (
+                              <p className="text-[9px] font-bold text-gray-400 mt-0.5 uppercase tracking-widest">
+                                Collected: {formatCurrency(totalPaid)}
+                              </p>
                             )}
                           </div>
                           {tx.transaction_type === 'loan' && remainingBalance > 0 && (
@@ -314,9 +336,9 @@ export default function PeoplePage() {
                                 setSelectedLoan({ ...tx, remainingBalance, totalPaid });
                                 setShowLoanPaymentModal(true);
                               }}
-                              className="flex items-center gap-1.5 px-3 py-1.5 bg-purple-50 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 rounded-xl text-xs font-bold hover:bg-purple-100 dark:hover:bg-purple-900/50 transition-colors"
+                              className="flex items-center gap-1 px-3 py-1.5 bg-purple-50 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 rounded-lg text-[10px] font-black uppercase tracking-widest hover:bg-purple-100 dark:hover:bg-purple-900/50 transition-colors"
                             >
-                              <BanknoteArrowDown className="w-3.5 h-3.5" />
+                              <BanknoteArrowDown className="w-3 h-3" />
                               Collect
                             </button>
                           )}
@@ -324,8 +346,8 @@ export default function PeoplePage() {
                       </div>
                       
                       {isExpanded && payments.length > 0 && (
-                        <div className={`px-5 md:px-6 pb-6 pt-1 bg-gray-50/50 dark:bg-gray-800/20 ${index === mainTxs.length - 1 ? 'rounded-b-[2.5rem]' : ''}`} onClick={e => e.stopPropagation()}>
-                          <div className="border-l-2 border-gray-200 dark:border-gray-700 pl-4 space-y-4">
+                        <div className={`px-4 md:px-5 pb-5 pt-1 bg-gray-50/50 dark:bg-gray-800/20 ${index === mainTxs.length - 1 ? 'rounded-b-[2.5rem]' : ''}`} onClick={e => e.stopPropagation()}>
+                          <div className="border-l-2 border-gray-200 dark:border-gray-700 pl-4 space-y-3">
                             {payments.map(payment => (
                               <div key={payment.id} className="flex justify-between items-center group relative">
                                 <div>
