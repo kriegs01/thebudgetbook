@@ -6,7 +6,6 @@ import { NAV_ITEMS, INITIAL_BUDGET, DEFAULT_SETUP, INITIAL_CATEGORIES } from './
 import { getAllBillersFrontend, createBillerFrontend, updateBillerFrontend, deleteBillerFrontend } from './src/services/billersService';
 import { getAllAccountsFrontend, createAccountFrontend, updateAccountFrontend, deleteAccountFrontend } from './src/services/accountsService';
 import { getAllInstallmentsFrontend, createInstallmentFrontend, updateInstallmentFrontend, deleteInstallmentFrontend } from './src/services/installmentsService';
-import { getAllSavingsFrontend, createSavingsFrontend, updateSavingsFrontend, deleteSavingsFrontend } from './src/services/savingsService';
 import { getAllBudgetSetupsFrontend, deleteBudgetSetupFrontend, archiveBudgetSetup, reopenBudgetSetup } from './src/services/budgetSetupsService';
 import { getPaymentSchedulesBySource } from './src/services/paymentSchedulesService';
 import { getAllTransactions, createTransaction, createPaymentScheduleTransaction, uploadTransactionReceipt, updateTransaction } from './src/services/transactionsService';
@@ -15,7 +14,7 @@ import { supabase } from './src/utils/supabaseClient';
 import { combineDateWithCurrentTime } from './src/utils/dateUtils';
 import { recalculateAllAccountBalances } from './src/utils/accountBalanceCalculator';
 import { updateUserProfile } from './src/services/userProfileService';
-import type { Biller, Account, Installment, SavingsJar, Transaction } from './types';
+import type { Biller, Account, Installment, Transaction } from './types';
 import type { SupabaseTransaction } from './src/types/supabase';
 
 // Context
@@ -33,12 +32,10 @@ import Installments from './pages/Installments';
 import Accounts from './pages/Accounts';
 import AccountFilteredTransactions from './pages/accounts/view';
 import StatementPage from './pages/accounts/statement';
-import Savings from './pages/Savings';
 import WalletsPage from './pages/Wallets';
 import WalletView from './pages/wallets/view';
 import PeoplePage from './pages/People';
 import SettingsPage from './pages/Settings';
-import TrashPage from './pages/Trash';
 import SupabaseDemo from './pages/SupabaseDemo';
 import Auth from './pages/Auth';
 import UpdatePassword from './pages/update-password';
@@ -206,9 +203,6 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
   const [installments, setInstallments] = useState<Installment[]>([]);
   const [installmentsLoading, setInstallmentsLoading] = useState(true);
   const [installmentsError, setInstallmentsError] = useState<string | null>(null);
-  const [savings, setSavings] = useState<SavingsJar[]>([]);
-  const [savingsLoading, setSavingsLoading] = useState(true);
-  const [savingsError, setSavingsError] = useState<string | null>(null);
 
   const { data: txData, isLoading: transactionsLoading } = useTransactions();
   const transactions = txData?.formatted || [];
@@ -250,9 +244,6 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
   const [budgetSetupsLoading, setBudgetSetupsLoading] = useState(true);
   const [budgetSetupsError, setBudgetSetupsError] = useState<string | null>(null);
 
-  // Shared Trash State
-  const [trashSetups, setTrashSetups] = useState<any[]>([]);
-
   // Splash Screen State
   const [showSplash, setShowSplash] = useState(true);
   const [minSplashTimeElapsed, setMinSplashTimeElapsed] = useState(false);
@@ -262,7 +253,7 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
     return () => clearTimeout(timer);
   }, []);
 
-  const isDataLoading = accountsLoading || transactionsLoading || billersLoading || installmentsLoading || savingsLoading || budgetSetupsLoading;
+  const isDataLoading = accountsLoading || transactionsLoading || billersLoading || installmentsLoading || budgetSetupsLoading;
 
   useEffect(() => {
     if (!isDataLoading && minSplashTimeElapsed) setShowSplash(false);
@@ -276,7 +267,8 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
   const { triggerStandbyLock, isPinEnabled } = usePinProtection();
 
   const effectiveNavItems = React.useMemo(() => {
-    const items = [...NAV_ITEMS];
+    // Filter out savings and trash items from the menu
+    const items = [...NAV_ITEMS].filter(item => item.id !== 'savings' && item.id !== 'trash');
     if (userProfile?.settings?.usePeoplePage && !items.find(i => i.id === 'people')) {
       items.push({
         id: 'people',
@@ -389,23 +381,6 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
       setInstallmentsLoading(false);
     };
 
-    const fetchSavings = async () => {
-      setSavingsLoading(true);
-      setSavingsError(null);
-      
-      const { data, error } = await getAllSavingsFrontend();
-      
-      if (error) {
-        console.error('Error loading savings:', error);
-        setSavingsError('Failed to load savings from database');
-        setSavings([]);
-      } else {
-        setSavings(data || []);
-      }
-      
-      setSavingsLoading(false);
-    };
-
     const fetchBudgetSetups = async () => {
       setBudgetSetupsLoading(true);
       setBudgetSetupsError(null);
@@ -425,7 +400,6 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
 
     fetchBillers();
     fetchInstallments();
-    fetchSavings();
     fetchBudgetSetups();
   }, []);
 
@@ -484,17 +458,6 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
     } else {
       setInstallments(data || []);
       setInstallmentsError(null);
-    }
-  };
-
-  const reloadSavings = async () => {
-    const { data, error } = await getAllSavingsFrontend();
-    if (error) {
-      console.error('Error reloading savings:', error);
-      setSavingsError('Failed to reload savings from database');
-    } else {
-      setSavings(data || []);
-      setSavingsError(null);
     }
   };
 
@@ -942,27 +905,6 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
   };
 
 
-  // Savings handlers
-  const handleAddSavings = async (newSavings: SavingsJar) => {
-    const { data, error } = await createSavingsFrontend(newSavings);
-    if (error) {
-      console.error('Error creating savings jar:', error);
-      alert('Failed to create savings jar. Please try again.');
-    } else {
-      await reloadSavings();
-    }
-  };
-
-  const handleDeleteSavings = async (id: string) => {
-    const { error } = await deleteSavingsFrontend(id);
-    if (error) {
-      console.error('Error deleting savings jar:', error);
-      alert('Failed to delete savings jar. Please try again.');
-    } else {
-      await reloadSavings();
-    }
-  };
-
   const handleResetAll = () => {
     const confirmation = window.confirm(
       "WARNING: This will permanently clear all your accounts, budget history, billers, installments, savings jars, and trash. This action cannot be undone. Do you want to proceed?"
@@ -972,8 +914,6 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
       setBudgetItems([]);
       setBillers([]);
       setInstallments([]);
-      setSavings([]);
-      setTrashSetups([]);
       setBudgetSetups([]);
     }
   };
@@ -1226,7 +1166,6 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
                     } else {
                       // Update local state
                       setBudgetSetups(prev => prev.filter(s => s.id !== setup.id));
-                      setTrashSetups(prev => [...prev, setup]);
                     }
                   }}
                   onReloadSetups={reloadBudgetSetups}
@@ -1318,16 +1257,6 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
               } />
               <Route path="/accounts/view" element={<AccountFilteredTransactions accounts={accounts} onTransactionCreated={reloadAccounts} />} />
               <Route path="/accounts/statement" element={<StatementPage accounts={accounts} />} />
-              <Route path="/savings" element={
-                <Savings
-                  jars={savings}
-                  accounts={accounts}
-                  onAdd={handleAddSavings}
-                  onDelete={handleDeleteSavings}
-                  loading={savingsLoading}
-                  error={savingsError}
-                />
-              } />
               <Route path="/wallets" element={<WalletsPage accounts={accounts} />} />
               <Route path="/wallets/view" element={<WalletView accounts={accounts} />} />
               <Route path="/settings" element={
@@ -1342,18 +1271,6 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
                   onUpdateBiller={handleUpdateBiller}
                   theme={theme}
                   onToggleTheme={handleToggleTheme}
-                />
-              } />
-              <Route path="/trash" element={
-                <TrashPage
-                  items={trashSetups}
-                  onRestore={(setup) => {
-                    setTrashSetups(prev => prev.filter(s => s.id !== setup.id));
-                    setBudgetSetups(prev => [setup, ...prev]);
-                  }}
-                  onDeletePermanently={(id) => {
-                    setTrashSetups(prev => prev.filter(s => s.id !== id));
-                  }}
                 />
               } />
               <Route path="/people" element={<PeoplePage />} />
