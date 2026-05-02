@@ -470,7 +470,6 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ transactions, loadi
           </div>
           
           <div className="flex items-center gap-3 self-end sm:self-auto">
-            <a href="/" className="px-5 py-3 rounded-xl bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 font-bold hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors text-sm">Back</a>
             <button onClick={() => setShowTypeModal(true)} className="flex items-center gap-2 bg-indigo-600 text-white px-5 py-3 rounded-xl font-bold hover:bg-indigo-700 transition-all shadow-md shadow-indigo-200 dark:shadow-none text-sm">
               <Plus className="w-4 h-4" />
               <span className="hidden sm:inline">Add Transaction</span>
