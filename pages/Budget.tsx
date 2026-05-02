@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { BudgetItem, Account, Biller, PaymentSchedule, CategorizedSetupItem, SavedBudgetSetup, BudgetCategory, Installment, Wallet } from '../types';
-import { Plus, Check, ChevronDown, Trash2, Save, FileText, ArrowRight, Upload, CheckCircle2, X, AlertTriangle, Info, Eye, ZoomIn, ZoomOut, Download, Archive, RotateCcw, Lock } from 'lucide-react';
+import { Plus, Check, ChevronDown, Trash2, Save, FileText, ArrowRight, ArrowLeft, Upload, CheckCircle2, X, AlertTriangle, Info, Eye, ZoomIn, ZoomOut, Download, Archive, RotateCcw, Lock } from 'lucide-react';
 import { PinProtectedAction } from '../src/components/PinProtectedAction';
 import { createBudgetSetupFrontend, updateBudgetSetupFrontend, archiveBudgetSetup, reopenBudgetSetup } from '../src/services/budgetSetupsService';
 import { IconSquircleButton } from '../src/components/IconSquircleButton';
@@ -2007,15 +2007,23 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
 
     return (
       <div className="space-y-8 animate-in fade-in duration-500 w-full">
-        <div className="flex items-center justify-between">
-          <div>
-            <h2 className="text-3xl font-black text-gray-900 dark:text-gray-100 tracking-tight uppercase">BUDGET</h2>
-            <p className="text-xs text-gray-400 dark:text-gray-500 font-bold uppercase tracking-[0.2em] mt-1">Review your monthly budget history</p>
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white dark:bg-gray-900 p-6 md:p-8 rounded-[2.5rem] border border-gray-100 dark:border-gray-800 shadow-sm transition-colors mb-2">
+          <div className="flex items-center gap-5">
+            <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-indigo-500 to-blue-600 flex items-center justify-center text-white shadow-lg">
+              <FileText className="w-7 h-7" />
+            </div>
+            <div>
+              <h1 className="text-2xl md:text-3xl font-black text-gray-900 dark:text-gray-100 uppercase tracking-tight transition-colors">Budget</h1>
+              <p className="text-gray-500 dark:text-gray-400 text-sm font-medium transition-colors">Review your monthly budget history</p>
+            </div>
           </div>
-          <button type="button" onClick={handleOpenNew} className="flex items-center space-x-3 bg-indigo-600 text-white px-8 py-4 rounded-[1.5rem] font-black uppercase tracking-widest text-xs hover:bg-indigo-700 shadow-xl transition-all">
-            <Plus className="w-5 h-5" />
-            <span>Open New</span>
-          </button>
+          
+          <div className="flex items-center gap-3 self-end sm:self-auto">
+            <button type="button" onClick={handleOpenNew} className="flex items-center gap-2 bg-indigo-600 text-white px-5 py-3 rounded-xl font-bold hover:bg-indigo-700 transition-all shadow-md shadow-indigo-200 dark:shadow-none text-sm">
+              <Plus className="w-4 h-4" />
+              <span className="hidden sm:inline">Open New</span>
+            </button>
+          </div>
         </div>
 
         {archiveStatusMsg && (
@@ -2153,19 +2161,21 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
   return (
     <div className="space-y-8 animate-in slide-in-from-right-4 duration-500 pb-20 w-full">
       <div className="flex flex-col space-y-6">
-        <div className="flex items-center justify-between">
-          <button onClick={() => setView('summary')} className="flex flex-col text-left group transition-colors">
-            <span className="text-[10px] uppercase font-black tracking-[0.2em] text-gray-400 dark:text-gray-500 group-hover:text-indigo-400 dark:group-hover:text-indigo-300">Back to</span>
-            <span className="text-sm font-black tracking-tight text-gray-600 dark:text-gray-300 group-hover:text-indigo-600 dark:group-hover:text-indigo-400">Summary</span>
-          </button>
-          <div className="text-center">
-            <h2 className="text-2xl font-black text-gray-900 dark:text-gray-100 tracking-tighter uppercase">BUDGET SETUP</h2>
-            <p className="text-xs text-gray-400 dark:text-gray-500 font-bold uppercase tracking-widest mt-1">{isReadOnly ? 'Archived — Read Only' : 'Configure Recurring Expenses'}</p>
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white dark:bg-gray-900 p-6 md:p-8 rounded-[2.5rem] border border-gray-100 dark:border-gray-800 shadow-sm transition-colors">
+          <div className="flex items-center gap-5">
+            <button onClick={() => setView('summary')} className="flex items-center justify-center w-12 h-12 md:w-14 md:h-14 rounded-2xl bg-gray-50 dark:bg-gray-800 text-gray-500 dark:text-gray-400 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 transition-all shrink-0">
+              <ArrowLeft className="w-6 h-6" />
+            </button>
+            <div>
+              <h1 className="text-2xl md:text-3xl font-black text-gray-900 dark:text-gray-100 uppercase tracking-tight transition-colors">Budget Setup</h1>
+              <p className="text-gray-500 dark:text-gray-400 text-sm font-medium transition-colors">{isReadOnly ? 'Archived — Read Only' : 'Configure Recurring Expenses'}</p>
+            </div>
           </div>
-          <div className="flex items-center space-x-3">
+          
+          <div className="flex items-center gap-3 self-end sm:self-auto flex-wrap justify-end">
             {/* Autosave Status Indicator */}
             {!isReadOnly && autoSaveStatus !== 'idle' && (
-              <div className="flex items-center space-x-2 text-xs font-bold">
+              <div className="flex items-center space-x-2 text-xs font-bold mr-2">
                 {autoSaveStatus === 'saving' && (
                   <>
                     <div className="w-4 h-4 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
@@ -2191,10 +2201,10 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                 <button
                   onClick={(e) => e.preventDefault()}
                   disabled={archiveSubmitting}
-                  className="flex items-center space-x-2 bg-indigo-50 text-indigo-700 px-6 py-3 rounded-2xl font-black uppercase tracking-widest text-xs hover:bg-indigo-100 transition-all disabled:opacity-50"
+                  className="flex items-center gap-2 bg-indigo-50 text-indigo-700 px-5 py-3 rounded-xl font-bold text-sm hover:bg-indigo-100 transition-all disabled:opacity-50"
                 >
                   <RotateCcw className="w-4 h-4" />
-                  <span>Reopen</span>
+                  <span className="hidden sm:inline">Reopen</span>
                 </button>
               </PinProtectedAction>
             )}
@@ -2203,18 +2213,18 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                 <button
                   onClick={(e) => e.preventDefault()}
                   disabled={archiveSubmitting}
-                  className="flex items-center space-x-2 bg-amber-50 text-amber-700 px-6 py-3 rounded-2xl font-black uppercase tracking-widest text-xs hover:bg-amber-100 transition-all disabled:opacity-50"
+                  className="flex items-center gap-2 bg-amber-50 text-amber-700 px-5 py-3 rounded-xl font-bold text-sm hover:bg-amber-100 transition-all disabled:opacity-50"
                 >
                   <Archive className="w-4 h-4" />
-                  <span>Close</span>
+                  <span className="hidden sm:inline">Close</span>
                 </button>
               </PinProtectedAction>
             )}
             {!isReadOnly && (
               <PinProtectedAction featureId="budget_modifications" onVerified={handleSaveSetup} actionLabel="Save Budget">
-                <button onClick={(e) => e.preventDefault()} className="flex items-center space-x-3 bg-indigo-600 text-white px-8 py-3 rounded-2xl font-black uppercase tracking-widest text-xs hover:bg-indigo-700 shadow-xl">
-                  <Save className="w-5 h-5" />
-                  <span>Save</span>
+                <button onClick={(e) => e.preventDefault()} className="flex items-center gap-2 bg-indigo-600 text-white px-5 py-3 rounded-xl font-bold hover:bg-indigo-700 transition-all shadow-md shadow-indigo-200 dark:shadow-none text-sm">
+                  <Save className="w-4 h-4" />
+                  <span className="hidden sm:inline">Save</span>
                 </button>
               </PinProtectedAction>
             )}
