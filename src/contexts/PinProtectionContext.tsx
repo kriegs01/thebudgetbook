@@ -97,6 +97,7 @@ const hashPin = async (pin: string): Promise<string> => {
 };
 
 export const PinProtectionProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
+  const [firstName, setFirstName] = useState<string>('');
   const [pinData, setPinData] = useState<PinProtectionData>(() => {
     const stored = localStorage.getItem(STORAGE_KEY);
     if (stored) {
@@ -162,6 +163,7 @@ export const PinProtectionProvider: React.FC<{ children: ReactNode }> = ({ child
         if (user) {
           const { data } = await getUserProfile(user.id);
           if (data) {
+            setFirstName((data as any).first_name || '');
             const dbPinHash = data.pin_hash || '';
                 const dbFeatures = (data as any).pin_protected_features;
                   const dbSettings = (data as any).pin_settings;
@@ -661,8 +663,8 @@ export const PinProtectionProvider: React.FC<{ children: ReactNode }> = ({ child
           <div className="w-24 h-24 bg-indigo-50 dark:bg-indigo-500/20 text-indigo-600 dark:text-indigo-400 rounded-full flex items-center justify-center mb-6 shadow-[0_0_50px_-10px_rgba(99,102,241,0.2)] dark:shadow-[0_0_50px_-10px_rgba(99,102,241,0.4)] transition-colors">
             <Lock className="w-12 h-12" />
           </div>
-          <h2 className="text-3xl font-black text-gray-900 dark:text-white mb-2 uppercase tracking-[0.2em] transition-colors">App Locked</h2>
-          <p className="text-gray-500 dark:text-gray-400 mb-10 font-medium tracking-wide transition-colors">Please enter your PIN to resume</p>
+          <h2 className="text-3xl font-black text-gray-900 dark:text-white mb-2 transition-colors">Hi, {firstName || 'there'}!</h2>
+          <p className="text-gray-500 dark:text-gray-400 mb-10 font-medium tracking-wide transition-colors">Please enter your PIN to resume session</p>
           
           <form onSubmit={handleStandbySubmit} className="w-full max-w-xs space-y-6">
             <div>
