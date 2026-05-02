@@ -1076,13 +1076,28 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
       <>
       {detailedBiller ? (
         <div className="space-y-6 animate-in slide-in-from-right-4 duration-500">
-          <div className="flex items-center justify-between">
-            <button onClick={() => setDetailedBillerId(null)} className="flex items-center space-x-2 text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 group transition-colors"><ArrowLeft className="w-5 h-5 group-hover:-translate-x-1 transition-transform" /><span className="font-medium">Back to Billers</span></button>
-            <div className="flex items-center space-x-3">
-              <button onClick={() => openEditModal(detailedBiller)} className="flex items-center space-x-2 px-4 py-2 bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 rounded-xl text-xs font-bold hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"><Edit2 className="w-4 h-4" /><span>Edit</span></button>
-              <button onClick={() => handleDeleteTrigger(detailedBiller.id, detailedBiller.name)} className="flex items-center space-x-2 px-4 py-2 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 rounded-xl text-xs font-bold hover:bg-red-100 dark:hover:bg-red-900/40 transition-colors"><Trash2 className="w-4 h-4" /><span>Delete</span></button>
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white dark:bg-gray-900 p-6 md:p-8 rounded-[2.5rem] border border-gray-100 dark:border-gray-800 shadow-sm transition-colors">
+          <div className="flex items-center gap-5">
+            <button onClick={() => setDetailedBillerId(null)} className="flex items-center justify-center w-12 h-12 md:w-14 md:h-14 rounded-2xl bg-gray-50 dark:bg-gray-800 text-gray-500 dark:text-gray-400 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 transition-all shrink-0">
+              <ArrowLeft className="w-6 h-6" />
+            </button>
+            <div>
+              <h1 className="text-2xl md:text-3xl font-black text-gray-900 dark:text-gray-100 uppercase tracking-tight transition-colors">Biller Details</h1>
+              <p className="text-gray-500 dark:text-gray-400 text-sm font-medium transition-colors">Manage payment schedules for {detailedBiller.name}</p>
             </div>
           </div>
+          
+          <div className="flex items-center gap-3 self-end sm:self-auto flex-wrap justify-end">
+            <button onClick={() => openEditModal(detailedBiller)} className="flex items-center gap-2 bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 px-5 py-3 rounded-xl font-bold text-sm hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors">
+              <Edit2 className="w-4 h-4" />
+              <span className="hidden sm:inline">Edit</span>
+            </button>
+            <button onClick={() => handleDeleteTrigger(detailedBiller.id, detailedBiller.name)} className="flex items-center gap-2 bg-red-50 text-red-600 dark:bg-red-900/20 dark:text-red-400 px-5 py-3 rounded-xl font-bold text-sm hover:bg-red-100 dark:hover:bg-red-900/40 transition-colors">
+              <Trash2 className="w-4 h-4" />
+              <span className="hidden sm:inline">Delete</span>
+            </button>
+          </div>
+        </div>
           <div className="bg-white dark:bg-gray-900 p-8 rounded-3xl border border-gray-100 dark:border-gray-800 shadow-sm transition-colors">
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-8">
               <div className="flex items-center space-x-6">
@@ -1339,9 +1354,23 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
         </div>
       ) : (
         <>
-          <div className="flex items-center justify-between mb-8">
-            <div className="space-y-1"><h2 className="text-3xl font-black text-gray-900 dark:text-gray-100 tracking-tight uppercase transition-colors">BILLERS</h2><p className="text-gray-500 dark:text-gray-400 text-sm transition-colors">Manage recurring bills and payment schedules</p></div>
-            <button onClick={() => { setShowAddModal(true); setTimingFeedback(''); }} className="flex items-center justify-center space-x-2 bg-indigo-600 text-white px-6 py-3 rounded-2xl font-bold hover:bg-indigo-700 shadow-lg"><Plus className="w-5 h-5" /><span>Add Billers</span></button>
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white dark:bg-gray-900 p-6 md:p-8 rounded-[2.5rem] border border-gray-100 dark:border-gray-800 shadow-sm transition-colors mb-8">
+            <div className="flex items-center gap-5">
+              <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-indigo-500 to-blue-600 flex items-center justify-center text-white shadow-lg">
+                <Bell className="w-7 h-7" />
+              </div>
+              <div>
+                <h1 className="text-2xl md:text-3xl font-black text-gray-900 dark:text-gray-100 uppercase tracking-tight transition-colors">Billers</h1>
+                <p className="text-gray-500 dark:text-gray-400 text-sm font-medium transition-colors">Manage recurring bills and payment schedules</p>
+              </div>
+            </div>
+            
+            <div className="flex items-center gap-3 self-end sm:self-auto">
+              <button onClick={() => { setShowAddModal(true); setTimingFeedback(''); }} className="flex items-center gap-2 bg-indigo-600 text-white px-5 py-3 rounded-xl font-bold hover:bg-indigo-700 transition-all shadow-md shadow-indigo-200 dark:shadow-none text-sm">
+                <Plus className="w-4 h-4" />
+                <span className="hidden sm:inline">Add Biller</span>
+              </button>
+            </div>
           </div>
 
           {/* Active Billers Section */}
