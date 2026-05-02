@@ -338,7 +338,7 @@ export default function PeoplePage() {
                     <h3 className="text-lg font-black text-gray-900 dark:text-gray-100 uppercase tracking-widest mb-1">No transactions</h3>
                     <p className="text-sm text-gray-500 dark:text-gray-400 font-medium">This person hasn't been linked to any transactions yet.</p>
                   </div>
-                )}
+                );
               })()}
             </div>
           </div>
