@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Installment, Account, ViewMode, Biller } from '../types';
-import { Plus, LayoutGrid, List, Wallet, Trash2, X, Upload, AlertTriangle, Edit2, Eye, MoreVertical, Info, ZoomIn, ZoomOut, Download, Archive, CheckCircle2, ChevronDown } from 'lucide-react';
+import { Plus, LayoutGrid, List, Calendar, Wallet, Trash2, X, Upload, AlertTriangle, Edit2, Eye, MoreVertical, Info, ZoomIn, ZoomOut, Download, Archive, CheckCircle2, ChevronDown } from 'lucide-react';
 import { PinProtectedAction } from '../src/components/PinProtectedAction';
 import { getPaymentSchedulesBySource } from '../src/services/paymentSchedulesService';
 import { hasInstallmentPayments, deleteAllInstallmentPaymentsAndResetSchedules } from '../src/services/installmentsService';
@@ -861,32 +861,40 @@ const Installments: React.FC<InstallmentsProps> = ({ installments, accounts, bil
       {/* Main Content */}
       {!loading && (
       <>
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
-        <div>
-          <h2 className="text-3xl font-black text-gray-900 dark:text-gray-100 tracking-tight uppercase transition-colors">INSTALLMENTS</h2>
-          <p className="text-gray-500 dark:text-gray-400 text-sm transition-colors">Manage your tracked installments and loans</p>
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white dark:bg-gray-900 p-6 md:p-8 rounded-[2.5rem] border border-gray-100 dark:border-gray-800 shadow-sm transition-colors mb-8">
+        <div className="flex items-center gap-5">
+          <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-indigo-500 to-blue-600 flex items-center justify-center text-white shadow-lg">
+            <Calendar className="w-7 h-7" />
+          </div>
+          <div>
+            <h1 className="text-2xl md:text-3xl font-black text-gray-900 dark:text-gray-100 uppercase tracking-tight transition-colors">Installments</h1>
+            <p className="text-gray-500 dark:text-gray-400 text-sm font-medium transition-colors">Manage your tracked installments and loans</p>
+          </div>
         </div>
-        <div className="flex items-center space-x-3">
-          <div className="flex bg-gray-100 dark:bg-gray-800 p-1 rounded-2xl transition-colors">
+        
+        <div className="flex items-center gap-3 self-end sm:self-auto">
+          <div className="flex items-center bg-gray-50 dark:bg-gray-800 rounded-xl p-1 space-x-1 transition-colors">
             <button 
               onClick={() => setViewMode('card')}
-              className={`p-2 rounded-xl transition-all ${viewMode === 'card' ? 'bg-white dark:bg-gray-700 shadow-sm text-indigo-600 dark:text-indigo-400' : 'text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300'}`}
+              className={`p-2 rounded-lg transition-colors ${viewMode === 'card' ? 'bg-white dark:bg-gray-700 shadow-sm text-indigo-600 dark:text-indigo-400' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'}`}
+              title="Card view"
             >
-              <LayoutGrid className="w-5 h-5" />
+              <LayoutGrid className="w-4 h-4" />
             </button>
             <button 
               onClick={() => setViewMode('list')}
-              className={`p-2 rounded-xl transition-all ${viewMode === 'list' ? 'bg-white dark:bg-gray-700 shadow-sm text-indigo-600 dark:text-indigo-400' : 'text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300'}`}
+              className={`p-2 rounded-lg transition-colors ${viewMode === 'list' ? 'bg-white dark:bg-gray-700 shadow-sm text-indigo-600 dark:text-indigo-400' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'}`}
+              title="List view"
             >
-              <List className="w-5 h-5" />
+              <List className="w-4 h-4" />
             </button>
           </div>
           <button 
             onClick={() => setShowModal(true)}
-            className="bg-indigo-600 text-white px-6 py-3 rounded-2xl font-black uppercase tracking-widest text-xs hover:bg-indigo-700 transition-all shadow-xl shadow-indigo-100 dark:shadow-none flex items-center space-x-2"
+            className="flex items-center gap-2 bg-indigo-600 text-white px-5 py-3 rounded-xl font-bold hover:bg-indigo-700 transition-all shadow-md shadow-indigo-200 dark:shadow-none text-sm"
           >
-            <Plus className="w-5 h-5" />
-            <span>New Installment</span>
+            <Plus className="w-4 h-4" />
+            <span className="hidden sm:inline">New Installment</span>
           </button>
         </div>
       </div>
