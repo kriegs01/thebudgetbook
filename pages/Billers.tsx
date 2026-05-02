@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Biller, BillerAmountIncrease, Account, PaymentSchedule, BudgetCategory, Installment } from '../types';
-import { Plus, Calendar, Bell, ChevronDown, ChevronRight, Upload, CheckCircle2, X, ArrowLeft, Power, PowerOff, MoreVertical, Edit2, Eye, Trash2, AlertTriangle, Info, ZoomIn, ZoomOut, Download } from 'lucide-react';
+import { Plus, Calendar, Receipt, ChevronDown, ChevronRight, Upload, CheckCircle2, X, ArrowLeft, Power, PowerOff, MoreVertical, Edit2, Eye, Trash2, AlertTriangle, Info, ZoomIn, ZoomOut, Download } from 'lucide-react';
 import { PinProtectedAction } from '../src/components/PinProtectedAction';
 import { getAllTransactions, getTransactionsByPaymentSchedule, getReceiptSignedUrl, updateTransaction, updateTransactionAndSyncSchedule, deleteTransactionAndRevertSchedule } from '../src/services/transactionsService';
 import { getPaymentSchedulesBySource } from '../src/services/paymentSchedulesService';
@@ -999,7 +999,7 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
       <div className="flex items-start justify-between mb-4">
         <div className="flex items-center space-x-4 flex-1 min-w-0">
           <div className={`p-3 rounded-2xl flex-shrink-0 transition-colors ${biller.status === 'active' ? 'bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400' : 'bg-gray-100 dark:bg-gray-800 text-gray-400 dark:text-gray-500'}`}>
-            <Bell className="w-6 h-6" />
+            <Receipt className="w-6 h-6" />
           </div>
           <div className="flex-1 min-w-0">
             <h3 className="text-lg font-bold text-gray-900 dark:text-gray-100 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors truncate">{biller.name}</h3>
@@ -1101,7 +1101,7 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
           <div className="bg-white dark:bg-gray-900 p-8 rounded-3xl border border-gray-100 dark:border-gray-800 shadow-sm transition-colors">
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-8">
               <div className="flex items-center space-x-6">
-                <div className="p-5 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 rounded-3xl transition-colors"><Bell className="w-10 h-10" /></div>
+                <div className="p-5 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 rounded-3xl transition-colors"><Receipt className="w-10 h-10" /></div>
                 <div>
                   <h2 className="text-3xl font-black text-gray-900 dark:text-gray-100 transition-colors">{detailedBiller.name}</h2>
                   <div className="flex items-center space-x-3 mt-2">
@@ -1357,7 +1357,7 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white dark:bg-gray-900 p-6 md:p-8 rounded-[2.5rem] border border-gray-100 dark:border-gray-800 shadow-sm transition-colors mb-8">
             <div className="flex items-center gap-5">
               <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-indigo-500 to-blue-600 flex items-center justify-center text-white shadow-lg">
-                <Bell className="w-7 h-7" />
+                <Receipt className="w-7 h-7" />
               </div>
               <div>
                 <h1 className="text-2xl md:text-3xl font-black text-gray-900 dark:text-gray-100 uppercase tracking-tight transition-colors">Billers</h1>
@@ -1413,7 +1413,7 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
           {activeBillers.length === 0 && inactiveBillers.length === 0 && (
             <div className="text-center py-12">
               <div className="inline-flex items-center justify-center w-20 h-20 rounded-full bg-gray-100 mb-4">
-                <Bell className="w-10 h-10 text-gray-400" />
+                <Receipt className="w-10 h-10 text-gray-400" />
               </div>
               <h3 className="text-xl font-bold text-gray-900 dark:text-gray-100 mb-2 transition-colors">No Billers Yet</h3>
               <p className="text-gray-500 mb-6">Get started by adding your first recurring bill</p>
