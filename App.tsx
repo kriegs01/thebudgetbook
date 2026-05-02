@@ -14,6 +14,7 @@ import { recordPayment } from './src/services/paymentSchedulesService';
 import { supabase } from './src/utils/supabaseClient';
 import { combineDateWithCurrentTime } from './src/utils/dateUtils';
 import { recalculateAllAccountBalances } from './src/utils/accountBalanceCalculator';
+import { updateUserProfile } from './src/services/userProfileService';
 import type { Biller, Account, Installment, SavingsJar, Transaction } from './types';
 import type { SupabaseTransaction } from './src/types/supabase';
 
@@ -43,6 +44,7 @@ import Auth from './pages/Auth';
 import UpdatePassword from './pages/update-password';
 import { useTransactions } from './src/hooks/useTransactions';
 import { useAccounts } from './src/hooks/useAccounts';
+import { SetupWizard } from './src/components/SetupWizard';
 
 // Helper function to convert UI Account to Supabase format
 const accountToSupabase = (account: Account) => ({
@@ -218,6 +220,9 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
   const [currency, setCurrency] = useState('PHP');
   const [categories, setCategories] = useState(INITIAL_CATEGORIES);
   const [theme, setTheme] = useState<'light' | 'dark'>('light');
+  
+  // Wizard State
+  const [showWizard, setShowWizard] = useState(false);
 
   // Load Custom Categories from User Profile
   useEffect(() => {
@@ -225,6 +230,18 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
       setCategories(userProfile.settings.categories);
     } else {
       setCategories(INITIAL_CATEGORIES); // Fallback for new accounts
+    }
+
+    // Intercept New Users for Setup Wizard
+    if (userProfile) {
+      const isSetupCompleted = userProfile.settings?.setupCompleted;
+      const hasCustomCategories = userProfile.settings?.categories && userProfile.settings.categories.length > 0;
+      
+      if (!isSetupCompleted && !hasCustomCategories) {
+        setShowWizard(true);
+      } else {
+        setShowWizard(false);
+      }
     }
   }, [userProfile]);
 
@@ -420,6 +437,28 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
       setAccounts([]);
     }
   }, [rawAccounts, rawTransactions]);
+
+  // Setup Wizard Completion Handler
+  const handleCompleteWizard = async (wizardCategories: BudgetCategory[], newAccount: Account | null) => {
+    if (newAccount) {
+      await handleAddAccount(newAccount);
+    }
+    
+    const newSettings = {
+      ...(userProfile?.settings || {}),
+      categories: wizardCategories,
+      setupCompleted: true
+    };
+    
+    try {
+      await updateUserProfile(user.id, { settings: newSettings });
+      setCategories(wizardCategories);
+      setShowWizard(false);
+    } catch (err) {
+      console.error('Failed to complete setup wizard:', err);
+      alert('Failed to save your setup. Please check your connection and try again.');
+    }
+  };
 
   // Reload functions for each entity
   const reloadBillers = async () => {
@@ -1023,6 +1062,7 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
 
   return (
     <>
+        {showWizard && <SetupWizard onComplete={handleCompleteWizard} />}
         <TestModeBanner sidebarOpen={isSidebarOpen} />
         <BrowserRouter>
         <div className="flex h-[100dvh] bg-gray-50 dark:bg-gray-950 w-full overflow-hidden fixed inset-0 transition-colors duration-200">
