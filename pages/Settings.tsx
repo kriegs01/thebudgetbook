@@ -73,6 +73,9 @@ interface DeleteConflict {
 // ─── Component ───────────────────────────────────────────────────────────────
 
 const Settings: React.FC<SettingsProps> = ({ currency, setCurrency, categories, setCategories, onResetAll, billers = [], installments = [], onUpdateBiller, theme = 'light', onToggleTheme }) => {
+  // Auth context
+  const { userProfile, updateProfile, refreshProfile, user } = useAuth();
+
   const [openSection, setOpenSection] = useState<string | null>(null);
   const [newCatName, setNewCatName] = useState('');
   const [showAddCat, setShowAddCat] = useState(false);
@@ -115,6 +118,20 @@ const Settings: React.FC<SettingsProps> = ({ currency, setCurrency, categories, 
   } | null>(null);
   const [deleteSaving, setDeleteSaving] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+
+  // Helper to persist categories to Supabase
+  const saveCategories = async (newCats: BudgetCategory[]) => {
+    setCategories(newCats); // Optimistic UI update
+    if (user) {
+      try {
+        const newSettings = { ...(userProfile?.settings || {}), categories: newCats };
+        await updateUserProfile(user.id, { settings: newSettings });
+        await refreshProfile();
+      } catch (error) {
+        console.error('Failed to save categories to profile:', error);
+      }
+    }
+  };
 
   // ── Shared confirm modal ───────────────────────────────────────────────────
   const [confirmModal, setConfirmModal] = useState<{
@@ -269,7 +286,7 @@ const Settings: React.FC<SettingsProps> = ({ currency, setCurrency, categories, 
       delete updated.reactivatedFrom;
     }
 
-    setCategories(prev => prev.map(c => c.id === catSettingsModal.catId ? updated : c));
+    saveCategories(categories.map(c => c.id === catSettingsModal.catId ? updated : c));
     closeCatSettings();
   };
 
@@ -297,7 +314,7 @@ const Settings: React.FC<SettingsProps> = ({ currency, setCurrency, categories, 
       }
       // Apply the full pending category update (includes subcats, flexi, deactivation, reactivation)
       if (deactConflictPendingCategory) {
-        setCategories(prev => prev.map(c =>
+        saveCategories(categories.map(c =>
           c.id === deactConflictModal.catId ? deactConflictPendingCategory : c
         ));
         setDeactConflictPendingCategory(null);
@@ -325,7 +342,7 @@ const Settings: React.FC<SettingsProps> = ({ currency, setCurrency, categories, 
         title: 'Delete Category',
         message: `Are you sure you want to permanently delete the category "${catName}"?`,
         onConfirm: () => {
-          setCategories(prev => prev.filter(c => c.id !== catId));
+          saveCategories(categories.filter(c => c.id !== catId));
           setConfirmModal(p => ({ ...p, show: false }));
         },
       });
@@ -394,7 +411,7 @@ const Settings: React.FC<SettingsProps> = ({ currency, setCurrency, categories, 
         const updated: Biller = { ...conflict.biller, category: targetCat.name };
         await onUpdateBiller(updated);
       }
-      setCategories(prev => prev.filter(c => c.id !== deleteModal.catId));
+      saveCategories(categories.filter(c => c.id !== deleteModal.catId));
       setDeleteModal(null);
     } catch {
       setDeleteError('Some items could not be reassigned. Please try again.');
@@ -402,11 +419,6 @@ const Settings: React.FC<SettingsProps> = ({ currency, setCurrency, categories, 
       setDeleteSaving(false);
     }
   };
-
-
-
-  // Auth context
-  const { userProfile, updateProfile, refreshProfile, user } = useAuth();
 
   // Account management state
   const [editFirstName, setEditFirstName] = useState('');
@@ -450,7 +462,7 @@ const Settings: React.FC<SettingsProps> = ({ currency, setCurrency, categories, 
   const handleAddCategory = (e: React.FormEvent) => {
     e.preventDefault();
     if (!newCatName.trim()) return;
-    setCategories(prev => [...prev, { id: Math.random().toString(36).substr(2, 9), name: newCatName.trim(), subcategories: [] }]);
+    saveCategories([...categories, { id: Math.random().toString(36).substr(2, 9), name: newCatName.trim(), subcategories: [] }]);
     setNewCatName('');
     setShowAddCat(false);
   };

@@ -219,6 +219,15 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
   const [categories, setCategories] = useState(INITIAL_CATEGORIES);
   const [theme, setTheme] = useState<'light' | 'dark'>('light');
 
+  // Load Custom Categories from User Profile
+  useEffect(() => {
+    if (userProfile?.settings?.categories && Array.isArray(userProfile.settings.categories)) {
+      setCategories(userProfile.settings.categories);
+    } else {
+      setCategories(INITIAL_CATEGORIES); // Fallback for new accounts
+    }
+  }, [userProfile]);
+
   // Lifted Budget Setups State - now loaded from Supabase
   const [budgetSetups, setBudgetSetups] = useState<any[]>([]);
   const [budgetSetupsLoading, setBudgetSetupsLoading] = useState(true);
