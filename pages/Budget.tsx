@@ -2392,52 +2392,50 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                       </div>
                     )}
                     {!isReadOnly && (
-                      <button
-                        onClick={() => {
-                          const debitAccounts = accounts.filter(a => a.type === 'Debit');
-                          setSalaryFormData({
-                            name: 'Income',
-                            amount: actualSalary || projectedSalary || '',
-                            date: new Date().toISOString().split('T')[0],
-                            accountId: debitAccounts[0]?.id || ''
-                          });
-                          setShowSalaryModal(true);
-                        }}
-                        className="p-1.5 bg-green-50 dark:bg-green-900/20 text-green-600 dark:text-green-400 rounded-lg hover:bg-green-100 dark:hover:bg-green-900/40 transition-colors shadow-sm"
-                        title="Record as Cash In transaction"
-                      >
-                        <WalletIcon className="w-4 h-4" />
-                      </button>
+                  hasIncomeRecords ? (
+                    <button
+                      onClick={() => setShowIncomeRecordsModal(true)}
+                      className="p-1.5 bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 rounded-lg hover:bg-blue-100 dark:hover:bg-blue-900/40 transition-colors shadow-sm"
+                      title="View Income Records"
+                    >
+                      <List className="w-4 h-4" />
+                    </button>
+                  ) : (
+                    <button
+                      onClick={() => {
+                        const debitAccounts = accounts.filter(a => a.type === 'Debit');
+                        setSalaryFormData({
+                          name: 'Income',
+                          amount: actualSalary || projectedSalary || '',
+                          date: new Date().toISOString().split('T')[0],
+                          accountId: debitAccounts[0]?.id || ''
+                        });
+                        setShowSalaryModal(true);
+                      }}
+                      className="p-1.5 bg-green-50 dark:bg-green-900/20 text-green-600 dark:text-green-400 rounded-lg hover:bg-green-100 dark:hover:bg-green-900/40 transition-colors shadow-sm"
+                      title="Record as Cash In transaction"
+                    >
+                      <WalletIcon className="w-4 h-4" />
+                    </button>
+                  )
                     )}
                   </div>
                 </td>
               </tr>
+          {totalOtherIncome > 0 && (
+            <>
               <tr>
                 <td className="p-3 pl-6 font-bold text-gray-700 dark:text-gray-300 text-sm">Other Income</td>
                 <td className="p-3 pr-6 text-right">
-                  <div className="flex items-center justify-end space-x-2">
-                    <span className="text-sm font-black text-gray-900 dark:text-gray-100">{formatCurrency(totalOtherIncome)}</span>
-                    {!isReadOnly && (
-                      <button
-                        onClick={() => {
-                          const debitAccounts = accounts.filter(a => a.type === 'Debit');
-                          setSalaryFormData({
-                            name: '', // Empty so user can type "Side Gig", "Bonus", etc.
-                            amount: '',
-                            date: new Date().toISOString().split('T')[0],
-                            accountId: debitAccounts[0]?.id || ''
-                          });
-                          setShowSalaryModal(true);
-                        }}
-                        className="p-1.5 bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400 rounded-lg hover:bg-indigo-100 dark:hover:bg-indigo-900/40 transition-colors shadow-sm"
-                        title="Record Other Income"
-                      >
-                        <Plus className="w-4 h-4" />
-                      </button>
-                    )}
-                  </div>
+                  <span className="text-sm font-black text-gray-900 dark:text-gray-100">{formatCurrency(totalOtherIncome)}</span>
                 </td>
               </tr>
+              <tr className="bg-green-50/30 dark:bg-green-900/10">
+                <td className="p-3 pl-6 font-bold text-green-700 dark:text-green-400 text-sm">Net Income</td>
+                <td className="p-3 pr-6 text-right font-black text-green-700 dark:text-green-400 text-sm">{formatCurrency(netIncome)}</td>
+              </tr>
+            </>
+          )}
               <tr>
                 <td className="p-3 pl-6 font-bold text-gray-700 dark:text-gray-300 text-sm">Total Spend</td>
                 <td className="p-3 pr-6 text-right font-black text-gray-900 dark:text-gray-100 text-sm">{formatCurrency(totalSpend)}</td>
