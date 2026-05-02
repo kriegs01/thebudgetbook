@@ -208,6 +208,14 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
   const [categories, setCategories] = useState(INITIAL_CATEGORIES);
   const [theme, setTheme] = useState<'light' | 'dark'>('light');
 
+  // Lifted Budget Setups State - now loaded from Supabase
+  const [budgetSetups, setBudgetSetups] = useState<any[]>([]);
+  const [budgetSetupsLoading, setBudgetSetupsLoading] = useState(true);
+  const [budgetSetupsError, setBudgetSetupsError] = useState<string | null>(null);
+
+  // Shared Trash State
+  const [trashSetups, setTrashSetups] = useState<any[]>([]);
+
   // Splash Screen State
   const [showSplash, setShowSplash] = useState(true);
   const [minSplashTimeElapsed, setMinSplashTimeElapsed] = useState(false);
@@ -308,14 +316,6 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
 
   // Wallet state is managed internally by WalletsPage and WalletView (they fetch their own data)
   
-  // Lifted Budget Setups State - now loaded from Supabase
-  const [budgetSetups, setBudgetSetups] = useState([]);
-  const [budgetSetupsLoading, setBudgetSetupsLoading] = useState(true);
-  const [budgetSetupsError, setBudgetSetupsError] = useState<string | null>(null);
-
-  // Shared Trash State
-  const [trashSetups, setTrashSetups] = useState([]);
-
   // Load all data from Supabase on component mount
   useEffect(() => {
     const fetchBillers = async () => {
