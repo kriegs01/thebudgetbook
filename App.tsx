@@ -208,6 +208,21 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
   const [categories, setCategories] = useState(INITIAL_CATEGORIES);
   const [theme, setTheme] = useState<'light' | 'dark'>('light');
 
+  // Splash Screen State
+  const [showSplash, setShowSplash] = useState(true);
+  const [minSplashTimeElapsed, setMinSplashTimeElapsed] = useState(false);
+
+  useEffect(() => {
+    const timer = setTimeout(() => setMinSplashTimeElapsed(true), 3000); // 3 seconds buffer
+    return () => clearTimeout(timer);
+  }, []);
+
+  const isDataLoading = accountsLoading || transactionsLoading || billersLoading || installmentsLoading || savingsLoading || budgetSetupsLoading;
+
+  useEffect(() => {
+    if (!isDataLoading && minSplashTimeElapsed) setShowSplash(false);
+  }, [isDataLoading, minSplashTimeElapsed]);
+
   // Navigation Customization State
   const [navPreferences, setNavPreferences] = useState<{id: string, visible: boolean}[]>([]);
   const [showNavEditModal, setShowNavEditModal] = useState(false);
@@ -1061,6 +1076,25 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
       localStorage.setItem('theme', newTheme);
     }
   };
+
+  if (showSplash) {
+    return (
+      <div className="fixed inset-0 z-[9999] flex flex-col items-center justify-center bg-gradient-to-br from-blue-50 via-white to-purple-50 dark:from-gray-950 dark:via-gray-900 dark:to-gray-950 transition-colors duration-300">
+        <div className="text-center animate-in fade-in zoom-in duration-700">
+          <div className="w-24 h-24 bg-white dark:bg-gray-900 rounded-3xl shadow-2xl flex items-center justify-center mx-auto mb-8 relative overflow-hidden border border-gray-100 dark:border-gray-800">
+            <div className="absolute inset-0 bg-blue-50/50 dark:bg-blue-900/10 animate-pulse"></div>
+            <div className="w-10 h-10 border-4 border-blue-100 dark:border-gray-800 border-t-blue-600 dark:border-t-blue-500 rounded-full animate-spin relative z-10"></div>
+          </div>
+          <h1 className="text-3xl font-black bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent mb-4 tracking-tight">
+            Budget Book
+          </h1>
+          <p className="text-gray-500 dark:text-gray-400 font-medium text-sm max-w-[260px] mx-auto leading-relaxed animate-pulse">
+            Loading your financial data and preparing your dashboard...
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <>
