@@ -245,17 +245,63 @@ const isCategoryLegacyForBudget = (
 /**
  * Calculates the remaining amount for a saved budget setup.
  * Uses the same formula as the Budget Setup page's Month Summary:
- *   remaining = salaryToUse - setup.totalAmount
- * where salaryToUse = _actualSalary if set, otherwise _projectedSalary.
+ *   remaining = salaryToUse + totalOtherIncome - setup.totalAmount
+ * where salaryToUse = _actualSalary if set, 0 if other income exists, otherwise _projectedSalary.
  */
-const calculateBudgetRemaining = (setup: SavedBudgetSetup): number => {
+const calculateBudgetRemaining = (
+  setup: SavedBudgetSetup,
+  transactions: SupabaseTransaction[],
+  selectedYear: number
+): number => {
   if (!setup.data) return -setup.totalAmount;
   const actualStr = setup.data._actualSalary;
   const projectedStr = setup.data._projectedSalary;
   const actualValue = actualStr && actualStr.trim() !== '' ? parseFloat(actualStr) : null;
   const projectedValue = parseFloat(projectedStr || '0') || 0;
-  const salaryToUse = actualValue !== null && !isNaN(actualValue) ? actualValue : projectedValue;
-  return salaryToUse - setup.totalAmount;
+  
+  const currentMonthIndex = MONTHS.indexOf(setup.month);
+  const allIncomeTxs = transactions.filter(tx => {
+    if (tx.transaction_type !== 'cash_in') return false;
+    
+    const isTaggedIncome = tx.notes?.startsWith('Income Record');
+    const nameLower = tx.name.trim().toLowerCase();
+    const isLegacyIncome = nameLower === 'salary' || nameLower === 'income';
+    
+    if (!isTaggedIncome && !isLegacyIncome) return false;
+
+    const txDate = new Date(tx.date);
+    if (txDate.getMonth() !== currentMonthIndex || txDate.getFullYear() !== selectedYear) return false;
+
+    let matchesTiming = false;
+    if (tx.notes?.includes(' - 1/2') || tx.notes?.includes(' - 2/2')) {
+      matchesTiming = tx.notes.includes(` - ${setup.timing}`);
+    } else {
+      const estimatedTiming = txDate.getDate() <= 15 ? '1/2' : '2/2';
+      matchesTiming = estimatedTiming === setup.timing;
+    }
+
+    return matchesTiming;
+  });
+
+  const otherIncomeTxs = allIncomeTxs.filter(tx => {
+    const nameLower = tx.name.trim().toLowerCase();
+    return nameLower !== 'salary' && nameLower !== 'income';
+  });
+
+  const totalOtherIncome = otherIncomeTxs.reduce((sum, tx) => sum + Math.abs(tx.amount), 0);
+  const hasIncomeRecords = allIncomeTxs.length > 0;
+
+  let salaryToUse = 0;
+  if (actualValue !== null && !isNaN(actualValue)) {
+    salaryToUse = actualValue;
+  } else if (hasIncomeRecords) {
+    salaryToUse = 0;
+  } else {
+    salaryToUse = projectedValue;
+  }
+
+  const netIncome = salaryToUse + totalOtherIncome;
+  return netIncome - setup.totalAmount;
 };
 
 const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSetups, setSavedSetups, onUpdateBiller, onMoveToTrash, onReloadSetups, onReloadBillers, onUpdateInstallment, installments = [], onTransactionCreated, onTransactionDeleted, onArchiveBudget, onReopenBudget }) => {
@@ -1953,7 +1999,7 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
     const archivedSetups = savedSetups.filter(s => s.isArchived);
 
     const renderSetupRow = (setup: SavedBudgetSetup) => {
-      const remaining = calculateBudgetRemaining(setup);
+      const remaining = calculateBudgetRemaining(setup, transactions, selectedYear);
       return (
       <tr key={setup.id} className="hover:bg-gray-50/50 dark:hover:bg-gray-800/50 transition-colors group">
         <td className="p-8 pl-12">
@@ -2196,9 +2242,6 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
 
   // Calculate Month Summary values
   const totalSpend = grandTotal;
-  const actualSalaryValue = actualSalary.trim() !== '' ? parseFloat(actualSalary) : null;
-  const projectedSalaryValue = parseFloat(projectedSalary) || 0;
-  const salaryToUse = actualSalaryValue !== null && !isNaN(actualSalaryValue) ? actualSalaryValue : projectedSalaryValue;
   
   // Calculate Other Income (Side gigs, bonuses, etc.)
   const currentMonthIndex = MONTHS.indexOf(selectedMonth);
@@ -2235,6 +2278,19 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
 
   const totalOtherIncome = otherIncomeTxs.reduce((sum, tx) => sum + Math.abs(tx.amount), 0);
   const hasIncomeRecords = allIncomeTxs.length > 0;
+
+  const actualSalaryValue = actualSalary.trim() !== '' ? parseFloat(actualSalary) : null;
+  const projectedSalaryValue = parseFloat(projectedSalary) || 0;
+  
+  let salaryToUse = 0;
+  if (actualSalaryValue !== null && !isNaN(actualSalaryValue)) {
+    salaryToUse = actualSalaryValue;
+  } else if (hasIncomeRecords) {
+    salaryToUse = 0;
+  } else {
+    salaryToUse = projectedSalaryValue;
+  }
+
   const netIncome = salaryToUse + totalOtherIncome;
 
   const remaining = netIncome - totalSpend;
@@ -3847,6 +3903,14 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                               try {
                                 const { error } = await deleteTransactionAndRevertSchedule(tx.id);
                                 if (error) throw error;
+
+                              const nameLower = tx.name.trim().toLowerCase();
+                              const isSalaryRecord = nameLower === 'salary' || nameLower === 'income';
+                              const actualSalaryParsed = parseFloat(actualSalary);
+                              if (isSalaryRecord || (!isNaN(actualSalaryParsed) && Math.abs(tx.amount) === actualSalaryParsed)) {
+                                setActualSalary('');
+                              }
+
                                 await reloadTransactions();
                                 if (onTransactionDeleted) onTransactionDeleted();
                               } catch (err) {
