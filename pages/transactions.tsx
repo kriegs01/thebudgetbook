@@ -7,6 +7,7 @@ import { getAllAccountsFrontend } from '../src/services/accountsService';
 import { getAllPeople } from '../src/services/peopleService';
 import type { SupabasePerson } from '../src/types/supabase';
 import { combineDateWithCurrentTime, getTodayIso, getFirstDayOfCurrentYearIso, getLastDayOfCurrentYearIso } from '../src/utils/dateUtils';
+import { PersonAutocomplete } from '../src/components/PersonAutocomplete';
 
 const FILTER_MIN_DATE = '2025-01-01';
 
@@ -898,17 +899,14 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ transactions, loadi
                         
                         <div>
                           <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">To Who?</label>
-                          <input 
-                            list="send-friends-global-list" 
+                          <PersonAutocomplete 
+                            options={uniquePeopleNames.filter(Boolean) as string[]}
                             value={form.personName} 
-                            onChange={e => setForm(f => ({ ...f, personName: e.target.value }))} 
+                            onChange={val => setForm(f => ({ ...f, personName: val }))} 
                             required 
                             placeholder="e.g. John Doe"
-                            className="w-full bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-transparent rounded-xl p-3.5 outline-none font-bold focus:ring-2 focus:ring-indigo-500 transition-all text-sm" 
+                            className="w-full bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-transparent rounded-xl p-3.5 outline-none font-bold focus:ring-2 focus:ring-indigo-500 transition-all text-sm"
                           />
-                          <datalist id="send-friends-global-list">
-                            {uniquePeopleNames.map((name, i) => <option key={i} value={name as string} />)}
-                          </datalist>
                         </div>
 
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -972,16 +970,13 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ transactions, loadi
                 {form.transactionType === 'loan' && userProfile?.settings?.peopleEnabled && (
                   <div>
                     <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Borrower (Optional)</label>
-                    <select
+                    <PersonAutocomplete 
+                      options={uniquePeopleNames.filter(Boolean) as string[]}
                       value={form.borrowerName}
-                      onChange={e => setForm(f => ({ ...f, borrowerName: e.target.value }))}
-                      className="w-full min-w-0 bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-transparent rounded-xl px-3 py-3 outline-none font-bold text-sm appearance-none transition-colors"
-                    >
-                      <option value="">Select Borrower</option>
-                      {people.map((person) => (
-                        <option key={person.id} value={person.name}>{person.name}</option>
-                      ))}
-                    </select>
+                      onChange={val => setForm(f => ({ ...f, borrowerName: val }))}
+                      placeholder="Select or type borrower"
+                      className="w-full min-w-0 bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-transparent rounded-xl px-3 py-3 outline-none font-bold text-sm transition-colors focus:ring-2 focus:ring-indigo-500"
+                    />
                     {people.length === 0 && (
                       <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">Add people in Settings to see them here.</p>
                     )}

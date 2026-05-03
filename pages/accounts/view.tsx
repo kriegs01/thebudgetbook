@@ -9,6 +9,7 @@ import { computeCreditUtilization, type CreditUtilization } from '../../src/util
 import { PinProtectedAction } from '../../src/components/PinProtectedAction';
 import { getAllPeople } from '../../src/services/peopleService';
 import type { SupabasePerson } from '../../src/types/supabase';
+import { PersonAutocomplete } from '../../src/components/PersonAutocomplete';
 
 const FILTER_MIN_DATE = '2025-01-01';
 
@@ -1086,16 +1087,13 @@ const AccountFilteredTransactions: React.FC<AccountFilteredTransactionsProps> = 
 
               <div>
                 <label className="block text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-2">Person / Payee (Optional)</label>
-                <input 
-                  list="withdraw-people-list"
+                <PersonAutocomplete 
+                  options={uniquePeopleNames.filter(Boolean) as string[]}
                   value={withdrawForm.personName} 
-                  onChange={e => setWithdrawForm(f => ({ ...f, personName: e.target.value }))} 
+                  onChange={val => setWithdrawForm(f => ({ ...f, personName: val }))} 
                   placeholder="e.g. John Doe"
-                  className="w-full bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-transparent rounded-2xl p-4 outline-none font-bold focus:ring-2 focus:ring-red-500 transition-all" 
+                  className="w-full bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-transparent rounded-2xl p-4 outline-none font-bold focus:ring-2 focus:ring-red-500 transition-all"
                 />
-                <datalist id="withdraw-people-list">
-                  {uniquePeopleNames.map((name, i) => <option key={i} value={name as string} />)}
-                </datalist>
                 <p className="text-[10px] text-gray-500 mt-2 font-medium">Link this expense to a person in your People page.</p>
               </div>
 
@@ -1247,15 +1245,14 @@ const AccountFilteredTransactions: React.FC<AccountFilteredTransactionsProps> = 
                 
                 <div>
                   <label className="block text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-2">To Who?</label>
-                  <input 
-                    list="send-friends-list" value={sendFriendForm.personName} 
-                    onChange={e => setSendFriendForm(f => ({ ...f, personName: e.target.value }))} 
-                    required placeholder="e.g. John Doe"
-                    className="w-full bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-transparent rounded-2xl p-4 outline-none font-bold focus:ring-2 focus:ring-blue-500 transition-all" 
+                  <PersonAutocomplete 
+                    options={uniquePeopleNames.filter(Boolean) as string[]}
+                    value={sendFriendForm.personName} 
+                    onChange={val => setSendFriendForm(f => ({ ...f, personName: val }))} 
+                    required 
+                    placeholder="e.g. John Doe"
+                    className="w-full bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-transparent rounded-2xl p-4 outline-none font-bold focus:ring-2 focus:ring-blue-500 transition-all"
                   />
-                  <datalist id="send-friends-list">
-                    {uniquePeopleNames.map((name, i) => <option key={i} value={name as string} />)}
-                  </datalist>
                 </div>
 
                 <div className="grid grid-cols-2 gap-4">
@@ -1320,16 +1317,13 @@ const AccountFilteredTransactions: React.FC<AccountFilteredTransactionsProps> = 
 
               <div>
                 <label className="block text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-2">Person (Optional)</label>
-                <input 
-                  list="loan-people-list"
+                <PersonAutocomplete 
+                  options={uniquePeopleNames.filter(Boolean) as string[]}
                   value={loanForm.personName} 
-                  onChange={e => setLoanForm(f => ({ ...f, personName: e.target.value }))} 
+                  onChange={val => setLoanForm(f => ({ ...f, personName: val }))} 
                   placeholder="e.g. John Doe"
-                  className="w-full bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-transparent rounded-2xl p-4 outline-none font-bold focus:ring-2 focus:ring-orange-500 transition-all" 
+                  className="w-full bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-transparent rounded-2xl p-4 outline-none font-bold focus:ring-2 focus:ring-orange-500 transition-all"
                 />
-                <datalist id="loan-people-list">
-                  {uniquePeopleNames.map((name, i) => <option key={i} value={name as string} />)}
-                </datalist>
               </div>
 
               <div>
@@ -1390,16 +1384,13 @@ const AccountFilteredTransactions: React.FC<AccountFilteredTransactionsProps> = 
 
               <div>
                 <label className="block text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-2">From Person (Optional)</label>
-                <input 
-                  list="cashin-people-list"
+                <PersonAutocomplete 
+                  options={uniquePeopleNames.filter(Boolean) as string[]}
                   value={cashInForm.personName} 
-                  onChange={e => setCashInForm(f => ({ ...f, personName: e.target.value }))} 
+                  onChange={val => setCashInForm(f => ({ ...f, personName: val }))} 
                   placeholder="e.g. John Doe"
-                  className="w-full bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-transparent rounded-2xl p-4 outline-none font-bold focus:ring-2 focus:ring-green-500 transition-all" 
+                  className="w-full bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-transparent rounded-2xl p-4 outline-none font-bold focus:ring-2 focus:ring-green-500 transition-all"
                 />
-                <datalist id="cashin-people-list">
-                  {uniquePeopleNames.map((name, i) => <option key={i} value={name as string} />)}
-                </datalist>
               </div>
 
               <div>
