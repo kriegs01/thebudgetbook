@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Users, Plus, LayoutGrid, List, MoreVertical, Trash2, ArrowRight, ArrowLeft, X, AlertTriangle, User, Landmark, ArrowUpFromLine, ArrowDownToLine, ArrowLeftRight, BanknoteArrowDown, ChevronDown, ChevronUp, Edit2 } from 'lucide-react';
+import { Users, Plus, LayoutGrid, List, MoreVertical, Trash2, ArrowRight, ArrowLeft, X, AlertTriangle, User, Landmark, ArrowUpFromLine, ArrowDownToLine, ArrowLeftRight, BanknoteArrowDown, ChevronDown, ChevronUp, Edit2, Search, UserPlus, CheckSquare } from 'lucide-react';
 import { getAllPeople, createPerson, deletePerson } from '../src/services/peopleService';
 import { getAllTransactions, createTransaction, deleteTransaction, updateTransaction } from '../src/services/transactionsService';
 import type { SupabasePerson, SupabaseTransaction } from '../src/types/supabase';
@@ -29,6 +29,12 @@ export default function PeoplePage() {
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
   const [editTxModal, setEditTxModal] = useState<{id: string, name: string, amount: string, date: string} | null>(null);
   const [txConfirmModal, setTxConfirmModal] = useState<{show: boolean; id: string; name: string} | null>(null);
+  
+  // Budee Social features
+  const [activeTab, setActiveTab] = useState<'balances' | 'history'>('balances');
+  const [showFindFriendsModal, setShowFindFriendsModal] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [isSearching, setIsSearching] = useState(false);
 
   const loadData = useCallback(async () => {
     setIsLoading(true);
@@ -45,6 +51,14 @@ export default function PeoplePage() {
   useEffect(() => {
     loadData();
   }, [loadData]);
+
+  useEffect(() => {
+    if (searchQuery) {
+      setIsSearching(true);
+      const timer = setTimeout(() => setIsSearching(false), 800);
+      return () => clearTimeout(timer);
+    }
+  }, [searchQuery]);
 
   const handleAddPerson = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -72,8 +86,9 @@ export default function PeoplePage() {
 
   const handleDeleteTrigger = (id: string, name: string) => {
     const hasTransactions = transactions.some(t => 
-      t.borrower_name === name || 
-      (t.transaction_type === 'loan_payment' && t.related_transaction_id && transactions.some(l => l.id === t.related_transaction_id && l.borrower_name === name))
+      t.person_name === name || t.borrower_name === name || 
+      (t.transaction_type === 'loan_payment' && t.related_transaction_id && 
+       transactions.some(l => l.id === t.related_transaction_id && (l.person_name === name || l.borrower_name === name)))
     );
     setConfirmModal({ show: true, id, name, hasTransactions });
   };
@@ -84,9 +99,9 @@ export default function PeoplePage() {
     setIsSubmitting(true);
     try {
       if (confirmModal.hasTransactions) {
-        const personTxs = transactions.filter(t => t.borrower_name === confirmModal.name);
+        const personTxs = transactions.filter(t => t.person_name === confirmModal.name || t.borrower_name === confirmModal.name);
         for (const tx of personTxs) {
-          await updateTransaction(tx.id, { borrower_name: null });
+          await updateTransaction(tx.id, { borrower_name: null, person_name: null });
         }
       }
       
@@ -122,7 +137,7 @@ export default function PeoplePage() {
       notes: `Payment for: ${selectedLoan.name}`,
       payment_schedule_id: null,
       related_transaction_id: selectedLoan.id,
-      borrower_name: selectedPerson,
+      person_name: selectedPerson,
     });
     setIsSubmitting(false);
 
@@ -179,8 +194,9 @@ export default function PeoplePage() {
   // Get aggregate stats from transactions
   const getPersonStats = (personName: string) => {
     const personTxs = transactions.filter(t => 
-      t.borrower_name === personName || 
-      (t.transaction_type === 'loan_payment' && t.related_transaction_id && transactions.some(l => l.id === t.related_transaction_id && l.borrower_name === personName))
+      t.person_name === personName || t.borrower_name === personName || 
+      (t.transaction_type === 'loan_payment' && t.related_transaction_id && 
+       transactions.some(l => l.id === t.related_transaction_id && (l.person_name === personName || l.borrower_name === personName)))
     );
     const activeLoans = personTxs.filter(t => t.transaction_type === 'loan');
     const totalLoanGiven = activeLoans.reduce((sum, t) => sum + Number(t.amount || 0), 0);
@@ -199,8 +215,9 @@ export default function PeoplePage() {
     const personStats = getPersonStats(selectedPerson);
     const personTxs = transactions
       .filter(t => 
-        t.borrower_name === selectedPerson || 
-        (t.transaction_type === 'loan_payment' && t.related_transaction_id && transactions.some(l => l.id === t.related_transaction_id && l.borrower_name === selectedPerson))
+        t.person_name === selectedPerson || t.borrower_name === selectedPerson || 
+        (t.transaction_type === 'loan_payment' && t.related_transaction_id && 
+         transactions.some(l => l.id === t.related_transaction_id && (l.person_name === selectedPerson || l.borrower_name === selectedPerson)))
       )
       .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
     
@@ -245,15 +262,41 @@ export default function PeoplePage() {
             </div>
           </div>
 
+          {/* Tabs */}
+          <div className="flex gap-6 border-b border-gray-200 dark:border-gray-800 mb-6 px-2 mt-8">
+            <button
+              onClick={() => setActiveTab('balances')}
+              className={`pb-4 text-sm font-black uppercase tracking-widest transition-colors relative ${activeTab === 'balances' ? 'text-indigo-600 dark:text-indigo-400' : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-300'}`}
+            >
+              Active Balances
+              {activeTab === 'balances' && <span className="absolute bottom-0 left-0 w-full h-0.5 bg-indigo-600 dark:bg-indigo-400 rounded-t-full"></span>}
+            </button>
+            <button
+              onClick={() => setActiveTab('history')}
+              className={`pb-4 text-sm font-black uppercase tracking-widest transition-colors relative ${activeTab === 'history' ? 'text-indigo-600 dark:text-indigo-400' : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-300'}`}
+            >
+              Transaction History
+              {activeTab === 'history' && <span className="absolute bottom-0 left-0 w-full h-0.5 bg-indigo-600 dark:bg-indigo-400 rounded-t-full"></span>}
+            </button>
+          </div>
+
           {/* Transactions List */}
           <div className="bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-800 rounded-[2.5rem] shadow-sm">
-            <div className="p-6 md:p-8 border-b border-gray-100 dark:border-gray-800 flex items-center justify-between">
-              <h2 className="text-base font-black text-gray-900 dark:text-gray-100 uppercase tracking-widest">Transaction History</h2>
-            </div>
             <div className="divide-y divide-gray-50 dark:divide-gray-800/50">
               {(() => {
                 const mainTxs = personTxs.filter(t => t.transaction_type !== 'loan_payment' || !t.related_transaction_id);
-                return mainTxs.length > 0 ? mainTxs.map((tx, index) => {
+                
+                let displayTxs = mainTxs;
+                if (activeTab === 'balances') {
+                  displayTxs = mainTxs.filter(tx => {
+                    if (tx.transaction_type !== 'loan') return false;
+                    const payments = personTxs.filter(t => t.related_transaction_id === tx.id && t.transaction_type === 'loan_payment');
+                    const totalPaid = payments.reduce((sum, t) => sum + Math.abs(t.amount), 0);
+                    return (Math.abs(tx.amount) - totalPaid) > 0;
+                  });
+                }
+
+                return displayTxs.length > 0 ? displayTxs.map((tx, index) => {
                   const isMoneyOut = tx.amount > 0;
                   let TxIcon = isMoneyOut ? ArrowUpFromLine : ArrowDownToLine;
                   if (tx.transaction_type === 'transfer') TxIcon = ArrowLeftRight;
@@ -291,7 +334,7 @@ export default function PeoplePage() {
                   }
 
                   return (
-                    <div key={tx.id} className={`flex flex-col hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors ${payments.length > 0 ? 'cursor-pointer' : ''} ${index === mainTxs.length - 1 ? 'rounded-b-[2.5rem]' : ''}`} onClick={() => payments.length > 0 && toggleExpand(tx.id)}>
+                    <div key={tx.id} className={`flex flex-col hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors ${payments.length > 0 ? 'cursor-pointer' : ''} ${index === displayTxs.length - 1 ? 'rounded-b-[2.5rem]' : ''}`} onClick={() => payments.length > 0 && toggleExpand(tx.id)}>
                       <div className="p-4 md:p-5 flex items-center justify-between gap-3">
                         <div className="flex items-center space-x-3 min-w-0">
                           <div className={`p-2.5 rounded-xl flex-shrink-0 ${isMoneyOut ? 'bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400' : 'bg-green-50 dark:bg-green-900/20 text-green-600 dark:text-green-400'}`}>
@@ -346,7 +389,7 @@ export default function PeoplePage() {
                       </div>
                       
                       {isExpanded && payments.length > 0 && (
-                        <div className={`px-4 md:px-5 pb-5 pt-1 bg-gray-50/50 dark:bg-gray-800/20 ${index === mainTxs.length - 1 ? 'rounded-b-[2.5rem]' : ''}`} onClick={e => e.stopPropagation()}>
+                        <div className={`px-4 md:px-5 pb-5 pt-1 bg-gray-50/50 dark:bg-gray-800/20 ${index === displayTxs.length - 1 ? 'rounded-b-[2.5rem]' : ''}`} onClick={e => e.stopPropagation()}>
                           <div className="border-l-2 border-gray-200 dark:border-gray-700 pl-4 space-y-3">
                             {payments.map(payment => (
                               <div key={payment.id} className="flex justify-between items-center group relative">
@@ -381,10 +424,14 @@ export default function PeoplePage() {
                 }) : (
                   <div className="py-20 text-center">
                     <div className="w-16 h-16 bg-gray-50 dark:bg-gray-800 rounded-full flex items-center justify-center mx-auto mb-4 text-gray-400">
-                      <List className="w-8 h-8" />
+                      {activeTab === 'balances' ? <CheckSquare className="w-8 h-8 text-green-500" /> : <List className="w-8 h-8" />}
                     </div>
-                    <h3 className="text-lg font-black text-gray-900 dark:text-gray-100 uppercase tracking-widest mb-1">No transactions</h3>
-                    <p className="text-sm text-gray-500 dark:text-gray-400 font-medium">This person hasn't been linked to any transactions yet.</p>
+                    <h3 className="text-lg font-black text-gray-900 dark:text-gray-100 uppercase tracking-widest mb-1">
+                      {activeTab === 'balances' ? 'All Settled Up' : 'No transactions'}
+                    </h3>
+                    <p className="text-sm text-gray-500 dark:text-gray-400 font-medium">
+                      {activeTab === 'balances' ? "There are no active loans or balances here." : "This person hasn't been linked to any transactions yet."}
+                    </p>
                   </div>
                 );
               })()}
@@ -557,6 +604,13 @@ export default function PeoplePage() {
                 <List className="w-4 h-4" />
               </button>
             </div>
+            <button
+              onClick={() => setShowFindFriendsModal(true)}
+              className="flex items-center gap-2 bg-white dark:bg-gray-800 text-indigo-600 dark:text-indigo-400 border border-indigo-100 dark:border-indigo-800/50 px-5 py-3 rounded-xl font-bold hover:bg-indigo-50 dark:hover:bg-gray-700 transition-all shadow-sm"
+            >
+              <Search className="w-4 h-4" />
+              <span className="hidden sm:inline">Find Friends</span>
+            </button>
             <button 
               onClick={() => setShowAddModal(true)} 
               className="flex items-center gap-2 bg-indigo-600 text-white px-5 py-3 rounded-xl font-bold hover:bg-indigo-700 transition-all shadow-md shadow-indigo-200 dark:shadow-none"
@@ -687,6 +741,63 @@ export default function PeoplePage() {
                 {isSubmitting ? 'Adding...' : 'Save Person'}
               </button>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* ── Find Friends Modal (Social Sneak Peek) ─────────────────────── */}
+      {showFindFriendsModal && (
+        <div className="fixed inset-0 z-50 flex items-start justify-center p-4 pt-20 bg-black/60 backdrop-blur-sm animate-in fade-in">
+          <div className="bg-white dark:bg-gray-900 rounded-[2.5rem] w-full max-w-md p-8 shadow-2xl relative transition-colors animate-in slide-in-from-top-10">
+            <button onClick={() => { setShowFindFriendsModal(false); setSearchQuery(''); }} className="absolute right-6 top-6 p-2 text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full transition-colors">
+              <X className="w-5 h-5" />
+            </button>
+            <h2 className="text-xl font-black text-gray-900 dark:text-gray-100 mb-1 uppercase tracking-tight">Find Friends</h2>
+            <p className="text-sm text-gray-500 dark:text-gray-400 mb-6 font-medium">Search by email or @handle to connect.</p>
+
+            <div className="relative mb-6">
+              <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+              <input
+                autoFocus
+                type="text"
+                value={searchQuery}
+                onChange={e => setSearchQuery(e.target.value)}
+                placeholder="e.g. hello@budee.app"
+                className="w-full bg-gray-50 dark:bg-gray-800 border-transparent text-gray-900 dark:text-gray-100 rounded-2xl p-4 pl-12 text-sm font-bold outline-none focus:ring-2 focus:ring-indigo-500 transition-all placeholder:text-gray-400"
+              />
+            </div>
+
+            <div className="min-h-[150px]">
+              {!searchQuery ? (
+                <div className="flex flex-col items-center justify-center py-8 text-center text-gray-400 dark:text-gray-500">
+                  <Users className="w-10 h-10 mb-3 opacity-50" />
+                  <p className="text-sm font-medium">Search for your friends to start tracking shared expenses automatically.</p>
+                </div>
+              ) : isSearching ? (
+                <div className="space-y-4">
+                  {[1, 2].map(i => (
+                    <div key={i} className="flex items-center gap-4 animate-pulse">
+                      <div className="w-12 h-12 bg-gray-200 dark:bg-gray-800 rounded-full"></div>
+                      <div className="flex-1 space-y-2">
+                        <div className="h-4 bg-gray-200 dark:bg-gray-800 rounded w-1/2"></div>
+                        <div className="h-3 bg-gray-200 dark:bg-gray-800 rounded w-1/3"></div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="flex flex-col items-center justify-center py-6 text-center">
+                  <div className="w-12 h-12 bg-indigo-50 dark:bg-indigo-900/20 text-indigo-500 dark:text-indigo-400 rounded-full flex items-center justify-center mb-3">
+                    <UserPlus className="w-6 h-6" />
+                  </div>
+                  <p className="text-sm font-bold text-gray-900 dark:text-gray-100 mb-1">No registered users found</p>
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mb-4">"{searchQuery}" isn't on Budee yet.</p>
+                  <button className="bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-widest hover:bg-indigo-200 dark:hover:bg-indigo-900/50 transition-colors">
+                    Invite to Budee
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
         </div>
       )}

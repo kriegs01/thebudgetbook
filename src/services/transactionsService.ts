@@ -462,7 +462,8 @@ export const createTransfer = async (
   sourceAccountId: string,
   destinationAccountId: string,
   amount: number,
-  date: string
+  date: string,
+  feeAmount: number = 0
 ) => {
   try {
     // Fetch the current authenticated user — required for RLS compliance on insert
@@ -509,7 +510,29 @@ export const createTransfer = async (
       .update({ related_transaction_id: incomingTx.id })
       .eq('id', outgoingTx.id);
 
-    return { data: { outgoing: outgoingTx, incoming: incomingTx }, error: null };
+    // Create the fee transaction if a fee was provided
+    let feeTx = null;
+    if (feeAmount > 0) {
+      const { data: feeData, error: feeError } = await supabase
+        .from(getTableName('transactions'))
+        .insert([{
+          name: 'Transfer Fee',
+          date,
+          amount: Math.abs(feeAmount), // Positive because money is leaving (expense)
+          payment_method_id: sourceAccountId,
+          transaction_type: 'payment', // Logged as a standard expense
+          notes: `Bank fee for transfer`,
+          related_transaction_id: outgoingTx.id, // Group it with the transfer
+          user_id: user.id
+        }])
+        .select()
+        .single();
+        
+      if (feeError) throw feeError;
+      feeTx = feeData;
+    }
+
+    return { data: { outgoing: outgoingTx, incoming: incomingTx, fee: feeTx }, error: null };
   } catch (error) {
     console.error('Error creating transfer:', error);
     return { data: null, error };

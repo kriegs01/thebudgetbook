@@ -30,6 +30,7 @@ type Transaction = {
   notes?: string | null;
   related_transaction_id?: string | null;
   receiptUrl?: string | null;
+  person_name?: string | null;
 };
 
 type LoanTransaction = Transaction & {
@@ -82,10 +83,10 @@ const AccountFilteredTransactions: React.FC<AccountFilteredTransactionsProps> = 
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   // Form states
-  const [withdrawForm, setWithdrawForm] = useState({ forWhat: '', amount: '', date: new Date().toISOString().split('T')[0] });
-  const [transferForm, setTransferForm] = useState({ amount: '', receivingAccountId: '', date: new Date().toISOString().split('T')[0] });
-  const [loanForm, setLoanForm] = useState({ what: '', amount: '', date: new Date().toISOString().split('T')[0] });
-  const [cashInForm, setCashInForm] = useState({ amount: '', date: new Date().toISOString().split('T')[0], notes: '' });
+  const [withdrawForm, setWithdrawForm] = useState({ forWhat: '', amount: '', date: new Date().toISOString().split('T')[0], personName: '' });
+  const [transferForm, setTransferForm] = useState({ amount: '', feeAmount: '', receivingAccountId: '', date: new Date().toISOString().split('T')[0] });
+  const [loanForm, setLoanForm] = useState({ what: '', amount: '', date: new Date().toISOString().split('T')[0], personName: '' });
+  const [cashInForm, setCashInForm] = useState({ amount: '', date: new Date().toISOString().split('T')[0], notes: '', personName: '' });
   const [loanPaymentForm, setLoanPaymentForm] = useState({ amount: '', date: new Date().toISOString().split('T')[0] });
   const [cardPaymentForm, setCardPaymentForm] = useState({ name: '', amount: '', date: new Date().toISOString().split('T')[0], notes: '' });
 
@@ -139,7 +140,8 @@ const AccountFilteredTransactions: React.FC<AccountFilteredTransactionsProps> = 
         transaction_type: t.transaction_type,
         notes: t.notes,
         related_transaction_id: t.related_transaction_id,
-        receiptUrl: (t as unknown as { receipt_url?: string | null }).receipt_url ?? null
+        receiptUrl: (t as unknown as { receipt_url?: string | null }).receipt_url ?? null,
+        person_name: (t as any).person_name ?? null
       }));
       setTransactions(txList);
 
@@ -347,13 +349,14 @@ const AccountFilteredTransactions: React.FC<AccountFilteredTransactionsProps> = 
         notes: null,
         payment_schedule_id: null,
         related_transaction_id: null,
+        person_name: withdrawForm.personName.trim() || null,
       });
 
       if (error) throw error;
       
       showMessage('success', 'Withdrawal recorded successfully');
       setShowWithdrawModal(false);
-      setWithdrawForm({ forWhat: '', amount: '', date: new Date().toISOString().split('T')[0] });
+      setWithdrawForm({ forWhat: '', amount: '', date: new Date().toISOString().split('T')[0], personName: '' });
       await loadTransactions();
       onTransactionCreated?.();
     } catch (error) {
@@ -374,14 +377,15 @@ const AccountFilteredTransactions: React.FC<AccountFilteredTransactionsProps> = 
         accountId,
         transferForm.receivingAccountId,
         parseFloat(transferForm.amount),
-        combineDateWithCurrentTime(transferForm.date)
+        combineDateWithCurrentTime(transferForm.date),
+        parseFloat(transferForm.feeAmount || '0')
       );
 
       if (error) throw error;
       
       showMessage('success', 'Transfer completed successfully');
       setShowTransferModal(false);
-      setTransferForm({ amount: '', receivingAccountId: '', date: new Date().toISOString().split('T')[0] });
+      setTransferForm({ amount: '', feeAmount: '', receivingAccountId: '', date: new Date().toISOString().split('T')[0] });
       await loadTransactions();
       onTransactionCreated?.();
     } catch (error) {
@@ -407,13 +411,14 @@ const AccountFilteredTransactions: React.FC<AccountFilteredTransactionsProps> = 
         notes: loanForm.what,
         payment_schedule_id: null,
         related_transaction_id: null,
+        person_name: loanForm.personName.trim() || null,
       });
 
       if (error) throw error;
       
       showMessage('success', 'Loan recorded successfully');
       setShowLoanModal(false);
-      setLoanForm({ what: '', amount: '', date: new Date().toISOString().split('T')[0] });
+      setLoanForm({ what: '', amount: '', date: new Date().toISOString().split('T')[0], personName: '' });
       await loadTransactions();
       onTransactionCreated?.();
     } catch (error) {
@@ -439,13 +444,14 @@ const AccountFilteredTransactions: React.FC<AccountFilteredTransactionsProps> = 
         notes: cashInForm.notes || null,
         payment_schedule_id: null,
         related_transaction_id: null,
+        person_name: cashInForm.personName.trim() || null,
       });
 
       if (error) throw error;
       
       showMessage('success', 'Cash in recorded successfully');
       setShowCashInModal(false);
-      setCashInForm({ amount: '', date: new Date().toISOString().split('T')[0], notes: '' });
+      setCashInForm({ amount: '', date: new Date().toISOString().split('T')[0], notes: '', personName: '' });
       await loadTransactions();
       onTransactionCreated?.();
     } catch (error) {
@@ -1029,6 +1035,17 @@ const AccountFilteredTransactions: React.FC<AccountFilteredTransactionsProps> = 
               </div>
 
               <div>
+                <label className="block text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-2">Person / Payee (Optional)</label>
+                <input 
+                  value={withdrawForm.personName} 
+                  onChange={e => setWithdrawForm(f => ({ ...f, personName: e.target.value }))} 
+                  placeholder="e.g. John Doe"
+                  className="w-full bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-transparent rounded-2xl p-4 outline-none font-bold focus:ring-2 focus:ring-red-500 transition-all" 
+                />
+                <p className="text-[10px] text-gray-500 mt-2 font-medium">Link this expense to a person in your People page.</p>
+              </div>
+
+              <div>
                 <label className="block text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-2">Date</label>
                 <input 
                   type="date" 
@@ -1082,6 +1099,23 @@ const AccountFilteredTransactions: React.FC<AccountFilteredTransactionsProps> = 
                     className="w-full bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-transparent rounded-2xl p-4 pl-8 outline-none text-xl font-black focus:ring-2 focus:ring-blue-500 transition-all" 
                   />
                 </div>
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-2">Transfer Fee (Optional)</label>
+                <div className="relative">
+                  <span className="absolute left-4 top-1/2 -translate-y-1/2 font-bold text-gray-400 dark:text-gray-500">₱</span>
+                  <input 
+                    type="number" 
+                    step="0.01" 
+                    min="0"
+                    value={transferForm.feeAmount} 
+                    onChange={e => setTransferForm(f => ({ ...f, feeAmount: e.target.value }))} 
+                    placeholder="0.00"
+                    className="w-full bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-transparent rounded-2xl p-4 pl-8 outline-none text-xl font-black focus:ring-2 focus:ring-blue-500 transition-all" 
+                  />
+                </div>
+                <p className="text-[10px] text-gray-500 mt-2 font-medium">Fees will be logged as a separate expense from the source account.</p>
               </div>
 
               <div>
@@ -1169,6 +1203,16 @@ const AccountFilteredTransactions: React.FC<AccountFilteredTransactionsProps> = 
               </div>
 
               <div>
+                <label className="block text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-2">Person (Optional)</label>
+                <input 
+                  value={loanForm.personName} 
+                  onChange={e => setLoanForm(f => ({ ...f, personName: e.target.value }))} 
+                  placeholder="e.g. John Doe"
+                  className="w-full bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-transparent rounded-2xl p-4 outline-none font-bold focus:ring-2 focus:ring-orange-500 transition-all" 
+                />
+              </div>
+
+              <div>
                 <label className="block text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-2">Date</label>
                 <input 
                   type="date" 
@@ -1222,6 +1266,16 @@ const AccountFilteredTransactions: React.FC<AccountFilteredTransactionsProps> = 
                     className="w-full bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-transparent rounded-2xl p-4 pl-8 outline-none text-xl font-black focus:ring-2 focus:ring-green-500 transition-all" 
                   />
                 </div>
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-2">From Person (Optional)</label>
+                <input 
+                  value={cashInForm.personName} 
+                  onChange={e => setCashInForm(f => ({ ...f, personName: e.target.value }))} 
+                  placeholder="e.g. John Doe"
+                  className="w-full bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-transparent rounded-2xl p-4 outline-none font-bold focus:ring-2 focus:ring-green-500 transition-all" 
+                />
               </div>
 
               <div>

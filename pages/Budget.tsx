@@ -2551,6 +2551,7 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
         <div className="bg-white dark:bg-gray-900 rounded-[3rem] shadow-sm border border-gray-100 dark:border-gray-800 overflow-hidden w-full transition-colors">
           <div className="px-8 py-5 border-b border-gray-50 dark:border-gray-800/50 bg-gray-50/30 dark:bg-gray-800/30 flex justify-between items-center transition-colors">
             <h3 className="text-xs font-black text-gray-900 dark:text-gray-100 uppercase tracking-[0.25em]">Stash</h3>
+            <h3 className="text-sm font-bold text-gray-900 dark:text-gray-100 uppercase tracking-[0.2em]">Stash</h3>
             <div className="flex items-center space-x-3">
               {stashStatusMsg && (
                 <span className={`text-xs font-bold px-3 py-1 rounded-xl ${stashStatusMsg.type === 'success' ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'}`}>
@@ -2663,6 +2664,7 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
               <div className="px-8 py-5 border-b border-gray-50 dark:border-gray-800/50 bg-gray-50/30 dark:bg-gray-800/30 flex justify-between items-center transition-colors">
                 <div className="flex items-center space-x-2">
                   <h3 className="text-xs font-black text-gray-900 dark:text-gray-100 uppercase tracking-[0.25em]">{cat.name}</h3>
+                  <h3 className="text-sm font-bold text-gray-900 dark:text-gray-100 uppercase tracking-[0.2em]">{cat.name}</h3>
                   {(cat.flexiMode ?? true) && <span className="text-[9px] font-black text-green-600 bg-green-50 border border-green-200 dark:bg-green-900/30 dark:border-green-800/50 dark:text-green-400 px-2 py-0.5 rounded-full uppercase tracking-wider">Flexi</span>}
                   {isLegacyCategory && <span className="text-[9px] font-black text-amber-600 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full uppercase tracking-wider" aria-label="Legacy category — use Stash for new savings/allowance items" title="This category is legacy. Use Stash for new savings/allowance items.">Legacy</span>}
                 </div>
@@ -2815,6 +2817,7 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
               <div className="px-8 py-5 border-b border-gray-50 dark:border-gray-800/50 bg-gray-50/30 dark:bg-gray-800/30 flex justify-between items-center transition-colors">
                 <div className="flex items-center space-x-2">
                   <h3 className="text-xs font-black text-gray-900 dark:text-gray-100 uppercase tracking-[0.25em]">{cat.name}</h3>
+                  <h3 className="text-sm font-bold text-gray-900 dark:text-gray-100 uppercase tracking-[0.2em]">{cat.name}</h3>
                   {(cat.flexiMode ?? true) && <span className="text-[9px] font-black text-green-600 bg-green-50 border border-green-200 dark:bg-green-900/30 dark:border-green-800/50 dark:text-green-400 px-2 py-0.5 rounded-full uppercase tracking-wider">Flexi</span>}
                   {isLegacyCategory && <span className="text-[9px] font-black text-amber-600 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full uppercase tracking-wider">Legacy</span>}
                 </div>
@@ -3213,6 +3216,7 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                 <div className="px-8 py-5 border-b border-gray-50 dark:border-gray-800/50 bg-gray-50/30 dark:bg-gray-800/30 flex justify-between items-center transition-colors">
                   <div>
                     <h3 className="text-xs font-black text-gray-900 dark:text-gray-100 uppercase tracking-[0.25em]">Credit Card Purchases</h3>
+                    <h3 className="text-sm font-bold text-gray-900 dark:text-gray-100 uppercase tracking-[0.2em]">Credit Card Purchases</h3>
                     <p className="text-[10px] text-gray-500 font-medium mt-1">{account.bank} • {relevantCycle.cycleLabel}</p>
                   </div>
                   <span className="text-lg font-black text-purple-600">{formatCurrency(relevantCycle.totalAmount)}</span>
