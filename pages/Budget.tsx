@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { BudgetItem, Account, Biller, PaymentSchedule, CategorizedSetupItem, SavedBudgetSetup, BudgetCategory, Installment, Wallet } from '../types';
-import { Plus, Check, ChevronDown, Trash2, Save, FileText, Wallet as WalletIcon, ArrowRight, ArrowLeft, Upload, CheckCircle2, X, AlertTriangle, Info, Eye, ZoomIn, ZoomOut, Download, Archive, RotateCcw, Lock } from 'lucide-react';
+import { Plus, Check, ChevronDown, Trash2, Save, FileText, Wallet as WalletIcon, ArrowRight, ArrowLeft, Upload, CheckCircle2, X, AlertTriangle, Info, Eye, ZoomIn, ZoomOut, Download, Archive, RotateCcw, Lock, List } from 'lucide-react';
 import { PinProtectedAction } from '../src/components/PinProtectedAction';
 import { createBudgetSetupFrontend, updateBudgetSetupFrontend, archiveBudgetSetup, reopenBudgetSetup } from '../src/services/budgetSetupsService';
 import { IconSquircleButton } from '../src/components/IconSquircleButton';
@@ -206,6 +206,10 @@ const shouldRenderCategorySection = (
     }
   }
 
+    if (cat.flexiMode === false && !hasData) {
+      return false;
+    }
+
   return isActive || hasData;
 };
 
@@ -245,17 +249,63 @@ const isCategoryLegacyForBudget = (
 /**
  * Calculates the remaining amount for a saved budget setup.
  * Uses the same formula as the Budget Setup page's Month Summary:
- *   remaining = salaryToUse - setup.totalAmount
- * where salaryToUse = _actualSalary if set, otherwise _projectedSalary.
+ *   remaining = salaryToUse + totalOtherIncome - setup.totalAmount
+ * where salaryToUse = _actualSalary if set, 0 if other income exists, otherwise _projectedSalary.
  */
-const calculateBudgetRemaining = (setup: SavedBudgetSetup): number => {
+const calculateBudgetRemaining = (
+  setup: SavedBudgetSetup,
+  transactions: SupabaseTransaction[],
+  selectedYear: number
+): number => {
   if (!setup.data) return -setup.totalAmount;
   const actualStr = setup.data._actualSalary;
   const projectedStr = setup.data._projectedSalary;
   const actualValue = actualStr && actualStr.trim() !== '' ? parseFloat(actualStr) : null;
   const projectedValue = parseFloat(projectedStr || '0') || 0;
-  const salaryToUse = actualValue !== null && !isNaN(actualValue) ? actualValue : projectedValue;
-  return salaryToUse - setup.totalAmount;
+  
+  const currentMonthIndex = MONTHS.indexOf(setup.month);
+  const allIncomeTxs = transactions.filter(tx => {
+    if (tx.transaction_type !== 'cash_in') return false;
+    
+    const isTaggedIncome = tx.notes?.startsWith('Income Record');
+    const nameLower = tx.name.trim().toLowerCase();
+    const isLegacyIncome = nameLower === 'salary' || nameLower === 'income';
+    
+    if (!isTaggedIncome && !isLegacyIncome) return false;
+
+    const txDate = new Date(tx.date);
+    if (txDate.getMonth() !== currentMonthIndex || txDate.getFullYear() !== selectedYear) return false;
+
+    let matchesTiming = false;
+    if (tx.notes?.includes(' - 1/2') || tx.notes?.includes(' - 2/2')) {
+      matchesTiming = tx.notes.includes(` - ${setup.timing}`);
+    } else {
+      const estimatedTiming = txDate.getDate() <= 15 ? '1/2' : '2/2';
+      matchesTiming = estimatedTiming === setup.timing;
+    }
+
+    return matchesTiming;
+  });
+
+  const otherIncomeTxs = allIncomeTxs.filter(tx => {
+    const nameLower = tx.name.trim().toLowerCase();
+    return nameLower !== 'salary' && nameLower !== 'income';
+  });
+
+  const totalOtherIncome = otherIncomeTxs.reduce((sum, tx) => sum + Math.abs(tx.amount), 0);
+  const hasIncomeRecords = allIncomeTxs.length > 0;
+
+  let salaryToUse = 0;
+  if (actualValue !== null && !isNaN(actualValue)) {
+    salaryToUse = actualValue;
+  } else if (hasIncomeRecords) {
+    salaryToUse = 0;
+  } else {
+    salaryToUse = projectedValue;
+  }
+
+  const netIncome = salaryToUse + totalOtherIncome;
+  return netIncome - setup.totalAmount;
 };
 
 const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSetups, setSavedSetups, onUpdateBiller, onMoveToTrash, onReloadSetups, onReloadBillers, onUpdateInstallment, installments = [], onTransactionCreated, onTransactionDeleted, onArchiveBudget, onReopenBudget }) => {
@@ -277,6 +327,8 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
   // Month Summary State - stored in Supabase with setup data
   const [projectedSalary, setProjectedSalary] = useState<string>('11000');
   const [actualSalary, setActualSalary] = useState<string>('');
+  const [isProjectedFocused, setIsProjectedFocused] = useState(false);
+  const [isActualFocused, setIsActualFocused] = useState(false);
 
   // Transactions state - used for matching payments
   const [transactions, setTransactions] = useState<SupabaseTransaction[]>([]);
@@ -661,6 +713,16 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
   });
   
   const [transactionFormData, setTransactionFormData] = useState(getDefaultTransactionFormData());
+
+  // Salary Cash-In state
+  const [showSalaryModal, setShowSalaryModal] = useState(false);
+  const [showIncomeRecordsModal, setShowIncomeRecordsModal] = useState(false);
+  const [salaryFormData, setSalaryFormData] = useState({
+    name: 'Income',
+    amount: '',
+    date: new Date().toISOString().split('T')[0],
+    accountId: ''
+  });
 
   const [confirmModal, setConfirmModal] = useState<{
     show: boolean;
@@ -1487,12 +1549,19 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
     try {
       let transactionData, transactionError;
       
+      let finalAmount = parseFloat(transactionFormData.amount);
+      if (transactionFormData.transactionType === 'cash_in' || transactionFormData.transactionType === 'loan_payment') {
+        finalAmount = -Math.abs(finalAmount);
+      } else {
+        finalAmount = Math.abs(finalAmount);
+      }
+
       if (isEditing) {
         // Update existing transaction and recalculate the linked payment schedule
         const transaction = {
           name: transactionFormData.name,
           date: combineDateWithCurrentTime(transactionFormData.date),
-          amount: parseFloat(transactionFormData.amount),
+          amount: finalAmount,
           payment_method_id: transactionFormData.accountId
         };
         const result = await updateTransactionAndSyncSchedule(transactionFormData.id, transaction);
@@ -1506,7 +1575,7 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
           {
             name: transactionFormData.name,
             date: combineDateWithCurrentTime(transactionFormData.date),
-            amount: parseFloat(transactionFormData.amount),
+            amount: finalAmount,
             paymentMethodId: transactionFormData.accountId
           }
         );
@@ -1520,7 +1589,7 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
             paymentScheduleId,
             {
               transactionName: transactionFormData.name,
-              amountPaid: parseFloat(transactionFormData.amount),
+              amountPaid: Math.abs(finalAmount),
               datePaid: transactionFormData.date,
               accountId: transactionFormData.accountId,
               receipt: undefined
@@ -1555,7 +1624,7 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
         const transaction = {
           name: transactionFormData.name,
           date: combineDateWithCurrentTime(transactionFormData.date),
-          amount: parseFloat(transactionFormData.amount),
+          amount: finalAmount,
           payment_method_id: transactionFormData.accountId
         };
         const result = await createTransaction(transaction);
@@ -1583,6 +1652,35 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
     } catch (e) {
       console.error('[Budget] Error saving transaction:', e);
       alert('Failed to save transaction. Please try again.');
+    }
+  };
+
+  const handleSalaryCashIn = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    const amount = parseFloat(salaryFormData.amount);
+    if (isNaN(amount) || amount <= 0) return;
+
+    const transaction = {
+      name: salaryFormData.name,
+      // Negative amount: cash_in = money IN to the linked account (adds to balance per sign convention)
+      amount: -Math.abs(amount),
+      date: combineDateWithCurrentTime(salaryFormData.date),
+      payment_method_id: salaryFormData.accountId,
+      transaction_type: 'cash_in' as const,
+      notes: `Income Record - ${selectedTiming}`
+    };
+
+    try {
+      const { error } = await createTransaction(transaction);
+      if (error) throw error;
+      
+      setShowSalaryModal(false);
+      await reloadTransactions();
+      if (onTransactionCreated) onTransactionCreated();
+    } catch (error) {
+      console.error('[Budget] Error creating salary transaction:', error);
+      alert('Failed to record salary. Please try again.');
     }
   };
 
@@ -1905,7 +2003,7 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
     const archivedSetups = savedSetups.filter(s => s.isArchived);
 
     const renderSetupRow = (setup: SavedBudgetSetup) => {
-      const remaining = calculateBudgetRemaining(setup);
+      const remaining = calculateBudgetRemaining(setup, transactions, selectedYear);
       return (
       <tr key={setup.id} className="hover:bg-gray-50/50 dark:hover:bg-gray-800/50 transition-colors group">
         <td className="p-8 pl-12">
@@ -2148,10 +2246,58 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
 
   // Calculate Month Summary values
   const totalSpend = grandTotal;
+  
+  // Calculate Other Income (Side gigs, bonuses, etc.)
+  const currentMonthIndex = MONTHS.indexOf(selectedMonth);
+  const allIncomeTxs = transactions.filter(tx => {
+    if (tx.transaction_type !== 'cash_in') return false;
+    
+    // Only include explicitly tagged income records, or legacy entries named "Salary"/"Income"
+    const isTaggedIncome = tx.notes?.startsWith('Income Record');
+    const nameLower = tx.name.trim().toLowerCase();
+    const isLegacyIncome = nameLower === 'salary' || nameLower === 'income';
+    
+    if (!isTaggedIncome && !isLegacyIncome) return false;
+
+    const txDate = new Date(tx.date);
+    if (txDate.getMonth() !== currentMonthIndex || txDate.getFullYear() !== selectedYear) return false;
+
+    // Filter strictly by the selected timing period (1/2 or 2/2)
+    let matchesTiming = false;
+    if (tx.notes?.includes(' - 1/2') || tx.notes?.includes(' - 2/2')) {
+      matchesTiming = tx.notes.includes(` - ${selectedTiming}`);
+    } else {
+      // Fallback for older legacy entries: Split the month at the 15th
+      const estimatedTiming = txDate.getDate() <= 15 ? '1/2' : '2/2';
+      matchesTiming = estimatedTiming === selectedTiming;
+    }
+
+    return matchesTiming;
+  });
+
+  const otherIncomeTxs = allIncomeTxs.filter(tx => {
+    const nameLower = tx.name.trim().toLowerCase();
+    return nameLower !== 'salary' && nameLower !== 'income';
+  });
+
+  const totalOtherIncome = otherIncomeTxs.reduce((sum, tx) => sum + Math.abs(tx.amount), 0);
+  const hasIncomeRecords = allIncomeTxs.length > 0;
+
   const actualSalaryValue = actualSalary.trim() !== '' ? parseFloat(actualSalary) : null;
   const projectedSalaryValue = parseFloat(projectedSalary) || 0;
-  const salaryToUse = actualSalaryValue !== null && !isNaN(actualSalaryValue) ? actualSalaryValue : projectedSalaryValue;
-  const remaining = salaryToUse - totalSpend;
+  
+  let salaryToUse = 0;
+  if (actualSalaryValue !== null && !isNaN(actualSalaryValue)) {
+    salaryToUse = actualSalaryValue;
+  } else if (hasIncomeRecords) {
+    salaryToUse = 0;
+  } else {
+    salaryToUse = projectedSalaryValue;
+  }
+
+  const netIncome = salaryToUse + totalOtherIncome;
+
+  const remaining = netIncome - totalSpend;
 
   // Determine read-only state for the current setup
   const currentSetup = savedSetups.find(s => s.month === selectedMonth && s.timing === selectedTiming);
@@ -2257,7 +2403,7 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
         {/* Budget Summary - Compact Version */}
         <div className="bg-white dark:bg-gray-900 rounded-[3rem] shadow-sm border border-gray-100 dark:border-gray-800 overflow-hidden w-full transition-colors">
-          <div className="p-4 border-b border-gray-50 dark:border-gray-800/50 bg-gray-50/30 dark:bg-gray-800/30"><h3 className="text-xs font-black text-gray-900 dark:text-gray-100 uppercase tracking-[0.25em]">BUDGET SUMMARY</h3></div>
+          <div className="p-4 border-b border-gray-50 dark:border-gray-800/50 bg-gray-50/30 dark:bg-gray-800/30"><h3 className="text-xs font-black text-gray-900 dark:text-gray-100 uppercase tracking-[0.25em] text-center">BUDGET SUMMARY</h3></div>
           <table className="w-full text-left">
             <thead><tr className="text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase border-b border-gray-50 dark:border-gray-800/50"><th className="p-3 pl-6">Category</th><th className="p-3 pr-6 text-right">Amount</th></tr></thead>
             <tbody className="divide-y divide-gray-50 dark:divide-gray-800/50">
@@ -2274,51 +2420,117 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
 
         {/* Month Summary - New Component */}
         <div className="bg-white dark:bg-gray-900 rounded-[3rem] shadow-sm border border-gray-100 dark:border-gray-800 overflow-hidden w-full transition-colors">
-          <div className="p-4 border-b border-gray-50 dark:border-gray-800/50 bg-gray-50/30 dark:bg-gray-800/30"><h3 className="text-xs font-black text-gray-900 dark:text-gray-100 uppercase tracking-[0.25em]">MONTH SUMMARY</h3></div>
+          <div className="p-4 border-b border-gray-50 dark:border-gray-800/50 bg-gray-50/30 dark:bg-gray-800/30"><h3 className="text-xs font-black text-gray-900 dark:text-gray-100 uppercase tracking-[0.25em] text-center">MONTH SUMMARY</h3></div>
           <table className="w-full text-left">
             <thead><tr className="text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase border-b border-gray-50 dark:border-gray-800/50"><th className="p-3 pl-6">Item</th><th className="p-3 pr-6 text-right">Amount</th></tr></thead>
             <tbody className="divide-y divide-gray-50 dark:divide-gray-800/50">
               <tr>
-                <td className="p-3 pl-6 font-bold text-gray-700 dark:text-gray-300 text-sm">Projected Salary</td>
+                <td className="p-3 pl-6 font-bold text-gray-700 dark:text-gray-300 text-sm">Projected Income</td>
                 <td className="p-3 pr-6 text-right">
-                  <div className="flex items-center justify-end space-x-1">
-                    <span className="text-gray-400 dark:text-gray-500 font-bold text-sm">₱</span>
-                    <input 
-                      type="number" 
-                      min="0"
-                      step="0.01"
-                      value={projectedSalary} 
-                      onChange={(e) => setProjectedSalary(e.target.value)} 
-                      onFocus={() => { isFocusedRef.current = true; }}
-                      onBlur={() => { isFocusedRef.current = false; }}
-                      disabled={isReadOnly}
-                      className="bg-transparent border-none text-sm font-black text-gray-900 dark:text-gray-100 w-28 text-right outline-none focus:bg-indigo-50 dark:focus:bg-indigo-900/30 rounded px-1 disabled:opacity-60 disabled:cursor-not-allowed"
-                      aria-label="Projected Salary"
-                    />
+                  <div className="flex items-center justify-end">
+                    {!isProjectedFocused ? (
+                      <span 
+                        className={`text-sm font-black text-gray-900 dark:text-gray-100 ${!isReadOnly ? 'cursor-pointer hover:text-indigo-600 dark:hover:text-indigo-400' : ''} transition-colors`}
+                        onClick={() => !isReadOnly && setIsProjectedFocused(true)}
+                      >
+                        {formatCurrency(parseFloat(projectedSalary || '0'))}
+                      </span>
+                    ) : (
+                      <div className="flex items-center justify-end space-x-1">
+                        <span className="text-gray-400 dark:text-gray-500 font-bold text-sm">₱</span>
+                        <input 
+                          autoFocus
+                          type="number" 
+                          min="0"
+                          step="0.01"
+                          value={projectedSalary} 
+                          onChange={(e) => setProjectedSalary(e.target.value)} 
+                          onFocus={() => { isFocusedRef.current = true; }}
+                          onBlur={() => { isFocusedRef.current = false; setIsProjectedFocused(false); }}
+                          disabled={isReadOnly}
+                          className="bg-transparent border-none text-sm font-black text-gray-900 dark:text-gray-100 w-28 text-right outline-none focus:bg-indigo-50 dark:focus:bg-indigo-900/30 rounded px-1 disabled:opacity-60 disabled:cursor-not-allowed"
+                          aria-label="Projected Income"
+                        />
+                      </div>
+                    )}
                   </div>
                 </td>
               </tr>
               <tr>
-                <td className="p-3 pl-6 font-bold text-gray-700 dark:text-gray-300 text-sm">Actual Salary</td>
+                <td className="p-3 pl-6 font-bold text-gray-700 dark:text-gray-300 text-sm">Actual Income</td>
                 <td className="p-3 pr-6 text-right">
-                  <div className="flex items-center justify-end space-x-1">
-                    <span className="text-gray-400 dark:text-gray-500 font-bold text-sm">₱</span>
-                    <input 
-                      type="number" 
-                      min="0"
-                      step="0.01"
-                      value={actualSalary} 
-                      onChange={(e) => setActualSalary(e.target.value)} 
-                      onFocus={() => { isFocusedRef.current = true; }}
-                      onBlur={() => { isFocusedRef.current = false; }}
-                      disabled={isReadOnly}
-                      placeholder="Enter actual"
-                      className="bg-transparent border-none text-sm font-black text-gray-900 dark:text-gray-100 w-28 text-right outline-none focus:bg-indigo-50 dark:focus:bg-indigo-900/30 rounded px-1 placeholder:text-gray-300 dark:placeholder:text-gray-600 disabled:opacity-60 disabled:cursor-not-allowed"
-                      aria-label="Actual Salary"
-                    />
+                  <div className="flex items-center justify-end space-x-2">
+                    {!isActualFocused ? (
+                      <span 
+                        className={`text-sm font-black ${actualSalary ? 'text-gray-900 dark:text-gray-100' : 'text-gray-400 dark:text-gray-500 italic'} ${!isReadOnly ? 'cursor-pointer hover:text-indigo-600 dark:hover:text-indigo-400' : ''} transition-colors`}
+                        onClick={() => !isReadOnly && setIsActualFocused(true)}
+                      >
+                        {actualSalary ? formatCurrency(parseFloat(actualSalary)) : 'Click to add...'}
+                      </span>
+                    ) : (
+                      <div className="flex items-center justify-end space-x-1">
+                        <span className="text-gray-400 dark:text-gray-500 font-bold text-sm">₱</span>
+                        <input 
+                          autoFocus
+                          type="number" 
+                          min="0"
+                          step="0.01"
+                          value={actualSalary} 
+                          onChange={(e) => setActualSalary(e.target.value)} 
+                          onFocus={() => { isFocusedRef.current = true; }}
+                          onBlur={() => { isFocusedRef.current = false; setIsActualFocused(false); }}
+                          disabled={isReadOnly}
+                          placeholder="Enter actual"
+                          className="bg-transparent border-none text-sm font-black text-gray-900 dark:text-gray-100 w-28 text-right outline-none focus:bg-indigo-50 dark:focus:bg-indigo-900/30 rounded px-1 placeholder:text-gray-300 dark:placeholder:text-gray-600 disabled:opacity-60 disabled:cursor-not-allowed"
+                          aria-label="Actual Income"
+                        />
+                      </div>
+                    )}
+                    {!isReadOnly && (
+                  hasIncomeRecords ? (
+                    <button
+                      onClick={() => setShowIncomeRecordsModal(true)}
+                      className="p-1.5 bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 rounded-lg hover:bg-blue-100 dark:hover:bg-blue-900/40 transition-colors shadow-sm"
+                      title="View Income Records"
+                    >
+                      <List className="w-4 h-4" />
+                    </button>
+                  ) : (
+                    <button
+                      onClick={() => {
+                        const debitAccounts = accounts.filter(a => a.type === 'Debit');
+                        setSalaryFormData({
+                          name: 'Income',
+                          amount: actualSalary || projectedSalary || '',
+                          date: new Date().toISOString().split('T')[0],
+                          accountId: debitAccounts[0]?.id || ''
+                        });
+                        setShowSalaryModal(true);
+                      }}
+                      className="p-1.5 bg-green-50 dark:bg-green-900/20 text-green-600 dark:text-green-400 rounded-lg hover:bg-green-100 dark:hover:bg-green-900/40 transition-colors shadow-sm"
+                      title="Record as Cash In transaction"
+                    >
+                      <WalletIcon className="w-4 h-4" />
+                    </button>
+                  )
+                    )}
                   </div>
                 </td>
               </tr>
+          {totalOtherIncome > 0 && (
+            <>
+              <tr>
+                <td className="p-3 pl-6 font-bold text-gray-700 dark:text-gray-300 text-sm">Other Income</td>
+                <td className="p-3 pr-6 text-right">
+                  <span className="text-sm font-black text-gray-900 dark:text-gray-100">{formatCurrency(totalOtherIncome)}</span>
+                </td>
+              </tr>
+              <tr className="bg-green-50/30 dark:bg-green-900/10">
+                <td className="p-3 pl-6 font-bold text-green-700 dark:text-green-400 text-sm">Net Income</td>
+                <td className="p-3 pr-6 text-right font-black text-green-700 dark:text-green-400 text-sm">{formatCurrency(netIncome)}</td>
+              </tr>
+            </>
+          )}
               <tr>
                 <td className="p-3 pl-6 font-bold text-gray-700 dark:text-gray-300 text-sm">Total Spend</td>
                 <td className="p-3 pr-6 text-right font-black text-gray-900 dark:text-gray-100 text-sm">{formatCurrency(totalSpend)}</td>
@@ -2335,8 +2547,9 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
       {/* Category Tables - Full Width and Stacked for FIXED, UTILITIES, LOANS, SUBSCRIPTIONS, PURCHASES */}
       <div className="space-y-6">
         {/* Stash section - wallets from the wallets table */}
+        {wallets.length > 0 && (
         <div className="bg-white dark:bg-gray-900 rounded-[3rem] shadow-sm border border-gray-100 dark:border-gray-800 overflow-hidden w-full transition-colors">
-          <div className="p-8 border-b border-gray-50 dark:border-gray-800/50 bg-gray-50/30 dark:bg-gray-800/30 flex justify-between items-center transition-colors">
+          <div className="px-8 py-5 border-b border-gray-50 dark:border-gray-800/50 bg-gray-50/30 dark:bg-gray-800/30 flex justify-between items-center transition-colors">
             <h3 className="text-xs font-black text-gray-900 dark:text-gray-100 uppercase tracking-[0.25em]">Stash</h3>
             <div className="flex items-center space-x-3">
               {stashStatusMsg && (
@@ -2350,12 +2563,6 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
             </div>
           </div>
           <div className="overflow-x-auto">
-            {wallets.length === 0 ? (
-              <div className="px-10 py-8 text-center text-gray-400 text-sm">
-                No wallets configured yet.{' '}
-                <a href="/wallets" className="text-indigo-500 font-bold hover:underline">Set up your wallets →</a>
-              </div>
-            ) : (
               <table className="w-full text-left">
                 <thead>
                   <tr className="text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase border-b border-gray-50 dark:border-gray-800/50">
@@ -2440,9 +2647,9 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                   })}
                 </tbody>
               </table>
-            )}
           </div>
         </div>
+        )}
 
         {/* Fixed category - full width with account and settle columns */}
         {categories.filter(cat => cat.name === 'Fixed').map((cat) => {
@@ -2453,9 +2660,10 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
           const isLegacyCategory = isCategoryLegacyForBudget(cat, selectedYear, selectedMonth);
           return (
             <div key={cat.id} className="bg-white dark:bg-gray-900 rounded-[3rem] shadow-sm border border-gray-100 dark:border-gray-800 overflow-hidden w-full transition-colors">
-              <div className="p-8 border-b border-gray-50 dark:border-gray-800/50 bg-gray-50/30 dark:bg-gray-800/30 flex justify-between items-center transition-colors">
+              <div className="px-8 py-5 border-b border-gray-50 dark:border-gray-800/50 bg-gray-50/30 dark:bg-gray-800/30 flex justify-between items-center transition-colors">
                 <div className="flex items-center space-x-2">
                   <h3 className="text-xs font-black text-gray-900 dark:text-gray-100 uppercase tracking-[0.25em]">{cat.name}</h3>
+                  {(cat.flexiMode ?? true) && <span className="text-[9px] font-black text-green-600 bg-green-50 border border-green-200 dark:bg-green-900/30 dark:border-green-800/50 dark:text-green-400 px-2 py-0.5 rounded-full uppercase tracking-wider">Flexi</span>}
                   {isLegacyCategory && <span className="text-[9px] font-black text-amber-600 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full uppercase tracking-wider" aria-label="Legacy category — use Stash for new savings/allowance items" title="This category is legacy. Use Stash for new savings/allowance items.">Legacy</span>}
                 </div>
                 <span className="text-lg font-black text-indigo-600">{formatCurrency(items.filter(i => i.included).reduce((s, i) => s + (parseFloat(i.amount) || 0), 0))}</span>
@@ -2562,8 +2770,8 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
           );
         })}
 
-        {/* Other full-width categories: Utilities, Loans, Subscriptions, Purchases */}
-        {categories.filter(cat => ['Utilities', 'Loans', 'Subscriptions', 'Purchases'].includes(cat.name)).map((cat) => {
+        {/* Other full-width categories: Utilities, Loans, Subscriptions, Purchases, and custom categories */}
+        {categories.filter(cat => cat.name !== 'Fixed').map((cat) => {
           const items = setupData[cat.name] || [];
           
           // QA: For Loans category, filter installments by timing, payment schedule existence, and completion status
@@ -2604,9 +2812,10 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
           
           return (
             <div key={cat.id} className="bg-white dark:bg-gray-900 rounded-[3rem] shadow-sm border border-gray-100 dark:border-gray-800 overflow-hidden w-full transition-colors">
-              <div className="p-8 border-b border-gray-50 dark:border-gray-800/50 bg-gray-50/30 dark:bg-gray-800/30 flex justify-between items-center transition-colors">
+              <div className="px-8 py-5 border-b border-gray-50 dark:border-gray-800/50 bg-gray-50/30 dark:bg-gray-800/30 flex justify-between items-center transition-colors">
                 <div className="flex items-center space-x-2">
                   <h3 className="text-xs font-black text-gray-900 dark:text-gray-100 uppercase tracking-[0.25em]">{cat.name}</h3>
+                  {(cat.flexiMode ?? true) && <span className="text-[9px] font-black text-green-600 bg-green-50 border border-green-200 dark:bg-green-900/30 dark:border-green-800/50 dark:text-green-400 px-2 py-0.5 rounded-full uppercase tracking-wider">Flexi</span>}
                   {isLegacyCategory && <span className="text-[9px] font-black text-amber-600 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full uppercase tracking-wider">Legacy</span>}
                 </div>
                 <span className="text-lg font-black text-indigo-600">{formatCurrency(categoryTotal)}</span>
@@ -3001,7 +3210,7 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
             
             return (
               <div key={`cc-${account.id}`} className="bg-white dark:bg-gray-900 rounded-[3rem] shadow-sm border border-gray-100 dark:border-gray-800 overflow-hidden w-full transition-colors">
-                <div className="p-8 border-b border-gray-50 dark:border-gray-800/50 bg-gray-50/30 dark:bg-gray-800/30 flex justify-between items-center transition-colors">
+                <div className="px-8 py-5 border-b border-gray-50 dark:border-gray-800/50 bg-gray-50/30 dark:bg-gray-800/30 flex justify-between items-center transition-colors">
                   <div>
                     <h3 className="text-xs font-black text-gray-900 dark:text-gray-100 uppercase tracking-[0.25em]">Credit Card Purchases</h3>
                     <p className="text-[10px] text-gray-500 font-medium mt-1">{account.bank} • {relevantCycle.cycleLabel}</p>
@@ -3088,112 +3297,6 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
           });
         })()}
 
-        {/* Remaining categories (excluding Fixed, Utilities, Loans, Subscriptions, Purchases) - keep in grid if needed */}
-        {(() => {
-          const remainingCats = categories.filter(cat =>
-            !['Fixed', 'Utilities', 'Loans', 'Subscriptions', 'Purchases'].includes(cat.name) &&
-            shouldRenderCategorySection(cat, (setupData[cat.name] || []).length > 0, selectedYear, selectedMonth)
-          );
-          if (remainingCats.length === 0) return null;
-          return (
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-            {remainingCats.map((cat) => {
-              const items = setupData[cat.name] || [];
-              const canAddItems = !isReadOnly && (cat.flexiMode ?? true) && isCategoryActiveForBudget(cat, selectedYear, selectedMonth);
-              const isLegacyCategory = isCategoryLegacyForBudget(cat, selectedYear, selectedMonth);
-              return (
-                <div key={cat.id} className="bg-white dark:bg-gray-900 rounded-[3rem] shadow-sm border border-gray-100 dark:border-gray-800 overflow-hidden flex flex-col transition-colors">
-                  <div className="p-8 border-b border-gray-50 dark:border-gray-800/50 bg-gray-50/30 dark:bg-gray-800/30 flex justify-between items-center transition-colors">
-                    <div className="flex items-center space-x-2">
-                      <h3 className="text-xs font-black text-gray-900 dark:text-gray-100 uppercase tracking-[0.25em]">{cat.name}</h3>
-                      {isLegacyCategory && <span className="text-[9px] font-black text-amber-600 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full uppercase tracking-wider">Legacy</span>}
-                    </div>
-                    <span className="text-lg font-black text-indigo-600">{formatCurrency(items.filter(i => i.included).reduce((s, i) => s + (parseFloat(i.amount) || 0), 0))}</span>
-                  </div>
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-left">
-                      <tbody className="divide-y divide-gray-50 dark:divide-gray-800/50">
-                        {items.map((item) => {
-                          let isPaid = false, linkedBiller, schedule;
-                          const isBiller = item.isBiller || billers.some(b => b.id === item.id);
-                          
-                          if (isBiller) {
-                            linkedBiller = billers.find(b => b.id === item.id);
-                            schedule = linkedBiller?.schedules.find(s => s.month === selectedMonth);
-                            // FIX: For billers with schedules, ONLY use schedule.amountPaid
-                            // This prevents double-counting when transactions match multiple months via grace period
-                            if (schedule) {
-                              isPaid = !!schedule.amountPaid;
-                            } else {
-                              // Fallback to transaction matching if no schedule found
-                              isPaid = checkIfPaidByTransaction(item.name, item.amount, selectedMonth);
-                            }
-                          } else {
-                            // For non-biller items, only check transactions
-                            isPaid = checkIfPaidByTransaction(item.name, item.amount, selectedMonth);
-                          }
-                          return (
-                            <tr key={item.id} className={`${item.included ? 'bg-white dark:bg-gray-900' : 'bg-gray-50 dark:bg-gray-800/50 opacity-60'}`}>
-                              <td className="p-4 pl-10"><input type="text" value={item.name} onChange={(e) => handleSetupUpdate(cat.name, item.id, 'name', e.target.value)} className="bg-transparent border-none text-sm font-bold w-full dark:text-gray-100" /></td>
-                              <td className="p-4">
-                                <div className="flex items-center space-x-1"><span className="text-gray-400 dark:text-gray-500 font-bold">₱</span><input type="number" value={item.amount} onChange={(e) => handleSetupUpdate(cat.name, item.id, 'amount', e.target.value)} className="bg-transparent border-none text-sm font-black w-24 dark:text-gray-100" /></div>
-                              </td>
-                              <td className="p-4 text-center">
-                                <div className="flex items-center justify-center space-x-2">
-                                  {isBiller && (
-                                    isPaid ? (
-                                      <>
-                                        <CheckCircle2 className="w-4 h-4 text-green-500" aria-label="Payment completed" title="Paid" />
-                                        {schedule?.id && (
-                                          <button onClick={() => openSchedulePaymentsModal(schedule.id!, `${item.name} - ${selectedMonth}`)} title="View payment records" className="text-gray-400 hover:text-indigo-600 transition-colors rounded-full p-1 hover:bg-indigo-50">
-                                            <Info className="w-3.5 h-3.5" />
-                                          </button>
-                                        )}
-                                      </>
-                                    ) : (
-                                      <button 
-                                        onClick={() => { 
-                                          if(linkedBiller && schedule) {
-                                            // QA: Check for existing transaction to enable editing
-                                            const existingTx = findExistingTransaction(
-                                              linkedBiller.name,
-                                              schedule.expectedAmount,
-                                              selectedMonth
-                                            );
-                                            
-                                            setShowPayModal({biller: linkedBiller, schedule}); 
-                                            setPayFormData({
-                                              transactionId: existingTx?.id || '',
-                                            amount: existingTx?.amount.toFixed(2) || schedule.expectedAmount.toFixed(2),
-                                              receipt: existingTx ? 'Receipt on file' : '',
-                                              datePaid: existingTx ? new Date(existingTx.date).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
-                                              accountId: existingTx?.payment_method_id || payFormData.accountId
-                                            }); 
-                                          } 
-                                        }} 
-                                        className="px-3 py-1 bg-indigo-600 text-white text-[9px] font-black uppercase rounded-lg hover:bg-indigo-700 transition-colors"
-                                      >
-                                        Pay
-                                      </button>
-                                    )
-                                  )}
-                                  <button onClick={() => handleSetupToggle(cat.name, item.id)} className={`w-8 h-8 rounded-xl border-2 transition-all flex items-center justify-center ${item.included ? 'bg-indigo-600 border-indigo-600 text-white' : 'border-gray-200'}`}><Check className="w-4 h-4" /></button>
-                                </div>
-                              </td>
-                              <td className="p-4 pr-10 text-right"><button onClick={() => removeItemFromCategory(cat.name, item.id, item.name)} className="text-[9px] font-black text-red-500 uppercase tracking-widest border border-red-50 px-2 py-1 rounded-lg">Exclude</button></td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
-                    {canAddItems && <button onClick={() => addItemToCategory(cat.name)} className="w-full p-4 text-[10px] font-black text-gray-400 uppercase hover:text-indigo-600">+ Add Item</button>}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-          );
-        })()}
       </div>
 
       {showPayModal && (
@@ -3564,6 +3667,173 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
           </div>
         </div>
       )}
+
+      {/* Salary Cash In Modal */}
+      {showSalaryModal && (
+        <div className="fixed inset-0 z-[150] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md animate-in fade-in" onClick={() => setShowSalaryModal(false)}>
+          <div className="bg-white dark:bg-gray-900 rounded-3xl w-full max-w-md p-10 shadow-2xl animate-in zoom-in-95 relative transition-colors" onClick={e => e.stopPropagation()}>
+            <button onClick={() => setShowSalaryModal(false)} className="absolute right-6 top-6 p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full transition-colors">
+              <X className="w-6 h-6 text-gray-400" />
+            </button>
+            <h2 className="text-2xl font-black text-gray-900 dark:text-gray-100 mb-2">Record Income</h2>
+            <p className="text-gray-500 text-sm mb-8">Add this income to your account balance</p>
+            
+            <form onSubmit={handleSalaryCashIn} className="space-y-6">
+              <div>
+                <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Transaction Name</label>
+                <input required type="text" value={salaryFormData.name} onChange={(e) => setSalaryFormData({...salaryFormData, name: e.target.value})} className="w-full bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-transparent rounded-2xl p-4 outline-none font-bold focus:ring-2 focus:ring-indigo-500 transition-all" />
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Amount</label>
+                <div className="relative">
+                  <span className="absolute left-4 top-1/2 -translate-y-1/2 font-bold text-gray-400">₱</span>
+                  <input required type="number" min="0.01" step="0.01" value={salaryFormData.amount} onChange={(e) => setSalaryFormData({...salaryFormData, amount: e.target.value})} className="w-full bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-transparent rounded-2xl p-4 pl-8 outline-none text-xl font-black focus:ring-2 focus:ring-indigo-500 transition-all" />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Date Received</label>
+                  <input required type="date" value={salaryFormData.date} onChange={(e) => setSalaryFormData({...salaryFormData, date: e.target.value})} className="w-full min-w-0 bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-transparent rounded-2xl px-3 py-4 outline-none font-bold text-sm transition-colors" />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Deposit Account</label>
+                  <select required value={salaryFormData.accountId} onChange={(e) => setSalaryFormData({...salaryFormData, accountId: e.target.value})} className="w-full min-w-0 bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-transparent rounded-2xl px-3 py-4 outline-none font-bold text-sm appearance-none transition-colors">
+                    <option value="" disabled>Select Account</option>
+                    {accounts.filter(a => a.type === 'Debit').map(acc => <option key={acc.id} value={acc.id}>{acc.bank} ({acc.classification})</option>)}
+                  </select>
+                </div>
+              </div>
+
+              <div className="flex space-x-4 pt-4">
+                <button type="button" onClick={() => setShowSalaryModal(false)} className="flex-1 bg-gray-100 dark:bg-gray-800 py-4 rounded-2xl font-bold text-gray-500 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors">Cancel</button>
+                <button type="submit" className="flex-1 bg-green-600 text-white py-4 rounded-2xl font-bold hover:bg-green-700 shadow-xl shadow-green-100 dark:shadow-none transition-all">Record Income</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Income Records Modal */}
+      {showIncomeRecordsModal && (
+        <div className="fixed inset-0 z-[150] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md animate-in fade-in" onClick={() => setShowIncomeRecordsModal(false)}>
+          <div className="bg-white dark:bg-gray-900 rounded-3xl w-full max-w-lg p-8 shadow-2xl relative max-h-[85vh] overflow-y-auto transition-colors" onClick={e => e.stopPropagation()}>
+            <button onClick={() => setShowIncomeRecordsModal(false)} className="absolute top-6 right-6 p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full transition-colors">
+              <X className="w-5 h-5 text-gray-400 dark:text-gray-500" />
+            </button>
+            <div className="flex items-center justify-between mb-6">
+              <div>
+                <h2 className="text-2xl font-black text-gray-900 dark:text-gray-100 mb-1">Income Records</h2>
+                <p className="text-gray-500 dark:text-gray-400 text-sm">{selectedMonth} {selectedYear}</p>
+              </div>
+              <button
+                onClick={() => {
+                  setShowIncomeRecordsModal(false);
+                  const debitAccounts = accounts.filter(a => a.type === 'Debit');
+                  setSalaryFormData({
+                    name: '',
+                    amount: '',
+                    date: new Date().toISOString().split('T')[0],
+                    accountId: debitAccounts[0]?.id || ''
+                  });
+                  setShowSalaryModal(true);
+                }}
+                className="flex items-center gap-2 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 px-4 py-2 rounded-xl font-bold hover:bg-indigo-100 dark:hover:bg-indigo-900/50 transition-colors text-sm"
+              >
+                <Plus className="w-4 h-4" />
+                Add Income
+              </button>
+            </div>
+
+            {allIncomeTxs.length === 0 ? (
+              <div className="text-center py-8 text-gray-400 dark:text-gray-500 italic">No income records found.</div>
+            ) : (
+              <div className="space-y-4">
+                {allIncomeTxs.map(tx => {
+                  const pmName = accounts.find(a => a.id === tx.payment_method_id)?.bank || tx.payment_method_id;
+                  return (
+                    <div key={tx.id} className="bg-gray-50 dark:bg-gray-800/50 rounded-2xl p-4 space-y-2 transition-colors">
+                      <div className="flex justify-between items-start">
+                        <div className="space-y-2 flex-1">
+                          <div className="flex justify-between">
+                            <span className="text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest">Name</span>
+                            <span className="text-sm font-bold text-gray-900 dark:text-gray-100">{tx.name}</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest">Amount</span>
+                            <span className="text-sm font-bold text-green-600 dark:text-green-400">{formatCurrency(Math.abs(tx.amount))}</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest">Deposit To</span>
+                            <span className="text-sm text-gray-700 dark:text-gray-300">{pmName}</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest">Date</span>
+                            <span className="text-sm text-gray-700 dark:text-gray-300">{new Date(tx.date).toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' })}</span>
+                          </div>
+                        </div>
+                        <div className="flex flex-col items-end pl-4 space-y-2">
+                          <button
+                            onClick={() => { 
+                              setTransactionFormData({
+                                id: tx.id,
+                                name: tx.name,
+                                amount: Math.abs(tx.amount).toFixed(2),
+                                date: tx.date.split('T')[0],
+                                accountId: tx.payment_method_id,
+                                paymentScheduleId: tx.payment_schedule_id || '',
+                                transactionType: tx.transaction_type || 'cash_in'
+                              });
+                              setShowIncomeRecordsModal(false);
+                              setShowTransactionModal(true);
+                            }}
+                            className="text-[9px] font-black text-indigo-600 dark:text-indigo-400 uppercase tracking-widest border border-indigo-100 dark:border-indigo-900/30 px-2 py-1 rounded-lg hover:bg-indigo-50 dark:hover:bg-indigo-900/50 transition-colors"
+                          >
+                            Edit
+                          </button>
+                          <PinProtectedAction
+                            featureId="transaction_deletions"
+                            onVerified={async () => {
+                              try {
+                                const { error } = await deleteTransactionAndRevertSchedule(tx.id);
+                                if (error) throw error;
+
+                              const nameLower = tx.name.trim().toLowerCase();
+                              const isSalaryRecord = nameLower === 'salary' || nameLower === 'income';
+                              const actualSalaryParsed = parseFloat(actualSalary);
+                              if (isSalaryRecord || (!isNaN(actualSalaryParsed) && Math.abs(tx.amount) === actualSalaryParsed)) {
+                                setActualSalary('');
+                              }
+
+                                await reloadTransactions();
+                                if (onTransactionDeleted) onTransactionDeleted();
+                              } catch (err) {
+                                console.error('[Budget] Error deleting income transaction:', err);
+                                alert('Failed to delete transaction. Please try again.');
+                              }
+                            }}
+                            actionLabel="Delete Income Record"
+                          >
+                            <button
+                              onClick={(e) => e.preventDefault()}
+                              title="Delete income record"
+                              className="text-[9px] font-black text-red-500 dark:text-red-400 uppercase tracking-widest border border-red-100 dark:border-red-900/30 px-2 py-1 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/50 transition-colors"
+                            >
+                              Delete
+                            </button>
+                          </PinProtectedAction>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
       {confirmModal.show && <ConfirmDialog {...confirmModal} onClose={() => setConfirmModal(p => ({ ...p, show: false }))} />}
     </div>
   );
