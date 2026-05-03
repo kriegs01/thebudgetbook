@@ -2770,8 +2770,8 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
           );
         })}
 
-        {/* Other full-width categories: Utilities, Loans, Subscriptions, Purchases */}
-        {categories.filter(cat => ['Utilities', 'Loans', 'Subscriptions', 'Purchases'].includes(cat.name)).map((cat) => {
+        {/* Other full-width categories: Utilities, Loans, Subscriptions, Purchases, and custom categories */}
+        {categories.filter(cat => cat.name !== 'Fixed').map((cat) => {
           const items = setupData[cat.name] || [];
           
           // QA: For Loans category, filter installments by timing, payment schedule existence, and completion status
@@ -3296,112 +3296,6 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
           });
         })()}
 
-        {/* Remaining categories (excluding Fixed, Utilities, Loans, Subscriptions, Purchases) - keep in grid if needed */}
-        {(() => {
-          const remainingCats = categories.filter(cat =>
-            !['Fixed', 'Utilities', 'Loans', 'Subscriptions', 'Purchases'].includes(cat.name) &&
-            shouldRenderCategorySection(cat, (setupData[cat.name] || []).length > 0, selectedYear, selectedMonth)
-          );
-          if (remainingCats.length === 0) return null;
-          return (
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-            {remainingCats.map((cat) => {
-              const items = setupData[cat.name] || [];
-              const canAddItems = !isReadOnly && (cat.flexiMode ?? true) && isCategoryActiveForBudget(cat, selectedYear, selectedMonth);
-              const isLegacyCategory = isCategoryLegacyForBudget(cat, selectedYear, selectedMonth);
-              return (
-                <div key={cat.id} className="bg-white dark:bg-gray-900 rounded-[3rem] shadow-sm border border-gray-100 dark:border-gray-800 overflow-hidden flex flex-col transition-colors">
-                  <div className="p-8 border-b border-gray-50 dark:border-gray-800/50 bg-gray-50/30 dark:bg-gray-800/30 flex justify-between items-center transition-colors">
-                    <div className="flex items-center space-x-2">
-                      <h3 className="text-xs font-black text-gray-900 dark:text-gray-100 uppercase tracking-[0.25em]">{cat.name}</h3>
-                      {isLegacyCategory && <span className="text-[9px] font-black text-amber-600 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full uppercase tracking-wider">Legacy</span>}
-                    </div>
-                    <span className="text-lg font-black text-indigo-600">{formatCurrency(items.filter(i => i.included).reduce((s, i) => s + (parseFloat(i.amount) || 0), 0))}</span>
-                  </div>
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-left">
-                      <tbody className="divide-y divide-gray-50 dark:divide-gray-800/50">
-                        {items.map((item) => {
-                          let isPaid = false, linkedBiller, schedule;
-                          const isBiller = item.isBiller || billers.some(b => b.id === item.id);
-                          
-                          if (isBiller) {
-                            linkedBiller = billers.find(b => b.id === item.id);
-                            schedule = linkedBiller?.schedules.find(s => s.month === selectedMonth);
-                            // FIX: For billers with schedules, ONLY use schedule.amountPaid
-                            // This prevents double-counting when transactions match multiple months via grace period
-                            if (schedule) {
-                              isPaid = !!schedule.amountPaid;
-                            } else {
-                              // Fallback to transaction matching if no schedule found
-                              isPaid = checkIfPaidByTransaction(item.name, item.amount, selectedMonth);
-                            }
-                          } else {
-                            // For non-biller items, only check transactions
-                            isPaid = checkIfPaidByTransaction(item.name, item.amount, selectedMonth);
-                          }
-                          return (
-                            <tr key={item.id} className={`${item.included ? 'bg-white dark:bg-gray-900' : 'bg-gray-50 dark:bg-gray-800/50 opacity-60'}`}>
-                              <td className="p-4 pl-10"><input type="text" value={item.name} onChange={(e) => handleSetupUpdate(cat.name, item.id, 'name', e.target.value)} className="bg-transparent border-none text-sm font-bold w-full dark:text-gray-100" /></td>
-                              <td className="p-4">
-                                <div className="flex items-center space-x-1"><span className="text-gray-400 dark:text-gray-500 font-bold">₱</span><input type="number" value={item.amount} onChange={(e) => handleSetupUpdate(cat.name, item.id, 'amount', e.target.value)} className="bg-transparent border-none text-sm font-black w-24 dark:text-gray-100" /></div>
-                              </td>
-                              <td className="p-4 text-center">
-                                <div className="flex items-center justify-center space-x-2">
-                                  {isBiller && (
-                                    isPaid ? (
-                                      <>
-                                        <CheckCircle2 className="w-4 h-4 text-green-500" aria-label="Payment completed" title="Paid" />
-                                        {schedule?.id && (
-                                          <button onClick={() => openSchedulePaymentsModal(schedule.id!, `${item.name} - ${selectedMonth}`)} title="View payment records" className="text-gray-400 hover:text-indigo-600 transition-colors rounded-full p-1 hover:bg-indigo-50">
-                                            <Info className="w-3.5 h-3.5" />
-                                          </button>
-                                        )}
-                                      </>
-                                    ) : (
-                                      <button 
-                                        onClick={() => { 
-                                          if(linkedBiller && schedule) {
-                                            // QA: Check for existing transaction to enable editing
-                                            const existingTx = findExistingTransaction(
-                                              linkedBiller.name,
-                                              schedule.expectedAmount,
-                                              selectedMonth
-                                            );
-                                            
-                                            setShowPayModal({biller: linkedBiller, schedule}); 
-                                            setPayFormData({
-                                              transactionId: existingTx?.id || '',
-                                            amount: existingTx?.amount.toFixed(2) || schedule.expectedAmount.toFixed(2),
-                                              receipt: existingTx ? 'Receipt on file' : '',
-                                              datePaid: existingTx ? new Date(existingTx.date).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
-                                              accountId: existingTx?.payment_method_id || payFormData.accountId
-                                            }); 
-                                          } 
-                                        }} 
-                                        className="px-3 py-1 bg-indigo-600 text-white text-[9px] font-black uppercase rounded-lg hover:bg-indigo-700 transition-colors"
-                                      >
-                                        Pay
-                                      </button>
-                                    )
-                                  )}
-                                  <button onClick={() => handleSetupToggle(cat.name, item.id)} className={`w-8 h-8 rounded-xl border-2 transition-all flex items-center justify-center ${item.included ? 'bg-indigo-600 border-indigo-600 text-white' : 'border-gray-200'}`}><Check className="w-4 h-4" /></button>
-                                </div>
-                              </td>
-                              <td className="p-4 pr-10 text-right"><button onClick={() => removeItemFromCategory(cat.name, item.id, item.name)} className="text-[9px] font-black text-red-500 uppercase tracking-widest border border-red-50 px-2 py-1 rounded-lg">Exclude</button></td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
-                    {canAddItems && <button onClick={() => addItemToCategory(cat.name)} className="w-full p-4 text-[10px] font-black text-gray-400 uppercase hover:text-indigo-600">+ Add Item</button>}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-          );
-        })()}
       </div>
 
       {showPayModal && (
