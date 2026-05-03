@@ -71,6 +71,10 @@ const isBillerActiveForPeriod = (biller: Biller, month: string, year: number): b
     }
   }
 
+  if (cat.flexiMode === false && !hasData) {
+    return false;
+  }
+
   return true;
 };
 
@@ -2543,6 +2547,7 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
       {/* Category Tables - Full Width and Stacked for FIXED, UTILITIES, LOANS, SUBSCRIPTIONS, PURCHASES */}
       <div className="space-y-6">
         {/* Stash section - wallets from the wallets table */}
+        {wallets.length > 0 && (
         <div className="bg-white dark:bg-gray-900 rounded-[3rem] shadow-sm border border-gray-100 dark:border-gray-800 overflow-hidden w-full transition-colors">
           <div className="p-8 border-b border-gray-50 dark:border-gray-800/50 bg-gray-50/30 dark:bg-gray-800/30 flex justify-between items-center transition-colors">
             <h3 className="text-xs font-black text-gray-900 dark:text-gray-100 uppercase tracking-[0.25em]">Stash</h3>
@@ -2558,12 +2563,6 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
             </div>
           </div>
           <div className="overflow-x-auto">
-            {wallets.length === 0 ? (
-              <div className="px-10 py-8 text-center text-gray-400 text-sm">
-                No wallets configured yet.{' '}
-                <a href="/wallets" className="text-indigo-500 font-bold hover:underline">Set up your wallets →</a>
-              </div>
-            ) : (
               <table className="w-full text-left">
                 <thead>
                   <tr className="text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase border-b border-gray-50 dark:border-gray-800/50">
@@ -2648,9 +2647,9 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                   })}
                 </tbody>
               </table>
-            )}
           </div>
         </div>
+        )}
 
         {/* Fixed category - full width with account and settle columns */}
         {categories.filter(cat => cat.name === 'Fixed').map((cat) => {
