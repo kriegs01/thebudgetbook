@@ -35,6 +35,10 @@ export default function PeoplePage() {
   const [showFindFriendsModal, setShowFindFriendsModal] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [isSearching, setIsSearching] = useState(false);
+  
+  const [showEditPersonModal, setShowEditPersonModal] = useState(false);
+  const [editPersonForm, setEditPersonForm] = useState({ name: '', handle: '' });
+  const [linkState, setLinkState] = useState<'idle' | 'searching' | 'found' | 'error'>('idle');
 
   const loadData = useCallback(async () => {
     setIsLoading(true);
@@ -224,19 +228,32 @@ export default function PeoplePage() {
     return (
       <div className="min-h-screen bg-gray-50 dark:bg-gray-950 p-4 md:p-8 transition-colors duration-200">
         <div className="max-w-4xl mx-auto space-y-6 animate-in slide-in-from-right-8 duration-300 pb-20">
-          <div className="flex items-center space-x-4 mb-6">
+          <div className="flex items-center justify-between mb-6">
+            <div className="flex items-center space-x-4">
+              <button 
+                onClick={() => setSelectedPerson(null)}
+                className="p-3 bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-800 rounded-full hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors shadow-sm"
+              >
+                <ArrowLeft className="w-5 h-5 text-gray-600 dark:text-gray-400" />
+              </button>
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 rounded-full bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 font-black text-lg flex items-center justify-center border border-indigo-100 dark:border-indigo-800">
+                  {selectedPerson.substring(0, 2).toUpperCase()}
+                </div>
+                <h1 className="text-2xl md:text-3xl font-black text-gray-900 dark:text-gray-100 uppercase tracking-tight">{selectedPerson}</h1>
+              </div>
+            </div>
+            
             <button 
-              onClick={() => setSelectedPerson(null)}
+              onClick={() => {
+                setEditPersonForm({ name: selectedPerson, handle: '' });
+                setLinkState('idle');
+                setShowEditPersonModal(true);
+              }}
               className="p-3 bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-800 rounded-full hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors shadow-sm"
             >
-              <ArrowLeft className="w-5 h-5 text-gray-600 dark:text-gray-400" />
+              <Edit2 className="w-5 h-5 text-gray-600 dark:text-gray-400" />
             </button>
-            <div className="flex items-center gap-4">
-              <div className="w-12 h-12 rounded-full bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 font-black text-lg flex items-center justify-center border border-indigo-100 dark:border-indigo-800">
-                {selectedPerson.substring(0, 2).toUpperCase()}
-              </div>
-              <h1 className="text-2xl md:text-3xl font-black text-gray-900 dark:text-gray-100 uppercase tracking-tight">{selectedPerson}</h1>
-            </div>
           </div>
 
           {/* Stats Cards */}
