@@ -586,6 +586,87 @@ export default function PeoplePage() {
             </div>
           </div>
         )}
+
+        {/* ── Edit Profile Modal ─────────────────────────────────────────── */}
+        {showEditPersonModal && (
+          <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in">
+            <div className="bg-white dark:bg-gray-900 rounded-[2.5rem] w-full max-w-md p-8 shadow-2xl relative transition-colors animate-in zoom-in-95">
+              <button onClick={() => setShowEditPersonModal(false)} className="absolute right-6 top-6 p-2 text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full transition-colors"><X className="w-5 h-5" /></button>
+              <h2 className="text-xl font-black text-gray-900 dark:text-gray-100 mb-1 uppercase tracking-tight">Edit Profile</h2>
+              <p className="text-sm text-gray-500 dark:text-gray-400 mb-6 font-medium">Update alias or link to a Budee user.</p>
+
+              <div className="space-y-6">
+                <div>
+                  <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Local Alias</label>
+                  <input
+                    type="text"
+                    value={editPersonForm.name}
+                    onChange={e => setEditPersonForm(f => ({ ...f, name: e.target.value }))}
+                    className="w-full bg-gray-50 dark:bg-gray-800 border-transparent text-gray-900 dark:text-gray-100 rounded-2xl p-4 text-sm font-bold outline-none focus:ring-2 focus:ring-indigo-500 transition-all"
+                  />
+                  <p className="text-[10px] text-gray-500 mt-2 font-medium">This display name is only visible to you.</p>
+                </div>
+
+                <div className="border-t border-gray-100 dark:border-gray-800 pt-6">
+                  <label className="block text-[10px] font-black text-indigo-500 dark:text-indigo-400 uppercase tracking-widest mb-2">Link Budee Account</label>
+                  <div className="flex gap-2">
+                    <div className="relative flex-1">
+                      <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                      <input
+                        type="text"
+                        placeholder="@username or email"
+                        value={editPersonForm.handle}
+                        onChange={e => {
+                          setEditPersonForm(f => ({ ...f, handle: e.target.value }));
+                          setLinkState('idle');
+                        }}
+                        className="w-full bg-gray-50 dark:bg-gray-800 border-transparent text-gray-900 dark:text-gray-100 rounded-2xl p-4 pl-10 text-sm font-bold outline-none focus:ring-2 focus:ring-indigo-500 transition-all"
+                      />
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (!editPersonForm.handle.trim()) return;
+                        setLinkState('searching');
+                        setTimeout(() => setLinkState('found'), 1200);
+                      }}
+                      className="bg-indigo-50 text-indigo-600 dark:bg-indigo-900/30 dark:text-indigo-400 px-5 py-2 rounded-2xl font-bold hover:bg-indigo-100 dark:hover:bg-indigo-900/50 transition-colors"
+                    >
+                      {linkState === 'searching' ? '...' : 'Find'}
+                    </button>
+                  </div>
+
+                  {linkState === 'found' && (
+                    <div className="mt-4 p-4 bg-green-50 dark:bg-green-900/20 rounded-2xl border border-green-100 dark:border-green-900/30 flex items-center justify-between animate-in zoom-in-95">
+                      <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 bg-green-200 dark:bg-green-800 rounded-full flex items-center justify-center text-green-700 dark:text-green-300 font-bold">
+                          {editPersonForm.handle.replace('@', '').charAt(0).toUpperCase()}
+                        </div>
+                        <div>
+                          <p className="text-xs font-bold text-green-800 dark:text-green-300">User Match Found!</p>
+                          <p className="text-[10px] text-green-600 dark:text-green-400">Account linking unlocks in Phase 3.</p>
+                        </div>
+                      </div>
+                      <CheckSquare className="w-4 h-4 text-green-600" />
+                    </div>
+                  )}
+                </div>
+
+                <div className="flex gap-3 pt-4">
+                  <button type="button" onClick={() => setShowEditPersonModal(false)} className="flex-1 bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 py-4 rounded-2xl font-black uppercase tracking-widest text-[10px] hover:bg-gray-200 dark:hover:bg-gray-700 transition-all">
+                    Cancel
+                  </button>
+                  <button type="button" onClick={() => {
+                      alert("Alias updating and live account linking will be fully enabled in Phase 3!");
+                      setShowEditPersonModal(false);
+                  }} className="flex-1 bg-indigo-600 text-white py-4 rounded-2xl font-black uppercase tracking-widest text-[10px] hover:bg-indigo-700 transition-all shadow-lg">
+                    Save Profile
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     );
   }

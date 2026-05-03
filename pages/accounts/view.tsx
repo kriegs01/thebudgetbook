@@ -7,6 +7,8 @@ import { combineDateWithCurrentTime, getFirstDayOfCurrentYearIso, getLastDayOfCu
 import type { SupabaseTransaction } from '../../src/types/supabase';
 import { computeCreditUtilization, type CreditUtilization } from '../../src/utils/accounts';
 import { PinProtectedAction } from '../../src/components/PinProtectedAction';
+import { getAllPeople } from '../../src/services/peopleService';
+import type { SupabasePerson } from '../../src/types/supabase';
 
 const FILTER_MIN_DATE = '2025-01-01';
 
@@ -91,6 +93,7 @@ const AccountFilteredTransactions: React.FC<AccountFilteredTransactionsProps> = 
   const [cashInForm, setCashInForm] = useState({ amount: '', date: new Date().toISOString().split('T')[0], notes: '', personName: '' });
   const [loanPaymentForm, setLoanPaymentForm] = useState({ amount: '', date: new Date().toISOString().split('T')[0] });
   const [cardPaymentForm, setCardPaymentForm] = useState({ name: '', amount: '', date: new Date().toISOString().split('T')[0], notes: '' });
+  const [people, setPeople] = useState<SupabasePerson[]>([]);
 
   // Raw Supabase transactions (used for credit utilization calculation)
   const [supabaseTransactions, setSupabaseTransactions] = useState<SupabaseTransaction[]>([]);
@@ -206,6 +209,9 @@ const AccountFilteredTransactions: React.FC<AccountFilteredTransactionsProps> = 
 
         // Use accounts prop for transfer dropdown (already loaded from parent)
         setAllAccounts(accounts);
+            
+            const { data: peopleData } = await getAllPeople();
+            if (peopleData) setPeople(peopleData);
 
         await loadTransactions();
       } finally {
@@ -661,7 +667,13 @@ const AccountFilteredTransactions: React.FC<AccountFilteredTransactionsProps> = 
   );
   
   // Extract unique people names for autocomplete datalist
-  const uniquePeopleNames = Array.from(new Set(supabaseTransactions.map(t => (t as any).person_name).filter(Boolean)));
+  const uniquePeopleNames = useMemo(() => {
+    const names = [
+      ...people.map(p => p.name),
+      ...supabaseTransactions.map(t => (t as any).person_name).filter(Boolean)
+    ];
+    return Array.from(new Set(names));
+  }, [people, supabaseTransactions]);
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-950 p-8 transition-colors">
@@ -1075,11 +1087,15 @@ const AccountFilteredTransactions: React.FC<AccountFilteredTransactionsProps> = 
               <div>
                 <label className="block text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-2">Person / Payee (Optional)</label>
                 <input 
+                  list="withdraw-people-list"
                   value={withdrawForm.personName} 
                   onChange={e => setWithdrawForm(f => ({ ...f, personName: e.target.value }))} 
                   placeholder="e.g. John Doe"
                   className="w-full bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-transparent rounded-2xl p-4 outline-none font-bold focus:ring-2 focus:ring-red-500 transition-all" 
                 />
+                <datalist id="withdraw-people-list">
+                  {uniquePeopleNames.map((name, i) => <option key={i} value={name as string} />)}
+                </datalist>
                 <p className="text-[10px] text-gray-500 mt-2 font-medium">Link this expense to a person in your People page.</p>
               </div>
 
@@ -1305,11 +1321,15 @@ const AccountFilteredTransactions: React.FC<AccountFilteredTransactionsProps> = 
               <div>
                 <label className="block text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-2">Person (Optional)</label>
                 <input 
+                  list="loan-people-list"
                   value={loanForm.personName} 
                   onChange={e => setLoanForm(f => ({ ...f, personName: e.target.value }))} 
                   placeholder="e.g. John Doe"
                   className="w-full bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-transparent rounded-2xl p-4 outline-none font-bold focus:ring-2 focus:ring-orange-500 transition-all" 
                 />
+                <datalist id="loan-people-list">
+                  {uniquePeopleNames.map((name, i) => <option key={i} value={name as string} />)}
+                </datalist>
               </div>
 
               <div>
@@ -1371,11 +1391,15 @@ const AccountFilteredTransactions: React.FC<AccountFilteredTransactionsProps> = 
               <div>
                 <label className="block text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-2">From Person (Optional)</label>
                 <input 
+                  list="cashin-people-list"
                   value={cashInForm.personName} 
                   onChange={e => setCashInForm(f => ({ ...f, personName: e.target.value }))} 
                   placeholder="e.g. John Doe"
                   className="w-full bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-transparent rounded-2xl p-4 outline-none font-bold focus:ring-2 focus:ring-green-500 transition-all" 
                 />
+                <datalist id="cashin-people-list">
+                  {uniquePeopleNames.map((name, i) => <option key={i} value={name as string} />)}
+                </datalist>
               </div>
 
               <div>
