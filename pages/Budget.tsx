@@ -71,10 +71,6 @@ const isBillerActiveForPeriod = (biller: Biller, month: string, year: number): b
     }
   }
 
-  if (cat.flexiMode === false && !hasData) {
-    return false;
-  }
-
   return true;
 };
 
@@ -209,6 +205,10 @@ const shouldRenderCategorySection = (
       if (inGap) return false;
     }
   }
+
+    if (cat.flexiMode === false && !hasData) {
+      return false;
+    }
 
   return isActive || hasData;
 };
