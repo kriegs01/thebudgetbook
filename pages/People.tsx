@@ -45,8 +45,10 @@ export default function PeoplePage() {
   const [editPersonForm, setEditPersonForm] = useState({ name: '', handle: '', matchedUserId: '' });
   const [linkState, setLinkState] = useState<'idle' | 'searching' | 'found' | 'error'>('idle');
   const [matchedUsers, setMatchedUsers] = useState<SupabaseUserProfile[]>([]);
-  const [linkOffers, setLinkOffers] = useState<{profile: SupabaseUserProfile, matches: SupabasePerson[]}[]>([]);
-  const processedOffersRef = useRef<Set<string>>(new Set());
+  const [mainTab, setMainTab] = useState<'profiles' | 'budies'>('profiles');
+  const [friendProfiles, setFriendProfiles] = useState<SupabaseUserProfile[]>([]);
+  const [linkBudeeModal, setLinkBudeeModal] = useState<SupabaseUserProfile | null>(null);
+  const [selectedLocalPersonToLink, setSelectedLocalPersonToLink] = useState('');
 
   const loadData = useCallback(async () => {
     setIsLoading(true);
@@ -102,48 +104,13 @@ export default function PeoplePage() {
         }
       }
 
-      // 2. Auto-sync missing shadow profiles for accepted OR pending connections
       const validFriendships = currentFriendships.filter(f => f.status === 'accepted' || f.status === 'pending');
-      const missingFriendIds = validFriendships
-        .map(f => f.user_id === myId ? f.friend_id : f.user_id)
-        .filter(fid => !currentPeople.some(p => p.friend_user_id === fid))
-        .filter(fid => !processedOffersRef.current.has(fid));
-
-      if (missingFriendIds.length > 0) {
-        const { data: profiles } = await supabase.from('user_profiles').select('*').in('user_id', missingFriendIds);
-        if (profiles) {
-          const offers: any[] = [];
-          for (const prof of profiles) {
-            const profFirstName = prof.first_name?.toLowerCase() || '';
-            const profLastName = prof.last_name?.toLowerCase() || '';
-            
-            const localMatches = currentPeople.filter(p => {
-              if (p.friend_user_id) return false;
-              const pName = p.name.toLowerCase();
-              return (profFirstName && pName.includes(profFirstName)) || (profLastName && pName.includes(profLastName));
-            });
-
-            if (localMatches.length > 0) {
-              offers.push({ profile: prof, matches: localMatches });
-            } else {
-              const newName = `${prof.first_name} ${prof.last_name}${prof.username ? ` (@${prof.username})` : ''}`;
-              const { data: newPerson } = await createPerson({ name: newName } as any);
-              if (newPerson) {
-                const isTestMode = localStorage.getItem('test_environment_enabled') === 'true';
-                const peopleTable = isTestMode ? 'people_test' : 'people';
-                let { error: updateErr } = await supabase.from(peopleTable).update({ friend_user_id: prof.user_id }).eq('id', newPerson.id);
-                if (updateErr && updateErr.code === '42P01') {
-                  await supabase.from('people').update({ friend_user_id: prof.user_id }).eq('id', newPerson.id);
-                }
-                newPerson.friend_user_id = prof.user_id;
-                currentPeople = [...currentPeople, newPerson];
-              }
-            }
-          }
-          if (offers.length > 0) {
-            setLinkOffers(offers);
-          }
-        }
+      const friendIds = validFriendships.map(f => f.user_id === myId ? f.friend_id : f.user_id);
+      if (friendIds.length > 0) {
+        const { data: fProfiles } = await supabase.from('user_profiles').select('*').in('user_id', friendIds);
+        if (fProfiles) setFriendProfiles(fProfiles);
+      } else {
+        setFriendProfiles([]);
       }
     }
 
@@ -153,48 +120,59 @@ export default function PeoplePage() {
     setIsLoading(false);
   }, []);
 
-  const handleAcceptLinkOffer = async (profile: SupabaseUserProfile, match: SupabasePerson | null) => {
-    // Mark as processed immediately to prevent modal loops
-    processedOffersRef.current.add(profile.user_id);
+  const handleCreateProfileForBudee = async (prof: SupabaseUserProfile) => {
     setIsSubmitting(true);
     try {
-      const isTestMode = localStorage.getItem('test_environment_enabled') === 'true';
-      const peopleTable = isTestMode ? 'people_test' : 'people';
-      const newName = `${profile.first_name} ${profile.last_name}${profile.username ? ` (@${profile.username})` : ''}`;
-      let createdPerson: any = null;
-
-      if (match) {
-        let { error: updateErr } = await supabase.from(peopleTable).update({ friend_user_id: profile.user_id, name: newName }).eq('id', match.id);
+      const newName = `${prof.first_name} ${prof.last_name}${prof.username ? \` (@${prof.username})\` : ''}`;
+      const { data: newPerson } = await createPerson({ name: newName } as any);
+      if (newPerson) {
+        const isTestMode = localStorage.getItem('test_environment_enabled') === 'true';
+        const peopleTable = isTestMode ? 'people_test' : 'people';
+        let { error: updateErr } = await supabase.from(peopleTable).update({ friend_user_id: prof.user_id }).eq('id', newPerson.id);
         if (updateErr && updateErr.code === '42P01') {
-          await supabase.from('people').update({ friend_user_id: profile.user_id, name: newName }).eq('id', match.id);
-        }
-        const txsToUpdate = transactions.filter(t => (t as any).person_name === match.name || t.borrower_name === match.name);
-        for (const tx of txsToUpdate) {
-          const updates: any = {};
-          if ((tx as any).person_name === match.name) updates.person_name = newName;
-          if (tx.borrower_name === match.name) updates.borrower_name = newName;
-          if (Object.keys(updates).length > 0) {
-            await updateTransaction(tx.id, updates);
-          }
-        }
-      } else {
-        const { data: newPerson } = await createPerson({ name: newName } as any);
-        if (newPerson) {
-          createdPerson = newPerson;
-          let { error: updateErr } = await supabase.from(peopleTable).update({ friend_user_id: profile.user_id }).eq('id', newPerson.id);
-          if (updateErr && updateErr.code === '42P01') {
-            await supabase.from('people').update({ friend_user_id: profile.user_id }).eq('id', newPerson.id);
-          }
-          createdPerson.friend_user_id = profile.user_id;
+          await supabase.from('people').update({ friend_user_id: prof.user_id }).eq('id', newPerson.id);
         }
       }
-
-      setLinkOffers(prev => prev.slice(1));
       
-      // Reload to let sync process fetch the cleanest format and relations directly
       await loadData();
     } catch (err) {
       console.error(err);
+      alert('Failed to create profile.');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleLinkBudeeToProfile = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!linkBudeeModal || !selectedLocalPersonToLink) return;
+    setIsSubmitting(true);
+    try {
+      const personRecord = people.find(p => p.id === selectedLocalPersonToLink);
+      if (!personRecord) return;
+      const newName = `${linkBudeeModal.first_name} ${linkBudeeModal.last_name}${linkBudeeModal.username ? \` (@${linkBudeeModal.username})\` : ''}`;
+      const isTestMode = localStorage.getItem('test_environment_enabled') === 'true';
+      const peopleTable = isTestMode ? 'people_test' : 'people';
+      let { error: updateErr } = await supabase.from(peopleTable).update({ friend_user_id: linkBudeeModal.user_id, name: newName }).eq('id', personRecord.id);
+      if (updateErr && updateErr.code === '42P01') {
+        await supabase.from('people').update({ friend_user_id: linkBudeeModal.user_id, name: newName }).eq('id', personRecord.id);
+      }
+      
+      const txsToUpdate = transactions.filter(t => (t as any).person_name === personRecord.name || t.borrower_name === personRecord.name);
+      for (const tx of txsToUpdate) {
+        const updates: any = {};
+        if ((tx as any).person_name === personRecord.name) updates.person_name = newName;
+        if (tx.borrower_name === personRecord.name) updates.borrower_name = newName;
+        if (Object.keys(updates).length > 0) {
+          await updateTransaction(tx.id, updates);
+        }
+      }
+      setLinkBudeeModal(null);
+      setSelectedLocalPersonToLink('');
+      await loadData();
+    } catch (err) {
+      console.error(err);
+      alert('Failed to link profile.');
     } finally {
       setIsSubmitting(false);
     }
@@ -370,19 +348,6 @@ export default function PeoplePage() {
       });
     } else {
       alert('Friend request sent successfully!');
-      if (userProfile) {
-        const newName = `${userProfile.first_name} ${userProfile.last_name}${userProfile.username ? ` (@${userProfile.username})` : ''}`;
-        const { data: newPerson } = await createPerson({ name: newName } as any);
-        if (newPerson) {
-          const isTestMode = localStorage.getItem('test_environment_enabled') === 'true';
-          const peopleTable = isTestMode ? 'people_test' : 'people';
-          let { error: updateErr } = await supabase.from(peopleTable).update({ friend_user_id: friendId }).eq('id', newPerson.id);
-          if (updateErr && updateErr.code === '42P01') {
-            await supabase.from('people').update({ friend_user_id: friendId }).eq('id', newPerson.id);
-          }
-        }
-        await loadData();
-      }
     }
   };
 
@@ -978,20 +943,22 @@ export default function PeoplePage() {
           </div>
           
           <div className="flex items-center gap-3 self-end sm:self-auto">
-            <div className="bg-gray-100 dark:bg-gray-800/80 p-1 rounded-xl flex items-center border border-gray-200 dark:border-gray-700 transition-colors">
-              <button 
-                onClick={() => setViewMode('grid')}
-                className={`p-2 rounded-lg transition-all ${viewMode === 'grid' ? 'bg-white dark:bg-gray-700 text-indigo-600 dark:text-indigo-400 shadow-sm' : 'text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'}`}
-              >
-                <LayoutGrid className="w-4 h-4" />
-              </button>
-              <button 
-                onClick={() => setViewMode('list')}
-                className={`p-2 rounded-lg transition-all ${viewMode === 'list' ? 'bg-white dark:bg-gray-700 text-indigo-600 dark:text-indigo-400 shadow-sm' : 'text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'}`}
-              >
-                <List className="w-4 h-4" />
-              </button>
-            </div>
+            {mainTab === 'profiles' && (
+              <div className="bg-gray-100 dark:bg-gray-800/80 p-1 rounded-xl flex items-center border border-gray-200 dark:border-gray-700 transition-colors">
+                <button 
+                  onClick={() => setViewMode('grid')}
+                  className={`p-2 rounded-lg transition-all ${viewMode === 'grid' ? 'bg-white dark:bg-gray-700 text-indigo-600 dark:text-indigo-400 shadow-sm' : 'text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'}`}
+                >
+                  <LayoutGrid className="w-4 h-4" />
+                </button>
+                <button 
+                  onClick={() => setViewMode('list')}
+                  className={`p-2 rounded-lg transition-all ${viewMode === 'list' ? 'bg-white dark:bg-gray-700 text-indigo-600 dark:text-indigo-400 shadow-sm' : 'text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'}`}
+                >
+                  <List className="w-4 h-4" />
+                </button>
+              </div>
+            )}
             <button
               onClick={() => setShowFindFriendsModal(true)}
               className="flex items-center gap-2 bg-white dark:bg-gray-800 text-indigo-600 dark:text-indigo-400 border border-indigo-100 dark:border-indigo-800/50 px-5 py-3 rounded-xl font-bold hover:bg-indigo-50 dark:hover:bg-gray-700 transition-all shadow-sm"
@@ -1009,10 +976,28 @@ export default function PeoplePage() {
           </div>
         </div>
 
+        <div className="flex gap-6 border-b border-gray-200 dark:border-gray-800 mb-6 px-2">
+          <button
+            onClick={() => setMainTab('profiles')}
+            className={`pb-4 text-sm font-black uppercase tracking-widest transition-colors relative ${mainTab === 'profiles' ? 'text-indigo-600 dark:text-indigo-400' : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-300'}`}
+          >
+            Local Profiles
+            {mainTab === 'profiles' && <span className="absolute bottom-0 left-0 w-full h-0.5 bg-indigo-600 dark:bg-indigo-400 rounded-t-full"></span>}
+          </button>
+          <button
+            onClick={() => setMainTab('budies')}
+            className={`pb-4 text-sm font-black uppercase tracking-widest transition-colors relative ${mainTab === 'budies' ? 'text-indigo-600 dark:text-indigo-400' : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-300'}`}
+          >
+            My Budies
+            {mainTab === 'budies' && <span className="absolute bottom-0 left-0 w-full h-0.5 bg-indigo-600 dark:bg-indigo-400 rounded-t-full"></span>}
+          </button>
+        </div>
+
         {/* ── Content ────────────────────────────────────────────────────── */}
         {isLoading ? (
           <div className="text-center py-20 text-gray-500 dark:text-gray-400 font-medium">Loading people...</div>
-        ) : people.length === 0 ? (
+        ) : mainTab === 'profiles' ? (
+          people.length === 0 ? (
           <div className="text-center py-20 bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-800 rounded-[2.5rem] transition-colors">
             <User className="w-16 h-16 text-gray-300 dark:text-gray-600 mx-auto mb-4" />
             <h3 className="text-lg font-black text-gray-900 dark:text-gray-100 uppercase tracking-widest mb-1">No people found</h3>
@@ -1125,7 +1110,71 @@ export default function PeoplePage() {
               );
             })}
           </div>
-        )}
+        )
+      ) : (
+        <div className="bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-800 rounded-[2.5rem] overflow-hidden transition-colors">
+          {friendProfiles.length === 0 ? (
+            <div className="text-center py-20">
+              <Users className="w-16 h-16 text-gray-300 dark:text-gray-600 mx-auto mb-4" />
+              <h3 className="text-lg font-black text-gray-900 dark:text-gray-100 uppercase tracking-widest mb-1">No Budies Yet</h3>
+              <p className="text-sm text-gray-500 dark:text-gray-400 mb-6">Search and connect with friends to see them here.</p>
+              <button onClick={() => setShowFindFriendsModal(true)} className="bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 px-6 py-3 rounded-xl font-bold hover:bg-indigo-100 dark:hover:bg-indigo-900/50 transition-colors">
+                Find Friends
+              </button>
+            </div>
+          ) : (
+            friendProfiles.map((prof, i) => {
+              const fStatus = getFriendshipStatus(prof.user_id);
+              const linkedPerson = people.find(p => p.friend_user_id === prof.user_id);
+              const displayName = `${prof.first_name} ${prof.last_name}`;
+              
+              return (
+                <div key={prof.user_id} className={`flex items-center justify-between p-5 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors ${i !== friendProfiles.length - 1 ? 'border-b border-gray-50 dark:border-gray-800' : ''}`}>
+                  <div className="flex items-center gap-4">
+                    <div className="w-10 h-10 rounded-full bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 font-black text-sm flex items-center justify-center border border-indigo-100 dark:border-indigo-800 uppercase">
+                      {(prof.first_name?.charAt(0) || '')}{(prof.last_name?.charAt(0) || '')}
+                    </div>
+                    <div className="flex flex-col min-w-0">
+                      <div className="flex items-center gap-2">
+                        <h3 className="text-base font-black text-gray-900 dark:text-gray-100 truncate">{displayName}</h3>
+                        {fStatus === 'pending' && (
+                          <span className="inline-flex items-center gap-1 text-[9px] font-bold px-2 py-0.5 bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400 rounded uppercase tracking-widest" title="Waiting confirmation">
+                            <Clock className="w-3 h-3" /> Pending
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">{prof.username ? `@${prof.username}` : prof.email}</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    {linkedPerson ? (
+                      <span className="inline-flex items-center gap-1 text-[10px] font-bold px-3 py-1.5 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 rounded-xl uppercase tracking-widest">
+                        <CheckSquare className="w-3 h-3" /> Linked to {linkedPerson.name}
+                      </span>
+                    ) : fStatus === 'accepted' ? (
+                      <div className="flex gap-2">
+                        <button 
+                          onClick={() => handleCreateProfileForBudee(prof)}
+                          disabled={isSubmitting}
+                          className="text-xs font-bold text-white bg-indigo-600 px-4 py-2 rounded-xl hover:bg-indigo-700 transition-colors uppercase tracking-widest disabled:opacity-50"
+                        >
+                          Create Profile
+                        </button>
+                        <button 
+                          onClick={() => { setLinkBudeeModal(prof); setSelectedLocalPersonToLink(''); }}
+                          className="text-xs font-bold text-indigo-600 bg-indigo-50 dark:bg-indigo-900/30 dark:text-indigo-400 px-4 py-2 rounded-xl hover:bg-indigo-100 dark:hover:bg-indigo-900/50 transition-colors uppercase tracking-widest"
+                        >
+                          Link Existing
+                        </button>
+                      </div>
+                    ) : null}
+                  </div>
+                </div>
+              );
+            })
+          )}
+        </div>
+      )}
       </div>
 
       {/* ── Add Person Modal ───────────────────────────────────────────── */}
