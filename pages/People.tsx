@@ -48,53 +48,6 @@ export default function PeoplePage() {
   const [linkOffers, setLinkOffers] = useState<{profile: SupabaseUserProfile, matches: SupabasePerson[]}[]>([]);
   const processedOffersRef = useRef<Set<string>>(new Set());
 
-  const ensureReciprocalProfile = useCallback(async (friendId: string) => {
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
-      const myId = user.id;
-
-      const { data: myProfile } = await supabase.from('user_profiles').select('*').eq('user_id', myId).single();
-      if (!myProfile) return;
-
-      const myNewName = `${myProfile.first_name} ${myProfile.last_name}${myProfile.username ? ` (@${myProfile.username})` : ''}`;
-      
-      const isTestMode = localStorage.getItem('test_environment_enabled') === 'true';
-      const peopleTable = isTestMode ? 'people_test' : 'people';
-
-      let { data: existing, error: checkErr } = await supabase
-        .from(peopleTable)
-        .select('id')
-        .eq('user_id', friendId)
-        .eq('friend_user_id', myId)
-        .maybeSingle();
-
-      if (checkErr && checkErr.code === '42P01') {
-        const fallback = await supabase
-          .from('people')
-          .select('id')
-          .eq('user_id', friendId)
-          .eq('friend_user_id', myId)
-          .maybeSingle();
-        existing = fallback?.data;
-      }
-
-      if (!existing) {
-        const insertPayload = {
-          user_id: friendId,
-          friend_user_id: myId,
-          name: myNewName
-        };
-        let { error: insertErr } = await supabase.from(peopleTable).insert(insertPayload);
-        if (insertErr && insertErr.code === '42P01') {
-          await supabase.from('people').insert(insertPayload);
-        }
-      }
-    } catch (e) {
-      console.error('Error ensuring reciprocal profile:', e);
-    }
-  }, []);
-
   const loadData = useCallback(async () => {
     setIsLoading(true);
 
@@ -108,12 +61,50 @@ export default function PeoplePage() {
     ]);
     
     let currentPeople = peopleRes.data || [];
+    let currentTxs = txRes.data || [];
     const currentFriendships = friendRes.data || [];
 
-    // Auto-sync missing shadow profiles for accepted connections
     if (myId) {
-      const acceptedFriendships = currentFriendships.filter(f => f.status === 'accepted');
-      const missingFriendIds = acceptedFriendships
+      // 1. Force sync names for ALL existing linked profiles (updates legacy names to strict format)
+      const linkedPeople = currentPeople.filter(p => p.friend_user_id);
+      if (linkedPeople.length > 0) {
+        const { data: linkedProfiles } = await supabase.from('user_profiles').select('*').in('user_id', linkedPeople.map(p => p.friend_user_id));
+        if (linkedProfiles) {
+          let needsUpdate = false;
+          const updatedPeople = currentPeople.map(p => {
+            if (p.friend_user_id) {
+              const prof = linkedProfiles.find(lp => lp.user_id === p.friend_user_id);
+              if (prof) {
+                const correctName = `${prof.first_name} ${prof.last_name}${prof.username ? ` (@${prof.username})` : ''}`;
+                if (p.name !== correctName) {
+                  needsUpdate = true;
+                  const isTestMode = localStorage.getItem('test_environment_enabled') === 'true';
+                  const peopleTable = isTestMode ? 'people_test' : 'people';
+                  supabase.from(peopleTable).update({ name: correctName }).eq('id', p.id).then();
+                  
+                  const txsToUpdate = currentTxs.filter(t => t.person_name === p.name || t.borrower_name === p.name);
+                  txsToUpdate.forEach(tx => {
+                    const updates: any = {};
+                    if (tx.person_name === p.name) updates.person_name = correctName;
+                    if (tx.borrower_name === p.name) updates.borrower_name = correctName;
+                    updateTransaction(tx.id, updates).then();
+                  });
+                  return { ...p, name: correctName };
+                }
+              }
+            }
+            return p;
+          });
+          if (needsUpdate) {
+            currentPeople = updatedPeople;
+            getAllTransactions().then(res => { if (res.data) setTransactions(res.data); });
+          }
+        }
+      }
+
+      // 2. Auto-sync missing shadow profiles for accepted OR pending connections
+      const validFriendships = currentFriendships.filter(f => f.status === 'accepted' || f.status === 'pending');
+      const missingFriendIds = validFriendships
         .map(f => f.user_id === myId ? f.friend_id : f.user_id)
         .filter(fid => !currentPeople.some(p => p.friend_user_id === fid))
         .filter(fid => !processedOffersRef.current.has(fid));
@@ -146,7 +137,6 @@ export default function PeoplePage() {
                 }
                 newPerson.friend_user_id = prof.user_id;
                 currentPeople = [...currentPeople, newPerson];
-                await ensureReciprocalProfile(prof.user_id);
               }
             }
           }
@@ -158,10 +148,10 @@ export default function PeoplePage() {
     }
 
     setPeople(currentPeople);
-    if (txRes.data) setTransactions(txRes.data);
+    setTransactions(currentTxs);
     setFriendships(currentFriendships);
     setIsLoading(false);
-  }, [ensureReciprocalProfile]);
+  }, []);
 
   const handleAcceptLinkOffer = async (profile: SupabaseUserProfile, match: SupabasePerson | null) => {
     // Mark as processed immediately to prevent modal loops
@@ -185,7 +175,6 @@ export default function PeoplePage() {
           if (tx.borrower_name === match.name) updates.borrower_name = newName;
           await updateTransaction(tx.id, updates);
         }
-        await ensureReciprocalProfile(profile.user_id);
       } else {
         const { data: newPerson } = await createPerson({ name: newName, friend_user_id: profile.user_id } as any);
         if (newPerson) {
@@ -195,32 +184,13 @@ export default function PeoplePage() {
             await supabase.from('people').update({ friend_user_id: profile.user_id }).eq('id', newPerson.id);
           }
           createdPerson.friend_user_id = profile.user_id;
-          await ensureReciprocalProfile(profile.user_id);
         }
       }
 
       setLinkOffers(prev => prev.slice(1));
       
-      // Optimistic UI updates to avoid fetching stale data and triggering the modal again
-      setPeople(prev => {
-        if (match) return prev.map(p => p.id === match.id ? { ...p, friend_user_id: profile.user_id, name: newName } : p);
-        if (createdPerson) return [...prev, createdPerson];
-        return prev;
-      });
-      
-      if (match) {
-        setTransactions(prev => prev.map(t => {
-          if (t.person_name === match.name || t.borrower_name === match.name) {
-            return {
-              ...t,
-              friend_user_id: profile.user_id,
-              person_name: t.person_name === match.name ? newName : t.person_name,
-              borrower_name: t.borrower_name === match.name ? newName : t.borrower_name
-            };
-          }
-          return t;
-        }));
-      }
+      // Reload to let sync process fetch the cleanest format and relations directly
+      loadData();
     } catch (err) {
       console.error(err);
     } finally {
@@ -386,7 +356,7 @@ export default function PeoplePage() {
     return f ? f.status : null;
   };
 
-  const handleAddFriend = async (friendId: string) => {
+  const handleAddFriend = async (friendId: string, userProfile?: SupabaseUserProfile) => {
     setSentRequests(prev => new Set(prev).add(friendId));
     const { error } = await sendFriendRequest(friendId);
     if (error) {
@@ -398,6 +368,11 @@ export default function PeoplePage() {
       });
     } else {
       alert('Friend request sent successfully!');
+      if (userProfile) {
+        const newName = `${userProfile.first_name} ${userProfile.last_name}${userProfile.username ? ` (@${userProfile.username})` : ''}`;
+        await createPerson({ name: newName, friend_user_id: friendId } as any);
+        loadData();
+      }
     }
   };
 
@@ -1231,7 +1206,7 @@ export default function PeoplePage() {
                         </p>
                       ) : (
                         <button 
-                          onClick={() => handleAddFriend(user.user_id)}
+                          onClick={() => handleAddFriend(user.user_id, user)}
                           className="px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-widest transition-colors bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-200 dark:hover:bg-indigo-900/50"
                         >
                           Add
