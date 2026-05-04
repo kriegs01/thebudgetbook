@@ -237,6 +237,27 @@ export default function PeoplePage() {
     }
   };
 
+  const getFriendshipStatus = (fid?: string | null) => {
+    if (!fid) return null;
+    const f = friendships.find(f => f.user_id === fid || f.friend_id === fid);
+    return f ? f.status : null;
+  };
+
+  const handleAddFriend = async (friendId: string) => {
+    setSentRequests(prev => new Set(prev).add(friendId));
+    const { error } = await sendFriendRequest(friendId);
+    if (error) {
+      alert('Failed to send friend request. You may have already sent one or they are already connected.');
+      setSentRequests(prev => {
+        const next = new Set(prev);
+        next.delete(friendId);
+        return next;
+      });
+    } else {
+      alert('Friend request sent successfully!');
+    }
+  };
+
   // Get aggregate stats from transactions
   const getPersonStats = (personName: string) => {
     const personTxs = transactions.filter(t => 
