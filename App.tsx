@@ -210,22 +210,11 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
   }, [user]);
 
   const handleAcceptRequest = async (id: string) => {
-    const req = pendingRequests.find(r => r.id === id);
     await acceptFriendRequest(id);
     setPendingRequests(prev => prev.filter(r => r.id !== id));
-
-    if (req && req.user_id) {
-      try {
-        const { data: people } = await getAllPeople();
-        const exists = people?.some(p => p.friend_user_id === req.user_id);
-        if (!exists) {
-          const name = req.sender_profile ? `${req.sender_profile.first_name} ${req.sender_profile.last_name}` : 'New Connection';
-          await createPerson({ name, friend_user_id: req.user_id });
-        }
-      } catch (e) {
-        console.error("Failed to auto-create profile", e);
-      }
-    }
+    // Per touchbase notes (Issue #2), the immediate profile creation logic is removed from here.
+    // This logic will be moved to the People page to ensure profiles are created for BOTH users
+    // when they load their connections, fixing the bug where the sender was left out.
   };
 
   const handleDeclineRequest = async (id: string) => {

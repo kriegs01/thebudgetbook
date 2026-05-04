@@ -44,7 +44,7 @@ export default function PeoplePage() {
   const [showEditPersonModal, setShowEditPersonModal] = useState(false);
   const [editPersonForm, setEditPersonForm] = useState({ name: '', handle: '', matchedUserId: '' });
   const [linkState, setLinkState] = useState<'idle' | 'searching' | 'found' | 'error'>('idle');
-  const [matchedUser, setMatchedUser] = useState<SupabaseUserProfile | null>(null);
+  const [matchedUsers, setMatchedUsers] = useState<SupabaseUserProfile[]>([]);
 
   const loadData = useCallback(async () => {
     setIsLoading(true);
@@ -310,7 +310,7 @@ export default function PeoplePage() {
             <button 
               onClick={() => {
                 setEditPersonForm({ name: selectedPerson, handle: '', matchedUserId: '' });
-                setMatchedUser(null);
+                setMatchedUsers([]);
                 setLinkState('idle');
                 setShowEditPersonModal(true);
               }}
@@ -695,8 +695,7 @@ export default function PeoplePage() {
                         const { data } = await searchUsers(editPersonForm.handle.trim());
                         if (data && data.length > 0) {
                           setLinkState('found');
-                          setEditPersonForm(f => ({ ...f, matchedUserId: data[0].user_id }));
-                          setMatchedUser(data[0]);
+                          setMatchedUsers(data);
                         } else {
                           alert('No user found with that handle or email.');
                           setLinkState('idle');
@@ -708,22 +707,59 @@ export default function PeoplePage() {
                     </button>
                   </div>
 
-                  {linkState === 'found' && matchedUser && (
-                    <div className="mt-4 p-4 bg-green-50 dark:bg-green-900/20 rounded-2xl border border-green-200 dark:border-green-900/40 flex items-center justify-between animate-in zoom-in-95 transition-colors">
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 bg-green-200 dark:bg-green-800 text-green-700 dark:text-green-300 rounded-full flex items-center justify-center font-black uppercase text-sm transition-colors">
-                          {(matchedUser.first_name?.charAt(0) || '')}{(matchedUser.last_name?.charAt(0) || '')}
+                  {linkState === 'found' && matchedUsers.length > 0 && (
+                    <div className="mt-4 space-y-2 max-h-48 overflow-y-auto pr-1 animate-in zoom-in-95">
+                      {matchedUsers.map(user => (
+                        <div key={user.id} className="p-3 bg-gray-50 dark:bg-gray-800/50 rounded-2xl border border-gray-100 dark:border-gray-800 flex items-center justify-between transition-colors">
+                          <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 bg-indigo-100 dark:bg-indigo-900/50 text-indigo-600 dark:text-indigo-400 rounded-full flex items-center justify-center font-black uppercase text-sm">
+                              {(user.first_name?.charAt(0) || '')}{(user.last_name?.charAt(0) || '')}
+                            </div>
+                            <div>
+                              <p className="text-sm font-bold text-gray-900 dark:text-gray-100">
+                                {user.first_name} {user.last_name}
+                              </p>
+                              <p className="text-[10px] font-medium text-gray-500 dark:text-gray-400">
+                                {user.username ? `@${user.username}` : user.email}
+                              </p>
+                            </div>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={async () => {
+                              setIsSubmitting(true);
+                              try {
+                                const personRecord = people.find(p => p.name === selectedPerson);
+                                const profileUpdates: any = { friend_user_id: user.user_id };
+                                if (editPersonForm.name !== selectedPerson) profileUpdates.name = editPersonForm.name;
+                                if (personRecord) await supabase.from('people').update(profileUpdates).eq('id', personRecord.id);
+                                
+                                await sendFriendRequest(user.user_id);
+                                const txsToUpdate = transactions.filter(t => (t as any).person_name === selectedPerson || t.borrower_name === selectedPerson);
+                                for (const tx of txsToUpdate) {
+                                  const updates: any = { friend_user_id: user.user_id };
+                                  if ((tx as any).person_name === selectedPerson) updates.person_name = editPersonForm.name;
+                                  if (tx.borrower_name === selectedPerson) updates.borrower_name = editPersonForm.name;
+                                  await updateTransaction(tx.id, updates);
+                                }
+                                alert('Profile linked! A Connect Request has been sent.');
+                                setShowEditPersonModal(false);
+                                if (editPersonForm.name !== selectedPerson) setSelectedPerson(editPersonForm.name);
+                                loadData();
+                              } catch (e) {
+                                console.error(e);
+                                alert('Failed to link profile');
+                              } finally {
+                                setIsSubmitting(false);
+                              }
+                            }}
+                            disabled={isSubmitting}
+                            className="px-4 py-2 bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 rounded-xl text-xs font-bold uppercase tracking-widest hover:bg-indigo-200 dark:hover:bg-indigo-900/50 transition-colors disabled:opacity-50"
+                          >
+                            Link
+                          </button>
                         </div>
-                        <div>
-                          <p className="text-sm font-bold text-green-800 dark:text-green-300 transition-colors">
-                            {matchedUser.first_name} {matchedUser.last_name}
-                          </p>
-                          <p className="text-[10px] font-medium text-green-600 dark:text-green-400 transition-colors">
-                            {matchedUser.username ? `@${matchedUser.username}` : matchedUser.email}
-                          </p>
-                        </div>
-                      </div>
-                      <CheckSquare className="w-4 h-4 text-green-600" />
+                      ))}
                     </div>
                   )}
                 </div>
@@ -740,11 +776,6 @@ export default function PeoplePage() {
                         // Update the local people table with name and the permanent linked ID
                         const profileUpdates: any = {};
                         if (editPersonForm.name !== selectedPerson) profileUpdates.name = editPersonForm.name;
-                        if (editPersonForm.matchedUserId) {
-                          profileUpdates.friend_user_id = editPersonForm.matchedUserId;
-                          // Send connection request when linking
-                          await sendFriendRequest(editPersonForm.matchedUserId);
-                        }
                         
                         if (Object.keys(profileUpdates).length > 0 && personRecord) {
                           await supabase.from('people').update(profileUpdates).eq('id', personRecord.id);
@@ -756,14 +787,12 @@ export default function PeoplePage() {
                           const updates: any = {};
                           if ((tx as any).person_name === selectedPerson) updates.person_name = editPersonForm.name;
                           if (tx.borrower_name === selectedPerson) updates.borrower_name = editPersonForm.name;
-                          if (editPersonForm.matchedUserId) updates.friend_user_id = editPersonForm.matchedUserId;
                           
                           if (Object.keys(updates).length > 0) {
                             await updateTransaction(tx.id, updates);
                           }
                         }
 
-                        alert('Profile updated! A Connect Request has been sent if linking a new user.');
                         setShowEditPersonModal(false);
                         if (editPersonForm.name !== selectedPerson) {
                           setSelectedPerson(editPersonForm.name);
