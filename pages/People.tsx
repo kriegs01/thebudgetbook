@@ -238,7 +238,7 @@ export default function PeoplePage() {
       .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
     
     return (
-      <div className="min-h-screen bg-gray-50 dark:bg-gray-950 p-4 md:p-8 transition-colors duration-200">
+      <div className="w-full transition-colors duration-200">
         <div className="max-w-4xl mx-auto space-y-6 animate-in slide-in-from-right-8 duration-300 pb-20">
           <div className="flex items-center justify-between mb-6">
             <div className="flex items-center space-x-4">
@@ -690,7 +690,7 @@ export default function PeoplePage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-950 p-4 md:p-8 transition-colors duration-200">
+    <div className="w-full transition-colors duration-200">
       <div className="max-w-6xl mx-auto space-y-6 animate-in fade-in duration-500 pb-20">
         
         {/* ── Header & Controllers ───────────────────────────────────────── */}

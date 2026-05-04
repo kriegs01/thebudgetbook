@@ -12,6 +12,8 @@ export interface SupabaseUserProfile {
   user_id: string; // uuid, references auth.users(id)
   first_name: string;
   last_name: string;
+  email?: string | null;
+  username?: string | null;
   created_at: string; // timestamptz
   updated_at: string; // timestamptz
   settings?: {

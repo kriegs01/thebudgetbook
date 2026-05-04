@@ -15,14 +15,23 @@ export const searchUsers = async (searchTerm: string): Promise<SupabaseResponse<
     const userId = await getCurrentUserId();
     if (!userId) throw new Error('Not authenticated');
 
-    // Search user profiles (ignoring the current user)
-    const { data, error } = await supabase
+    // Clean the search term (remove '@' if they typed a handle)
+    const cleanTerm = searchTerm.replace('@', '');
+
+    // Split the search term by spaces to handle full name searches (e.g. "John Doe")
+    const words = cleanTerm.split(/\s+/).filter(Boolean);
+
+    let query = supabase
       .from('user_profiles')
       .select('*')
-      .neq('user_id', userId)
-      .or(`first_name.ilike.%${searchTerm}%,last_name.ilike.%${searchTerm}%`)
-      .limit(10);
+      .neq('user_id', userId);
+      
+    // Each typed word must match at least one of the searchable columns
+    for (const word of words) {
+      query = query.or(`first_name.ilike.%${word}%,last_name.ilike.%${word}%,email.ilike.%${word}%,username.ilike.%${word}%`);
+    }
 
+    const { data, error } = await query.limit(10);
     if (error) throw error;
     return { data, error: null };
   } catch (error: any) {

@@ -1013,9 +1013,9 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
         <TestModeBanner sidebarOpen={isSidebarOpen} />
         <BrowserRouter>
         <div className="flex h-[100dvh] bg-gray-50 dark:bg-gray-950 w-full overflow-hidden fixed inset-0 transition-colors duration-200">
-        <aside className={`fixed inset-y-0 left-0 z-50 bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-gray-800 transition-all duration-300 ease-in-out ${isSidebarOpen ? 'w-64' : 'hidden md:flex w-20'} overscroll-none`}> 
+        <aside className={`fixed inset-y-0 left-0 z-50 bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-gray-800 transition-all duration-300 ease-in-out ${isSidebarOpen ? 'w-56' : 'hidden md:flex w-20'} overscroll-none`}> 
           <div className="flex flex-col h-full">
-            <div className="flex items-center justify-between h-16 px-4 border-b border-gray-100 dark:border-gray-800">
+            <div className="flex items-center justify-between h-14 px-4 border-b border-gray-100 dark:border-gray-800">
               {isSidebarOpen && <span className="text-xl font-black bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">Budget Book</span>}
               <button onClick={() => setIsSidebarOpen(!isSidebarOpen)} className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-500 dark:text-gray-400 transition-colors">
                 {isSidebarOpen ? <ChevronLeft className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
@@ -1072,10 +1072,10 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
           </div>
           </div>
         </aside>
-        <main className={`flex-1 bg-gray-50 dark:bg-gray-950 transition-all duration-300 ease-in-out ${isSidebarOpen ? 'md:ml-64' : 'md:ml-20'} h-full flex flex-col overflow-hidden`}> 
+        <main className={`flex-1 bg-gray-50 dark:bg-gray-950 transition-all duration-300 ease-in-out ${isSidebarOpen ? 'md:ml-56' : 'md:ml-20'} h-full flex flex-col overflow-hidden`}> 
         
         {/* Top Navigation Bar */}
-        <header className="h-16 px-4 md:px-8 border-b border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 flex items-center justify-end shrink-0 transition-colors z-20">
+        <header className="h-14 px-4 md:px-8 border-b border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 flex items-center justify-end shrink-0 transition-colors z-20">
           <div className="flex items-center space-x-2 md:space-x-4">
             {/* Messages */}
             <button className="p-2 text-gray-400 hover:text-indigo-600 dark:hover:text-indigo-400 rounded-full hover:bg-indigo-50 dark:hover:bg-indigo-900/30 transition-colors">
@@ -1147,7 +1147,7 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
           </div>
         </header>
 
-          <div className="p-4 md:p-8 w-full flex-1 overflow-auto overscroll-none touch-pan-y" style={{ WebkitOverflowScrolling: 'touch' }}>
+        <div className="p-4 md:px-8 md:py-6 w-full flex-1 overflow-auto overscroll-none touch-pan-y" style={{ WebkitOverflowScrolling: 'touch' }}>
             <Routes>
               <Route path="/" element={<Dashboard accounts={accounts} budget={budgetItems} installments={installments} transactions={transactions} budgetSetups={budgetSetups} userProfile={userProfile} theme={theme} />} />
               <Route path="/budget" element={
