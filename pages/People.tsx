@@ -250,9 +250,7 @@ export default function PeoplePage() {
       } else {
         setPeople(prev => prev.filter(p => p.id !== confirmModal.id));
         setConfirmModal(null);
-        if (confirmModal.hasTransactions) {
-          loadData();
-        }
+        loadData(); // Unconditionally sync connections state back to the UI
       }
     } catch (e) {
       console.error('Error deleting person:', e);
@@ -1011,6 +1009,7 @@ export default function PeoplePage() {
             {people.map(person => {
               const stats = getPersonStats(person.name);
               const fStatus = getFriendshipStatus(person.friend_user_id);
+              const budeeProf = friendProfiles.find(fp => fp.user_id === person.friend_user_id);
               return (
                 <div key={person.id} className="bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-800 rounded-[2rem] p-6 hover:shadow-lg transition-all group relative overflow-hidden">
                   <button 
@@ -1026,6 +1025,11 @@ export default function PeoplePage() {
                     </div>
                     <div className="flex flex-col min-w-0 pr-8">
                       <h3 className="text-lg font-black text-gray-900 dark:text-gray-100 truncate">{person.name}</h3>
+                      {budeeProf && (
+                        <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mt-0.5">
+                          {budeeProf.username ? `@${budeeProf.username}` : budeeProf.email}
+                        </p>
+                      )}
                       {person.friend_user_id && fStatus === 'accepted' && (
                         <span className="inline-flex items-center gap-1 w-fit mt-0.5 text-[9px] font-bold px-2 py-0.5 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 rounded uppercase tracking-widest transition-colors">
                           <CheckSquare className="w-3 h-3" /> Linked
@@ -1065,6 +1069,7 @@ export default function PeoplePage() {
             {people.map((person, i) => {
               const stats = getPersonStats(person.name);
               const fStatus = getFriendshipStatus(person.friend_user_id);
+              const budeeProf = friendProfiles.find(fp => fp.user_id === person.friend_user_id);
               return (
                 <div key={person.id} className={`flex items-center justify-between p-5 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors ${i !== people.length - 1 ? 'border-b border-gray-50 dark:border-gray-800' : ''}`}>
                   <div className="flex items-center gap-4">
@@ -1085,7 +1090,11 @@ export default function PeoplePage() {
                           </span>
                         )}
                       </div>
-                      <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">{stats.txCount} transactions</p>
+                      {budeeProf ? (
+                        <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">{budeeProf.username ? `@${budeeProf.username}` : budeeProf.email}</p>
+                      ) : (
+                        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">{stats.txCount} transactions</p>
+                      )}
                     </div>
                   </div>
                   <div className="flex items-center gap-6">

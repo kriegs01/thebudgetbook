@@ -1,13 +1,14 @@
 import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react';
-import { Plus, Info, Eye, ZoomIn, ZoomOut, Download, X, ArrowLeft, Pencil, Trash2, CheckSquare, Square, ChevronDown, Filter, AlertTriangle, ArrowUpFromLine, ArrowDownToLine, ArrowLeftRight, Landmark, CreditCard, FileText, User } from 'lucide-react';
+import { Plus, Info, Eye, ZoomIn, ZoomOut, Download, X, ArrowLeft, Pencil, Trash2, CheckSquare, Square, ChevronDown, Filter, AlertTriangle, ArrowUpFromLine, ArrowDownToLine, ArrowLeftRight, Landmark, CreditCard, FileText, User, UserPlus } from 'lucide-react';
 import { PinProtectedAction } from '../src/components/PinProtectedAction';
 import { useAuth } from '../src/contexts/AuthContext';
 import { createTransaction, updateTransaction, deleteTransactionAndRevertSchedule, uploadTransactionReceipt, getReceiptSignedUrl, batchDeleteTransactions, createTransfer } from '../src/services/transactionsService';
 import { getAllAccountsFrontend } from '../src/services/accountsService';
-import { getAllPeople } from '../src/services/peopleService';
-import type { SupabasePerson } from '../src/types/supabase';
+import { getAllPeople, createPerson } from '../src/services/peopleService';
+import { getFriendships } from '../src/services/friendshipsService';
+import type { SupabasePerson, SupabaseUserProfile, SupabaseFriendship } from '../src/types/supabase';
+import { supabase } from '../src/utils/supabaseClient';
 import { combineDateWithCurrentTime, getTodayIso, getFirstDayOfCurrentYearIso, getLastDayOfCurrentYearIso } from '../src/utils/dateUtils';
-import { PersonAutocomplete } from '../src/components/PersonAutocomplete';
 
 const FILTER_MIN_DATE = '2025-01-01';
 
@@ -38,6 +39,66 @@ const TRANSACTION_TYPES = [
   { id: 'loan', label: 'Loan', icon: <Landmark className="w-5 h-5" />, x: 0, y: -130 },
 ];
 
+type ContactOption = {
+  id: string;
+  name: string;
+  handleOrEmail?: string;
+  isLinked: boolean;
+  isBudeeOnly: boolean;
+  budeeProfile?: SupabaseUserProfile;
+};
+
+const ContactDropdown = ({ value, onChange, contacts, placeholder }: { value: string, onChange: (val: string) => void, contacts: ContactOption[], placeholder: string }) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const [search, setSearch] = useState(value);
+  const wrapperRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => { setSearch(value); }, [value]);
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (wrapperRef.current && !wrapperRef.current.contains(e.target as Node)) setIsOpen(false);
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const filtered = contacts.filter(c => c.name.toLowerCase().includes(search.toLowerCase()));
+
+  return (
+    <div className="relative" ref={wrapperRef}>
+      <input
+        type="text"
+        value={search}
+        onChange={e => { setSearch(e.target.value); onChange(e.target.value); setIsOpen(true); }}
+        onFocus={() => setIsOpen(true)}
+        placeholder={placeholder}
+        className="w-full bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-transparent rounded-xl p-3.5 outline-none font-bold focus:ring-2 focus:ring-indigo-500 transition-all text-sm"
+      />
+      {isOpen && filtered.length > 0 && (
+        <div className="absolute z-50 w-full mt-1 bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-800 rounded-xl shadow-lg max-h-48 overflow-y-auto">
+          {filtered.map(c => (
+            <div key={c.id} onClick={() => { setSearch(c.name); onChange(c.name); setIsOpen(false); }} className="px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-800 cursor-pointer flex items-center justify-between transition-colors border-b border-gray-50 dark:border-gray-800/50 last:border-0">
+              <div className="flex flex-col min-w-0 pr-2">
+                <span className="text-sm font-bold text-gray-900 dark:text-gray-100 truncate">{c.name}</span>
+                {c.handleOrEmail && <span className="text-[10px] text-gray-500 truncate">{c.handleOrEmail}</span>}
+              </div>
+              <div className="flex items-center gap-2 flex-shrink-0">
+                {c.isLinked && (
+                  <div className="flex items-center gap-1 bg-green-100 dark:bg-green-900/30 px-2 py-1 rounded" title="Profile Linked"><CheckSquare className="w-3 h-3 text-green-600 dark:text-green-400" /></div>
+                )}
+                {c.isBudeeOnly && (
+                  <div className="flex items-center gap-1 bg-indigo-100 dark:bg-indigo-900/30 px-2 py-1 rounded" title="Budee Connection"><UserPlus className="w-3 h-3 text-indigo-600 dark:text-indigo-400" /></div>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
+
 interface TransactionsPageProps {
   transactions: Transaction[];
   loading?: boolean;
@@ -60,6 +121,8 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ transactions, loadi
   const [showFabMenu, setShowFabMenu] = useState(false);
   const [formSource, setFormSource] = useState<'top' | 'fab' | null>(null);
   const [transferTab, setTransferTab] = useState<'accounts' | 'friends'>('accounts');
+  const [friendProfiles, setFriendProfiles] = useState<SupabaseUserProfile[]>([]);
+  const [pendingProfileModal, setPendingProfileModal] = useState<{budee: SupabaseUserProfile, formName: string} | null>(null);
 
   // Transaction details modal
   const [selectedTx, setSelectedTx] = useState<Transaction | null>(null);
@@ -135,9 +198,13 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ transactions, loadi
   const loadData = useCallback(async () => {
     setIsLoading(true);
     try {
-      const [accountsResult, peopleResult] = await Promise.all([
+      const { data: { user } } = await supabase.auth.getUser();
+      const myId = user?.id;
+
+      const [accountsResult, peopleResult, friendshipsResult] = await Promise.all([
         getAllAccountsFrontend(),
-        getAllPeople()
+        getAllPeople(),
+        getFriendships()
       ]);
 
       if (accountsResult.error) {
@@ -151,6 +218,15 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ transactions, loadi
       } else if (peopleResult.data) {
         setPeople(peopleResult.data);
       }
+
+      if (myId && friendshipsResult.data) {
+        const validFriendships = friendshipsResult.data.filter(f => f.status === 'accepted');
+        const friendIds = validFriendships.map(f => f.user_id === myId ? f.friend_id : f.user_id);
+        if (friendIds.length > 0) {
+          const { data: fProfiles } = await supabase.from('user_profiles').select('*').in('user_id', friendIds);
+          if (fProfiles) setFriendProfiles(fProfiles);
+        }
+      }
     } catch (error) {
       console.error('Error loading data:', error);
     } finally {
@@ -161,6 +237,44 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ transactions, loadi
   useEffect(() => {
     loadData();
   }, [loadData]);
+
+  const selectableContacts: ContactOption[] = useMemo(() => {
+    const list: ContactOption[] = [];
+    const addedNames = new Set<string>();
+
+    people.forEach(p => {
+      const isLinked = !!p.friend_user_id;
+      let handleOrEmail = '';
+      if (isLinked) {
+        const prof = friendProfiles.find(fp => fp.user_id === p.friend_user_id);
+        if (prof) handleOrEmail = prof.username ? `@${prof.username}` : prof.email;
+      }
+      list.push({ id: p.id, name: p.name, handleOrEmail, isLinked, isBudeeOnly: false });
+      addedNames.add(p.name.toLowerCase());
+    });
+    
+    friendProfiles.forEach(prof => {
+      const isAlreadyLinked = people.some(p => p.friend_user_id === prof.user_id);
+      if (!isAlreadyLinked) {
+        const name = `${prof.first_name} ${prof.last_name}${prof.username ? \` (@${prof.username})\` : ''}`;
+        list.push({ id: prof.user_id, name: name, handleOrEmail: prof.username ? \`@${prof.username}\` : prof.email, isLinked: false, isBudeeOnly: true, budeeProfile: prof });
+        addedNames.add(name.toLowerCase());
+      }
+    });
+
+    uniquePeopleNames.forEach(name => {
+      if (name && !addedNames.has(name.toLowerCase())) {
+        list.push({
+          id: \`hist-\${name}\`,
+          name: name,
+          isLinked: false,
+          isBudeeOnly: false
+        });
+        addedNames.add(name.toLowerCase());
+      }
+    });
+    return list;
+  }, [people, friendProfiles, uniquePeopleNames]);
 
   // Observer to show floating add button when scrolled past header
   useEffect(() => {
@@ -253,8 +367,7 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ transactions, loadi
     setShowForm(true);
   };
 
-  const onSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const executeTransactionSubmit = async () => {
     
     // Transfer creation logic (uses specialized service)
     if (form.transactionType === 'transfer' && !editingTxId) {
@@ -365,6 +478,22 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ transactions, loadi
       console.error('Error saving transaction:', error);
       alert('Failed to save transaction. Please try again.');
     }
+  };
+
+  const onSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    const isTransferToFriend = form.transactionType === 'transfer' && transferTab === 'friends' && !editingTxId;
+    const targetName = isTransferToFriend ? form.personName : (form.transactionType === 'loan' ? form.borrowerName : null);
+
+    if (targetName) {
+      const matchedBudee = selectableContacts.find(c => c.name === targetName && c.isBudeeOnly);
+      if (matchedBudee && matchedBudee.budeeProfile) {
+        setPendingProfileModal({ budee: matchedBudee.budeeProfile, formName: targetName });
+        return;
+      }
+    }
+    await executeTransactionSubmit();
   };
 
   const removeTx = async (id: string, name: string) => {
@@ -899,13 +1028,11 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ transactions, loadi
                         
                         <div>
                           <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">To Who?</label>
-                          <PersonAutocomplete 
-                            options={uniquePeopleNames.filter(Boolean) as string[]}
-                            value={form.personName} 
-                            onChange={val => setForm(f => ({ ...f, personName: val }))} 
-                            required 
+                          <ContactDropdown 
+                            contacts={selectableContacts}
+                            value={form.personName || ''} 
+                            onChange={val => setForm(f => ({ ...f, personName: val }))}
                             placeholder="e.g. John Doe"
-                            className="w-full bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-transparent rounded-xl p-3.5 outline-none font-bold focus:ring-2 focus:ring-indigo-500 transition-all text-sm"
                           />
                         </div>
 
@@ -970,12 +1097,11 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ transactions, loadi
                 {form.transactionType === 'loan' && userProfile?.settings?.peopleEnabled && (
                   <div>
                     <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Borrower (Optional)</label>
-                    <PersonAutocomplete 
-                      options={uniquePeopleNames.filter(Boolean) as string[]}
-                      value={form.borrowerName}
+                    <ContactDropdown 
+                      contacts={selectableContacts}
+                      value={form.borrowerName || ''}
                       onChange={val => setForm(f => ({ ...f, borrowerName: val }))}
                       placeholder="Select or type borrower"
-                      className="w-full min-w-0 bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-transparent rounded-xl px-3 py-3 outline-none font-bold text-sm transition-colors focus:ring-2 focus:ring-indigo-500"
                     />
                     {people.length === 0 && (
                       <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">Add people in Settings to see them here.</p>
@@ -1247,6 +1373,50 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ transactions, loadi
             >
               <Plus className="w-6 h-6" />
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* Intercept Modal for Unlinked Budies */}
+      {pendingProfileModal && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in">
+          <div className="bg-white dark:bg-gray-900 rounded-[2.5rem] w-full max-w-sm p-8 shadow-2xl relative transition-colors animate-in zoom-in-95 flex flex-col items-center text-center">
+            <div className="w-16 h-16 bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400 rounded-3xl flex items-center justify-center mb-6 transition-colors">
+              <UserPlus className="w-8 h-8" />
+            </div>
+            <h3 className="text-xl font-black text-gray-900 dark:text-gray-100 mb-2 uppercase tracking-tight transition-colors">Profile Required</h3>
+            <p className="text-sm text-gray-500 dark:text-gray-400 mb-8 font-medium leading-relaxed transition-colors">
+              You selected <strong>{pendingProfileModal.formName}</strong> who is a Budee but doesn't have a local profile yet. We will link them and create one so you can track this transaction.
+            </p>
+            <div className="flex flex-col w-full space-y-3">
+              <button 
+                disabled={isSubmitting}
+                onClick={async () => {
+                  setIsSubmitting(true);
+                  try {
+                    const prof = pendingProfileModal.budee;
+                    const { data: newPerson } = await createPerson({ name: pendingProfileModal.formName } as any);
+                    if (newPerson) {
+                      const isTestMode = localStorage.getItem('test_environment_enabled') === 'true';
+                      const peopleTable = isTestMode ? 'people_test' : 'people';
+                      let { error: updateErr } = await supabase.from(peopleTable).update({ friend_user_id: prof.user_id }).eq('id', newPerson.id);
+                      if (updateErr && updateErr.code === '42P01') await supabase.from('people').update({ friend_user_id: prof.user_id }).eq('id', newPerson.id);
+                    }
+                    setPendingProfileModal(null);
+                    await executeTransactionSubmit();
+                  } catch (e) {
+                    console.error('Failed to create profile', e);
+                    alert('Failed to create local profile.');
+                  } finally { setIsSubmitting(false); }
+                }}
+                className="w-full bg-indigo-600 text-white py-4 rounded-2xl font-black uppercase tracking-widest text-[10px] hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-100 dark:shadow-none disabled:opacity-50"
+              >
+                {isSubmitting ? 'Processing...' : 'Create Profile & Continue'}
+              </button>
+              <button disabled={isSubmitting} onClick={() => setPendingProfileModal(null)} className="w-full bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-300 py-4 rounded-2xl font-black uppercase tracking-widest text-[10px] hover:bg-gray-200 dark:hover:bg-gray-700 transition-all disabled:opacity-50">
+                Cancel
+              </button>
+            </div>
           </div>
         </div>
       )}
