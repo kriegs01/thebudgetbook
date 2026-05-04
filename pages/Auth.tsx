@@ -113,13 +113,17 @@ const Auth: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900 flex items-center justify-center p-4 transition-colors">
+      <style>
+        {`@import url('https://fonts.googleapis.com/css2?family=Titan+One&display=swap');
+        .font-titan { font-family: 'Titan One', cursive; font-weight: 400; letter-spacing: 1px; }`}
+      </style>
       <div className="max-w-md w-full">
         {/* Logo/Header */}
         <div className="text-center mb-8">
           <div className="inline-flex items-center justify-center w-16 h-16 bg-blue-600 rounded-2xl mb-4">
             <Lock className="w-8 h-8 text-white" />
           </div>
-          <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2 transition-colors">Budget Book</h1>
+          <h1 className="text-4xl font-titan bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent mb-2 transition-colors">Budee</h1>
           <p className="text-gray-600 dark:text-gray-400 transition-colors">
             {mode === 'login' ? 'Sign in to your account' : mode === 'signup' ? 'Create your account' : 'Reset your password'}
           </p>

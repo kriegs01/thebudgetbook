@@ -1018,13 +1018,17 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
   if (showSplash) {
     return (
       <div className="fixed inset-0 z-[9999] flex flex-col items-center justify-center bg-gradient-to-br from-blue-50 via-white to-purple-50 dark:from-gray-950 dark:via-gray-900 dark:to-gray-950 transition-colors duration-300">
+        <style>
+          {`@import url('https://fonts.googleapis.com/css2?family=Titan+One&display=swap');
+          .font-titan { font-family: 'Titan One', cursive; font-weight: 400; letter-spacing: 1px; }`}
+        </style>
         <div className="text-center animate-in fade-in zoom-in duration-700">
           <div className="w-24 h-24 bg-white dark:bg-gray-900 rounded-3xl shadow-2xl flex items-center justify-center mx-auto mb-8 relative overflow-hidden border border-gray-100 dark:border-gray-800">
             <div className="absolute inset-0 bg-blue-50/50 dark:bg-blue-900/10 animate-pulse"></div>
             <div className="w-10 h-10 border-4 border-blue-100 dark:border-gray-800 border-t-blue-600 dark:border-t-blue-500 rounded-full animate-spin relative z-10"></div>
           </div>
-          <h1 className="text-3xl font-black bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent mb-4 tracking-tight">
-            Budget Book
+          <h1 className="text-4xl font-titan bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent mb-4 tracking-tight">
+            Budee
           </h1>
           <p className="text-gray-500 dark:text-gray-400 font-medium text-sm max-w-[260px] mx-auto leading-relaxed animate-pulse">
             Loading your financial data and preparing your dashboard...
@@ -1039,11 +1043,15 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
         {showWizard && <SetupWizard onComplete={handleCompleteWizard} />}
         <TestModeBanner sidebarOpen={isSidebarOpen} />
         <BrowserRouter>
+        <style>
+          {`@import url('https://fonts.googleapis.com/css2?family=Titan+One&display=swap');
+          .font-titan { font-family: 'Titan One', cursive; font-weight: 400; letter-spacing: 1px; }`}
+        </style>
         <div className="flex h-[100dvh] bg-gray-50 dark:bg-gray-950 w-full overflow-hidden fixed inset-0 transition-colors duration-200">
         <aside className={`fixed inset-y-0 left-0 z-50 bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-gray-800 transition-all duration-300 ease-in-out ${isSidebarOpen ? 'w-56' : 'hidden md:flex w-20'} overscroll-none`}> 
           <div className="flex flex-col h-full">
             <div className="flex items-center justify-between h-14 px-4 border-b border-gray-100 dark:border-gray-800">
-              {isSidebarOpen && <span className="text-xl font-black bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">Budget Book</span>}
+              {isSidebarOpen && <span className="text-2xl font-titan bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">Budee</span>}
               <button onClick={() => setIsSidebarOpen(!isSidebarOpen)} className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-500 dark:text-gray-400 transition-colors">
                 {isSidebarOpen ? <ChevronLeft className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
               </button>

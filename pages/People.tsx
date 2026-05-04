@@ -127,7 +127,7 @@ export default function PeoplePage() {
               offers.push({ profile: prof, matches: localMatches });
             } else {
               const newName = `${prof.first_name} ${prof.last_name}${prof.username ? ` (@${prof.username})` : ''}`;
-              const { data: newPerson } = await createPerson({ name: newName, friend_user_id: prof.user_id } as any);
+              const { data: newPerson } = await createPerson({ name: newName } as any);
               if (newPerson) {
                 const isTestMode = localStorage.getItem('test_environment_enabled') === 'true';
                 const peopleTable = isTestMode ? 'people_test' : 'people';
@@ -168,15 +168,17 @@ export default function PeoplePage() {
         if (updateErr && updateErr.code === '42P01') {
           await supabase.from('people').update({ friend_user_id: profile.user_id, name: newName }).eq('id', match.id);
         }
-        const txsToUpdate = transactions.filter(t => t.person_name === match.name || t.borrower_name === match.name);
+        const txsToUpdate = transactions.filter(t => (t as any).person_name === match.name || t.borrower_name === match.name);
         for (const tx of txsToUpdate) {
-          const updates: any = { friend_user_id: profile.user_id };
-          if (tx.person_name === match.name) updates.person_name = newName;
+          const updates: any = {};
+          if ((tx as any).person_name === match.name) updates.person_name = newName;
           if (tx.borrower_name === match.name) updates.borrower_name = newName;
-          await updateTransaction(tx.id, updates);
+          if (Object.keys(updates).length > 0) {
+            await updateTransaction(tx.id, updates);
+          }
         }
       } else {
-        const { data: newPerson } = await createPerson({ name: newName, friend_user_id: profile.user_id } as any);
+        const { data: newPerson } = await createPerson({ name: newName } as any);
         if (newPerson) {
           createdPerson = newPerson;
           let { error: updateErr } = await supabase.from(peopleTable).update({ friend_user_id: profile.user_id }).eq('id', newPerson.id);
@@ -190,7 +192,7 @@ export default function PeoplePage() {
       setLinkOffers(prev => prev.slice(1));
       
       // Reload to let sync process fetch the cleanest format and relations directly
-      loadData();
+      await loadData();
     } catch (err) {
       console.error(err);
     } finally {
@@ -370,8 +372,16 @@ export default function PeoplePage() {
       alert('Friend request sent successfully!');
       if (userProfile) {
         const newName = `${userProfile.first_name} ${userProfile.last_name}${userProfile.username ? ` (@${userProfile.username})` : ''}`;
-        await createPerson({ name: newName, friend_user_id: friendId } as any);
-        loadData();
+        const { data: newPerson } = await createPerson({ name: newName } as any);
+        if (newPerson) {
+          const isTestMode = localStorage.getItem('test_environment_enabled') === 'true';
+          const peopleTable = isTestMode ? 'people_test' : 'people';
+          let { error: updateErr } = await supabase.from(peopleTable).update({ friend_user_id: friendId }).eq('id', newPerson.id);
+          if (updateErr && updateErr.code === '42P01') {
+            await supabase.from('people').update({ friend_user_id: friendId }).eq('id', newPerson.id);
+          }
+        }
+        await loadData();
       }
     }
   };
@@ -865,15 +875,17 @@ export default function PeoplePage() {
                                 await sendFriendRequest(user.user_id);
                                 const txsToUpdate = transactions.filter(t => (t as any).person_name === selectedPerson || t.borrower_name === selectedPerson);
                                 for (const tx of txsToUpdate) {
-                                  const updates: any = { friend_user_id: user.user_id };
+                                  const updates: any = {};
                                   if ((tx as any).person_name === selectedPerson) updates.person_name = newName;
                                   if (tx.borrower_name === selectedPerson) updates.borrower_name = newName;
-                                  await updateTransaction(tx.id, updates);
+                                  if (Object.keys(updates).length > 0) {
+                                    await updateTransaction(tx.id, updates);
+                                  }
                                 }
                                 alert('Profile linked! A Connect Request has been sent.');
                                 setShowEditPersonModal(false);
                                 setSelectedPerson(newName);
-                                loadData();
+                                await loadData();
                               } catch (e) {
                                 console.error(e);
                                 alert('Failed to link profile');
