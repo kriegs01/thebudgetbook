@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Users, Plus, LayoutGrid, List, MoreVertical, Trash2, ArrowRight, ArrowLeft, X, AlertTriangle, User, Landmark, ArrowUpFromLine, ArrowDownToLine, ArrowLeftRight, BanknoteArrowDown, ChevronDown, ChevronUp, Edit2, Search, UserPlus, CheckSquare, Clock } from 'lucide-react';
 import { getAllPeople, createPerson, deletePerson } from '../src/services/peopleService';
 import { getAllTransactions, createTransaction, deleteTransaction, updateTransaction } from '../src/services/transactionsService';
@@ -46,6 +46,7 @@ export default function PeoplePage() {
   const [linkState, setLinkState] = useState<'idle' | 'searching' | 'found' | 'error'>('idle');
   const [matchedUsers, setMatchedUsers] = useState<SupabaseUserProfile[]>([]);
   const [linkOffers, setLinkOffers] = useState<{profile: SupabaseUserProfile, matches: SupabasePerson[]}[]>([]);
+  const processedOffersRef = useRef<Set<string>>(new Set());
 
   const loadData = useCallback(async () => {
     setIsLoading(true);
@@ -67,7 +68,8 @@ export default function PeoplePage() {
       const acceptedFriendships = currentFriendships.filter(f => f.status === 'accepted');
       const missingFriendIds = acceptedFriendships
         .map(f => f.user_id === myId ? f.friend_id : f.user_id)
-        .filter(fid => !currentPeople.some(p => p.friend_user_id === fid));
+        .filter(fid => !currentPeople.some(p => p.friend_user_id === fid))
+        .filter(fid => !processedOffersRef.current.has(fid));
 
       if (missingFriendIds.length > 0) {
         const { data: profiles } = await supabase.from('user_profiles').select('*').in('user_id', missingFriendIds);
@@ -114,11 +116,14 @@ export default function PeoplePage() {
   }, []);
 
   const handleAcceptLinkOffer = async (profile: SupabaseUserProfile, match: SupabasePerson | null) => {
+    // Mark as processed immediately to prevent modal loops
+    processedOffersRef.current.add(profile.user_id);
     setIsSubmitting(true);
     try {
       const isTestMode = localStorage.getItem('test_environment_enabled') === 'true';
       const peopleTable = isTestMode ? 'people_test' : 'people';
       const newName = `${profile.first_name} ${profile.last_name}${profile.username ? ` (@${profile.username})` : ''}`;
+      let createdPerson: any = null;
 
       if (match) {
         let { error: updateErr } = await supabase.from(peopleTable).update({ friend_user_id: profile.user_id, name: newName }).eq('id', match.id);
@@ -135,15 +140,37 @@ export default function PeoplePage() {
       } else {
         const { data: newPerson } = await createPerson({ name: newName, friend_user_id: profile.user_id } as any);
         if (newPerson) {
+          createdPerson = newPerson;
           let { error: updateErr } = await supabase.from(peopleTable).update({ friend_user_id: profile.user_id }).eq('id', newPerson.id);
           if (updateErr && updateErr.code === '42P01') {
             await supabase.from('people').update({ friend_user_id: profile.user_id }).eq('id', newPerson.id);
           }
+          createdPerson.friend_user_id = profile.user_id;
         }
       }
 
       setLinkOffers(prev => prev.slice(1));
-      loadData();
+      
+      // Optimistic UI updates to avoid fetching stale data and triggering the modal again
+      setPeople(prev => {
+        if (match) return prev.map(p => p.id === match.id ? { ...p, friend_user_id: profile.user_id, name: newName } : p);
+        if (createdPerson) return [...prev, createdPerson];
+        return prev;
+      });
+      
+      if (match) {
+        setTransactions(prev => prev.map(t => {
+          if (t.person_name === match.name || t.borrower_name === match.name) {
+            return {
+              ...t,
+              friend_user_id: profile.user_id,
+              person_name: t.person_name === match.name ? newName : t.person_name,
+              borrower_name: t.borrower_name === match.name ? newName : t.borrower_name
+            };
+          }
+          return t;
+        }));
+      }
     } catch (err) {
       console.error(err);
     } finally {
