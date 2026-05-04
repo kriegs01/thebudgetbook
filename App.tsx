@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Menu, ChevronLeft, SlidersHorizontal, ArrowUp, ArrowDown, Eye, EyeOff, X, ChevronUp, LogOut, Lock, Users } from 'lucide-react';
+import { Menu, ChevronLeft, SlidersHorizontal, ArrowUp, ArrowDown, Eye, EyeOff, X, ChevronDown, LogOut, Lock, Users, Bell, MessageCircle } from 'lucide-react';
 import { BrowserRouter, Routes, Route, NavLink } from 'react-router-dom';
 import { QueryClient, QueryClientProvider, useQueryClient } from '@tanstack/react-query';
 import { NAV_ITEMS, INITIAL_BUDGET, DEFAULT_SETUP, INITIAL_CATEGORIES } from './constants';
@@ -271,8 +271,10 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
     const items = [...NAV_ITEMS].filter(item => 
       item.path !== '/savings' && 
       item.path !== '/trash' &&
+      item.path !== '/settings' &&
       item.id?.toLowerCase() !== 'savings' &&
-      item.id?.toLowerCase() !== 'trash'
+      item.id?.toLowerCase() !== 'trash' &&
+      item.id?.toLowerCase() !== 'settings'
     );
     if (userProfile?.settings?.usePeoplePage && !items.find(i => i.id === 'people')) {
       items.push({
@@ -1053,100 +1055,98 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
                 </button>
               </div>
             )}
-            <div className="p-3 border-t border-gray-100 dark:border-gray-800 transition-colors">
-              {isSidebarOpen ? (
-                <div>
-                  {isUserMenuOpen && (
-                    <div className="pb-2 space-y-1">
-                      {isPinEnabled() && (
-                        <button
-                          onClick={triggerStandbyLock}
-                          className="w-full flex items-center space-x-3 py-2 px-3 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors"
-                        >
-                          <Lock className="w-4 h-4" />
-                          <span>Lock App</span>
-                        </button>
-                      )}
-                      <button
-                        onClick={async () => {
-                          try {
-                            await signOut();
-                          } catch (error) {
-                            console.error('Logout error:', error);
-                          }
-                        }}
-                        className="w-full flex items-center space-x-3 py-2 px-3 text-sm font-medium text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
-                      >
-                        <LogOut className="w-4 h-4" />
-                        <span>Logout</span>
-                      </button>
-                    </div>
-                  )}
-                  <button onClick={() => setIsUserMenuOpen(prev => !prev)} className="w-full flex items-center justify-between p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-xl transition-colors">
-                    <div className="flex items-center space-x-3">
-                      <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 font-bold">
-                        {userProfile ? 
-                          `${userProfile.first_name.charAt(0)}${userProfile.last_name.charAt(0)}`.toUpperCase() :
-                          user?.email?.charAt(0).toUpperCase() || 'U'
-                        }
-                      </div>
-                      <div className="flex-1 overflow-hidden text-left">
-                        <p className="text-sm font-semibold text-gray-900 dark:text-gray-100 truncate transition-colors">
-                          {userProfile ? 
-                            `${userProfile.first_name} ${userProfile.last_name}` :
-                            user?.email?.split('@')[0] || 'User'
-                          }
-                        </p>
-                        <p className="text-xs text-gray-500 dark:text-gray-400 truncate transition-colors">{user?.email || ''}</p>
-                      </div>
-                    </div>
-                    <ChevronUp className={`w-5 h-5 text-gray-400 dark:text-gray-500 transition-transform duration-200 ${!isUserMenuOpen && 'rotate-180'}`} />
-                  </button>
-                </div>
-              ) : (
-                <div className="flex flex-col items-center w-full">
-                  {isUserMenuOpen && (
-                    <div className="pb-2 w-full space-y-1">
-                      {isPinEnabled() && (
-                        <button
-                          onClick={triggerStandbyLock}
-                          className="w-full py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg flex items-center justify-center transition-colors"
-                          title="Lock App"
-                        >
-                          <Lock className="w-5 h-5" />
-                        </button>
-                      )}
-                      <button
-                        onClick={async () => {
-                          try {
-                            await signOut();
-                          } catch (error) {
-                            console.error('Logout error:', error);
-                          }
-                        }}
-                        className="w-full py-2 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg flex items-center justify-center transition-colors"
-                        title="Logout"
-                      >
-                        <LogOut className="w-5 h-5" />
-                      </button>
-                    </div>
-                  )}
-                  <button 
-                    onClick={() => setIsUserMenuOpen(prev => !prev)} 
-                    className="w-10 h-10 rounded-full bg-blue-100 hover:bg-blue-200 flex items-center justify-center text-blue-600 font-bold mx-auto transition-colors"
-                    title="User Menu"
-                  >
-                    {userProfile ? 
-                      `${userProfile.first_name.charAt(0)}${userProfile.last_name.charAt(0)}`.toUpperCase() :
-                      user?.email?.charAt(0).toUpperCase() || 'U'
-                    }
-                  </button>
-                </div>
-              )}
-            </div>
+          <div className="p-3 border-t border-gray-100 dark:border-gray-800 transition-colors">
+            <NavLink
+              to="/settings"
+              className={({ isActive }) =>
+                `w-full flex items-center p-3 rounded-xl transition-colors ${
+                  isActive ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400' : 'text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800/50'
+                }`
+              }
+            >
+              <div className={`${isSidebarOpen ? '' : 'mx-auto'} ${window.location.pathname === '/settings' ? 'text-blue-600 dark:text-blue-400' : 'text-gray-400 dark:text-gray-500'} transition-colors`}>
+                <SlidersHorizontal className="w-5 h-5" />
+              </div>
+              {isSidebarOpen && <span className="ml-3 font-bold text-sm">Settings</span>}
+            </NavLink>
+          </div>
           </div>
         </aside>
         <main className={`flex-1 bg-gray-50 dark:bg-gray-950 transition-all duration-300 ease-in-out ${isSidebarOpen ? 'md:ml-64' : 'md:ml-20'} h-full flex flex-col overflow-hidden`}> 
+        
+        {/* Top Navigation Bar */}
+        <header className="h-16 px-4 md:px-8 border-b border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 flex items-center justify-end shrink-0 transition-colors z-20">
+          <div className="flex items-center space-x-2 md:space-x-4">
+            {/* Messages */}
+            <button className="p-2 text-gray-400 hover:text-indigo-600 dark:hover:text-indigo-400 rounded-full hover:bg-indigo-50 dark:hover:bg-indigo-900/30 transition-colors">
+              <MessageCircle className="w-5 h-5" />
+            </button>
+            {/* Notifications */}
+            <button className="relative p-2 text-gray-400 hover:text-indigo-600 dark:hover:text-indigo-400 rounded-full hover:bg-indigo-50 dark:hover:bg-indigo-900/30 transition-colors">
+              <Bell className="w-5 h-5" />
+              {/* Prototype red dot for pending requests */}
+              <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-red-500 rounded-full border-2 border-white dark:border-gray-900"></span>
+            </button>
+            
+            {/* Profile Dropdown */}
+            <div className="relative ml-2 border-l border-gray-200 dark:border-gray-700 pl-4">
+              <button 
+                onClick={() => setIsUserMenuOpen(!isUserMenuOpen)}
+                className="flex items-center space-x-2 p-1 pr-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 border border-transparent hover:border-gray-200 dark:hover:border-gray-700 transition-colors"
+              >
+                <div className="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-600 font-bold text-sm">
+                  {userProfile ? 
+                    `${userProfile.first_name.charAt(0)}${userProfile.last_name.charAt(0)}`.toUpperCase() :
+                    user?.email?.charAt(0).toUpperCase() || 'U'
+                  }
+                </div>
+                <span className="hidden sm:block text-sm font-semibold text-gray-700 dark:text-gray-300 truncate max-w-[120px]">
+                  {userProfile ? userProfile.first_name : (user?.email?.split('@')[0] || 'User')}
+                </span>
+                <ChevronDown className={`w-4 h-4 text-gray-500 transition-transform ${isUserMenuOpen ? 'rotate-180' : ''}`} />
+              </button>
+
+              {/* Dropdown Menu */}
+              {isUserMenuOpen && (
+                <>
+                  <div className="fixed inset-0 z-[40]" onClick={() => setIsUserMenuOpen(false)}></div>
+                  <div className="absolute right-0 top-full mt-2 w-56 bg-white dark:bg-gray-900 rounded-2xl shadow-xl border border-gray-100 dark:border-gray-800 py-2 z-[50] animate-in zoom-in-95">
+                    <div className="px-4 py-3 border-b border-gray-50 dark:border-gray-800 mb-2">
+                      <p className="text-sm font-bold text-gray-900 dark:text-gray-100 truncate">
+                        {userProfile ? `${userProfile.first_name} ${userProfile.last_name}` : 'User'}
+                      </p>
+                      <p className="text-[10px] text-gray-500 dark:text-gray-400 truncate">{user?.email}</p>
+                    </div>
+                    {isPinEnabled() && (
+                      <button
+                        onClick={() => { setIsUserMenuOpen(false); triggerStandbyLock(); }}
+                        className="w-full flex items-center space-x-3 py-2.5 px-4 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+                      >
+                        <Lock className="w-4 h-4" />
+                        <span>Lock App</span>
+                      </button>
+                    )}
+                    <button
+                      onClick={async () => {
+                        try {
+                          setIsUserMenuOpen(false);
+                          await signOut();
+                        } catch (error) {
+                          console.error('Logout error:', error);
+                        }
+                      }}
+                      className="w-full flex items-center space-x-3 py-2.5 px-4 text-sm font-medium text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+                    >
+                      <LogOut className="w-4 h-4" />
+                      <span>Logout</span>
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+        </header>
+
           <div className="p-4 md:p-8 w-full flex-1 overflow-auto overscroll-none touch-pan-y" style={{ WebkitOverflowScrolling: 'touch' }}>
             <Routes>
               <Route path="/" element={<Dashboard accounts={accounts} budget={budgetItems} installments={installments} transactions={transactions} budgetSetups={budgetSetups} userProfile={userProfile} theme={theme} />} />

@@ -1,4 +1,4 @@
-import { supabase } from '../supabaseClient'; // Adjust path if your supabaseClient is located elsewhere
+import { supabase } from '../utils/supabaseClient';
 import type { SupabaseFriendship, SupabaseResponse, SupabaseUserProfile } from '../types/supabase';
 
 // Helper to get current user ID
