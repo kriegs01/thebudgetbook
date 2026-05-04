@@ -41,6 +41,7 @@ export interface SupabasePerson {
   user_id: string; // uuid, references auth.users(id)
   created_at: string; // timestamptz
   updated_at: string; // timestamptz
+  friend_user_id?: string | null; // uuid, nullable - permanently links alias to a real user
 }
 
 export interface SupabaseBiller {

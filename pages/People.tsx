@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Users, Plus, LayoutGrid, List, MoreVertical, Trash2, ArrowRight, ArrowLeft, X, AlertTriangle, User, Landmark, ArrowUpFromLine, ArrowDownToLine, ArrowLeftRight, BanknoteArrowDown, ChevronDown, ChevronUp, Edit2, Search, UserPlus, CheckSquare } from 'lucide-react';
+import { Users, Plus, LayoutGrid, List, MoreVertical, Trash2, ArrowRight, ArrowLeft, X, AlertTriangle, User, Landmark, ArrowUpFromLine, ArrowDownToLine, ArrowLeftRight, BanknoteArrowDown, ChevronDown, ChevronUp, Edit2, Search, UserPlus, CheckSquare, Clock } from 'lucide-react';
 import { getAllPeople, createPerson, deletePerson } from '../src/services/peopleService';
 import { getAllTransactions, createTransaction, deleteTransaction, updateTransaction } from '../src/services/transactionsService';
-import { searchUsers, sendFriendRequest } from '../src/services/friendshipsService';
-import type { SupabasePerson, SupabaseTransaction, SupabaseUserProfile } from '../src/types/supabase';
+import { searchUsers, sendFriendRequest, getFriendships } from '../src/services/friendshipsService';
+import type { SupabasePerson, SupabaseTransaction, SupabaseUserProfile, SupabaseFriendship } from '../src/types/supabase';
 import { combineDateWithCurrentTime } from '../src/utils/dateUtils';
 import { supabase } from '../src/utils/supabaseClient';
 
@@ -40,19 +40,48 @@ export default function PeoplePage() {
   const [searchResults, setSearchResults] = useState<SupabaseUserProfile[]>([]);
   const [sentRequests, setSentRequests] = useState<Set<string>>(new Set());
   
+  const [friendships, setFriendships] = useState<SupabaseFriendship[]>([]);
   const [showEditPersonModal, setShowEditPersonModal] = useState(false);
   const [editPersonForm, setEditPersonForm] = useState({ name: '', handle: '', matchedUserId: '' });
   const [linkState, setLinkState] = useState<'idle' | 'searching' | 'found' | 'error'>('idle');
+  const [matchedUser, setMatchedUser] = useState<SupabaseUserProfile | null>(null);
 
   const loadData = useCallback(async () => {
     setIsLoading(true);
-    const [peopleRes, txRes] = await Promise.all([
+
+    const { data: { user } } = await supabase.auth.getUser();
+    const myId = user?.id;
+
+    const [peopleRes, txRes, friendRes] = await Promise.all([
       getAllPeople(),
-      getAllTransactions()
+      getAllTransactions(),
+      getFriendships()
     ]);
     
-    if (peopleRes.data) setPeople(peopleRes.data);
+    let currentPeople = peopleRes.data || [];
+    const currentFriendships = friendRes.data || [];
+
+    // Auto-sync missing shadow profiles for accepted connections
+    if (myId) {
+      const acceptedFriendships = currentFriendships.filter(f => f.status === 'accepted');
+      const missingFriendIds = acceptedFriendships
+        .map(f => f.user_id === myId ? f.friend_id : f.user_id)
+        .filter(fid => !currentPeople.some(p => p.friend_user_id === fid));
+
+      if (missingFriendIds.length > 0) {
+        const { data: profiles } = await supabase.from('user_profiles').select('*').in('user_id', missingFriendIds);
+        if (profiles) {
+          for (const prof of profiles) {
+            const { data: newPerson } = await createPerson({ name: `${prof.first_name} ${prof.last_name}`, friend_user_id: prof.user_id });
+            if (newPerson) currentPeople = [...currentPeople, newPerson];
+          }
+        }
+      }
+    }
+
+    setPeople(currentPeople);
     if (txRes.data) setTransactions(txRes.data);
+    setFriendships(currentFriendships);
     setIsLoading(false);
   }, []);
 
@@ -260,6 +289,7 @@ export default function PeoplePage() {
             <button 
               onClick={() => {
                 setEditPersonForm({ name: selectedPerson, handle: '', matchedUserId: '' });
+                setMatchedUser(null);
                 setLinkState('idle');
                 setShowEditPersonModal(true);
               }}
@@ -645,6 +675,7 @@ export default function PeoplePage() {
                         if (data && data.length > 0) {
                           setLinkState('found');
                           setEditPersonForm(f => ({ ...f, matchedUserId: data[0].user_id }));
+                          setMatchedUser(data[0]);
                         } else {
                           alert('No user found with that handle or email.');
                           setLinkState('idle');
@@ -656,15 +687,19 @@ export default function PeoplePage() {
                     </button>
                   </div>
 
-                  {linkState === 'found' && (
-                    <div className="mt-4 p-4 bg-green-50 dark:bg-green-900/20 rounded-2xl border border-green-100 dark:border-green-900/30 flex items-center justify-between animate-in zoom-in-95">
+                  {linkState === 'found' && matchedUser && (
+                    <div className="mt-4 p-4 bg-green-50 dark:bg-green-900/20 rounded-2xl border border-green-200 dark:border-green-900/40 flex items-center justify-between animate-in zoom-in-95 transition-colors">
                       <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 bg-green-200 dark:bg-green-800 rounded-full flex items-center justify-center text-green-700 dark:text-green-300 font-bold">
-                          {editPersonForm.handle.replace('@', '').charAt(0).toUpperCase()}
+                        <div className="w-10 h-10 bg-green-200 dark:bg-green-800 text-green-700 dark:text-green-300 rounded-full flex items-center justify-center font-black uppercase text-sm transition-colors">
+                          {(matchedUser.first_name?.charAt(0) || '')}{(matchedUser.last_name?.charAt(0) || '')}
                         </div>
                         <div>
-                          <p className="text-xs font-bold text-green-800 dark:text-green-300">User Match Found!</p>
-                          <p className="text-[10px] text-green-600 dark:text-green-400">Account linking ready.</p>
+                          <p className="text-sm font-bold text-green-800 dark:text-green-300 transition-colors">
+                            {matchedUser.first_name} {matchedUser.last_name}
+                          </p>
+                          <p className="text-[10px] font-medium text-green-600 dark:text-green-400 transition-colors">
+                            {matchedUser.username ? `@${matchedUser.username}` : matchedUser.email}
+                          </p>
                         </div>
                       </div>
                       <CheckSquare className="w-4 h-4 text-green-600" />
@@ -680,8 +715,18 @@ export default function PeoplePage() {
                       setIsSubmitting(true);
                       try {
                         const personRecord = people.find(p => p.name === selectedPerson);
-                        if (personRecord && editPersonForm.name !== selectedPerson) {
-                          await supabase.from('people').update({ name: editPersonForm.name }).eq('id', personRecord.id);
+                        
+                        // Update the local people table with name and the permanent linked ID
+                        const profileUpdates: any = {};
+                        if (editPersonForm.name !== selectedPerson) profileUpdates.name = editPersonForm.name;
+                        if (editPersonForm.matchedUserId) {
+                          profileUpdates.friend_user_id = editPersonForm.matchedUserId;
+                          // Send connection request when linking
+                          await sendFriendRequest(editPersonForm.matchedUserId);
+                        }
+                        
+                        if (Object.keys(profileUpdates).length > 0 && personRecord) {
+                          await supabase.from('people').update(profileUpdates).eq('id', personRecord.id);
                         }
 
                         const txsToUpdate = transactions.filter(t => (t as any).person_name === selectedPerson || t.borrower_name === selectedPerson);
@@ -697,7 +742,7 @@ export default function PeoplePage() {
                           }
                         }
 
-                        alert('Profile updated and linked successfully!');
+                        alert('Profile updated! A Connect Request has been sent if linking a new user.');
                         setShowEditPersonModal(false);
                         if (editPersonForm.name !== selectedPerson) {
                           setSelectedPerson(editPersonForm.name);
@@ -785,6 +830,7 @@ export default function PeoplePage() {
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {people.map(person => {
               const stats = getPersonStats(person.name);
+              const fStatus = getFriendshipStatus(person.friend_user_id);
               return (
                 <div key={person.id} className="bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-800 rounded-[2rem] p-6 hover:shadow-lg transition-all group relative overflow-hidden">
                   <button 
@@ -798,7 +844,19 @@ export default function PeoplePage() {
                     <div className="w-14 h-14 rounded-full bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 font-black text-xl flex items-center justify-center border border-indigo-100 dark:border-indigo-800 transition-colors">
                       {person.name.substring(0, 2).toUpperCase()}
                     </div>
-                    <h3 className="text-lg font-black text-gray-900 dark:text-gray-100 truncate pr-8">{person.name}</h3>
+                    <div className="flex flex-col min-w-0 pr-8">
+                      <h3 className="text-lg font-black text-gray-900 dark:text-gray-100 truncate">{person.name}</h3>
+                      {person.friend_user_id && fStatus === 'accepted' && (
+                        <span className="inline-flex items-center gap-1 w-fit mt-0.5 text-[9px] font-bold px-2 py-0.5 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 rounded uppercase tracking-widest transition-colors">
+                          <CheckSquare className="w-3 h-3" /> Linked
+                        </span>
+                      )}
+                      {person.friend_user_id && fStatus === 'pending' && (
+                        <span className="inline-flex items-center gap-1 w-fit mt-0.5 text-[9px] font-bold px-2 py-0.5 bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400 rounded uppercase tracking-widest transition-colors">
+                          <Clock className="w-3 h-3" /> Pending Link
+                        </span>
+                      )}
+                    </div>
                   </div>
                   
                   <div className="space-y-3 bg-gray-50 dark:bg-gray-800/50 p-4 rounded-2xl transition-colors">
@@ -826,14 +884,27 @@ export default function PeoplePage() {
           <div className="bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-800 rounded-[2rem] overflow-hidden transition-colors">
             {people.map((person, i) => {
               const stats = getPersonStats(person.name);
+              const fStatus = getFriendshipStatus(person.friend_user_id);
               return (
                 <div key={person.id} className={`flex items-center justify-between p-5 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors ${i !== people.length - 1 ? 'border-b border-gray-50 dark:border-gray-800' : ''}`}>
                   <div className="flex items-center gap-4">
                     <div className="w-10 h-10 rounded-full bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 font-black text-sm flex items-center justify-center border border-indigo-100 dark:border-indigo-800 transition-colors">
                       {person.name.substring(0, 2).toUpperCase()}
                     </div>
-                    <div>
-                      <h3 className="text-base font-black text-gray-900 dark:text-gray-100">{person.name}</h3>
+                    <div className="flex flex-col min-w-0">
+                      <div className="flex items-center gap-2">
+                        <h3 className="text-base font-black text-gray-900 dark:text-gray-100 truncate">{person.name}</h3>
+                        {person.friend_user_id && fStatus === 'accepted' && (
+                          <span className="inline-flex items-center gap-1 text-[9px] font-bold px-2 py-0.5 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 rounded uppercase tracking-widest transition-colors" title="Linked">
+                            <CheckSquare className="w-3 h-3" />
+                          </span>
+                        )}
+                        {person.friend_user_id && fStatus === 'pending' && (
+                          <span className="inline-flex items-center gap-1 text-[9px] font-bold px-2 py-0.5 bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400 rounded uppercase tracking-widest transition-colors" title="Pending Link">
+                            <Clock className="w-3 h-3" />
+                          </span>
+                        )}
+                      </div>
                       <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">{stats.txCount} transactions</p>
                     </div>
                   </div>

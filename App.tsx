@@ -15,6 +15,7 @@ import { combineDateWithCurrentTime } from './src/utils/dateUtils';
 import { recalculateAllAccountBalances } from './src/utils/accountBalanceCalculator';
 import { updateUserProfile } from './src/services/userProfileService';
 import { getIncomingFriendRequests, acceptFriendRequest, removeFriendship } from './src/services/friendshipsService';
+import { getAllPeople, createPerson } from './src/services/peopleService';
 import type { Biller, Account, Installment, Transaction } from './types';
 import type { SupabaseTransaction } from './src/types/supabase';
 
@@ -209,8 +210,22 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
   }, [user]);
 
   const handleAcceptRequest = async (id: string) => {
+    const req = pendingRequests.find(r => r.id === id);
     await acceptFriendRequest(id);
     setPendingRequests(prev => prev.filter(r => r.id !== id));
+
+    if (req && req.user_id) {
+      try {
+        const { data: people } = await getAllPeople();
+        const exists = people?.some(p => p.friend_user_id === req.user_id);
+        if (!exists) {
+          const name = req.sender_profile ? `${req.sender_profile.first_name} ${req.sender_profile.last_name}` : 'New Connection';
+          await createPerson({ name, friend_user_id: req.user_id });
+        }
+      } catch (e) {
+        console.error("Failed to auto-create profile", e);
+      }
+    }
   };
 
   const handleDeclineRequest = async (id: string) => {
@@ -1136,7 +1151,7 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
                               </div>
                               <div>
                                 <p className="text-sm font-bold text-gray-900 dark:text-gray-100">{req.sender_profile?.first_name} {req.sender_profile?.last_name}</p>
-                                <p className="text-xs text-gray-500 dark:text-gray-400">wants to connect on Budee</p>
+                                <p className="text-xs text-gray-500 dark:text-gray-400">sent a Connect Request</p>
                               </div>
                             </div>
                             <div className="flex gap-2">
