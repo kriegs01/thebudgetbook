@@ -132,3 +132,40 @@ export const removeFriendship = async (friendshipId: string): Promise<SupabaseRe
     return { data: null, error };
   }
 };
+
+/**
+ * Fetch incoming friend requests with the sender's profile attached
+ */
+export const getIncomingFriendRequests = async (): Promise<SupabaseResponse<any[]>> => {
+  try {
+    const userId = await getCurrentUserId();
+    if (!userId) throw new Error('Not authenticated');
+
+    const { data: friendships, error: fError } = await supabase
+      .from('friendships')
+      .select('*')
+      .eq('friend_id', userId)
+      .eq('status', 'pending');
+
+    if (fError) throw fError;
+    if (!friendships || friendships.length === 0) return { data: [], error: null };
+
+    const senderIds = friendships.map(f => f.user_id);
+    const { data: profiles, error: pError } = await supabase
+      .from('user_profiles')
+      .select('*')
+      .in('user_id', senderIds);
+
+    if (pError) throw pError;
+
+    const enrichedRequests = friendships.map(f => ({
+      ...f,
+      sender_profile: profiles?.find(p => p.user_id === f.user_id)
+    }));
+
+    return { data: enrichedRequests, error: null };
+  } catch (error: any) {
+    console.error('Error fetching incoming requests:', error);
+    return { data: null, error };
+  }
+};

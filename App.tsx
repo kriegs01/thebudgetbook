@@ -14,6 +14,7 @@ import { supabase } from './src/utils/supabaseClient';
 import { combineDateWithCurrentTime } from './src/utils/dateUtils';
 import { recalculateAllAccountBalances } from './src/utils/accountBalanceCalculator';
 import { updateUserProfile } from './src/services/userProfileService';
+import { getIncomingFriendRequests, acceptFriendRequest, removeFriendship } from './src/services/friendshipsService';
 import type { Biller, Account, Installment, Transaction } from './types';
 import type { SupabaseTransaction } from './src/types/supabase';
 
@@ -195,6 +196,28 @@ const AppContent: React.FC = () => {
 const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<void> }> = ({ user, userProfile, signOut }) => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
+  const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
+  const [pendingRequests, setPendingRequests] = useState<any[]>([]);
+
+  const loadFriendRequests = async () => {
+    const { data } = await getIncomingFriendRequests();
+    if (data) setPendingRequests(data);
+  };
+
+  useEffect(() => {
+    if (user) loadFriendRequests();
+  }, [user]);
+
+  const handleAcceptRequest = async (id: string) => {
+    await acceptFriendRequest(id);
+    setPendingRequests(prev => prev.filter(r => r.id !== id));
+  };
+
+  const handleDeclineRequest = async (id: string) => {
+    await removeFriendship(id);
+    setPendingRequests(prev => prev.filter(r => r.id !== id));
+  };
+
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [budgetItems, setBudgetItems] = useState(INITIAL_BUDGET);
   const [billers, setBillers] = useState<Biller[]>([]);
@@ -1082,12 +1105,61 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
               <MessageCircle className="w-5 h-5" />
             </button>
             {/* Notifications */}
-            <button className="relative p-2 text-gray-400 hover:text-indigo-600 dark:hover:text-indigo-400 rounded-full hover:bg-indigo-50 dark:hover:bg-indigo-900/30 transition-colors">
-              <Bell className="w-5 h-5" />
-              {/* Prototype red dot for pending requests */}
-              <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-red-500 rounded-full border-2 border-white dark:border-gray-900"></span>
-            </button>
-            
+            <div className="relative">
+              <button 
+                onClick={() => setIsNotificationsOpen(!isNotificationsOpen)}
+                className="relative p-2 text-gray-400 hover:text-indigo-600 dark:hover:text-indigo-400 rounded-full hover:bg-indigo-50 dark:hover:bg-indigo-900/30 transition-colors"
+              >
+                <Bell className="w-5 h-5" />
+                {pendingRequests.length > 0 && (
+                  <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-red-500 rounded-full border-2 border-white dark:border-gray-900"></span>
+                )}
+              </button>
+
+              {isNotificationsOpen && (
+                <>
+                  <div className="fixed inset-0 z-[40]" onClick={() => setIsNotificationsOpen(false)}></div>
+                  <div className="absolute right-0 top-full mt-2 w-80 bg-white dark:bg-gray-900 rounded-2xl shadow-xl border border-gray-100 dark:border-gray-800 py-2 z-[50] animate-in zoom-in-95">
+                    <div className="px-4 py-3 border-b border-gray-50 dark:border-gray-800 flex justify-between items-center">
+                      <h3 className="text-sm font-black text-gray-900 dark:text-gray-100 uppercase tracking-widest">Notifications</h3>
+                      {pendingRequests.length > 0 && (
+                        <span className="bg-indigo-100 dark:bg-indigo-900/50 text-indigo-600 dark:text-indigo-400 text-[10px] font-bold px-2 py-0.5 rounded-full">{pendingRequests.length} New</span>
+                      )}
+                    </div>
+                    <div className="max-h-[60vh] overflow-y-auto">
+                      {pendingRequests.length > 0 ? (
+                        pendingRequests.map(req => (
+                          <div key={req.id} className="p-4 border-b border-gray-50 dark:border-gray-800/50 last:border-0 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
+                            <div className="flex items-center gap-3 mb-3">
+                              <div className="w-10 h-10 rounded-full bg-indigo-100 dark:bg-indigo-900/50 text-indigo-600 dark:text-indigo-400 font-black flex items-center justify-center uppercase shrink-0">
+                                {(req.sender_profile?.first_name?.charAt(0) || '') + (req.sender_profile?.last_name?.charAt(0) || '') || '?'}
+                              </div>
+                              <div>
+                                <p className="text-sm font-bold text-gray-900 dark:text-gray-100">{req.sender_profile?.first_name} {req.sender_profile?.last_name}</p>
+                                <p className="text-xs text-gray-500 dark:text-gray-400">wants to connect on Budee</p>
+                              </div>
+                            </div>
+                            <div className="flex gap-2">
+                              <button onClick={() => handleAcceptRequest(req.id)} className="flex-1 bg-indigo-600 text-white py-2 rounded-xl text-xs font-bold hover:bg-indigo-700 transition-colors">Accept</button>
+                              <button onClick={() => handleDeclineRequest(req.id)} className="flex-1 bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 py-2 rounded-xl text-xs font-bold hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors">Decline</button>
+                            </div>
+                          </div>
+                        ))
+                      ) : (
+                        <div className="p-8 flex flex-col items-center justify-center text-center">
+                          <div className="w-12 h-12 bg-gray-50 dark:bg-gray-800 rounded-full flex items-center justify-center mb-3">
+                            <Bell className="w-6 h-6 text-gray-300 dark:text-gray-600" />
+                          </div>
+                          <p className="text-sm font-bold text-gray-900 dark:text-gray-100 mb-1">All caught up!</p>
+                          <p className="text-xs text-gray-500 dark:text-gray-400">No new notifications.</p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
+
             {/* Profile Dropdown */}
             <div className="relative ml-2 border-l border-gray-200 dark:border-gray-700 pl-4">
               <button 

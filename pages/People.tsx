@@ -5,6 +5,7 @@ import { getAllTransactions, createTransaction, deleteTransaction, updateTransac
 import { searchUsers, sendFriendRequest } from '../src/services/friendshipsService';
 import type { SupabasePerson, SupabaseTransaction, SupabaseUserProfile } from '../src/types/supabase';
 import { combineDateWithCurrentTime } from '../src/utils/dateUtils';
+import { supabase } from '../src/utils/supabaseClient';
 
 const formatCurrency = (val: number) =>
   new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP', minimumFractionDigits: 2 }).format(val);
@@ -40,7 +41,7 @@ export default function PeoplePage() {
   const [sentRequests, setSentRequests] = useState<Set<string>>(new Set());
   
   const [showEditPersonModal, setShowEditPersonModal] = useState(false);
-  const [editPersonForm, setEditPersonForm] = useState({ name: '', handle: '' });
+  const [editPersonForm, setEditPersonForm] = useState({ name: '', handle: '', matchedUserId: '' });
   const [linkState, setLinkState] = useState<'idle' | 'searching' | 'found' | 'error'>('idle');
 
   const loadData = useCallback(async () => {
@@ -258,7 +259,7 @@ export default function PeoplePage() {
             
             <button 
               onClick={() => {
-                setEditPersonForm({ name: selectedPerson, handle: '' });
+                setEditPersonForm({ name: selectedPerson, handle: '', matchedUserId: '' });
                 setLinkState('idle');
                 setShowEditPersonModal(true);
               }}
@@ -643,6 +644,7 @@ export default function PeoplePage() {
                         const { data } = await searchUsers(editPersonForm.handle.trim());
                         if (data && data.length > 0) {
                           setLinkState('found');
+                          setEditPersonForm(f => ({ ...f, matchedUserId: data[0].user_id }));
                         } else {
                           alert('No user found with that handle or email.');
                           setLinkState('idle');
@@ -662,7 +664,7 @@ export default function PeoplePage() {
                         </div>
                         <div>
                           <p className="text-xs font-bold text-green-800 dark:text-green-300">User Match Found!</p>
-                          <p className="text-[10px] text-green-600 dark:text-green-400">Account linking unlocks in Phase 3.</p>
+                          <p className="text-[10px] text-green-600 dark:text-green-400">Account linking ready.</p>
                         </div>
                       </div>
                       <CheckSquare className="w-4 h-4 text-green-600" />
@@ -674,11 +676,41 @@ export default function PeoplePage() {
                   <button type="button" onClick={() => setShowEditPersonModal(false)} className="flex-1 bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 py-4 rounded-2xl font-black uppercase tracking-widest text-[10px] hover:bg-gray-200 dark:hover:bg-gray-700 transition-all">
                     Cancel
                   </button>
-                  <button type="button" onClick={() => {
-                      alert("Alias updating and live account linking will be fully enabled in Phase 3!");
-                      setShowEditPersonModal(false);
-                  }} className="flex-1 bg-indigo-600 text-white py-4 rounded-2xl font-black uppercase tracking-widest text-[10px] hover:bg-indigo-700 transition-all shadow-lg">
-                    Save Profile
+                  <button type="button" disabled={isSubmitting} onClick={async () => {
+                      setIsSubmitting(true);
+                      try {
+                        const personRecord = people.find(p => p.name === selectedPerson);
+                        if (personRecord && editPersonForm.name !== selectedPerson) {
+                          await supabase.from('people').update({ name: editPersonForm.name }).eq('id', personRecord.id);
+                        }
+
+                        const txsToUpdate = transactions.filter(t => (t as any).person_name === selectedPerson || t.borrower_name === selectedPerson);
+                        
+                        for (const tx of txsToUpdate) {
+                          const updates: any = {};
+                          if ((tx as any).person_name === selectedPerson) updates.person_name = editPersonForm.name;
+                          if (tx.borrower_name === selectedPerson) updates.borrower_name = editPersonForm.name;
+                          if (editPersonForm.matchedUserId) updates.friend_user_id = editPersonForm.matchedUserId;
+                          
+                          if (Object.keys(updates).length > 0) {
+                            await updateTransaction(tx.id, updates);
+                          }
+                        }
+
+                        alert('Profile updated and linked successfully!');
+                        setShowEditPersonModal(false);
+                        if (editPersonForm.name !== selectedPerson) {
+                          setSelectedPerson(editPersonForm.name);
+                        }
+                        loadData();
+                      } catch (e) {
+                        console.error(e);
+                        alert('Failed to update profile');
+                      } finally {
+                        setIsSubmitting(false);
+                      }
+                  }} className="flex-1 bg-indigo-600 text-white py-4 rounded-2xl font-black uppercase tracking-widest text-[10px] hover:bg-indigo-700 transition-all shadow-lg disabled:opacity-50">
+                    {isSubmitting ? 'Saving...' : 'Save Profile'}
                   </button>
                 </div>
               </div>
