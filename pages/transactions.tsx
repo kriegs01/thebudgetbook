@@ -256,8 +256,8 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ transactions, loadi
     friendProfiles.forEach(prof => {
       const isAlreadyLinked = people.some(p => p.friend_user_id === prof.user_id);
       if (!isAlreadyLinked) {
-        const name = `${prof.first_name} ${prof.last_name}${prof.username ? \` (@${prof.username})\` : ''}`;
-        list.push({ id: prof.user_id, name: name, handleOrEmail: prof.username ? \`@${prof.username}\` : prof.email, isLinked: false, isBudeeOnly: true, budeeProfile: prof });
+        const name = `${prof.first_name} ${prof.last_name}${prof.username ? ` (@${prof.username})` : ''}`;
+        list.push({ id: prof.user_id, name: name, handleOrEmail: prof.username ? `@${prof.username}` : prof.email, isLinked: false, isBudeeOnly: true, budeeProfile: prof });
         addedNames.add(name.toLowerCase());
       }
     });
@@ -265,7 +265,7 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ transactions, loadi
     uniquePeopleNames.forEach(name => {
       if (name && !addedNames.has(name.toLowerCase())) {
         list.push({
-          id: \`hist-\${name}\`,
+          id: `hist-${name}`,
           name: name,
           isLinked: false,
           isBudeeOnly: false
