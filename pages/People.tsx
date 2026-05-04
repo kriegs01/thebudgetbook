@@ -45,6 +45,7 @@ export default function PeoplePage() {
   const [editPersonForm, setEditPersonForm] = useState({ name: '', handle: '', matchedUserId: '' });
   const [linkState, setLinkState] = useState<'idle' | 'searching' | 'found' | 'error'>('idle');
   const [matchedUsers, setMatchedUsers] = useState<SupabaseUserProfile[]>([]);
+  const [linkOffers, setLinkOffers] = useState<{profile: SupabaseUserProfile, matches: SupabasePerson[]}[]>([]);
 
   const loadData = useCallback(async () => {
     setIsLoading(true);
@@ -71,18 +72,36 @@ export default function PeoplePage() {
       if (missingFriendIds.length > 0) {
         const { data: profiles } = await supabase.from('user_profiles').select('*').in('user_id', missingFriendIds);
         if (profiles) {
+          const offers: any[] = [];
           for (const prof of profiles) {
-            const { data: newPerson } = await createPerson({ name: `${prof.first_name} ${prof.last_name}`, friend_user_id: prof.user_id } as any);
-            if (newPerson) {
-              const isTestMode = localStorage.getItem('test_environment_enabled') === 'true';
-              const peopleTable = isTestMode ? 'people_test' : 'people';
-              let { error: updateErr } = await supabase.from(peopleTable).update({ friend_user_id: prof.user_id }).eq('id', newPerson.id);
-              if (updateErr && updateErr.code === '42P01') {
-                await supabase.from('people').update({ friend_user_id: prof.user_id }).eq('id', newPerson.id);
+            const profFirstName = prof.first_name?.toLowerCase() || '';
+            const profLastName = prof.last_name?.toLowerCase() || '';
+            
+            const localMatches = currentPeople.filter(p => {
+              if (p.friend_user_id) return false;
+              const pName = p.name.toLowerCase();
+              return (profFirstName && pName.includes(profFirstName)) || (profLastName && pName.includes(profLastName));
+            });
+
+            if (localMatches.length > 0) {
+              offers.push({ profile: prof, matches: localMatches });
+            } else {
+              const newName = `${prof.first_name} ${prof.last_name}${prof.username ? ` (@${prof.username})` : ''}`;
+              const { data: newPerson } = await createPerson({ name: newName, friend_user_id: prof.user_id } as any);
+              if (newPerson) {
+                const isTestMode = localStorage.getItem('test_environment_enabled') === 'true';
+                const peopleTable = isTestMode ? 'people_test' : 'people';
+                let { error: updateErr } = await supabase.from(peopleTable).update({ friend_user_id: prof.user_id }).eq('id', newPerson.id);
+                if (updateErr && updateErr.code === '42P01') {
+                  await supabase.from('people').update({ friend_user_id: prof.user_id }).eq('id', newPerson.id);
+                }
+                newPerson.friend_user_id = prof.user_id;
+                currentPeople = [...currentPeople, newPerson];
               }
-              newPerson.friend_user_id = prof.user_id;
-              currentPeople = [...currentPeople, newPerson];
             }
+          }
+          if (offers.length > 0) {
+            setLinkOffers(offers);
           }
         }
       }
@@ -93,6 +112,44 @@ export default function PeoplePage() {
     setFriendships(currentFriendships);
     setIsLoading(false);
   }, []);
+
+  const handleAcceptLinkOffer = async (profile: SupabaseUserProfile, match: SupabasePerson | null) => {
+    setIsSubmitting(true);
+    try {
+      const isTestMode = localStorage.getItem('test_environment_enabled') === 'true';
+      const peopleTable = isTestMode ? 'people_test' : 'people';
+      const newName = `${profile.first_name} ${profile.last_name}${profile.username ? ` (@${profile.username})` : ''}`;
+
+      if (match) {
+        let { error: updateErr } = await supabase.from(peopleTable).update({ friend_user_id: profile.user_id, name: newName }).eq('id', match.id);
+        if (updateErr && updateErr.code === '42P01') {
+          await supabase.from('people').update({ friend_user_id: profile.user_id, name: newName }).eq('id', match.id);
+        }
+        const txsToUpdate = transactions.filter(t => t.person_name === match.name || t.borrower_name === match.name);
+        for (const tx of txsToUpdate) {
+          const updates: any = { friend_user_id: profile.user_id };
+          if (tx.person_name === match.name) updates.person_name = newName;
+          if (tx.borrower_name === match.name) updates.borrower_name = newName;
+          await updateTransaction(tx.id, updates);
+        }
+      } else {
+        const { data: newPerson } = await createPerson({ name: newName, friend_user_id: profile.user_id } as any);
+        if (newPerson) {
+          let { error: updateErr } = await supabase.from(peopleTable).update({ friend_user_id: profile.user_id }).eq('id', newPerson.id);
+          if (updateErr && updateErr.code === '42P01') {
+            await supabase.from('people').update({ friend_user_id: profile.user_id }).eq('id', newPerson.id);
+          }
+        }
+      }
+
+      setLinkOffers(prev => prev.slice(1));
+      loadData();
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
 
   useEffect(() => {
     loadData();
@@ -739,8 +796,9 @@ export default function PeoplePage() {
                               setIsSubmitting(true);
                               try {
                                 const personRecord = people.find(p => p.name === selectedPerson);
-                                const profileUpdates: any = { friend_user_id: user.user_id };
-                                if (editPersonForm.name !== selectedPerson) profileUpdates.name = editPersonForm.name;
+                                const newName = `${user.first_name} ${user.last_name}${user.username ? ` (@${user.username})` : ''}`;
+                                const profileUpdates: any = { friend_user_id: user.user_id, name: newName };
+                                
                                 if (personRecord) {
                                   const isTestMode = localStorage.getItem('test_environment_enabled') === 'true';
                                   const peopleTable = isTestMode ? 'people_test' : 'people';
@@ -756,13 +814,13 @@ export default function PeoplePage() {
                                 const txsToUpdate = transactions.filter(t => (t as any).person_name === selectedPerson || t.borrower_name === selectedPerson);
                                 for (const tx of txsToUpdate) {
                                   const updates: any = { friend_user_id: user.user_id };
-                                  if ((tx as any).person_name === selectedPerson) updates.person_name = editPersonForm.name;
-                                  if (tx.borrower_name === selectedPerson) updates.borrower_name = editPersonForm.name;
+                                  if ((tx as any).person_name === selectedPerson) updates.person_name = newName;
+                                  if (tx.borrower_name === selectedPerson) updates.borrower_name = newName;
                                   await updateTransaction(tx.id, updates);
                                 }
                                 alert('Profile linked! A Connect Request has been sent.');
                                 setShowEditPersonModal(false);
-                                if (editPersonForm.name !== selectedPerson) setSelectedPerson(editPersonForm.name);
+                                setSelectedPerson(newName);
                                 loadData();
                               } catch (e) {
                                 console.error(e);
@@ -925,8 +983,8 @@ export default function PeoplePage() {
                         </span>
                       )}
                       {person.friend_user_id && fStatus === 'pending' && (
-                        <span className="inline-flex items-center gap-1 w-fit mt-0.5 text-[9px] font-bold px-2 py-0.5 bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400 rounded uppercase tracking-widest transition-colors">
-                          <Clock className="w-3 h-3" /> Pending Link
+                        <span className="inline-flex items-center gap-1 w-fit mt-0.5 text-[9px] font-bold px-2 py-0.5 bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400 rounded uppercase tracking-widest transition-colors" title="Waiting confirmation">
+                          <Clock className="w-3 h-3" /> Waiting confirmation from {person.name}
                         </span>
                       )}
                     </div>
@@ -973,8 +1031,8 @@ export default function PeoplePage() {
                           </span>
                         )}
                         {person.friend_user_id && fStatus === 'pending' && (
-                          <span className="inline-flex items-center gap-1 text-[9px] font-bold px-2 py-0.5 bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400 rounded uppercase tracking-widest transition-colors" title="Pending Link">
-                            <Clock className="w-3 h-3" />
+                          <span className="inline-flex items-center gap-1 text-[9px] font-bold px-2 py-0.5 bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400 rounded uppercase tracking-widest transition-colors" title="Waiting confirmation">
+                            <Clock className="w-3 h-3" /> Waiting confirmation
                           </span>
                         )}
                       </div>
@@ -1090,13 +1148,18 @@ export default function PeoplePage() {
                           <p className="text-[10px] text-gray-500 font-medium">Budee User</p>
                         </div>
                       </div>
-                      <button 
-                        onClick={() => handleAddFriend(user.user_id)}
-                        disabled={sentRequests.has(user.user_id)}
-                        className={`px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-widest transition-colors ${sentRequests.has(user.user_id) ? 'bg-gray-100 dark:bg-gray-800 text-gray-400 cursor-not-allowed' : 'bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-200 dark:hover:bg-indigo-900/50'}`}
-                      >
-                        {sentRequests.has(user.user_id) ? 'Sent' : 'Add'}
-                      </button>
+                      {sentRequests.has(user.user_id) ? (
+                        <p className="text-[10px] font-bold text-yellow-600 dark:text-yellow-400 uppercase tracking-widest text-right">
+                          Waiting confirmation from<br />{user.first_name} {user.last_name}{user.username ? ` (@${user.username})` : ''}
+                        </p>
+                      ) : (
+                        <button 
+                          onClick={() => handleAddFriend(user.user_id)}
+                          className="px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-widest transition-colors bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-200 dark:hover:bg-indigo-900/50"
+                        >
+                          Add
+                        </button>
+                      )}
                     </div>
                   ))}
                 </div>
@@ -1144,6 +1207,38 @@ export default function PeoplePage() {
                 Keep Person
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Link Match Offer Modal ─────────────────────────────────────── */}
+      {linkOffers.length > 0 && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in">
+          <div className="bg-white dark:bg-gray-900 rounded-[2.5rem] w-full max-w-md p-8 shadow-2xl relative transition-colors animate-in zoom-in-95">
+            <h2 className="text-xl font-black text-gray-900 dark:text-gray-100 mb-1 uppercase tracking-tight">Match Found</h2>
+            <p className="text-sm text-gray-500 dark:text-gray-400 mb-6 font-medium">
+              Your new connection <strong>{linkOffers[0].profile.first_name} {linkOffers[0].profile.last_name}</strong> matches existing local profiles. Do you want to link to an existing profile or create a new one?
+            </p>
+            
+            <div className="space-y-3 mb-4 max-h-48 overflow-y-auto">
+              {linkOffers[0].matches.map(match => (
+                <button
+                  key={match.id}
+                  disabled={isSubmitting}
+                  onClick={() => handleAcceptLinkOffer(linkOffers[0].profile, match)}
+                  className="w-full p-4 bg-indigo-50 dark:bg-indigo-900/30 rounded-2xl border border-indigo-100 dark:border-indigo-800/50 hover:bg-indigo-100 dark:hover:bg-indigo-900/50 text-left transition-colors disabled:opacity-50"
+                >
+                  <p className="text-sm font-bold text-indigo-900 dark:text-indigo-100">Link to "{match.name}"</p>
+                </button>
+              ))}
+            </div>
+            <button
+              disabled={isSubmitting}
+              onClick={() => handleAcceptLinkOffer(linkOffers[0].profile, null)}
+              className="w-full p-4 bg-gray-50 dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-700 text-left transition-colors disabled:opacity-50"
+            >
+              <p className="text-sm font-bold text-gray-900 dark:text-gray-100">Create New Profile Instead</p>
+            </button>
           </div>
         </div>
       )}
