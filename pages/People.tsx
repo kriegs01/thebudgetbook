@@ -48,6 +48,53 @@ export default function PeoplePage() {
   const [linkOffers, setLinkOffers] = useState<{profile: SupabaseUserProfile, matches: SupabasePerson[]}[]>([]);
   const processedOffersRef = useRef<Set<string>>(new Set());
 
+  const ensureReciprocalProfile = useCallback(async (friendId: string) => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+      const myId = user.id;
+
+      const { data: myProfile } = await supabase.from('user_profiles').select('*').eq('user_id', myId).single();
+      if (!myProfile) return;
+
+      const myNewName = `${myProfile.first_name} ${myProfile.last_name}${myProfile.username ? ` (@${myProfile.username})` : ''}`;
+      
+      const isTestMode = localStorage.getItem('test_environment_enabled') === 'true';
+      const peopleTable = isTestMode ? 'people_test' : 'people';
+
+      let { data: existing, error: checkErr } = await supabase
+        .from(peopleTable)
+        .select('id')
+        .eq('user_id', friendId)
+        .eq('friend_user_id', myId)
+        .maybeSingle();
+
+      if (checkErr && checkErr.code === '42P01') {
+        const fallback = await supabase
+          .from('people')
+          .select('id')
+          .eq('user_id', friendId)
+          .eq('friend_user_id', myId)
+          .maybeSingle();
+        existing = fallback?.data;
+      }
+
+      if (!existing) {
+        const insertPayload = {
+          user_id: friendId,
+          friend_user_id: myId,
+          name: myNewName
+        };
+        let { error: insertErr } = await supabase.from(peopleTable).insert(insertPayload);
+        if (insertErr && insertErr.code === '42P01') {
+          await supabase.from('people').insert(insertPayload);
+        }
+      }
+    } catch (e) {
+      console.error('Error ensuring reciprocal profile:', e);
+    }
+  }, []);
+
   const loadData = useCallback(async () => {
     setIsLoading(true);
 
@@ -99,6 +146,7 @@ export default function PeoplePage() {
                 }
                 newPerson.friend_user_id = prof.user_id;
                 currentPeople = [...currentPeople, newPerson];
+                await ensureReciprocalProfile(prof.user_id);
               }
             }
           }
@@ -113,7 +161,7 @@ export default function PeoplePage() {
     if (txRes.data) setTransactions(txRes.data);
     setFriendships(currentFriendships);
     setIsLoading(false);
-  }, []);
+  }, [ensureReciprocalProfile]);
 
   const handleAcceptLinkOffer = async (profile: SupabaseUserProfile, match: SupabasePerson | null) => {
     // Mark as processed immediately to prevent modal loops
@@ -137,6 +185,7 @@ export default function PeoplePage() {
           if (tx.borrower_name === match.name) updates.borrower_name = newName;
           await updateTransaction(tx.id, updates);
         }
+        await ensureReciprocalProfile(profile.user_id);
       } else {
         const { data: newPerson } = await createPerson({ name: newName, friend_user_id: profile.user_id } as any);
         if (newPerson) {
@@ -146,6 +195,7 @@ export default function PeoplePage() {
             await supabase.from('people').update({ friend_user_id: profile.user_id }).eq('id', newPerson.id);
           }
           createdPerson.friend_user_id = profile.user_id;
+          await ensureReciprocalProfile(profile.user_id);
         }
       }
 
