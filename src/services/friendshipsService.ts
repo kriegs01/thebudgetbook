@@ -21,17 +21,25 @@ export const searchUsers = async (searchTerm: string): Promise<SupabaseResponse<
     // Split the search term by spaces to handle full name searches (e.g. "John Doe")
     const words = cleanTerm.split(/\s+/).filter(Boolean);
 
-    let query = supabase
-      .from('user_profiles')
-      .select('*')
-      .neq('user_id', userId);
-      
-    // Each typed word must match at least one of the searchable columns
-    for (const word of words) {
-      query = query.or(`first_name.ilike.%${word}%,last_name.ilike.%${word}%,email.ilike.%${word}%,username.ilike.%${word}%`);
+    let orQuery = '';
+
+    if (words.length === 1) {
+      const word = words[0];
+      orQuery = `first_name.ilike.%${word}%,last_name.ilike.%${word}%,email.ilike.%${word}%,username.ilike.%${word}%`;
+    } else if (words.length >= 2) {
+      const w1 = words[0];
+      const w2 = words.slice(1).join(' '); // Group the rest as the last name
+      // Using embedded 'and()' so it precisely matches "First Last" OR "Last First"
+      orQuery = `and(first_name.ilike.%${w1}%,last_name.ilike.%${w2}%),and(first_name.ilike.%${w2}%,last_name.ilike.%${w1}%),email.ilike.%${cleanTerm}%,username.ilike.%${cleanTerm}%`;
     }
 
-    const { data, error } = await query.limit(10);
+    const { data, error } = await supabase
+      .from('user_profiles')
+      .select('*')
+      .neq('user_id', userId)
+      .or(orQuery)
+      .limit(10);
+
     if (error) throw error;
     return { data, error: null };
   } catch (error: any) {

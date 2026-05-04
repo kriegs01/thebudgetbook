@@ -423,6 +423,7 @@ const Settings: React.FC<SettingsProps> = ({ currency, setCurrency, categories, 
   // Account management state
   const [editFirstName, setEditFirstName] = useState('');
   const [editLastName, setEditLastName] = useState('');
+  const [editUsername, setEditUsername] = useState('');
   const [newEmail, setNewEmail] = useState('');
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
@@ -551,8 +552,12 @@ const Settings: React.FC<SettingsProps> = ({ currency, setCurrency, categories, 
 
   // Account management handlers
   const handleUpdateName = async () => {
-    if (!editFirstName.trim() || !editLastName.trim()) {
-      setUpdateError('First and last name are required');
+    const fName = editFirstName.trim() || userProfile?.first_name || '';
+    const lName = editLastName.trim() || userProfile?.last_name || '';
+    const uName = editUsername.trim() || userProfile?.username || '';
+
+    if (!fName || !lName) {
+      setUpdateError('First and last name cannot be empty');
       return;
     }
 
@@ -561,12 +566,26 @@ const Settings: React.FC<SettingsProps> = ({ currency, setCurrency, categories, 
     setUpdateMessage('');
 
     try {
-      const { error } = await updateProfile(editFirstName, editLastName);
-      if (error) throw error;
+      const updates: any = {};
+      if (editFirstName.trim()) updates.first_name = fName;
+      if (editLastName.trim()) updates.last_name = lName;
+      if (editUsername.trim()) updates.username = uName;
 
-      setUpdateMessage('Name updated successfully!');
+      if (Object.keys(updates).length > 0) {
+        const { error } = await updateUserProfile(user!.id, updates);
+        if (error) {
+          if (error.message?.includes('duplicate key') || error.message?.includes('unique constraint')) {
+            throw new Error('This username is already taken. Please choose another.');
+          }
+          throw error;
+        }
+        await refreshProfile();
+      }
+
+      setUpdateMessage('Profile updated successfully!');
       setEditFirstName('');
       setEditLastName('');
+      setEditUsername('');
       setTimeout(() => setUpdateMessage(''), 3000);
     } catch (error: any) {
       setUpdateError(error.message || 'Failed to update name');
@@ -676,11 +695,11 @@ const Settings: React.FC<SettingsProps> = ({ currency, setCurrency, categories, 
             </div>
           )}
 
-          {/* Update Name */}
+          {/* Update Profile (Name & Username) */}
           <div className="p-4 bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-800 space-y-3 transition-colors">
             <div className="flex items-center space-x-2 mb-4">
               <User className="w-5 h-5 text-gray-600 dark:text-gray-400" />
-              <h4 className="text-sm font-bold text-gray-900 dark:text-gray-100 uppercase transition-colors">Update Name</h4>
+              <h4 className="text-sm font-bold text-gray-900 dark:text-gray-100 uppercase transition-colors">Update Profile</h4>
             </div>
             
             <div className="grid grid-cols-2 gap-4">
@@ -704,14 +723,27 @@ const Settings: React.FC<SettingsProps> = ({ currency, setCurrency, categories, 
                   className="w-full px-4 py-3 bg-transparent text-gray-900 dark:text-gray-100 border border-gray-300 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all placeholder:text-gray-400 dark:placeholder:text-gray-500"
                 />
               </div>
+              <div className="col-span-2">
+                <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-2 transition-colors">Username (Handle)</label>
+                <div className="relative">
+                  <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 font-bold">@</span>
+                  <input
+                    type="text"
+                    value={editUsername}
+                    onChange={(e) => setEditUsername(e.target.value.replace(/[^a-zA-Z0-9_]/g, '').toLowerCase())}
+                    placeholder={userProfile?.username || 'username'}
+                    className="w-full pl-8 pr-4 py-3 bg-transparent text-gray-900 dark:text-gray-100 border border-gray-300 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all placeholder:text-gray-400 dark:placeholder:text-gray-500"
+                  />
+                </div>
+              </div>
             </div>
 
             <button
               onClick={handleUpdateName}
-              disabled={isUpdating || (!editFirstName && !editLastName)}
+              disabled={isUpdating || (!editFirstName && !editLastName && !editUsername)}
               className="w-full px-4 py-3 bg-blue-600 text-white rounded-xl font-medium hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
             >
-              {isUpdating ? 'Updating...' : 'Update Name'}
+              {isUpdating ? 'Updating...' : 'Save Profile'}
             </button>
           </div>
 
