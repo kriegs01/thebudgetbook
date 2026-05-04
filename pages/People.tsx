@@ -123,7 +123,7 @@ export default function PeoplePage() {
   const handleCreateProfileForBudee = async (prof: SupabaseUserProfile) => {
     setIsSubmitting(true);
     try {
-      const newName = `${prof.first_name} ${prof.last_name}${prof.username ? \` (@${prof.username})\` : ''}`;
+      const newName = `${prof.first_name} ${prof.last_name}${prof.username ? ` (@${prof.username})` : ''}`;
       const { data: newPerson } = await createPerson({ name: newName } as any);
       if (newPerson) {
         const isTestMode = localStorage.getItem('test_environment_enabled') === 'true';
@@ -150,7 +150,7 @@ export default function PeoplePage() {
     try {
       const personRecord = people.find(p => p.id === selectedLocalPersonToLink);
       if (!personRecord) return;
-      const newName = `${linkBudeeModal.first_name} ${linkBudeeModal.last_name}${linkBudeeModal.username ? \` (@${linkBudeeModal.username})\` : ''}`;
+      const newName = `${linkBudeeModal.first_name} ${linkBudeeModal.last_name}${linkBudeeModal.username ? ` (@${linkBudeeModal.username})` : ''}`;
       const isTestMode = localStorage.getItem('test_environment_enabled') === 'true';
       const peopleTable = isTestMode ? 'people_test' : 'people';
       let { error: updateErr } = await supabase.from(peopleTable).update({ friend_user_id: linkBudeeModal.user_id, name: newName }).eq('id', personRecord.id);
