@@ -1275,34 +1275,39 @@ export default function PeoplePage() {
         </div>
       )}
 
-      {/* ── Link Match Offer Modal ─────────────────────────────────────── */}
-      {linkOffers.length > 0 && (
+      {/* ── Link Budee Modal ─────────────────────────────────────────── */}
+      {linkBudeeModal && (
         <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in">
-          <div className="bg-white dark:bg-gray-900 rounded-[2.5rem] w-full max-w-md p-8 shadow-2xl relative transition-colors animate-in zoom-in-95">
-            <h2 className="text-xl font-black text-gray-900 dark:text-gray-100 mb-1 uppercase tracking-tight">Match Found</h2>
-            <p className="text-sm text-gray-500 dark:text-gray-400 mb-6 font-medium">
-              Your new connection <strong>{linkOffers[0].profile.first_name} {linkOffers[0].profile.last_name}</strong> matches existing local profiles. Do you want to link to an existing profile or create a new one?
-            </p>
+          <div className="bg-white dark:bg-gray-900 rounded-[2.5rem] w-full max-w-sm p-8 shadow-2xl relative transition-colors animate-in zoom-in-95">
+            <button onClick={() => { setLinkBudeeModal(null); setSelectedLocalPersonToLink(''); }} className="absolute right-6 top-6 p-2 text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full transition-colors"><X className="w-5 h-5" /></button>
+            <h2 className="text-xl font-black text-gray-900 dark:text-gray-100 mb-1 uppercase tracking-tight">Link Budee</h2>
+            <p className="text-sm text-gray-500 dark:text-gray-400 mb-6 font-medium">Select a local profile to link with {linkBudeeModal.first_name}.</p>
             
-            <div className="space-y-3 mb-4 max-h-48 overflow-y-auto">
-              {linkOffers[0].matches.map(match => (
-                <button
-                  key={match.id}
-                  disabled={isSubmitting}
-                  onClick={() => handleAcceptLinkOffer(linkOffers[0].profile, match)}
-                  className="w-full p-4 bg-indigo-50 dark:bg-indigo-900/30 rounded-2xl border border-indigo-100 dark:border-indigo-800/50 hover:bg-indigo-100 dark:hover:bg-indigo-900/50 text-left transition-colors disabled:opacity-50"
+            <form onSubmit={handleLinkBudeeToProfile} className="space-y-4">
+              <div>
+                <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Local Profile</label>
+                <select
+                  required
+                  value={selectedLocalPersonToLink}
+                  onChange={e => setSelectedLocalPersonToLink(e.target.value)}
+                  className="w-full bg-gray-50 dark:bg-gray-800 border-transparent text-gray-900 dark:text-gray-100 rounded-2xl p-4 text-sm font-bold outline-none focus:ring-2 focus:ring-indigo-500 transition-all"
                 >
-                  <p className="text-sm font-bold text-indigo-900 dark:text-indigo-100">Link to "{match.name}"</p>
+                  <option value="">Select a profile...</option>
+                  {people.filter(p => !p.friend_user_id).map(p => (
+                    <option key={p.id} value={p.id}>{p.name}</option>
+                  ))}
+                </select>
+              </div>
+              
+              <div className="flex gap-3 pt-2">
+                <button type="button" onClick={() => { setLinkBudeeModal(null); setSelectedLocalPersonToLink(''); }} className="flex-1 bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 py-4 rounded-2xl font-black uppercase tracking-widest text-[10px] hover:bg-gray-200 dark:hover:bg-gray-700 transition-all">
+                  Cancel
                 </button>
-              ))}
-            </div>
-            <button
-              disabled={isSubmitting}
-              onClick={() => handleAcceptLinkOffer(linkOffers[0].profile, null)}
-              className="w-full p-4 bg-gray-50 dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-700 text-left transition-colors disabled:opacity-50"
-            >
-              <p className="text-sm font-bold text-gray-900 dark:text-gray-100">Create New Profile Instead</p>
-            </button>
+                <button type="submit" disabled={isSubmitting || !selectedLocalPersonToLink} className="flex-1 bg-indigo-600 text-white py-4 rounded-2xl font-black uppercase tracking-widest text-[10px] hover:bg-indigo-700 transition-all shadow-lg disabled:opacity-50">
+                  {isSubmitting ? 'Linking...' : 'Link Profile'}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}
