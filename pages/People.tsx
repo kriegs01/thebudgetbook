@@ -72,8 +72,17 @@ export default function PeoplePage() {
         const { data: profiles } = await supabase.from('user_profiles').select('*').in('user_id', missingFriendIds);
         if (profiles) {
           for (const prof of profiles) {
-            const { data: newPerson } = await createPerson({ name: `${prof.first_name} ${prof.last_name}`, friend_user_id: prof.user_id });
-            if (newPerson) currentPeople = [...currentPeople, newPerson];
+            const { data: newPerson } = await createPerson({ name: `${prof.first_name} ${prof.last_name}`, friend_user_id: prof.user_id } as any);
+            if (newPerson) {
+              const isTestMode = localStorage.getItem('test_environment_enabled') === 'true';
+              const peopleTable = isTestMode ? 'people_test' : 'people';
+              let { error: updateErr } = await supabase.from(peopleTable).update({ friend_user_id: prof.user_id }).eq('id', newPerson.id);
+              if (updateErr && updateErr.code === '42P01') {
+                await supabase.from('people').update({ friend_user_id: prof.user_id }).eq('id', newPerson.id);
+              }
+              newPerson.friend_user_id = prof.user_id;
+              currentPeople = [...currentPeople, newPerson];
+            }
           }
         }
       }
@@ -732,7 +741,16 @@ export default function PeoplePage() {
                                 const personRecord = people.find(p => p.name === selectedPerson);
                                 const profileUpdates: any = { friend_user_id: user.user_id };
                                 if (editPersonForm.name !== selectedPerson) profileUpdates.name = editPersonForm.name;
-                                if (personRecord) await supabase.from('people').update(profileUpdates).eq('id', personRecord.id);
+                                if (personRecord) {
+                                  const isTestMode = localStorage.getItem('test_environment_enabled') === 'true';
+                                  const peopleTable = isTestMode ? 'people_test' : 'people';
+                                  let { error: updateErr } = await supabase.from(peopleTable).update(profileUpdates).eq('id', personRecord.id);
+                                  if (updateErr && updateErr.code === '42P01') {
+                                    await supabase.from('people').update(profileUpdates).eq('id', personRecord.id);
+                                  } else if (updateErr) {
+                                    console.error('Link update failed:', updateErr);
+                                  }
+                                }
                                 
                                 await sendFriendRequest(user.user_id);
                                 const txsToUpdate = transactions.filter(t => (t as any).person_name === selectedPerson || t.borrower_name === selectedPerson);
@@ -778,7 +796,12 @@ export default function PeoplePage() {
                         if (editPersonForm.name !== selectedPerson) profileUpdates.name = editPersonForm.name;
                         
                         if (Object.keys(profileUpdates).length > 0 && personRecord) {
-                          await supabase.from('people').update(profileUpdates).eq('id', personRecord.id);
+                          const isTestMode = localStorage.getItem('test_environment_enabled') === 'true';
+                          const peopleTable = isTestMode ? 'people_test' : 'people';
+                          let { error: updateErr } = await supabase.from(peopleTable).update(profileUpdates).eq('id', personRecord.id);
+                          if (updateErr && updateErr.code === '42P01') {
+                            await supabase.from('people').update(profileUpdates).eq('id', personRecord.id);
+                          }
                         }
 
                         const txsToUpdate = transactions.filter(t => (t as any).person_name === selectedPerson || t.borrower_name === selectedPerson);
