@@ -2,7 +2,8 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { Users, Plus, LayoutGrid, List, MoreVertical, Trash2, ArrowRight, ArrowLeft, X, AlertTriangle, User, Landmark, ArrowUpFromLine, ArrowDownToLine, ArrowLeftRight, BanknoteArrowDown, ChevronDown, ChevronUp, Edit2, Search, UserPlus, CheckSquare } from 'lucide-react';
 import { getAllPeople, createPerson, deletePerson } from '../src/services/peopleService';
 import { getAllTransactions, createTransaction, deleteTransaction, updateTransaction } from '../src/services/transactionsService';
-import type { SupabasePerson, SupabaseTransaction } from '../src/types/supabase';
+import { searchUsers, sendFriendRequest } from '../src/services/friendshipsService';
+import type { SupabasePerson, SupabaseTransaction, SupabaseUserProfile } from '../src/types/supabase';
 import { combineDateWithCurrentTime } from '../src/utils/dateUtils';
 
 const formatCurrency = (val: number) =>
@@ -35,6 +36,8 @@ export default function PeoplePage() {
   const [showFindFriendsModal, setShowFindFriendsModal] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [isSearching, setIsSearching] = useState(false);
+  const [searchResults, setSearchResults] = useState<SupabaseUserProfile[]>([]);
+  const [sentRequests, setSentRequests] = useState<Set<string>>(new Set());
   
   const [showEditPersonModal, setShowEditPersonModal] = useState(false);
   const [editPersonForm, setEditPersonForm] = useState({ name: '', handle: '' });
@@ -57,11 +60,20 @@ export default function PeoplePage() {
   }, [loadData]);
 
   useEffect(() => {
-    if (searchQuery) {
-      setIsSearching(true);
-      const timer = setTimeout(() => setIsSearching(false), 800);
-      return () => clearTimeout(timer);
+    if (!searchQuery.trim()) {
+      setSearchResults([]);
+      setIsSearching(false);
+      return;
     }
+
+    setIsSearching(true);
+    const timer = setTimeout(async () => {
+      const { data } = await searchUsers(searchQuery.trim());
+      setSearchResults(data || []);
+      setIsSearching(false);
+    }, 500); // 500ms debounce
+
+    return () => clearTimeout(timer);
   }, [searchQuery]);
 
   const handleAddPerson = async (e: React.FormEvent) => {
@@ -625,10 +637,16 @@ export default function PeoplePage() {
                     </div>
                     <button
                       type="button"
-                      onClick={() => {
+                      onClick={async () => {
                         if (!editPersonForm.handle.trim()) return;
                         setLinkState('searching');
-                        setTimeout(() => setLinkState('found'), 1200);
+                        const { data } = await searchUsers(editPersonForm.handle.trim());
+                        if (data && data.length > 0) {
+                          setLinkState('found');
+                        } else {
+                          alert('No user found with that handle or email.');
+                          setLinkState('idle');
+                        }
                       }}
                       className="bg-indigo-50 text-indigo-600 dark:bg-indigo-900/30 dark:text-indigo-400 px-5 py-2 rounded-2xl font-bold hover:bg-indigo-100 dark:hover:bg-indigo-900/50 transition-colors"
                     >
@@ -883,8 +901,31 @@ export default function PeoplePage() {
                     </div>
                   ))}
                 </div>
+              ) : searchResults.length > 0 ? (
+                <div className="space-y-3 animate-in fade-in slide-in-from-bottom-2">
+                  {searchResults.map(user => (
+                    <div key={user.id} className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-800/50 rounded-2xl border border-gray-100 dark:border-gray-800">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-full bg-indigo-100 dark:bg-indigo-900/50 text-indigo-600 dark:text-indigo-400 font-black flex items-center justify-center uppercase">
+                          {(user.first_name?.charAt(0) || '') + (user.last_name?.charAt(0) || '') || '?'}
+                        </div>
+                        <div>
+                          <p className="text-sm font-bold text-gray-900 dark:text-gray-100">{user.first_name} {user.last_name}</p>
+                          <p className="text-[10px] text-gray-500 font-medium">Budee User</p>
+                        </div>
+                      </div>
+                      <button 
+                        onClick={() => handleAddFriend(user.user_id)}
+                        disabled={sentRequests.has(user.user_id)}
+                        className={`px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-widest transition-colors ${sentRequests.has(user.user_id) ? 'bg-gray-100 dark:bg-gray-800 text-gray-400 cursor-not-allowed' : 'bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-200 dark:hover:bg-indigo-900/50'}`}
+                      >
+                        {sentRequests.has(user.user_id) ? 'Sent' : 'Add'}
+                      </button>
+                    </div>
+                  ))}
+                </div>
               ) : (
-                <div className="flex flex-col items-center justify-center py-6 text-center">
+                <div className="flex flex-col items-center justify-center py-6 text-center animate-in fade-in">
                   <div className="w-12 h-12 bg-indigo-50 dark:bg-indigo-900/20 text-indigo-500 dark:text-indigo-400 rounded-full flex items-center justify-center mb-3">
                     <UserPlus className="w-6 h-6" />
                   </div>

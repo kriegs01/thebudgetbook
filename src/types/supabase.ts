@@ -68,6 +68,7 @@ export interface SupabaseInstallment {
   start_date: string | null; // date, nullable
   timing: string | null; // PROTOTYPE: '1/2' or '2/2' - payment timing within month
   user_id: string | null; // uuid, references auth.users(id)
+  friend_user_id?: string | null; // uuid, nullable - links loan to a real Budee friend
 }
 
 export interface SupabaseSavings {
@@ -92,6 +93,7 @@ export interface SupabaseTransaction {
   receipt_url: string | null; // URL of receipt image in Supabase Storage
   user_id: string | null; // uuid, references auth.users(id)
   wallet_id: string | null; // uuid, nullable - links stash top-up transactions to a wallet
+  friend_user_id?: string | null; // uuid, nullable - links transaction to a real Budee friend
 }
 
 export interface SupabaseBudgetSetup {
@@ -139,6 +141,28 @@ export interface SupabaseMonthlyPaymentSchedule {
   user_id: string | null; // uuid, references auth.users(id)
 }
 
+export interface SupabaseFriendship {
+  id: string; // uuid
+  user_id: string; // uuid, references auth.users(id) (Sender)
+  friend_id: string; // uuid, references auth.users(id) (Receiver)
+  status: 'pending' | 'accepted' | 'blocked';
+  created_at: string; // timestamptz
+  updated_at: string; // timestamptz
+}
+
+export interface SupabaseMessage {
+  id: string; // uuid
+  sender_id: string; // uuid, references auth.users(id)
+  receiver_id: string; // uuid, references auth.users(id)
+  content: string; // text
+  related_transaction_id: string | null; // uuid, nullable
+  related_installment_id: string | null; // uuid, nullable
+  message_type: string; // text
+  read_at: string | null; // timestamptz, nullable
+  created_at: string; // timestamptz
+}
+
+
 // Input types for creating new records (without id, timestamps, and user_id)
 
 export type CreateAccountInput = Omit<SupabaseAccount, 'id' | 'created_at' | 'user_id'>;
@@ -157,13 +181,14 @@ export type CreateSavingsInput = Omit<SupabaseSavings, 'id' | 'user_id'>;
 export type UpdateSavingsInput = Partial<CreateSavingsInput>;
 
 // Required fields only; newer columns that may not exist in all DB environments are optional
-export type CreateTransactionInput = Omit<SupabaseTransaction, 'id' | 'user_id' | 'transaction_type' | 'notes' | 'related_transaction_id' | 'borrower_name' | 'receipt_url' | 'wallet_id'> & {
+export type CreateTransactionInput = Omit<SupabaseTransaction, 'id' | 'user_id' | 'transaction_type' | 'notes' | 'related_transaction_id' | 'borrower_name' | 'receipt_url' | 'wallet_id' | 'friend_user_id'> & {
   transaction_type?: SupabaseTransaction['transaction_type'];
   notes?: string | null;
   related_transaction_id?: string | null;
   borrower_name?: string | null;
   receipt_url?: string | null;
   wallet_id?: string | null;
+  friend_user_id?: string | null;
 };
 export type UpdateTransactionInput = Partial<CreateTransactionInput>;
 
@@ -182,6 +207,12 @@ export type UpdateMonthlyPaymentScheduleInput = Partial<CreateMonthlyPaymentSche
 
 export type CreateUserProfileInput = Omit<SupabaseUserProfile, 'id' | 'created_at' | 'updated_at'>;
 export type UpdateUserProfileInput = Partial<Omit<SupabaseUserProfile, 'id' | 'user_id' | 'created_at' | 'updated_at'>>;
+
+export type CreateFriendshipInput = Omit<SupabaseFriendship, 'id' | 'created_at' | 'updated_at' | 'user_id'>;
+export type UpdateFriendshipInput = Partial<CreateFriendshipInput>;
+
+export type CreateMessageInput = Omit<SupabaseMessage, 'id' | 'created_at' | 'sender_id' | 'read_at'>;
+export type UpdateMessageInput = Partial<CreateMessageInput>;
 
 // Database Response Types (for better type safety with Supabase responses)
 
