@@ -29,6 +29,43 @@ import type {
 import { getCachedUser } from '../utils/authCache';
 
 /**
+ * Internal helper to automatically dispatch shared transactions (Loans, Transfers)
+ * into the connected Budee's pending inbox.
+ */
+const syncToBudeeInbox = async (transactionId: string, transaction: any, userId: string) => {
+  try {
+    const targetName = transaction.borrower_name || transaction.person_name;
+    if (!targetName) return;
+
+    const isTestMode = localStorage.getItem('test_environment_enabled') === 'true';
+    const peopleTable = isTestMode ? 'people_test' : 'people';
+    const pendingTable = isTestMode ? 'pending_transactions_test' : 'pending_transactions';
+
+    // Lookup local profile to see if they are linked to a real user
+    const { data: person } = await supabase
+      .from(peopleTable)
+      .select('friend_user_id')
+      .eq('user_id', userId)
+      .eq('name', targetName)
+      .single();
+
+    if (person?.friend_user_id) {
+      await supabase.from(pendingTable).insert([{
+        sender_user_id: userId,
+        receiver_user_id: person.friend_user_id,
+        amount: transaction.amount,
+        transaction_type: transaction.transaction_type || 'payment',
+        name: transaction.name,
+        source_transaction_id: transactionId,
+        status: 'pending'
+      }]);
+    }
+  } catch (e) {
+    console.error('Failed to sync to Budee inbox:', e);
+  }
+};
+
+/**
  * Get all transactions for the current user
  */
 export const getAllTransactions = async () => {
@@ -98,15 +135,113 @@ export const createTransaction = async (transaction: CreateTransactionInput) => 
           .single();
           
         if (retryError) throw retryError;
+        if (retryData) await syncToBudeeInbox(retryData.id, txWithoutBorrower, user.id);
         return { data: retryData, error: null };
       }
       throw error;
     }
 
+    if (data) await syncToBudeeInbox(data.id, transaction, user.id);
+
     return { data, error: null };
   } catch (error) {
     console.error('Error creating transaction:', error);
     return { data: null, error };
+  }
+};
+
+/**
+ * Checks if there are any past shared transactions that haven't been pushed to the Budee's inbox.
+ */
+export const getUnsyncedHistoricalTransactionsCount = async () => {
+  try {
+    const user = await getCachedUser();
+    const isTestMode = localStorage.getItem('test_environment_enabled') === 'true';
+    const peopleTable = isTestMode ? 'people_test' : 'people';
+    const pendingTable = isTestMode ? 'pending_transactions_test' : 'pending_transactions';
+
+    // 1. Get all locally linked profiles
+    const { data: people } = await supabase
+      .from(peopleTable)
+      .select('name, friend_user_id')
+      .eq('user_id', user.id)
+      .not('friend_user_id', 'is', null);
+
+    if (!people || people.length === 0) return { count: 0, error: null };
+
+    // 2. Fetch all user transactions to filter locally
+    const { data: allTxs } = await supabase.from(getTableName('transactions')).select('*').eq('user_id', user.id);
+    if (!allTxs || allTxs.length === 0) return { count: 0, error: null };
+
+    // 3. Find missing ones
+    const { data: existingPending } = await supabase.from(pendingTable).select('source_transaction_id').eq('sender_user_id', user.id);
+    const existingIds = new Set(existingPending?.map(p => p.source_transaction_id) || []);
+    const linkedNames = new Map(people.map(p => [p.name, p.friend_user_id]));
+
+    const unsyncedTxs = allTxs.filter(tx => {
+      if (existingIds.has(tx.id)) return false;
+      const targetName = tx.borrower_name || (tx as any).person_name;
+      return targetName && linkedNames.has(targetName);
+    });
+
+    return { count: unsyncedTxs.length, error: null };
+  } catch (error) {
+    console.error('Error counting historical transactions:', error);
+    return { count: 0, error };
+  }
+};
+
+/**
+ * Retroactively syncs any past shared transactions into the connected Budee's inbox.
+ * Useful for pushing old loans/transfers to a friend after you just linked their profile.
+ */
+export const syncHistoricalSharedTransactions = async () => {
+  try {
+    const user = await getCachedUser();
+    const isTestMode = localStorage.getItem('test_environment_enabled') === 'true';
+    const peopleTable = isTestMode ? 'people_test' : 'people';
+    const pendingTable = isTestMode ? 'pending_transactions_test' : 'pending_transactions';
+
+    // 1. Get all locally linked profiles
+    const { data: people } = await supabase
+      .from(peopleTable)
+      .select('name, friend_user_id')
+      .eq('user_id', user.id)
+      .not('friend_user_id', 'is', null);
+
+    if (!people || people.length === 0) return { count: 0, error: null };
+
+    // 2. Fetch all user transactions to filter locally (safest approach)
+    const { data: allTxs } = await supabase.from(getTableName('transactions')).select('*').eq('user_id', user.id);
+    if (!allTxs || allTxs.length === 0) return { count: 0, error: null };
+
+    // 3. Find missing ones
+    const { data: existingPending } = await supabase.from(pendingTable).select('source_transaction_id').eq('sender_user_id', user.id);
+    const existingIds = new Set(existingPending?.map(p => p.source_transaction_id) || []);
+    const linkedNames = new Map(people.map(p => [p.name, p.friend_user_id]));
+
+    const toInsert = allTxs
+      .filter(tx => !existingIds.has(tx.id))
+      .map(tx => {
+        const targetName = tx.borrower_name || (tx as any).person_name;
+        const friendId = targetName ? linkedNames.get(targetName) : null;
+        if (!friendId) return null;
+        return {
+          sender_user_id: user.id,
+          receiver_user_id: friendId,
+          amount: tx.amount,
+          transaction_type: tx.transaction_type || 'payment',
+          name: tx.name,
+          source_transaction_id: tx.id,
+          status: 'pending'
+        };
+      }).filter(Boolean);
+
+    if (toInsert.length > 0) await supabase.from(pendingTable).insert(toInsert);
+    return { count: toInsert.length, error: null };
+  } catch (error) {
+    console.error('Error syncing historical transactions:', error);
+    return { count: 0, error };
   }
 };
 

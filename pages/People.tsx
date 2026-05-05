@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { Users, Plus, LayoutGrid, List, MoreVertical, Trash2, ArrowRight, ArrowLeft, X, AlertTriangle, User, Landmark, ArrowUpFromLine, ArrowDownToLine, ArrowLeftRight, BanknoteArrowDown, ChevronDown, ChevronUp, Edit2, Search, UserPlus, CheckSquare, Clock } from 'lucide-react';
+import { Users, Plus, LayoutGrid, List, MoreVertical, Trash2, ArrowRight, ArrowLeft, X, AlertTriangle, User, Landmark, ArrowUpFromLine, ArrowDownToLine, ArrowLeftRight, BanknoteArrowDown, ChevronDown, ChevronUp, Edit2, Search, UserPlus, CheckSquare, Clock, RefreshCw } from 'lucide-react';
 import { getAllPeople, createPerson, deletePerson } from '../src/services/peopleService';
-import { getAllTransactions, createTransaction, deleteTransaction, updateTransaction } from '../src/services/transactionsService';
+import { getAllTransactions, createTransaction, deleteTransaction, updateTransaction, getUnsyncedHistoricalTransactionsCount, syncHistoricalSharedTransactions } from '../src/services/transactionsService';
 import { searchUsers, sendFriendRequest, getFriendships } from '../src/services/friendshipsService';
 import type { SupabasePerson, SupabaseTransaction, SupabaseUserProfile, SupabaseFriendship } from '../src/types/supabase';
 import { combineDateWithCurrentTime } from '../src/utils/dateUtils';
@@ -49,6 +49,7 @@ export default function PeoplePage() {
   const [friendProfiles, setFriendProfiles] = useState<SupabaseUserProfile[]>([]);
   const [linkBudeeModal, setLinkBudeeModal] = useState<SupabaseUserProfile | null>(null);
   const [selectedLocalPersonToLink, setSelectedLocalPersonToLink] = useState('');
+  const [unsyncedCount, setUnsyncedCount] = useState(0);
 
   const loadData = useCallback(async () => {
     setIsLoading(true);
@@ -116,6 +117,9 @@ export default function PeoplePage() {
       } else {
         setFriendProfiles([]);
       }
+      
+      const unsyncedRes = await getUnsyncedHistoricalTransactionsCount();
+      setUnsyncedCount(unsyncedRes.count || 0);
     }
 
     setPeople(currentPeople);
@@ -961,6 +965,38 @@ export default function PeoplePage() {
     <div className="w-full transition-colors duration-200">
       <div className="max-w-6xl mx-auto space-y-6 animate-in fade-in duration-500 pb-20">
         
+        {unsyncedCount > 0 && (
+          <div className="bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-200 dark:border-indigo-800/30 rounded-[2.5rem] p-6 flex flex-col sm:flex-row items-center justify-between gap-4 transition-colors shadow-sm">
+            <div className="flex items-center gap-4">
+              <div className="p-3 bg-indigo-100 dark:bg-indigo-900/50 rounded-2xl text-indigo-600 dark:text-indigo-400">
+                <RefreshCw className="w-6 h-6" />
+              </div>
+              <div>
+                <h4 className="text-sm font-black text-indigo-900 dark:text-indigo-100 uppercase tracking-widest">Sync Past Transactions</h4>
+                <p className="text-xs text-indigo-700 dark:text-indigo-300 font-medium mt-0.5">You have {unsyncedCount} existing transactions that haven't been shared with your linked Budies.</p>
+              </div>
+            </div>
+            <button
+              onClick={async () => {
+                setIsSubmitting(true);
+                try {
+                  const { count } = await syncHistoricalSharedTransactions();
+                  alert(`Successfully synced ${count} past transactions!`);
+                  setUnsyncedCount(0);
+                } catch (e) {
+                  alert('Failed to sync. Please try again.');
+                } finally {
+                  setIsSubmitting(false);
+                }
+              }}
+              disabled={isSubmitting}
+              className="w-full sm:w-auto px-6 py-3 bg-indigo-600 text-white rounded-xl text-xs font-black uppercase tracking-widest hover:bg-indigo-700 transition-colors shrink-0 disabled:opacity-50 shadow-md shadow-indigo-200 dark:shadow-none"
+            >
+              {isSubmitting ? 'Syncing...' : 'Sync Now'}
+            </button>
+          </div>
+        )}
+
         {/* ── Header & Controllers ───────────────────────────────────────── */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white dark:bg-gray-900 p-6 md:p-8 rounded-[2.5rem] border border-gray-100 dark:border-gray-800 shadow-sm transition-colors">
           <div className="flex items-center gap-5">

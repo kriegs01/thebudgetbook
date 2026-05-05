@@ -431,12 +431,13 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ transactions, loadi
       if (editingTxId) {
         // Edit mode: update existing transaction
         const updates = {
-          name: form.name,
+          name: txName,
           date: combineDateWithCurrentTime(form.date),
           amount: finalAmount,
           payment_method_id: form.paymentMethodId,
           transaction_type: form.transactionType,
-          borrower_name: form.transactionType === 'loan' ? form.borrowerName || null : null
+          borrower_name: form.transactionType === 'loan' ? form.borrowerName || null : null,
+          person_name: (form.transactionType === 'transfer' && transferTab === 'friends') ? form.personName || null : null
         };
         const { error } = await updateTransaction(editingTxId, updates);
         if (error) {
@@ -458,15 +459,16 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ transactions, loadi
       } else {
         // Create mode
         const transaction = {
-          name: form.name,
+          name: txName,
           date: combineDateWithCurrentTime(form.date),
           amount: finalAmount,
           payment_method_id: form.paymentMethodId,
           transaction_type: form.transactionType,
-          borrower_name: form.transactionType === 'loan' ? form.borrowerName || null : null
+          borrower_name: form.transactionType === 'loan' ? form.borrowerName || null : null,
+          person_name: (form.transactionType === 'transfer' && transferTab === 'friends') ? form.personName || null : null
         };
         
-        const { data, error } = await createTransaction(transaction);
+        const { data, error } = await createTransaction(transaction as any);
         
         if (error) {
           console.error('Error creating transaction:', error);

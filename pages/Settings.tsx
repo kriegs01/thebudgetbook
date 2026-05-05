@@ -15,6 +15,7 @@ interface SettingsProps {
   setCurrency: (c: string) => void;
   categories: BudgetCategory[];
   setCategories: React.Dispatch<React.SetStateAction<BudgetCategory[]>>;
+  accounts?: Account[];
   onResetAll?: () => void;
   billers?: Biller[];
   installments?: Installment[];
@@ -72,7 +73,7 @@ interface DeleteConflict {
 
 // ─── Component ───────────────────────────────────────────────────────────────
 
-const Settings: React.FC<SettingsProps> = ({ currency, setCurrency, categories, setCategories, onResetAll, billers = [], installments = [], onUpdateBiller, theme = 'light', onToggleTheme }) => {
+const Settings: React.FC<SettingsProps> = ({ currency, setCurrency, categories, setCategories, accounts = [], onResetAll, billers = [], installments = [], onUpdateBiller, theme = 'light', onToggleTheme }) => {
   // Auth context
   const { userProfile, updateProfile, refreshProfile, user } = useAuth();
 
@@ -990,6 +991,38 @@ const Settings: React.FC<SettingsProps> = ({ currency, setCurrency, categories, 
                 </div>
               </div>
             )}
+
+            {/* Default Deposit Account */}
+            <div className="pt-4 border-t border-gray-100 dark:border-gray-800 space-y-3">
+              <div>
+                <h4 className="font-black text-sm text-gray-900 dark:text-gray-100 uppercase mb-1 transition-colors">Default Deposit Account</h4>
+                <p className="text-xs text-gray-500 dark:text-gray-400 transition-colors">
+                  Automatically deposit money received from Budies into this account.
+                </p>
+              </div>
+              <select
+                value={userProfile?.settings?.defaultReceiveAccountId || ''}
+                onChange={async (e) => {
+                  if (!user) return;
+                  const newAccountId = e.target.value;
+                  try {
+                    const newSettings = { ...(userProfile?.settings || {}), defaultReceiveAccountId: newAccountId };
+                    const { error } = await updateUserProfile(user.id, { settings: newSettings });
+                    if (error) throw error;
+                    await refreshProfile();
+                  } catch (err) {
+                    console.error('Failed to update default account:', err);
+                    alert('Failed to update default deposit account.');
+                  }
+                }}
+                className="w-full bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-gray-100 border border-gray-200 dark:border-gray-700 rounded-xl p-3 outline-none focus:ring-2 focus:ring-indigo-500 transition-colors text-sm font-bold"
+              >
+                <option value="">Ask me every time (Pending Sync)</option>
+                {accounts.filter(a => a.type === 'Debit').map(acc => (
+                  <option key={acc.id} value={acc.id}>{acc.bank} ({acc.classification})</option>
+                ))}
+              </select>
+            </div>
           </div>
         </div>
       )
