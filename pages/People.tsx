@@ -2,6 +2,8 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Users, Plus, LayoutGrid, List, MoreVertical, Trash2, ArrowRight, ArrowLeft, X, AlertTriangle, User, Landmark, ArrowUpFromLine, ArrowDownToLine, ArrowLeftRight, BanknoteArrowDown, ChevronDown, ChevronUp, Edit2, Search, UserPlus, CheckSquare, Clock, RefreshCw, Check } from 'lucide-react';
 import { getAllPeople, createPerson, deletePerson } from '../src/services/peopleService';
 import { getAllTransactions, createTransaction, deleteTransaction, updateTransaction, getUnsyncedHistoricalTransactionsCount, getUnsyncedHistoricalTransactions, syncSpecificHistoricalTransactions } from '../src/services/transactionsService';
+import { getAllAccountsFrontend } from '../src/services/accountsService';
+import { Account } from '../types';
 import { searchUsers, sendFriendRequest, getFriendships } from '../src/services/friendshipsService';
 import type { SupabasePerson, SupabaseTransaction, SupabaseUserProfile, SupabaseFriendship } from '../src/types/supabase';
 import { combineDateWithCurrentTime } from '../src/utils/dateUtils';
@@ -13,6 +15,7 @@ const formatCurrency = (val: number) =>
 export default function PeoplePage() {
   const [people, setPeople] = useState<SupabasePerson[]>([]);
   const [transactions, setTransactions] = useState<SupabaseTransaction[]>([]);
+  const [accounts, setAccounts] = useState<Account[]>([]);
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [isLoading, setIsLoading] = useState(true);
   
@@ -25,7 +28,7 @@ export default function PeoplePage() {
 
   const [showLoanPaymentModal, setShowLoanPaymentModal] = useState(false);
   const [selectedLoan, setSelectedLoan] = useState<any | null>(null);
-  const [loanPaymentForm, setLoanPaymentForm] = useState({ amount: '', date: new Date().toISOString().split('T')[0] });
+  const [loanPaymentForm, setLoanPaymentForm] = useState({ amount: '', date: new Date().toISOString().split('T')[0], accountId: '' });
   
   const [expandedTxIds, setExpandedTxIds] = useState<Set<string>>(new Set());
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
@@ -63,15 +66,17 @@ export default function PeoplePage() {
     const { data: { user } } = await supabase.auth.getUser();
     const myId = user?.id;
 
-    const [peopleRes, txRes, friendRes] = await Promise.all([
+    const [peopleRes, txRes, friendRes, accountsRes] = await Promise.all([
       getAllPeople(),
       getAllTransactions(),
-      getFriendships()
+      getFriendships(),
+      getAllAccountsFrontend()
     ]);
     
     let currentPeople = peopleRes.data || [];
     let currentTxs = txRes.data || [];
     const currentFriendships = friendRes.data || [];
+    if (accountsRes.data) setAccounts(accountsRes.data);
 
     if (myId) {
       // 1. Force sync names for ALL existing linked profiles (updates legacy names to strict format)
@@ -300,15 +305,15 @@ export default function PeoplePage() {
 
   const handleLoanPaymentSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedLoan) return;
+    if (!selectedLoan || !loanPaymentForm.accountId) return;
     
     setIsSubmitting(true);
     const isBorrowed = selectedLoan.isBorrowed;
     const { error } = await createTransaction({
-      name: isBorrowed ? `Paid back ${selectedPerson}` : 'Loan Payment Received',
+      name: isBorrowed ? `Paid back ${selectedPerson}` : `Payment from ${selectedPerson}`,
       date: combineDateWithCurrentTime(loanPaymentForm.date),
       amount: isBorrowed ? Math.abs(parseFloat(loanPaymentForm.amount)) : -Math.abs(parseFloat(loanPaymentForm.amount)),
-      payment_method_id: selectedLoan.payment_method_id,
+      payment_method_id: loanPaymentForm.accountId,
       transaction_type: 'loan_payment',
       notes: `Payment for: ${selectedLoan.name}`,
       payment_schedule_id: null,
@@ -323,7 +328,7 @@ export default function PeoplePage() {
     } else {
       setShowLoanPaymentModal(false);
       setSelectedLoan(null);
-      setLoanPaymentForm({ amount: '', date: new Date().toISOString().split('T')[0] });
+      setLoanPaymentForm({ amount: '', date: new Date().toISOString().split('T')[0], accountId: '' });
       loadData();
     }
   };
@@ -609,6 +614,8 @@ export default function PeoplePage() {
                               onClick={(e) => {
                                 e.stopPropagation();
                                 setSelectedLoan({ ...tx, remainingBalance, totalPaid, isBorrowed });
+                                const defaultAcc = accounts.find(a => a.type === 'Debit')?.id || '';
+                                setLoanPaymentForm({ amount: '', date: new Date().toISOString().split('T')[0], accountId: defaultAcc });
                                 setShowLoanPaymentModal(true);
                               }}
                               className={`flex items-center gap-1 px-3 py-1.5 ${isBorrowed ? 'bg-red-50 text-red-600 dark:bg-red-900/30 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/50' : 'bg-purple-50 text-purple-600 dark:bg-purple-900/30 dark:text-purple-400 hover:bg-purple-100 dark:hover:bg-purple-900/50'} rounded-lg text-[10px] font-black uppercase tracking-widest transition-colors`}
@@ -676,7 +683,7 @@ export default function PeoplePage() {
           <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in">
             <div className="bg-white dark:bg-gray-900 rounded-[2.5rem] w-full max-w-sm p-8 shadow-2xl relative transition-colors animate-in zoom-in-95">
               <h2 className="text-xl font-black text-gray-900 dark:text-gray-100 mb-1 uppercase tracking-tight">{selectedLoan.isBorrowed ? 'Pay Back Loan' : 'Receive Payment'}</h2>
-              <p className="text-sm text-gray-500 dark:text-gray-400 mb-6 font-medium">Record payment for: {selectedLoan.name}</p>
+              <p className="text-sm text-gray-500 dark:text-gray-400 mb-6 font-medium">{selectedLoan.isBorrowed ? 'Record a payment to' : 'Record a payment from'} {selectedPerson}</p>
               
               <div className="mb-6 p-4 bg-gray-50 dark:bg-gray-800/50 rounded-2xl transition-colors">
                 <div className="flex justify-between mb-2">
@@ -695,7 +702,7 @@ export default function PeoplePage() {
 
               <form onSubmit={handleLoanPaymentSubmit} className="space-y-4">
                 <div>
-                  <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Amount Received</label>
+                  <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">{selectedLoan.isBorrowed ? 'Amount to Pay' : 'Amount Received'}</label>
                   <div className="relative">
                     <span className="absolute left-4 top-1/2 -translate-y-1/2 font-bold text-gray-400 dark:text-gray-500">₱</span>
                     <input 
@@ -711,22 +718,38 @@ export default function PeoplePage() {
                     />
                   </div>
                 </div>
-                <div>
-                  <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Date</label>
-                  <input 
-                    type="date" 
-                    required
-                    value={loanPaymentForm.date}
-                    onChange={e => setLoanPaymentForm(f => ({ ...f, date: e.target.value }))}
-                    className="w-full bg-gray-50 dark:bg-gray-800 border-transparent text-gray-900 dark:text-gray-100 rounded-2xl p-4 text-sm font-bold outline-none focus:ring-2 focus:ring-purple-500 transition-all"
-                  />
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Date</label>
+                    <input 
+                      type="date" 
+                      required
+                      value={loanPaymentForm.date}
+                      onChange={e => setLoanPaymentForm(f => ({ ...f, date: e.target.value }))}
+                      className="w-full bg-gray-50 dark:bg-gray-800 border-transparent text-gray-900 dark:text-gray-100 rounded-2xl p-4 text-sm font-bold outline-none focus:ring-2 focus:ring-purple-500 transition-all"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">{selectedLoan.isBorrowed ? 'Pay From' : 'Deposit To'}</label>
+                    <select
+                      required
+                      value={loanPaymentForm.accountId}
+                      onChange={e => setLoanPaymentForm(f => ({ ...f, accountId: e.target.value }))}
+                      className="w-full bg-gray-50 dark:bg-gray-800 border-transparent text-gray-900 dark:text-gray-100 rounded-2xl p-4 text-sm font-bold outline-none focus:ring-2 focus:ring-purple-500 transition-all appearance-none"
+                    >
+                      <option value="" disabled>Select Account</option>
+                      {accounts.filter(a => a.type === 'Debit').map(acc => (
+                        <option key={acc.id} value={acc.id}>{acc.bank}</option>
+                      ))}
+                    </select>
+                  </div>
                 </div>
                 <div className="flex gap-3 pt-2">
                   <button type="button" onClick={() => { setShowLoanPaymentModal(false); setSelectedLoan(null); }} className="flex-1 bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 py-4 rounded-2xl font-black uppercase tracking-widest text-[10px] hover:bg-gray-200 dark:hover:bg-gray-700 transition-all disabled:opacity-50">
                     Cancel
                   </button>
-                  <button type="submit" disabled={isSubmitting || !loanPaymentForm.amount} className={`flex-1 ${selectedLoan.isBorrowed ? 'bg-red-600 hover:bg-red-700 shadow-red-200' : 'bg-purple-600 hover:bg-purple-700 shadow-purple-200'} text-white py-4 rounded-2xl font-black uppercase tracking-widest text-[10px] transition-all shadow-lg dark:shadow-none disabled:opacity-50`}>
-                    {isSubmitting ? 'Saving...' : 'Record Payment'}
+                  <button type="submit" disabled={isSubmitting || !loanPaymentForm.amount || !loanPaymentForm.accountId} className={`flex-1 ${selectedLoan.isBorrowed ? 'bg-red-600 hover:bg-red-700 shadow-red-200' : 'bg-purple-600 hover:bg-purple-700 shadow-purple-200'} text-white py-4 rounded-2xl font-black uppercase tracking-widest text-[10px] transition-all shadow-lg dark:shadow-none disabled:opacity-50`}>
+                    {isSubmitting ? 'Processing...' : (selectedLoan.isBorrowed ? 'Send Payment' : 'Record Payment')}
                   </button>
                 </div>
               </form>
