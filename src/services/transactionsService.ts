@@ -180,6 +180,9 @@ export const getUnsyncedHistoricalTransactionsCount = async () => {
 
     const unsyncedTxs = allTxs.filter(tx => {
       if (existingIds.has(tx.id)) return false;
+      if (tx.notes && tx.notes.includes('Received via Budee Sync')) return false;
+      if (tx.transaction_type === 'cash_in' && (tx.name.startsWith('Loan from ') || tx.name.startsWith('Transfer from '))) return false;
+      if (tx.transaction_type === 'loan' && tx.amount < 0) return false;
       const targetName = tx.borrower_name || (tx as any).person_name;
       return targetName && linkedNames.has(targetName);
     });
@@ -218,6 +221,9 @@ export const getUnsyncedHistoricalTransactions = async () => {
 
     const unsyncedTxs = allTxs.filter(tx => {
       if (existingIds.has(tx.id)) return false;
+      if (tx.notes && tx.notes.includes('Received via Budee Sync')) return false;
+      if (tx.transaction_type === 'cash_in' && (tx.name.startsWith('Loan from ') || tx.name.startsWith('Transfer from '))) return false;
+      if (tx.transaction_type === 'loan' && tx.amount < 0) return false;
       const targetName = tx.borrower_name || (tx as any).person_name;
       return targetName && linkedNames.has(targetName);
     }).map(tx => {
@@ -379,14 +385,26 @@ export const resolvePendingTransaction = async (pendingTxId: string, action: 'ac
       
       const personName = localProfile?.name || 'Budee User';
       
+      let finalType = 'cash_in';
+      let finalName = `Transfer from ${personName}`;
+      if (pendingTx.transaction_type === 'loan') {
+        finalType = 'loan';
+        finalName = `Loan from ${personName}`;
+      } else if (pendingTx.transaction_type === 'loan_payment') {
+        finalType = 'loan_payment';
+        finalName = `Payment from ${personName}`;
+      }
+
       const newTx = {
-        name: `${pendingTx.transaction_type === 'loan' ? 'Loan from' : 'Transfer from'} ${personName}`,
+        name: finalName,
         date: new Date().toISOString(),
         amount: -Math.abs(pendingTx.amount), // negative = cash in
         payment_method_id: accountId,
-        transaction_type: 'cash_in', 
+        transaction_type: finalType, 
         person_name: personName,
-        user_id: user.id
+        borrower_name: (finalType === 'loan' || finalType === 'loan_payment') ? personName : null,
+        user_id: user.id,
+        notes: 'Received via Budee Sync'
       };
 
       const txTable = isTestMode ? 'transactions_test' : 'transactions';

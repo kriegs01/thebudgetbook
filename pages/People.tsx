@@ -303,16 +303,18 @@ export default function PeoplePage() {
     if (!selectedLoan) return;
     
     setIsSubmitting(true);
+    const isBorrowed = selectedLoan.isBorrowed;
     const { error } = await createTransaction({
-      name: 'Loan Payment Received',
+      name: isBorrowed ? `Paid back ${selectedPerson}` : 'Loan Payment Received',
       date: combineDateWithCurrentTime(loanPaymentForm.date),
-      amount: -Math.abs(parseFloat(loanPaymentForm.amount)), // Negative - money coming in
+      amount: isBorrowed ? Math.abs(parseFloat(loanPaymentForm.amount)) : -Math.abs(parseFloat(loanPaymentForm.amount)),
       payment_method_id: selectedLoan.payment_method_id,
       transaction_type: 'loan_payment',
       notes: `Payment for: ${selectedLoan.name}`,
       payment_schedule_id: null,
       related_transaction_id: selectedLoan.id,
       person_name: selectedPerson,
+      borrower_name: selectedPerson,
     });
     setIsSubmitting(false);
 
@@ -395,15 +397,26 @@ export default function PeoplePage() {
        transactions.some(l => l.id === t.related_transaction_id && (l.person_name === personName || l.borrower_name === personName)))
     );
     const activeLoans = personTxs.filter(t => t.transaction_type === 'loan');
-    const totalLoanGiven = activeLoans.reduce((sum, t) => sum + Number(t.amount || 0), 0);
+    
+    const loansGiven = activeLoans.filter(t => Number(t.amount || 0) > 0);
+    const totalLoanGiven = loansGiven.reduce((sum, t) => sum + Number(t.amount || 0), 0);
+    
+    const loansReceived = activeLoans.filter(t => Number(t.amount || 0) < 0);
+    const totalLoanReceived = loansReceived.reduce((sum, t) => sum + Math.abs(Number(t.amount || 0)), 0);
     
     const loanPayments = personTxs.filter(t => t.transaction_type === 'loan_payment');
-    const totalPaid = loanPayments.reduce((sum, t) => sum + Math.abs(Number(t.amount || 0)), 0);
+    
+    const paymentsReceived = loanPayments.filter(t => Number(t.amount || 0) < 0);
+    const totalPaidToYou = paymentsReceived.reduce((sum, t) => sum + Math.abs(Number(t.amount || 0)), 0);
+    
+    const paymentsMade = loanPayments.filter(t => Number(t.amount || 0) > 0);
+    const totalPaidByYou = paymentsMade.reduce((sum, t) => sum + Number(t.amount || 0), 0);
     
     return {
       txCount: personTxs.length,
       loanCount: activeLoans.length,
-      totalLoanAmount: Math.max(0, totalLoanGiven - totalPaid)
+      totalLoanAmount: Math.max(0, totalLoanGiven - totalPaidToYou),
+      totalOwedAmount: Math.max(0, totalLoanReceived - totalPaidByYou)
     };
   };
 
@@ -452,11 +465,19 @@ export default function PeoplePage() {
           {/* Stats Cards */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="bg-white dark:bg-gray-900 p-6 rounded-[2rem] border border-gray-100 dark:border-gray-800 shadow-sm">
-              <div className="flex items-center space-x-3 mb-4">
-                <div className="p-3 bg-indigo-50 dark:bg-indigo-900/30 rounded-xl text-indigo-600 dark:text-indigo-400">
-                  <Landmark className="w-6 h-6" />
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center space-x-3">
+                  <div className="p-3 bg-indigo-50 dark:bg-indigo-900/30 rounded-xl text-indigo-600 dark:text-indigo-400">
+                    <Landmark className="w-6 h-6" />
+                  </div>
+                  <h3 className="text-sm font-bold text-gray-600 dark:text-gray-400 uppercase tracking-widest">Lent</h3>
                 </div>
-                <h3 className="text-sm font-bold text-gray-600 dark:text-gray-400 uppercase tracking-widest">Total Loans</h3>
+                {personStats.totalOwedAmount > 0 && (
+                  <div className="text-right">
+                    <p className="text-[10px] font-black text-red-500 uppercase tracking-widest">You Owe</p>
+                    <p className="text-sm font-bold text-red-600">{formatCurrency(personStats.totalOwedAmount)}</p>
+                  </div>
+                )}
               </div>
               <p className="text-3xl font-black text-gray-900 dark:text-gray-100">{formatCurrency(personStats.totalLoanAmount)}</p>
             </div>
@@ -519,8 +540,9 @@ export default function PeoplePage() {
 
                   let remainingBalance = 0;
                   let totalPaid = 0;
+                  const isBorrowed = tx.transaction_type === 'loan' && tx.amount < 0;
                   if (tx.transaction_type === 'loan') {
-                    totalPaid = payments.reduce((sum, t) => sum + Math.abs(t.amount), 0);
+                    totalPaid = payments.reduce((sum, t) => sum + (isBorrowed ? (Number(t.amount) > 0 ? Number(t.amount) : 0) : (Number(t.amount) < 0 ? Math.abs(Number(t.amount)) : 0)), 0);
                     remainingBalance = Math.abs(tx.amount) - totalPaid;
                   }
 
@@ -586,13 +608,13 @@ export default function PeoplePage() {
                             <button
                               onClick={(e) => {
                                 e.stopPropagation();
-                                setSelectedLoan({ ...tx, remainingBalance, totalPaid });
+                                setSelectedLoan({ ...tx, remainingBalance, totalPaid, isBorrowed });
                                 setShowLoanPaymentModal(true);
                               }}
-                              className="flex items-center gap-1 px-3 py-1.5 bg-purple-50 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 rounded-lg text-[10px] font-black uppercase tracking-widest hover:bg-purple-100 dark:hover:bg-purple-900/50 transition-colors"
+                              className={`flex items-center gap-1 px-3 py-1.5 ${isBorrowed ? 'bg-red-50 text-red-600 dark:bg-red-900/30 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/50' : 'bg-purple-50 text-purple-600 dark:bg-purple-900/30 dark:text-purple-400 hover:bg-purple-100 dark:hover:bg-purple-900/50'} rounded-lg text-[10px] font-black uppercase tracking-widest transition-colors`}
                             >
-                              <BanknoteArrowDown className="w-3 h-3" />
-                              Collect
+                              {isBorrowed ? <ArrowUpFromLine className="w-3 h-3" /> : <BanknoteArrowDown className="w-3 h-3" />}
+                              {isBorrowed ? 'Pay Back' : 'Collect'}
                             </button>
                           )}
                         </div>
@@ -653,7 +675,7 @@ export default function PeoplePage() {
         {showLoanPaymentModal && selectedLoan && (
           <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in">
             <div className="bg-white dark:bg-gray-900 rounded-[2.5rem] w-full max-w-sm p-8 shadow-2xl relative transition-colors animate-in zoom-in-95">
-              <h2 className="text-xl font-black text-gray-900 dark:text-gray-100 mb-1 uppercase tracking-tight">Receive Payment</h2>
+              <h2 className="text-xl font-black text-gray-900 dark:text-gray-100 mb-1 uppercase tracking-tight">{selectedLoan.isBorrowed ? 'Pay Back Loan' : 'Receive Payment'}</h2>
               <p className="text-sm text-gray-500 dark:text-gray-400 mb-6 font-medium">Record payment for: {selectedLoan.name}</p>
               
               <div className="mb-6 p-4 bg-gray-50 dark:bg-gray-800/50 rounded-2xl transition-colors">
@@ -703,7 +725,7 @@ export default function PeoplePage() {
                   <button type="button" onClick={() => { setShowLoanPaymentModal(false); setSelectedLoan(null); }} className="flex-1 bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 py-4 rounded-2xl font-black uppercase tracking-widest text-[10px] hover:bg-gray-200 dark:hover:bg-gray-700 transition-all disabled:opacity-50">
                     Cancel
                   </button>
-                  <button type="submit" disabled={isSubmitting || !loanPaymentForm.amount} className="flex-1 bg-purple-600 text-white py-4 rounded-2xl font-black uppercase tracking-widest text-[10px] hover:bg-purple-700 transition-all shadow-lg shadow-purple-200 dark:shadow-none disabled:opacity-50">
+                  <button type="submit" disabled={isSubmitting || !loanPaymentForm.amount} className={`flex-1 ${selectedLoan.isBorrowed ? 'bg-red-600 hover:bg-red-700 shadow-red-200' : 'bg-purple-600 hover:bg-purple-700 shadow-purple-200'} text-white py-4 rounded-2xl font-black uppercase tracking-widest text-[10px] transition-all shadow-lg dark:shadow-none disabled:opacity-50`}>
                     {isSubmitting ? 'Saving...' : 'Record Payment'}
                   </button>
                 </div>
