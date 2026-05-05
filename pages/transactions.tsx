@@ -64,6 +64,7 @@ const ContactDropdown = ({ value, onChange, contacts, placeholder }: { value: st
   }, []);
 
   const filtered = contacts.filter(c => c.name.toLowerCase().includes(search.toLowerCase()));
+  const exactMatch = contacts.find(c => c.name.toLowerCase() === search.toLowerCase());
 
   return (
     <div className="relative" ref={wrapperRef}>
@@ -73,8 +74,22 @@ const ContactDropdown = ({ value, onChange, contacts, placeholder }: { value: st
         onChange={e => { setSearch(e.target.value); onChange(e.target.value); setIsOpen(true); }}
         onFocus={() => setIsOpen(true)}
         placeholder={placeholder}
-        className="w-full bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-transparent rounded-xl p-3.5 outline-none font-bold focus:ring-2 focus:ring-indigo-500 transition-all text-sm"
+        className="w-full bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-transparent rounded-xl p-3.5 pr-10 outline-none font-bold focus:ring-2 focus:ring-indigo-500 transition-all text-sm"
       />
+      {exactMatch && !isOpen && (
+        <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none">
+          {exactMatch.isLinked && (
+            <div className="flex items-center justify-center bg-green-100 dark:bg-green-900/30 p-1.5 rounded-lg" title="Profile Linked">
+              <CheckSquare className="w-3.5 h-3.5 text-green-600 dark:text-green-400" />
+            </div>
+          )}
+          {exactMatch.isBudeeOnly && (
+            <div className="flex items-center justify-center bg-indigo-100 dark:bg-indigo-900/30 p-1.5 rounded-lg" title="Budee Connection">
+              <UserPlus className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
+            </div>
+          )}
+        </div>
+      )}
       {isOpen && filtered.length > 0 && (
         <div className="absolute z-50 w-full mt-1 bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-800 rounded-xl shadow-lg max-h-48 overflow-y-auto">
           {filtered.map(c => (
@@ -219,13 +234,22 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ transactions, loadi
         setPeople(peopleResult.data);
       }
 
-      if (myId && friendshipsResult.data) {
-        const validFriendships = friendshipsResult.data.filter(f => f.status === 'accepted');
-        const friendIds = validFriendships.map(f => f.user_id === myId ? f.friend_id : f.user_id);
-        if (friendIds.length > 0) {
-          const { data: fProfiles } = await supabase.from('user_profiles').select('*').in('user_id', friendIds);
-          if (fProfiles) setFriendProfiles(fProfiles);
-        }
+        if (myId) {
+          const linkedFriendIds = peopleResult.data ? peopleResult.data.filter(p => p.friend_user_id).map(p => p.friend_user_id) : [];
+          let friendIds: string[] = [];
+          if (friendshipsResult.data) {
+            const validFriendships = friendshipsResult.data.filter(f => f.status === 'accepted');
+            friendIds = validFriendships.map(f => f.user_id === myId ? f.friend_id : f.user_id);
+          }
+          
+          const allProfileIdsToFetch = Array.from(new Set([...linkedFriendIds, ...friendIds]));
+          
+          if (allProfileIdsToFetch.length > 0) {
+            const { data: fProfiles } = await supabase.from('user_profiles').select('*').in('user_id', allProfileIdsToFetch);
+            if (fProfiles) setFriendProfiles(fProfiles);
+          } else {
+            setFriendProfiles([]);
+          }
       }
     } catch (error) {
       console.error('Error loading data:', error);
@@ -1400,7 +1424,10 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ transactions, loadi
                       const isTestMode = localStorage.getItem('test_environment_enabled') === 'true';
                       const peopleTable = isTestMode ? 'people_test' : 'people';
                       let { error: updateErr } = await supabase.from(peopleTable).update({ friend_user_id: prof.user_id }).eq('id', newPerson.id);
-                      if (updateErr && updateErr.code === '42P01') await supabase.from('people').update({ friend_user_id: prof.user_id }).eq('id', newPerson.id);
+                      if (updateErr && updateErr.code === '42P01') {
+                        updateErr = (await supabase.from('people').update({ friend_user_id: prof.user_id }).eq('id', newPerson.id)).error;
+                      }
+                      if (updateErr) console.error('Failed to link profile to budee during transaction intercept:', updateErr);
                     }
                     setPendingProfileModal(null);
                     await executeTransactionSubmit();

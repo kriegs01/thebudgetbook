@@ -105,9 +105,13 @@ export default function PeoplePage() {
       }
 
       const validFriendships = currentFriendships.filter(f => f.status === 'accepted' || f.status === 'pending');
-      const friendIds = validFriendships.map(f => f.user_id === myId ? f.friend_id : f.user_id);
-      if (friendIds.length > 0) {
-        const { data: fProfiles } = await supabase.from('user_profiles').select('*').in('user_id', friendIds);
+      const friendshipIds = validFriendships.map(f => f.user_id === myId ? f.friend_id : f.user_id);
+      const linkedFriendIds = currentPeople.filter(p => p.friend_user_id).map(p => p.friend_user_id);
+      
+      const allProfileIdsToFetch = Array.from(new Set([...friendshipIds, ...linkedFriendIds]));
+      
+      if (allProfileIdsToFetch.length > 0) {
+        const { data: fProfiles } = await supabase.from('user_profiles').select('*').in('user_id', allProfileIdsToFetch);
         if (fProfiles) setFriendProfiles(fProfiles);
       } else {
         setFriendProfiles([]);
@@ -124,13 +128,27 @@ export default function PeoplePage() {
     setIsSubmitting(true);
     try {
       const newName = `${prof.first_name} ${prof.last_name}${prof.username ? ` (@${prof.username})` : ''}`;
-      const { data: newPerson } = await createPerson({ name: newName } as any);
+      const { data: newPerson, error: createErr } = await createPerson({ name: newName } as any);
+      
+      if (createErr) {
+        console.error("Create failed:", createErr);
+        alert("Failed to create profile.");
+        return;
+      }
+
       if (newPerson) {
         const isTestMode = localStorage.getItem('test_environment_enabled') === 'true';
         const peopleTable = isTestMode ? 'people_test' : 'people';
         let { error: updateErr } = await supabase.from(peopleTable).update({ friend_user_id: prof.user_id }).eq('id', newPerson.id);
         if (updateErr && updateErr.code === '42P01') {
-          await supabase.from('people').update({ friend_user_id: prof.user_id }).eq('id', newPerson.id);
+          updateErr = (await supabase.from('people').update({ friend_user_id: prof.user_id }).eq('id', newPerson.id)).error;
+        }
+
+        if (updateErr) {
+          console.error("Linking failed:", updateErr);
+          alert("Failed to link new profile to Budee.");
+        } else {
+          setPeople(prev => [...prev, { ...newPerson, friend_user_id: prof.user_id, name: newName }]);
         }
       }
       
@@ -153,10 +171,19 @@ export default function PeoplePage() {
       const newName = `${linkBudeeModal.first_name} ${linkBudeeModal.last_name}${linkBudeeModal.username ? ` (@${linkBudeeModal.username})` : ''}`;
       const isTestMode = localStorage.getItem('test_environment_enabled') === 'true';
       const peopleTable = isTestMode ? 'people_test' : 'people';
+      
       let { error: updateErr } = await supabase.from(peopleTable).update({ friend_user_id: linkBudeeModal.user_id, name: newName }).eq('id', personRecord.id);
       if (updateErr && updateErr.code === '42P01') {
-        await supabase.from('people').update({ friend_user_id: linkBudeeModal.user_id, name: newName }).eq('id', personRecord.id);
+        updateErr = (await supabase.from('people').update({ friend_user_id: linkBudeeModal.user_id, name: newName }).eq('id', personRecord.id)).error;
       }
+
+      if (updateErr) {
+        console.error("Linking failed at database level:", updateErr);
+        alert('Failed to link profile: ' + updateErr.message);
+        return;
+      }
+
+      setPeople(prev => prev.map(p => p.id === personRecord.id ? { ...p, friend_user_id: linkBudeeModal.user_id, name: newName } : p));
       
       const txsToUpdate = transactions.filter(t => (t as any).person_name === personRecord.name || t.borrower_name === personRecord.name);
       for (const tx of txsToUpdate) {
@@ -829,10 +856,15 @@ export default function PeoplePage() {
                                   const peopleTable = isTestMode ? 'people_test' : 'people';
                                   let { error: updateErr } = await supabase.from(peopleTable).update(profileUpdates).eq('id', personRecord.id);
                                   if (updateErr && updateErr.code === '42P01') {
-                                    await supabase.from('people').update(profileUpdates).eq('id', personRecord.id);
-                                  } else if (updateErr) {
-                                    console.error('Link update failed:', updateErr);
+                                    updateErr = (await supabase.from('people').update(profileUpdates).eq('id', personRecord.id)).error;
                                   }
+                                  if (updateErr) {
+                                    console.error('Link update failed:', updateErr);
+                                    alert('Failed to link: ' + updateErr.message);
+                                    return;
+                                  }
+                                  
+                                  setPeople(prev => prev.map(p => p.id === personRecord.id ? { ...p, friend_user_id: user.user_id, name: newName } : p));
                                 }
                                 
                                 await sendFriendRequest(user.user_id);
