@@ -23,6 +23,7 @@ import type { SupabaseTransaction } from './src/types/supabase';
 import { TestEnvironmentProvider, useTestEnvironment } from './src/contexts/TestEnvironmentContext';
 import { PinProtectionProvider, usePinProtection } from './src/contexts/PinProtectionContext';
 import { AuthProvider, useAuth } from './src/contexts/AuthContext';
+import { ThemeProvider, useTheme } from './src/contexts/ThemeContext';
 import { TestModeBanner } from './src/components/TestModeBanner';
 
 // Pages
@@ -203,6 +204,7 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
   const [pendingTransactions, setPendingTransactions] = useState<any[]>([]);
   const [txAccountSelections, setTxAccountSelections] = useState<Record<string, string>>({});
   const [resolvingIds, setResolvingIds] = useState<Set<string>>(new Set());
+  const { getAccentClasses } = useTheme();
 
   const loadNotifications = async () => {
     const [{ data: fReqs }, { data: pTxs }] = await Promise.all([getIncomingFriendRequests(), getPendingTransactions()]);
@@ -1101,12 +1103,12 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
                     to={item.path}
                     className={({ isActive }) =>
                       `w-full flex items-center p-3 rounded-xl transition-colors ${
-                    isActive ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400' : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800/50'
+                    isActive ? getAccentClasses('lightBg') : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800/50'
                       }`
                     }
                     end={item.path === '/'}
                   >
-                    <div className={`${isSidebarOpen ? '' : 'mx-auto'} ${window.location.pathname === item.path ? 'text-blue-600 dark:text-blue-400' : 'text-gray-400 dark:text-gray-500'} transition-colors`}>
+                    <div className={`${isSidebarOpen ? '' : 'mx-auto'} ${window.location.pathname === item.path ? getAccentClasses('text') : 'text-gray-400 dark:text-gray-500'} transition-colors`}>
                       {item.icon}
                     </div>
                     {isSidebarOpen && <span className="ml-3 font-bold text-sm">{item.label}</span>}
@@ -1130,11 +1132,11 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
               to="/settings"
               className={({ isActive }) =>
                 `w-full flex items-center p-3 rounded-xl transition-colors ${
-                    isActive ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400' : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800/50'
+                    isActive ? getAccentClasses('lightBg') : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800/50'
                 }`
               }
             >
-              <div className={`${isSidebarOpen ? '' : 'mx-auto'} ${window.location.pathname === '/settings' ? 'text-blue-600 dark:text-blue-400' : 'text-gray-400 dark:text-gray-500'} transition-colors`}>
+              <div className={`${isSidebarOpen ? '' : 'mx-auto'} ${window.location.pathname === '/settings' ? getAccentClasses('text') : 'text-gray-400 dark:text-gray-500'} transition-colors`}>
                 <SlidersHorizontal className="w-5 h-5" />
               </div>
               {isSidebarOpen && <span className="ml-3 font-bold text-sm">Settings</span>}
@@ -1513,7 +1515,9 @@ const App: React.FC = () => {
     <QueryClientProvider client={queryClient}>
       <TestEnvironmentProvider>
         <AuthProvider>
-          <AppContent />
+          <ThemeProvider>
+            <AppContent />
+          </ThemeProvider>
         </AuthProvider>
       </TestEnvironmentProvider>
     </QueryClientProvider>
