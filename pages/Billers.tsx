@@ -16,6 +16,7 @@ import {
 import { getDueDayForMonth, ordinalSuffix } from '../src/utils/billingCycles';
 // Import schedule ID generator for consistent ID creation
 import { generateScheduleId } from '../src/utils/billersAdapter';
+import { useTheme } from '../src/contexts/ThemeContext';
 
 
 interface BillersProps {
