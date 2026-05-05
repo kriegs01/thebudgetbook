@@ -44,6 +44,7 @@ import UpdatePassword from './pages/update-password';
 import { useTransactions } from './src/hooks/useTransactions';
 import { useAccounts } from './src/hooks/useAccounts';
 import { SetupWizard } from './src/components/SetupWizard';
+import { Logo } from './src/components/Logo';
 
 // Helper function to convert UI Account to Supabase format
 const accountToSupabase = (account: Account) => ({
@@ -1057,13 +1058,8 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
             <div className="absolute inset-0 bg-blue-50/50 dark:bg-blue-900/10 animate-pulse"></div>
             <div className="w-10 h-10 border-4 border-blue-100 dark:border-gray-800 border-t-blue-600 dark:border-t-blue-500 rounded-full animate-spin relative z-10"></div>
           </div>
-          <div className="relative inline-block mb-4">
-            <h1 className="text-5xl md:text-6xl font-titan absolute inset-0 z-0 tracking-tight [-webkit-text-stroke:6px_#374151] dark:[-webkit-text-stroke:6px_#ffffff] text-[#374151] dark:text-white select-none">
-              Budee
-            </h1>
-            <h1 className="text-5xl md:text-6xl font-titan bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent relative z-10 tracking-tight">
-              Budee
-            </h1>
+          <div className="flex justify-center mb-6">
+            <Logo className="text-6xl md:text-7xl" />
           </div>
           <p className="text-gray-500 dark:text-gray-400 font-medium text-sm max-w-[260px] mx-auto leading-relaxed animate-pulse">
             Loading your financial data and preparing your dashboard...
@@ -1087,9 +1083,8 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
           <div className="flex flex-col h-full">
             <div className="flex items-center justify-between h-14 px-4 border-b border-gray-100 dark:border-gray-800">
               {isSidebarOpen && (
-                <div className="relative inline-block mt-1">
-                  <span className="text-3xl font-titan absolute inset-0 z-0 [-webkit-text-stroke:4px_#374151] dark:[-webkit-text-stroke:4px_#ffffff] text-[#374151] dark:text-white select-none">Budee</span>
-                  <span className="text-3xl font-titan bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent relative z-10">Budee</span>
+                <div className="mt-1">
+                  <Logo className="text-3xl" />
                 </div>
               )}
               <button onClick={() => setIsSidebarOpen(!isSidebarOpen)} className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-500 dark:text-gray-400 transition-colors">
