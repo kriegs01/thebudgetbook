@@ -9,6 +9,7 @@ import { getTransactionsByPaymentSchedule, getReceiptSignedUrl, updateTransactio
 import { combineDateWithCurrentTime } from '../src/utils/dateUtils';
 import type { SupabaseMonthlyPaymentSchedule, SupabaseTransaction } from '../src/types/supabase';
 import { supabase } from '../src/utils/supabaseClient';
+import { useTheme } from '../src/contexts/ThemeContext';
 
 interface InstallmentsProps {
   installments: Installment[];
@@ -30,6 +31,7 @@ interface InstallmentsProps {
 }
 
 const Installments: React.FC<InstallmentsProps> = ({ installments, accounts, billers = [], onAdd, onUpdate, onDelete, onPayInstallment, loading = false, error = null }) => {
+  const { getAccentClasses } = useTheme();
   // Memoized first non-credit account ID to avoid redundant filtering
   const defaultNonCreditAccountId = useMemo(() => {
     return accounts.filter(acc => acc.classification !== 'Credit Card' && acc.type !== 'Credit')[0]?.id || '';
@@ -569,7 +571,7 @@ const Installments: React.FC<InstallmentsProps> = ({ installments, accounts, bil
         <div className="flex justify-between items-start mb-4">
           <div className="flex-1">
             <div className="flex items-center gap-2 mb-1">
-              <h3 className="font-black text-lg text-gray-900 dark:text-gray-100 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors uppercase tracking-tight">{item.name}</h3>
+              <h3 className={`font-black text-lg text-gray-900 dark:text-gray-100 transition-colors uppercase tracking-tight ${getAccentClasses('text').replace('text-', 'group-hover:text-')}`}>{item.name}</h3>
               {archived && (
                 <span className={`text-[9px] font-black px-2 py-0.5 rounded uppercase tracking-wider ${
                   archStatus === 'terminated' ? 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400' :
@@ -863,7 +865,7 @@ const Installments: React.FC<InstallmentsProps> = ({ installments, accounts, bil
       <>
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white dark:bg-gray-900 p-6 md:p-8 rounded-[2.5rem] border border-gray-100 dark:border-gray-800 shadow-sm transition-colors mb-8">
         <div className="flex items-center gap-5">
-          <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-indigo-500 to-blue-600 flex items-center justify-center text-white shadow-lg">
+            <div className={`w-14 h-14 rounded-2xl flex items-center justify-center text-white shadow-lg transition-colors ${getAccentClasses('bg')} ${getAccentClasses('shadow')}`}>
             <Calendar className="w-7 h-7" />
           </div>
           <div>
@@ -891,7 +893,7 @@ const Installments: React.FC<InstallmentsProps> = ({ installments, accounts, bil
           </div>
           <button 
             onClick={() => setShowModal(true)}
-            className="flex items-center gap-2 bg-indigo-600 text-white px-5 py-3 rounded-xl font-bold hover:bg-indigo-700 transition-all shadow-md shadow-indigo-200 dark:shadow-none text-sm"
+              className={`flex items-center gap-2 text-white px-5 py-3 rounded-xl font-bold transition-all shadow-md dark:shadow-none text-sm ${getAccentClasses('bg')} ${getAccentClasses('shadow')}`}
           >
             <Plus className="w-4 h-4" />
             <span className="hidden sm:inline">New Installment</span>

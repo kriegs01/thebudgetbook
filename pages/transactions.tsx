@@ -9,6 +9,7 @@ import { getFriendships } from '../src/services/friendshipsService';
 import type { SupabasePerson, SupabaseUserProfile, SupabaseFriendship } from '../src/types/supabase';
 import { supabase } from '../src/utils/supabaseClient';
 import { combineDateWithCurrentTime, getTodayIso, getFirstDayOfCurrentYearIso, getLastDayOfCurrentYearIso } from '../src/utils/dateUtils';
+import { useTheme } from '../src/contexts/ThemeContext';
 
 const FILTER_MIN_DATE = '2025-01-01';
 
@@ -122,6 +123,7 @@ interface TransactionsPageProps {
 }
 
 const TransactionsPage: React.FC<TransactionsPageProps> = ({ transactions, loading = false, onTransactionDeleted, onTransactionCreated }) => {
+  const { getAccentClasses } = useTheme();
   const { userProfile } = useAuth();
 
   const [accounts, setAccounts] = useState<AccountOption[]>([]);
@@ -640,7 +642,7 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ transactions, loadi
         {/* ── Header & Controllers ───────────────────────────────────────── */}
         <div ref={headerRef} className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white dark:bg-gray-900 p-6 md:p-8 rounded-[2.5rem] border border-gray-100 dark:border-gray-800 shadow-sm transition-colors mb-6">
           <div className="flex items-center gap-5">
-            <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-indigo-500 to-blue-600 flex items-center justify-center text-white shadow-lg">
+            <div className={`w-14 h-14 rounded-2xl flex items-center justify-center text-white shadow-lg transition-colors ${getAccentClasses('bg')} ${getAccentClasses('shadow')}`}>
               <FileText className="w-7 h-7" />
             </div>
             <div>
@@ -650,7 +652,7 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ transactions, loadi
           </div>
           
           <div className="flex items-center gap-3 self-end sm:self-auto">
-            <button onClick={() => setShowTypeModal(true)} className="flex items-center gap-2 bg-indigo-600 text-white px-5 py-3 rounded-xl font-bold hover:bg-indigo-700 transition-all shadow-md shadow-indigo-200 dark:shadow-none text-sm">
+            <button onClick={() => setShowTypeModal(true)} className={`flex items-center gap-2 text-white px-5 py-3 rounded-xl font-bold transition-all shadow-md dark:shadow-none text-sm ${getAccentClasses('bg')} ${getAccentClasses('shadow')}`}>
               <Plus className="w-4 h-4" />
               <span className="hidden sm:inline">Add Transaction</span>
             </button>
@@ -1406,7 +1408,7 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ transactions, loadi
             {/* Main FAB */}
             <button
               onClick={() => setShowFabMenu(!showFabMenu)}
-              className={`relative z-10 w-14 h-14 bg-indigo-600 text-white rounded-2xl shadow-xl flex items-center justify-center hover:bg-indigo-700 transition-all duration-300 ${showFabMenu ? 'rotate-[135deg] bg-indigo-700 shadow-indigo-600/50' : 'hover:-translate-y-1'}`}
+              className={`relative z-10 w-14 h-14 text-white rounded-2xl shadow-xl flex items-center justify-center transition-all duration-300 ${getAccentClasses('bg')} ${showFabMenu ? 'rotate-[135deg] scale-110 shadow-2xl' : 'hover:-translate-y-1'}`}
               aria-label="Add Transaction"
             >
               <Plus className="w-6 h-6" />

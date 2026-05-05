@@ -119,6 +119,7 @@ const calculateStatus = (deactivationDate?: { month: string; year: string }): 'a
 };
 
 const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, accounts, categories, onUpdate, onDelete, onPayBiller, loading = false, error = null }) => {
+  const { getAccentClasses } = useTheme();
   const [showAddModal, setShowAddModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState<Biller | null>(null);
   const [showPayModal, setShowPayModal] = useState<{ biller: Biller, schedule: PaymentSchedule, expectedAmount?: number } | null>(null);
@@ -1078,7 +1079,7 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
         <div className="space-y-6 animate-in slide-in-from-right-4 duration-500">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white dark:bg-gray-900 p-6 md:p-8 rounded-[2.5rem] border border-gray-100 dark:border-gray-800 shadow-sm transition-colors">
           <div className="flex items-center gap-5">
-            <button onClick={() => setDetailedBillerId(null)} className="flex items-center justify-center w-12 h-12 md:w-14 md:h-14 rounded-2xl bg-gray-50 dark:bg-gray-800 text-gray-500 dark:text-gray-400 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 transition-all shrink-0">
+            <button onClick={() => setDetailedBillerId(null)} className={`flex items-center justify-center w-12 h-12 md:w-14 md:h-14 rounded-2xl bg-gray-50 dark:bg-gray-800 text-gray-500 dark:text-gray-400 transition-all shrink-0 ${getAccentClasses('hoverLight')}`}>
               <ArrowLeft className="w-6 h-6" />
             </button>
             <div>
@@ -1101,7 +1102,7 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
           <div className="bg-white dark:bg-gray-900 p-8 rounded-3xl border border-gray-100 dark:border-gray-800 shadow-sm transition-colors">
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-8">
               <div className="flex items-center space-x-6">
-                <div className="p-5 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 rounded-3xl transition-colors"><Receipt className="w-10 h-10" /></div>
+                <div className={`p-5 rounded-3xl transition-colors ${getAccentClasses('lightBg')}`}><Receipt className="w-10 h-10" /></div>
                 <div>
                   <h2 className="text-3xl font-black text-gray-900 dark:text-gray-100 transition-colors">{detailedBiller.name}</h2>
                   <div className="flex items-center space-x-3 mt-2">
@@ -1116,7 +1117,7 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
                   </div>
                 </div>
               </div>
-              <div className="text-right"><p className="text-xs font-bold text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-1 transition-colors">Expected Amount</p><p className="text-3xl font-black text-indigo-600 dark:text-indigo-400 transition-colors">{formatCurrency(getExpectedAmount(detailedBiller))}</p></div>
+              <div className="text-right"><p className="text-xs font-bold text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-1 transition-colors">Expected Amount</p><p className={`text-3xl font-black transition-colors ${getAccentClasses('text')}`}>{formatCurrency(getExpectedAmount(detailedBiller))}</p></div>
             </div>
             <div className="overflow-hidden rounded-2xl border border-gray-100 dark:border-gray-800 transition-colors">
               <div className="overflow-x-auto">
@@ -1356,7 +1357,7 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
         <>
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white dark:bg-gray-900 p-6 md:p-8 rounded-[2.5rem] border border-gray-100 dark:border-gray-800 shadow-sm transition-colors mb-8">
             <div className="flex items-center gap-5">
-              <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-indigo-500 to-blue-600 flex items-center justify-center text-white shadow-lg">
+            <div className={`w-14 h-14 rounded-2xl flex items-center justify-center text-white shadow-lg transition-colors ${getAccentClasses('bg')} ${getAccentClasses('shadow')}`}>
                 <Receipt className="w-7 h-7" />
               </div>
               <div>
@@ -1366,7 +1367,7 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
             </div>
             
             <div className="flex items-center gap-3 self-end sm:self-auto">
-              <button onClick={() => { setShowAddModal(true); setTimingFeedback(''); }} className="flex items-center gap-2 bg-indigo-600 text-white px-5 py-3 rounded-xl font-bold hover:bg-indigo-700 transition-all shadow-md shadow-indigo-200 dark:shadow-none text-sm">
+            <button onClick={() => { setShowAddModal(true); setTimingFeedback(''); }} className={`flex items-center gap-2 text-white px-5 py-3 rounded-xl font-bold transition-all shadow-md dark:shadow-none text-sm ${getAccentClasses('bg')} ${getAccentClasses('shadow')}`}>
                 <Plus className="w-4 h-4" />
                 <span className="hidden sm:inline">Add Biller</span>
               </button>

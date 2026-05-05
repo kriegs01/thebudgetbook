@@ -17,6 +17,7 @@ import {
   PowerOff
 } from 'lucide-react';
 import { getDueDayForDisplay, ordinalSuffix } from '../src/utils/billingCycles';
+import { useTheme } from '../src/contexts/ThemeContext';
 
 interface AccountsProps {
   accounts: Account[];
@@ -40,6 +41,7 @@ const monthNames = [
 const FAKE_DATE_PREFIX = '2000-01-';
 
 const Accounts: React.FC<AccountsProps> = ({ accounts, onAdd, onDelete, onEdit, onDeactivate, loading = false, error = null }) => {
+  const { getAccentClasses } = useTheme();
   const [viewMode, setViewMode] = useState<ViewMode>('card');
   const [showModal, setShowModal] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -392,7 +394,7 @@ const Accounts: React.FC<AccountsProps> = ({ accounts, onAdd, onDelete, onEdit, 
       <>
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white dark:bg-gray-900 p-6 md:p-8 rounded-[2.5rem] border border-gray-100 dark:border-gray-800 shadow-sm transition-colors">
         <div className="flex items-center gap-5">
-          <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-indigo-500 to-blue-600 flex items-center justify-center text-white shadow-lg">
+          <div className={`w-14 h-14 rounded-2xl flex items-center justify-center text-white shadow-lg transition-colors ${getAccentClasses('bg')} ${getAccentClasses('shadow')}`}>
             <Landmark className="w-7 h-7" />
           </div>
           <div>
@@ -405,7 +407,7 @@ const Accounts: React.FC<AccountsProps> = ({ accounts, onAdd, onDelete, onEdit, 
           <Link to="/transactions" className="flex items-center gap-2 bg-gray-50 dark:bg-gray-800 text-gray-700 dark:text-gray-300 px-5 py-3 rounded-xl font-bold text-sm hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
             <span className="hidden sm:inline">Transactions</span>
           </Link>
-          <button onClick={openAddModal} className="flex items-center gap-2 bg-indigo-600 text-white px-5 py-3 rounded-xl font-bold hover:bg-indigo-700 transition-all shadow-md shadow-indigo-200 dark:shadow-none text-sm">
+          <button onClick={openAddModal} className={`flex items-center gap-2 text-white px-5 py-3 rounded-xl font-bold transition-all shadow-md dark:shadow-none text-sm ${getAccentClasses('bg')} ${getAccentClasses('shadow')}`}>
             <Plus className="w-4 h-4" />
             <span className="hidden sm:inline">Add Account</span>
           </button>

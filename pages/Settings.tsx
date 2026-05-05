@@ -9,6 +9,7 @@ import { supabase } from '../src/utils/supabaseClient';
 import { SecuritySettings } from '../src/components/settings/SecuritySettings';
 import { PinProtectedAction } from '../src/components/PinProtectedAction';
 import { updateUserEmail, updateUserPassword, updateUserProfile } from '../src/services/userProfileService';
+import { useTheme } from '../src/contexts/ThemeContext';
 
 interface SettingsProps {
   currency: string;
@@ -74,6 +75,7 @@ interface DeleteConflict {
 // ─── Component ───────────────────────────────────────────────────────────────
 
 const Settings: React.FC<SettingsProps> = ({ currency, setCurrency, categories, setCategories, accounts = [], onResetAll, billers = [], installments = [], onUpdateBiller, theme = 'light', onToggleTheme }) => {
+  const { getAccentClasses } = useTheme();
   // Auth context
   const { userProfile, updateProfile, refreshProfile, user } = useAuth();
 
@@ -1614,7 +1616,7 @@ const Settings: React.FC<SettingsProps> = ({ currency, setCurrency, categories, 
     <div className="max-w-3xl mx-auto space-y-4 animate-in slide-in-from-right-4 duration-500 pb-20">
       <div className="bg-white dark:bg-gray-900 rounded-[3rem] border border-gray-100 dark:border-gray-800 shadow-sm overflow-hidden transition-colors">
         <div className="p-6 md:p-8 border-b border-gray-100 dark:border-gray-800 flex items-center space-x-6 bg-gray-50/30 dark:bg-gray-800/30 transition-colors">
-          <div className="w-16 h-16 md:w-20 md:h-20 rounded-2xl bg-gradient-to-br from-indigo-500 to-blue-600 flex items-center justify-center text-white text-2xl md:text-3xl font-black shadow-2xl">
+          <div className={`w-16 h-16 md:w-20 md:h-20 rounded-2xl flex items-center justify-center text-white text-2xl md:text-3xl font-black shadow-2xl transition-colors ${getAccentClasses('bg')} ${getAccentClasses('shadow')}`}>
             {userProfile ? 
               `${userProfile.first_name.charAt(0)}${userProfile.last_name.charAt(0)}`.toUpperCase() :
               user?.email?.charAt(0).toUpperCase() || 'U'

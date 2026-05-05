@@ -3,6 +3,7 @@ import { Account, BudgetItem, Installment, Transaction, SavedBudgetSetup } from 
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, PieChart, Pie, Legend, LabelList } from 'recharts';
 import { TrendingUp, TrendingDown, Landmark, ArrowUpRight, CreditCard, Wallet, Calendar } from 'lucide-react';
 import type { SupabaseUserProfile } from '../src/types/supabase';
+import { useTheme } from '../src/contexts/ThemeContext';
 
 interface DashboardProps {
   accounts: Account[];
@@ -28,6 +29,7 @@ interface MonthlyAverage {
 }
 
 const Dashboard: React.FC<DashboardProps> = ({ accounts, budget, installments, transactions = [], budgetSetups = [], userProfile, theme }) => {
+  const { getAccentClasses } = useTheme();
   const isDarkMode = theme === 'dark';
   const tickColor = isDarkMode ? '#6b7280' : '#94a3b8'; // gray-500 dark, gray-400 light
   const gridColor = isDarkMode ? '#374151' : '#f1f5f9'; // gray-700 dark, gray-100 light
@@ -219,7 +221,7 @@ const Dashboard: React.FC<DashboardProps> = ({ accounts, budget, installments, t
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <div className="bg-white dark:bg-gray-900 p-6 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800">
           <div className="flex items-center justify-between mb-4">
-            <div className="p-3 bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 rounded-xl">
+            <div className={`p-3 rounded-xl transition-colors ${getAccentClasses('lightBg')}`}>
               <Landmark className="w-6 h-6" />
             </div>
             <span className="text-xs font-medium text-green-600 bg-green-50 px-2 py-1 rounded-full">+2.5%</span>
@@ -230,7 +232,7 @@ const Dashboard: React.FC<DashboardProps> = ({ accounts, budget, installments, t
 
         <div className="bg-white dark:bg-gray-900 p-6 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800">
           <div className="flex items-center justify-between mb-4">
-            <div className="p-3 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 rounded-xl">
+            <div className={`p-3 rounded-xl transition-colors ${getAccentClasses('lightBg')}`}>
               <TrendingUp className="w-6 h-6" />
             </div>
             <span className="text-xs font-medium text-red-600 bg-red-50 px-2 py-1 rounded-full">+12%</span>
@@ -241,7 +243,7 @@ const Dashboard: React.FC<DashboardProps> = ({ accounts, budget, installments, t
 
         <div className="bg-white dark:bg-gray-900 p-6 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800">
           <div className="flex items-center justify-between mb-4">
-            <div className="p-3 bg-purple-50 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 rounded-xl">
+            <div className={`p-3 rounded-xl transition-colors ${getAccentClasses('lightBg')}`}>
               <TrendingDown className="w-6 h-6" />
             </div>
             <span className="text-xs font-medium text-green-600 bg-green-50 px-2 py-1 rounded-full">-5%</span>
@@ -590,7 +592,7 @@ const Dashboard: React.FC<DashboardProps> = ({ accounts, budget, installments, t
       <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800 overflow-hidden">
         <div className="p-6 border-b border-gray-100 dark:border-gray-800 flex items-center justify-between">
           <h3 className="text-lg font-bold dark:text-gray-100">Recent Transactions</h3>
-          <button className="text-blue-600 text-sm font-medium hover:underline">View All</button>
+          <button className={`text-sm font-medium hover:underline transition-colors ${getAccentClasses('text')}`}>View All</button>
         </div>
         <div className="divide-y divide-gray-50 dark:divide-gray-800">
           {transactions.slice(0, 5).map((transaction) => {
@@ -598,7 +600,7 @@ const Dashboard: React.FC<DashboardProps> = ({ accounts, budget, installments, t
             return (
               <div key={transaction.id} className="p-4 flex items-center justify-between hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
                 <div className="flex items-center space-x-4">
-                  <div className="w-10 h-10 rounded-full bg-blue-50 dark:bg-blue-900/30 flex items-center justify-center text-blue-600 dark:text-blue-400">
+                  <div className={`w-10 h-10 rounded-full flex items-center justify-center transition-colors ${getAccentClasses('lightBg')}`}>
                     <ArrowUpRight className="w-5 h-5" />
                   </div>
                   <div>
