@@ -8,7 +8,7 @@ import { getAllAccountsFrontend, createAccountFrontend, updateAccountFrontend, d
 import { getAllInstallmentsFrontend, createInstallmentFrontend, updateInstallmentFrontend, deleteInstallmentFrontend } from './src/services/installmentsService';
 import { getAllBudgetSetupsFrontend, deleteBudgetSetupFrontend, archiveBudgetSetup, reopenBudgetSetup } from './src/services/budgetSetupsService';
 import { getPaymentSchedulesBySource } from './src/services/paymentSchedulesService';
-import { getAllTransactions, createTransaction, createPaymentScheduleTransaction, uploadTransactionReceipt, updateTransaction } from './src/services/transactionsService';
+import { getAllTransactions, createTransaction, createPaymentScheduleTransaction, uploadTransactionReceipt, updateTransaction, getPendingTransactions, resolvePendingTransaction } from './src/services/transactionsService';
 import { recordPayment } from './src/services/paymentSchedulesService';
 import { supabase } from './src/utils/supabaseClient';
 import { combineDateWithCurrentTime } from './src/utils/dateUtils';
@@ -199,15 +199,33 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
   const [pendingRequests, setPendingRequests] = useState<any[]>([]);
+  const [pendingTransactions, setPendingTransactions] = useState<any[]>([]);
+  const [txAccountSelections, setTxAccountSelections] = useState<Record<string, string>>({});
 
-  const loadFriendRequests = async () => {
-    const { data } = await getIncomingFriendRequests();
-    if (data) setPendingRequests(data);
+  const loadNotifications = async () => {
+    const [{ data: fReqs }, { data: pTxs }] = await Promise.all([getIncomingFriendRequests(), getPendingTransactions()]);
+    if (fReqs) setPendingRequests(fReqs);
+    if (pTxs) setPendingTransactions(pTxs);
   };
 
   useEffect(() => {
-    if (user) loadFriendRequests();
+    if (user) loadNotifications();
   }, [user]);
+
+  const handleResolveTransaction = async (id: string, action: 'accept' | 'decline') => {
+    let accountId = userProfile?.settings?.defaultReceiveAccountId || txAccountSelections[id];
+    if (action === 'accept' && !accountId) {
+      alert('Please select an account to receive these funds.');
+      return;
+    }
+    const { error } = await resolvePendingTransaction(id, action, accountId);
+    if (error) return alert('Failed to process transaction.');
+    setPendingTransactions(prev => prev.filter(tx => tx.id !== id));
+    if (action === 'accept') {
+      await reloadAccounts();
+      queryClient.invalidateQueries({ queryKey: ['transactions'] });
+    }
+  };
 
   const handleAcceptRequest = async (id: string) => {
     await acceptFriendRequest(id);
@@ -1123,7 +1141,7 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
                 className="relative p-2 text-gray-400 hover:text-indigo-600 dark:hover:text-indigo-400 rounded-full hover:bg-indigo-50 dark:hover:bg-indigo-900/30 transition-colors"
               >
                 <Bell className="w-5 h-5" />
-                {pendingRequests.length > 0 && (
+                {((pendingRequests?.length || 0) + (pendingTransactions?.length || 0)) > 0 && (
                   <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-red-500 rounded-full border-2 border-white dark:border-gray-900"></span>
                 )}
               </button>
@@ -1134,13 +1152,16 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
                   <div className="absolute right-0 top-full mt-2 w-80 bg-white dark:bg-gray-900 rounded-2xl shadow-xl border border-gray-100 dark:border-gray-800 py-2 z-[50] animate-in zoom-in-95">
                     <div className="px-4 py-3 border-b border-gray-50 dark:border-gray-800 flex justify-between items-center">
                       <h3 className="text-sm font-black text-gray-900 dark:text-gray-100 uppercase tracking-widest">Notifications</h3>
-                      {pendingRequests.length > 0 && (
-                        <span className="bg-indigo-100 dark:bg-indigo-900/50 text-indigo-600 dark:text-indigo-400 text-[10px] font-bold px-2 py-0.5 rounded-full">{pendingRequests.length} New</span>
+                      {((pendingRequests?.length || 0) + (pendingTransactions?.length || 0)) > 0 && (
+                        <span className="bg-indigo-100 dark:bg-indigo-900/50 text-indigo-600 dark:text-indigo-400 text-[10px] font-bold px-2 py-0.5 rounded-full">
+                          {(pendingRequests?.length || 0) + (pendingTransactions?.length || 0)} New
+                        </span>
                       )}
                     </div>
                     <div className="max-h-[60vh] overflow-y-auto">
-                      {pendingRequests.length > 0 ? (
-                        pendingRequests.map(req => (
+                      {((pendingRequests?.length || 0) + (pendingTransactions?.length || 0)) > 0 ? (
+                        <>
+                          {pendingRequests.map(req => (
                           <div key={req.id} className="p-4 border-b border-gray-50 dark:border-gray-800/50 last:border-0 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
                             <div className="flex items-center gap-3 mb-3">
                               <div className="w-10 h-10 rounded-full bg-indigo-100 dark:bg-indigo-900/50 text-indigo-600 dark:text-indigo-400 font-black flex items-center justify-center uppercase shrink-0">
@@ -1156,7 +1177,44 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
                               <button onClick={() => handleDeclineRequest(req.id)} className="flex-1 bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 py-2 rounded-xl text-xs font-bold hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors">Decline</button>
                             </div>
                           </div>
-                        ))
+                          ))}
+                          {pendingTransactions.map(tx => {
+                            const senderName = tx.sender_profile ? `${tx.sender_profile.first_name} ${tx.sender_profile.last_name}` : 'A Budee';
+                            const formatCurrency = (val: number) => new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP', minimumFractionDigits: 2 }).format(val);
+                            const needsAccount = !userProfile?.settings?.defaultReceiveAccountId;
+                            return (
+                              <div key={tx.id} className="p-4 border-b border-gray-50 dark:border-gray-800/50 last:border-0 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
+                                <div className="flex items-center gap-3 mb-3">
+                                  <div className="w-10 h-10 rounded-full bg-green-100 dark:bg-green-900/50 text-green-600 dark:text-green-400 font-black flex items-center justify-center uppercase shrink-0">
+                                    {tx.sender_profile?.first_name?.charAt(0) || 'B'}{tx.sender_profile?.last_name?.charAt(0) || ''}
+                                  </div>
+                                  <div>
+                                    <p className="text-sm font-bold text-gray-900 dark:text-gray-100">{senderName}</p>
+                                    <p className="text-xs text-gray-500 dark:text-gray-400">sent you {formatCurrency(tx.amount)}</p>
+                                  </div>
+                                </div>
+                                {needsAccount && (
+                                  <div className="mb-3">
+                                    <select 
+                                      className="w-full text-xs p-2 rounded-xl bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 outline-none focus:ring-2 focus:ring-indigo-500 text-gray-700 dark:text-gray-300"
+                                      value={txAccountSelections[tx.id] || ''}
+                                      onChange={e => setTxAccountSelections(prev => ({...prev, [tx.id]: e.target.value}))}
+                                    >
+                                      <option value="">Select deposit account...</option>
+                                      {accounts.filter(a => a.type === 'Debit').map(a => (
+                                        <option key={a.id} value={a.id}>{a.bank}</option>
+                                      ))}
+                                    </select>
+                                  </div>
+                                )}
+                                <div className="flex gap-2">
+                                  <button onClick={() => handleResolveTransaction(tx.id, 'accept')} className="flex-1 bg-green-600 text-white py-2 rounded-xl text-xs font-bold hover:bg-green-700 transition-colors">Accept</button>
+                                  <button onClick={() => handleResolveTransaction(tx.id, 'decline')} className="flex-1 bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 py-2 rounded-xl text-xs font-bold hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors">Decline</button>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </>
                       ) : (
                         <div className="p-8 flex flex-col items-center justify-center text-center">
                           <div className="w-12 h-12 bg-gray-50 dark:bg-gray-800 rounded-full flex items-center justify-center mb-3">

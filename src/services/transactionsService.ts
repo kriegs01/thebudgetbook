@@ -192,6 +192,81 @@ export const getUnsyncedHistoricalTransactionsCount = async () => {
 };
 
 /**
+ * Retrieves the actual list of past shared transactions that haven't been pushed to the Budee's inbox.
+ */
+export const getUnsyncedHistoricalTransactions = async () => {
+  try {
+    const user = await getCachedUser();
+    const isTestMode = localStorage.getItem('test_environment_enabled') === 'true';
+    const peopleTable = isTestMode ? 'people_test' : 'people';
+    const pendingTable = isTestMode ? 'pending_transactions_test' : 'pending_transactions';
+
+    const { data: people } = await supabase
+      .from(peopleTable)
+      .select('name, friend_user_id')
+      .eq('user_id', user.id)
+      .not('friend_user_id', 'is', null);
+
+    if (!people || people.length === 0) return { data: [], count: 0, error: null };
+
+    const { data: allTxs } = await supabase.from(getTableName('transactions')).select('*').eq('user_id', user.id).order('date', { ascending: false });
+    if (!allTxs || allTxs.length === 0) return { data: [], count: 0, error: null };
+
+    const { data: existingPending } = await supabase.from(pendingTable).select('source_transaction_id').eq('sender_user_id', user.id);
+    const existingIds = new Set(existingPending?.map(p => p.source_transaction_id) || []);
+    const linkedNames = new Map(people.map(p => [p.name, p.friend_user_id]));
+
+    const unsyncedTxs = allTxs.filter(tx => {
+      if (existingIds.has(tx.id)) return false;
+      const targetName = tx.borrower_name || (tx as any).person_name;
+      return targetName && linkedNames.has(targetName);
+    }).map(tx => {
+      const targetName = tx.borrower_name || (tx as any).person_name;
+      return {
+         ...tx,
+         friend_user_id: linkedNames.get(targetName),
+         targetName
+      };
+    });
+
+    return { data: unsyncedTxs, count: unsyncedTxs.length, error: null };
+  } catch (error) {
+    console.error('Error getting unsynced historical transactions:', error);
+    return { data: [], count: 0, error };
+  }
+};
+
+/**
+ * Syncs only the specific transactions the user selected from the review modal.
+ */
+export const syncSpecificHistoricalTransactions = async (transactionsToSync: any[]) => {
+  try {
+    const user = await getCachedUser();
+    const isTestMode = localStorage.getItem('test_environment_enabled') === 'true';
+    const pendingTable = isTestMode ? 'pending_transactions_test' : 'pending_transactions';
+
+    const toInsert = transactionsToSync.map(tx => ({
+      sender_user_id: user.id,
+      receiver_user_id: tx.friend_user_id,
+      amount: tx.amount,
+      transaction_type: tx.transaction_type || 'payment',
+      name: tx.name,
+      source_transaction_id: tx.id,
+      status: 'pending'
+    }));
+
+    if (toInsert.length > 0) {
+      const { error } = await supabase.from(pendingTable).insert(toInsert);
+      if (error) throw error;
+    }
+    return { count: toInsert.length, error: null };
+  } catch (error) {
+    console.error('Error syncing specific historical transactions:', error);
+    return { count: 0, error };
+  }
+};
+
+/**
  * Retroactively syncs any past shared transactions into the connected Budee's inbox.
  * Useful for pushing old loans/transfers to a friend after you just linked their profile.
  */
@@ -242,6 +317,87 @@ export const syncHistoricalSharedTransactions = async () => {
   } catch (error) {
     console.error('Error syncing historical transactions:', error);
     return { count: 0, error };
+  }
+};
+
+/**
+ * Get pending inbox transactions for the current user
+ */
+export const getPendingTransactions = async () => {
+  try {
+    const user = await getCachedUser();
+    const isTestMode = localStorage.getItem('test_environment_enabled') === 'true';
+    const pendingTable = isTestMode ? 'pending_transactions_test' : 'pending_transactions';
+
+    const { data, error } = await supabase
+      .from(pendingTable)
+      .select('*')
+      .eq('receiver_user_id', user.id)
+      .eq('status', 'pending')
+      .order('created_at', { ascending: false });
+
+    if (error) throw error;
+    
+    // Fetch sender profiles so we can display their names/monograms in the Bell dropdown
+    if (data && data.length > 0) {
+      const senderIds = [...new Set(data.map(tx => tx.sender_user_id))];
+      const { data: profiles } = await supabase.from('user_profiles').select('*').in('user_id', senderIds);
+      
+      return { 
+        data: data.map(tx => ({
+          ...tx,
+          sender_profile: profiles?.find(p => p.user_id === tx.sender_user_id)
+        })), 
+        error: null 
+      };
+    }
+    
+    return { data: [], error: null };
+  } catch (error) {
+    console.error('Error fetching pending transactions:', error);
+    return { data: [], error };
+  }
+};
+
+/**
+ * Resolve (accept/decline) a pending inbox transaction
+ */
+export const resolvePendingTransaction = async (pendingTxId: string, action: 'accept' | 'decline', accountId?: string) => {
+  try {
+    const user = await getCachedUser();
+    const isTestMode = localStorage.getItem('test_environment_enabled') === 'true';
+    const pendingTable = isTestMode ? 'pending_transactions_test' : 'pending_transactions';
+
+    // 1. Update inbox status
+    const { data: pendingTx, error: updateErr } = await supabase.from(pendingTable).update({ status: action === 'accept' ? 'accepted' : 'declined' }).eq('id', pendingTxId).eq('receiver_user_id', user.id).select().single();
+    if (updateErr) throw updateErr;
+
+    // 2. If accepted, create mirrored transaction directly (bypassing the sync hook to avoid infinite loops)
+    if (action === 'accept' && pendingTx && accountId) {
+      const peopleTable = isTestMode ? 'people_test' : 'people';
+      const { data: localProfile } = await supabase.from(peopleTable).select('name').eq('user_id', user.id).eq('friend_user_id', pendingTx.sender_user_id).single();
+      
+      const personName = localProfile?.name || 'Budee User';
+      
+      const newTx = {
+        name: `${pendingTx.transaction_type === 'loan' ? 'Loan from' : 'Transfer from'} ${personName}`,
+        date: new Date().toISOString(),
+        amount: -Math.abs(pendingTx.amount), // negative = cash in
+        payment_method_id: accountId,
+        transaction_type: 'cash_in', 
+        person_name: personName,
+        user_id: user.id
+      };
+
+      const txTable = isTestMode ? 'transactions_test' : 'transactions';
+      const { error: txErr } = await supabase.from(txTable).insert([newTx]);
+      if (txErr) throw txErr;
+    }
+
+    return { error: null };
+  } catch (error) {
+    console.error('Error resolving pending transaction:', error);
+    return { error };
   }
 };
 

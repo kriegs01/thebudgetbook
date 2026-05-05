@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { Users, Plus, LayoutGrid, List, MoreVertical, Trash2, ArrowRight, ArrowLeft, X, AlertTriangle, User, Landmark, ArrowUpFromLine, ArrowDownToLine, ArrowLeftRight, BanknoteArrowDown, ChevronDown, ChevronUp, Edit2, Search, UserPlus, CheckSquare, Clock, RefreshCw } from 'lucide-react';
+import { Users, Plus, LayoutGrid, List, MoreVertical, Trash2, ArrowRight, ArrowLeft, X, AlertTriangle, User, Landmark, ArrowUpFromLine, ArrowDownToLine, ArrowLeftRight, BanknoteArrowDown, ChevronDown, ChevronUp, Edit2, Search, UserPlus, CheckSquare, Clock, RefreshCw, Check } from 'lucide-react';
 import { getAllPeople, createPerson, deletePerson } from '../src/services/peopleService';
-import { getAllTransactions, createTransaction, deleteTransaction, updateTransaction, getUnsyncedHistoricalTransactionsCount, syncHistoricalSharedTransactions } from '../src/services/transactionsService';
+import { getAllTransactions, createTransaction, deleteTransaction, updateTransaction, getUnsyncedHistoricalTransactionsCount, getUnsyncedHistoricalTransactions, syncSpecificHistoricalTransactions } from '../src/services/transactionsService';
 import { searchUsers, sendFriendRequest, getFriendships } from '../src/services/friendshipsService';
 import type { SupabasePerson, SupabaseTransaction, SupabaseUserProfile, SupabaseFriendship } from '../src/types/supabase';
 import { combineDateWithCurrentTime } from '../src/utils/dateUtils';
@@ -50,6 +50,12 @@ export default function PeoplePage() {
   const [linkBudeeModal, setLinkBudeeModal] = useState<SupabaseUserProfile | null>(null);
   const [selectedLocalPersonToLink, setSelectedLocalPersonToLink] = useState('');
   const [unsyncedCount, setUnsyncedCount] = useState(0);
+
+  // Review Sync Modal State
+  const [syncModalOpen, setSyncModalOpen] = useState(false);
+  const [unsyncedTxsList, setUnsyncedTxsList] = useState<any[]>([]);
+  const [selectedSyncIds, setSelectedSyncIds] = useState<Set<string>>(new Set());
+  const [isLoadingSyncList, setIsLoadingSyncList] = useState(false);
 
   const loadData = useCallback(async () => {
     setIsLoading(true);
@@ -978,21 +984,17 @@ export default function PeoplePage() {
             </div>
             <button
               onClick={async () => {
-                setIsSubmitting(true);
-                try {
-                  const { count } = await syncHistoricalSharedTransactions();
-                  alert(`Successfully synced ${count} past transactions!`);
-                  setUnsyncedCount(0);
-                } catch (e) {
-                  alert('Failed to sync. Please try again.');
-                } finally {
-                  setIsSubmitting(false);
-                }
+                setSyncModalOpen(true);
+                setIsLoadingSyncList(true);
+                const { data } = await getUnsyncedHistoricalTransactions();
+                setUnsyncedTxsList(data || []);
+                setSelectedSyncIds(new Set((data || []).map(t => t.id)));
+                setIsLoadingSyncList(false);
               }}
               disabled={isSubmitting}
               className="w-full sm:w-auto px-6 py-3 bg-indigo-600 text-white rounded-xl text-xs font-black uppercase tracking-widest hover:bg-indigo-700 transition-colors shrink-0 disabled:opacity-50 shadow-md shadow-indigo-200 dark:shadow-none"
             >
-              {isSubmitting ? 'Syncing...' : 'Sync Now'}
+              {isSubmitting ? 'Loading...' : 'Review & Sync'}
             </button>
           </div>
         )}
@@ -1435,6 +1437,69 @@ export default function PeoplePage() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* ── Review Sync Transactions Modal ─────────────────────────────── */}
+      {syncModalOpen && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in">
+          <div className="bg-white dark:bg-gray-900 rounded-[2.5rem] w-full max-w-2xl p-8 shadow-2xl relative transition-colors animate-in zoom-in-95 max-h-[90vh] flex flex-col">
+            <button onClick={() => setSyncModalOpen(false)} className="absolute right-6 top-6 p-2 text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full transition-colors"><X className="w-5 h-5" /></button>
+            <h2 className="text-xl font-black text-gray-900 dark:text-gray-100 mb-1 uppercase tracking-tight">Review Past Transactions</h2>
+            <p className="text-sm text-gray-500 dark:text-gray-400 mb-6 font-medium">Select the transactions you want to share with your linked Budies.</p>
+            
+            <div className="flex-1 overflow-y-auto mb-6 pr-2 space-y-3">
+              {isLoadingSyncList ? (
+                <p className="text-center py-8 text-gray-500">Loading transactions...</p>
+              ) : unsyncedTxsList.length === 0 ? (
+                <p className="text-center py-8 text-gray-500">No transactions found.</p>
+              ) : (
+                unsyncedTxsList.map(tx => (
+                  <div key={tx.id} className={`p-4 rounded-2xl border transition-colors flex items-center gap-4 cursor-pointer ${selectedSyncIds.has(tx.id) ? 'bg-indigo-50/50 border-indigo-200 dark:bg-indigo-900/20 dark:border-indigo-800' : 'bg-gray-50 border-gray-100 dark:bg-gray-800 dark:border-gray-700'}`} onClick={() => {
+                    const newSet = new Set(selectedSyncIds);
+                    if (newSet.has(tx.id)) newSet.delete(tx.id);
+                    else newSet.add(tx.id);
+                    setSelectedSyncIds(newSet);
+                  }}>
+                    <div className={`w-6 h-6 rounded-md border flex items-center justify-center transition-colors ${selectedSyncIds.has(tx.id) ? 'bg-indigo-600 border-indigo-600 text-white' : 'bg-white dark:bg-gray-900 border-gray-300 dark:border-gray-600'}`}>
+                      {selectedSyncIds.has(tx.id) && <Check className="w-4 h-4" />}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex justify-between">
+                        <p className="text-sm font-bold text-gray-900 dark:text-gray-100 truncate">{tx.name}</p>
+                        <p className={`text-sm font-black ${tx.amount > 0 ? 'text-red-600 dark:text-red-400' : 'text-green-600 dark:text-green-400'}`}>{formatCurrency(Math.abs(tx.amount))}</p>
+                      </div>
+                      <p className="text-[10px] text-gray-500 dark:text-gray-400 mt-1 uppercase tracking-widest">{new Date(tx.date).toLocaleDateString()} · With: {tx.targetName}</p>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+            
+            <div className="flex gap-3 pt-2">
+              <button type="button" onClick={() => setSyncModalOpen(false)} className="flex-1 bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 py-4 rounded-2xl font-black uppercase tracking-widest text-[10px] hover:bg-gray-200 dark:hover:bg-gray-700 transition-all disabled:opacity-50">
+                Cancel
+              </button>
+              <button type="button" disabled={isSubmitting || selectedSyncIds.size === 0 || isLoadingSyncList} onClick={async () => {
+                setIsSubmitting(true);
+                try {
+                  const toSync = unsyncedTxsList.filter(t => selectedSyncIds.has(t.id));
+                  const { count, error } = await syncSpecificHistoricalTransactions(toSync);
+                  if (error) throw error;
+                  alert(`Successfully synced ${count} transactions! They will appear in your Budies' inboxes.`);
+                  setSyncModalOpen(false);
+                  const unsyncedRes = await getUnsyncedHistoricalTransactionsCount();
+                  setUnsyncedCount(unsyncedRes.count || 0);
+                } catch (e) {
+                  alert('Failed to sync. Please try again.');
+                } finally {
+                  setIsSubmitting(false);
+                }
+              }} className="flex-1 bg-indigo-600 text-white py-4 rounded-2xl font-black uppercase tracking-widest text-[10px] hover:bg-indigo-700 transition-all shadow-lg disabled:opacity-50">
+                {isSubmitting ? 'Syncing...' : `Sync ${selectedSyncIds.size} Transactions`}
+              </button>
+            </div>
           </div>
         </div>
       )}
