@@ -416,8 +416,13 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ transactions, loadi
       }
     }
 
+    let txName = form.name;
+    if (form.transactionType === 'transfer' && transferTab === 'friends' && !txName) {
+      txName = `Transfer to ${form.personName}`;
+    }
+
     // Standard transaction creation/update logic
-    if (!form.name || !form.date || !form.amount || !form.paymentMethodId) return;
+    if (!txName || !form.date || !form.amount || !form.paymentMethodId) return;
 
     // Apply correct positive/negative sign based on transaction type
     let finalAmount = parseFloat(form.amount);
