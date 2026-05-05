@@ -677,7 +677,7 @@ const AccountFilteredTransactions: React.FC<AccountFilteredTransactionsProps> = 
   }, [people, supabaseTransactions]);
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-950 p-8 transition-colors">
+    <div className="min-h-screen bg-gray-100 dark:bg-gray-950 p-8 transition-colors">
       <div className="max-w-4xl mx-auto">
         <div className="mb-6 flex items-center space-x-4">
           <Link to="/accounts" className="p-2 rounded-lg bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-800 shadow-sm hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
