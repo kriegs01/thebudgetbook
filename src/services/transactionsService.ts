@@ -395,6 +395,24 @@ export const resolvePendingTransaction = async (pendingTxId: string, action: 'ac
         finalName = `Payment from ${personName}`;
       }
 
+      let relatedTransactionId = null;
+
+      // If it's a loan payment, automatically tuck it under the original loan's history
+      if (finalType === 'loan_payment') {
+        const txTable = isTestMode ? 'transactions_test' : 'transactions';
+        const { data: potentialLoans } = await supabase.from(txTable)
+          .select('id, amount, date')
+          .eq('user_id', user.id)
+          .eq('transaction_type', 'loan')
+          .or(`person_name.eq."${personName}",borrower_name.eq."${personName}"`)
+          .order('date', { ascending: false });
+
+        if (potentialLoans && potentialLoans.length > 0) {
+          // Attach to the most recent active loan with this person
+          relatedTransactionId = potentialLoans[0].id;
+        }
+      }
+
       const newTx = {
         name: finalName,
         date: new Date().toISOString(),
@@ -404,7 +422,8 @@ export const resolvePendingTransaction = async (pendingTxId: string, action: 'ac
         person_name: personName,
         borrower_name: (finalType === 'loan' || finalType === 'loan_payment') ? personName : null,
         user_id: user.id,
-        notes: 'Received via Budee Sync'
+        notes: 'Received via Budee Sync',
+        related_transaction_id: relatedTransactionId
       };
 
       const txTable = isTestMode ? 'transactions_test' : 'transactions';
