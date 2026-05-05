@@ -47,3 +47,4 @@
 ## Next Session / Currently Parked
 
 - **Phase 3 (Contextual Verification):** We will integrate **Tesseract.js** for Receipt OCR reading. When settling loans or shared payments, the sender can upload a receipt, and the recipient will verify the amount and the **Last 4 digits** to securely accept and log the transaction into their ledger.
+- **Data Caching Optimization:** Wrap the new Budee social features (`usePeople`, `useFriendships`) in TanStack React Query hooks to standardize state management, minimize redundant Supabase API calls, and replace the manual `CustomEvent` refresh workarounds.
