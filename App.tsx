@@ -1150,14 +1150,14 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
         <header className="h-14 px-4 md:px-8 border-b border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-900 flex items-center justify-end shrink-0 transition-colors z-20">
           <div className="flex items-center space-x-2 md:space-x-4">
             {/* Messages */}
-            <button className="p-2 text-gray-400 hover:text-indigo-600 dark:hover:text-indigo-400 rounded-full hover:bg-indigo-50 dark:hover:bg-indigo-900/30 transition-colors">
+            <button className={`p-2 text-gray-400 rounded-full transition-colors ${getAccentClasses('hoverLight')}`}>
               <MessageCircle className="w-5 h-5" />
             </button>
             {/* Notifications */}
             <div className="relative">
               <button 
                 onClick={() => setIsNotificationsOpen(!isNotificationsOpen)}
-                className="relative p-2 text-gray-400 hover:text-indigo-600 dark:hover:text-indigo-400 rounded-full hover:bg-indigo-50 dark:hover:bg-indigo-900/30 transition-colors"
+                className={`relative p-2 text-gray-400 rounded-full transition-colors ${getAccentClasses('hoverLight')}`}
               >
                 <Bell className="w-5 h-5" />
                 {((pendingRequests?.length || 0) + (pendingTransactions?.length || 0)) > 0 && (
@@ -1172,7 +1172,7 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
                     <div className="px-4 py-3 border-b border-gray-50 dark:border-gray-800 flex justify-between items-center">
                       <h3 className="text-sm font-black text-gray-900 dark:text-gray-100 uppercase tracking-widest">Notifications</h3>
                       {((pendingRequests?.length || 0) + (pendingTransactions?.length || 0)) > 0 && (
-                        <span className="bg-indigo-100 dark:bg-indigo-900/50 text-indigo-600 dark:text-indigo-400 text-[10px] font-bold px-2 py-0.5 rounded-full">
+                        <span className={`${getAccentClasses('lightBg')} text-[10px] font-bold px-2 py-0.5 rounded-full`}>
                           {(pendingRequests?.length || 0) + (pendingTransactions?.length || 0)} New
                         </span>
                       )}
@@ -1192,7 +1192,7 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
                               </div>
                             </div>
                             <div className="flex gap-2">
-                              <button onClick={() => handleAcceptRequest(req.id)} className="flex-1 bg-indigo-600 text-white py-2 rounded-xl text-xs font-bold hover:bg-indigo-700 transition-colors">Accept</button>
+                              <button onClick={() => handleAcceptRequest(req.id)} className={`flex-1 text-white py-2 rounded-xl text-xs font-bold transition-colors ${getAccentClasses('bg')}`}>Accept</button>
                               <button onClick={() => handleDeclineRequest(req.id)} className="flex-1 bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 py-2 rounded-xl text-xs font-bold hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors">Decline</button>
                             </div>
                           </div>
@@ -1499,7 +1499,7 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
             
             <div className="flex space-x-3 pt-2">
               <button onClick={() => setShowNavEditModal(false)} className="flex-1 bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 py-4 rounded-2xl font-black uppercase tracking-widest text-[10px] hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors">Cancel</button>
-              <button onClick={handleSaveNavPreferences} className="flex-1 bg-indigo-600 text-white py-4 rounded-2xl font-black uppercase tracking-widest text-[10px] hover:bg-indigo-700 transition-colors shadow-xl shadow-indigo-100">Save Changes</button>
+              <button onClick={handleSaveNavPreferences} className={`flex-1 text-white py-4 rounded-2xl font-black uppercase tracking-widest text-[10px] transition-colors shadow-xl ${getAccentClasses('bg')} ${getAccentClasses('shadow')}`}>Save Changes</button>
             </div>
           </div>
         </div>

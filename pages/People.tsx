@@ -7,12 +7,14 @@ import { Account } from '../types';
 import { searchUsers, sendFriendRequest, getFriendships } from '../src/services/friendshipsService';
 import type { SupabasePerson, SupabaseTransaction, SupabaseUserProfile, SupabaseFriendship } from '../src/types/supabase';
 import { combineDateWithCurrentTime } from '../src/utils/dateUtils';
+import { useTheme } from '../src/contexts/ThemeContext';
 import { supabase } from '../src/utils/supabaseClient';
 
 const formatCurrency = (val: number) =>
   new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP', minimumFractionDigits: 2 }).format(val);
 
 export default function PeoplePage() {
+  const { getAccentClasses } = useTheme();
   const [people, setPeople] = useState<SupabasePerson[]>([]);
   const [transactions, setTransactions] = useState<SupabaseTransaction[]>([]);
   const [accounts, setAccounts] = useState<Account[]>([]);
@@ -509,17 +511,17 @@ export default function PeoplePage() {
           <div className="flex gap-6 border-b border-gray-200 dark:border-gray-800 mb-6 px-2 mt-8">
             <button
               onClick={() => setActiveTab('balances')}
-              className={`pb-4 text-sm font-black uppercase tracking-widest transition-colors relative ${activeTab === 'balances' ? 'text-indigo-600 dark:text-indigo-400' : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-300'}`}
+              className={`pb-4 text-sm font-black uppercase tracking-widest transition-colors relative ${activeTab === 'balances' ? getAccentClasses('text') : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-300'}`}
             >
               Active Balances
-              {activeTab === 'balances' && <span className="absolute bottom-0 left-0 w-full h-0.5 bg-indigo-600 dark:bg-indigo-400 rounded-t-full"></span>}
+              {activeTab === 'balances' && <span className={`absolute bottom-0 left-0 w-full h-0.5 rounded-t-full ${getAccentClasses('indicator')}`}></span>}
             </button>
             <button
               onClick={() => setActiveTab('history')}
-              className={`pb-4 text-sm font-black uppercase tracking-widest transition-colors relative ${activeTab === 'history' ? 'text-indigo-600 dark:text-indigo-400' : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-300'}`}
+              className={`pb-4 text-sm font-black uppercase tracking-widest transition-colors relative ${activeTab === 'history' ? getAccentClasses('text') : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-300'}`}
             >
               Transaction History
-              {activeTab === 'history' && <span className="absolute bottom-0 left-0 w-full h-0.5 bg-indigo-600 dark:bg-indigo-400 rounded-t-full"></span>}
+              {activeTab === 'history' && <span className={`absolute bottom-0 left-0 w-full h-0.5 rounded-t-full ${getAccentClasses('indicator')}`}></span>}
             </button>
           </div>
 
@@ -838,7 +840,7 @@ export default function PeoplePage() {
             <div className="bg-white dark:bg-gray-900 rounded-[2.5rem] w-full max-w-md p-8 shadow-2xl relative transition-colors animate-in zoom-in-95">
               <button onClick={() => setShowEditPersonModal(false)} className="absolute right-6 top-6 p-2 text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full transition-colors"><X className="w-5 h-5" /></button>
               <h2 className="text-xl font-black text-gray-900 dark:text-gray-100 mb-1 uppercase tracking-tight">Edit Profile</h2>
-              <p className="text-sm text-gray-500 dark:text-gray-400 mb-6 font-medium">Update alias or link to a Budee user.</p>
+              <p className="text-sm text-gray-500 dark:text-gray-400 mb-6 font-medium">Update local alias.</p>
 
               <div className="space-y-6">
                 <div>
@@ -850,116 +852,6 @@ export default function PeoplePage() {
                     className="w-full bg-gray-50 dark:bg-gray-800 border-transparent text-gray-900 dark:text-gray-100 rounded-2xl p-4 text-sm font-bold outline-none focus:ring-2 focus:ring-indigo-500 transition-all"
                   />
                   <p className="text-[10px] text-gray-500 mt-2 font-medium">This display name is only visible to you.</p>
-                </div>
-
-                <div className="border-t border-gray-100 dark:border-gray-800 pt-6">
-                  <label className="block text-[10px] font-black text-indigo-500 dark:text-indigo-400 uppercase tracking-widest mb-2">Link Budee Account</label>
-                  <div className="flex gap-2">
-                    <div className="relative flex-1">
-                      <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                      <input
-                        type="text"
-                        placeholder="@username or email"
-                        value={editPersonForm.handle}
-                        onChange={e => {
-                          setEditPersonForm(f => ({ ...f, handle: e.target.value }));
-                          setLinkState('idle');
-                        }}
-                        className="w-full bg-gray-50 dark:bg-gray-800 border-transparent text-gray-900 dark:text-gray-100 rounded-2xl p-4 pl-10 text-sm font-bold outline-none focus:ring-2 focus:ring-indigo-500 transition-all"
-                      />
-                    </div>
-                    <button
-                      type="button"
-                      onClick={async () => {
-                        if (!editPersonForm.handle.trim()) return;
-                        setLinkState('searching');
-                        const { data } = await searchUsers(editPersonForm.handle.trim());
-                        if (data && data.length > 0) {
-                          setLinkState('found');
-                          setMatchedUsers(data);
-                        } else {
-                          alert('No user found with that handle or email.');
-                          setLinkState('idle');
-                        }
-                      }}
-                      className="bg-indigo-50 text-indigo-600 dark:bg-indigo-900/30 dark:text-indigo-400 px-5 py-2 rounded-2xl font-bold hover:bg-indigo-100 dark:hover:bg-indigo-900/50 transition-colors"
-                    >
-                      {linkState === 'searching' ? '...' : 'Find'}
-                    </button>
-                  </div>
-
-                  {linkState === 'found' && matchedUsers.length > 0 && (
-                    <div className="mt-4 space-y-2 max-h-48 overflow-y-auto pr-1 animate-in zoom-in-95">
-                      {matchedUsers.map(user => (
-                        <div key={user.id} className="p-3 bg-gray-50 dark:bg-gray-800/50 rounded-2xl border border-gray-100 dark:border-gray-800 flex items-center justify-between transition-colors">
-                          <div className="flex items-center gap-3">
-                            <div className="w-10 h-10 bg-indigo-100 dark:bg-indigo-900/50 text-indigo-600 dark:text-indigo-400 rounded-full flex items-center justify-center font-black uppercase text-sm">
-                              {(user.first_name?.charAt(0) || '')}{(user.last_name?.charAt(0) || '')}
-                            </div>
-                            <div>
-                              <p className="text-sm font-bold text-gray-900 dark:text-gray-100">
-                                {user.first_name} {user.last_name}
-                              </p>
-                              <p className="text-[10px] font-medium text-gray-500 dark:text-gray-400">
-                                {user.username ? `@${user.username}` : user.email}
-                              </p>
-                            </div>
-                          </div>
-                          <button
-                            type="button"
-                            onClick={async () => {
-                              setIsSubmitting(true);
-                              try {
-                                const personRecord = people.find(p => p.name === selectedPerson);
-                                const newName = `${user.first_name} ${user.last_name}${user.username ? ` (@${user.username})` : ''}`;
-                                const profileUpdates: any = { friend_user_id: user.user_id, name: newName };
-                                
-                                if (personRecord) {
-                                  const isTestMode = localStorage.getItem('test_environment_enabled') === 'true';
-                                  const peopleTable = isTestMode ? 'people_test' : 'people';
-                                  let { error: updateErr } = await supabase.from(peopleTable).update(profileUpdates).eq('id', personRecord.id);
-                                  if (updateErr && updateErr.code === '42P01') {
-                                    updateErr = (await supabase.from('people').update(profileUpdates).eq('id', personRecord.id)).error;
-                                  }
-                                  if (updateErr) {
-                                    console.error('Link update failed:', updateErr);
-                                    alert(`Failed to link: ${updateErr.message}\n\nPlease ensure 'friend_user_id' is added to the database.`);
-                                    return;
-                                  }
-                                  
-                                  setPeople(prev => prev.map(p => p.id === personRecord.id ? { ...p, friend_user_id: user.user_id, name: newName } : p));
-                                }
-                                
-                                await sendFriendRequest(user.user_id);
-                                const txsToUpdate = transactions.filter(t => (t as any).person_name === selectedPerson || t.borrower_name === selectedPerson);
-                                for (const tx of txsToUpdate) {
-                                  const updates: any = {};
-                                  if ((tx as any).person_name === selectedPerson) updates.person_name = newName;
-                                  if (tx.borrower_name === selectedPerson) updates.borrower_name = newName;
-                                  if (Object.keys(updates).length > 0) {
-                                    await updateTransaction(tx.id, updates);
-                                  }
-                                }
-                                alert('Profile linked! A Connect Request has been sent.');
-                                setShowEditPersonModal(false);
-                                setSelectedPerson(newName);
-                                await loadData();
-                              } catch (e) {
-                                console.error(e);
-                                alert('Failed to link profile');
-                              } finally {
-                                setIsSubmitting(false);
-                              }
-                            }}
-                            disabled={isSubmitting}
-                            className="px-4 py-2 bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 rounded-xl text-xs font-bold uppercase tracking-widest hover:bg-indigo-200 dark:hover:bg-indigo-900/50 transition-colors disabled:opacity-50"
-                          >
-                            Link
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-                  )}
                 </div>
 
                 <div className="flex gap-3 pt-4">
@@ -1082,14 +974,14 @@ export default function PeoplePage() {
             )}
             <button
               onClick={() => setShowFindFriendsModal(true)}
-              className="flex items-center gap-2 bg-white dark:bg-gray-800 text-indigo-600 dark:text-indigo-400 border border-indigo-100 dark:border-indigo-800/50 px-5 py-3 rounded-xl font-bold hover:bg-indigo-50 dark:hover:bg-gray-700 transition-all shadow-sm"
+              className={`flex items-center gap-2 bg-white dark:bg-gray-800 border px-5 py-3 rounded-xl font-bold transition-all shadow-sm ${getAccentClasses('text')} ${getAccentClasses('borderLight')} ${getAccentClasses('hoverLight')}`}
             >
               <Search className="w-4 h-4" />
               <span className="hidden sm:inline">Find Friends</span>
             </button>
             <button 
               onClick={() => setShowAddModal(true)} 
-              className="flex items-center gap-2 bg-indigo-600 text-white px-5 py-3 rounded-xl font-bold hover:bg-indigo-700 transition-all shadow-md shadow-indigo-200 dark:shadow-none"
+              className={`flex items-center gap-2 text-white px-5 py-3 rounded-xl font-bold transition-all shadow-md dark:shadow-none ${getAccentClasses('bg')} ${getAccentClasses('shadow')}`}
             >
               <Plus className="w-4 h-4" />
               <span className="hidden sm:inline">New Person</span>
@@ -1100,17 +992,17 @@ export default function PeoplePage() {
         <div className="flex gap-6 border-b border-gray-200 dark:border-gray-800 mb-6 px-2">
           <button
             onClick={() => setMainTab('profiles')}
-            className={`pb-4 text-sm font-black uppercase tracking-widest transition-colors relative ${mainTab === 'profiles' ? 'text-indigo-600 dark:text-indigo-400' : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-300'}`}
+            className={`pb-4 text-sm font-black uppercase tracking-widest transition-colors relative ${mainTab === 'profiles' ? getAccentClasses('text') : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-300'}`}
           >
             Local Profiles
-            {mainTab === 'profiles' && <span className="absolute bottom-0 left-0 w-full h-0.5 bg-indigo-600 dark:bg-indigo-400 rounded-t-full"></span>}
+            {mainTab === 'profiles' && <span className={`absolute bottom-0 left-0 w-full h-0.5 rounded-t-full ${getAccentClasses('indicator')}`}></span>}
           </button>
           <button
             onClick={() => setMainTab('budies')}
-            className={`pb-4 text-sm font-black uppercase tracking-widest transition-colors relative ${mainTab === 'budies' ? 'text-indigo-600 dark:text-indigo-400' : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-300'}`}
+            className={`pb-4 text-sm font-black uppercase tracking-widest transition-colors relative ${mainTab === 'budies' ? getAccentClasses('text') : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-300'}`}
           >
             My Budies
-            {mainTab === 'budies' && <span className="absolute bottom-0 left-0 w-full h-0.5 bg-indigo-600 dark:bg-indigo-400 rounded-t-full"></span>}
+            {mainTab === 'budies' && <span className={`absolute bottom-0 left-0 w-full h-0.5 rounded-t-full ${getAccentClasses('indicator')}`}></span>}
           </button>
         </div>
 
@@ -1123,7 +1015,7 @@ export default function PeoplePage() {
             <User className="w-16 h-16 text-gray-300 dark:text-gray-600 mx-auto mb-4" />
             <h3 className="text-lg font-black text-gray-900 dark:text-gray-100 uppercase tracking-widest mb-1">No people found</h3>
             <p className="text-sm text-gray-500 dark:text-gray-400 mb-6">Add someone to start tracking shared expenses and loans.</p>
-            <button onClick={() => setShowAddModal(true)} className="bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 px-6 py-3 rounded-xl font-bold hover:bg-indigo-100 dark:hover:bg-indigo-900/50 transition-colors">
+            <button onClick={() => setShowAddModal(true)} className={`px-6 py-3 rounded-xl font-bold transition-colors ${getAccentClasses('lightBg')}`}>
               Add your first person
             </button>
           </div>
