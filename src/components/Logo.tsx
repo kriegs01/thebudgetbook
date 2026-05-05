@@ -10,9 +10,9 @@ export const Logo: React.FC<{ className?: string }> = ({ className = '' }) => {
   `;
 
   return (
-    <div className={`relative flex items-center tracking-tight cursor-pointer group ${className}`}>
+    <div className={`relative flex items-center justify-center tracking-tight cursor-pointer group ${className}`}>
       {/* Main text with 3D faceted shadow */}
-      <div className="relative z-10 flex items-center text-slate-50" style={{ WebkitTextStroke: '1px #0f172a' }}>
+      <div className="relative z-10 flex items-center justify-center text-slate-50 pr-[10px] pb-[10px]" style={{ WebkitTextStroke: '1px #0f172a' }}>
         <span style={{ textShadow: prismaticShadow }} className="font-titan transition-transform duration-300 group-hover:translate-x-2 rotate-[-6deg]">B</span>
         <span style={{ textShadow: prismaticShadow }} className="font-titan transition-transform duration-300 group-hover:translate-x-1 rotate-[3deg]">u</span>
         <span style={{ textShadow: prismaticShadow }} className="font-titan transition-transform duration-300 rotate-[-4deg]">d</span>
