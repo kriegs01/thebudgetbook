@@ -146,7 +146,8 @@ export default function PeoplePage() {
 
         if (updateErr) {
           console.error("Linking failed:", updateErr);
-          alert("Failed to link new profile to Budee.");
+          alert(`Profile created, but failed to link Budee: ${updateErr.message}\n\nPlease check if 'friend_user_id' exists in the database.`);
+          setPeople(prev => [...prev, { ...newPerson, name: newName }]); // Add to UI anyway
         } else {
           setPeople(prev => [...prev, { ...newPerson, friend_user_id: prof.user_id, name: newName }]);
         }
@@ -179,7 +180,7 @@ export default function PeoplePage() {
 
       if (updateErr) {
         console.error("Linking failed at database level:", updateErr);
-        alert('Failed to link profile: ' + updateErr.message);
+        alert(`Failed to link profile: ${updateErr.message}\n\nPlease ensure 'friend_user_id' is added to the database.`);
         return;
       }
 
@@ -860,7 +861,7 @@ export default function PeoplePage() {
                                   }
                                   if (updateErr) {
                                     console.error('Link update failed:', updateErr);
-                                    alert('Failed to link: ' + updateErr.message);
+                                    alert(`Failed to link: ${updateErr.message}\n\nPlease ensure 'friend_user_id' is added to the database.`);
                                     return;
                                   }
                                   

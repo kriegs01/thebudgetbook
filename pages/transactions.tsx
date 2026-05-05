@@ -1427,7 +1427,10 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ transactions, loadi
                       if (updateErr && updateErr.code === '42P01') {
                         updateErr = (await supabase.from('people').update({ friend_user_id: prof.user_id }).eq('id', newPerson.id)).error;
                       }
-                      if (updateErr) console.error('Failed to link profile to budee during transaction intercept:', updateErr);
+                      if (updateErr) {
+                        console.error('Failed to link profile to budee during transaction intercept:', updateErr);
+                        alert(`Profile created but failed to link: ${updateErr.message}`);
+                      }
                     }
                     setPendingProfileModal(null);
                     await executeTransactionSubmit();
