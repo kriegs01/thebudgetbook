@@ -1057,9 +1057,14 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
             <div className="absolute inset-0 bg-blue-50/50 dark:bg-blue-900/10 animate-pulse"></div>
             <div className="w-10 h-10 border-4 border-blue-100 dark:border-gray-800 border-t-blue-600 dark:border-t-blue-500 rounded-full animate-spin relative z-10"></div>
           </div>
-          <h1 className="text-5xl md:text-6xl font-titan bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent mb-4 tracking-tight [text-shadow:-2px_-2px_0_#374151,2px_-2px_0_#374151,-2px_2px_0_#374151,2px_2px_0_#374151] dark:[text-shadow:-2px_-2px_0_#ffffff,2px_-2px_0_#ffffff,-2px_2px_0_#ffffff,2px_2px_0_#ffffff]">
-            Budee
-          </h1>
+          <div className="relative inline-block mb-4">
+            <h1 className="text-5xl md:text-6xl font-titan absolute inset-0 z-0 tracking-tight [-webkit-text-stroke:6px_#374151] dark:[-webkit-text-stroke:6px_#ffffff] text-[#374151] dark:text-white select-none">
+              Budee
+            </h1>
+            <h1 className="text-5xl md:text-6xl font-titan bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent relative z-10 tracking-tight">
+              Budee
+            </h1>
+          </div>
           <p className="text-gray-500 dark:text-gray-400 font-medium text-sm max-w-[260px] mx-auto leading-relaxed animate-pulse">
             Loading your financial data and preparing your dashboard...
           </p>
@@ -1081,7 +1086,12 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
         <aside className={`fixed inset-y-0 left-0 z-50 bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-gray-800 transition-all duration-300 ease-in-out ${isSidebarOpen ? 'w-56' : 'hidden md:flex w-20'} overscroll-none`}> 
           <div className="flex flex-col h-full">
             <div className="flex items-center justify-between h-14 px-4 border-b border-gray-100 dark:border-gray-800">
-              {isSidebarOpen && <span className="text-3xl mt-1 font-titan bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent [text-shadow:-1px_-1px_0_#374151,1px_-1px_0_#374151,-1px_1px_0_#374151,1px_1px_0_#374151] dark:[text-shadow:-1px_-1px_0_#ffffff,1px_-1px_0_#ffffff,-1px_1px_0_#ffffff,1px_1px_0_#ffffff]">Budee</span>}
+              {isSidebarOpen && (
+                <div className="relative inline-block mt-1">
+                  <span className="text-3xl font-titan absolute inset-0 z-0 [-webkit-text-stroke:4px_#374151] dark:[-webkit-text-stroke:4px_#ffffff] text-[#374151] dark:text-white select-none">Budee</span>
+                  <span className="text-3xl font-titan bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent relative z-10">Budee</span>
+                </div>
+              )}
               <button onClick={() => setIsSidebarOpen(!isSidebarOpen)} className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-500 dark:text-gray-400 transition-colors">
                 {isSidebarOpen ? <ChevronLeft className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
               </button>
