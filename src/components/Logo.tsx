@@ -14,10 +14,10 @@ export const Logo: React.FC<{ className?: string }> = ({ className = '' }) => {
       {/* Main text with 3D faceted shadow */}
       <div className="relative z-10 flex items-center text-slate-50" style={{ WebkitTextStroke: '1px #0f172a' }}>
         <span style={{ textShadow: prismaticShadow }} className="font-titan transition-transform duration-300 group-hover:translate-x-2 rotate-[-6deg]">B</span>
-        <span style={{ textShadow: prismaticShadow }} className="font-titan transition-transform duration-300 group-hover:translate-x-1 translate-y-0.5 rotate-[3deg]">u</span>
-        <span style={{ textShadow: prismaticShadow }} className="font-titan transition-transform duration-300 -translate-y-0.5 rotate-[-4deg]">d</span>
-        <span style={{ textShadow: prismaticShadow }} className="font-titan transition-transform duration-300 group-hover:-translate-x-1 translate-y-1 rotate-[5deg]">e</span>
-        <span style={{ textShadow: prismaticShadow }} className="font-titan transition-transform duration-300 group-hover:-translate-x-2 -translate-y-1 rotate-[-3deg]">e</span>
+        <span style={{ textShadow: prismaticShadow }} className="font-titan transition-transform duration-300 group-hover:translate-x-1 rotate-[3deg]">u</span>
+        <span style={{ textShadow: prismaticShadow }} className="font-titan transition-transform duration-300 rotate-[-4deg]">d</span>
+        <span style={{ textShadow: prismaticShadow }} className="font-titan transition-transform duration-300 group-hover:-translate-x-1 rotate-[5deg]">e</span>
+        <span style={{ textShadow: prismaticShadow }} className="font-titan transition-transform duration-300 group-hover:-translate-x-2 rotate-[-3deg]">e</span>
       </div>
     </div>
   );
