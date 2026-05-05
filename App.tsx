@@ -201,6 +201,7 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
   const [pendingRequests, setPendingRequests] = useState<any[]>([]);
   const [pendingTransactions, setPendingTransactions] = useState<any[]>([]);
   const [txAccountSelections, setTxAccountSelections] = useState<Record<string, string>>({});
+  const [resolvingIds, setResolvingIds] = useState<Set<string>>(new Set());
 
   const loadNotifications = async () => {
     const [{ data: fReqs }, { data: pTxs }] = await Promise.all([getIncomingFriendRequests(), getPendingTransactions()]);
@@ -213,17 +214,28 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
   }, [user]);
 
   const handleResolveTransaction = async (id: string, action: 'accept' | 'decline') => {
-    let accountId = userProfile?.settings?.defaultReceiveAccountId || txAccountSelections[id];
-    if (action === 'accept' && !accountId) {
-      alert('Please select an account to receive these funds.');
-      return;
-    }
-    const { error } = await resolvePendingTransaction(id, action, accountId);
-    if (error) return alert('Failed to process transaction.');
-    setPendingTransactions(prev => prev.filter(tx => tx.id !== id));
-    if (action === 'accept') {
-      await reloadAccounts();
-      queryClient.invalidateQueries({ queryKey: ['transactions'] });
+    if (resolvingIds.has(id)) return;
+    setResolvingIds(prev => new Set(prev).add(id));
+    
+    try {
+      let accountId = userProfile?.settings?.defaultReceiveAccountId || txAccountSelections[id];
+      if (action === 'accept' && !accountId) {
+        alert('Please select an account to receive these funds.');
+        return;
+      }
+      const { error } = await resolvePendingTransaction(id, action, accountId);
+      if (error) return alert('Failed to process transaction.');
+      
+      setPendingTransactions(prev => prev.filter(tx => tx.id !== id));
+      
+      if (action === 'accept') {
+        await reloadAccounts();
+        queryClient.invalidateQueries({ queryKey: ['transactions'] });
+        // Force immediate background data refetch on active pages
+        window.dispatchEvent(new CustomEvent('transactions_updated'));
+      }
+    } finally {
+      setResolvingIds(prev => { const next = new Set(prev); next.delete(id); return next; });
     }
   };
 
@@ -1208,8 +1220,12 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
                                   </div>
                                 )}
                                 <div className="flex gap-2">
-                                  <button onClick={() => handleResolveTransaction(tx.id, 'accept')} className="flex-1 bg-green-600 text-white py-2 rounded-xl text-xs font-bold hover:bg-green-700 transition-colors">Accept</button>
-                                  <button onClick={() => handleResolveTransaction(tx.id, 'decline')} className="flex-1 bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 py-2 rounded-xl text-xs font-bold hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors">Decline</button>
+                                  <button onClick={() => handleResolveTransaction(tx.id, 'accept')} disabled={resolvingIds.has(tx.id)} className="flex-1 bg-green-600 text-white py-2 rounded-xl text-xs font-bold hover:bg-green-700 transition-colors disabled:opacity-50">
+                                    {resolvingIds.has(tx.id) ? '...' : 'Accept'}
+                                  </button>
+                                  <button onClick={() => handleResolveTransaction(tx.id, 'decline')} disabled={resolvingIds.has(tx.id)} className="flex-1 bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 py-2 rounded-xl text-xs font-bold hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors disabled:opacity-50">
+                                    {resolvingIds.has(tx.id) ? '...' : 'Decline'}
+                                  </button>
                                 </div>
                               </div>
                             );

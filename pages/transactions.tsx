@@ -262,6 +262,13 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ transactions, loadi
     loadData();
   }, [loadData]);
 
+  // Instantly sync data if a notification payment is accepted globally
+  useEffect(() => {
+    const handleUpdate = () => loadData();
+    window.addEventListener('transactions_updated', handleUpdate);
+    return () => window.removeEventListener('transactions_updated', handleUpdate);
+  }, [loadData]);
+
   const selectableContacts: ContactOption[] = useMemo(() => {
     const list: ContactOption[] = [];
     const addedNames = new Set<string>();

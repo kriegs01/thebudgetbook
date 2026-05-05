@@ -374,6 +374,16 @@ export const resolvePendingTransaction = async (pendingTxId: string, action: 'ac
     const isTestMode = localStorage.getItem('test_environment_enabled') === 'true';
     const pendingTable = isTestMode ? 'pending_transactions_test' : 'pending_transactions';
 
+    // 0. Verify it is actually pending to prevent double-logging from rapid clicks
+    const { data: checkTx, error: checkErr } = await supabase
+      .from(pendingTable)
+      .select('status')
+      .eq('id', pendingTxId)
+      .single();
+      
+    if (checkErr) throw checkErr;
+    if (checkTx.status !== 'pending') return { error: null }; // Already resolved
+
     // 1. Update inbox status
     const { data: pendingTx, error: updateErr } = await supabase.from(pendingTable).update({ status: action === 'accept' ? 'accepted' : 'declined' }).eq('id', pendingTxId).eq('receiver_user_id', user.id).select().single();
     if (updateErr) throw updateErr;
