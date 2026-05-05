@@ -1,6 +1,6 @@
 # May 5, 2026 Touchbase Notes
 
-## Actions Made Today
+## Actions Made Today (Part 1 - Architecture & Rebranding)
 
 1. **App Rebranding to "Budee"**
    - Replaced "Budget Book" with "Budee" across the application (Sidebar, Auth/Login, Splash Screen, Reset Password).
@@ -19,23 +19,31 @@
    - Built a custom `ContactDropdown` for transaction forms to replace the standard text autocomplete.
    - Implemented logic to intercept transactions when an unlinked "Budee" is selected, prompting the user to instantly create a local profile for them before the transaction saves.
 
-4. **Build Fixes**
+4. **Build Fixes & Schema Cache**
    - Resolved `esbuild` syntax errors caused by escaped backticks inside template literals across `People.tsx` and `transactions.tsx`.
+   - Added missing `friend_user_id` to the local `people` table and forcefully reloaded the PostgREST schema cache to resolve linking failures.
 
-## Last Issue Raised (Currently Parked)
+## Actions Made Today (Part 2 - Phase 3 Shared Transactions)
 
-Despite the logic updates, the integration between the Friends system and Local Profiles is failing in the UI:
-- **Missing Info:** Created/linked local profiles are not displaying the Budee's `@handle` or `email` underneath their names on the cards/list.
-- **Linking Failures:** The "Link Existing" button is either failing silently or not persisting the `friend_user_id` to the database/UI state properly.
-- **Dropdown Visuals Missing:** The `ContactDropdown` in the `transactions.tsx` page (used for Transfers and Loans) is not displaying the green checkmark icon to indicate a linked profile or the "Budee" icon for unlinked friends.
+1. **Inbox & Pending Sync Architecture**
+   - Created the `pending_transactions` table to serve as an Inbox for incoming shared money (Loans, Transfers, Payments).
+   - Added a "Default Deposit Account" preference in the `Settings.tsx` page to handle automated routing of accepted funds.
+   - Hooked the Top Navigation Bell Icon to display both pending Friend Requests and pending Inbox Transactions. Users can pick a deposit account on the fly and click "Accept" or "Decline".
 
-## Gameplan to Address This
+2. **Historical Sync & Review Modal**
+   - Added background scanning logic in `People.tsx` to detect past shared transactions that haven't been pushed to newly linked Budies.
+   - Built a robust **Review & Sync** modal, allowing users to specifically select which historical ledger items to push to their friends' inboxes.
 
-1. **Audit Data Hydration (`friendProfiles` state):**
-   - The green checks, handles, and emails all rely on the `friendProfiles` array accurately matching the `friend_user_id` of local profiles. We need to verify that `getFriendships()` and the subsequent `user_profiles` query are actually returning data and that the IDs match perfectly.
-2. **Trace the Linking Mutation:**
-   - Add strict error logging to the `handleLinkBudeeToProfile` and `handleCreateProfileForBudee` functions to see if Supabase is rejecting the `UPDATE` payload (potentially an RLS issue on the `people` table or a column mismatch).
-3. **Fix the ContactDropdown State:**
-   - Ensure `transactions.tsx` is successfully polling the `friendProfiles` list. If the `selectableContacts` useMemo hook is running before the `friendProfiles` are fetched, it will permanently render them as standard, unlinked text options. We'll introduce a loading dependency or force a re-evaluation of that hook.
-4. **UI State Optimization:**
-   - Ensure that immediately upon linking, the local `people` state array is forcefully updated with the new `friend_user_id` so the UI instantly reacts without needing a full page reload.
+3. **Ledger Logic & "Pay Back" Flow**
+   - Refined the transaction interception so when a user accepts a loan, it logs correctly as `isBorrowed = true`.
+   - Transformed the standard "Collect" button into a red **"Pay Back"** button for borrowers.
+   - Refactored the Loan Settlement modal to allow the borrower to choose their source account, dynamically calculating remaining balances without mutating the original loan amount.
+   - Connected accepted Loan Payments to instantly tuck themselves underneath the original loan's history dropdown using the `related_transaction_id`.
+
+4. **Performance & Concurrency Protection**
+   - Implemented a `resolvingIds` state lock in `App.tsx` to disable the "Accept" button and safeguard against rapid double-clicks inserting duplicate transactions.
+   - Dispatched a global `transactions_updated` CustomEvent upon accepting inbox items to trigger a lightning-fast data refetch, seamlessly updating balances without a full page reload.
+
+## Next Session / Currently Parked
+
+- **Phase 3 (Contextual Verification):** We will integrate **Tesseract.js** for Receipt OCR reading. When settling loans or shared payments, the sender can upload a receipt, and the recipient will verify the amount and the **Last 4 digits** to securely accept and log the transaction into their ledger.
