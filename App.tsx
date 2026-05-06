@@ -1520,6 +1520,7 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
         onClose={() => setIsMessagesOpen(false)}
         currentUserId={user.id}
         activeFriendId={activeChatFriendId}
+        onClearActiveChat={() => setActiveChatFriendId(undefined)}
       />
     </BrowserRouter>
     </>

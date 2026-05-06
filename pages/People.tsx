@@ -467,17 +467,6 @@ export default function PeoplePage({ onStartChat }: PeoplePageProps) {
               </div>
             </div>
             
-            <button 
-              onClick={() => {
-                setEditPersonForm({ name: selectedPerson, handle: '', matchedUserId: '' });
-                setMatchedUsers([]);
-                setLinkState('idle');
-                setShowEditPersonModal(true);
-              }}
-              className="p-3 bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-800 rounded-full hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors shadow-sm"
-            >
-              <Edit2 className="w-5 h-5 text-gray-600 dark:text-gray-400" />
-            </button>
             <div className="flex items-center gap-2">
               {people.find(p => p.name === selectedPerson)?.friend_user_id && onStartChat && (
                 <button
