@@ -1,5 +1,4 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { Users, Plus, LayoutGrid, List, MoreVertical, Trash2, ArrowRight, ArrowLeft, X, AlertTriangle, User, Landmark, ArrowUpFromLine, ArrowDownToLine, ArrowLeftRight, BanknoteArrowDown, ChevronDown, ChevronUp, Edit2, Search, UserPlus, CheckSquare, Clock, RefreshCw, Check } from 'lucide-react';
 import { Users, Plus, LayoutGrid, List, MoreVertical, Trash2, ArrowRight, ArrowLeft, X, AlertTriangle, User, Landmark, ArrowUpFromLine, ArrowDownToLine, ArrowLeftRight, BanknoteArrowDown, ChevronDown, ChevronUp, Edit2, Search, UserPlus, CheckSquare, Clock, RefreshCw, Check, MessageCircle } from 'lucide-react';
 import { getAllPeople, createPerson, deletePerson } from '../src/services/peopleService';
 import { getAllTransactions, createTransaction, deleteTransaction, updateTransaction, getUnsyncedHistoricalTransactionsCount, getUnsyncedHistoricalTransactions, syncSpecificHistoricalTransactions } from '../src/services/transactionsService';
@@ -14,7 +13,6 @@ import { supabase } from '../src/utils/supabaseClient';
 const formatCurrency = (val: number) =>
   new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP', minimumFractionDigits: 2 }).format(val);
 
-export default function PeoplePage() {
 interface PeoplePageProps {
   onStartChat?: (friendId: string) => void;
 }
