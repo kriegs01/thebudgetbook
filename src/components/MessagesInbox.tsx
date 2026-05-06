@@ -1,8 +1,9 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { X, Send, MessageCircle, ArrowLeft } from 'lucide-react';
+import { X, Send, MessageCircle, ArrowLeft, Banknote } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import { subscribeToIncomingMessages, getConversation, sendMessage, Message } from '../services/messagesService';
-import { getFriendships } from '../services/friendshipsService';
 import { supabase } from '../utils/supabaseClient';
+import { useFriendships, useBudeeProfiles } from '../hooks/useBudies';
 
 interface MessagesInboxProps {
   isOpen: boolean;
@@ -16,12 +17,25 @@ export const MessagesInbox: React.FC<MessagesInboxProps> = ({ isOpen, onClose, c
   const [messages, setMessages] = useState<Message[]>([]);
   const [newMessage, setNewMessage] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const navigate = useNavigate();
 
   // Internal routing states for the messaging hub
   const [internalChatId, setInternalChatId] = useState<string | undefined>();
   const [inboxList, setInboxList] = useState<any[]>([]);
   const [isLoadingInbox, setIsLoadingInbox] = useState(false);
-  const [chatProfile, setChatProfile] = useState<any>(null);
+  const hasLoadedInboxRef = useRef(false);
+
+  // Quick Request state
+  const [showRequestForm, setShowRequestForm] = useState(false);
+  const [reqAmount, setReqAmount] = useState('');
+  const [reqNote, setReqNote] = useState('');
+
+  // Consume Globally Cached Social Data
+  const { data: friendships } = useFriendships();
+  const acceptedFriends = friendships?.filter(f => f.status === 'accepted') || [];
+  const friendIds = acceptedFriends.map(f => f.user_id === currentUserId ? f.friend_id : f.user_id);
+  const { data: profiles, isLoading: isLoadingProfiles } = useBudeeProfiles(friendIds);
+  const chatProfile = profiles?.find(p => p.user_id === internalChatId);
 
   // Sync external prop to internal state
   useEffect(() => {
@@ -40,19 +54,15 @@ export const MessagesInbox: React.FC<MessagesInboxProps> = ({ isOpen, onClose, c
     if (!isOpen || internalChatId) return;
 
     const fetchInbox = async () => {
-      setIsLoadingInbox(true);
+      // Only show the loading spinner on the very first load
+      if (!hasLoadedInboxRef.current) {
+        setIsLoadingInbox(true);
+      }
       try {
-        const { data: friendships } = await getFriendships();
-        const acceptedFriends = friendships?.filter(f => f.status === 'accepted') || [];
-        const friendIds = acceptedFriends.map(f => f.user_id === currentUserId ? f.friend_id : f.user_id);
-        
-        if (friendIds.length === 0) {
+        if (!profiles || profiles.length === 0) {
           setInboxList([]);
-          setIsLoadingInbox(false);
           return;
         }
-
-        const { data: profiles } = await supabase.from('user_profiles').select('*').in('user_id', friendIds);
         
         const { data: recentMsgs } = await supabase
           .from('messages')
@@ -60,7 +70,7 @@ export const MessagesInbox: React.FC<MessagesInboxProps> = ({ isOpen, onClose, c
           .or(`sender_id.eq.${currentUserId},receiver_id.eq.${currentUserId}`)
           .order('created_at', { ascending: false });
 
-        const combined = profiles?.map(prof => {
+        const combined = profiles.map(prof => {
           const msgs = recentMsgs?.filter(m => m.sender_id === prof.user_id || m.receiver_id === prof.user_id) || [];
           return {
             profile: prof,
@@ -75,29 +85,21 @@ export const MessagesInbox: React.FC<MessagesInboxProps> = ({ isOpen, onClose, c
         setInboxList(combined);
       } catch (err) {
         console.error("Error loading inbox", err);
+      } finally {
+        setIsLoadingInbox(false);
+        hasLoadedInboxRef.current = true;
       }
-      setIsLoadingInbox(false);
     };
 
-    fetchInbox();
-  }, [isOpen, internalChatId, currentUserId]);
-
-  // Load active chat profile details dynamically
-  useEffect(() => {
-    if (!internalChatId) {
-      setChatProfile(null);
-      return;
-    }
-    const fetchProf = async () => {
-      const { data } = await supabase.from('user_profiles').select('*').eq('user_id', internalChatId).single();
-      setChatProfile(data);
-    };
-    fetchProf();
-  }, [internalChatId]);
+    if (!isLoadingProfiles) fetchInbox();
+  }, [isOpen, internalChatId, currentUserId, profiles, isLoadingProfiles]);
 
   // Load history and subscribe to live updates
   useEffect(() => {
     if (!isOpen || !internalChatId) return;
+
+    // Instantly clear old messages when switching to a new chat
+    setMessages([]);
 
     const loadHistory = async () => {
       try {
@@ -139,6 +141,28 @@ export const MessagesInbox: React.FC<MessagesInboxProps> = ({ isOpen, onClose, c
       }
     } catch (err) {
       console.error('Failed to send message', err);
+    }
+  };
+
+  const handleSendRequest = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!reqAmount.trim() || !internalChatId) return;
+
+    try {
+      const { data } = await sendMessage({
+        sender_id: currentUserId,
+        receiver_id: internalChatId,
+        content: `[PAY_REQUEST]|${reqAmount}|${reqNote || 'Payment Request'}`,
+      });
+      
+      if (data) {
+        setMessages((prev) => [...prev, data]);
+        setShowRequestForm(false);
+        setReqAmount('');
+        setReqNote('');
+      }
+    } catch (err) {
+      console.error('Failed to send request', err);
     }
   };
 
@@ -230,6 +254,40 @@ export const MessagesInbox: React.FC<MessagesInboxProps> = ({ isOpen, onClose, c
             ) : (
               messages.map((msg) => {
                 const isMe = msg.sender_id === currentUserId;
+                const isPayReq = msg.content.startsWith('[PAY_REQUEST]|');
+
+                if (isPayReq) {
+                  const parts = msg.content.split('|');
+                  const amt = parts[1] || '0.00';
+                  const note = parts[2] || '';
+                  return (
+                    <div key={msg.id} className={`flex ${isMe ? 'justify-end' : 'justify-start'}`}>
+                      <div className={`w-48 md:w-56 rounded-2xl p-4 shadow-sm border ${isMe ? 'bg-indigo-50 border-indigo-100 text-indigo-900 rounded-br-sm dark:bg-indigo-900/30 dark:border-indigo-800' : 'bg-white border-gray-200 text-gray-900 rounded-bl-sm dark:bg-gray-800 dark:border-gray-700 dark:text-gray-100'}`}>
+                        <div className="flex items-center gap-2 mb-2">
+                          <Banknote className="w-4 h-4 text-indigo-500" />
+                          <span className="text-[10px] font-black uppercase tracking-widest text-indigo-500">Request</span>
+                        </div>
+                        <p className="text-2xl font-black mb-1">₱{amt}</p>
+                        <p className="text-xs opacity-80 mb-4 truncate">{note}</p>
+                        {!isMe && (
+                          <button
+                            onClick={() => {
+                              onClose();
+                              alert(`Ready to pay ₱${amt} for ${note}? We'll hook this up to the transfer modal next!`);
+                            }}
+                            className="w-full bg-indigo-600 text-white py-2 rounded-xl text-xs font-bold hover:bg-indigo-700 transition-colors shadow-sm"
+                          >
+                            Pay Now
+                          </button>
+                        )}
+                        <span className={`text-[9px] font-bold uppercase tracking-widest block text-right mt-2 ${isMe ? 'text-indigo-400' : 'text-gray-400'}`}>
+                          {new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        </span>
+                      </div>
+                    </div>
+                  );
+                }
+
                 return (
                   <div key={msg.id} className={`flex ${isMe ? 'justify-end' : 'justify-start'}`}>
                     <div className={`max-w-[75%] rounded-2xl px-4 py-2.5 ${isMe ? 'bg-indigo-600 text-white rounded-br-sm' : 'bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-gray-100 rounded-bl-sm'}`}>
@@ -245,20 +303,44 @@ export const MessagesInbox: React.FC<MessagesInboxProps> = ({ isOpen, onClose, c
             <div ref={messagesEndRef} />
           </div>
 
-          <div className="p-4 border-t border-gray-100 dark:border-gray-800 bg-white dark:bg-gray-900">
-            <form onSubmit={handleSend} className="flex items-center space-x-2">
-              <input
-                type="text"
-                value={newMessage}
-                onChange={(e) => setNewMessage(e.target.value)}
-                placeholder="Type a message..."
-                className="flex-1 bg-gray-50 dark:bg-gray-800 border-transparent text-gray-900 dark:text-gray-100 rounded-2xl px-4 py-3 text-sm font-medium outline-none focus:ring-2 focus:ring-indigo-500 placeholder:text-gray-400"
-              />
-              <button type="submit" disabled={!newMessage.trim()} className="p-3 rounded-2xl bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50 transition-colors">
-                <Send className="w-5 h-5" />
-              </button>
-            </form>
-          </div>
+          {showRequestForm ? (
+            <div className="p-4 border-t border-gray-100 dark:border-gray-800 bg-white dark:bg-gray-900 shadow-[0_-10px_40px_-15px_rgba(0,0,0,0.1)]">
+              <div className="flex items-center justify-between mb-3">
+                <span className="text-xs font-black uppercase tracking-widest text-indigo-500 flex items-center gap-1.5"><Banknote className="w-4 h-4"/> Payment Request</span>
+                <button onClick={() => setShowRequestForm(false)} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"><X className="w-4 h-4"/></button>
+              </div>
+              <form onSubmit={handleSendRequest} className="space-y-3">
+                <div className="flex gap-2">
+                  <div className="relative w-1/3">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 font-bold text-gray-400">₱</span>
+                    <input type="number" step="0.01" min="0.01" value={reqAmount} onChange={e => setReqAmount(e.target.value)} placeholder="0.00" className="w-full bg-gray-50 dark:bg-gray-800 dark:text-white rounded-xl py-3 pl-8 pr-3 text-sm font-black outline-none focus:ring-2 focus:ring-indigo-500 transition-all" required />
+                  </div>
+                  <input type="text" value={reqNote} onChange={e => setReqNote(e.target.value)} placeholder="For what?" className="flex-1 bg-gray-50 dark:bg-gray-800 dark:text-white rounded-xl py-3 px-4 text-sm font-medium outline-none focus:ring-2 focus:ring-indigo-500 transition-all" />
+                </div>
+                <button type="submit" disabled={!reqAmount} className="w-full bg-indigo-600 text-white py-3 rounded-xl text-xs font-black uppercase tracking-widest hover:bg-indigo-700 disabled:opacity-50 transition-colors shadow-sm">
+                  Send Request
+                </button>
+              </form>
+            </div>
+          ) : (
+            <div className="p-4 border-t border-gray-100 dark:border-gray-800 bg-white dark:bg-gray-900">
+              <form onSubmit={handleSend} className="flex items-center space-x-2">
+                <button type="button" onClick={() => setShowRequestForm(true)} className="p-3 text-indigo-500 hover:text-indigo-600 bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-900/30 dark:hover:bg-indigo-900/50 rounded-2xl transition-colors">
+                  <Banknote className="w-5 h-5" />
+                </button>
+                <input
+                  type="text"
+                  value={newMessage}
+                  onChange={(e) => setNewMessage(e.target.value)}
+                  placeholder="Message..."
+                  className="flex-1 bg-gray-50 dark:bg-gray-800 border-transparent text-gray-900 dark:text-gray-100 rounded-2xl px-4 py-3 text-sm font-medium outline-none focus:ring-2 focus:ring-indigo-500 placeholder:text-gray-400 transition-all"
+                />
+                <button type="submit" disabled={!newMessage.trim()} className="p-3 rounded-2xl bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50 transition-colors shadow-sm">
+                  <Send className="w-5 h-5" />
+                </button>
+              </form>
+            </div>
+          )}
         </>
       )}
     </div>

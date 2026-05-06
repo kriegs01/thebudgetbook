@@ -14,7 +14,7 @@ import { supabase } from './src/utils/supabaseClient';
 import { combineDateWithCurrentTime } from './src/utils/dateUtils';
 import { recalculateAllAccountBalances } from './src/utils/accountBalanceCalculator';
 import { updateUserProfile } from './src/services/userProfileService';
-import { getIncomingFriendRequests, acceptFriendRequest, removeFriendship } from './src/services/friendshipsService';
+import { acceptFriendRequest, removeFriendship } from './src/services/friendshipsService';
 import { getAllPeople, createPerson } from './src/services/peopleService';
 import type { Biller, Account, Installment, Transaction } from './types';
 import type { SupabaseTransaction } from './src/types/supabase';
@@ -44,6 +44,7 @@ import Auth from './pages/Auth';
 import UpdatePassword from './pages/update-password';
 import { useTransactions } from './src/hooks/useTransactions';
 import { useAccounts } from './src/hooks/useAccounts';
+import { useIncomingRequests } from './src/hooks/useBudies';
 import { SetupWizard } from './src/components/SetupWizard';
 import { Logo } from './src/components/Logo';
 import { MessagesInbox } from './src/components/MessagesInbox';
@@ -203,15 +204,14 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
   const [isMessagesOpen, setIsMessagesOpen] = useState(false);
   const [activeChatFriendId, setActiveChatFriendId] = useState<string | undefined>();
-  const [pendingRequests, setPendingRequests] = useState<any[]>([]);
+  const { data: pendingRequests = [], refetch: refetchRequests } = useIncomingRequests();
   const [pendingTransactions, setPendingTransactions] = useState<any[]>([]);
   const [txAccountSelections, setTxAccountSelections] = useState<Record<string, string>>({});
   const [resolvingIds, setResolvingIds] = useState<Set<string>>(new Set());
   const { getAccentClasses } = useTheme();
 
   const loadNotifications = async () => {
-    const [{ data: fReqs }, { data: pTxs }] = await Promise.all([getIncomingFriendRequests(), getPendingTransactions()]);
-    if (fReqs) setPendingRequests(fReqs);
+    const { data: pTxs } = await getPendingTransactions();
     if (pTxs) setPendingTransactions(pTxs);
   };
 
@@ -247,7 +247,7 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
 
   const handleAcceptRequest = async (id: string) => {
     await acceptFriendRequest(id);
-    setPendingRequests(prev => prev.filter(r => r.id !== id));
+    await refetchRequests();
     // Per touchbase notes (Issue #2), the immediate profile creation logic is removed from here.
     // This logic will be moved to the People page to ensure profiles are created for BOTH users
     // when they load their connections, fixing the bug where the sender was left out.
@@ -255,7 +255,7 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
 
   const handleDeclineRequest = async (id: string) => {
     await removeFriendship(id);
-    setPendingRequests(prev => prev.filter(r => r.id !== id));
+    await refetchRequests();
   };
 
   const [accounts, setAccounts] = useState<Account[]>([]);
