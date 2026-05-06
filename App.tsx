@@ -46,6 +46,7 @@ import { useTransactions } from './src/hooks/useTransactions';
 import { useAccounts } from './src/hooks/useAccounts';
 import { SetupWizard } from './src/components/SetupWizard';
 import { Logo } from './src/components/Logo';
+import { MessagesInbox } from './src/components/MessagesInbox';
 
 // Helper function to convert UI Account to Supabase format
 const accountToSupabase = (account: Account) => ({
@@ -200,6 +201,8 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
+  const [isMessagesOpen, setIsMessagesOpen] = useState(false);
+  const [activeChatFriendId, setActiveChatFriendId] = useState<string | undefined>();
   const [pendingRequests, setPendingRequests] = useState<any[]>([]);
   const [pendingTransactions, setPendingTransactions] = useState<any[]>([]);
   const [txAccountSelections, setTxAccountSelections] = useState<Record<string, string>>({});
@@ -1150,7 +1153,10 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
         <header className="h-14 px-4 md:px-8 border-b border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-900 flex items-center justify-end shrink-0 transition-colors z-20">
           <div className="flex items-center space-x-2 md:space-x-4">
             {/* Messages */}
-            <button className={`p-2 text-gray-400 rounded-full transition-colors ${getAccentClasses('hoverLight')}`}>
+            <button 
+              onClick={() => setIsMessagesOpen(!isMessagesOpen)}
+              className={`p-2 text-gray-400 rounded-full transition-colors ${getAccentClasses('hoverLight')} ${isMessagesOpen ? 'bg-gray-100 dark:bg-gray-800' : ''}`}
+            >
               <MessageCircle className="w-5 h-5" />
             </button>
             {/* Notifications */}
@@ -1443,7 +1449,10 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
                   onToggleTheme={handleToggleTheme}
                 />
               } />
-              <Route path="/people" element={<PeoplePage />} />
+          <Route path="/people" element={<PeoplePage onStartChat={(friendId: string) => {
+            setActiveChatFriendId(friendId);
+            setIsMessagesOpen(true);
+          }} />} />
               <Route path="/transactions" element={
                 <TransactionsPage 
                   transactions={transactions}
@@ -1504,6 +1513,14 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
           </div>
         </div>
       )}
+
+      {/* Messages Inbox Drawer */}
+      <MessagesInbox 
+        isOpen={isMessagesOpen}
+        onClose={() => setIsMessagesOpen(false)}
+        currentUserId={user.id}
+        activeFriendId={activeChatFriendId}
+      />
     </BrowserRouter>
     </>
   );

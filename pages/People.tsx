@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Users, Plus, LayoutGrid, List, MoreVertical, Trash2, ArrowRight, ArrowLeft, X, AlertTriangle, User, Landmark, ArrowUpFromLine, ArrowDownToLine, ArrowLeftRight, BanknoteArrowDown, ChevronDown, ChevronUp, Edit2, Search, UserPlus, CheckSquare, Clock, RefreshCw, Check } from 'lucide-react';
+import { Users, Plus, LayoutGrid, List, MoreVertical, Trash2, ArrowRight, ArrowLeft, X, AlertTriangle, User, Landmark, ArrowUpFromLine, ArrowDownToLine, ArrowLeftRight, BanknoteArrowDown, ChevronDown, ChevronUp, Edit2, Search, UserPlus, CheckSquare, Clock, RefreshCw, Check, MessageCircle } from 'lucide-react';
 import { getAllPeople, createPerson, deletePerson } from '../src/services/peopleService';
 import { getAllTransactions, createTransaction, deleteTransaction, updateTransaction, getUnsyncedHistoricalTransactionsCount, getUnsyncedHistoricalTransactions, syncSpecificHistoricalTransactions } from '../src/services/transactionsService';
 import { getAllAccountsFrontend } from '../src/services/accountsService';
@@ -14,6 +15,11 @@ const formatCurrency = (val: number) =>
   new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP', minimumFractionDigits: 2 }).format(val);
 
 export default function PeoplePage() {
+interface PeoplePageProps {
+  onStartChat?: (friendId: string) => void;
+}
+
+export default function PeoplePage({ onStartChat }: PeoplePageProps) {
   const { getAccentClasses } = useTheme();
   const [people, setPeople] = useState<SupabasePerson[]>([]);
   const [transactions, setTransactions] = useState<SupabaseTransaction[]>([]);
@@ -474,6 +480,28 @@ export default function PeoplePage() {
             >
               <Edit2 className="w-5 h-5 text-gray-600 dark:text-gray-400" />
             </button>
+            <div className="flex items-center gap-2">
+              {people.find(p => p.name === selectedPerson)?.friend_user_id && onStartChat && (
+                <button
+                  onClick={() => onStartChat(people.find(p => p.name === selectedPerson)!.friend_user_id!)}
+                  className="p-3 bg-indigo-50 dark:bg-indigo-900/30 border border-indigo-100 dark:border-indigo-800 rounded-full hover:bg-indigo-100 dark:hover:bg-indigo-900/50 transition-colors shadow-sm"
+                  title="Message"
+                >
+                  <MessageCircle className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
+                </button>
+              )}
+              <button 
+                onClick={() => {
+                  setEditPersonForm({ name: selectedPerson, handle: '', matchedUserId: '' });
+                  setMatchedUsers([]);
+                  setLinkState('idle');
+                  setShowEditPersonModal(true);
+                }}
+                className="p-3 bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-800 rounded-full hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors shadow-sm"
+              >
+                <Edit2 className="w-5 h-5 text-gray-600 dark:text-gray-400" />
+              </button>
+            </div>
           </div>
 
           {/* Stats Cards */}
@@ -1117,6 +1145,15 @@ export default function PeoplePage() {
                       <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Total Loans</p>
                       <p className="text-sm font-bold text-gray-900 dark:text-gray-100">{formatCurrency(stats.totalLoanAmount)}</p>
                     </div>
+                    {person.friend_user_id && fStatus === 'accepted' && onStartChat && (
+                      <button 
+                        onClick={() => onStartChat(person.friend_user_id!)}
+                        className="p-2 text-indigo-600 bg-indigo-50 dark:bg-indigo-900/30 dark:text-indigo-400 rounded-xl hover:bg-indigo-100 dark:hover:bg-indigo-900/50 transition-colors"
+                        title="Message"
+                      >
+                        <MessageCircle className="w-4 h-4" />
+                      </button>
+                    )}
                     <button 
                       onClick={() => setSelectedPerson(person.name)}
                       className="text-xs font-bold text-indigo-600 bg-indigo-50 dark:bg-indigo-900/30 dark:text-indigo-400 px-4 py-2 rounded-xl hover:bg-indigo-100 dark:hover:bg-indigo-900/50 transition-colors uppercase tracking-widest"
@@ -1192,6 +1229,15 @@ export default function PeoplePage() {
                         </button>
                       </div>
                     ) : null}
+                    {fStatus === 'accepted' && onStartChat && (
+                      <button 
+                        onClick={() => onStartChat(prof.user_id)}
+                        className="p-2 text-indigo-600 bg-indigo-50 dark:bg-indigo-900/30 dark:text-indigo-400 rounded-xl hover:bg-indigo-100 dark:hover:bg-indigo-900/50 transition-colors"
+                        title="Message"
+                      >
+                        <MessageCircle className="w-4 h-4" />
+                      </button>
+                    )}
                   </div>
                 </div>
               );
