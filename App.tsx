@@ -1064,9 +1064,15 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
             <div className="absolute inset-0 bg-blue-50/50 dark:bg-blue-900/10 animate-pulse"></div>
             <div className="w-10 h-10 border-4 border-blue-100 dark:border-gray-800 border-t-blue-600 dark:border-t-blue-500 rounded-full animate-spin relative z-10"></div>
           </div>
-          <div className="flex flex-row flex-nowrap justify-center items-center gap-4 mb-6">
-            <img src="/iconapp.png" alt="Budee Mascot" className="w-16 h-16 md:w-20 md:h-20 drop-shadow-xl hover:scale-105 transition-transform" />
-            <Logo className="text-6xl md:text-7xl" />
+          <div className="flex flex-row flex-nowrap justify-center items-center mb-6 active:scale-95 transition-transform">
+            <img 
+              src="/iconapp.png" 
+              alt="Budee Mascot" 
+              className="w-24 h-24 md:w-32 md:h-32 drop-shadow-2xl z-10 -mr-6 md:-mr-8 rotate-[15deg] hover:scale-105 hover:rotate-12 transition-all duration-300" 
+            />
+            <div className="mt-2 md:mt-4">
+              <Logo className="text-6xl md:text-8xl" />
+            </div>
           </div>
           <p className="text-gray-500 dark:text-gray-400 font-medium text-sm max-w-[260px] mx-auto leading-relaxed animate-pulse">
             Loading your financial data and preparing your dashboard...
@@ -1099,16 +1105,33 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
         <div className="flex h-[100dvh] bg-gray-100 dark:bg-gray-950 w-full overflow-hidden fixed inset-0 transition-colors duration-200">
         <aside className={`fixed inset-y-0 left-0 z-50 bg-gray-50 dark:bg-gray-900 border-r border-gray-200 dark:border-gray-800 transition-all duration-300 ease-in-out ${isSidebarOpen ? 'w-56' : 'hidden md:flex w-20'} overscroll-none`}> 
           <div className="flex flex-col h-full">
-            <div className="flex items-center justify-between h-14 px-4 border-b border-gray-100 dark:border-gray-800">
+            <div className={`flex items-center h-14 px-4 border-b border-gray-100 dark:border-gray-800 ${isSidebarOpen ? 'justify-between' : 'justify-center'}`}>
+              <div 
+                className="flex flex-row flex-nowrap items-center cursor-pointer active:scale-95 transition-transform"
+                onClick={() => !isSidebarOpen && setIsSidebarOpen(true)}
+                title={!isSidebarOpen ? "Expand Menu" : ""}
+              >
+                <img 
+                  src="/iconapp.png" 
+                  alt="Budee Mascot" 
+                  className={`drop-shadow-md transition-all duration-300 z-10 ${
+                    isSidebarOpen 
+                      ? 'w-10 h-10 md:w-12 md:h-12 -mr-3 rotate-[15deg] hover:scale-110 hover:rotate-12' 
+                      : 'w-8 h-8 hover:scale-110'
+                  }`} 
+                />
+                {isSidebarOpen && (
+                  <div className="mt-1 ml-1">
+                    <Logo className="text-3xl md:text-4xl" />
+                  </div>
+                )}
+              </div>
+              
               {isSidebarOpen && (
-                <div className="mt-1 flex flex-row flex-nowrap items-center gap-2">
-                  <img src="/iconapp.png" alt="Budee Mascot" className="w-8 h-8 drop-shadow-md hover:scale-105 transition-transform" />
-                  <Logo className="text-3xl" />
-                </div>
+                <button onClick={() => setIsSidebarOpen(false)} className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-500 dark:text-gray-400 transition-colors ml-2 active:scale-95">
+                  <ChevronLeft className="w-5 h-5" />
+                </button>
               )}
-              <button onClick={() => setIsSidebarOpen(!isSidebarOpen)} className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-500 dark:text-gray-400 transition-colors">
-                {isSidebarOpen ? <ChevronLeft className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
-              </button>
             </div>
             <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
               {navPreferences.filter(pref => pref.visible).map((pref) => {
