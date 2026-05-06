@@ -1,14 +1,17 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { Users, Plus, LayoutGrid, List, MoreVertical, Trash2, ArrowRight, ArrowLeft, X, AlertTriangle, User, Landmark, ArrowUpFromLine, ArrowDownToLine, ArrowLeftRight, BanknoteArrowDown, ChevronDown, ChevronUp, Edit2, Search, UserPlus, CheckSquare, Clock, RefreshCw, Check, MessageCircle } from 'lucide-react';
-import { getAllPeople, createPerson, deletePerson } from '../src/services/peopleService';
+import { createPerson, deletePerson } from '../src/services/peopleService';
 import { getAllTransactions, createTransaction, deleteTransaction, updateTransaction, getUnsyncedHistoricalTransactionsCount, getUnsyncedHistoricalTransactions, syncSpecificHistoricalTransactions } from '../src/services/transactionsService';
 import { getAllAccountsFrontend } from '../src/services/accountsService';
 import { Account } from '../types';
-import { searchUsers, sendFriendRequest, getFriendships } from '../src/services/friendshipsService';
+import { searchUsers, sendFriendRequest } from '../src/services/friendshipsService';
 import type { SupabasePerson, SupabaseTransaction, SupabaseUserProfile, SupabaseFriendship } from '../src/types/supabase';
 import { combineDateWithCurrentTime } from '../src/utils/dateUtils';
 import { useTheme } from '../src/contexts/ThemeContext';
 import { supabase } from '../src/utils/supabaseClient';
+import { useAuth } from '../src/contexts/AuthContext';
+import { useQueryClient } from '@tanstack/react-query';
+import { useLocalPeople, useFriendships, useBudeeProfiles, socialKeys } from '../src/hooks/useBudies';
 
 const formatCurrency = (val: number) =>
   new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP', minimumFractionDigits: 2 }).format(val);
@@ -19,11 +22,25 @@ interface PeoplePageProps {
 
 export default function PeoplePage({ onStartChat }: PeoplePageProps) {
   const { getAccentClasses } = useTheme();
-  const [people, setPeople] = useState<SupabasePerson[]>([]);
+  const { user } = useAuth();
+  const queryClient = useQueryClient();
+  
+  // TanStack Global Cache for Social Data
+  const { data: people = [], isLoading: isPeopleLoading } = useLocalPeople();
+  const { data: friendships = [], isLoading: isFriendshipsLoading } = useFriendships();
+  
+  const validFriendships = useMemo(() => friendships.filter(f => f.status === 'accepted' || f.status === 'pending'), [friendships]);
+  const friendshipIds = useMemo(() => validFriendships.map(f => f.user_id === user?.id ? f.friend_id : f.user_id), [validFriendships, user?.id]);
+  const linkedFriendIds = useMemo(() => people.filter(p => p.friend_user_id).map(p => p.friend_user_id as string), [people]);
+  const allProfileIdsToFetch = useMemo(() => Array.from(new Set([...friendshipIds, ...linkedFriendIds])), [friendshipIds, linkedFriendIds]);
+  
+  const { data: friendProfiles = [], isLoading: isProfilesLoading } = useBudeeProfiles(allProfileIdsToFetch);
+
   const [transactions, setTransactions] = useState<SupabaseTransaction[]>([]);
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
-  const [isLoading, setIsLoading] = useState(true);
+  const [isExtraDataLoading, setIsExtraDataLoading] = useState(true);
+  const isLoading = isPeopleLoading || isFriendshipsLoading || isProfilesLoading || isExtraDataLoading;
   
   const [showAddModal, setShowAddModal] = useState(false);
   const [selectedPerson, setSelectedPerson] = useState<string | null>(null);
@@ -49,13 +66,11 @@ export default function PeoplePage({ onStartChat }: PeoplePageProps) {
   const [searchResults, setSearchResults] = useState<SupabaseUserProfile[]>([]);
   const [sentRequests, setSentRequests] = useState<Set<string>>(new Set());
   
-  const [friendships, setFriendships] = useState<SupabaseFriendship[]>([]);
   const [showEditPersonModal, setShowEditPersonModal] = useState(false);
   const [editPersonForm, setEditPersonForm] = useState({ name: '', handle: '', matchedUserId: '' });
   const [linkState, setLinkState] = useState<'idle' | 'searching' | 'found' | 'error'>('idle');
   const [matchedUsers, setMatchedUsers] = useState<SupabaseUserProfile[]>([]);
   const [mainTab, setMainTab] = useState<'profiles' | 'budies'>('profiles');
-  const [friendProfiles, setFriendProfiles] = useState<SupabaseUserProfile[]>([]);
   const [linkBudeeModal, setLinkBudeeModal] = useState<SupabaseUserProfile | null>(null);
   const [selectedLocalPersonToLink, setSelectedLocalPersonToLink] = useState('');
   const [unsyncedCount, setUnsyncedCount] = useState(0);
@@ -67,83 +82,56 @@ export default function PeoplePage({ onStartChat }: PeoplePageProps) {
   const [isLoadingSyncList, setIsLoadingSyncList] = useState(false);
 
   const loadData = useCallback(async () => {
-    setIsLoading(true);
+    setIsExtraDataLoading(true);
 
-    const { data: { user } } = await supabase.auth.getUser();
-    const myId = user?.id;
-
-    const [peopleRes, txRes, friendRes, accountsRes] = await Promise.all([
-      getAllPeople(),
+    const [txRes, accountsRes, unsyncedRes] = await Promise.all([
       getAllTransactions(),
-      getFriendships(),
-      getAllAccountsFrontend()
+      getAllAccountsFrontend(),
+      getUnsyncedHistoricalTransactionsCount()
     ]);
     
-    let currentPeople = peopleRes.data || [];
-    let currentTxs = txRes.data || [];
-    const currentFriendships = friendRes.data || [];
     if (accountsRes.data) setAccounts(accountsRes.data);
+    if (txRes.data) setTransactions(txRes.data);
+    setUnsyncedCount(unsyncedRes.count || 0);
+    
+    setIsExtraDataLoading(false);
+  }, []);
 
-    if (myId) {
-      // 1. Force sync names for ALL existing linked profiles (updates legacy names to strict format)
-      const linkedPeople = currentPeople.filter(p => p.friend_user_id);
-      if (linkedPeople.length > 0) {
-        const { data: linkedProfiles } = await supabase.from('user_profiles').select('*').in('user_id', linkedPeople.map(p => p.friend_user_id));
-        if (linkedProfiles) {
-          let needsUpdate = false;
-          const updatedPeople = currentPeople.map(p => {
-            if (p.friend_user_id) {
-              const prof = linkedProfiles.find(lp => lp.user_id === p.friend_user_id);
-              if (prof) {
-                const correctName = `${prof.first_name} ${prof.last_name}${prof.username ? ` (@${prof.username})` : ''}`;
-                if (p.name !== correctName) {
-                  needsUpdate = true;
-                  const isTestMode = localStorage.getItem('test_environment_enabled') === 'true';
-                  const peopleTable = isTestMode ? 'people_test' : 'people';
-                  supabase.from(peopleTable).update({ name: correctName }).eq('id', p.id).then();
-                  
-                  const txsToUpdate = currentTxs.filter(t => t.person_name === p.name || t.borrower_name === p.name);
-                  txsToUpdate.forEach(tx => {
-                    const updates: any = {};
-                    if (tx.person_name === p.name) updates.person_name = correctName;
-                    if (tx.borrower_name === p.name) updates.borrower_name = correctName;
-                    updateTransaction(tx.id, updates).then();
-                  });
-                  return { ...p, name: correctName };
-                }
-              }
-            }
-            return p;
-          });
-          if (needsUpdate) {
-            currentPeople = updatedPeople;
-            getAllTransactions().then(res => { if (res.data) setTransactions(res.data); });
+  // Auto-sync names for linked profiles
+  useEffect(() => {
+    if (!people.length || !friendProfiles.length || !user) return;
+    
+    let needsUpdate = false;
+    const linkedPeople = people.filter(p => p.friend_user_id);
+    
+    if (linkedPeople.length > 0) {
+      linkedPeople.forEach(p => {
+        const prof = friendProfiles.find(lp => lp.user_id === p.friend_user_id);
+        if (prof) {
+          const correctName = `${prof.first_name} ${prof.last_name}${prof.username ? ` (@${prof.username})` : ''}`;
+          if (p.name !== correctName) {
+            needsUpdate = true;
+            const isTestMode = localStorage.getItem('test_environment_enabled') === 'true';
+            const peopleTable = isTestMode ? 'people_test' : 'people';
+            supabase.from(peopleTable).update({ name: correctName }).eq('id', p.id).then();
+            
+            const txsToUpdate = transactions.filter(t => (t as any).person_name === p.name || t.borrower_name === p.name);
+            txsToUpdate.forEach(tx => {
+              const updates: any = {};
+              if ((tx as any).person_name === p.name) updates.person_name = correctName;
+              if (tx.borrower_name === p.name) updates.borrower_name = correctName;
+              updateTransaction(tx.id, updates).then();
+            });
           }
         }
-      }
+      });
 
-      const validFriendships = currentFriendships.filter(f => f.status === 'accepted' || f.status === 'pending');
-      const friendshipIds = validFriendships.map(f => f.user_id === myId ? f.friend_id : f.user_id);
-      const linkedFriendIds = currentPeople.filter(p => p.friend_user_id).map(p => p.friend_user_id);
-      
-      const allProfileIdsToFetch = Array.from(new Set([...friendshipIds, ...linkedFriendIds]));
-      
-      if (allProfileIdsToFetch.length > 0) {
-        const { data: fProfiles } = await supabase.from('user_profiles').select('*').in('user_id', allProfileIdsToFetch);
-        if (fProfiles) setFriendProfiles(fProfiles);
-      } else {
-        setFriendProfiles([]);
+      if (needsUpdate) {
+        queryClient.invalidateQueries({ queryKey: socialKeys.localPeople() });
+        getAllTransactions().then(res => { if (res.data) setTransactions(res.data); });
       }
-      
-      const unsyncedRes = await getUnsyncedHistoricalTransactionsCount();
-      setUnsyncedCount(unsyncedRes.count || 0);
     }
-
-    setPeople(currentPeople);
-    setTransactions(currentTxs);
-    setFriendships(currentFriendships);
-    setIsLoading(false);
-  }, []);
+  }, [people, friendProfiles, user, transactions, queryClient]);
 
   const handleCreateProfileForBudee = async (prof: SupabaseUserProfile) => {
     setIsSubmitting(true);
@@ -168,10 +156,8 @@ export default function PeoplePage({ onStartChat }: PeoplePageProps) {
         if (updateErr) {
           console.error("Linking failed:", updateErr);
           alert(`Profile created, but failed to link Budee: ${updateErr.message}\n\nPlease check if 'friend_user_id' exists in the database.`);
-          setPeople(prev => [...prev, { ...newPerson, name: newName }]); // Add to UI anyway
-        } else {
-          setPeople(prev => [...prev, { ...newPerson, friend_user_id: prof.user_id, name: newName }]);
         }
+        queryClient.invalidateQueries({ queryKey: socialKeys.localPeople() });
       }
       
       await loadData();
@@ -205,8 +191,7 @@ export default function PeoplePage({ onStartChat }: PeoplePageProps) {
         return;
       }
 
-      setPeople(prev => prev.map(p => p.id === personRecord.id ? { ...p, friend_user_id: linkBudeeModal.user_id, name: newName } : p));
-      
+      queryClient.invalidateQueries({ queryKey: socialKeys.localPeople() });
       const txsToUpdate = transactions.filter(t => (t as any).person_name === personRecord.name || t.borrower_name === personRecord.name);
       for (const tx of txsToUpdate) {
         const updates: any = {};
@@ -273,7 +258,7 @@ export default function PeoplePage({ onStartChat }: PeoplePageProps) {
     if (error) {
       alert('Failed to add person. Please try again.');
     } else if (data) {
-      setPeople(prev => [...prev, data]);
+      queryClient.invalidateQueries({ queryKey: socialKeys.localPeople() });
       setNewPersonName('');
       setShowAddModal(false);
     }
@@ -304,7 +289,7 @@ export default function PeoplePage({ onStartChat }: PeoplePageProps) {
       if (error) {
         alert('Failed to delete person.');
       } else {
-        setPeople(prev => prev.filter(p => p.id !== confirmModal.id));
+        queryClient.invalidateQueries({ queryKey: socialKeys.localPeople() });
         setConfirmModal(null);
         loadData(); // Unconditionally sync connections state back to the UI
       }
@@ -404,6 +389,7 @@ export default function PeoplePage({ onStartChat }: PeoplePageProps) {
       });
     } else {
       alert('Friend request sent successfully!');
+    queryClient.invalidateQueries({ queryKey: socialKeys.friendships() });
     }
   };
 
@@ -907,6 +893,7 @@ export default function PeoplePage({ onStartChat }: PeoplePageProps) {
                         if (editPersonForm.name !== selectedPerson) {
                           setSelectedPerson(editPersonForm.name);
                         }
+                      queryClient.invalidateQueries({ queryKey: socialKeys.localPeople() });
                         loadData();
                       } catch (e) {
                         console.error(e);

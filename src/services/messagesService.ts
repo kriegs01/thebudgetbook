@@ -49,6 +49,17 @@ export const markMessagesAsRead = async (messageIds: string[]) => {
   return { data, error: null };
 };
 
+// Get total count of unread messages for a user
+export const getUnreadMessagesCount = async (userId: string) => {
+  const { count, error } = await supabase
+    .from('messages')
+    .select('*', { count: 'exact', head: true })
+    .eq('receiver_id', userId)
+    .is('read_at', null);
+  if (error) throw error;
+  return count || 0;
+};
+
 // Set up a real-time listener for new incoming messages
 export const subscribeToIncomingMessages = (userId: string, onNewMessage: (payload: any) => void) => {
   return supabase

@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { getFriendships, getIncomingFriendRequests, acceptFriendRequest, removeFriendship } from '../services/friendshipsService';
+import { getUnreadMessagesCount } from '../services/messagesService';
 import { getAllPeople } from '../services/peopleService';
 import { supabase } from '../utils/supabaseClient';
 import { useAuth } from '../contexts/AuthContext';
@@ -10,6 +11,7 @@ export const socialKeys = {
   incomingRequests: () => [...socialKeys.all, 'incomingRequests'] as const,
   localPeople: () => [...socialKeys.all, 'localPeople'] as const,
   profiles: (userIds: string[]) => [...socialKeys.all, 'profiles', userIds] as const,
+  unreadMessages: () => [...socialKeys.all, 'unreadMessages'] as const,
 };
 
 // 1. Fetch Friendships (My Budies)
@@ -24,6 +26,20 @@ export function useFriendships() {
     },
     enabled: !!user,
     staleTime: 1000 * 60 * 5, // Data is fresh for 5 minutes
+  });
+}
+
+// 5. Fetch Unread Messages Count
+export function useUnreadMessagesCount() {
+  const { user } = useAuth();
+  return useQuery({
+    queryKey: socialKeys.unreadMessages(),
+    queryFn: async () => {
+      if (!user) return 0;
+      return await getUnreadMessagesCount(user.id);
+    },
+    enabled: !!user,
+    refetchInterval: 1000 * 30, // Background poll every 30 seconds to catch missed sockets
   });
 }
 

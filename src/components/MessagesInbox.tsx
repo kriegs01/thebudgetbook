@@ -1,9 +1,10 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { X, Send, MessageCircle, ArrowLeft, Banknote } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { subscribeToIncomingMessages, getConversation, sendMessage, Message } from '../services/messagesService';
+import { subscribeToIncomingMessages, getConversation, sendMessage, Message, markMessagesAsRead } from '../services/messagesService';
 import { supabase } from '../utils/supabaseClient';
-import { useFriendships, useBudeeProfiles } from '../hooks/useBudies';
+import { useFriendships, useBudeeProfiles, socialKeys } from '../hooks/useBudies';
+import { useQueryClient } from '@tanstack/react-query';
 
 interface MessagesInboxProps {
   isOpen: boolean;
@@ -18,6 +19,7 @@ export const MessagesInbox: React.FC<MessagesInboxProps> = ({ isOpen, onClose, c
   const [newMessage, setNewMessage] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
 
   // Internal routing states for the messaging hub
   const [internalChatId, setInternalChatId] = useState<string | undefined>();
@@ -104,7 +106,15 @@ export const MessagesInbox: React.FC<MessagesInboxProps> = ({ isOpen, onClose, c
     const loadHistory = async () => {
       try {
         const { data } = await getConversation(currentUserId, internalChatId);
-        if (data) setMessages(data);
+        if (data) {
+          setMessages(data);
+          // Automatically mark unread messages as read when opening the chat
+          const unreadIds = data.filter(m => m.receiver_id === currentUserId && !m.read_at).map(m => m.id);
+          if (unreadIds.length > 0) {
+            await markMessagesAsRead(unreadIds);
+            queryClient.invalidateQueries({ queryKey: socialKeys.unreadMessages() });
+          }
+        }
       } catch (err) {
         console.error('Failed to load messages', err);
       }
@@ -113,9 +123,15 @@ export const MessagesInbox: React.FC<MessagesInboxProps> = ({ isOpen, onClose, c
     loadHistory();
 
     // Start Realtime Subscription
-    const channel = subscribeToIncomingMessages(currentUserId, (newMsg: Message) => {
+    const channel = subscribeToIncomingMessages(currentUserId, async (newMsg: Message) => {
       if (newMsg.sender_id === internalChatId) {
         setMessages((prev) => [...prev, newMsg]);
+        // Mark single message as read if chat is actively open
+        await markMessagesAsRead([newMsg.id]);
+        queryClient.invalidateQueries({ queryKey: socialKeys.unreadMessages() });
+      } else {
+        // Update badge if receiving a message while looking at another screen
+        queryClient.invalidateQueries({ queryKey: socialKeys.unreadMessages() });
       }
     });
 

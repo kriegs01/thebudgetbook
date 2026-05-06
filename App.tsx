@@ -44,7 +44,7 @@ import Auth from './pages/Auth';
 import UpdatePassword from './pages/update-password';
 import { useTransactions } from './src/hooks/useTransactions';
 import { useAccounts } from './src/hooks/useAccounts';
-import { useIncomingRequests } from './src/hooks/useBudies';
+import { useIncomingRequests, useUnreadMessagesCount } from './src/hooks/useBudies';
 import { SetupWizard } from './src/components/SetupWizard';
 import { Logo } from './src/components/Logo';
 import { MessagesInbox } from './src/components/MessagesInbox';
@@ -205,6 +205,7 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
   const [isMessagesOpen, setIsMessagesOpen] = useState(false);
   const [activeChatFriendId, setActiveChatFriendId] = useState<string | undefined>();
   const { data: pendingRequests = [], refetch: refetchRequests } = useIncomingRequests();
+  const { data: unreadMessagesCount = 0 } = useUnreadMessagesCount();
   const [pendingTransactions, setPendingTransactions] = useState<any[]>([]);
   const [txAccountSelections, setTxAccountSelections] = useState<Record<string, string>>({});
   const [resolvingIds, setResolvingIds] = useState<Set<string>>(new Set());
@@ -1081,7 +1082,18 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
         <BrowserRouter>
         <style>
           {`@import url('https://fonts.googleapis.com/css2?family=Titan+One&display=swap');
-          .font-titan { font-family: 'Titan One', cursive; font-weight: 400; letter-spacing: 1px; }`}
+          .font-titan { font-family: 'Titan One', cursive; font-weight: 400; letter-spacing: 1px; }
+          
+          @keyframes ring {
+            0% { transform: rotate(0); }
+            5% { transform: rotate(15deg); }
+            10% { transform: rotate(-10deg); }
+            15% { transform: rotate(15deg); }
+            20% { transform: rotate(-10deg); }
+            25% { transform: rotate(0); }
+            100% { transform: rotate(0); }
+          }
+          .animate-ring { animation: ring 2s ease-in-out infinite; }`}
         </style>
         <div className="flex h-[100dvh] bg-gray-100 dark:bg-gray-950 w-full overflow-hidden fixed inset-0 transition-colors duration-200">
         <aside className={`fixed inset-y-0 left-0 z-50 bg-gray-50 dark:bg-gray-900 border-r border-gray-200 dark:border-gray-800 transition-all duration-300 ease-in-out ${isSidebarOpen ? 'w-56' : 'hidden md:flex w-20'} overscroll-none`}> 
@@ -1153,12 +1165,19 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
         <header className="h-14 px-4 md:px-8 border-b border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-900 flex items-center justify-end shrink-0 transition-colors z-20">
           <div className="flex items-center space-x-2 md:space-x-4">
             {/* Messages */}
-            <button 
-              onClick={() => setIsMessagesOpen(!isMessagesOpen)}
-              className={`p-2 text-gray-400 rounded-full transition-colors ${getAccentClasses('hoverLight')} ${isMessagesOpen ? 'bg-gray-100 dark:bg-gray-800' : ''}`}
-            >
-              <MessageCircle className="w-5 h-5" />
-            </button>
+            <div className="relative">
+              <button 
+                onClick={() => setIsMessagesOpen(!isMessagesOpen)}
+                className={`relative p-2 text-gray-400 rounded-full transition-colors ${getAccentClasses('hoverLight')} ${isMessagesOpen ? 'bg-gray-100 dark:bg-gray-800' : ''} ${unreadMessagesCount > 0 && !isMessagesOpen ? 'animate-ring text-indigo-500 dark:text-indigo-400' : ''}`}
+              >
+                <MessageCircle className="w-5 h-5" />
+                {unreadMessagesCount > 0 && (
+                  <span className="absolute top-0 right-0 flex items-center justify-center min-w-[18px] h-[18px] px-1 bg-red-500 text-white text-[9px] font-black rounded-full border-2 border-white dark:border-gray-900">
+                    {unreadMessagesCount > 99 ? '99+' : unreadMessagesCount}
+                  </span>
+                )}
+              </button>
+            </div>
             {/* Notifications */}
             <div className="relative">
               <button 
