@@ -1057,7 +1057,19 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
       <div className="fixed inset-0 z-[9999] flex flex-col items-center justify-center bg-gradient-to-br from-blue-100 via-gray-50 to-purple-100 dark:from-gray-950 dark:via-gray-900 dark:to-gray-950 transition-colors duration-300">
         <style>
           {`@import url('https://fonts.googleapis.com/css2?family=Titan+One&display=swap');
-          .font-titan { font-family: 'Titan One', cursive; font-weight: 400; letter-spacing: 1px; }`}
+          .font-titan { font-family: 'Titan One', cursive; font-weight: 400; letter-spacing: 1px; }
+          @keyframes squeeze-mascot {
+            0% { transform: translateY(16px) rotate(15deg); }
+            5% { transform: translateY(16px) rotate(15deg); }
+            30% { transform: translateY(0) rotate(15deg); }
+            38% { transform: translateY(0) rotate(15deg); }
+            55% { transform: translateY(0) translateX(12px) rotate(22deg) scale(0.92); }
+            72% { transform: translateY(0) translateX(12px) rotate(22deg) scale(0.92); }
+            100% { transform: translateY(0) translateX(0) rotate(15deg) scale(1); }
+          }
+          .animate-squeeze-mascot {
+            animation: squeeze-mascot 1.8s ease-in-out forwards;
+          }`}
         </style>
         <div className="text-center animate-in fade-in zoom-in duration-700">
           <div className="w-24 h-24 bg-white dark:bg-gray-900 rounded-3xl shadow-2xl flex items-center justify-center mx-auto mb-8 relative overflow-hidden border border-gray-100 dark:border-gray-800">
@@ -1068,7 +1080,7 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
             <img 
               src="/iconapp.png" 
               alt="Budee Mascot" 
-              className="w-24 h-24 md:w-32 md:h-32 drop-shadow-2xl z-10 -mr-6 md:-mr-8 rotate-[15deg] hover:scale-105 hover:rotate-12 transition-all duration-300" 
+              className="w-24 h-24 md:w-32 md:h-32 drop-shadow-2xl z-10 -mr-10 md:-mr-12 rotate-[15deg] animate-squeeze-mascot hover:scale-105 hover:rotate-12 transition-all duration-300" 
             />
             <div className="mt-2 md:mt-4">
               <Logo className="text-6xl md:text-8xl" />
@@ -1116,7 +1128,7 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
                   alt="Budee Mascot" 
                   className={`drop-shadow-md transition-all duration-300 z-10 ${
                     isSidebarOpen 
-                      ? 'w-10 h-10 md:w-12 md:h-12 -mr-3 rotate-[15deg] hover:scale-110 hover:rotate-12' 
+                      ? 'w-10 h-10 md:w-12 md:h-12 -mr-5 md:-mr-6 rotate-[15deg] hover:scale-110 hover:rotate-12' 
                       : 'w-8 h-8 hover:scale-110'
                   }`} 
                 />
