@@ -1064,7 +1064,8 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
             <div className="absolute inset-0 bg-blue-50/50 dark:bg-blue-900/10 animate-pulse"></div>
             <div className="w-10 h-10 border-4 border-blue-100 dark:border-gray-800 border-t-blue-600 dark:border-t-blue-500 rounded-full animate-spin relative z-10"></div>
           </div>
-          <div className="flex justify-center mb-6">
+          <div className="flex flex-row flex-nowrap justify-center items-center gap-4 mb-6">
+            <img src="/iconapp.png" alt="Budee Mascot" className="w-16 h-16 md:w-20 md:h-20 drop-shadow-xl hover:scale-105 transition-transform" />
             <Logo className="text-6xl md:text-7xl" />
           </div>
           <p className="text-gray-500 dark:text-gray-400 font-medium text-sm max-w-[260px] mx-auto leading-relaxed animate-pulse">
@@ -1100,7 +1101,8 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
           <div className="flex flex-col h-full">
             <div className="flex items-center justify-between h-14 px-4 border-b border-gray-100 dark:border-gray-800">
               {isSidebarOpen && (
-                <div className="mt-1">
+                <div className="mt-1 flex flex-row flex-nowrap items-center gap-2">
+                  <img src="/iconapp.png" alt="Budee Mascot" className="w-8 h-8 drop-shadow-md hover:scale-105 transition-transform" />
                   <Logo className="text-3xl" />
                 </div>
               )}
