@@ -1,4 +1,4 @@
-import { supabase } from '../lib/supabase'; // Adjust this import to match your actual supabase client path
+import { supabase } from '../utils/supabaseClient';
 
 export interface Message {
   id: string;
