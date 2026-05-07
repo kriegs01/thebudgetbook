@@ -1,12 +1,15 @@
 import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react';
-import { Plus, Info, Eye, ZoomIn, ZoomOut, Download, X, ArrowLeft, Pencil, Trash2, CheckSquare, Square, ChevronDown, Filter, AlertTriangle, ArrowUpFromLine, ArrowDownToLine, ArrowLeftRight, Landmark, CreditCard, FileText } from 'lucide-react';
+import { Plus, Info, Eye, ZoomIn, ZoomOut, Download, X, ArrowLeft, Pencil, Trash2, CheckSquare, Square, ChevronDown, Filter, AlertTriangle, ArrowUpFromLine, ArrowDownToLine, ArrowLeftRight, Landmark, CreditCard, FileText, User, UserPlus } from 'lucide-react';
 import { PinProtectedAction } from '../src/components/PinProtectedAction';
 import { useAuth } from '../src/contexts/AuthContext';
 import { createTransaction, updateTransaction, deleteTransactionAndRevertSchedule, uploadTransactionReceipt, getReceiptSignedUrl, batchDeleteTransactions, createTransfer } from '../src/services/transactionsService';
 import { getAllAccountsFrontend } from '../src/services/accountsService';
-import { getAllPeople } from '../src/services/peopleService';
-import type { SupabasePerson } from '../src/types/supabase';
+import { getAllPeople, createPerson } from '../src/services/peopleService';
+import { getFriendships } from '../src/services/friendshipsService';
+import type { SupabasePerson, SupabaseUserProfile, SupabaseFriendship } from '../src/types/supabase';
+import { supabase } from '../src/utils/supabaseClient';
 import { combineDateWithCurrentTime, getTodayIso, getFirstDayOfCurrentYearIso, getLastDayOfCurrentYearIso } from '../src/utils/dateUtils';
+import { useTheme } from '../src/contexts/ThemeContext';
 
 const FILTER_MIN_DATE = '2025-01-01';
 
@@ -37,6 +40,81 @@ const TRANSACTION_TYPES = [
   { id: 'loan', label: 'Loan', icon: <Landmark className="w-5 h-5" />, x: 0, y: -130 },
 ];
 
+type ContactOption = {
+  id: string;
+  name: string;
+  handleOrEmail?: string;
+  isLinked: boolean;
+  isBudeeOnly: boolean;
+  budeeProfile?: SupabaseUserProfile;
+};
+
+const ContactDropdown = ({ value, onChange, contacts, placeholder }: { value: string, onChange: (val: string) => void, contacts: ContactOption[], placeholder: string }) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const [search, setSearch] = useState(value);
+  const wrapperRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => { setSearch(value); }, [value]);
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (wrapperRef.current && !wrapperRef.current.contains(e.target as Node)) setIsOpen(false);
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const filtered = contacts.filter(c => c.name.toLowerCase().includes(search.toLowerCase()));
+  const exactMatch = contacts.find(c => c.name.toLowerCase() === search.toLowerCase());
+
+  return (
+    <div className="relative" ref={wrapperRef}>
+      <input
+        type="text"
+        value={search}
+        onChange={e => { setSearch(e.target.value); onChange(e.target.value); setIsOpen(true); }}
+        onFocus={() => setIsOpen(true)}
+        placeholder={placeholder}
+        className="w-full bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-transparent rounded-xl p-3.5 pr-10 outline-none font-bold focus:ring-2 focus:ring-indigo-500 transition-all text-sm"
+      />
+      {exactMatch && !isOpen && (
+        <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none">
+          {exactMatch.isLinked && (
+            <div className="flex items-center justify-center bg-green-100 dark:bg-green-900/30 p-1.5 rounded-lg" title="Profile Linked">
+              <CheckSquare className="w-3.5 h-3.5 text-green-600 dark:text-green-400" />
+            </div>
+          )}
+          {exactMatch.isBudeeOnly && (
+            <div className="flex items-center justify-center bg-indigo-100 dark:bg-indigo-900/30 p-1.5 rounded-lg" title="Budee Connection">
+              <UserPlus className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
+            </div>
+          )}
+        </div>
+      )}
+      {isOpen && filtered.length > 0 && (
+        <div className="absolute z-50 w-full mt-1 bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-800 rounded-xl shadow-lg max-h-48 overflow-y-auto">
+          {filtered.map(c => (
+            <div key={c.id} onClick={() => { setSearch(c.name); onChange(c.name); setIsOpen(false); }} className="px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-800 cursor-pointer flex items-center justify-between transition-colors border-b border-gray-50 dark:border-gray-800/50 last:border-0">
+              <div className="flex flex-col min-w-0 pr-2">
+                <span className="text-sm font-bold text-gray-900 dark:text-gray-100 truncate">{c.name}</span>
+                {c.handleOrEmail && <span className="text-[10px] text-gray-500 truncate">{c.handleOrEmail}</span>}
+              </div>
+              <div className="flex items-center gap-2 flex-shrink-0">
+                {c.isLinked && (
+                  <div className="flex items-center gap-1 bg-green-100 dark:bg-green-900/30 px-2 py-1 rounded" title="Profile Linked"><CheckSquare className="w-3 h-3 text-green-600 dark:text-green-400" /></div>
+                )}
+                {c.isBudeeOnly && (
+                  <div className="flex items-center gap-1 bg-indigo-100 dark:bg-indigo-900/30 px-2 py-1 rounded" title="Budee Connection"><UserPlus className="w-3 h-3 text-indigo-600 dark:text-indigo-400" /></div>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
+
 interface TransactionsPageProps {
   transactions: Transaction[];
   loading?: boolean;
@@ -45,6 +123,7 @@ interface TransactionsPageProps {
 }
 
 const TransactionsPage: React.FC<TransactionsPageProps> = ({ transactions, loading = false, onTransactionDeleted, onTransactionCreated }) => {
+  const { getAccentClasses } = useTheme();
   const { userProfile } = useAuth();
 
   const [accounts, setAccounts] = useState<AccountOption[]>([]);
@@ -58,6 +137,9 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ transactions, loadi
   const [showTypeModal, setShowTypeModal] = useState(false);
   const [showFabMenu, setShowFabMenu] = useState(false);
   const [formSource, setFormSource] = useState<'top' | 'fab' | null>(null);
+  const [transferTab, setTransferTab] = useState<'accounts' | 'friends'>('accounts');
+  const [friendProfiles, setFriendProfiles] = useState<SupabaseUserProfile[]>([]);
+  const [pendingProfileModal, setPendingProfileModal] = useState<{budee: SupabaseUserProfile, formName: string} | null>(null);
 
   // Transaction details modal
   const [selectedTx, setSelectedTx] = useState<Transaction | null>(null);
@@ -74,6 +156,7 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ transactions, loadi
     name: '',
     date: todayIso(),
     amount: '',
+    feeAmount: '',
     paymentMethodId: '',
     transactionType: 'payment',
     transferToAccountId: '',
@@ -92,6 +175,15 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ transactions, loadi
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [showBatchConfirm, setShowBatchConfirm] = useState(false);
   const [isBatchDeleting, setIsBatchDeleting] = useState(false);
+
+  // Extract unique people names from both the People table and historical transactions
+  const uniquePeopleNames = useMemo(() => {
+    const names = [
+      ...people.map(p => p.name),
+      ...transactions.map(t => (t as any).person_name).filter(Boolean)
+    ];
+    return Array.from(new Set(names));
+  }, [people, transactions]);
 
   const [confirmModal, setConfirmModal] = useState<{
     show: boolean;
@@ -123,9 +215,13 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ transactions, loadi
   const loadData = useCallback(async () => {
     setIsLoading(true);
     try {
-      const [accountsResult, peopleResult] = await Promise.all([
+      const { data: { user } } = await supabase.auth.getUser();
+      const myId = user?.id;
+
+      const [accountsResult, peopleResult, friendshipsResult] = await Promise.all([
         getAllAccountsFrontend(),
-        getAllPeople()
+        getAllPeople(),
+        getFriendships()
       ]);
 
       if (accountsResult.error) {
@@ -139,6 +235,24 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ transactions, loadi
       } else if (peopleResult.data) {
         setPeople(peopleResult.data);
       }
+
+        if (myId) {
+          const linkedFriendIds = peopleResult.data ? peopleResult.data.filter(p => p.friend_user_id).map(p => p.friend_user_id) : [];
+          let friendIds: string[] = [];
+          if (friendshipsResult.data) {
+            const validFriendships = friendshipsResult.data.filter(f => f.status === 'accepted');
+            friendIds = validFriendships.map(f => f.user_id === myId ? f.friend_id : f.user_id);
+          }
+          
+          const allProfileIdsToFetch = Array.from(new Set([...linkedFriendIds, ...friendIds]));
+          
+          if (allProfileIdsToFetch.length > 0) {
+            const { data: fProfiles } = await supabase.from('user_profiles').select('*').in('user_id', allProfileIdsToFetch);
+            if (fProfiles) setFriendProfiles(fProfiles);
+          } else {
+            setFriendProfiles([]);
+          }
+      }
     } catch (error) {
       console.error('Error loading data:', error);
     } finally {
@@ -149,6 +263,51 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ transactions, loadi
   useEffect(() => {
     loadData();
   }, [loadData]);
+
+  // Instantly sync data if a notification payment is accepted globally
+  useEffect(() => {
+    const handleUpdate = () => loadData();
+    window.addEventListener('transactions_updated', handleUpdate);
+    return () => window.removeEventListener('transactions_updated', handleUpdate);
+  }, [loadData]);
+
+  const selectableContacts: ContactOption[] = useMemo(() => {
+    const list: ContactOption[] = [];
+    const addedNames = new Set<string>();
+
+    people.forEach(p => {
+      const isLinked = !!p.friend_user_id;
+      let handleOrEmail = '';
+      if (isLinked) {
+        const prof = friendProfiles.find(fp => fp.user_id === p.friend_user_id);
+        if (prof) handleOrEmail = prof.username ? `@${prof.username}` : prof.email;
+      }
+      list.push({ id: p.id, name: p.name, handleOrEmail, isLinked, isBudeeOnly: false });
+      addedNames.add(p.name.toLowerCase());
+    });
+    
+    friendProfiles.forEach(prof => {
+      const isAlreadyLinked = people.some(p => p.friend_user_id === prof.user_id);
+      if (!isAlreadyLinked) {
+        const name = `${prof.first_name} ${prof.last_name}${prof.username ? ` (@${prof.username})` : ''}`;
+        list.push({ id: prof.user_id, name: name, handleOrEmail: prof.username ? `@${prof.username}` : prof.email, isLinked: false, isBudeeOnly: true, budeeProfile: prof });
+        addedNames.add(name.toLowerCase());
+      }
+    });
+
+    uniquePeopleNames.forEach(name => {
+      if (name && !addedNames.has(name.toLowerCase())) {
+        list.push({
+          id: `hist-${name}`,
+          name: name,
+          isLinked: false,
+          isBudeeOnly: false
+        });
+        addedNames.add(name.toLowerCase());
+      }
+    });
+    return list;
+  }, [people, friendProfiles, uniquePeopleNames]);
 
   // Observer to show floating add button when scrolled past header
   useEffect(() => {
@@ -241,8 +400,7 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ transactions, loadi
     setShowForm(true);
   };
 
-  const onSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const executeTransactionSubmit = async () => {
     
     // Transfer creation logic (uses specialized service)
     if (form.transactionType === 'transfer' && !editingTxId) {
@@ -252,7 +410,8 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ transactions, loadi
           form.paymentMethodId,
           form.transferToAccountId,
           parseFloat(form.amount),
-          combineDateWithCurrentTime(form.date)
+          combineDateWithCurrentTime(form.date),
+          parseFloat(form.feeAmount || '0')
         );
         if (error) throw error;
         await loadData();
@@ -266,8 +425,13 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ transactions, loadi
       }
     }
 
+    let txName = form.name;
+    if (form.transactionType === 'transfer' && transferTab === 'friends' && !txName) {
+      txName = `Transfer to ${form.personName}`;
+    }
+
     // Standard transaction creation/update logic
-    if (!form.name || !form.date || !form.amount || !form.paymentMethodId) return;
+    if (!txName || !form.date || !form.amount || !form.paymentMethodId) return;
 
     // Apply correct positive/negative sign based on transaction type
     let finalAmount = parseFloat(form.amount);
@@ -281,12 +445,13 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ transactions, loadi
       if (editingTxId) {
         // Edit mode: update existing transaction
         const updates = {
-          name: form.name,
+          name: txName,
           date: combineDateWithCurrentTime(form.date),
           amount: finalAmount,
           payment_method_id: form.paymentMethodId,
           transaction_type: form.transactionType,
-          borrower_name: form.transactionType === 'loan' ? form.borrowerName || null : null
+          borrower_name: form.transactionType === 'loan' ? form.borrowerName || null : null,
+          person_name: (form.transactionType === 'transfer' && transferTab === 'friends') ? form.personName || null : null
         };
         const { error } = await updateTransaction(editingTxId, updates);
         if (error) {
@@ -308,15 +473,16 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ transactions, loadi
       } else {
         // Create mode
         const transaction = {
-          name: form.name,
+          name: txName,
           date: combineDateWithCurrentTime(form.date),
           amount: finalAmount,
           payment_method_id: form.paymentMethodId,
           transaction_type: form.transactionType,
-          borrower_name: form.transactionType === 'loan' ? form.borrowerName || null : null
+          borrower_name: form.transactionType === 'loan' ? form.borrowerName || null : null,
+          person_name: (form.transactionType === 'transfer' && transferTab === 'friends') ? form.personName || null : null
         };
         
-        const { data, error } = await createTransaction(transaction);
+        const { data, error } = await createTransaction(transaction as any);
         
         if (error) {
           console.error('Error creating transaction:', error);
@@ -352,6 +518,22 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ transactions, loadi
       console.error('Error saving transaction:', error);
       alert('Failed to save transaction. Please try again.');
     }
+  };
+
+  const onSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    const isTransferToFriend = form.transactionType === 'transfer' && transferTab === 'friends' && !editingTxId;
+    const targetName = isTransferToFriend ? form.personName : (form.transactionType === 'loan' ? form.borrowerName : null);
+
+    if (targetName) {
+      const matchedBudee = selectableContacts.find(c => c.name === targetName && c.isBudeeOnly);
+      if (matchedBudee && matchedBudee.budeeProfile) {
+        setPendingProfileModal({ budee: matchedBudee.budeeProfile, formName: targetName });
+        return;
+      }
+    }
+    await executeTransactionSubmit();
   };
 
   const removeTx = async (id: string, name: string) => {
@@ -460,7 +642,7 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ transactions, loadi
         {/* ── Header & Controllers ───────────────────────────────────────── */}
         <div ref={headerRef} className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white dark:bg-gray-900 p-6 md:p-8 rounded-[2.5rem] border border-gray-100 dark:border-gray-800 shadow-sm transition-colors mb-6">
           <div className="flex items-center gap-5">
-            <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-indigo-500 to-blue-600 flex items-center justify-center text-white shadow-lg">
+            <div className={`w-14 h-14 rounded-2xl flex items-center justify-center text-white shadow-lg transition-colors ${getAccentClasses('bg')} ${getAccentClasses('shadow')}`}>
               <FileText className="w-7 h-7" />
             </div>
             <div>
@@ -470,7 +652,7 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ transactions, loadi
           </div>
           
           <div className="flex items-center gap-3 self-end sm:self-auto">
-            <button onClick={() => setShowTypeModal(true)} className="flex items-center gap-2 bg-indigo-600 text-white px-5 py-3 rounded-xl font-bold hover:bg-indigo-700 transition-all shadow-md shadow-indigo-200 dark:shadow-none text-sm">
+            <button onClick={() => setShowTypeModal(true)} className={`flex items-center gap-2 text-white px-5 py-3 rounded-xl font-bold transition-all shadow-md dark:shadow-none text-sm ${getAccentClasses('bg')} ${getAccentClasses('shadow')}`}>
               <Plus className="w-4 h-4" />
               <span className="hidden sm:inline">Add Transaction</span>
             </button>
@@ -688,12 +870,12 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ transactions, loadi
 
         {/* QA: Consistent Transaction Form - with receipt upload, exclude credit accounts */}
         {showForm && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-md">
-          <div className="w-full max-w-md bg-white dark:bg-gray-900 rounded-3xl p-10 shadow-2xl relative transition-colors">
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-black/60 backdrop-blur-md">
+          <div className="w-full max-w-md bg-white dark:bg-gray-900 rounded-3xl p-6 md:p-8 shadow-2xl relative transition-colors max-h-[95vh] overflow-y-auto">
             {formSource === 'top' && !editingTxId && (
               <button 
                 onClick={() => { setShowForm(false); setShowTypeModal(true); setFormSource(null); }} 
-                className="absolute left-6 top-6 p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full transition-colors"
+                className="absolute left-4 top-4 md:left-6 md:top-6 p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full transition-colors"
                 aria-label="Back to type selection"
               >
                 <ArrowLeft className="w-5 h-5 text-gray-400" />
@@ -702,13 +884,13 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ transactions, loadi
             {(formSource === 'fab' || editingTxId) && (
               <button 
                 onClick={closeForm} 
-                className="absolute right-6 top-6 p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full transition-colors"
+                className="absolute right-4 top-4 md:right-6 md:top-6 p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full transition-colors"
                 aria-label="Close"
               >
                 <X className="w-5 h-5 text-gray-400" />
               </button>
             )}
-            <h2 className={`text-2xl font-black text-gray-900 dark:text-gray-100 mb-2 ${formSource === 'top' && !editingTxId ? 'mt-6' : ''}`}>
+            <h2 className={`text-xl md:text-2xl font-black text-gray-900 dark:text-gray-100 mb-1 ${formSource === 'top' && !editingTxId ? 'mt-8 md:mt-6' : ''}`}>
             {editingTxId ? 'Edit Transaction' : 
               form.transactionType === 'withdraw' ? 'Withdraw Funds' :
               form.transactionType === 'cash_in' ? 'Cash In' :
@@ -717,7 +899,7 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ transactions, loadi
               `Add New ${TRANSACTION_TYPES.find(t => t.id === form.transactionType)?.label || 'Transaction'}`
             }
             </h2>
-          <p className="text-gray-500 text-sm mb-8">
+          <p className="text-gray-500 text-xs md:text-sm mb-6">
             {editingTxId ? 'Update the transaction details below' : 
               form.transactionType === 'withdraw' ? 'Record an ATM withdrawal or cash out' :
               form.transactionType === 'cash_in' ? 'Record incoming funds' :
@@ -726,7 +908,7 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ transactions, loadi
               'Record a payment transaction'
             }
           </p>
-              <form onSubmit={onSubmit} className="space-y-6">
+              <form onSubmit={onSubmit} className="space-y-4 md:space-y-5">
                 {/* Conditional Name Field — Hide for Transfers since they auto-generate names */}
                 {(form.transactionType !== 'transfer' || editingTxId) && (
                   <div>
@@ -743,7 +925,7 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ transactions, loadi
                     form.transactionType === 'loan' ? 'e.g. Loan to John' :
                     'e.g. Groceries, Gas, etc.'
                   }
-                      className="w-full bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-transparent rounded-2xl p-4 outline-none font-bold focus:ring-2 focus:ring-indigo-500 transition-all" 
+                      className="w-full bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-transparent rounded-xl p-3.5 outline-none font-bold focus:ring-2 focus:ring-indigo-500 transition-all text-sm" 
                     />
                   </div>
                 )}
@@ -759,72 +941,164 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ transactions, loadi
                       value={form.amount} 
                       onChange={e => setForm(f => ({ ...f, amount: e.target.value }))} 
                       required 
-                    className="w-full bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-transparent rounded-2xl p-4 pl-8 outline-none text-xl font-black focus:ring-2 focus:ring-indigo-500 transition-all" 
+                    className="w-full bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-transparent rounded-xl p-3.5 pl-8 outline-none text-lg font-black focus:ring-2 focus:ring-indigo-500 transition-all" 
                     />
                   </div>
                 </div>
 
                 {form.transactionType === 'transfer' && !editingTxId ? (
                   <>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 relative">
-                      {/* Swap Accounts Button */}
-                      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 mt-0 sm:mt-3 flex items-center justify-center pointer-events-none z-10">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setForm(f => {
-                              const newFrom = f.transferToAccountId || accounts.find(a => a.type !== 'Credit' && a.id !== f.paymentMethodId)?.id || f.paymentMethodId;
-                              return {
-                                ...f,
-                                paymentMethodId: newFrom,
-                                transferToAccountId: f.paymentMethodId
-                              };
-                            });
-                          }}
-                          className="pointer-events-auto w-10 h-10 rounded-full bg-gray-100 dark:bg-gray-800 border-4 border-white dark:border-gray-900 flex items-center justify-center text-gray-500 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/50 transition-all shadow-sm"
-                          title="Swap accounts"
-                        >
-                          <ArrowLeftRight className="w-4 h-4 rotate-90 sm:rotate-0" />
-                        </button>
-                      </div>
-                      <div>
-                        <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Transfer From</label>
-                        {accounts.length === 0 ? (
-                          <div className="text-xs text-red-600 p-4">No accounts available</div>
-                        ) : (
-                          <select 
-                            value={form.paymentMethodId} 
-                            onChange={e => setForm(f => ({ ...f, paymentMethodId: e.target.value }))} 
-                            className="w-full min-w-0 bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-transparent rounded-2xl px-3 py-4 outline-none font-bold text-sm appearance-none transition-colors"
-                          >
-                            {accounts.filter(a => a.type !== 'Credit').map(a => <option key={a.id} value={a.id}>{a.bank}</option>)}
-                          </select>
-                        )}
-                      </div>
-                      <div>
-                        <label className="block text-[10px] font-black text-indigo-500 uppercase tracking-widest mb-2">Transfer To</label>
-                        <select 
-                          value={form.transferToAccountId} 
-                          onChange={e => setForm(f => ({ ...f, transferToAccountId: e.target.value }))} 
-                          className="w-full min-w-0 bg-indigo-50 dark:bg-indigo-900/20 text-indigo-700 dark:text-indigo-300 border-transparent rounded-2xl px-3 py-4 outline-none font-bold text-sm appearance-none transition-colors"
-                        >
-                          <option value="">Select Destination Account</option>
-                          {accounts.filter(a => a.id !== form.paymentMethodId && a.type !== 'Credit').map(a => (
-                            <option key={a.id} value={a.id}>{a.bank}</option>
-                          ))}
-                        </select>
-                      </div>
+                    {/* Tab Selector */}
+                    <div className="flex p-1 bg-gray-100 dark:bg-gray-800 rounded-xl mb-4 mt-2">
+                      <button
+                        type="button"
+                        onClick={() => setTransferTab('accounts')}
+                        className={`flex-1 flex items-center justify-center gap-2 py-2.5 px-3 rounded-lg text-xs md:text-sm font-bold transition-all ${transferTab === 'accounts' ? 'bg-white dark:bg-gray-900 text-blue-600 dark:text-blue-400 shadow-sm' : 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'}`}
+                      >
+                        <ArrowLeftRight className="w-4 h-4" />
+                        <span>My Accounts</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setTransferTab('friends')}
+                        className={`flex-1 flex items-center justify-center gap-2 py-2.5 px-3 rounded-lg text-xs md:text-sm font-bold transition-all ${transferTab === 'friends' ? 'bg-white dark:bg-gray-900 text-blue-600 dark:text-blue-400 shadow-sm' : 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'}`}
+                      >
+                        <User className="w-4 h-4" />
+                        <span>Friends</span>
+                      </button>
                     </div>
-                    <div>
-                      <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Date</label>
-                      <input 
-                        type="date" 
-                        value={form.date} 
-                        onChange={e => setForm(f => ({ ...f, date: e.target.value }))} 
-                        required 
-                        className="w-full min-w-0 bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-transparent rounded-2xl px-3 py-4 outline-none font-bold text-sm transition-colors" 
-                      />
-                    </div>
+
+                    {/* TAB 1: MY ACCOUNTS */}
+                    {transferTab === 'accounts' && (
+                      <div className="space-y-4 md:space-y-5 animate-in fade-in slide-in-from-left-4 duration-300">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 relative">
+                          {/* Swap Accounts Button */}
+                          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 mt-0 sm:mt-3 flex items-center justify-center pointer-events-none z-10">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setForm(f => {
+                                  const newFrom = f.transferToAccountId || accounts.find(a => a.type !== 'Credit' && a.id !== f.paymentMethodId)?.id || f.paymentMethodId;
+                                  return {
+                                    ...f,
+                                    paymentMethodId: newFrom,
+                                    transferToAccountId: f.paymentMethodId
+                                  };
+                                });
+                              }}
+                              className="pointer-events-auto w-10 h-10 rounded-full bg-gray-100 dark:bg-gray-800 border-4 border-white dark:border-gray-900 flex items-center justify-center text-gray-500 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/50 transition-all shadow-sm"
+                              title="Swap accounts"
+                            >
+                              <ArrowLeftRight className="w-4 h-4 rotate-90 sm:rotate-0" />
+                            </button>
+                          </div>
+                          <div>
+                            <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Transfer From</label>
+                            {accounts.length === 0 ? (
+                              <div className="text-xs text-red-600 p-4">No accounts available</div>
+                            ) : (
+                              <select 
+                                value={form.paymentMethodId} 
+                                onChange={e => setForm(f => ({ ...f, paymentMethodId: e.target.value }))} 
+                                className="w-full min-w-0 bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-transparent rounded-xl px-3 py-3 outline-none font-bold text-sm appearance-none transition-colors"
+                              >
+                                {accounts.filter(a => a.type !== 'Credit').map(a => <option key={a.id} value={a.id}>{a.bank}</option>)}
+                              </select>
+                            )}
+                          </div>
+                          <div>
+                            <label className="block text-[10px] font-black text-indigo-500 uppercase tracking-widest mb-2">Transfer To</label>
+                            <select 
+                              value={form.transferToAccountId} 
+                              onChange={e => setForm(f => ({ ...f, transferToAccountId: e.target.value }))} 
+                              className="w-full min-w-0 bg-indigo-50 dark:bg-indigo-900/20 text-indigo-700 dark:text-indigo-300 border-transparent rounded-xl px-3 py-3 outline-none font-bold text-sm appearance-none transition-colors"
+                            >
+                              <option value="">Select Destination Account</option>
+                              {accounts.filter(a => a.id !== form.paymentMethodId && a.type !== 'Credit').map(a => (
+                                <option key={a.id} value={a.id}>{a.bank}</option>
+                              ))}
+                            </select>
+                          </div>
+                        </div>
+                        <div>
+                          <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Transfer Fee (Optional)</label>
+                          <div className="relative mb-4">
+                            <span className="absolute left-4 top-1/2 -translate-y-1/2 font-bold text-gray-400">₱</span>
+                            <input
+                              type="number"
+                              step="0.01"
+                              min="0"
+                              value={form.feeAmount}
+                              onChange={e => setForm(f => ({ ...f, feeAmount: e.target.value }))}
+                              placeholder="0.00"
+                              className="w-full bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-transparent rounded-xl p-3.5 pl-8 outline-none font-bold text-sm transition-colors"
+                            />
+                          </div>
+                          <p className="text-[10px] text-gray-500 mt-[-10px] mb-4 font-medium">Logged as separate expense.</p>
+
+                          <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Date</label>
+                          <input 
+                            type="date" 
+                            value={form.date} 
+                            onChange={e => setForm(f => ({ ...f, date: e.target.value }))} 
+                            required 
+                            className="w-full min-w-0 bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-transparent rounded-xl px-3 py-3 outline-none font-bold text-sm transition-colors" 
+                          />
+                        </div>
+                      </div>
+                    )}
+                    
+                    {/* TAB 2: FRIENDS */}
+                    {transferTab === 'friends' && (
+                      <div className="space-y-4 md:space-y-5 animate-in fade-in slide-in-from-right-4 duration-300">
+                        <div>
+                          <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">From Account</label>
+                          {accounts.length === 0 ? (
+                            <div className="text-xs text-red-600 p-4">No accounts available</div>
+                          ) : (
+                            <select 
+                              value={form.paymentMethodId} 
+                              onChange={e => setForm(f => ({ ...f, paymentMethodId: e.target.value }))} 
+                              className="w-full min-w-0 bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-transparent rounded-xl px-3 py-3 outline-none font-bold text-sm appearance-none transition-colors"
+                            >
+                              {accounts.filter(a => a.type !== 'Credit').map(a => <option key={a.id} value={a.id}>{a.bank}</option>)}
+                            </select>
+                          )}
+                        </div>
+                        
+                        <div>
+                          <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">To Who?</label>
+                          <ContactDropdown 
+                            contacts={selectableContacts}
+                            value={form.personName || ''} 
+                            onChange={val => setForm(f => ({ ...f, personName: val }))}
+                            placeholder="e.g. John Doe"
+                          />
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                          <div>
+                            <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">For What? (Optional)</label>
+                            <input 
+                              value={form.name} 
+                              onChange={e => setForm(f => ({ ...f, name: e.target.value }))} 
+                              placeholder="e.g. Dinner" 
+                              className="w-full bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-transparent rounded-xl p-3.5 outline-none font-bold text-sm transition-colors" 
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Date</label>
+                            <input 
+                              type="date" 
+                              value={form.date} 
+                              onChange={e => setForm(f => ({ ...f, date: e.target.value }))} 
+                              required 
+                              className="w-full bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-transparent rounded-xl p-3.5 outline-none font-bold text-sm transition-colors" 
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    )}
                   </>
                 ) : (
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -837,7 +1111,7 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ transactions, loadi
                         value={form.date} 
                         onChange={e => setForm(f => ({ ...f, date: e.target.value }))} 
                         required 
-                        className="w-full min-w-0 bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-transparent rounded-2xl px-3 py-4 outline-none font-bold text-sm transition-colors" 
+                        className="w-full min-w-0 bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-transparent rounded-xl px-3 py-3 outline-none font-bold text-sm transition-colors" 
                       />
                     </div>
                     <div>
@@ -850,7 +1124,7 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ transactions, loadi
                         <select 
                           value={form.paymentMethodId} 
                           onChange={e => setForm(f => ({ ...f, paymentMethodId: e.target.value }))} 
-                          className="w-full min-w-0 bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-transparent rounded-2xl px-3 py-4 outline-none font-bold text-sm appearance-none transition-colors"
+                          className="w-full min-w-0 bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-transparent rounded-xl px-3 py-3 outline-none font-bold text-sm appearance-none transition-colors"
                         >
                           {accounts.filter(a => form.transactionType === 'payment' ? a.classification !== 'Credit Card' : a.type !== 'Credit').map(a => <option key={a.id} value={a.id}>{a.bank}</option>)}
                         </select>
@@ -863,16 +1137,12 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ transactions, loadi
                 {form.transactionType === 'loan' && userProfile?.settings?.peopleEnabled && (
                   <div>
                     <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Borrower (Optional)</label>
-                    <select
-                      value={form.borrowerName}
-                      onChange={e => setForm(f => ({ ...f, borrowerName: e.target.value }))}
-                      className="w-full min-w-0 bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-transparent rounded-2xl px-3 py-4 outline-none font-bold text-sm appearance-none transition-colors"
-                    >
-                      <option value="">Select Borrower</option>
-                      {people.map((person) => (
-                        <option key={person.id} value={person.name}>{person.name}</option>
-                      ))}
-                    </select>
+                    <ContactDropdown 
+                      contacts={selectableContacts}
+                      value={form.borrowerName || ''}
+                      onChange={val => setForm(f => ({ ...f, borrowerName: val }))}
+                      placeholder="Select or type borrower"
+                    />
                     {people.length === 0 && (
                       <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">Add people in Settings to see them here.</p>
                     )}
@@ -889,17 +1159,17 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ transactions, loadi
                       className="absolute inset-0 opacity-0 cursor-pointer"
                       onChange={e => setReceiptFile(e.target.files?.[0] ?? null)}
                     />
-                  <div className="w-full bg-gray-50 dark:bg-gray-800 border-2 border-dashed border-gray-200 dark:border-gray-700 rounded-2xl p-6 text-center text-sm text-gray-500 hover:border-indigo-300 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 transition-all flex flex-col items-center">
+                  <div className="w-full bg-gray-50 dark:bg-gray-800 border-2 border-dashed border-gray-200 dark:border-gray-700 rounded-xl p-5 md:p-6 text-center text-sm text-gray-500 hover:border-indigo-300 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 transition-all flex flex-col items-center">
                       <span className="font-bold">{receiptFile ? receiptFile.name : 'Click or drag to upload receipt'}</span>
                     </div>
                   </div>
                 </div>
             )}
 
-                <div className="flex space-x-4 pt-4">
-                  <button type="button" onClick={closeForm} className="flex-1 bg-gray-100 dark:bg-gray-800 py-4 rounded-2xl font-bold text-gray-500 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors">Cancel</button>
-                  <button type="submit" disabled={accounts.length === 0 || (form.transactionType === 'transfer' && !editingTxId && !form.transferToAccountId)} className="flex-1 bg-green-600 text-white py-4 rounded-2xl font-bold hover:bg-green-700 shadow-xl shadow-green-100 dark:shadow-none transition-all disabled:opacity-50">
-                    {editingTxId ? 'Update' : form.transactionType === 'transfer' ? 'Complete Transfer' : 'Submit'}
+                <div className="flex space-x-3 pt-2 md:pt-4">
+                  <button type="button" onClick={closeForm} className="flex-1 bg-gray-100 dark:bg-gray-800 py-3.5 rounded-xl font-bold text-gray-500 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors">Cancel</button>
+                  <button type="submit" disabled={accounts.length === 0 || (form.transactionType === 'transfer' && !editingTxId && transferTab === 'accounts' && !form.transferToAccountId) || (form.transactionType === 'transfer' && !editingTxId && transferTab === 'friends' && !form.personName)} className="flex-1 bg-green-600 text-white py-3.5 rounded-xl font-bold hover:bg-green-700 shadow-xl shadow-green-100 dark:shadow-none transition-all disabled:opacity-50">
+                    {editingTxId ? 'Update' : form.transactionType === 'transfer' ? (transferTab === 'friends' ? 'Send to Friend' : 'Complete Transfer') : 'Submit'}
                   </button>
                 </div>
               </form>
@@ -1138,11 +1408,61 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ transactions, loadi
             {/* Main FAB */}
             <button
               onClick={() => setShowFabMenu(!showFabMenu)}
-              className={`relative z-10 w-14 h-14 bg-indigo-600 text-white rounded-2xl shadow-xl flex items-center justify-center hover:bg-indigo-700 transition-all duration-300 ${showFabMenu ? 'rotate-[135deg] bg-indigo-700 shadow-indigo-600/50' : 'hover:-translate-y-1'}`}
+              className={`relative z-10 w-14 h-14 text-white rounded-2xl shadow-xl flex items-center justify-center transition-all duration-300 ${getAccentClasses('bg')} ${showFabMenu ? 'rotate-[135deg] scale-110 shadow-2xl' : 'hover:-translate-y-1'}`}
               aria-label="Add Transaction"
             >
               <Plus className="w-6 h-6" />
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* Intercept Modal for Unlinked Budies */}
+      {pendingProfileModal && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in">
+          <div className="bg-white dark:bg-gray-900 rounded-[2.5rem] w-full max-w-sm p-8 shadow-2xl relative transition-colors animate-in zoom-in-95 flex flex-col items-center text-center">
+            <div className="w-16 h-16 bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400 rounded-3xl flex items-center justify-center mb-6 transition-colors">
+              <UserPlus className="w-8 h-8" />
+            </div>
+            <h3 className="text-xl font-black text-gray-900 dark:text-gray-100 mb-2 uppercase tracking-tight transition-colors">Profile Required</h3>
+            <p className="text-sm text-gray-500 dark:text-gray-400 mb-8 font-medium leading-relaxed transition-colors">
+              You selected <strong>{pendingProfileModal.formName}</strong> who is a Budee but doesn't have a local profile yet. We will link them and create one so you can track this transaction.
+            </p>
+            <div className="flex flex-col w-full space-y-3">
+              <button 
+                disabled={isSubmitting}
+                onClick={async () => {
+                  setIsSubmitting(true);
+                  try {
+                    const prof = pendingProfileModal.budee;
+                    const { data: newPerson } = await createPerson({ name: pendingProfileModal.formName } as any);
+                    if (newPerson) {
+                      const isTestMode = localStorage.getItem('test_environment_enabled') === 'true';
+                      const peopleTable = isTestMode ? 'people_test' : 'people';
+                      let { error: updateErr } = await supabase.from(peopleTable).update({ friend_user_id: prof.user_id }).eq('id', newPerson.id);
+                      if (updateErr && updateErr.code === '42P01') {
+                        updateErr = (await supabase.from('people').update({ friend_user_id: prof.user_id }).eq('id', newPerson.id)).error;
+                      }
+                      if (updateErr) {
+                        console.error('Failed to link profile to budee during transaction intercept:', updateErr);
+                        alert(`Profile created but failed to link: ${updateErr.message}`);
+                      }
+                    }
+                    setPendingProfileModal(null);
+                    await executeTransactionSubmit();
+                  } catch (e) {
+                    console.error('Failed to create profile', e);
+                    alert('Failed to create local profile.');
+                  } finally { setIsSubmitting(false); }
+                }}
+                className="w-full bg-indigo-600 text-white py-4 rounded-2xl font-black uppercase tracking-widest text-[10px] hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-100 dark:shadow-none disabled:opacity-50"
+              >
+                {isSubmitting ? 'Processing...' : 'Create Profile & Continue'}
+              </button>
+              <button disabled={isSubmitting} onClick={() => setPendingProfileModal(null)} className="w-full bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-300 py-4 rounded-2xl font-black uppercase tracking-widest text-[10px] hover:bg-gray-200 dark:hover:bg-gray-700 transition-all disabled:opacity-50">
+                Cancel
+              </button>
+            </div>
           </div>
         </div>
       )}

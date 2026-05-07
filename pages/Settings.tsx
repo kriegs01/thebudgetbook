@@ -9,12 +9,14 @@ import { supabase } from '../src/utils/supabaseClient';
 import { SecuritySettings } from '../src/components/settings/SecuritySettings';
 import { PinProtectedAction } from '../src/components/PinProtectedAction';
 import { updateUserEmail, updateUserPassword, updateUserProfile } from '../src/services/userProfileService';
+import { useTheme } from '../src/contexts/ThemeContext';
 
 interface SettingsProps {
   currency: string;
   setCurrency: (c: string) => void;
   categories: BudgetCategory[];
   setCategories: React.Dispatch<React.SetStateAction<BudgetCategory[]>>;
+  accounts?: Account[];
   onResetAll?: () => void;
   billers?: Biller[];
   installments?: Installment[];
@@ -72,7 +74,8 @@ interface DeleteConflict {
 
 // ─── Component ───────────────────────────────────────────────────────────────
 
-const Settings: React.FC<SettingsProps> = ({ currency, setCurrency, categories, setCategories, onResetAll, billers = [], installments = [], onUpdateBiller, theme = 'light', onToggleTheme }) => {
+const Settings: React.FC<SettingsProps> = ({ currency, setCurrency, categories, setCategories, accounts = [], onResetAll, billers = [], installments = [], onUpdateBiller, theme = 'light', onToggleTheme }) => {
+  const { getAccentClasses } = useTheme();
   // Auth context
   const { userProfile, updateProfile, refreshProfile, user } = useAuth();
 
@@ -423,6 +426,7 @@ const Settings: React.FC<SettingsProps> = ({ currency, setCurrency, categories, 
   // Account management state
   const [editFirstName, setEditFirstName] = useState('');
   const [editLastName, setEditLastName] = useState('');
+  const [editUsername, setEditUsername] = useState('');
   const [newEmail, setNewEmail] = useState('');
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
@@ -551,8 +555,12 @@ const Settings: React.FC<SettingsProps> = ({ currency, setCurrency, categories, 
 
   // Account management handlers
   const handleUpdateName = async () => {
-    if (!editFirstName.trim() || !editLastName.trim()) {
-      setUpdateError('First and last name are required');
+    const fName = editFirstName.trim() || userProfile?.first_name || '';
+    const lName = editLastName.trim() || userProfile?.last_name || '';
+    const uName = editUsername.trim() || userProfile?.username || '';
+
+    if (!fName || !lName) {
+      setUpdateError('First and last name cannot be empty');
       return;
     }
 
@@ -561,12 +569,26 @@ const Settings: React.FC<SettingsProps> = ({ currency, setCurrency, categories, 
     setUpdateMessage('');
 
     try {
-      const { error } = await updateProfile(editFirstName, editLastName);
-      if (error) throw error;
+      const updates: any = {};
+      if (editFirstName.trim()) updates.first_name = fName;
+      if (editLastName.trim()) updates.last_name = lName;
+      if (editUsername.trim()) updates.username = uName;
 
-      setUpdateMessage('Name updated successfully!');
+      if (Object.keys(updates).length > 0) {
+        const { error } = await updateUserProfile(user!.id, updates);
+        if (error) {
+          if (error.message?.includes('duplicate key') || error.message?.includes('unique constraint')) {
+            throw new Error('This username is already taken. Please choose another.');
+          }
+          throw error;
+        }
+        await refreshProfile();
+      }
+
+      setUpdateMessage('Profile updated successfully!');
       setEditFirstName('');
       setEditLastName('');
+      setEditUsername('');
       setTimeout(() => setUpdateMessage(''), 3000);
     } catch (error: any) {
       setUpdateError(error.message || 'Failed to update name');
@@ -676,11 +698,11 @@ const Settings: React.FC<SettingsProps> = ({ currency, setCurrency, categories, 
             </div>
           )}
 
-          {/* Update Name */}
+          {/* Update Profile (Name & Username) */}
           <div className="p-4 bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-800 space-y-3 transition-colors">
             <div className="flex items-center space-x-2 mb-4">
               <User className="w-5 h-5 text-gray-600 dark:text-gray-400" />
-              <h4 className="text-sm font-bold text-gray-900 dark:text-gray-100 uppercase transition-colors">Update Name</h4>
+              <h4 className="text-sm font-bold text-gray-900 dark:text-gray-100 uppercase transition-colors">Update Profile</h4>
             </div>
             
             <div className="grid grid-cols-2 gap-4">
@@ -704,14 +726,27 @@ const Settings: React.FC<SettingsProps> = ({ currency, setCurrency, categories, 
                   className="w-full px-4 py-3 bg-transparent text-gray-900 dark:text-gray-100 border border-gray-300 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all placeholder:text-gray-400 dark:placeholder:text-gray-500"
                 />
               </div>
+              <div className="col-span-2">
+                <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-2 transition-colors">Username (Handle)</label>
+                <div className="relative">
+                  <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 font-bold">@</span>
+                  <input
+                    type="text"
+                    value={editUsername}
+                    onChange={(e) => setEditUsername(e.target.value.replace(/[^a-zA-Z0-9_]/g, '').toLowerCase())}
+                    placeholder={userProfile?.username || 'username'}
+                    className="w-full pl-8 pr-4 py-3 bg-transparent text-gray-900 dark:text-gray-100 border border-gray-300 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all placeholder:text-gray-400 dark:placeholder:text-gray-500"
+                  />
+                </div>
+              </div>
             </div>
 
             <button
               onClick={handleUpdateName}
-              disabled={isUpdating || (!editFirstName && !editLastName)}
+              disabled={isUpdating || (!editFirstName && !editLastName && !editUsername)}
               className="w-full px-4 py-3 bg-blue-600 text-white rounded-xl font-medium hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
             >
-              {isUpdating ? 'Updating...' : 'Update Name'}
+              {isUpdating ? 'Updating...' : 'Save Profile'}
             </button>
           </div>
 
@@ -958,6 +993,38 @@ const Settings: React.FC<SettingsProps> = ({ currency, setCurrency, categories, 
                 </div>
               </div>
             )}
+
+            {/* Default Deposit Account */}
+            <div className="pt-4 border-t border-gray-100 dark:border-gray-800 space-y-3">
+              <div>
+                <h4 className="font-black text-sm text-gray-900 dark:text-gray-100 uppercase mb-1 transition-colors">Default Deposit Account</h4>
+                <p className="text-xs text-gray-500 dark:text-gray-400 transition-colors">
+                  Automatically deposit money received from Budies into this account.
+                </p>
+              </div>
+              <select
+                value={userProfile?.settings?.defaultReceiveAccountId || ''}
+                onChange={async (e) => {
+                  if (!user) return;
+                  const newAccountId = e.target.value;
+                  try {
+                    const newSettings = { ...(userProfile?.settings || {}), defaultReceiveAccountId: newAccountId };
+                    const { error } = await updateUserProfile(user.id, { settings: newSettings });
+                    if (error) throw error;
+                    await refreshProfile();
+                  } catch (err) {
+                    console.error('Failed to update default account:', err);
+                    alert('Failed to update default deposit account.');
+                  }
+                }}
+                className="w-full bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-gray-100 border border-gray-200 dark:border-gray-700 rounded-xl p-3 outline-none focus:ring-2 focus:ring-indigo-500 transition-colors text-sm font-bold"
+              >
+                <option value="">Ask me every time (Pending Sync)</option>
+                {accounts.filter(a => a.type === 'Debit').map(acc => (
+                  <option key={acc.id} value={acc.id}>{acc.bank} ({acc.classification})</option>
+                ))}
+              </select>
+            </div>
           </div>
         </div>
       )
@@ -1549,7 +1616,7 @@ const Settings: React.FC<SettingsProps> = ({ currency, setCurrency, categories, 
     <div className="max-w-3xl mx-auto space-y-4 animate-in slide-in-from-right-4 duration-500 pb-20">
       <div className="bg-white dark:bg-gray-900 rounded-[3rem] border border-gray-100 dark:border-gray-800 shadow-sm overflow-hidden transition-colors">
         <div className="p-6 md:p-8 border-b border-gray-100 dark:border-gray-800 flex items-center space-x-6 bg-gray-50/30 dark:bg-gray-800/30 transition-colors">
-          <div className="w-16 h-16 md:w-20 md:h-20 rounded-2xl bg-gradient-to-br from-indigo-500 to-blue-600 flex items-center justify-center text-white text-2xl md:text-3xl font-black shadow-2xl">
+          <div className={`w-16 h-16 md:w-20 md:h-20 rounded-2xl flex items-center justify-center text-white text-2xl md:text-3xl font-black shadow-2xl transition-colors ${getAccentClasses('bg')} ${getAccentClasses('shadow')}`}>
             {userProfile ? 
               `${userProfile.first_name.charAt(0)}${userProfile.last_name.charAt(0)}`.toUpperCase() :
               user?.email?.charAt(0).toUpperCase() || 'U'

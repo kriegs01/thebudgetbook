@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Menu, ChevronLeft, SlidersHorizontal, ArrowUp, ArrowDown, Eye, EyeOff, X, ChevronUp, LogOut, Lock, Users } from 'lucide-react';
+import { Menu, ChevronLeft, SlidersHorizontal, ArrowUp, ArrowDown, Eye, EyeOff, X, ChevronDown, LogOut, Lock, Users, Bell, MessageCircle } from 'lucide-react';
 import { BrowserRouter, Routes, Route, NavLink } from 'react-router-dom';
 import { QueryClient, QueryClientProvider, useQueryClient } from '@tanstack/react-query';
 import { NAV_ITEMS, INITIAL_BUDGET, DEFAULT_SETUP, INITIAL_CATEGORIES } from './constants';
@@ -8,12 +8,14 @@ import { getAllAccountsFrontend, createAccountFrontend, updateAccountFrontend, d
 import { getAllInstallmentsFrontend, createInstallmentFrontend, updateInstallmentFrontend, deleteInstallmentFrontend } from './src/services/installmentsService';
 import { getAllBudgetSetupsFrontend, deleteBudgetSetupFrontend, archiveBudgetSetup, reopenBudgetSetup } from './src/services/budgetSetupsService';
 import { getPaymentSchedulesBySource } from './src/services/paymentSchedulesService';
-import { getAllTransactions, createTransaction, createPaymentScheduleTransaction, uploadTransactionReceipt, updateTransaction } from './src/services/transactionsService';
+import { getAllTransactions, createTransaction, createPaymentScheduleTransaction, uploadTransactionReceipt, updateTransaction, getPendingTransactions, resolvePendingTransaction } from './src/services/transactionsService';
 import { recordPayment } from './src/services/paymentSchedulesService';
 import { supabase } from './src/utils/supabaseClient';
 import { combineDateWithCurrentTime } from './src/utils/dateUtils';
 import { recalculateAllAccountBalances } from './src/utils/accountBalanceCalculator';
 import { updateUserProfile } from './src/services/userProfileService';
+import { acceptFriendRequest, removeFriendship } from './src/services/friendshipsService';
+import { getAllPeople, createPerson } from './src/services/peopleService';
 import type { Biller, Account, Installment, Transaction } from './types';
 import type { SupabaseTransaction } from './src/types/supabase';
 
@@ -21,6 +23,7 @@ import type { SupabaseTransaction } from './src/types/supabase';
 import { TestEnvironmentProvider, useTestEnvironment } from './src/contexts/TestEnvironmentContext';
 import { PinProtectionProvider, usePinProtection } from './src/contexts/PinProtectionContext';
 import { AuthProvider, useAuth } from './src/contexts/AuthContext';
+import { ThemeProvider, useTheme } from './src/contexts/ThemeContext';
 import { TestModeBanner } from './src/components/TestModeBanner';
 
 // Pages
@@ -41,7 +44,10 @@ import Auth from './pages/Auth';
 import UpdatePassword from './pages/update-password';
 import { useTransactions } from './src/hooks/useTransactions';
 import { useAccounts } from './src/hooks/useAccounts';
+import { useIncomingRequests, useUnreadMessagesCount } from './src/hooks/useBudies';
 import { SetupWizard } from './src/components/SetupWizard';
+import { Logo } from './src/components/Logo';
+import { MessagesInbox } from './src/components/MessagesInbox';
 
 // Helper function to convert UI Account to Supabase format
 const accountToSupabase = (account: Account) => ({
@@ -171,7 +177,7 @@ const AppContent: React.FC = () => {
   // Show auth page if not authenticated
   if (authLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 via-white to-purple-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900">
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-100 via-gray-50 to-purple-100 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900">
         <div className="text-center">
           <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mb-4"></div>
           <p className="text-gray-600">Loading...</p>
@@ -195,6 +201,64 @@ const AppContent: React.FC = () => {
 const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<void> }> = ({ user, userProfile, signOut }) => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
+  const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
+  const [isMessagesOpen, setIsMessagesOpen] = useState(false);
+  const [activeChatFriendId, setActiveChatFriendId] = useState<string | undefined>();
+  const { data: pendingRequests = [], refetch: refetchRequests } = useIncomingRequests();
+  const { data: unreadMessagesCount = 0 } = useUnreadMessagesCount();
+  const [pendingTransactions, setPendingTransactions] = useState<any[]>([]);
+  const [txAccountSelections, setTxAccountSelections] = useState<Record<string, string>>({});
+  const [resolvingIds, setResolvingIds] = useState<Set<string>>(new Set());
+  const { getAccentClasses } = useTheme();
+
+  const loadNotifications = async () => {
+    const { data: pTxs } = await getPendingTransactions();
+    if (pTxs) setPendingTransactions(pTxs);
+  };
+
+  useEffect(() => {
+    if (user) loadNotifications();
+  }, [user]);
+
+  const handleResolveTransaction = async (id: string, action: 'accept' | 'decline') => {
+    if (resolvingIds.has(id)) return;
+    setResolvingIds(prev => new Set(prev).add(id));
+    
+    try {
+      let accountId = userProfile?.settings?.defaultReceiveAccountId || txAccountSelections[id];
+      if (action === 'accept' && !accountId) {
+        alert('Please select an account to receive these funds.');
+        return;
+      }
+      const { error } = await resolvePendingTransaction(id, action, accountId);
+      if (error) return alert('Failed to process transaction.');
+      
+      setPendingTransactions(prev => prev.filter(tx => tx.id !== id));
+      
+      if (action === 'accept') {
+        await reloadAccounts();
+        queryClient.invalidateQueries({ queryKey: ['transactions'] });
+        // Force immediate background data refetch on active pages
+        window.dispatchEvent(new CustomEvent('transactions_updated'));
+      }
+    } finally {
+      setResolvingIds(prev => { const next = new Set(prev); next.delete(id); return next; });
+    }
+  };
+
+  const handleAcceptRequest = async (id: string) => {
+    await acceptFriendRequest(id);
+    await refetchRequests();
+    // Per touchbase notes (Issue #2), the immediate profile creation logic is removed from here.
+    // This logic will be moved to the People page to ensure profiles are created for BOTH users
+    // when they load their connections, fixing the bug where the sender was left out.
+  };
+
+  const handleDeclineRequest = async (id: string) => {
+    await removeFriendship(id);
+    await refetchRequests();
+  };
+
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [budgetItems, setBudgetItems] = useState(INITIAL_BUDGET);
   const [billers, setBillers] = useState<Biller[]>([]);
@@ -271,8 +335,10 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
     const items = [...NAV_ITEMS].filter(item => 
       item.path !== '/savings' && 
       item.path !== '/trash' &&
+      item.path !== '/settings' &&
       item.id?.toLowerCase() !== 'savings' &&
-      item.id?.toLowerCase() !== 'trash'
+      item.id?.toLowerCase() !== 'trash' &&
+      item.id?.toLowerCase() !== 'settings'
     );
     if (userProfile?.settings?.usePeoplePage && !items.find(i => i.id === 'people')) {
       items.push({
@@ -988,15 +1054,38 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
 
   if (showSplash) {
     return (
-      <div className="fixed inset-0 z-[9999] flex flex-col items-center justify-center bg-gradient-to-br from-blue-50 via-white to-purple-50 dark:from-gray-950 dark:via-gray-900 dark:to-gray-950 transition-colors duration-300">
+      <div className="fixed inset-0 z-[9999] flex flex-col items-center justify-center bg-gradient-to-br from-blue-100 via-gray-50 to-purple-100 dark:from-gray-950 dark:via-gray-900 dark:to-gray-950 transition-colors duration-300">
+        <style>
+          {`@import url('https://fonts.googleapis.com/css2?family=Titan+One&display=swap');
+          .font-titan { font-family: 'Titan One', cursive; font-weight: 400; letter-spacing: 1px; }
+          @keyframes squeeze-mascot {
+            0% { transform: translateY(16px) rotate(15deg); }
+            5% { transform: translateY(16px) rotate(15deg); }
+            30% { transform: translateY(0) rotate(15deg); }
+            38% { transform: translateY(0) rotate(15deg); }
+            55% { transform: translateY(0) translateX(12px) rotate(22deg) scale(0.92); }
+            72% { transform: translateY(0) translateX(12px) rotate(22deg) scale(0.92); }
+            100% { transform: translateY(0) translateX(0) rotate(15deg) scale(1); }
+          }
+          .animate-squeeze-mascot {
+            animation: squeeze-mascot 1.8s ease-in-out forwards;
+          }`}
+        </style>
         <div className="text-center animate-in fade-in zoom-in duration-700">
           <div className="w-24 h-24 bg-white dark:bg-gray-900 rounded-3xl shadow-2xl flex items-center justify-center mx-auto mb-8 relative overflow-hidden border border-gray-100 dark:border-gray-800">
             <div className="absolute inset-0 bg-blue-50/50 dark:bg-blue-900/10 animate-pulse"></div>
             <div className="w-10 h-10 border-4 border-blue-100 dark:border-gray-800 border-t-blue-600 dark:border-t-blue-500 rounded-full animate-spin relative z-10"></div>
           </div>
-          <h1 className="text-3xl font-black bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent mb-4 tracking-tight">
-            Budget Book
-          </h1>
+          <div className="flex flex-row flex-nowrap justify-center items-center mb-6 active:scale-95 transition-transform">
+            <img 
+              src="/iconapp.png" 
+              alt="Budee Mascot" 
+              className="w-24 h-24 md:w-32 md:h-32 drop-shadow-2xl z-10 -mr-10 md:-mr-12 rotate-[15deg] animate-squeeze-mascot hover:scale-105 hover:rotate-12 transition-all duration-300" 
+            />
+            <div className="mt-2 md:mt-4">
+              <Logo className="text-6xl md:text-8xl" />
+            </div>
+          </div>
           <p className="text-gray-500 dark:text-gray-400 font-medium text-sm max-w-[260px] mx-auto leading-relaxed animate-pulse">
             Loading your financial data and preparing your dashboard...
           </p>
@@ -1010,14 +1099,51 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
         {showWizard && <SetupWizard onComplete={handleCompleteWizard} />}
         <TestModeBanner sidebarOpen={isSidebarOpen} />
         <BrowserRouter>
-        <div className="flex h-[100dvh] bg-gray-50 dark:bg-gray-950 w-full overflow-hidden fixed inset-0 transition-colors duration-200">
-        <aside className={`fixed inset-y-0 left-0 z-50 bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-gray-800 transition-all duration-300 ease-in-out ${isSidebarOpen ? 'w-64' : 'hidden md:flex w-20'} overscroll-none`}> 
+        <style>
+          {`@import url('https://fonts.googleapis.com/css2?family=Titan+One&display=swap');
+          .font-titan { font-family: 'Titan One', cursive; font-weight: 400; letter-spacing: 1px; }
+          
+          @keyframes ring {
+            0% { transform: rotate(0); }
+            5% { transform: rotate(15deg); }
+            10% { transform: rotate(-10deg); }
+            15% { transform: rotate(15deg); }
+            20% { transform: rotate(-10deg); }
+            25% { transform: rotate(0); }
+            100% { transform: rotate(0); }
+          }
+          .animate-ring { animation: ring 2s ease-in-out infinite; }`}
+        </style>
+        <div className="flex h-[100dvh] bg-gray-100 dark:bg-gray-950 w-full overflow-hidden fixed inset-0 transition-colors duration-200">
+        <aside className={`fixed inset-y-0 left-0 z-50 bg-gray-50 dark:bg-gray-900 border-r border-gray-200 dark:border-gray-800 transition-all duration-300 ease-in-out ${isSidebarOpen ? 'w-56' : 'hidden md:flex w-20'} overscroll-none`}> 
           <div className="flex flex-col h-full">
-            <div className="flex items-center justify-between h-16 px-4 border-b border-gray-100 dark:border-gray-800">
-              {isSidebarOpen && <span className="text-xl font-black bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">Budget Book</span>}
-              <button onClick={() => setIsSidebarOpen(!isSidebarOpen)} className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-500 dark:text-gray-400 transition-colors">
-                {isSidebarOpen ? <ChevronLeft className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
-              </button>
+            <div className={`flex items-center h-14 px-4 border-b border-gray-100 dark:border-gray-800 ${isSidebarOpen ? 'justify-between' : 'justify-center'}`}>
+              <div 
+                className="flex flex-row flex-nowrap items-center cursor-pointer active:scale-95 transition-transform"
+                onClick={() => !isSidebarOpen && setIsSidebarOpen(true)}
+                title={!isSidebarOpen ? "Expand Menu" : ""}
+              >
+                <img 
+                  src="/iconapp.png" 
+                  alt="Budee Mascot" 
+                  className={`drop-shadow-md transition-all duration-300 z-10 ${
+                    isSidebarOpen 
+                      ? 'w-10 h-10 md:w-12 md:h-12 -mr-5 md:-mr-6 rotate-[15deg] hover:scale-110 hover:rotate-12' 
+                      : 'w-8 h-8 hover:scale-110'
+                  }`} 
+                />
+                {isSidebarOpen && (
+                  <div className="mt-1 ml-1">
+                    <Logo className="text-3xl md:text-4xl" />
+                  </div>
+                )}
+              </div>
+              
+              {isSidebarOpen && (
+                <button onClick={() => setIsSidebarOpen(false)} className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-500 dark:text-gray-400 transition-colors ml-2 active:scale-95">
+                  <ChevronLeft className="w-5 h-5" />
+                </button>
+              )}
             </div>
             <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
               {navPreferences.filter(pref => pref.visible).map((pref) => {
@@ -1029,12 +1155,12 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
                     to={item.path}
                     className={({ isActive }) =>
                       `w-full flex items-center p-3 rounded-xl transition-colors ${
-                        isActive ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400' : 'text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800/50'
+                    isActive ? getAccentClasses('lightBg') : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800/50'
                       }`
                     }
                     end={item.path === '/'}
                   >
-                    <div className={`${isSidebarOpen ? '' : 'mx-auto'} ${window.location.pathname === item.path ? 'text-blue-600 dark:text-blue-400' : 'text-gray-400 dark:text-gray-500'} transition-colors`}>
+                    <div className={`${isSidebarOpen ? '' : 'mx-auto'} ${window.location.pathname === item.path ? getAccentClasses('text') : 'text-gray-400 dark:text-gray-500'} transition-colors`}>
                       {item.icon}
                     </div>
                     {isSidebarOpen && <span className="ml-3 font-bold text-sm">{item.label}</span>}
@@ -1053,101 +1179,202 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
                 </button>
               </div>
             )}
-            <div className="p-3 border-t border-gray-100 dark:border-gray-800 transition-colors">
-              {isSidebarOpen ? (
-                <div>
-                  {isUserMenuOpen && (
-                    <div className="pb-2 space-y-1">
-                      {isPinEnabled() && (
-                        <button
-                          onClick={triggerStandbyLock}
-                          className="w-full flex items-center space-x-3 py-2 px-3 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors"
-                        >
-                          <Lock className="w-4 h-4" />
-                          <span>Lock App</span>
-                        </button>
+          <div className="p-3 border-t border-gray-100 dark:border-gray-800 transition-colors">
+            <NavLink
+              to="/settings"
+              className={({ isActive }) =>
+                `w-full flex items-center p-3 rounded-xl transition-colors ${
+                    isActive ? getAccentClasses('lightBg') : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800/50'
+                }`
+              }
+            >
+              <div className={`${isSidebarOpen ? '' : 'mx-auto'} ${window.location.pathname === '/settings' ? getAccentClasses('text') : 'text-gray-400 dark:text-gray-500'} transition-colors`}>
+                <SlidersHorizontal className="w-5 h-5" />
+              </div>
+              {isSidebarOpen && <span className="ml-3 font-bold text-sm">Settings</span>}
+            </NavLink>
+          </div>
+          </div>
+        </aside>
+        <main className={`flex-1 bg-gray-100 dark:bg-gray-950 transition-all duration-300 ease-in-out ${isSidebarOpen ? 'md:ml-56' : 'md:ml-20'} h-full flex flex-col overflow-hidden`}> 
+        
+        {/* Top Navigation Bar */}
+        <header className="h-14 px-4 md:px-8 border-b border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-900 flex items-center justify-end shrink-0 transition-colors z-20">
+          <div className="flex items-center space-x-2 md:space-x-4">
+            {/* Messages */}
+            <div className="relative">
+              <button 
+                onClick={() => setIsMessagesOpen(!isMessagesOpen)}
+                className={`relative p-2 text-gray-400 rounded-full transition-colors ${getAccentClasses('hoverLight')} ${isMessagesOpen ? 'bg-gray-100 dark:bg-gray-800' : ''} ${unreadMessagesCount > 0 && !isMessagesOpen ? 'animate-ring text-indigo-500 dark:text-indigo-400' : ''}`}
+              >
+                <MessageCircle className="w-5 h-5" />
+                {unreadMessagesCount > 0 && (
+                  <span className="absolute top-0 right-0 flex items-center justify-center min-w-[18px] h-[18px] px-1 bg-red-500 text-white text-[9px] font-black rounded-full border-2 border-white dark:border-gray-900">
+                    {unreadMessagesCount > 99 ? '99+' : unreadMessagesCount}
+                  </span>
+                )}
+              </button>
+            </div>
+            {/* Notifications */}
+            <div className="relative">
+              <button 
+                onClick={() => setIsNotificationsOpen(!isNotificationsOpen)}
+                className={`relative p-2 text-gray-400 rounded-full transition-colors ${getAccentClasses('hoverLight')}`}
+              >
+                <Bell className="w-5 h-5" />
+                {((pendingRequests?.length || 0) + (pendingTransactions?.length || 0)) > 0 && (
+                  <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-red-500 rounded-full border-2 border-white dark:border-gray-900"></span>
+                )}
+              </button>
+
+              {isNotificationsOpen && (
+                <>
+                  <div className="fixed inset-0 z-[40]" onClick={() => setIsNotificationsOpen(false)}></div>
+                  <div className="absolute right-0 top-full mt-2 w-80 bg-white dark:bg-gray-900 rounded-2xl shadow-xl border border-gray-100 dark:border-gray-800 py-2 z-[50] animate-in zoom-in-95">
+                    <div className="px-4 py-3 border-b border-gray-50 dark:border-gray-800 flex justify-between items-center">
+                      <h3 className="text-sm font-black text-gray-900 dark:text-gray-100 uppercase tracking-widest">Notifications</h3>
+                      {((pendingRequests?.length || 0) + (pendingTransactions?.length || 0)) > 0 && (
+                        <span className={`${getAccentClasses('lightBg')} text-[10px] font-bold px-2 py-0.5 rounded-full`}>
+                          {(pendingRequests?.length || 0) + (pendingTransactions?.length || 0)} New
+                        </span>
                       )}
-                      <button
-                        onClick={async () => {
-                          try {
-                            await signOut();
-                          } catch (error) {
-                            console.error('Logout error:', error);
-                          }
-                        }}
-                        className="w-full flex items-center space-x-3 py-2 px-3 text-sm font-medium text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
-                      >
-                        <LogOut className="w-4 h-4" />
-                        <span>Logout</span>
-                      </button>
                     </div>
-                  )}
-                  <button onClick={() => setIsUserMenuOpen(prev => !prev)} className="w-full flex items-center justify-between p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-xl transition-colors">
-                    <div className="flex items-center space-x-3">
-                      <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 font-bold">
-                        {userProfile ? 
-                          `${userProfile.first_name.charAt(0)}${userProfile.last_name.charAt(0)}`.toUpperCase() :
-                          user?.email?.charAt(0).toUpperCase() || 'U'
+                    <div className="max-h-[60vh] overflow-y-auto">
+                      {((pendingRequests?.length || 0) + (pendingTransactions?.length || 0)) > 0 ? (
+                        <>
+                          {pendingRequests.map(req => (
+                          <div key={req.id} className="p-4 border-b border-gray-50 dark:border-gray-800/50 last:border-0 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
+                            <div className="flex items-center gap-3 mb-3">
+                              <div className="w-10 h-10 rounded-full bg-indigo-100 dark:bg-indigo-900/50 text-indigo-600 dark:text-indigo-400 font-black flex items-center justify-center uppercase shrink-0">
+                                {(req.sender_profile?.first_name?.charAt(0) || '') + (req.sender_profile?.last_name?.charAt(0) || '') || '?'}
+                              </div>
+                              <div>
+                                <p className="text-sm font-bold text-gray-900 dark:text-gray-100">{req.sender_profile?.first_name} {req.sender_profile?.last_name}</p>
+                                <p className="text-xs text-gray-500 dark:text-gray-400">sent a Connect Request</p>
+                              </div>
+                            </div>
+                            <div className="flex gap-2">
+                              <button onClick={() => handleAcceptRequest(req.id)} className={`flex-1 text-white py-2 rounded-xl text-xs font-bold transition-colors ${getAccentClasses('bg')}`}>Accept</button>
+                              <button onClick={() => handleDeclineRequest(req.id)} className="flex-1 bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 py-2 rounded-xl text-xs font-bold hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors">Decline</button>
+                            </div>
+                          </div>
+                          ))}
+                          {pendingTransactions.map(tx => {
+                            const senderName = tx.sender_profile ? `${tx.sender_profile.first_name} ${tx.sender_profile.last_name}` : 'A Budee';
+                            const formatCurrency = (val: number) => new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP', minimumFractionDigits: 2 }).format(val);
+                            const needsAccount = !userProfile?.settings?.defaultReceiveAccountId;
+                            return (
+                              <div key={tx.id} className="p-4 border-b border-gray-50 dark:border-gray-800/50 last:border-0 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
+                                <div className="flex items-center gap-3 mb-3">
+                                  <div className="w-10 h-10 rounded-full bg-green-100 dark:bg-green-900/50 text-green-600 dark:text-green-400 font-black flex items-center justify-center uppercase shrink-0">
+                                    {tx.sender_profile?.first_name?.charAt(0) || 'B'}{tx.sender_profile?.last_name?.charAt(0) || ''}
+                                  </div>
+                                  <div>
+                                    <p className="text-sm font-bold text-gray-900 dark:text-gray-100">{senderName}</p>
+                                    <p className="text-xs text-gray-500 dark:text-gray-400">sent you {formatCurrency(tx.amount)}</p>
+                                  </div>
+                                </div>
+                                {needsAccount && (
+                                  <div className="mb-3">
+                                    <select 
+                                      className="w-full text-xs p-2 rounded-xl bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 outline-none focus:ring-2 focus:ring-indigo-500 text-gray-700 dark:text-gray-300"
+                                      value={txAccountSelections[tx.id] || ''}
+                                      onChange={e => setTxAccountSelections(prev => ({...prev, [tx.id]: e.target.value}))}
+                                    >
+                                      <option value="">Select deposit account...</option>
+                                      {accounts.filter(a => a.type === 'Debit').map(a => (
+                                        <option key={a.id} value={a.id}>{a.bank}</option>
+                                      ))}
+                                    </select>
+                                  </div>
+                                )}
+                                <div className="flex gap-2">
+                                  <button onClick={() => handleResolveTransaction(tx.id, 'accept')} disabled={resolvingIds.has(tx.id)} className="flex-1 bg-green-600 text-white py-2 rounded-xl text-xs font-bold hover:bg-green-700 transition-colors disabled:opacity-50">
+                                    {resolvingIds.has(tx.id) ? '...' : 'Accept'}
+                                  </button>
+                                  <button onClick={() => handleResolveTransaction(tx.id, 'decline')} disabled={resolvingIds.has(tx.id)} className="flex-1 bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 py-2 rounded-xl text-xs font-bold hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors disabled:opacity-50">
+                                    {resolvingIds.has(tx.id) ? '...' : 'Decline'}
+                                  </button>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </>
+                      ) : (
+                        <div className="p-8 flex flex-col items-center justify-center text-center">
+                          <div className="w-12 h-12 bg-gray-50 dark:bg-gray-800 rounded-full flex items-center justify-center mb-3">
+                            <Bell className="w-6 h-6 text-gray-300 dark:text-gray-600" />
+                          </div>
+                          <p className="text-sm font-bold text-gray-900 dark:text-gray-100 mb-1">All caught up!</p>
+                          <p className="text-xs text-gray-500 dark:text-gray-400">No new notifications.</p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
+
+            {/* Profile Dropdown */}
+            <div className="relative ml-2 border-l border-gray-200 dark:border-gray-700 pl-4">
+              <button 
+                onClick={() => setIsUserMenuOpen(!isUserMenuOpen)}
+                className="flex items-center space-x-2 p-1 pr-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 border border-transparent hover:border-gray-200 dark:hover:border-gray-700 transition-colors"
+              >
+                <div className="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-600 font-bold text-sm">
+                  {userProfile ? 
+                    `${userProfile.first_name.charAt(0)}${userProfile.last_name.charAt(0)}`.toUpperCase() :
+                    user?.email?.charAt(0).toUpperCase() || 'U'
+                  }
+                </div>
+                <span className="hidden sm:block text-sm font-semibold text-gray-700 dark:text-gray-300 truncate max-w-[120px]">
+                  {userProfile ? userProfile.first_name : (user?.email?.split('@')[0] || 'User')}
+                </span>
+                <ChevronDown className={`w-4 h-4 text-gray-500 transition-transform ${isUserMenuOpen ? 'rotate-180' : ''}`} />
+              </button>
+
+              {/* Dropdown Menu */}
+              {isUserMenuOpen && (
+                <>
+                  <div className="fixed inset-0 z-[40]" onClick={() => setIsUserMenuOpen(false)}></div>
+                  <div className="absolute right-0 top-full mt-2 w-56 bg-white dark:bg-gray-900 rounded-2xl shadow-xl border border-gray-100 dark:border-gray-800 py-2 z-[50] animate-in zoom-in-95">
+                    <div className="px-4 py-3 border-b border-gray-50 dark:border-gray-800 mb-2">
+                      <p className="text-sm font-bold text-gray-900 dark:text-gray-100 truncate">
+                        {userProfile ? `${userProfile.first_name} ${userProfile.last_name}` : 'User'}
+                      </p>
+                      <p className="text-[10px] text-gray-500 dark:text-gray-400 truncate">{user?.email}</p>
+                    </div>
+                    {isPinEnabled() && (
+                      <button
+                        onClick={() => { setIsUserMenuOpen(false); triggerStandbyLock(); }}
+                        className="w-full flex items-center space-x-3 py-2.5 px-4 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+                      >
+                        <Lock className="w-4 h-4" />
+                        <span>Lock App</span>
+                      </button>
+                    )}
+                    <button
+                      onClick={async () => {
+                        try {
+                          setIsUserMenuOpen(false);
+                          await signOut();
+                        } catch (error) {
+                          console.error('Logout error:', error);
                         }
-                      </div>
-                      <div className="flex-1 overflow-hidden text-left">
-                        <p className="text-sm font-semibold text-gray-900 dark:text-gray-100 truncate transition-colors">
-                          {userProfile ? 
-                            `${userProfile.first_name} ${userProfile.last_name}` :
-                            user?.email?.split('@')[0] || 'User'
-                          }
-                        </p>
-                        <p className="text-xs text-gray-500 dark:text-gray-400 truncate transition-colors">{user?.email || ''}</p>
-                      </div>
-                    </div>
-                    <ChevronUp className={`w-5 h-5 text-gray-400 dark:text-gray-500 transition-transform duration-200 ${!isUserMenuOpen && 'rotate-180'}`} />
-                  </button>
-                </div>
-              ) : (
-                <div className="flex flex-col items-center w-full">
-                  {isUserMenuOpen && (
-                    <div className="pb-2 w-full space-y-1">
-                      {isPinEnabled() && (
-                        <button
-                          onClick={triggerStandbyLock}
-                          className="w-full py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg flex items-center justify-center transition-colors"
-                          title="Lock App"
-                        >
-                          <Lock className="w-5 h-5" />
-                        </button>
-                      )}
-                      <button
-                        onClick={async () => {
-                          try {
-                            await signOut();
-                          } catch (error) {
-                            console.error('Logout error:', error);
-                          }
-                        }}
-                        className="w-full py-2 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg flex items-center justify-center transition-colors"
-                        title="Logout"
-                      >
-                        <LogOut className="w-5 h-5" />
-                      </button>
-                    </div>
-                  )}
-                  <button 
-                    onClick={() => setIsUserMenuOpen(prev => !prev)} 
-                    className="w-10 h-10 rounded-full bg-blue-100 hover:bg-blue-200 flex items-center justify-center text-blue-600 font-bold mx-auto transition-colors"
-                    title="User Menu"
-                  >
-                    {userProfile ? 
-                      `${userProfile.first_name.charAt(0)}${userProfile.last_name.charAt(0)}`.toUpperCase() :
-                      user?.email?.charAt(0).toUpperCase() || 'U'
-                    }
-                  </button>
-                </div>
+                      }}
+                      className="w-full flex items-center space-x-3 py-2.5 px-4 text-sm font-medium text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+                    >
+                      <LogOut className="w-4 h-4" />
+                      <span>Logout</span>
+                    </button>
+                  </div>
+                </>
               )}
             </div>
           </div>
-        </aside>
-        <main className={`flex-1 bg-gray-50 dark:bg-gray-950 transition-all duration-300 ease-in-out ${isSidebarOpen ? 'md:ml-64' : 'md:ml-20'} h-full flex flex-col overflow-hidden`}> 
-          <div className="p-4 md:p-8 w-full flex-1 overflow-auto overscroll-none touch-pan-y" style={{ WebkitOverflowScrolling: 'touch' }}>
+        </header>
+
+        <div className="p-4 md:px-8 md:py-6 w-full flex-1 overflow-auto overscroll-none touch-pan-y" style={{ WebkitOverflowScrolling: 'touch' }}>
             <Routes>
               <Route path="/" element={<Dashboard accounts={accounts} budget={budgetItems} installments={installments} transactions={transactions} budgetSetups={budgetSetups} userProfile={userProfile} theme={theme} />} />
               <Route path="/budget" element={
@@ -1278,7 +1505,10 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
                   onToggleTheme={handleToggleTheme}
                 />
               } />
-              <Route path="/people" element={<PeoplePage />} />
+          <Route path="/people" element={<PeoplePage onStartChat={(friendId: string) => {
+            setActiveChatFriendId(friendId);
+            setIsMessagesOpen(true);
+          }} />} />
               <Route path="/transactions" element={
                 <TransactionsPage 
                   transactions={transactions}
@@ -1334,11 +1564,20 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
             
             <div className="flex space-x-3 pt-2">
               <button onClick={() => setShowNavEditModal(false)} className="flex-1 bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 py-4 rounded-2xl font-black uppercase tracking-widest text-[10px] hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors">Cancel</button>
-              <button onClick={handleSaveNavPreferences} className="flex-1 bg-indigo-600 text-white py-4 rounded-2xl font-black uppercase tracking-widest text-[10px] hover:bg-indigo-700 transition-colors shadow-xl shadow-indigo-100">Save Changes</button>
+              <button onClick={handleSaveNavPreferences} className={`flex-1 text-white py-4 rounded-2xl font-black uppercase tracking-widest text-[10px] transition-colors shadow-xl ${getAccentClasses('bg')} ${getAccentClasses('shadow')}`}>Save Changes</button>
             </div>
           </div>
         </div>
       )}
+
+      {/* Messages Inbox Drawer */}
+      <MessagesInbox 
+        isOpen={isMessagesOpen}
+        onClose={() => setIsMessagesOpen(false)}
+        currentUserId={user.id}
+        activeFriendId={activeChatFriendId}
+        onClearActiveChat={() => setActiveChatFriendId(undefined)}
+      />
     </BrowserRouter>
     </>
   );
@@ -1350,7 +1589,9 @@ const App: React.FC = () => {
     <QueryClientProvider client={queryClient}>
       <TestEnvironmentProvider>
         <AuthProvider>
-          <AppContent />
+          <ThemeProvider>
+            <AppContent />
+          </ThemeProvider>
         </AuthProvider>
       </TestEnvironmentProvider>
     </QueryClientProvider>

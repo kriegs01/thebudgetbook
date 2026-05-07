@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useMemo, useRef } from 'react';
-import { ArrowLeft, Info, Eye, ZoomIn, ZoomOut, Download, X, Pencil, BanknoteArrowDown, Trash2, ArrowUpFromLine, ArrowDownToLine, ArrowLeftRight, Banknote, CheckSquare, Square, Filter, ChevronDown, CreditCard, AlertTriangle } from 'lucide-react';
+import { ArrowLeft, Info, Eye, ZoomIn, ZoomOut, Download, X, Pencil, BanknoteArrowDown, Trash2, ArrowUpFromLine, ArrowDownToLine, ArrowLeftRight, Banknote, CheckSquare, Square, Filter, ChevronDown, CreditCard, AlertTriangle, Send, User, Landmark } from 'lucide-react';
 import { useSearchParams, Link } from 'react-router-dom';
 import { Account } from '../../types';
 import { getTransactionsByPaymentMethod, createTransaction, updateTransaction, updateTransactionAndSyncSchedule, createTransfer, getLoanTransactionsWithPayments, getReceiptSignedUrl, deleteTransactionAndRevertSchedule, batchDeleteTransactions } from '../../src/services/transactionsService';
@@ -7,6 +7,9 @@ import { combineDateWithCurrentTime, getFirstDayOfCurrentYearIso, getLastDayOfCu
 import type { SupabaseTransaction } from '../../src/types/supabase';
 import { computeCreditUtilization, type CreditUtilization } from '../../src/utils/accounts';
 import { PinProtectedAction } from '../../src/components/PinProtectedAction';
+import { getAllPeople } from '../../src/services/peopleService';
+import type { SupabasePerson } from '../../src/types/supabase';
+import { PersonAutocomplete } from '../../src/components/PersonAutocomplete';
 
 const FILTER_MIN_DATE = '2025-01-01';
 
@@ -30,6 +33,7 @@ type Transaction = {
   notes?: string | null;
   related_transaction_id?: string | null;
   receiptUrl?: string | null;
+  person_name?: string | null;
 };
 
 type LoanTransaction = Transaction & {
@@ -63,7 +67,8 @@ const AccountFilteredTransactions: React.FC<AccountFilteredTransactionsProps> = 
   
   // Modal states
   const [showWithdrawModal, setShowWithdrawModal] = useState(false);
-  const [showTransferModal, setShowTransferModal] = useState(false);
+  const [showSendModal, setShowSendModal] = useState(false);
+  const [sendTab, setSendTab] = useState<'accounts' | 'friends'>('accounts');
   const [showLoanModal, setShowLoanModal] = useState(false);
   const [showCashInModal, setShowCashInModal] = useState(false);
   const [showLoanPaymentModal, setShowLoanPaymentModal] = useState(false);
@@ -82,12 +87,14 @@ const AccountFilteredTransactions: React.FC<AccountFilteredTransactionsProps> = 
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   // Form states
-  const [withdrawForm, setWithdrawForm] = useState({ forWhat: '', amount: '', date: new Date().toISOString().split('T')[0] });
-  const [transferForm, setTransferForm] = useState({ amount: '', receivingAccountId: '', date: new Date().toISOString().split('T')[0] });
-  const [loanForm, setLoanForm] = useState({ what: '', amount: '', date: new Date().toISOString().split('T')[0] });
-  const [cashInForm, setCashInForm] = useState({ amount: '', date: new Date().toISOString().split('T')[0], notes: '' });
+  const [withdrawForm, setWithdrawForm] = useState({ forWhat: '', amount: '', date: new Date().toISOString().split('T')[0], personName: '' });
+  const [transferForm, setTransferForm] = useState({ amount: '', feeAmount: '', receivingAccountId: '', date: new Date().toISOString().split('T')[0] }); // For My Accounts tab
+  const [sendFriendForm, setSendFriendForm] = useState({ forWhat: '', amount: '', personName: '', date: new Date().toISOString().split('T')[0] }); // For Friends tab
+  const [loanForm, setLoanForm] = useState({ what: '', amount: '', date: new Date().toISOString().split('T')[0], personName: '' });
+  const [cashInForm, setCashInForm] = useState({ amount: '', date: new Date().toISOString().split('T')[0], notes: '', personName: '' });
   const [loanPaymentForm, setLoanPaymentForm] = useState({ amount: '', date: new Date().toISOString().split('T')[0] });
   const [cardPaymentForm, setCardPaymentForm] = useState({ name: '', amount: '', date: new Date().toISOString().split('T')[0], notes: '' });
+  const [people, setPeople] = useState<SupabasePerson[]>([]);
 
   // Raw Supabase transactions (used for credit utilization calculation)
   const [supabaseTransactions, setSupabaseTransactions] = useState<SupabaseTransaction[]>([]);
@@ -139,7 +146,8 @@ const AccountFilteredTransactions: React.FC<AccountFilteredTransactionsProps> = 
         transaction_type: t.transaction_type,
         notes: t.notes,
         related_transaction_id: t.related_transaction_id,
-        receiptUrl: (t as unknown as { receipt_url?: string | null }).receipt_url ?? null
+        receiptUrl: (t as unknown as { receipt_url?: string | null }).receipt_url ?? null,
+        person_name: (t as any).person_name ?? null
       }));
       setTransactions(txList);
 
@@ -202,6 +210,9 @@ const AccountFilteredTransactions: React.FC<AccountFilteredTransactionsProps> = 
 
         // Use accounts prop for transfer dropdown (already loaded from parent)
         setAllAccounts(accounts);
+            
+            const { data: peopleData } = await getAllPeople();
+            if (peopleData) setPeople(peopleData);
 
         await loadTransactions();
       } finally {
@@ -347,13 +358,14 @@ const AccountFilteredTransactions: React.FC<AccountFilteredTransactionsProps> = 
         notes: null,
         payment_schedule_id: null,
         related_transaction_id: null,
+        person_name: withdrawForm.personName.trim() || null,
       });
 
       if (error) throw error;
       
       showMessage('success', 'Withdrawal recorded successfully');
       setShowWithdrawModal(false);
-      setWithdrawForm({ forWhat: '', amount: '', date: new Date().toISOString().split('T')[0] });
+      setWithdrawForm({ forWhat: '', amount: '', date: new Date().toISOString().split('T')[0], personName: '' });
       await loadTransactions();
       onTransactionCreated?.();
     } catch (error) {
@@ -374,19 +386,53 @@ const AccountFilteredTransactions: React.FC<AccountFilteredTransactionsProps> = 
         accountId,
         transferForm.receivingAccountId,
         parseFloat(transferForm.amount),
-        combineDateWithCurrentTime(transferForm.date)
+        combineDateWithCurrentTime(transferForm.date),
+        parseFloat(transferForm.feeAmount || '0')
       );
 
       if (error) throw error;
       
       showMessage('success', 'Transfer completed successfully');
-      setShowTransferModal(false);
-      setTransferForm({ amount: '', receivingAccountId: '', date: new Date().toISOString().split('T')[0] });
+      setShowSendModal(false);
+      setTransferForm({ amount: '', feeAmount: '', receivingAccountId: '', date: new Date().toISOString().split('T')[0] });
       await loadTransactions();
       onTransactionCreated?.();
     } catch (error) {
       console.error('Error creating transfer:', error);
       showMessage('error', 'Failed to create transfer');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleSendFriendSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!accountId) return;
+    
+    setIsSubmitting(true);
+    try {
+      const { error } = await createTransaction({
+        name: sendFriendForm.forWhat || `Payment to ${sendFriendForm.personName}`,
+        date: combineDateWithCurrentTime(sendFriendForm.date),
+        amount: Math.abs(parseFloat(sendFriendForm.amount)), // Positive - money going out
+        payment_method_id: accountId,
+        transaction_type: 'payment',
+        notes: null,
+        payment_schedule_id: null,
+        related_transaction_id: null,
+        person_name: sendFriendForm.personName.trim() || null,
+      });
+
+      if (error) throw error;
+      
+      showMessage('success', 'Payment sent successfully');
+      setShowSendModal(false);
+      setSendFriendForm({ forWhat: '', amount: '', personName: '', date: new Date().toISOString().split('T')[0] });
+      await loadTransactions();
+      onTransactionCreated?.();
+    } catch (error) {
+      console.error('Error sending to friend:', error);
+      showMessage('error', 'Failed to send payment');
     } finally {
       setIsSubmitting(false);
     }
@@ -407,13 +453,14 @@ const AccountFilteredTransactions: React.FC<AccountFilteredTransactionsProps> = 
         notes: loanForm.what,
         payment_schedule_id: null,
         related_transaction_id: null,
+        person_name: loanForm.personName.trim() || null,
       });
 
       if (error) throw error;
       
       showMessage('success', 'Loan recorded successfully');
       setShowLoanModal(false);
-      setLoanForm({ what: '', amount: '', date: new Date().toISOString().split('T')[0] });
+      setLoanForm({ what: '', amount: '', date: new Date().toISOString().split('T')[0], personName: '' });
       await loadTransactions();
       onTransactionCreated?.();
     } catch (error) {
@@ -439,13 +486,14 @@ const AccountFilteredTransactions: React.FC<AccountFilteredTransactionsProps> = 
         notes: cashInForm.notes || null,
         payment_schedule_id: null,
         related_transaction_id: null,
+        person_name: cashInForm.personName.trim() || null,
       });
 
       if (error) throw error;
       
       showMessage('success', 'Cash in recorded successfully');
       setShowCashInModal(false);
-      setCashInForm({ amount: '', date: new Date().toISOString().split('T')[0], notes: '' });
+      setCashInForm({ amount: '', date: new Date().toISOString().split('T')[0], notes: '', personName: '' });
       await loadTransactions();
       onTransactionCreated?.();
     } catch (error) {
@@ -618,9 +666,18 @@ const AccountFilteredTransactions: React.FC<AccountFilteredTransactionsProps> = 
   const transferAccountOptions = allAccounts.filter(
     a => a.type === 'Debit' && a.id !== accountId
   );
+  
+  // Extract unique people names for autocomplete datalist
+  const uniquePeopleNames = useMemo(() => {
+    const names = [
+      ...people.map(p => p.name),
+      ...supabaseTransactions.map(t => (t as any).person_name).filter(Boolean)
+    ];
+    return Array.from(new Set(names));
+  }, [people, supabaseTransactions]);
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-950 p-8 transition-colors">
+    <div className="min-h-screen bg-gray-100 dark:bg-gray-950 p-8 transition-colors">
       <div className="max-w-4xl mx-auto">
         <div className="mb-6 flex items-center space-x-4">
           <Link to="/accounts" className="p-2 rounded-lg bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-800 shadow-sm hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
@@ -754,12 +811,12 @@ const AccountFilteredTransactions: React.FC<AccountFilteredTransactionsProps> = 
                     <ArrowUpFromLine className="w-4 h-4" />
                   </button>
                   <button
-                    onClick={() => setShowTransferModal(true)}
-                    title="Transfer"
-                    aria-label="Transfer money"
+                    onClick={() => setShowSendModal(true)}
+                    title="Send / Transfer"
+                    aria-label="Send or transfer money"
                     className="w-9 h-9 flex items-center justify-center bg-blue-500 hover:bg-blue-600 text-white rounded-xl transition-colors"
                   >
-                    <ArrowLeftRight className="w-4 h-4" />
+                    <Send className="w-4 h-4 ml-0.5" />
                   </button>
                   <button
                     onClick={() => setShowLoanModal(true)}
@@ -1029,6 +1086,18 @@ const AccountFilteredTransactions: React.FC<AccountFilteredTransactionsProps> = 
               </div>
 
               <div>
+                <label className="block text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-2">Person / Payee (Optional)</label>
+                <PersonAutocomplete 
+                  options={uniquePeopleNames.filter(Boolean) as string[]}
+                  value={withdrawForm.personName} 
+                  onChange={val => setWithdrawForm(f => ({ ...f, personName: val }))} 
+                  placeholder="e.g. John Doe"
+                  className="w-full bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-transparent rounded-2xl p-4 outline-none font-bold focus:ring-2 focus:ring-red-500 transition-all"
+                />
+                <p className="text-[10px] text-gray-500 mt-2 font-medium">Link this expense to a person in your People page.</p>
+              </div>
+
+              <div>
                 <label className="block text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-2">Date</label>
                 <input 
                   type="date" 
@@ -1061,15 +1130,39 @@ const AccountFilteredTransactions: React.FC<AccountFilteredTransactionsProps> = 
         </div>
       )}
 
-      {/* Transfer Modal */}
-      {showTransferModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-md">
-          <div className="w-full max-w-md bg-white dark:bg-gray-900 rounded-3xl p-10 shadow-2xl relative transition-colors">
-            <h2 className="text-2xl font-black text-gray-900 dark:text-gray-100 mb-2">Transfer</h2>
-            <p className="text-gray-500 dark:text-gray-400 text-sm mb-8">Transfer money to another account</p>
-            <form onSubmit={handleTransferSubmit} className="space-y-6">
-              <div>
-                <label className="block text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-2">Amount</label>
+      {/* Send / Transfer Tabbed Modal */}
+      {showSendModal && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md animate-in fade-in">
+          <div className="w-full max-w-md bg-white dark:bg-gray-900 rounded-[2.5rem] p-8 shadow-2xl relative transition-colors animate-in zoom-in-95">
+            <button onClick={() => setShowSendModal(false)} className="absolute right-6 top-6 p-2 text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full transition-colors"><X className="w-5 h-5" /></button>
+            <h2 className="text-2xl font-black text-gray-900 dark:text-gray-100 mb-1 tracking-tight">Send Money</h2>
+            <p className="text-gray-500 dark:text-gray-400 text-sm mb-6 font-medium">Where are you sending these funds?</p>
+            
+            {/* Tab Selector */}
+            <div className="flex p-1 bg-gray-100 dark:bg-gray-800 rounded-2xl mb-8">
+              <button
+                type="button"
+                onClick={() => setSendTab('accounts')}
+                className={`flex-1 flex items-center justify-center gap-2 py-3 px-4 rounded-xl text-sm font-bold transition-all ${sendTab === 'accounts' ? 'bg-white dark:bg-gray-900 text-blue-600 dark:text-blue-400 shadow-sm' : 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'}`}
+              >
+                <Landmark className="w-4 h-4" />
+                <span>My Accounts</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setSendTab('friends')}
+                className={`flex-1 flex items-center justify-center gap-2 py-3 px-4 rounded-xl text-sm font-bold transition-all ${sendTab === 'friends' ? 'bg-white dark:bg-gray-900 text-blue-600 dark:text-blue-400 shadow-sm' : 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'}`}
+              >
+                <User className="w-4 h-4" />
+                <span>Friends</span>
+              </button>
+            </div>
+
+            {/* TAB 1: MY ACCOUNTS (Internal Transfer) */}
+            {sendTab === 'accounts' && (
+              <form onSubmit={handleTransferSubmit} className="space-y-5 animate-in fade-in slide-in-from-left-4 duration-300">
+                <div>
+                  <label className="block text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-2">Amount</label>
                 <div className="relative">
                   <span className="absolute left-4 top-1/2 -translate-y-1/2 font-bold text-gray-400 dark:text-gray-500">₱</span>
                   <input 
@@ -1082,54 +1175,108 @@ const AccountFilteredTransactions: React.FC<AccountFilteredTransactionsProps> = 
                     className="w-full bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-transparent rounded-2xl p-4 pl-8 outline-none text-xl font-black focus:ring-2 focus:ring-blue-500 transition-all" 
                   />
                 </div>
-              </div>
+                </div>
+                
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-2">To Account</label>
+                    {transferAccountOptions.length === 0 ? (
+                      <div className="text-xs text-red-600 p-4 bg-red-50 rounded-xl">No debit accounts</div>
+                    ) : (
+                      <select 
+                        value={transferForm.receivingAccountId} 
+                        onChange={e => setTransferForm(f => ({ ...f, receivingAccountId: e.target.value }))} 
+                        required
+                        className="w-full bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-transparent rounded-2xl p-4 outline-none font-bold text-sm appearance-none transition-colors"
+                      >
+                        <option value="">Select...</option>
+                        {transferAccountOptions.map(a => <option key={a.id} value={a.id}>{a.bank}</option>)}
+                      </select>
+                    )}
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-2">Date</label>
+                    <input 
+                      type="date" 
+                      value={transferForm.date} 
+                      onChange={e => setTransferForm(f => ({ ...f, date: e.target.value }))} 
+                      required 
+                      className="w-full bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-transparent rounded-2xl p-4 outline-none font-bold text-sm transition-colors" 
+                    />
+                  </div>
+                </div>
 
-              <div>
-                <label className="block text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-2">Receiving Account</label>
-                {transferAccountOptions.length === 0 ? (
-                  <div className="text-xs text-red-600 p-4 bg-red-50 rounded-xl">No other debit accounts available</div>
-                ) : (
-                  <select 
-                    value={transferForm.receivingAccountId} 
-                    onChange={e => setTransferForm(f => ({ ...f, receivingAccountId: e.target.value }))} 
-                    required
-                    className="w-full bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-transparent rounded-2xl p-4 outline-none font-bold text-sm appearance-none transition-colors"
-                  >
-                    <option value="">Select account...</option>
-                    {transferAccountOptions.map(a => <option key={a.id} value={a.id}>{a.bank}</option>)}
-                  </select>
-                )}
-              </div>
+                <div>
+                  <label className="block text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-2">Transfer Fee (Optional)</label>
+                  <div className="relative">
+                    <span className="absolute left-4 top-1/2 -translate-y-1/2 font-bold text-gray-400 dark:text-gray-500">₱</span>
+                  <input 
+                    type="number" 
+                    step="0.01" 
+                    min="0"
+                    value={transferForm.feeAmount} 
+                    onChange={e => setTransferForm(f => ({ ...f, feeAmount: e.target.value }))} 
+                    placeholder="0.00"
+                      className="w-full bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-transparent rounded-2xl p-4 pl-8 outline-none font-bold text-sm focus:ring-2 focus:ring-blue-500 transition-all" 
+                  />
+                </div>
+                </div>
 
-              <div>
-                <label className="block text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-2">Date</label>
-                <input 
-                  type="date" 
-                  value={transferForm.date} 
-                  onChange={e => setTransferForm(f => ({ ...f, date: e.target.value }))} 
-                  required 
-                  className="w-full bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-transparent rounded-2xl p-4 outline-none font-bold text-sm transition-colors" 
-                />
-              </div>
-
-              <div className="flex gap-4 pt-4">
-                <button
-                  type="button"
-                  onClick={() => setShowTransferModal(false)}
-                  className="flex-1 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 py-4 rounded-2xl font-bold transition-colors"
-                  disabled={isSubmitting}
-                >
-                  Cancel
+                <button type="submit" disabled={isSubmitting || transferAccountOptions.length === 0} className="w-full bg-blue-600 text-white py-4 rounded-2xl font-black uppercase tracking-widest text-[10px] hover:bg-blue-700 transition-all shadow-lg shadow-blue-200 dark:shadow-none disabled:opacity-50 mt-4">
+                  {isSubmitting ? 'Transferring...' : 'Transfer to Account'}
                 </button>
-                <button
-                  type="submit"
-                  className="flex-1 bg-blue-500 hover:bg-blue-600 text-white py-4 rounded-2xl font-bold transition-colors disabled:opacity-50"
-                  disabled={isSubmitting || transferAccountOptions.length === 0}
-                >
-                  {isSubmitting ? 'Processing...' : 'Complete Transfer'}
+              </form>
+            )}
+
+            {/* TAB 2: FRIENDS (External Payment) */}
+            {sendTab === 'friends' && (
+              <form onSubmit={handleSendFriendSubmit} className="space-y-5 animate-in fade-in slide-in-from-right-4 duration-300">
+                <div>
+                  <label className="block text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-2">Amount</label>
+                  <div className="relative">
+                    <span className="absolute left-4 top-1/2 -translate-y-1/2 font-bold text-gray-400 dark:text-gray-500">₱</span>
+                    <input 
+                      type="number" step="0.01" min="0.01" value={sendFriendForm.amount} 
+                      onChange={e => setSendFriendForm(f => ({ ...f, amount: e.target.value }))} 
+                      required className="w-full bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-transparent rounded-2xl p-4 pl-8 outline-none text-xl font-black focus:ring-2 focus:ring-blue-500 transition-all" 
+                    />
+                  </div>
+                </div>
+                
+                <div>
+                  <label className="block text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-2">To Who?</label>
+                  <PersonAutocomplete 
+                    options={uniquePeopleNames.filter(Boolean) as string[]}
+                    value={sendFriendForm.personName} 
+                    onChange={val => setSendFriendForm(f => ({ ...f, personName: val }))} 
+                    required 
+                    placeholder="e.g. John Doe"
+                    className="w-full bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-transparent rounded-2xl p-4 outline-none font-bold focus:ring-2 focus:ring-blue-500 transition-all"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-2">For What? (Optional)</label>
+                    <input 
+                      value={sendFriendForm.forWhat} onChange={e => setSendFriendForm(f => ({ ...f, forWhat: e.target.value }))} 
+                      placeholder="e.g. Dinner" className="w-full bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-transparent rounded-2xl p-4 outline-none font-bold text-sm transition-colors" 
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-2">Date</label>
+                    <input 
+                      type="date" value={sendFriendForm.date} onChange={e => setSendFriendForm(f => ({ ...f, date: e.target.value }))} 
+                      required className="w-full bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-transparent rounded-2xl p-4 outline-none font-bold text-sm transition-colors" 
+                    />
+                  </div>
+                </div>
+
+                <button type="submit" disabled={isSubmitting} className="w-full bg-blue-600 text-white py-4 rounded-2xl font-black uppercase tracking-widest text-[10px] hover:bg-blue-700 transition-all shadow-lg shadow-blue-200 dark:shadow-none disabled:opacity-50 mt-4">
+                  {isSubmitting ? 'Sending...' : 'Send to Friend'}
                 </button>
-              </div>
-            </form>
+              </form>
+            )}
           </div>
         </div>
       )}
@@ -1166,6 +1313,17 @@ const AccountFilteredTransactions: React.FC<AccountFilteredTransactionsProps> = 
                     className="w-full bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-transparent rounded-2xl p-4 pl-8 outline-none text-xl font-black focus:ring-2 focus:ring-orange-500 transition-all" 
                   />
                 </div>
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-2">Person (Optional)</label>
+                <PersonAutocomplete 
+                  options={uniquePeopleNames.filter(Boolean) as string[]}
+                  value={loanForm.personName} 
+                  onChange={val => setLoanForm(f => ({ ...f, personName: val }))} 
+                  placeholder="e.g. John Doe"
+                  className="w-full bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-transparent rounded-2xl p-4 outline-none font-bold focus:ring-2 focus:ring-orange-500 transition-all"
+                />
               </div>
 
               <div>
@@ -1222,6 +1380,17 @@ const AccountFilteredTransactions: React.FC<AccountFilteredTransactionsProps> = 
                     className="w-full bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-transparent rounded-2xl p-4 pl-8 outline-none text-xl font-black focus:ring-2 focus:ring-green-500 transition-all" 
                   />
                 </div>
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-2">From Person (Optional)</label>
+                <PersonAutocomplete 
+                  options={uniquePeopleNames.filter(Boolean) as string[]}
+                  value={cashInForm.personName} 
+                  onChange={val => setCashInForm(f => ({ ...f, personName: val }))} 
+                  placeholder="e.g. John Doe"
+                  className="w-full bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-transparent rounded-2xl p-4 outline-none font-bold focus:ring-2 focus:ring-green-500 transition-all"
+                />
               </div>
 
               <div>
