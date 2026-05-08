@@ -14,7 +14,7 @@ This document unifies all parked ideas, feature enhancements, and architectural 
   - Support Bulk Payments (pay multiple schedules at once).
   - Support Partial Payments (split a single payment across schedules).
   - Build a dedicated Payment History view per installment.
-- [ ] **Transfer Fees (Split Approach)**
+- [x] **Transfer Fees (Split Approach)**
   - Add an optional "Fee" input for internal bank transfers that splits the entry into a net-zero transfer + a separate expense transaction.
 - [ ] **Legacy Data Purge & Migration UI**
   - Fully remove old `localStorage` adapter code and fully commit to Supabase.
@@ -25,11 +25,11 @@ This document unifies all parked ideas, feature enhancements, and architectural 
 ## 🤝 Phase 2: The Social Pivot
 *Transforming the app from a personal ledger into a Venmo-style social finance tool.*
 
-- [ ] **People Page as a Relationship Ledger**
+- [x] **People Page as a Relationship Ledger**
   - Upgrade the People page to act as "Shadow Profiles" using a `person_name` transaction tag.
   - Show a rolled-up "Net Balance" per person.
   - Split profile views into "Active Balances" vs "Transaction History".
-- [ ] **Network "Add Friend" UI**
+- [x] **Network "Add Friend" UI**
   - Build the slide-out search drawer ("Search by email or @handle").
   - Add mock skeleton states and invitation prompts to prime users for real connections.
 - [ ] **Contextual Pay (Chat Integration)**
