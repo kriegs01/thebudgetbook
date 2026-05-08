@@ -226,29 +226,34 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
       .channel(`global-social-alerts-${user.id}`)
       .on(
         'postgres_changes',
-        { event: 'INSERT', schema: 'public', table: 'messages', filter: `receiver_id=eq.${user.id}` },
+        { event: 'INSERT', schema: 'public', table: 'messages' },
         (payload) => {
-          console.log('[Realtime] New message received:', payload);
-          // Update the message notification badge instantly
-          queryClient.invalidateQueries({ queryKey: socialKeys.unreadMessages() });
+          if (payload.new && payload.new.receiver_id === user.id) {
+            console.log('[Realtime] New message received:', payload.new);
+            // Optimistically update the message notification badge instantly
+            queryClient.setQueryData(socialKeys.unreadMessages(), (old: number = 0) => old + 1);
+            queryClient.invalidateQueries({ queryKey: socialKeys.unreadMessages() });
+          }
         }
       )
       .on(
         'postgres_changes',
-        { event: 'INSERT', schema: 'public', table: 'friendships', filter: `friend_id=eq.${user.id}` },
+        { event: 'INSERT', schema: 'public', table: 'friendships' },
         (payload) => {
-          console.log('[Realtime] New connect request received:', payload);
-          // Update the bell icon badge instantly for incoming connect requests
-          queryClient.invalidateQueries({ queryKey: socialKeys.incomingRequests() });
+          if (payload.new && payload.new.friend_id === user.id) {
+            console.log('[Realtime] New connect request received:', payload.new);
+            queryClient.invalidateQueries({ queryKey: socialKeys.incomingRequests() });
+          }
         }
       )
       .on(
         'postgres_changes',
-        { event: 'UPDATE', schema: 'public', table: 'friendships', filter: `user_id=eq.${user.id}` },
+        { event: 'UPDATE', schema: 'public', table: 'friendships' },
         (payload) => {
-          console.log('[Realtime] Connect request accepted:', payload);
-          // Instantly update UI when someone accepts your sent request
-          queryClient.invalidateQueries({ queryKey: socialKeys.friendships() });
+          if (payload.new && (payload.new.user_id === user.id || payload.new.friend_id === user.id)) {
+            console.log('[Realtime] Connect request accepted:', payload.new);
+            queryClient.invalidateQueries({ queryKey: socialKeys.friendships() });
+          }
         }
       )
       .subscribe((status) => {
