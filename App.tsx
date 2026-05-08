@@ -301,17 +301,20 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
     }
 
     // Intercept New Users for Setup Wizard
-    if (userProfile) {
+    if (userProfile && user?.created_at) {
       const isSetupCompleted = userProfile.settings?.setupCompleted;
       const hasCustomCategories = userProfile.settings?.categories && userProfile.settings.categories.length > 0;
       
-      if (!isSetupCompleted && !hasCustomCategories) {
+      // Calculate account age in days
+      const accountAgeDays = (new Date().getTime() - new Date(user.created_at).getTime()) / (1000 * 3600 * 24);
+      
+      if (accountAgeDays <= 7 && !isSetupCompleted && !hasCustomCategories) {
         setShowWizard(true);
       } else {
         setShowWizard(false);
       }
     }
-  }, [userProfile]);
+  }, [userProfile, user]);
 
   // Lifted Budget Setups State - now loaded from Supabase
   const [budgetSetups, setBudgetSetups] = useState<any[]>([]);

@@ -82,7 +82,7 @@ This document unifies all parked ideas, feature enhancements, and architectural 
 - [ ] **Friends/Connect Message Sync:** Fix delay in received messages appearing (notification alert shows, but message is missing in the messages window).
 - [x] **Dashboard Budget:** Refactor hard-coded monthly budget in Dashboard so it is dynamic/user-specific.
 - [ ] **Transactions Page:** Add an "All Transactions" filter.
-- [ ] **Settings Bug:** Prevent the Setup Wizard from unintentionally triggering when toggling the people feature.
+- [x] **Settings Bug:** Prevent the Setup Wizard from unintentionally triggering when toggling the people feature.
 - [x] **Credit Account Statement:** Fix issue where adding transactions dated exactly on the billing period end date causes them to be missing from the statement.
 - [x] **Transactions:** Fix "Transfer to Friends" functionality which is currently not working.
 - [x] **Dashboard Debit Accounts:** Fix issue where the debit accounts overview does not display the amount actually utilized/spent for each account.
