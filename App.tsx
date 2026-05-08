@@ -266,12 +266,14 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
       )
       .on(
         'postgres_changes',
-        { event: 'INSERT', schema: 'public', table: 'transactions' },
-        () => {
-          console.log('[Realtime] New transaction detected, updating notifications');
+        { event: '*', schema: 'public', table: 'transactions' },
+        (payload) => {
+          console.log('[Realtime] Transaction change detected, updating notifications', payload);
           setTimeout(() => {
             loadNotifications();
-          }, 500);
+            queryClient.invalidateQueries({ queryKey: ['transactions'] });
+            queryClient.invalidateQueries({ queryKey: ['accounts'] });
+          }, 1200);
         }
       )
       .subscribe((status) => {
