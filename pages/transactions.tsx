@@ -160,7 +160,8 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ transactions, loadi
     paymentMethodId: '',
     transactionType: 'payment',
     transferToAccountId: '',
-    borrowerName: '' // New field for loan transactions
+    borrowerName: '', // New field for loan transactions
+    personName: ''
   });
 
   // ── Filter state ──────────────────────────────────────────────────────────
@@ -364,7 +365,8 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ transactions, loadi
       paymentMethodId: accounts.find(a => type === 'payment' ? a.classification !== 'Credit Card' : a.type !== 'Credit')?.id ?? (accounts[0]?.id ?? ''),
       transactionType: type,
       transferToAccountId: '',
-      borrowerName: ''
+      borrowerName: '',
+      personName: ''
     });
     setReceiptFile(null);
     setShowTypeModal(false);
@@ -381,7 +383,7 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ transactions, loadi
     setEditingTxId(null);
     setFormSource(null);
     setReceiptFile(null); // Clear receipt file
-    setForm({ name: '', date: todayIso(), amount: '', paymentMethodId: accounts[0]?.id ?? '', transactionType: 'payment', transferToAccountId: '', borrowerName: '' });
+    setForm({ name: '', date: todayIso(), amount: '', paymentMethodId: accounts[0]?.id ?? '', transactionType: 'payment', transferToAccountId: '', borrowerName: '', personName: '' });
   };
 
   const openEditForm = (tx: Transaction) => {
@@ -394,7 +396,8 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ transactions, loadi
       paymentMethodId: tx.paymentMethodId,
       transactionType: tx.transaction_type || 'payment',
       transferToAccountId: '',
-      borrowerName: tx.borrower_name || ''
+      borrowerName: tx.borrower_name || '',
+      personName: (tx as any).person_name || ''
     });
     setReceiptFile(null);
     setShowForm(true);
@@ -403,7 +406,7 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ transactions, loadi
   const executeTransactionSubmit = async () => {
     
     // Transfer creation logic (uses specialized service)
-    if (form.transactionType === 'transfer' && !editingTxId) {
+    if (form.transactionType === 'transfer' && transferTab === 'accounts' && !editingTxId) {
       if (!form.paymentMethodId || !form.transferToAccountId || !form.amount || !form.date) return;
       try {
         const { error } = await createTransfer(
@@ -437,7 +440,7 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ transactions, loadi
     let finalAmount = parseFloat(form.amount);
     if (form.transactionType === 'cash_in') {
       finalAmount = -Math.abs(finalAmount); // Money in (negative reduces debt / increases asset internally)
-    } else if (['withdraw', 'payment', 'loan'].includes(form.transactionType)) {
+    } else if (['withdraw', 'payment', 'loan', 'transfer'].includes(form.transactionType)) {
       finalAmount = Math.abs(finalAmount); // Money out
     }
     
