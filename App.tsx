@@ -44,7 +44,7 @@ import Auth from './pages/Auth';
 import UpdatePassword from './pages/update-password';
 import { useTransactions } from './src/hooks/useTransactions';
 import { useAccounts } from './src/hooks/useAccounts';
-import { useIncomingRequests, useUnreadMessagesCount } from './src/hooks/useBudies';
+import { useIncomingRequests, useUnreadMessagesCount, socialKeys } from './src/hooks/useBudies';
 import { SetupWizard } from './src/components/SetupWizard';
 import { Logo } from './src/components/Logo';
 import { MessagesInbox } from './src/components/MessagesInbox';
@@ -217,8 +217,43 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
   };
 
   useEffect(() => {
-    if (user) loadNotifications();
-  }, [user]);
+    if (!user) return;
+    
+    loadNotifications();
+
+    // Global Realtime Listeners for instant social alerts (Messages & Connections)
+    const channel = supabase
+      .channel('global-social-alerts')
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'messages', filter: `receiver_id=eq.${user.id}` },
+        () => {
+          // Update the message notification badge instantly
+          queryClient.invalidateQueries({ queryKey: socialKeys.unreadMessages() });
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'friendships', filter: `friend_id=eq.${user.id}` },
+        () => {
+          // Update the bell icon badge instantly for incoming connect requests
+          queryClient.invalidateQueries({ queryKey: socialKeys.incomingRequests() });
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'friendships', filter: `user_id=eq.${user.id}` },
+        () => {
+          // Instantly update UI when someone accepts your sent request
+          queryClient.invalidateQueries({ queryKey: socialKeys.friendships() });
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [user, queryClient]);
 
   const handleResolveTransaction = async (id: string, action: 'accept' | 'decline') => {
     if (resolvingIds.has(id)) return;

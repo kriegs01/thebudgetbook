@@ -80,8 +80,6 @@ This document unifies all parked ideas, feature enhancements, and architectural 
 ## 🐛 Bug Fixes & Additional Found Issues
 *Recently discovered UX issues and bugs to address across various features.*
 
-- [ ] **Connect Feature:** Fix noticeable delay when sending connect requests.
-- [ ] **Friends/Connect Message Sync:** Fix delay in received messages appearing (notification alert shows, but message is missing in the messages window).
 - [x] **Dashboard Budget:** Refactor hard-coded monthly budget in Dashboard so it is dynamic/user-specific.
 - [x] **Transactions Page:** Add an "All Transactions" filter.
 - [x] **Settings Bug:** Prevent the Setup Wizard from unintentionally triggering when toggling the people feature.
