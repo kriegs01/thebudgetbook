@@ -70,6 +70,17 @@ const Dashboard: React.FC<DashboardProps> = ({ accounts, budget, installments, t
     return acc;
   }, 0);
 
+  // Dynamic Account Spending (Actual transactions for current month per account)
+  const accountActualExpenseMap = new Map<string, number>();
+  transactions.forEach(tx => {
+    const txDate = new Date(tx.date);
+    if (txDate.getMonth() === currentMonthIndex && txDate.getFullYear() === currentYearNum && tx.amount > 0) {
+      if (tx.paymentMethodId) {
+        accountActualExpenseMap.set(tx.paymentMethodId, (accountActualExpenseMap.get(tx.paymentMethodId) || 0) + tx.amount);
+      }
+    }
+  });
+
   const formatCurrency = (val: number) => {
     return new Intl.NumberFormat('en-PH', { 
       style: 'currency', 
@@ -96,7 +107,6 @@ const Dashboard: React.FC<DashboardProps> = ({ accounts, budget, installments, t
   const activeSetups = budgetSetups.filter(s => s.month === currentMonthName);
   
   const categoryDataMap = new Map<string, number>();
-  const accountExpenseMap = new Map<string, number>();
 
   activeSetups.forEach(setup => {
     if (!setup.data) return;
@@ -107,9 +117,6 @@ const Dashboard: React.FC<DashboardProps> = ({ accounts, budget, installments, t
           if (item.included) {
             const amount = parseFloat(item.amount) || 0;
             categoryDataMap.set(category, (categoryDataMap.get(category) || 0) + amount);
-            if (item.accountId) {
-              accountExpenseMap.set(item.accountId, (accountExpenseMap.get(item.accountId) || 0) + amount);
-            }
           }
         });
       }
@@ -573,7 +580,7 @@ const Dashboard: React.FC<DashboardProps> = ({ accounts, budget, installments, t
             <div className="p-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {debitAccounts.map((account) => {
                 const balance = account.balance;
-                const monthlyExpense = accountExpenseMap.get(account.id) || 0;
+                const monthlyExpense = accountActualExpenseMap.get(account.id) || 0;
                 const percentSpent = balance > 0 ? Math.round((monthlyExpense / balance) * 100) : 0;
                 const isOverdraft = percentSpent > 100;
                 
