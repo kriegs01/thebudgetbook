@@ -269,6 +269,22 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
         { event: '*', schema: 'public', table: 'transactions' },
         (payload) => {
           console.log('[Realtime] Transaction change detected, updating notifications', payload);
+          
+          // 1. Optimistic Update (Replicating Messages Logic)
+          // Instantly update the UI without waiting for the network fetch
+          if (payload.eventType === 'INSERT' && payload.new) {
+            // Only show notification if the transaction was created by someone else
+            if (payload.new.user_id && payload.new.user_id !== user.id) {
+              setPendingTransactions((prev) => {
+                if (prev.some(tx => tx.id === payload.new.id)) return prev;
+                return [{ ...payload.new, sender_profile: null }, ...prev];
+              });
+            }
+          } else if (payload.eventType === 'UPDATE' && payload.new) {
+            setPendingTransactions((prev) => prev.filter(tx => tx.id !== payload.new.id));
+          }
+
+          // 2. Delayed Network Fetch (to grab joined data like the sender's real name)
           setTimeout(() => {
             loadNotifications();
             queryClient.invalidateQueries({ queryKey: ['transactions'] });
