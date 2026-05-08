@@ -127,7 +127,7 @@ const Settings: React.FC<SettingsProps> = ({ currency, setCurrency, categories, 
     setCategories(newCats); // Optimistic UI update
     if (user) {
       try {
-        const newSettings = { ...(userProfile?.settings || {}), categories: newCats };
+        const newSettings = { ...(userProfile?.settings || {}), categories: newCats, setupCompleted: true };
         await updateUserProfile(user.id, { settings: newSettings });
         await refreshProfile();
       } catch (error) {
@@ -873,7 +873,7 @@ const Settings: React.FC<SettingsProps> = ({ currency, setCurrency, categories, 
                 const newValue = !isPeopleEnabled;
                 setIsPeopleEnabled(newValue); // Optimistic UI
                 try {
-                  const newSettings = { ...(userProfile?.settings || {}), peopleEnabled: newValue };
+                  const newSettings = { ...(userProfile?.settings || {}), peopleEnabled: newValue, setupCompleted: true };
                   const { error } = await updateUserProfile(user.id, { settings: newSettings });
                   if (error) throw error;
                   
@@ -916,7 +916,7 @@ const Settings: React.FC<SettingsProps> = ({ currency, setCurrency, categories, 
                       const newValue = !isPeoplePageEnabled;
                       setIsPeoplePageEnabled(newValue); // Optimistic UI
                       try {
-                        const newSettings = { ...(userProfile?.settings || {}), usePeoplePage: newValue };
+                        const newSettings = { ...(userProfile?.settings || {}), usePeoplePage: newValue, setupCompleted: true };
                         const { error } = await updateUserProfile(user.id, { settings: newSettings });
                         if (error) throw error;
                         
@@ -1008,7 +1008,7 @@ const Settings: React.FC<SettingsProps> = ({ currency, setCurrency, categories, 
                   if (!user) return;
                   const newAccountId = e.target.value;
                   try {
-                    const newSettings = { ...(userProfile?.settings || {}), defaultReceiveAccountId: newAccountId };
+                  const newSettings = { ...(userProfile?.settings || {}), defaultReceiveAccountId: newAccountId, setupCompleted: true };
                     const { error } = await updateUserProfile(user.id, { settings: newSettings });
                     if (error) throw error;
                     await refreshProfile();
