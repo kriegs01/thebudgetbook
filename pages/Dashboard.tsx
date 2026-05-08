@@ -56,8 +56,19 @@ const Dashboard: React.FC<DashboardProps> = ({ accounts, budget, installments, t
   const [endDate, setEndDate] = useState<string>(getNextMonth(getCurrentMonth()));
 
   const totalBalance = accounts.reduce((acc, a) => acc + (a.type === 'Debit' ? a.balance : -a.balance), 0);
-  const monthlySpending = budget.reduce((acc, b) => acc + b.amount, 0);
   const totalDebt = accounts.filter(a => a.type === 'Credit').reduce((acc, a) => acc + a.balance, 0);
+
+  // Dynamic Monthly Spending (Actual transactions for current month)
+  const currentMonthIndex = new Date().getMonth();
+  const currentYearNum = new Date().getFullYear();
+  const monthlySpending = transactions.reduce((acc, tx) => {
+    const txDate = new Date(tx.date);
+    // Sum positive amounts (expenditures) for the current month
+    if (txDate.getMonth() === currentMonthIndex && txDate.getFullYear() === currentYearNum && tx.amount > 0) {
+      return acc + tx.amount;
+    }
+    return acc;
+  }, 0);
 
   const formatCurrency = (val: number) => {
     return new Intl.NumberFormat('en-PH', { 
@@ -80,12 +91,34 @@ const Dashboard: React.FC<DashboardProps> = ({ accounts, budget, installments, t
 
   const COLORS = ['#3B82F6', '#6366F1', '#8B5CF6', '#EC4899'];
 
-  const categoryData = budget.reduce((acc: any[], item) => {
-    const existing = acc.find(a => a.name === item.category);
-    if (existing) existing.value += item.amount;
-    else acc.push({ name: item.category, value: item.amount });
-    return acc;
-  }, []);
+  // Extract category allocations and account expenses from active budget setups for the current month
+  const currentMonthName = new Date().toLocaleDateString('en-US', { month: 'long' });
+  const activeSetups = budgetSetups.filter(s => s.month === currentMonthName);
+  
+  const categoryDataMap = new Map<string, number>();
+  const accountExpenseMap = new Map<string, number>();
+
+  activeSetups.forEach(setup => {
+    if (!setup.data) return;
+    Object.entries(setup.data).forEach(([category, items]) => {
+      if (category.startsWith('_')) return; // Skip metadata like _projectedSalary
+      if (Array.isArray(items)) {
+        items.forEach((item: any) => {
+          if (item.included) {
+            const amount = parseFloat(item.amount) || 0;
+            categoryDataMap.set(category, (categoryDataMap.get(category) || 0) + amount);
+            if (item.accountId) {
+              accountExpenseMap.set(item.accountId, (accountExpenseMap.get(item.accountId) || 0) + amount);
+            }
+          }
+        });
+      }
+    });
+  });
+
+  const categoryData = Array.from(categoryDataMap.entries())
+    .map(([name, value]) => ({ name, value }))
+    .filter(cat => cat.value > 0); // Only chart categories with allocated funds
 
   // Helper: Get income from setup
   // Priority: _actualSalary (if entered) > _projectedSalary > 0
@@ -237,7 +270,7 @@ const Dashboard: React.FC<DashboardProps> = ({ accounts, budget, installments, t
             </div>
             <span className="text-xs font-medium text-red-600 bg-red-50 px-2 py-1 rounded-full">+12%</span>
           </div>
-          <h3 className="text-gray-500 dark:text-gray-400 text-sm font-medium">Monthly Budget Used</h3>
+          <h3 className="text-gray-500 dark:text-gray-400 text-sm font-medium">Monthly Spending</h3>
           <p className="text-2xl font-bold mt-1 dark:text-gray-100">{formatCurrency(monthlySpending)}</p>
         </div>
 
@@ -540,9 +573,7 @@ const Dashboard: React.FC<DashboardProps> = ({ accounts, budget, installments, t
             <div className="p-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {debitAccounts.map((account) => {
                 const balance = account.balance;
-                const monthlyExpense = budget
-                  .filter(b => b.accountId === account.id)
-                  .reduce((sum, b) => sum + b.amount, 0);
+                const monthlyExpense = accountExpenseMap.get(account.id) || 0;
                 const percentSpent = balance > 0 ? Math.round((monthlyExpense / balance) * 100) : 0;
                 const isOverdraft = percentSpent > 100;
                 

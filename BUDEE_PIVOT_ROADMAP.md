@@ -80,7 +80,7 @@ This document unifies all parked ideas, feature enhancements, and architectural 
 
 - [ ] **Connect Feature:** Fix noticeable delay when sending connect requests.
 - [ ] **Friends/Connect Message Sync:** Fix delay in received messages appearing (notification alert shows, but message is missing in the messages window).
-- [ ] **Dashboard Budget:** Refactor hard-coded monthly budget in Dashboard so it is dynamic/user-specific.
+- [x] **Dashboard Budget:** Refactor hard-coded monthly budget in Dashboard so it is dynamic/user-specific.
 - [ ] **Transactions Page:** Add an "All Transactions" filter.
 - [ ] **Settings Bug:** Prevent the Setup Wizard from unintentionally triggering when toggling the people feature.
 - [x] **Credit Account Statement:** Fix issue where adding transactions dated exactly on the billing period end date causes them to be missing from the statement.
