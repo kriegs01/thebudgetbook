@@ -223,11 +223,12 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
 
     // Global Realtime Listeners for instant social alerts (Messages & Connections)
     const channel = supabase
-      .channel('global-social-alerts')
+      .channel(`global-social-alerts-${user.id}`)
       .on(
         'postgres_changes',
         { event: 'INSERT', schema: 'public', table: 'messages', filter: `receiver_id=eq.${user.id}` },
-        () => {
+        (payload) => {
+          console.log('[Realtime] New message received:', payload);
           // Update the message notification badge instantly
           queryClient.invalidateQueries({ queryKey: socialKeys.unreadMessages() });
         }
@@ -235,7 +236,8 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
       .on(
         'postgres_changes',
         { event: 'INSERT', schema: 'public', table: 'friendships', filter: `friend_id=eq.${user.id}` },
-        () => {
+        (payload) => {
+          console.log('[Realtime] New connect request received:', payload);
           // Update the bell icon badge instantly for incoming connect requests
           queryClient.invalidateQueries({ queryKey: socialKeys.incomingRequests() });
         }
@@ -243,12 +245,15 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
       .on(
         'postgres_changes',
         { event: 'UPDATE', schema: 'public', table: 'friendships', filter: `user_id=eq.${user.id}` },
-        () => {
+        (payload) => {
+          console.log('[Realtime] Connect request accepted:', payload);
           // Instantly update UI when someone accepts your sent request
           queryClient.invalidateQueries({ queryKey: socialKeys.friendships() });
         }
       )
-      .subscribe();
+      .subscribe((status) => {
+        console.log('[Realtime] Global alerts subscription status:', status);
+      });
 
     return () => {
       supabase.removeChannel(channel);
