@@ -269,8 +269,18 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
   const [installmentsError, setInstallmentsError] = useState<string | null>(null);
 
   const { data: txData, isLoading: transactionsLoading } = useTransactions();
-  const transactions = txData?.formatted || [];
   const rawTransactions = txData?.raw || [];
+  // Ensure newly added database fields (like person_name) that might be stripped 
+  // by the hook's formatting are preserved and passed down to the UI components.
+  const transactions = (txData?.formatted || []).map((tx: any) => {
+    const raw = rawTransactions.find((r: any) => r.id === tx.id);
+    return {
+      ...tx,
+      person_name: raw?.person_name || tx.person_name,
+      borrower_name: raw?.borrower_name || tx.borrower_name,
+      transaction_type: raw?.transaction_type || tx.transaction_type
+    };
+  });
 
   const { data: rawAccounts = [], isLoading: accountsLoading, error: accountsQueryError } = useAccounts();
   const accountsError = accountsQueryError ? (accountsQueryError as Error).message : null;

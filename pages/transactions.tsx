@@ -1257,7 +1257,7 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ transactions, loadi
                   <dt className="text-[10px] font-black text-gray-400 uppercase tracking-widest self-center">
                     {selectedTx.transaction_type === 'loan' ? 'Borrower' : 'Recipient'}
                   </dt>
-                  <dd className="text-sm text-gray-700">{selectedTx.borrower_name || (selectedTx as any).person_name || 'N/A'}</dd>
+                  <dd className="text-sm text-gray-700">{selectedTx.borrower_name || (selectedTx as any).person_name || (selectedTx as any).personName || 'N/A'}</dd>
                 </div>
               </dl>
 
