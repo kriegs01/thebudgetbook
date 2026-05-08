@@ -14,8 +14,6 @@ This document unifies all parked ideas, feature enhancements, and architectural 
   - Support Bulk Payments (pay multiple schedules at once).
   - Support Partial Payments (split a single payment across schedules).
   - Build a dedicated Payment History view per installment.
-- [x] **Transfer Fees (Split Approach)**
-  - Add an optional "Fee" input for internal bank transfers that splits the entry into a net-zero transfer + a separate expense transaction.
 - [ ] **Legacy Data Purge & Migration UI**
   - Fully remove old `localStorage` adapter code and fully commit to Supabase.
   - Build an "In-App Migration UI" so users can apply missing DB schema changes with a single click.
@@ -25,13 +23,6 @@ This document unifies all parked ideas, feature enhancements, and architectural 
 ## 🤝 Phase 2: The Social Pivot
 *Transforming the app from a personal ledger into a Venmo-style social finance tool.*
 
-- [x] **People Page as a Relationship Ledger**
-  - Upgrade the People page to act as "Shadow Profiles" using a `person_name` transaction tag.
-  - Show a rolled-up "Net Balance" per person.
-  - Split profile views into "Active Balances" vs "Transaction History".
-- [x] **Network "Add Friend" UI**
-  - Build the slide-out search drawer ("Search by email or @handle").
-  - Add mock skeleton states and invitation prompts to prime users for real connections.
 - [ ] **Contextual Pay (Chat Integration)**
   - Wire up the "Pay Now" button on inline chat request cards.
   - Instantly trigger the Transfer modal with pre-filled amounts based on chat context.
@@ -80,12 +71,21 @@ This document unifies all parked ideas, feature enhancements, and architectural 
 ## 🐛 Bug Fixes & Additional Found Issues
 *Recently discovered UX issues and bugs to address across various features.*
 
-- [x] **Dashboard Budget:** Refactor hard-coded monthly budget in Dashboard so it is dynamic/user-specific.
-- [x] **Transactions Page:** Add an "All Transactions" filter.
-- [x] **Settings Bug:** Prevent the Setup Wizard from unintentionally triggering when toggling the people feature.
-- [x] **Credit Account Statement:** Fix issue where adding transactions dated exactly on the billing period end date causes them to be missing from the statement.
-- [x] **Transactions:** Fix "Transfer to Friends" functionality which is currently not working.
-- [x] **Dashboard Debit Accounts:** Fix issue where the debit accounts overview does not display the amount actually utilized/spent for each account.
+*(No pending bugs!)*
 
 ---
-*Note: As items are completed, move them to an "Archive/Completed" section at the bottom of this document.*
+
+## 🗄️ Archive / Completed
+*Completed tasks, features, and resolved bugs.*
+
+- [x] **Real-time Social Sync Foundation:** Enabled `supabase_realtime` replication, added global websocket listeners with Optimistic UI updates, and implemented RLS bypass via a Security Definer for secure transaction broadcasting.
+- [x] **Real-time Notification Delays:** Fixed issue where transaction notifications required a page reload by correcting RLS policies and implementing optimistic UI state updates.
+- [x] **People Page as a Relationship Ledger:** Upgraded the People page to act as "Shadow Profiles", showing rolled-up "Net Balances", and split profile views.
+- [x] **Network "Add Friend" UI:** Built the slide-out search drawer ("Search by email or @handle") with mock skeleton states and invitation prompts.
+- [x] **Transfer Fees (Split Approach):** Added an optional "Fee" input for internal bank transfers that splits the entry into a net-zero transfer + a separate expense transaction.
+- [x] **Dashboard Budget:** Refactored hard-coded monthly budget in Dashboard so it is dynamic/user-specific.
+- [x] **Transactions Page:** Added an "All Transactions" filter.
+- [x] **Settings Bug:** Prevented the Setup Wizard from unintentionally triggering when toggling the people feature.
+- [x] **Credit Account Statement:** Fixed issue where adding transactions dated exactly on the billing period end date causes them to be missing from the statement.
+- [x] **Transactions:** Fixed "Transfer to Friends" functionality which is currently not working.
+- [x] **Dashboard Debit Accounts:** Fixed issue where the debit accounts overview does not display the amount actually utilized/spent for each account.
