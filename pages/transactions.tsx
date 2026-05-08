@@ -200,7 +200,8 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ transactions, loadi
       // statement and should not appear in the global transaction list.
       if (tx.transaction_type === 'credit_payment') return false;
       const d = tx.date.slice(0, 10);
-      if (d < filterStartDate || d > filterEndDate) return false;
+      if (filterStartDate && d < filterStartDate) return false;
+      if (filterEndDate && d > filterEndDate) return false;
       if (filterPaymentMethods.size > 0 && !filterPaymentMethods.has(tx.paymentMethodId)) return false;
       return true;
     });
@@ -716,6 +717,13 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ transactions, loadi
                 </div>
               )}
             </div>
+            <button
+              type="button"
+              onClick={() => { setFilterStartDate(''); setFilterEndDate(''); }}
+              className="self-end px-3 py-2 text-xs font-bold text-indigo-600 bg-indigo-50 dark:bg-indigo-900/30 hover:bg-indigo-100 dark:hover:bg-indigo-900/50 rounded-xl transition-colors"
+            >
+              All Time
+            </button>
             <button
               type="button"
               onClick={resetFilters}

@@ -72,6 +72,8 @@ This document unifies all parked ideas, feature enhancements, and architectural 
 - [ ] **Performance Optimizations**
   - Implement React Code Splitting by route.
   - Enable Vercel Image Optimization for uploaded receipts and avatars.
+- [ ] **Setup Wizard Revamp**
+  - Redesign and improve the initial onboarding and setup wizard flow for new users.
 
 ---
 
@@ -81,7 +83,7 @@ This document unifies all parked ideas, feature enhancements, and architectural 
 - [ ] **Connect Feature:** Fix noticeable delay when sending connect requests.
 - [ ] **Friends/Connect Message Sync:** Fix delay in received messages appearing (notification alert shows, but message is missing in the messages window).
 - [x] **Dashboard Budget:** Refactor hard-coded monthly budget in Dashboard so it is dynamic/user-specific.
-- [ ] **Transactions Page:** Add an "All Transactions" filter.
+- [x] **Transactions Page:** Add an "All Transactions" filter.
 - [x] **Settings Bug:** Prevent the Setup Wizard from unintentionally triggering when toggling the people feature.
 - [x] **Credit Account Statement:** Fix issue where adding transactions dated exactly on the billing period end date causes them to be missing from the statement.
 - [x] **Transactions:** Fix "Transfer to Friends" functionality which is currently not working.
