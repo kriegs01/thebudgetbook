@@ -74,4 +74,17 @@ This document unifies all parked ideas, feature enhancements, and architectural 
   - Enable Vercel Image Optimization for uploaded receipts and avatars.
 
 ---
+
+## 🐛 Bug Fixes & Additional Found Issues
+*Recently discovered UX issues and bugs to address across various features.*
+
+- [ ] **Connect Feature:** Fix noticeable delay when sending connect requests.
+- [ ] **Friends/Connect Message Sync:** Fix delay in received messages appearing (notification alert shows, but message is missing in the messages window).
+- [ ] **Dashboard Budget:** Refactor hard-coded monthly budget in Dashboard so it is dynamic/user-specific.
+- [ ] **Transactions Page:** Add an "All Transactions" filter.
+- [ ] **Settings Bug:** Prevent the Setup Wizard from unintentionally triggering when toggling the people feature.
+- [ ] **Credit Account Statement:** Fix issue where adding transactions dated exactly on the billing period end date causes them to be missing from the statement.
+- [ ] **Transactions:** Fix "Transfer to Friends" functionality which is currently not working.
+
+---
 *Note: As items are completed, move them to an "Archive/Completed" section at the bottom of this document.*
