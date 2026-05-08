@@ -379,16 +379,25 @@ export default function PeoplePage({ onStartChat }: PeoplePageProps) {
 
   const handleAddFriend = async (friendId: string, userProfile?: SupabaseUserProfile) => {
     setSentRequests(prev => new Set(prev).add(friendId));
+    
+    // Optimistically update the friendships cache so the UI updates instantly
+    if (user?.id) {
+      queryClient.setQueryData(socialKeys.friendships(), (oldData: SupabaseFriendship[] = []) => {
+        return [...oldData, { user_id: user.id, friend_id: friendId, status: 'pending' } as SupabaseFriendship];
+      });
+    }
+
     const { error } = await sendFriendRequest(friendId);
     if (error) {
-      alert('Failed to send friend request. You may have already sent one or they are already connected.');
       setSentRequests(prev => {
         const next = new Set(prev);
         next.delete(friendId);
         return next;
       });
+      // Revert cache on failure
+      queryClient.invalidateQueries({ queryKey: socialKeys.friendships() });
+      alert('Failed to send friend request. You may have already sent one or they are already connected.');
     } else {
-      alert('Friend request sent successfully!');
     queryClient.invalidateQueries({ queryKey: socialKeys.friendships() });
     }
   };

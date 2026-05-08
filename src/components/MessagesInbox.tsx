@@ -5,6 +5,7 @@ import { subscribeToIncomingMessages, getConversation, sendMessage, Message, mar
 import { supabase } from '../utils/supabaseClient';
 import { useFriendships, useBudeeProfiles, socialKeys } from '../hooks/useBudies';
 import { useQueryClient } from '@tanstack/react-query';
+import { useUnreadMessagesCount } from '../hooks/useBudies';
 
 interface MessagesInboxProps {
   isOpen: boolean;
@@ -38,6 +39,9 @@ export const MessagesInbox: React.FC<MessagesInboxProps> = ({ isOpen, onClose, c
   const friendIds = acceptedFriends.map(f => f.user_id === currentUserId ? f.friend_id : f.user_id);
   const { data: profiles, isLoading: isLoadingProfiles } = useBudeeProfiles(friendIds);
   const chatProfile = profiles?.find(p => p.user_id === internalChatId);
+  
+  // Listen to the global unread count to know when to refresh the inbox list
+  const { data: unreadCount } = useUnreadMessagesCount();
 
   // Sync external prop to internal state
   useEffect(() => {
@@ -51,13 +55,12 @@ export const MessagesInbox: React.FC<MessagesInboxProps> = ({ isOpen, onClose, c
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, isOpen, internalChatId]);
 
-  // Load Inbox Hub List View
+  // Load Inbox Hub List View (Re-runs when opened or when unread count changes)
   useEffect(() => {
     if (!isOpen || internalChatId) return;
 
     const fetchInbox = async () => {
-      // Only show the loading spinner on the very first load
-      if (!hasLoadedInboxRef.current) {
+      if (!hasLoadedInboxRef.current && inboxList.length === 0) {
         setIsLoadingInbox(true);
       }
       try {
@@ -94,7 +97,7 @@ export const MessagesInbox: React.FC<MessagesInboxProps> = ({ isOpen, onClose, c
     };
 
     if (!isLoadingProfiles) fetchInbox();
-  }, [isOpen, internalChatId, currentUserId, profiles, isLoadingProfiles]);
+  }, [isOpen, internalChatId, currentUserId, profiles, isLoadingProfiles, unreadCount]);
 
   // Load history and subscribe to live updates
   useEffect(() => {
