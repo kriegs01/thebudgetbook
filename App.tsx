@@ -232,7 +232,10 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
             console.log('[Realtime] New message received:', payload.new);
             // Optimistically update the message notification badge instantly
             queryClient.setQueryData(socialKeys.unreadMessages(), (old: number = 0) => old + 1);
-            queryClient.invalidateQueries({ queryKey: socialKeys.unreadMessages() });
+            // Delay network fetch slightly to avoid database read-replica lag
+            setTimeout(() => {
+              queryClient.invalidateQueries({ queryKey: socialKeys.unreadMessages() });
+            }, 500);
           }
         }
       )
@@ -242,7 +245,10 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
         (payload) => {
           if (payload.new && payload.new.friend_id === user.id) {
             console.log('[Realtime] New connect request received:', payload.new);
-            queryClient.invalidateQueries({ queryKey: socialKeys.incomingRequests() });
+            setTimeout(() => {
+              refetchRequests(); // Force immediate refetch of the hook
+              queryClient.invalidateQueries({ queryKey: socialKeys.incomingRequests() });
+            }, 500);
           }
         }
       )
@@ -252,8 +258,20 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
         (payload) => {
           if (payload.new && (payload.new.user_id === user.id || payload.new.friend_id === user.id)) {
             console.log('[Realtime] Connect request accepted:', payload.new);
-            queryClient.invalidateQueries({ queryKey: socialKeys.friendships() });
+            setTimeout(() => {
+              queryClient.invalidateQueries({ queryKey: socialKeys.friendships() });
+            }, 500);
           }
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'transactions' },
+        () => {
+          console.log('[Realtime] New transaction detected, updating notifications');
+          setTimeout(() => {
+            loadNotifications();
+          }, 500);
         }
       )
       .subscribe((status) => {

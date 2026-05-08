@@ -134,6 +134,20 @@ export const MessagesInbox: React.FC<MessagesInboxProps> = ({ isOpen, onClose, c
 
     // Start Realtime Subscription
     const channel = subscribeToIncomingMessages(currentUserId, async (newMsg: Message) => {
+      // Optimistically update the inbox list with the new message instantly
+      setInboxList(prevList => {
+        return prevList.map(item => {
+          if (item.profile.user_id === newMsg.sender_id) {
+            return {
+              ...item,
+              lastMessage: newMsg,
+              unreadCount: newMsg.sender_id === internalChatId ? item.unreadCount : item.unreadCount + 1
+            };
+          }
+          return item;
+        });
+      });
+
       if (newMsg.sender_id === internalChatId) {
         setMessages((prev) => [...prev, newMsg]);
         // Mark single message as read if chat is actively open
