@@ -27,7 +27,7 @@ interface MonthlyAverage {
   avgRemaining: number;
 }
 
-const Dashboard: React.FC<DashboardProps> = ({ accounts, budget, installments, transactions = [], budgetSetups = [], userProfile, theme }) => {
+const Dashboard: React.FC<DashboardProps> = ({ accounts = [], budget = [], installments = [], transactions = [], budgetSetups = [], userProfile, theme }) => {
   const { getAccentClasses } = useTheme();
   const isDarkMode = theme === 'dark';
   const tickColor = isDarkMode ? '#6b7280' : '#94a3b8'; // gray-500 dark, gray-400 light

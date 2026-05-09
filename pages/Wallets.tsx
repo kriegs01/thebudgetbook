@@ -17,7 +17,7 @@ const formatCurrency = (val: number) =>
     maximumFractionDigits: 2,
   }).format(val);
 
-const WalletsPage: React.FC<WalletsPageProps> = ({ accounts }) => {
+const WalletsPage: React.FC<WalletsPageProps> = ({ accounts = [] }) => {
   const { getAccentClasses } = useTheme();
   const navigate = useNavigate();
 

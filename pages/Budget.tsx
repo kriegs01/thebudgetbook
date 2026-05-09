@@ -309,7 +309,7 @@ const calculateBudgetRemaining = (
   return netIncome - setup.totalAmount;
 };
 
-const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSetups, setSavedSetups, onUpdateBiller, onMoveToTrash, onReloadSetups, onReloadBillers, onUpdateInstallment, installments = [], onTransactionCreated, onTransactionDeleted, onArchiveBudget, onReopenBudget }) => {
+const Budget: React.FC<BudgetProps> = ({ accounts = [], billers = [], categories = [], savedSetups = [], setSavedSetups, onUpdateBiller, onMoveToTrash, onReloadSetups, onReloadBillers, onUpdateInstallment, installments = [], onTransactionCreated, onTransactionDeleted, onArchiveBudget, onReopenBudget }) => {
   const { getAccentClasses } = useTheme();
   const [view, setView] = useState<'summary' | 'setup'>('summary');
   const [selectedMonth, setSelectedMonth] = useState(MONTHS[new Date().getMonth()]);

@@ -29,7 +29,7 @@ interface InstallmentsProps {
   error?: string | null;
 }
 
-const Installments: React.FC<InstallmentsProps> = ({ installments, accounts, billers = [], onAdd, onUpdate, onDelete, onPayInstallment, loading = false, error = null }) => {
+const Installments: React.FC<InstallmentsProps> = ({ installments = [], accounts = [], billers = [], onAdd, onUpdate, onDelete, onPayInstallment, loading = false, error = null }) => {
   const { getAccentClasses } = useTheme();
   // Memoized first non-credit account ID to avoid redundant filtering
   const defaultNonCreditAccountId = useMemo(() => {

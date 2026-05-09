@@ -119,7 +119,7 @@ const calculateStatus = (deactivationDate?: { month: string; year: string }): 'a
   return 'active';
 };
 
-const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, accounts, categories, onUpdate, onDelete, onPayBiller, loading = false, error = null }) => {
+const Billers: React.FC<BillersProps> = ({ billers = [], installments = [], onAdd, accounts = [], categories = [], onUpdate, onDelete, onPayBiller, loading = false, error = null }) => {
   const { getAccentClasses } = useTheme();
   const [showAddModal, setShowAddModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState<Biller | null>(null);

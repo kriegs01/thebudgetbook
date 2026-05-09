@@ -40,7 +40,7 @@ const monthNames = [
  */
 const FAKE_DATE_PREFIX = '2000-01-';
 
-const Accounts: React.FC<AccountsProps> = ({ accounts, onAdd, onDelete, onEdit, onDeactivate, loading = false, error = null }) => {
+const Accounts: React.FC<AccountsProps> = ({ accounts = [], onAdd, onDelete, onEdit, onDeactivate, loading = false, error = null }) => {
   const { getAccentClasses } = useTheme();
   const [viewMode, setViewMode] = useState<ViewMode>('card');
   const [showModal, setShowModal] = useState(false);
