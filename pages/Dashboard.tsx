@@ -216,7 +216,7 @@ const Dashboard: React.FC<DashboardProps> = ({ accounts, budget, installments, t
         <h1 className="font-['Titan_One'] text-5xl md:text-7xl uppercase tracking-tighter text-white drop-shadow-[4px_4px_0px_black] relative z-10">
           Hello, {userProfile?.first_name || 'there'}!
         </h1>
-        <p className="font-black text-indigo-100 uppercase tracking-[0.3em] mt-4 text-xs md:text-sm drop-shadow-[1px_1px_0px_black] relative z-10">Just a quick vibe check</p>
+        <p className="font-black text-indigo-100 uppercase tracking-[0.3em] mt-4 text-xs md:text-sm drop-shadow-[1px_1px_0px_black] relative z-10">Just a quick vibe check!</p>
       </div>
       
       <div className="px-8 space-y-8 pb-20">
