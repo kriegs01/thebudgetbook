@@ -203,23 +203,23 @@ const Dashboard: React.FC<DashboardProps> = ({ accounts = [], budget = [], insta
 
 
   return (
-    <div className="space-y-8 animate-in fade-in duration-500 -mt-8 -mx-8">
+    <div className="space-y-8 animate-in fade-in duration-500 pb-12">
       {/* Greeting Header */}
       {/* This header is designed to visually merge with a global top navigation bar. */}
       {/* The global nav (with actual Bell, Mail, User buttons) should be positioned */}
       {/* absolutely or fixed at the top, and its height should be accounted for by this header's padding-top. */}
-      <div className="bg-indigo-600 border-b-[4px] border-black rounded-b-[5rem] px-12 pt-32 pb-20 mb-12 shadow-[0px_8px_0px_0px_black] relative overflow-hidden">
+      <div className="bg-indigo-600 border-[4px] border-black rounded-[2.5rem] px-8 md:px-12 pt-12 pb-12 mb-8 shadow-[8px_8px_0px_0px_black] relative overflow-hidden">
         <div className="absolute top-0 right-0 w-64 h-64 bg-white/10 rounded-full -mr-20 -mt-20 blur-3xl"></div>
         
         <div className="relative z-10 max-w-4xl"> {/* Added max-w-4xl to keep greeting from stretching too wide */}
-          <h1 className="font-['Titan_One'] text-6xl md:text-9xl uppercase tracking-tighter text-white drop-shadow-[6px_6px_0px_black]">
+          <h1 className="font-['Titan_One'] text-4xl md:text-5xl uppercase tracking-tighter text-white drop-shadow-[4px_4px_0px_black]">
             Hello, {userProfile?.first_name || 'there'}!
           </h1>
-          <p className="font-black text-indigo-100 uppercase tracking-[0.4em] mt-6 text-xs md:text-base drop-shadow-[2px_2px_0px_black]">Just a quick vibe check!</p>
+          <p className="font-black text-indigo-100 uppercase tracking-[0.4em] mt-4 text-xs md:text-sm drop-shadow-[2px_2px_0px_black]">Just a quick vibe check!</p>
         </div>
       </div>
       
-      <div className="px-8 space-y-8 pb-20">
+      <div className="space-y-8">
         {/* Top Cards */}
         <div className="max-w-xl">
           {/* Budget Used Card (Primary Highlight) */}
@@ -228,8 +228,8 @@ const Dashboard: React.FC<DashboardProps> = ({ accounts = [], budget = [], insta
               <h3 className="font-['Titan_One'] text-3xl text-black uppercase tracking-tight">Monthly Budget</h3>
               <TrendingUp className="w-8 h-8 text-black" />
             </div>
-            <div className="p-8 flex items-baseline gap-4">
-              <p className="text-6xl font-black text-black dark:text-gray-100 tracking-tighter">{formatCurrency(monthlySpending)}</p>
+            <div className="p-6 md:p-8 flex items-baseline gap-4">
+              <p className="text-4xl md:text-5xl font-black text-black dark:text-gray-100 tracking-tighter">{formatCurrency(monthlySpending)}</p>
               <span className="text-xs font-black text-rose-600 bg-rose-50 border-2 border-rose-200 px-3 py-1 rounded-full uppercase tracking-widest">Active</span>
             </div>
           </div>
