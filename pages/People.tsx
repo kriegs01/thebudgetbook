@@ -433,35 +433,34 @@ export default function PeoplePage({ onStartChat }: PeoplePageProps) {
     };
   };
 
-  if (selectedPerson) {
-    const personStats = getPersonStats(selectedPerson);
-    const personTxs = transactions
-      .filter(t => 
-        t.person_name === selectedPerson || t.borrower_name === selectedPerson || 
-        (t.transaction_type === 'loan_payment' && t.related_transaction_id && 
-         transactions.some(l => l.id === t.related_transaction_id && (l.person_name === selectedPerson || l.borrower_name === selectedPerson)))
-      )
-      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-    
-    return (
-      <div className="w-full transition-colors duration-200">
-        <div className="max-w-4xl mx-auto space-y-6 animate-in slide-in-from-right-8 duration-300 pb-20">
-          <div className="flex items-center justify-between mb-6">
-            <div className="flex items-center space-x-4">
+  return (
+    <div className="space-y-8 animate-in fade-in duration-500">
+      {/* Header Banner */}
+      <div className="bg-teal-500 border-b-[4px] border-black rounded-b-[4rem] px-8 md:px-12 pt-32 pb-16 mb-8 shadow-[0px_8px_0px_0px_black] relative overflow-hidden">
+        <div className="absolute top-0 right-0 w-64 h-64 bg-white/10 rounded-full -mr-20 -mt-20 blur-3xl"></div>
+        <div className="relative z-10">
+          <div className="flex items-center gap-4">
+            {selectedPerson && (
               <button 
                 onClick={() => setSelectedPerson(null)}
-                className="p-3 bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-800 rounded-full hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors shadow-sm"
+                className="p-3 bg-white border-2 border-black rounded-full shadow-[4px_4px_0px_0px_black] hover:translate-x-[1px] hover:translate-y-[1px] hover:shadow-[2px_2px_0px_0px_black] transition-all shrink-0"
               >
-                <ArrowLeft className="w-5 h-5 text-gray-600 dark:text-gray-400" />
+                <ArrowLeft className="w-6 h-6 text-black" />
               </button>
-              <div className="flex items-center gap-4">
-                <div className="w-12 h-12 rounded-full bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 font-black text-lg flex items-center justify-center border border-indigo-100 dark:border-indigo-800">
-                  {selectedPerson.substring(0, 2).toUpperCase()}
-                </div>
-                <h1 className="text-2xl md:text-3xl font-black text-gray-900 dark:text-gray-100 uppercase tracking-tight">{selectedPerson}</h1>
-              </div>
-            </div>
-            
+            )}
+            <h1 className="font-['Titan_One'] text-5xl md:text-7xl uppercase tracking-tighter text-white drop-shadow-[4px_4px_0px_black] truncate">
+              {selectedPerson || 'People'}
+            </h1>
+          </div>
+          <p className="font-black text-teal-100 uppercase tracking-[0.3em] mt-4 text-xs md:text-sm drop-shadow-[1px_1px_0px_black]">
+            {selectedPerson ? 'Vibe check on your connection' : 'Manage shared tracking and active loans'}
+          </p>
+        </div>
+      </div>
+
+      <div className="px-8 space-y-8 pb-20">
+        {selectedPerson ? (
+          <div className="max-w-4xl mx-auto space-y-6 animate-in slide-in-from-right-8 duration-300">
             <div className="flex items-center gap-2">
               {people.find(p => p.name === selectedPerson)?.friend_user_id && onStartChat && (
                 <button

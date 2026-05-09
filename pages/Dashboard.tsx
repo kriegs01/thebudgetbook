@@ -214,14 +214,14 @@ const Dashboard: React.FC<DashboardProps> = ({ accounts, budget, installments, t
       {/* This header is designed to visually merge with a global top navigation bar. */}
       {/* The global nav (with actual Bell, Mail, User buttons) should be positioned */}
       {/* absolutely or fixed at the top, and its height should be accounted for by this header's padding-top. */}
-      <div className="bg-indigo-600 border-b-[4px] border-black rounded-b-[4rem] px-12 pt-28 pb-16 mb-12 shadow-[0px_8px_0px_0px_rgba(0,0,0,1)] relative overflow-hidden">
+      <div className="bg-indigo-600 border-b-[4px] border-black rounded-b-[5rem] px-12 pt-32 pb-20 mb-12 shadow-[0px_8px_0px_0px_black] relative overflow-hidden">
         <div className="absolute top-0 right-0 w-64 h-64 bg-white/10 rounded-full -mr-20 -mt-20 blur-3xl"></div>
         
         <div className="relative z-10 max-w-4xl"> {/* Added max-w-4xl to keep greeting from stretching too wide */}
-          <h1 className="font-['Titan_One'] text-5xl md:text-7xl uppercase tracking-tighter text-white drop-shadow-[4px_4px_0px_black]">
+          <h1 className="font-['Titan_One'] text-6xl md:text-9xl uppercase tracking-tighter text-white drop-shadow-[6px_6px_0px_black]">
             Hello, {userProfile?.first_name || 'there'}!
           </h1>
-          <p className="font-black text-indigo-100 uppercase tracking-[0.3em] mt-4 text-xs md:text-sm drop-shadow-[1px_1px_0px_black]">Just a quick vibe check!</p>
+          <p className="font-black text-indigo-100 uppercase tracking-[0.4em] mt-6 text-xs md:text-base drop-shadow-[2px_2px_0px_black]">Just a quick vibe check!</p>
         </div>
       </div>
       
@@ -229,57 +229,57 @@ const Dashboard: React.FC<DashboardProps> = ({ accounts, budget, installments, t
         {/* Top Cards */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
           {/* Total Balance Card */}
-          <div className="bg-white dark:bg-gray-900 rounded-3xl border-[3px] border-black shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] transition-all overflow-hidden">
-            <div className="bg-teal-400 p-4 border-b-[3px] border-black">
-              <h3 className="text-black text-[10px] font-black uppercase tracking-[0.2em]">Total Balance</h3>
+          <div className="bg-white dark:bg-gray-900 rounded-[2rem] border-[3px] border-black shadow-[8px_8px_0px_0px_black] hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-[4px_4px_0px_0px_black] transition-all overflow-hidden">
+            <div className="bg-teal-400 px-6 py-4 border-b-[3px] border-black">
+              <h3 className="font-['Titan_One'] text-2xl text-black uppercase tracking-tight">Total Balance</h3>
             </div>
             <div className="p-6">
               <div className="flex items-center justify-between mb-4">
                 <div className="p-3 rounded-2xl border-2 border-black bg-black text-white shrink-0">
                   <Landmark className="w-6 h-6" />
                 </div>
-                <span className="text-xs font-black text-black bg-green-400 border-2 border-black px-2 py-1 rounded-lg">+2.5%</span>
+                <span className="text-[10px] font-black text-black bg-white border-2 border-black px-2 py-1 rounded-lg uppercase tracking-widest">+2.5%</span>
               </div>
-              <p className="text-3xl font-black mt-1 dark:text-gray-100">{formatCurrency(totalBalance)}</p>
+              <p className="text-4xl font-black mt-1 dark:text-gray-100">{formatCurrency(totalBalance)}</p>
             </div>
           </div>
 
           {/* Budget Used Card */}
-          <div className="bg-white dark:bg-gray-900 rounded-3xl border-[3px] border-black shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] transition-all overflow-hidden">
-            <div className="bg-fuchsia-400 p-4 border-b-[3px] border-black">
-              <h3 className="text-black text-[10px] font-black uppercase tracking-[0.2em]">Budget Used</h3>
+          <div className="bg-white dark:bg-gray-900 rounded-[2rem] border-[3px] border-black shadow-[8px_8px_0px_0px_black] hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-[4px_4px_0px_0px_black] transition-all overflow-hidden">
+            <div className="bg-rose-400 px-6 py-4 border-b-[3px] border-black">
+              <h3 className="font-['Titan_One'] text-2xl text-black uppercase tracking-tight">Budget Used</h3>
             </div>
             <div className="p-6">
               <div className="flex items-center justify-between mb-4">
                 <div className="p-3 rounded-2xl border-2 border-black bg-black text-white shrink-0">
                   <TrendingUp className="w-6 h-6" />
                 </div>
-                <span className="text-xs font-black text-black bg-amber-400 border-2 border-black px-2 py-1 rounded-lg">+12%</span>
+                <span className="text-[10px] font-black text-black bg-white border-2 border-black px-2 py-1 rounded-lg uppercase tracking-widest">+12%</span>
               </div>
-              <p className="text-3xl font-black mt-1 dark:text-gray-100">{formatCurrency(monthlySpending)}</p>
+              <p className="text-4xl font-black mt-1 dark:text-gray-100">{formatCurrency(monthlySpending)}</p>
             </div>
           </div>
 
           {/* Debt Card */}
-          <div className="bg-white dark:bg-gray-900 rounded-3xl border-[3px] border-black shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] transition-all overflow-hidden">
-            <div className="bg-amber-400 p-4 border-b-[3px] border-black">
-              <h3 className="text-black text-[10px] font-black uppercase tracking-[0.2em]">Credit Debt</h3>
+          <div className="bg-white dark:bg-gray-900 rounded-[2rem] border-[3px] border-black shadow-[8px_8px_0px_0px_black] hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-[4px_4px_0px_0px_black] transition-all overflow-hidden">
+            <div className="bg-amber-400 px-6 py-4 border-b-[3px] border-black">
+              <h3 className="font-['Titan_One'] text-2xl text-black uppercase tracking-tight">Credit Debt</h3>
             </div>
             <div className="p-6">
               <div className="flex items-center justify-between mb-4">
                 <div className="p-3 rounded-2xl border-2 border-black bg-black text-white shrink-0">
                   <TrendingDown className="w-6 h-6" />
                 </div>
-                <span className="text-xs font-black text-black bg-green-400 border-2 border-black px-2 py-1 rounded-lg">-5%</span>
+                <span className="text-[10px] font-black text-black bg-white border-2 border-black px-2 py-1 rounded-lg uppercase tracking-widest">-5%</span>
               </div>
-              <p className="text-3xl font-black mt-1 dark:text-gray-100">{formatCurrency(totalDebt)}</p>
+              <p className="text-4xl font-black mt-1 dark:text-gray-100">{formatCurrency(totalDebt)}</p>
             </div>
           </div>
         </div>
 
       {/* Budget Projections Section */}
-      <div className="bg-white dark:bg-gray-900 rounded-3xl border-[3px] border-black shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] overflow-hidden">
-        <div className="p-6 bg-blue-500 border-b-[3px] border-black">
+      <div className="bg-white dark:bg-gray-900 rounded-[2.5rem] border-[3px] border-black shadow-[8px_8px_0px_0px_black] overflow-hidden">
+        <div className="p-6 bg-indigo-600 border-b-[3px] border-black">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-2">
               <TrendingUp className="w-6 h-6 text-white" />
@@ -291,9 +291,9 @@ const Dashboard: React.FC<DashboardProps> = ({ accounts, budget, installments, t
                 type="month" 
                 value={startDate}
                 onChange={(e) => setStartDate(e.target.value)}
-                className="text-xs font-bold border-2 border-black rounded-lg px-2 py-1 bg-white"
+                className="text-xs font-black border-2 border-black rounded-lg px-2 py-1 bg-white uppercase"
               />
-              <span className="self-center text-white font-black text-xs">TO</span>
+              <span className="self-center text-white font-black text-[10px] uppercase tracking-widest">to</span>
               <input 
                 type="month" 
                 value={endDate}
@@ -449,10 +449,10 @@ const Dashboard: React.FC<DashboardProps> = ({ accounts, budget, installments, t
 
       {/* Charts Section */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        <div className="lg:col-span-2 bg-white dark:bg-gray-900 rounded-3xl border-[3px] border-black shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] overflow-hidden">
-          <div className="p-6 bg-amber-400 border-b-[3px] border-black flex items-center justify-between">
-            <h3 className="font-['Titan_One'] text-2xl text-black uppercase tracking-tight">Spending Activity</h3>
-            <select className="bg-white border-2 border-black rounded-lg text-xs font-bold p-1 focus:ring-0">
+        <div className="lg:col-span-2 bg-white dark:bg-gray-900 rounded-[2.5rem] border-[3px] border-black shadow-[8px_8px_0px_0px_black] overflow-hidden">
+          <div className="p-6 bg-violet-500 border-b-[3px] border-black flex items-center justify-between">
+            <h3 className="font-['Titan_One'] text-3xl text-white uppercase tracking-tight">Spending Activity</h3>
+            <select className="bg-white border-2 border-black rounded-xl text-[10px] font-black uppercase tracking-widest p-2 focus:ring-0">
               <option>This Week</option>
               <option>Last Week</option>
             </select>
@@ -473,9 +473,9 @@ const Dashboard: React.FC<DashboardProps> = ({ accounts, budget, installments, t
           </div>
         </div>
 
-        <div className="bg-white dark:bg-gray-900 rounded-3xl border-[3px] border-black shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] overflow-hidden">
-          <div className="p-6 bg-fuchsia-400 border-b-[3px] border-black">
-            <h3 className="font-['Titan_One'] text-2xl text-white uppercase tracking-tight">Categories</h3>
+        <div className="bg-white dark:bg-gray-900 rounded-[2.5rem] border-[3px] border-black shadow-[8px_8px_0px_0px_black] overflow-hidden">
+          <div className="p-6 bg-fuchsia-500 border-b-[3px] border-black">
+            <h3 className="font-['Titan_One'] text-3xl text-white uppercase tracking-tight">Top Categories</h3>
           </div>
           <div className="p-6">
           <div className="h-64">
@@ -517,10 +517,10 @@ const Dashboard: React.FC<DashboardProps> = ({ accounts, budget, installments, t
       <div className="space-y-6">
         {/* Credit Accounts Utilization */}
         {creditAccounts.length > 0 && (
-          <div className="bg-white dark:bg-gray-900 rounded-3xl border-[3px] border-black shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] overflow-hidden">
-            <div className="p-6 bg-purple-500 border-b-[3px] border-black flex items-center space-x-2">
+          <div className="bg-white dark:bg-gray-900 rounded-[2.5rem] border-[3px] border-black shadow-[8px_8px_0px_0px_black] overflow-hidden">
+            <div className="p-6 bg-orange-500 border-b-[3px] border-black flex items-center space-x-2">
               <CreditCard className="w-6 h-6 text-white" />
-              <h3 className="font-['Titan_One'] text-2xl text-white uppercase tracking-tight">Credit Utilization</h3>
+              <h3 className="font-['Titan_One'] text-3xl text-white uppercase tracking-tight">Credit Utilization</h3>
             </div>
             <div className="p-6 space-y-4">
               {creditAccounts.map((account) => {
@@ -560,10 +560,10 @@ const Dashboard: React.FC<DashboardProps> = ({ accounts, budget, installments, t
 
         {/* Debit Accounts Stats */}
         {debitAccounts.length > 0 && (
-          <div className="bg-white dark:bg-gray-900 rounded-3xl border-[3px] border-black shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] overflow-hidden">
+          <div className="bg-white dark:bg-gray-900 rounded-[2.5rem] border-[3px] border-black shadow-[8px_8px_0px_0px_black] overflow-hidden">
             <div className="p-6 bg-teal-500 border-b-[3px] border-black flex items-center space-x-2">
               <Wallet className="w-6 h-6 text-white" />
-              <h3 className="font-['Titan_One'] text-2xl text-white uppercase tracking-tight">Debit Overview</h3>
+              <h3 className="font-['Titan_One'] text-3xl text-white uppercase tracking-tight">Debit Overview</h3>
             </div>
             <div className="p-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {debitAccounts.map((account) => {
@@ -617,10 +617,10 @@ const Dashboard: React.FC<DashboardProps> = ({ accounts, budget, installments, t
       </div>
 
       {/* Recent Activity */}
-      <div className="bg-white dark:bg-gray-900 rounded-3xl border-[3px] border-black shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] overflow-hidden">
-        <div className="p-6 bg-white border-b-[3px] border-black flex items-center justify-between">
-          <h3 className="font-['Titan_One'] text-2xl text-black uppercase tracking-tight">Recent Activity</h3>
-          <button className={`text-xs font-black uppercase tracking-widest border-2 border-black px-3 py-1 rounded-lg hover:bg-black hover:text-white transition-colors`}>View All</button>
+      <div className="bg-white dark:bg-gray-900 rounded-[2.5rem] border-[3px] border-black shadow-[8px_8px_0px_0px_black] overflow-hidden">
+        <div className="p-6 bg-lime-400 border-b-[3px] border-black flex items-center justify-between">
+          <h3 className="font-['Titan_One'] text-3xl text-black uppercase tracking-tight">Recent Activity</h3>
+          <button className="text-[10px] font-black uppercase tracking-widest bg-white border-2 border-black px-4 py-2 rounded-xl hover:bg-black hover:text-white transition-colors">View All</button>
         </div>
         <div className="divide-y divide-gray-50 dark:divide-gray-800">
           {transactions.slice(0, 5).map((transaction) => {

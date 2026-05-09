@@ -365,43 +365,23 @@ const Accounts: React.FC<AccountsProps> = ({ accounts, onAdd, onDelete, onEdit, 
   const creditAccounts = accounts.filter(a => a.type === 'Credit');
 
   return (
-    <div className="space-y-12 animate-in fade-in duration-500" onClick={() => setOpenMenuId(null)}>
-      {/* Loading State */}
-      {loading && (
-        <div className="flex items-center justify-center py-12">
-          <div className="text-center">
-            <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600 mb-4"></div>
-            <p className="text-gray-600 font-medium">Loading accounts from database...</p>
-          </div>
+    <div className="space-y-8 animate-in fade-in duration-500" onClick={() => setOpenMenuId(null)}>
+      {/* Header Banner */}
+      <div className="bg-fuchsia-500 border-b-[4px] border-black rounded-b-[4rem] px-8 md:px-12 pt-32 pb-16 mb-8 shadow-[0px_8px_0px_0px_black] relative overflow-hidden">
+        <div className="absolute top-0 right-0 w-64 h-64 bg-white/10 rounded-full -mr-20 -mt-20 blur-3xl"></div>
+        <div className="relative z-10">
+          <h1 className="font-['Titan_One'] text-5xl md:text-7xl uppercase tracking-tighter text-white drop-shadow-[4px_4px_0px_black]">
+            Accounts
+          </h1>
+          <p className="font-black text-fuchsia-100 uppercase tracking-[0.3em] mt-4 text-xs md:text-sm drop-shadow-[1px_1px_0px_black]">
+            Manage your bank accounts and credit cards
+          </p>
         </div>
-      )}
+      </div>
 
-      {/* Error State */}
-      {error && !loading && (
-        <div className="bg-red-50 border border-red-200 rounded-xl p-4 mb-6">
-          <div className="flex items-start space-x-3">
-            <AlertTriangle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
-            <div>
-              <h3 className="text-sm font-semibold text-red-800">Error Loading Accounts</h3>
-              <p className="text-sm text-red-600 mt-1">{error}</p>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Main Content */}
-      {!loading && (
-      <>
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white dark:bg-gray-900 p-6 md:p-8 rounded-[2.5rem] border border-gray-100 dark:border-gray-800 shadow-sm transition-colors">
-        <div className="flex items-center gap-5">
-          <div className={`w-14 h-14 rounded-2xl flex items-center justify-center text-white shadow-lg transition-colors ${getAccentClasses('bg')} ${getAccentClasses('shadow')}`}>
-            <Landmark className="w-7 h-7" />
-          </div>
-          <div>
-            <h1 className="text-2xl md:text-3xl font-black text-gray-900 dark:text-gray-100 uppercase tracking-tight transition-colors">Accounts</h1>
-            <p className="text-gray-500 dark:text-gray-400 text-sm font-medium transition-colors">Manage your bank accounts and credit cards</p>
-          </div>
-        </div>
+      <div className="px-8 space-y-12">
+        {/* Loading/Error States */}
+        {loading && (
         
         <div className="flex items-center gap-3 self-end sm:self-auto flex-wrap justify-end">
           <Link to="/transactions" className="flex items-center gap-2 bg-gray-50 dark:bg-gray-800 text-gray-700 dark:text-gray-300 px-5 py-3 rounded-xl font-bold text-sm hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">

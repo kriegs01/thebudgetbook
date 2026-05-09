@@ -1293,17 +1293,17 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
         <main className={`flex-1 bg-gray-100 dark:bg-gray-950 transition-all duration-300 ease-in-out ${isSidebarOpen ? 'md:ml-56' : 'md:ml-20'} h-full flex flex-col overflow-hidden`}> 
         
         {/* Top Navigation Bar */}
-        <header className="h-14 px-4 md:px-8 border-b border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-900 flex items-center justify-end shrink-0 transition-colors z-20">
-          <div className="flex items-center space-x-2 md:space-x-4">
+        <header className="absolute top-0 right-0 left-0 h-28 px-4 md:px-12 flex items-center justify-end shrink-0 transition-colors z-30 pointer-events-none">
+          <div className="flex items-center space-x-3 md:space-x-4 pointer-events-auto mt-6 md:mt-8">
             {/* Messages */}
             <div className="relative">
               <button 
                 onClick={() => setIsMessagesOpen(!isMessagesOpen)}
-                className={`relative p-2 text-gray-400 rounded-full transition-colors ${getAccentClasses('hoverLight')} ${isMessagesOpen ? 'bg-gray-100 dark:bg-gray-800' : ''} ${unreadMessagesCount > 0 && !isMessagesOpen ? 'animate-ring text-indigo-500 dark:text-indigo-400' : ''}`}
+                className={`relative p-3 bg-white border-[3px] border-black rounded-2xl shadow-[4px_4px_0px_0px_black] hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-[2px_2px_0px_0px_black] transition-all group ${isMessagesOpen ? 'bg-indigo-50' : ''} ${unreadMessagesCount > 0 && !isMessagesOpen ? 'animate-ring' : ''}`}
               >
-                <MessageCircle className="w-5 h-5" />
+                <MessageCircle className="w-6 h-6 text-black" />
                 {unreadMessagesCount > 0 && (
-                  <span className="absolute top-0 right-0 flex items-center justify-center min-w-[18px] h-[18px] px-1 bg-red-500 text-white text-[9px] font-black rounded-full border-2 border-white dark:border-gray-900">
+                  <span className="absolute -top-2 -right-2 flex items-center justify-center min-w-[20px] h-[20px] px-1 bg-red-500 text-white text-[10px] font-black rounded-full border-2 border-black">
                     {unreadMessagesCount > 99 ? '99+' : unreadMessagesCount}
                   </span>
                 )}
@@ -1313,11 +1313,11 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
             <div className="relative">
               <button 
                 onClick={() => setIsNotificationsOpen(!isNotificationsOpen)}
-                className={`relative p-2 text-gray-400 rounded-full transition-colors ${getAccentClasses('hoverLight')}`}
+                className={`relative p-3 bg-white border-[3px] border-black rounded-2xl shadow-[4px_4px_0px_0px_black] hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-[2px_2px_0px_0px_black] transition-all group`}
               >
-                <Bell className="w-5 h-5" />
+                <Bell className="w-6 h-6 text-black" />
                 {((pendingRequests?.length || 0) + (pendingTransactions?.length || 0)) > 0 && (
-                  <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-red-500 rounded-full border-2 border-white dark:border-gray-900"></span>
+                  <span className="absolute -top-1 -right-1 w-3 h-3 bg-red-500 rounded-full border-2 border-black"></span>
                 )}
               </button>
 
@@ -1413,18 +1413,18 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
             <div className="relative ml-2 border-l border-gray-200 dark:border-gray-700 pl-4">
               <button 
                 onClick={() => setIsUserMenuOpen(!isUserMenuOpen)}
-                className="flex items-center space-x-2 p-1 pr-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 border border-transparent hover:border-gray-200 dark:hover:border-gray-700 transition-colors"
+                className="flex items-center space-x-2 p-1 pr-3 rounded-full bg-amber-400 border-[3px] border-black shadow-[4px_4px_0px_0px_black] hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-[2px_2px_0px_0px_black] transition-all"
               >
-                <div className="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-600 font-bold text-sm">
+                <div className="w-9 h-9 rounded-full bg-white border-2 border-black flex items-center justify-center text-black font-black text-sm">
                   {userProfile ? 
                     `${userProfile.first_name.charAt(0)}${userProfile.last_name.charAt(0)}`.toUpperCase() :
                     user?.email?.charAt(0).toUpperCase() || 'U'
                   }
                 </div>
-                <span className="hidden sm:block text-sm font-semibold text-gray-700 dark:text-gray-300 truncate max-w-[120px]">
+                <span className="hidden sm:block text-xs font-black text-black uppercase tracking-widest truncate max-w-[100px]">
                   {userProfile ? userProfile.first_name : (user?.email?.split('@')[0] || 'User')}
                 </span>
-                <ChevronDown className={`w-4 h-4 text-gray-500 transition-transform ${isUserMenuOpen ? 'rotate-180' : ''}`} />
+                <ChevronDown className={`w-4 h-4 text-black transition-transform ${isUserMenuOpen ? 'rotate-180' : ''}`} />
               </button>
 
               {/* Dropdown Menu */}
@@ -1468,7 +1468,7 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
           </div>
         </header>
 
-        <div className="p-4 md:px-8 md:py-6 w-full flex-1 overflow-auto overscroll-none touch-pan-y" style={{ WebkitOverflowScrolling: 'touch' }}>
+        <div className="w-full flex-1 overflow-auto overscroll-none touch-pan-y" style={{ WebkitOverflowScrolling: 'touch' }}>
             <Routes>
               <Route path="/" element={<Dashboard accounts={accounts} budget={budgetItems} installments={installments} transactions={transactions} budgetSetups={budgetSetups} userProfile={userProfile} theme={theme} />} />
               <Route path="/budget" element={
