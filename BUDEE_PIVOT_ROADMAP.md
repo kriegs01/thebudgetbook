@@ -75,6 +75,15 @@ This document unifies all parked ideas, feature enhancements, and architectural 
 
 ---
 
+## ⏸️ Parked / On Hold
+*Features and UI overhauls that are currently paused to maintain focus on core productivity and stability.*
+
+- [ ] **Retro Sticker Theme UI Redesign**
+  - App-wide visual overhaul with heavy, retro-inspired aesthetic (large headers, thick borders, sticker elements).
+  - Parked to prioritize functional roadmap items and avoid layout/scaling issues.
+
+---
+
 ## 🗄️ Archive / Completed
 *Completed tasks, features, and resolved bugs.*
 
