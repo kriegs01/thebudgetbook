@@ -264,7 +264,12 @@ const Dashboard: React.FC<DashboardProps> = ({ accounts, budget, installments, t
                 <div className="p-3 rounded-2xl border-2 border-black bg-black text-white shrink-0">
                   <TrendingDown className="w-6 h-6" />
                 </div>
-                <span className="text-xs font-black text-black bg-green-400 border-2 border-black px
+                <span className="text-xs font-black text-black bg-green-400 border-2 border-black px-2 py-1 rounded-lg">-5%</span>
+              </div>
+              <p className="text-3xl font-black mt-1 dark:text-gray-100">{formatCurrency(totalDebt)}</p>
+            </div>
+          </div>
+        </div>
 
       {/* Budget Projections Section */}
       <div className="bg-white dark:bg-gray-900 rounded-3xl border-[3px] border-black shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] overflow-hidden">
