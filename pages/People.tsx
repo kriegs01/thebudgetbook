@@ -442,9 +442,9 @@ export default function PeoplePage({ onStartChat }: PeoplePageProps) {
     );
 
     return (
-      <div className="space-y-8 animate-in fade-in duration-500 pb-12">
+      <div className="space-y-8 animate-in fade-in duration-500">
         {/* Header Banner */}
-        <div className="bg-teal-500 border-[4px] border-black rounded-[2.5rem] px-8 md:px-12 pt-12 pb-12 mb-8 shadow-[8px_8px_0px_0px_black] relative overflow-hidden">
+        <div className="bg-teal-500 border-b-[4px] border-black rounded-b-[4rem] px-8 md:px-12 pt-32 pb-16 mb-8 shadow-[0px_8px_0px_0px_black] relative overflow-hidden">
           <div className="absolute top-0 right-0 w-64 h-64 bg-white/10 rounded-full -mr-20 -mt-20 blur-3xl"></div>
           <div className="relative z-10">
             <div className="flex items-center gap-4">
@@ -454,7 +454,7 @@ export default function PeoplePage({ onStartChat }: PeoplePageProps) {
               >
                 <ArrowLeft className="w-6 h-6 text-black" />
               </button>
-              <h1 className="font-['Titan_One'] text-4xl md:text-5xl uppercase tracking-tighter text-white drop-shadow-[4px_4px_0px_black] truncate">
+              <h1 className="font-['Titan_One'] text-5xl md:text-7xl uppercase tracking-tighter text-white drop-shadow-[4px_4px_0px_black] truncate">
                 {selectedPerson}
               </h1>
             </div>
@@ -464,7 +464,7 @@ export default function PeoplePage({ onStartChat }: PeoplePageProps) {
           </div>
         </div>
 
-        <div className="space-y-8">
+        <div className="px-8 space-y-8 pb-20">
           <div className="max-w-4xl mx-auto space-y-6 animate-in slide-in-from-right-8 duration-300">
             <div className="flex items-center gap-2">
               {people.find(p => p.name === selectedPerson)?.friend_user_id && onStartChat && (

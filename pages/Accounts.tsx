@@ -365,12 +365,12 @@ const Accounts: React.FC<AccountsProps> = ({ accounts = [], onAdd, onDelete, onE
   const creditAccounts = accounts.filter(a => a.type === 'Credit');
 
   return (
-    <div className="space-y-8 animate-in fade-in duration-500 pb-12" onClick={() => setOpenMenuId(null)}>
+    <div className="space-y-8 animate-in fade-in duration-500" onClick={() => setOpenMenuId(null)}>
       {/* Header Banner */}
-      <div className="bg-fuchsia-500 border-[4px] border-black rounded-[2.5rem] px-8 md:px-12 pt-12 pb-12 mb-8 shadow-[8px_8px_0px_0px_black] relative overflow-hidden">
+      <div className="bg-fuchsia-500 border-b-[4px] border-black rounded-b-[4rem] px-8 md:px-12 pt-32 pb-16 mb-8 shadow-[0px_8px_0px_0px_black] relative overflow-hidden">
         <div className="absolute top-0 right-0 w-64 h-64 bg-white/10 rounded-full -mr-20 -mt-20 blur-3xl"></div>
         <div className="relative z-10">
-          <h1 className="font-['Titan_One'] text-4xl md:text-5xl uppercase tracking-tighter text-white drop-shadow-[4px_4px_0px_black]">
+          <h1 className="font-['Titan_One'] text-5xl md:text-7xl uppercase tracking-tighter text-white drop-shadow-[4px_4px_0px_black]">
             Accounts
           </h1>
           <p className="font-black text-fuchsia-100 uppercase tracking-[0.3em] mt-4 text-xs md:text-sm drop-shadow-[1px_1px_0px_black]">
@@ -379,7 +379,7 @@ const Accounts: React.FC<AccountsProps> = ({ accounts = [], onAdd, onDelete, onE
         </div>
       </div>
 
-      <div className="space-y-12">
+      <div className="px-8 space-y-12">
         {/* Loading/Error States */}
         {loading && (
           <div className="text-center py-12">
