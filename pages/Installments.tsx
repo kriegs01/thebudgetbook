@@ -4,6 +4,7 @@ import { Plus, LayoutGrid, List, Calendar, Wallet, Trash2, X, Upload, AlertTrian
 import { PinProtectedAction } from '../src/components/PinProtectedAction';
 import { getPaymentSchedulesBySource } from '../src/services/paymentSchedulesService';
 import { hasInstallmentPayments, deleteAllInstallmentPaymentsAndResetSchedules } from '../src/services/installmentsService';
+import { getTransactionsByPaymentSchedule, getReceiptSignedUrl, updateTransaction, updateTransactionAndSyncSchedule } from '../src/services/transactionsService';
 import { getTransactionsByPaymentSchedule, getReceiptSignedUrl, updateTransaction, updateTransactionAndSyncSchedule, deleteTransactionAndRevertSchedule } from '../src/services/transactionsService';
 import { combineDateWithCurrentTime } from '../src/utils/dateUtils';
 import type { SupabaseMonthlyPaymentSchedule, SupabaseTransaction } from '../src/types/supabase';
@@ -29,7 +30,7 @@ interface InstallmentsProps {
   error?: string | null;
 }
 
-const Installments: React.FC<InstallmentsProps> = ({ installments = [], accounts = [], billers = [], onAdd, onUpdate, onDelete, onPayInstallment, loading = false, error = null }) => {
+const Installments: React.FC<InstallmentsProps> = ({ installments, accounts, billers = [], onAdd, onUpdate, onDelete, onPayInstallment, loading = false, error = null }) => {
   const { getAccentClasses } = useTheme();
   // Memoized first non-credit account ID to avoid redundant filtering
   const defaultNonCreditAccountId = useMemo(() => {

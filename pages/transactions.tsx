@@ -122,7 +122,7 @@ interface TransactionsPageProps {
   onTransactionCreated?: () => void;
 }
 
-const TransactionsPage: React.FC<TransactionsPageProps> = ({ transactions = [], loading = false, onTransactionDeleted, onTransactionCreated }) => {
+const TransactionsPage: React.FC<TransactionsPageProps> = ({ transactions, loading = false, onTransactionDeleted, onTransactionCreated }) => {
   const { getAccentClasses } = useTheme();
   const { userProfile } = useAuth();
 

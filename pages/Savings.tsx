@@ -11,7 +11,7 @@ interface SavingsProps {
   error?: string | null;
 }
 
-const Savings: React.FC<SavingsProps> = ({ jars = [], accounts = [], onAdd, onDelete, loading = false, error = null }) => {
+const Savings: React.FC<SavingsProps> = ({ jars, accounts, onAdd, onDelete, loading = false, error = null }) => {
   const [showModal, setShowModal] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [formData, setFormData] = useState({ name: '', accountId: accounts[0]?.id || '', currentBalance: '' });
