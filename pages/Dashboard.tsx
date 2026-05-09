@@ -56,30 +56,8 @@ const Dashboard: React.FC<DashboardProps> = ({ accounts, budget, installments, t
   const [endDate, setEndDate] = useState<string>(getNextMonth(getCurrentMonth()));
 
   const totalBalance = accounts.reduce((acc, a) => acc + (a.type === 'Debit' ? a.balance : -a.balance), 0);
+  const monthlySpending = budget.reduce((acc, b) => acc + b.amount, 0);
   const totalDebt = accounts.filter(a => a.type === 'Credit').reduce((acc, a) => acc + a.balance, 0);
-
-  // Dynamic Monthly Spending (Actual transactions for current month)
-  const currentMonthIndex = new Date().getMonth();
-  const currentYearNum = new Date().getFullYear();
-  const monthlySpending = transactions.reduce((acc, tx) => {
-    const txDate = new Date(tx.date);
-    // Sum positive amounts (expenditures) for the current month
-    if (txDate.getMonth() === currentMonthIndex && txDate.getFullYear() === currentYearNum && tx.amount > 0) {
-      return acc + tx.amount;
-    }
-    return acc;
-  }, 0);
-
-  // Dynamic Account Spending (Actual transactions for current month per account)
-  const accountActualExpenseMap = new Map<string, number>();
-  transactions.forEach(tx => {
-    const txDate = new Date(tx.date);
-    if (txDate.getMonth() === currentMonthIndex && txDate.getFullYear() === currentYearNum && tx.amount > 0) {
-      if (tx.paymentMethodId) {
-        accountActualExpenseMap.set(tx.paymentMethodId, (accountActualExpenseMap.get(tx.paymentMethodId) || 0) + tx.amount);
-      }
-    }
-  });
 
   const formatCurrency = (val: number) => {
     return new Intl.NumberFormat('en-PH', { 
@@ -102,30 +80,12 @@ const Dashboard: React.FC<DashboardProps> = ({ accounts, budget, installments, t
 
   const COLORS = ['#3B82F6', '#6366F1', '#8B5CF6', '#EC4899'];
 
-  // Extract category allocations and account expenses from active budget setups for the current month
-  const currentMonthName = new Date().toLocaleDateString('en-US', { month: 'long' });
-  const activeSetups = budgetSetups.filter(s => s.month === currentMonthName);
-  
-  const categoryDataMap = new Map<string, number>();
-
-  activeSetups.forEach(setup => {
-    if (!setup.data) return;
-    Object.entries(setup.data).forEach(([category, items]) => {
-      if (category.startsWith('_')) return; // Skip metadata like _projectedSalary
-      if (Array.isArray(items)) {
-        items.forEach((item: any) => {
-          if (item.included) {
-            const amount = parseFloat(item.amount) || 0;
-            categoryDataMap.set(category, (categoryDataMap.get(category) || 0) + amount);
-          }
-        });
-      }
-    });
-  });
-
-  const categoryData = Array.from(categoryDataMap.entries())
-    .map(([name, value]) => ({ name, value }))
-    .filter(cat => cat.value > 0); // Only chart categories with allocated funds
+  const categoryData = budget.reduce((acc: any[], item) => {
+    const existing = acc.find(a => a.name === item.category);
+    if (existing) existing.value += item.amount;
+    else acc.push({ name: item.category, value: item.amount });
+    return acc;
+  }, []);
 
   // Helper: Get income from setup
   // Priority: _actualSalary (if entered) > _projectedSalary > 0
@@ -251,55 +211,55 @@ const Dashboard: React.FC<DashboardProps> = ({ accounts, budget, installments, t
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
       {/* Greeting Header */}
-      <div className="mb-2">
-        <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100">
+      <div className="mb-4">
+        <h1 className="font-['Titan_One'] text-4xl md:text-6xl uppercase tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-purple-600 drop-shadow-[3px_3px_0px_rgba(0,0,0,0.1)]">
           Hello, {userProfile?.first_name || 'there'}!
         </h1>
       </div>
       
       {/* Top Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <div className="bg-white dark:bg-gray-900 p-6 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800">
+        <div className="bg-white dark:bg-gray-900 p-6 rounded-3xl border-[3px] border-black shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] transition-all">
           <div className="flex items-center justify-between mb-4">
-            <div className={`p-3 rounded-xl transition-colors ${getAccentClasses('lightBg')}`}>
+            <div className={`p-3 rounded-2xl border-2 border-black transition-colors ${getAccentClasses('bg')} text-white`}>
               <Landmark className="w-6 h-6" />
             </div>
-            <span className="text-xs font-medium text-green-600 bg-green-50 px-2 py-1 rounded-full">+2.5%</span>
+            <span className="text-xs font-black text-black bg-green-400 border-2 border-black px-2 py-1 rounded-lg">+2.5%</span>
           </div>
-          <h3 className="text-gray-500 dark:text-gray-400 text-sm font-medium">Total Balance</h3>
+          <h3 className="text-gray-500 dark:text-gray-400 text-xs font-black uppercase tracking-widest">Total Balance</h3>
           <p className="text-2xl font-bold mt-1 dark:text-gray-100">{formatCurrency(totalBalance)}</p>
         </div>
 
-        <div className="bg-white dark:bg-gray-900 p-6 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800">
+        <div className="bg-white dark:bg-gray-900 p-6 rounded-3xl border-[3px] border-black shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] transition-all">
           <div className="flex items-center justify-between mb-4">
-            <div className={`p-3 rounded-xl transition-colors ${getAccentClasses('lightBg')}`}>
+            <div className={`p-3 rounded-2xl border-2 border-black transition-colors bg-fuchsia-400 text-white`}>
               <TrendingUp className="w-6 h-6" />
             </div>
-            <span className="text-xs font-medium text-red-600 bg-red-50 px-2 py-1 rounded-full">+12%</span>
+            <span className="text-xs font-black text-black bg-amber-400 border-2 border-black px-2 py-1 rounded-lg">+12%</span>
           </div>
-          <h3 className="text-gray-500 dark:text-gray-400 text-sm font-medium">Monthly Spending</h3>
+          <h3 className="text-gray-500 dark:text-gray-400 text-xs font-black uppercase tracking-widest">Monthly Budget Used</h3>
           <p className="text-2xl font-bold mt-1 dark:text-gray-100">{formatCurrency(monthlySpending)}</p>
         </div>
 
-        <div className="bg-white dark:bg-gray-900 p-6 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800">
+        <div className="bg-white dark:bg-gray-900 p-6 rounded-3xl border-[3px] border-black shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] transition-all">
           <div className="flex items-center justify-between mb-4">
-            <div className={`p-3 rounded-xl transition-colors ${getAccentClasses('lightBg')}`}>
+            <div className={`p-3 rounded-2xl border-2 border-black transition-colors bg-teal-400 text-white`}>
               <TrendingDown className="w-6 h-6" />
             </div>
-            <span className="text-xs font-medium text-green-600 bg-green-50 px-2 py-1 rounded-full">-5%</span>
+            <span className="text-xs font-black text-black bg-green-400 border-2 border-black px-2 py-1 rounded-lg">-5%</span>
           </div>
-          <h3 className="text-gray-500 dark:text-gray-400 text-sm font-medium">Credit Utilization</h3>
+          <h3 className="text-gray-500 dark:text-gray-400 text-xs font-black uppercase tracking-widest">Credit Utilization</h3>
           <p className="text-2xl font-bold mt-1 dark:text-gray-100">{formatCurrency(totalDebt)}</p>
         </div>
       </div>
 
       {/* Budget Projections Section */}
-      <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800 overflow-hidden">
-        <div className="p-6 border-b border-gray-100 dark:border-gray-800">
+      <div className="bg-white dark:bg-gray-900 rounded-3xl border-[3px] border-black shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] overflow-hidden">
+        <div className="p-6 bg-blue-500 border-b-[3px] border-black">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-2">
-              <TrendingUp className="w-5 h-5 text-blue-600" />
-              <h3 className="text-lg font-bold dark:text-gray-100">Budget Projections</h3>
+              <TrendingUp className="w-6 h-6 text-white" />
+              <h3 className="font-['Titan_One'] text-2xl text-white uppercase tracking-tight">Budget Projections</h3>
             </div>
             {/* Date range selector */}
             <div className="flex gap-2">
@@ -307,14 +267,14 @@ const Dashboard: React.FC<DashboardProps> = ({ accounts, budget, installments, t
                 type="month" 
                 value={startDate}
                 onChange={(e) => setStartDate(e.target.value)}
-                className="text-sm border dark:border-gray-700 rounded-lg px-3 py-1 dark:bg-gray-800 dark:text-gray-200"
+                className="text-xs font-bold border-2 border-black rounded-lg px-2 py-1 bg-white"
               />
-              <span className="self-center text-gray-500 dark:text-gray-400">to</span>
+              <span className="self-center text-white font-black text-xs">TO</span>
               <input 
                 type="month" 
                 value={endDate}
                 onChange={(e) => setEndDate(e.target.value)}
-                className="text-sm border dark:border-gray-700 rounded-lg px-3 py-1 dark:bg-gray-800 dark:text-gray-200"
+                className="text-xs font-bold border-2 border-black rounded-lg px-2 py-1 bg-white"
               />
             </div>
           </div>
@@ -465,10 +425,10 @@ const Dashboard: React.FC<DashboardProps> = ({ accounts, budget, installments, t
 
       {/* Charts Section */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        <div className="lg:col-span-2 bg-white dark:bg-gray-900 p-8 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800">
-          <div className="flex items-center justify-between mb-8">
-            <h3 className="text-lg font-bold dark:text-gray-100">Spending Activity</h3>
-            <select className="bg-gray-50 dark:bg-gray-800 dark:text-gray-200 border-none rounded-lg text-sm p-2 focus:ring-0">
+        <div className="lg:col-span-2 bg-white dark:bg-gray-900 rounded-3xl border-[3px] border-black shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] overflow-hidden">
+          <div className="p-6 bg-amber-400 border-b-[3px] border-black flex items-center justify-between">
+            <h3 className="font-['Titan_One'] text-2xl text-black uppercase tracking-tight">Spending Activity</h3>
+            <select className="bg-white border-2 border-black rounded-lg text-xs font-bold p-1 focus:ring-0">
               <option>This Week</option>
               <option>Last Week</option>
             </select>
@@ -489,8 +449,11 @@ const Dashboard: React.FC<DashboardProps> = ({ accounts, budget, installments, t
           </div>
         </div>
 
-        <div className="bg-white dark:bg-gray-900 p-8 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800">
-          <h3 className="text-lg font-bold mb-8 dark:text-gray-100">Categories</h3>
+        <div className="bg-white dark:bg-gray-900 rounded-3xl border-[3px] border-black shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] overflow-hidden">
+          <div className="p-6 bg-fuchsia-400 border-b-[3px] border-black">
+            <h3 className="font-['Titan_One'] text-2xl text-white uppercase tracking-tight">Categories</h3>
+          </div>
+          <div className="p-6">
           <div className="h-64">
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
@@ -524,15 +487,16 @@ const Dashboard: React.FC<DashboardProps> = ({ accounts, budget, installments, t
           </div>
         </div>
       </div>
+      </div>
 
       {/* Account Utilization Stats */}
       <div className="space-y-6">
         {/* Credit Accounts Utilization */}
         {creditAccounts.length > 0 && (
-          <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800 overflow-hidden">
-            <div className="p-6 border-b border-gray-100 dark:border-gray-800 flex items-center space-x-2">
-              <CreditCard className="w-5 h-5 text-purple-600" />
-              <h3 className="text-lg font-bold dark:text-gray-100">Credit Accounts Utilization</h3>
+          <div className="bg-white dark:bg-gray-900 rounded-3xl border-[3px] border-black shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] overflow-hidden">
+            <div className="p-6 bg-purple-500 border-b-[3px] border-black flex items-center space-x-2">
+              <CreditCard className="w-6 h-6 text-white" />
+              <h3 className="font-['Titan_One'] text-2xl text-white uppercase tracking-tight">Credit Utilization</h3>
             </div>
             <div className="p-6 space-y-4">
               {creditAccounts.map((account) => {
@@ -572,15 +536,17 @@ const Dashboard: React.FC<DashboardProps> = ({ accounts, budget, installments, t
 
         {/* Debit Accounts Stats */}
         {debitAccounts.length > 0 && (
-          <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800 overflow-hidden">
-            <div className="p-6 border-b border-gray-100 dark:border-gray-800 flex items-center space-x-2">
-              <Wallet className="w-5 h-5 text-green-600" />
-              <h3 className="text-lg font-bold dark:text-gray-100">Debit Accounts Overview</h3>
+          <div className="bg-white dark:bg-gray-900 rounded-3xl border-[3px] border-black shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] overflow-hidden">
+            <div className="p-6 bg-teal-500 border-b-[3px] border-black flex items-center space-x-2">
+              <Wallet className="w-6 h-6 text-white" />
+              <h3 className="font-['Titan_One'] text-2xl text-white uppercase tracking-tight">Debit Overview</h3>
             </div>
             <div className="p-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {debitAccounts.map((account) => {
                 const balance = account.balance;
-                const monthlyExpense = accountActualExpenseMap.get(account.id) || 0;
+                const monthlyExpense = budget
+                  .filter(b => b.accountId === account.id)
+                  .reduce((sum, b) => sum + b.amount, 0);
                 const percentSpent = balance > 0 ? Math.round((monthlyExpense / balance) * 100) : 0;
                 const isOverdraft = percentSpent > 100;
                 
@@ -627,10 +593,10 @@ const Dashboard: React.FC<DashboardProps> = ({ accounts, budget, installments, t
       </div>
 
       {/* Recent Activity */}
-      <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800 overflow-hidden">
-        <div className="p-6 border-b border-gray-100 dark:border-gray-800 flex items-center justify-between">
-          <h3 className="text-lg font-bold dark:text-gray-100">Recent Transactions</h3>
-          <button className={`text-sm font-medium hover:underline transition-colors ${getAccentClasses('text')}`}>View All</button>
+      <div className="bg-white dark:bg-gray-900 rounded-3xl border-[3px] border-black shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] overflow-hidden">
+        <div className="p-6 bg-white border-b-[3px] border-black flex items-center justify-between">
+          <h3 className="font-['Titan_One'] text-2xl text-black uppercase tracking-tight">Recent Activity</h3>
+          <button className={`text-xs font-black uppercase tracking-widest border-2 border-black px-3 py-1 rounded-lg hover:bg-black hover:text-white transition-colors`}>View All</button>
         </div>
         <div className="divide-y divide-gray-50 dark:divide-gray-800">
           {transactions.slice(0, 5).map((transaction) => {
