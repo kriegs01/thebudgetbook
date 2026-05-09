@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Account, BudgetItem, Installment, Transaction, SavedBudgetSetup } from '../types';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, PieChart, Pie, Legend, LabelList } from 'recharts';
-import { TrendingUp, TrendingDown, Landmark, ArrowUpRight, CreditCard, Wallet, Calendar } from 'lucide-react';
+import { TrendingUp, TrendingDown, Landmark, ArrowUpRight, CreditCard, Wallet, Calendar, Bell, Mail, User } from 'lucide-react';
 import type { SupabaseUserProfile } from '../src/types/supabase';
 import { useTheme } from '../src/contexts/ThemeContext';
 
@@ -211,12 +211,32 @@ const Dashboard: React.FC<DashboardProps> = ({ accounts, budget, installments, t
   return (
     <div className="space-y-8 animate-in fade-in duration-500 -mt-8 -mx-8">
       {/* Greeting Header */}
-      <div className="bg-indigo-600 border-b-[4px] border-black rounded-b-[4rem] px-12 py-16 mb-12 shadow-[0px_8px_0px_0px_rgba(0,0,0,1)] relative overflow-hidden">
+      <div className="bg-indigo-600 border-b-[4px] border-black rounded-b-[4rem] px-12 py-16 mb-12 shadow-[0px_8px_0px_0px_rgba(0,0,0,1)] relative overflow-hidden flex flex-col md:flex-row md:justify-between md:items-start gap-8">
         <div className="absolute top-0 right-0 w-64 h-64 bg-white/10 rounded-full -mr-20 -mt-20 blur-3xl"></div>
-        <h1 className="font-['Titan_One'] text-5xl md:text-7xl uppercase tracking-tighter text-white drop-shadow-[4px_4px_0px_black] relative z-10">
-          Hello, {userProfile?.first_name || 'there'}!
-        </h1>
-        <p className="font-black text-indigo-100 uppercase tracking-[0.3em] mt-4 text-xs md:text-sm drop-shadow-[1px_1px_0px_black] relative z-10">Just a quick vibe check!</p>
+        
+        <div className="relative z-10">
+          <h1 className="font-['Titan_One'] text-5xl md:text-7xl uppercase tracking-tighter text-white drop-shadow-[4px_4px_0px_black]">
+            Hello, {userProfile?.first_name || 'there'}!
+          </h1>
+          <p className="font-black text-indigo-100 uppercase tracking-[0.3em] mt-4 text-xs md:text-sm drop-shadow-[1px_1px_0px_black]">Just a quick vibe check!</p>
+        </div>
+
+        {/* Utility Sticker Buttons */}
+        <div className="flex items-center gap-4 relative z-10">
+          <button className="bg-white border-[3px] border-black p-4 rounded-2xl shadow-[4px_4px_0px_0px_black] hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-[2px_2px_0px_0px_black] transition-all group">
+            <Bell className="w-6 h-6 text-black group-hover:scale-110 transition-transform" />
+          </button>
+          
+          <button className="bg-white border-[3px] border-black p-4 rounded-2xl shadow-[4px_4px_0px_0px_black] hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-[2px_2px_0px_0px_black] transition-all group">
+            <Mail className="w-6 h-6 text-black group-hover:scale-110 transition-transform" />
+          </button>
+
+          <button className="bg-amber-400 border-[3px] border-black p-1 rounded-full shadow-[4px_4px_0px_0px_black] hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-[2px_2px_0px_0px_black] transition-all flex items-center justify-center w-14 h-14 overflow-hidden group">
+            <span className="font-['Titan_One'] text-black text-xl group-hover:scale-110 transition-transform">
+              {(userProfile?.first_name?.[0] || 'T')}{(userProfile?.last_name?.[0] || 'H')}
+            </span>
+          </button>
+        </div>
       </div>
       
       <div className="px-8 space-y-8 pb-20">
