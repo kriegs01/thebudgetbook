@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Account, BudgetItem, Installment, Transaction, SavedBudgetSetup } from '../types';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, PieChart, Pie, Legend, LabelList } from 'recharts';
-import { TrendingUp, Landmark, ArrowUpRight, Calendar } from 'lucide-react';
+import { TrendingUp, TrendingDown, Landmark, ArrowUpRight, Calendar } from 'lucide-react';
 import type { SupabaseUserProfile } from '../src/types/supabase';
 import { useTheme } from '../src/contexts/ThemeContext';
 
