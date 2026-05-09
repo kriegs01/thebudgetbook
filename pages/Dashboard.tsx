@@ -641,6 +641,7 @@ const Dashboard: React.FC<DashboardProps> = ({ accounts, budget, installments, t
           )}
         </div>
       </div>
+      </div>
     </div>
   );
 };
