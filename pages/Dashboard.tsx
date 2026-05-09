@@ -1,12 +1,11 @@
 import React, { useState } from 'react';
 import { Account, BudgetItem, Installment, Transaction, SavedBudgetSetup } from '../types';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, PieChart, Pie, Legend, LabelList } from 'recharts';
-import { TrendingUp, TrendingDown, Landmark, ArrowUpRight, CreditCard, Wallet, Calendar, Bell, Mail, User } from 'lucide-react';
+import { TrendingUp, Landmark, ArrowUpRight, Calendar } from 'lucide-react';
 import type { SupabaseUserProfile } from '../src/types/supabase';
 import { useTheme } from '../src/contexts/ThemeContext';
 
 interface DashboardProps {
-  accounts: Account[];
   budget: BudgetItem[];
   installments: Installment[];
   transactions?: Transaction[];
@@ -55,9 +54,7 @@ const Dashboard: React.FC<DashboardProps> = ({ accounts, budget, installments, t
   const [startDate, setStartDate] = useState<string>(getCurrentMonth());
   const [endDate, setEndDate] = useState<string>(getNextMonth(getCurrentMonth()));
 
-  const totalBalance = accounts.reduce((acc, a) => acc + (a.type === 'Debit' ? a.balance : -a.balance), 0);
   const monthlySpending = budget.reduce((acc, b) => acc + b.amount, 0);
-  const totalDebt = accounts.filter(a => a.type === 'Credit').reduce((acc, a) => acc + a.balance, 0);
 
   const formatCurrency = (val: number) => {
     return new Intl.NumberFormat('en-PH', { 
@@ -204,9 +201,6 @@ const Dashboard: React.FC<DashboardProps> = ({ accounts, budget, installments, t
     ? monthlyAverages.reduce((worst, m) => m.avgRemaining < worst.avgRemaining ? m : worst)
     : null;
 
-  // Calculate credit account utilization
-  const creditAccounts = accounts.filter(a => a.type === 'Credit');
-  const debitAccounts = accounts.filter(a => a.type === 'Debit');
 
   return (
     <div className="space-y-8 animate-in fade-in duration-500 -mt-8 -mx-8">
@@ -227,52 +221,16 @@ const Dashboard: React.FC<DashboardProps> = ({ accounts, budget, installments, t
       
       <div className="px-8 space-y-8 pb-20">
         {/* Top Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-          {/* Total Balance Card */}
-          <div className="bg-white dark:bg-gray-900 rounded-[2rem] border-[3px] border-black shadow-[8px_8px_0px_0px_black] hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-[4px_4px_0px_0px_black] transition-all overflow-hidden">
-            <div className="bg-teal-400 px-6 py-4 border-b-[3px] border-black">
-              <h3 className="font-['Titan_One'] text-2xl text-black uppercase tracking-tight">Total Balance</h3>
+        <div className="max-w-xl">
+          {/* Budget Used Card (Primary Highlight) */}
+          <div className="bg-white dark:bg-gray-900 rounded-[2.5rem] border-[3px] border-black shadow-[8px_8px_0px_0px_black] hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-[4px_4px_0px_0px_black] transition-all overflow-hidden">
+            <div className="bg-rose-400 px-8 py-5 border-b-[3px] border-black flex justify-between items-center">
+              <h3 className="font-['Titan_One'] text-3xl text-black uppercase tracking-tight">Monthly Budget</h3>
+              <TrendingUp className="w-8 h-8 text-black" />
             </div>
-            <div className="p-6">
-              <div className="flex items-center justify-between mb-4">
-                <div className="p-3 rounded-2xl border-2 border-black bg-black text-white shrink-0">
-                  <Landmark className="w-6 h-6" />
-                </div>
-                <span className="text-[10px] font-black text-black bg-white border-2 border-black px-2 py-1 rounded-lg uppercase tracking-widest">+2.5%</span>
-              </div>
-              <p className="text-4xl font-black mt-1 dark:text-gray-100">{formatCurrency(totalBalance)}</p>
-            </div>
-          </div>
-
-          {/* Budget Used Card */}
-          <div className="bg-white dark:bg-gray-900 rounded-[2rem] border-[3px] border-black shadow-[8px_8px_0px_0px_black] hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-[4px_4px_0px_0px_black] transition-all overflow-hidden">
-            <div className="bg-rose-400 px-6 py-4 border-b-[3px] border-black">
-              <h3 className="font-['Titan_One'] text-2xl text-black uppercase tracking-tight">Budget Used</h3>
-            </div>
-            <div className="p-6">
-              <div className="flex items-center justify-between mb-4">
-                <div className="p-3 rounded-2xl border-2 border-black bg-black text-white shrink-0">
-                  <TrendingUp className="w-6 h-6" />
-                </div>
-                <span className="text-[10px] font-black text-black bg-white border-2 border-black px-2 py-1 rounded-lg uppercase tracking-widest">+12%</span>
-              </div>
-              <p className="text-4xl font-black mt-1 dark:text-gray-100">{formatCurrency(monthlySpending)}</p>
-            </div>
-          </div>
-
-          {/* Debt Card */}
-          <div className="bg-white dark:bg-gray-900 rounded-[2rem] border-[3px] border-black shadow-[8px_8px_0px_0px_black] hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-[4px_4px_0px_0px_black] transition-all overflow-hidden">
-            <div className="bg-amber-400 px-6 py-4 border-b-[3px] border-black">
-              <h3 className="font-['Titan_One'] text-2xl text-black uppercase tracking-tight">Credit Debt</h3>
-            </div>
-            <div className="p-6">
-              <div className="flex items-center justify-between mb-4">
-                <div className="p-3 rounded-2xl border-2 border-black bg-black text-white shrink-0">
-                  <TrendingDown className="w-6 h-6" />
-                </div>
-                <span className="text-[10px] font-black text-black bg-white border-2 border-black px-2 py-1 rounded-lg uppercase tracking-widest">-5%</span>
-              </div>
-              <p className="text-4xl font-black mt-1 dark:text-gray-100">{formatCurrency(totalDebt)}</p>
+            <div className="p-8 flex items-baseline gap-4">
+              <p className="text-6xl font-black text-black dark:text-gray-100 tracking-tighter">{formatCurrency(monthlySpending)}</p>
+              <span className="text-xs font-black text-rose-600 bg-rose-50 border-2 border-rose-200 px-3 py-1 rounded-full uppercase tracking-widest">Active</span>
             </div>
           </div>
         </div>
@@ -513,118 +471,14 @@ const Dashboard: React.FC<DashboardProps> = ({ accounts, budget, installments, t
       </div>
       </div>
 
-      {/* Account Utilization Stats */}
-      <div className="space-y-6">
-        {/* Credit Accounts Utilization */}
-        {creditAccounts.length > 0 && (
-          <div className="bg-white dark:bg-gray-900 rounded-[2.5rem] border-[3px] border-black shadow-[8px_8px_0px_0px_black] overflow-hidden">
-            <div className="p-6 bg-orange-500 border-b-[3px] border-black flex items-center space-x-2">
-              <CreditCard className="w-6 h-6 text-white" />
-              <h3 className="font-['Titan_One'] text-3xl text-white uppercase tracking-tight">Credit Utilization</h3>
-            </div>
-            <div className="p-6 space-y-4">
-              {creditAccounts.map((account) => {
-                const creditLimit = account.creditLimit ?? 0;
-                const used = account.balance;
-                const usedPercent = creditLimit > 0 ? Math.min(100, Math.round((used / creditLimit) * 100)) : 0;
-                const available = creditLimit - used;
-                
-                return (
-                  <div key={account.id} className="bg-gray-50 dark:bg-gray-800/50 p-4 rounded-xl">
-                    <div className="flex items-center justify-between mb-3">
-                      <div>
-                        <h4 className="font-bold text-gray-900 dark:text-gray-100">{account.bank}</h4>
-                        <p className="text-xs text-gray-500 dark:text-gray-400">{account.classification}</p>
-                      </div>
-                      <div className="text-right">
-                        <p className="text-xs text-gray-500 dark:text-gray-400">Used / Limit</p>
-                        <p className="font-bold text-gray-900 dark:text-gray-100">{formatCurrency(used)} / {formatCurrency(creditLimit)}</p>
-                      </div>
-                    </div>
-                    <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-3 overflow-hidden mb-2">
-                      <div
-                        className={`h-3 rounded-full transition-all ${usedPercent >= 90 ? 'bg-red-500' : usedPercent >= 70 ? 'bg-yellow-500' : 'bg-purple-600'}`}
-                        style={{ width: `${usedPercent}%` }}
-                      />
-                    </div>
-                    <div className="flex items-center justify-between text-xs text-gray-600 dark:text-gray-300">
-                      <span>{usedPercent}% utilized</span>
-                      <span className="text-green-600 font-medium">{formatCurrency(available)} available</span>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        )}
-
-        {/* Debit Accounts Stats */}
-        {debitAccounts.length > 0 && (
-          <div className="bg-white dark:bg-gray-900 rounded-[2.5rem] border-[3px] border-black shadow-[8px_8px_0px_0px_black] overflow-hidden">
-            <div className="p-6 bg-teal-500 border-b-[3px] border-black flex items-center space-x-2">
-              <Wallet className="w-6 h-6 text-white" />
-              <h3 className="font-['Titan_One'] text-3xl text-white uppercase tracking-tight">Debit Overview</h3>
-            </div>
-            <div className="p-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {debitAccounts.map((account) => {
-                const balance = account.balance;
-                const monthlyExpense = budget
-                  .filter(b => b.accountId === account.id)
-                  .reduce((sum, b) => sum + b.amount, 0);
-                const percentSpent = balance > 0 ? Math.round((monthlyExpense / balance) * 100) : 0;
-                const isOverdraft = percentSpent > 100;
-                
-                return (
-                  <div key={account.id} className="bg-gray-50 dark:bg-gray-800/50 p-4 rounded-xl">
-                    <div className="flex items-center justify-between mb-3">
-                      <div>
-                        <h4 className="font-bold text-gray-900 dark:text-gray-100">{account.bank}</h4>
-                        <p className="text-xs text-gray-500 dark:text-gray-400">{account.classification}</p>
-                      </div>
-                    </div>
-                    <div className="space-y-2">
-                      <div className="flex items-center justify-between text-sm">
-                        <span className="text-gray-600 dark:text-gray-300">Balance</span>
-                        <span className="font-bold text-gray-900 dark:text-gray-100">{formatCurrency(balance)}</span>
-                      </div>
-                      <div className="flex items-center justify-between text-sm">
-                        <span className="text-gray-600 dark:text-gray-300">Monthly Expense</span>
-                        <span className="font-bold text-red-600">{formatCurrency(monthlyExpense)}</span>
-                      </div>
-                      {balance > 0 && (
-                        <div className="mt-2">
-                          <div className="flex items-center justify-between text-xs text-gray-600 dark:text-gray-300 mb-1">
-                            <span>Spent this month</span>
-                            <span className={`font-medium ${isOverdraft ? 'text-red-600' : ''}`}>
-                              {isOverdraft ? 'OVERDRAFT' : `${percentSpent}%`}
-                            </span>
-                          </div>
-                          <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2 overflow-hidden">
-                            <div
-                              className={`h-2 rounded-full transition-all ${isOverdraft ? 'bg-red-600' : percentSpent >= 90 ? 'bg-red-500' : percentSpent >= 70 ? 'bg-yellow-500' : 'bg-green-600'}`}
-                              style={{ width: `${Math.min(percentSpent, 100)}%` }}
-                            />
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        )}
-      </div>
-
       {/* Recent Activity */}
-      <div className="bg-white dark:bg-gray-900 rounded-[2.5rem] border-[3px] border-black shadow-[8px_8px_0px_0px_black] overflow-hidden">
+      <div className="bg-white dark:bg-gray-900 rounded-[2.5rem] border-[3px] border-black shadow-[8px_8px_0px_0px_black] overflow-hidden mb-12">
         <div className="p-6 bg-lime-400 border-b-[3px] border-black flex items-center justify-between">
           <h3 className="font-['Titan_One'] text-3xl text-black uppercase tracking-tight">Recent Activity</h3>
           <button className="text-[10px] font-black uppercase tracking-widest bg-white border-2 border-black px-4 py-2 rounded-xl hover:bg-black hover:text-white transition-colors">View All</button>
         </div>
         <div className="divide-y divide-gray-50 dark:divide-gray-800">
           {transactions.slice(0, 5).map((transaction) => {
-            const account = accounts.find(a => a.id === transaction.paymentMethodId);
             return (
               <div key={transaction.id} className="p-4 flex items-center justify-between hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
                 <div className="flex items-center space-x-4">
@@ -633,7 +487,7 @@ const Dashboard: React.FC<DashboardProps> = ({ accounts, budget, installments, t
                   </div>
                   <div>
                     <p className="font-semibold text-gray-900 dark:text-gray-100">{transaction.name}</p>
-                    <p className="text-xs text-gray-500 dark:text-gray-400">{new Date(transaction.date).toLocaleDateString()} • {account?.bank || 'Unknown Account'}</p>
+                    <p className="text-xs text-gray-500 dark:text-gray-400 font-bold uppercase tracking-wider">{new Date(transaction.date).toLocaleDateString()}</p>
                   </div>
                 </div>
                 <p className="font-bold text-gray-900 dark:text-gray-100">-{formatCurrency(transaction.amount)}</p>
