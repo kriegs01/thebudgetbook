@@ -4,7 +4,6 @@ import { Plus, LayoutGrid, List, Calendar, Wallet, Trash2, X, Upload, AlertTrian
 import { PinProtectedAction } from '../src/components/PinProtectedAction';
 import { getPaymentSchedulesBySource } from '../src/services/paymentSchedulesService';
 import { hasInstallmentPayments, deleteAllInstallmentPaymentsAndResetSchedules } from '../src/services/installmentsService';
-import { getTransactionsByPaymentSchedule, getReceiptSignedUrl, updateTransaction, updateTransactionAndSyncSchedule } from '../src/services/transactionsService';
 import { getTransactionsByPaymentSchedule, getReceiptSignedUrl, updateTransaction, updateTransactionAndSyncSchedule, deleteTransactionAndRevertSchedule } from '../src/services/transactionsService';
 import { combineDateWithCurrentTime } from '../src/utils/dateUtils';
 import type { SupabaseMonthlyPaymentSchedule, SupabaseTransaction } from '../src/types/supabase';

@@ -382,17 +382,29 @@ const Accounts: React.FC<AccountsProps> = ({ accounts, onAdd, onDelete, onEdit, 
       <div className="px-8 space-y-12">
         {/* Loading/Error States */}
         {loading && (
-        
-        <div className="flex items-center gap-3 self-end sm:self-auto flex-wrap justify-end">
-          <Link to="/transactions" className="flex items-center gap-2 bg-gray-50 dark:bg-gray-800 text-gray-700 dark:text-gray-300 px-5 py-3 rounded-xl font-bold text-sm hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
-            <span className="hidden sm:inline">Transactions</span>
-          </Link>
-          <button onClick={openAddModal} className={`flex items-center gap-2 text-white px-5 py-3 rounded-xl font-bold transition-all shadow-md dark:shadow-none text-sm ${getAccentClasses('bg')} ${getAccentClasses('shadow')}`}>
-            <Plus className="w-4 h-4" />
-            <span className="hidden sm:inline">Add Account</span>
-          </button>
-        </div>
-      </div>
+          <div className="text-center py-12">
+            <div className="inline-block w-8 h-8 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin mb-4"></div>
+            <p className="text-gray-500 dark:text-gray-400">Loading accounts...</p>
+          </div>
+        )}
+
+        {error && (
+          <div className="bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 p-4 rounded-xl text-sm font-medium text-center">
+            {error}
+          </div>
+        )}
+
+        {!loading && !error && (
+          <>
+            <div className="flex items-center gap-3 self-end sm:self-auto flex-wrap justify-end">
+              <Link to="/transactions" className="flex items-center gap-2 bg-gray-50 dark:bg-gray-800 text-gray-700 dark:text-gray-300 px-5 py-3 rounded-xl font-bold text-sm hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
+                <span className="hidden sm:inline">Transactions</span>
+              </Link>
+              <button onClick={openAddModal} className={`flex items-center gap-2 text-white px-5 py-3 rounded-xl font-bold transition-all shadow-md dark:shadow-none text-sm ${getAccentClasses('bg')} ${getAccentClasses('shadow')}`}>
+                <Plus className="w-4 h-4" />
+                <span className="hidden sm:inline">Add Account</span>
+              </button>
+            </div>
 
       {/* Empty State */}
       {debitAccounts.length === 0 && creditAccounts.length === 0 && (
@@ -443,8 +455,9 @@ const Accounts: React.FC<AccountsProps> = ({ accounts, onAdd, onDelete, onEdit, 
           </div>
         )}
       </section>
-      </>
-      )}
+          </>
+        )}
+      </div>
 
       {showModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-md">
