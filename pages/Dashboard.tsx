@@ -209,49 +209,62 @@ const Dashboard: React.FC<DashboardProps> = ({ accounts, budget, installments, t
   const debitAccounts = accounts.filter(a => a.type === 'Debit');
 
   return (
-    <div className="space-y-8 animate-in fade-in duration-500">
+    <div className="space-y-8 animate-in fade-in duration-500 -mt-8 -mx-8">
       {/* Greeting Header */}
-      <div className="mb-4">
-        <h1 className="font-['Titan_One'] text-4xl md:text-6xl uppercase tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-purple-600 drop-shadow-[3px_3px_0px_rgba(0,0,0,0.1)]">
+      <div className="bg-indigo-600 border-b-[4px] border-black rounded-b-[4rem] px-12 py-16 mb-12 shadow-[0px_8px_0px_0px_rgba(0,0,0,1)] relative overflow-hidden">
+        <div className="absolute top-0 right-0 w-64 h-64 bg-white/10 rounded-full -mr-20 -mt-20 blur-3xl"></div>
+        <h1 className="font-['Titan_One'] text-5xl md:text-7xl uppercase tracking-tighter text-white drop-shadow-[4px_4px_0px_black] relative z-10">
           Hello, {userProfile?.first_name || 'there'}!
         </h1>
+        <p className="font-black text-indigo-100 uppercase tracking-[0.3em] mt-4 text-xs md:text-sm drop-shadow-[1px_1px_0px_black] relative z-10">Your Financial Pulse Today</p>
       </div>
       
-      {/* Top Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <div className="bg-white dark:bg-gray-900 p-6 rounded-3xl border-[3px] border-black shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] transition-all">
-          <div className="flex items-center justify-between mb-4">
-            <div className={`p-3 rounded-2xl border-2 border-black transition-colors ${getAccentClasses('bg')} text-white`}>
-              <Landmark className="w-6 h-6" />
+      <div className="px-8 space-y-8 pb-20">
+        {/* Top Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+          {/* Total Balance Card */}
+          <div className="bg-white dark:bg-gray-900 rounded-3xl border-[3px] border-black shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] transition-all overflow-hidden">
+            <div className="bg-teal-400 p-4 border-b-[3px] border-black">
+              <h3 className="text-black text-[10px] font-black uppercase tracking-[0.2em]">Total Balance</h3>
             </div>
-            <span className="text-xs font-black text-black bg-green-400 border-2 border-black px-2 py-1 rounded-lg">+2.5%</span>
+            <div className="p-6">
+              <div className="flex items-center justify-between mb-4">
+                <div className="p-3 rounded-2xl border-2 border-black bg-black text-white shrink-0">
+                  <Landmark className="w-6 h-6" />
+                </div>
+                <span className="text-xs font-black text-black bg-green-400 border-2 border-black px-2 py-1 rounded-lg">+2.5%</span>
+              </div>
+              <p className="text-3xl font-black mt-1 dark:text-gray-100">{formatCurrency(totalBalance)}</p>
+            </div>
           </div>
-          <h3 className="text-gray-500 dark:text-gray-400 text-xs font-black uppercase tracking-widest">Total Balance</h3>
-          <p className="text-2xl font-bold mt-1 dark:text-gray-100">{formatCurrency(totalBalance)}</p>
-        </div>
 
-        <div className="bg-white dark:bg-gray-900 p-6 rounded-3xl border-[3px] border-black shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] transition-all">
-          <div className="flex items-center justify-between mb-4">
-            <div className={`p-3 rounded-2xl border-2 border-black transition-colors bg-fuchsia-400 text-white`}>
-              <TrendingUp className="w-6 h-6" />
+          {/* Budget Used Card */}
+          <div className="bg-white dark:bg-gray-900 rounded-3xl border-[3px] border-black shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] transition-all overflow-hidden">
+            <div className="bg-fuchsia-400 p-4 border-b-[3px] border-black">
+              <h3 className="text-black text-[10px] font-black uppercase tracking-[0.2em]">Budget Used</h3>
             </div>
-            <span className="text-xs font-black text-black bg-amber-400 border-2 border-black px-2 py-1 rounded-lg">+12%</span>
+            <div className="p-6">
+              <div className="flex items-center justify-between mb-4">
+                <div className="p-3 rounded-2xl border-2 border-black bg-black text-white shrink-0">
+                  <TrendingUp className="w-6 h-6" />
+                </div>
+                <span className="text-xs font-black text-black bg-amber-400 border-2 border-black px-2 py-1 rounded-lg">+12%</span>
+              </div>
+              <p className="text-3xl font-black mt-1 dark:text-gray-100">{formatCurrency(monthlySpending)}</p>
+            </div>
           </div>
-          <h3 className="text-gray-500 dark:text-gray-400 text-xs font-black uppercase tracking-widest">Monthly Budget Used</h3>
-          <p className="text-2xl font-bold mt-1 dark:text-gray-100">{formatCurrency(monthlySpending)}</p>
-        </div>
 
-        <div className="bg-white dark:bg-gray-900 p-6 rounded-3xl border-[3px] border-black shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] transition-all">
-          <div className="flex items-center justify-between mb-4">
-            <div className={`p-3 rounded-2xl border-2 border-black transition-colors bg-teal-400 text-white`}>
-              <TrendingDown className="w-6 h-6" />
+          {/* Debt Card */}
+          <div className="bg-white dark:bg-gray-900 rounded-3xl border-[3px] border-black shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] transition-all overflow-hidden">
+            <div className="bg-amber-400 p-4 border-b-[3px] border-black">
+              <h3 className="text-black text-[10px] font-black uppercase tracking-[0.2em]">Credit Debt</h3>
             </div>
-            <span className="text-xs font-black text-black bg-green-400 border-2 border-black px-2 py-1 rounded-lg">-5%</span>
-          </div>
-          <h3 className="text-gray-500 dark:text-gray-400 text-xs font-black uppercase tracking-widest">Credit Utilization</h3>
-          <p className="text-2xl font-bold mt-1 dark:text-gray-100">{formatCurrency(totalDebt)}</p>
-        </div>
-      </div>
+            <div className="p-6">
+              <div className="flex items-center justify-between mb-4">
+                <div className="p-3 rounded-2xl border-2 border-black bg-black text-white shrink-0">
+                  <TrendingDown className="w-6 h-6" />
+                </div>
+                <span className="text-xs font-black text-black bg-green-400 border-2 border-black px
 
       {/* Budget Projections Section */}
       <div className="bg-white dark:bg-gray-900 rounded-3xl border-[3px] border-black shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] overflow-hidden">
