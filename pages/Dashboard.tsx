@@ -4,6 +4,7 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContaine
 import { TrendingUp, TrendingDown, Landmark, ArrowUpRight, CreditCard, Wallet, Calendar } from 'lucide-react';
 import type { SupabaseUserProfile } from '../src/types/supabase';
 import { useTheme } from '../src/contexts/ThemeContext';
+import { DashboardHeader } from '../DashboardHeader';
 
 interface DashboardProps {
   accounts: Account[];
@@ -209,17 +210,12 @@ const Dashboard: React.FC<DashboardProps> = ({ accounts, budget, installments, t
   const debitAccounts = accounts.filter(a => a.type === 'Debit');
 
   return (
-    <div className="space-y-8 animate-in fade-in duration-500 -mt-8 -mx-8">
+    <div className="animate-in fade-in duration-500 max-w-7xl mx-auto px-8">
       {/* Greeting Header */}
-      <div className="bg-indigo-600 border-b-[4px] border-black rounded-b-[4rem] px-12 py-16 mb-12 shadow-[0px_8px_0px_0px_rgba(0,0,0,1)] relative overflow-hidden">
-        <div className="absolute top-0 right-0 w-64 h-64 bg-white/10 rounded-full -mr-20 -mt-20 blur-3xl"></div>
-        <h1 className="font-['Titan_One'] text-5xl md:text-7xl uppercase tracking-tighter text-white drop-shadow-[4px_4px_0px_black] relative z-10">
-          Hello, {userProfile?.first_name || 'there'}!
-        </h1>
-        <p className="font-black text-indigo-100 uppercase tracking-[0.3em] mt-4 text-xs md:text-sm drop-shadow-[1px_1px_0px_black] relative z-10">Your Financial Pulse Today</p>
-      </div>
-      
-      <div className="px-8 space-y-8 pb-20">
+      <DashboardHeader name={userProfile?.first_name || 'Budee User'} />
+
+      {/* Main Content Area with Right Gutter for Floating HUD */}
+      <div className="space-y-8 pb-20 pr-20">
         {/* Top Cards */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
           {/* Total Balance Card */}

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Menu, ChevronLeft, SlidersHorizontal, ArrowUp, ArrowDown, Eye, EyeOff, X, ChevronDown, LogOut, Lock, Users, Bell, MessageCircle } from 'lucide-react';
-import { BrowserRouter, Routes, Route, NavLink } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, NavLink, useLocation } from 'react-router-dom';
+import { FloatingHUD } from './FloatingHUD';
 import { QueryClient, QueryClientProvider, useQueryClient } from '@tanstack/react-query';
 import { NAV_ITEMS, INITIAL_BUDGET, DEFAULT_SETUP, INITIAL_CATEGORIES } from './constants';
 import { getAllBillersFrontend, createBillerFrontend, updateBillerFrontend, deleteBillerFrontend } from './src/services/billersService';
@@ -166,6 +167,80 @@ const formatTransaction = (supabaseTransaction: SupabaseTransaction): Transactio
   amount: supabaseTransaction.amount,
   paymentMethodId: supabaseTransaction.payment_method_id,
 });
+
+// NEW: Layout Wrapper to handle conditional UI (floating stickers vs top bar)
+const AppLayout: React.FC<any> = (props) => {
+  const location = useLocation();
+  const isDashboard = location.pathname === '/';
+  const { getAccentClasses } = useTheme();
+
+  return (
+    <div className="flex h-[100dvh] bg-gray-100 dark:bg-gray-950 w-full overflow-hidden fixed inset-0 transition-colors duration-200">
+      <aside className={`fixed inset-y-0 left-0 z-50 bg-gray-50 dark:bg-gray-900 border-r border-gray-200 dark:border-gray-800 transition-all duration-300 ease-in-out ${props.isSidebarOpen ? 'w-56' : 'hidden md:flex w-20'} overscroll-none`}> 
+        <div className="flex flex-col h-full">
+          <div className={`flex items-center h-14 px-4 border-b border-gray-100 dark:border-gray-800 ${props.isSidebarOpen ? 'justify-between' : 'justify-center'}`}>
+            <div 
+              className="flex flex-row flex-nowrap items-center cursor-pointer active:scale-95 transition-transform"
+              onClick={() => !props.isSidebarOpen && props.setIsSidebarOpen(true)}
+            >
+              <img src="/iconapp.png" alt="Budee Mascot" className={`drop-shadow-md transition-all duration-300 z-10 ${props.isSidebarOpen ? 'w-10 h-10 -mr-5 rotate-[15deg]' : 'w-8 h-8'}`} />
+              {props.isSidebarOpen && <div className="mt-1 ml-1"><Logo className="text-3xl" /></div>}
+            </div>
+            {props.isSidebarOpen && (
+              <button onClick={() => props.setIsSidebarOpen(false)} className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-500 transition-colors ml-2"><ChevronLeft className="w-5 h-5" /></button>
+            )}
+          </div>
+          <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
+            {props.navPreferences.filter((p: any) => p.visible).map((pref: any) => {
+              const item = props.effectiveNavItems.find((n: any) => n.id === pref.id);
+              if (!item) return null;
+              return (
+                <NavLink key={item.id} to={item.path} className={({ isActive }) => `w-full flex items-center p-3 rounded-xl transition-colors ${isActive ? getAccentClasses('lightBg') : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800/50'}`} end={item.path === '/'}>
+                  <div className={`${props.isSidebarOpen ? '' : 'mx-auto'} ${location.pathname === item.path ? getAccentClasses('text') : 'text-gray-400'} transition-colors`}>{item.icon}</div>
+                  {props.isSidebarOpen && <span className="ml-3 font-bold text-sm">{item.label}</span>}
+                </NavLink>
+              );
+            })}
+          </nav>
+        </div>
+      </aside>
+
+      <main className={`flex-1 bg-gray-100 dark:bg-gray-950 transition-all duration-300 ease-in-out ${props.isSidebarOpen ? 'md:ml-56' : 'md:ml-20'} h-full flex flex-col overflow-hidden`}> 
+        
+        {/* SHOW OLD TOP BAR ONLY IF NOT ON DASHBOARD */}
+        {!isDashboard && (
+          <header className="h-14 px-4 md:px-8 border-b border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-900 flex items-center justify-end shrink-0 transition-colors z-20">
+            <div className="flex items-center space-x-2 md:space-x-4">
+              <button onClick={() => props.setIsMessagesOpen(!props.isMessagesOpen)} className={`p-2 text-gray-400 rounded-full transition-colors ${getAccentClasses('hoverLight')}`}>
+                <MessageCircle className="w-5 h-5" />
+              </button>
+              <button onClick={() => props.setIsNotificationsOpen(!props.isNotificationsOpen)} className={`p-2 text-gray-400 rounded-full transition-colors ${getAccentClasses('hoverLight')}`}>
+                <Bell className="w-5 h-5" />
+              </button>
+              <div className="relative ml-2 border-l border-gray-200 dark:border-gray-700 pl-4">
+                <button onClick={() => props.setIsUserMenuOpen(!props.isUserMenuOpen)} className="flex items-center space-x-2 p-1 pr-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
+                  <div className="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-600 font-bold text-sm">
+                    {props.userProfile ? `${props.userProfile.first_name.charAt(0)}${props.userProfile.last_name.charAt(0)}`.toUpperCase() : 'U'}
+                  </div>
+                </button>
+              </div>
+            </div>
+          </header>
+        )}
+
+        {/* SHOW FLOATING HUD ONLY ON DASHBOARD */}
+        {isDashboard && <FloatingHUD userName={props.userProfile?.first_name || 'Budee'} />}
+
+        <div className={`w-full flex-1 overflow-auto overscroll-none touch-pan-y ${isDashboard ? 'pt-0' : 'p-4 md:px-8 md:py-6'}`}>
+          {props.children}
+        </div>
+      </main>
+
+      {/* Reuse Modals and Drawers logic here by passing them as children or props */}
+      <MessagesInbox isOpen={props.isMessagesOpen} onClose={() => props.setIsMessagesOpen(false)} currentUserId={props.user.id} />
+    </div>
+  );
+};
 
 const queryClient = new QueryClient();
 
