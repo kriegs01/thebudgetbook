@@ -1226,7 +1226,7 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
         </style>
         <div className="flex h-[100dvh] bg-gray-100 dark:bg-gray-950 w-full overflow-hidden fixed inset-0 transition-colors duration-200">
         <aside className={`fixed inset-y-0 left-0 z-50 bg-gray-50 dark:bg-gray-900 transition-all duration-300 ease-in-out ${isSidebarOpen ? 'w-52' : 'hidden md:flex w-20'} overscroll-none ${
-          isScrolled ? 'border-r-4 border-black shadow-[4px_0px_0px_0px_rgba(0,0,0,1)]' : 'border-r border-gray-200 dark:border-gray-800'
+          isScrolled ? 'border-r-4 border-black shadow-[2px_0px_0px_0px_rgba(0,0,0,1)]' : 'border-r border-gray-200 dark:border-gray-800'
         }`}> 
           <div className="flex flex-col h-full">
             <div className={`flex items-center h-14 px-4 transition-all duration-300 ${isSidebarOpen ? 'justify-between' : 'justify-center'} ${
