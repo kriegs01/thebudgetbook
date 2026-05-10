@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Menu, ChevronLeft, SlidersHorizontal, ArrowUp, ArrowDown, Eye, EyeOff, X, ChevronDown, LogOut, Lock, Users, Bell, MessageCircle } from 'lucide-react';
-import { BrowserRouter, Routes, Route, NavLink, useLocation } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, NavLink, useLocation, Navigate } from 'react-router-dom';
 import { FloatingHUD } from './FloatingHUD';
 import { QueryClient, QueryClientProvider, useQueryClient } from '@tanstack/react-query';
 import { NAV_ITEMS, INITIAL_BUDGET, DEFAULT_SETUP, INITIAL_CATEGORIES } from './constants';
@@ -274,6 +274,10 @@ const AppContent: React.FC = () => {
 };
 
 const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<void> }> = ({ user, userProfile, signOut }) => {
+  const location = useLocation();
+  const isDashboard = location.pathname === '/';
+  const [isScrolled, setIsScrolled] = useState(false);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
@@ -285,6 +289,21 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
   const [txAccountSelections, setTxAccountSelections] = useState<Record<string, string>>({});
   const [resolvingIds, setResolvingIds] = useState<Set<string>>(new Set());
   const { getAccentClasses } = useTheme();
+
+  // Scroll listener for Dashboard top bar visibility
+  useEffect(() => {
+    const handleScroll = () => {
+      if (scrollContainerRef.current) {
+        setIsScrolled(scrollContainerRef.current.scrollTop > 40);
+      }
+    };
+
+    const container = scrollContainerRef.current;
+    if (isDashboard) {
+      container?.addEventListener('scroll', handleScroll);
+    }
+    return () => container?.removeEventListener('scroll', handleScroll);
+  }, [isDashboard]);
 
   const loadNotifications = async () => {
     const { data: pTxs } = await getPendingTransactions();
@@ -1266,8 +1285,6 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
   return (
     <>
         {showWizard && <SetupWizard onComplete={handleCompleteWizard} />}
-        <TestModeBanner sidebarOpen={isSidebarOpen} />
-        <BrowserRouter>
         <style>
           {`@import url('https://fonts.googleapis.com/css2?family=Titan+One&display=swap');
           .font-titan { font-family: 'Titan One', cursive; font-weight: 400; letter-spacing: 1px; }
@@ -1367,8 +1384,14 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
         </aside>
         <main className={`flex-1 bg-gray-100 dark:bg-gray-950 transition-all duration-300 ease-in-out ${isSidebarOpen ? 'md:ml-56' : 'md:ml-20'} h-full flex flex-col overflow-hidden`}> 
         
-        {/* Top Navigation Bar */}
-        <header className="h-14 px-4 md:px-8 border-b border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-900 flex items-center justify-end shrink-0 transition-colors z-20">
+        <TestModeBanner sidebarOpen={isSidebarOpen} />
+
+        {/* Top Navigation Bar - Reactive for Dashboard, Static for others */}
+        <header className={`h-14 px-4 md:px-8 flex items-center justify-end transition-all duration-500 z-30 ${
+          isDashboard 
+            ? `fixed top-0 right-0 left-0 ${isScrolled ? 'translate-y-0 opacity-100' : '-translate-y-full opacity-0 pointer-events-none'} ${isSidebarOpen ? 'md:ml-56' : 'md:ml-20'} bg-white/80 dark:bg-gray-900/80 backdrop-blur-md border-b border-gray-100 dark:border-gray-800 shadow-sm`
+            : "border-b border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-900 shrink-0"
+        }`}>
           <div className="flex items-center space-x-2 md:space-x-4">
             {/* Messages */}
             <div className="relative">
@@ -1543,7 +1566,11 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
           </div>
         </header>
 
-        <div className="p-4 md:px-8 md:py-6 w-full flex-1 overflow-auto overscroll-none touch-pan-y" style={{ WebkitOverflowScrolling: 'touch' }}>
+        <div 
+          ref={scrollContainerRef}
+          className={`w-full flex-1 overflow-auto overscroll-none touch-pan-y ${isDashboard ? 'pt-0' : 'p-4 md:px-8 md:py-6'}`} 
+          style={{ WebkitOverflowScrolling: 'touch' }}
+        >
             <Routes>
               <Route path="/" element={<Dashboard accounts={accounts} budget={budgetItems} installments={installments} transactions={transactions} budgetSetups={budgetSetups} userProfile={userProfile} theme={theme} />} />
               <Route path="/budget" element={
@@ -1690,7 +1717,8 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
                 <SupabaseDemo />
               } />
               <Route path="/update-password" element={<UpdatePassword />} />
-              {/* Add additional routes/pages as needed */}
+              {/* Start with Dashboard and redirect anything else unrecognized */}
+              <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
           </div>
         </main>
@@ -1747,7 +1775,6 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
         activeFriendId={activeChatFriendId}
         onClearActiveChat={() => setActiveChatFriendId(undefined)}
       />
-    </BrowserRouter>
     </>
   );
 };
@@ -1759,7 +1786,9 @@ const App: React.FC = () => {
       <TestEnvironmentProvider>
         <AuthProvider>
           <ThemeProvider>
-            <AppContent />
+            <BrowserRouter>
+              <AppContent />
+            </BrowserRouter>
           </ThemeProvider>
         </AuthProvider>
       </TestEnvironmentProvider>
