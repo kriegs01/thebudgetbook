@@ -1225,9 +1225,13 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
           .animate-ring { animation: ring 2s ease-in-out infinite; }`}
         </style>
         <div className="flex h-[100dvh] bg-gray-100 dark:bg-gray-950 w-full overflow-hidden fixed inset-0 transition-colors duration-200">
-        <aside className={`fixed inset-y-0 left-0 z-50 bg-gray-50 dark:bg-gray-900 border-r border-gray-200 dark:border-gray-800 transition-all duration-300 ease-in-out ${isSidebarOpen ? 'w-52' : 'hidden md:flex w-20'} overscroll-none`}> 
+        <aside className={`fixed inset-y-0 left-0 z-50 bg-gray-50 dark:bg-gray-900 transition-all duration-300 ease-in-out ${isSidebarOpen ? 'w-52' : 'hidden md:flex w-20'} overscroll-none ${
+          isScrolled ? 'border-r-4 border-black shadow-[4px_0px_0px_0px_rgba(0,0,0,1)]' : 'border-r border-gray-200 dark:border-gray-800'
+        }`}> 
           <div className="flex flex-col h-full">
-            <div className={`flex items-center h-14 px-4 border-b border-gray-100 dark:border-gray-800 ${isSidebarOpen ? 'justify-between' : 'justify-center'}`}>
+            <div className={`flex items-center h-14 px-4 transition-all duration-300 ${isSidebarOpen ? 'justify-between' : 'justify-center'} ${
+              isScrolled ? `${getAccentClasses('bg')} border-b-4 border-black` : 'border-b border-gray-100 dark:border-gray-800'
+            }`}>
               <div 
                 className="flex flex-row flex-nowrap items-center cursor-pointer active:scale-95 transition-transform"
                 onClick={() => !isSidebarOpen && setIsSidebarOpen(true)}
@@ -1250,7 +1254,7 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
               </div>
               
               {isSidebarOpen && (
-                <button onClick={() => setIsSidebarOpen(false)} className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-500 dark:text-gray-400 transition-colors ml-2 active:scale-95">
+                <button onClick={() => setIsSidebarOpen(false)} className={`p-2 rounded-lg transition-colors ml-2 active:scale-95 ${isScrolled ? 'hover:bg-black/10 text-white' : 'hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-500 dark:text-gray-400'}`}>
                   <ChevronLeft className="w-5 h-5" />
                 </button>
               )}

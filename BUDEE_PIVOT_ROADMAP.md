@@ -4,6 +4,14 @@ This document unifies all parked ideas, feature enhancements, and architectural 
 
 ---
 
+## ⏯️ Resumption Plan
+*Immediate next steps to finalize the UI transition.*
+
+- [ ] **Retro Sticker Login Page:** Update the `Auth.tsx` layout and elements to match the heavy pop-art aesthetic.
+- [ ] **Unified Modal Overhaul:** Apply thick borders, offset shadows, and retro styling to all action modals app-wide.
+
+---
+
 ## 🧱 Phase 1: Core Financials & Foundation
 *Solidifying the base financial engine and paying off tech debt before expanding into multiplayer/social features.*
 
@@ -75,18 +83,12 @@ This document unifies all parked ideas, feature enhancements, and architectural 
 
 ---
 
-## ⏸️ Parked / On Hold
-*Features and UI overhauls that are currently paused to maintain focus on core productivity and stability.*
-
-- [ ] **Retro Sticker Theme UI Redesign**
-  - App-wide visual overhaul with heavy, retro-inspired aesthetic (large headers, thick borders, sticker elements).
-  - Parked to prioritize functional roadmap items and avoid layout/scaling issues.
-
----
-
 ## 🗄️ Archive / Completed
 *Completed tasks, features, and resolved bugs.*
 
+- [x] **Retro Sticker UI Foundation:** Implemented thick-border "sticker" icons with hard shadows and rotation for Page Headers and Nav Drawer.
+- [x] **Brand Voice Update:** Refreshed all page subtitles (Transactions, Billers, etc.) to align with the new Budee personality.
+- [x] **Sidebar & Header Cleanup:** Tightened navigation spacing, fixed top-bar alignment, and adjusted action button positioning for better utility.
 - [x] **Real-time Social Sync Foundation:** Enabled `supabase_realtime` replication, added global websocket listeners with Optimistic UI updates, and implemented RLS bypass via a Security Definer for secure transaction broadcasting.
 - [x] **Real-time Notification Delays:** Fixed issue where transaction notifications required a page reload by correcting RLS policies and implementing optimistic UI state updates.
 - [x] **People Page as a Relationship Ledger:** Upgraded the People page to act as "Shadow Profiles", showing rolled-up "Net Balances", and split profile views.
