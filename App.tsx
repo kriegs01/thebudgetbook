@@ -290,6 +290,10 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
   const [resolvingIds, setResolvingIds] = useState<Set<string>>(new Set());
   const { getAccentClasses } = useTheme();
 
+  // Splash Screen State
+  const [showSplash, setShowSplash] = useState(true);
+  const [minSplashTimeElapsed, setMinSplashTimeElapsed] = useState(false);
+
   // Scroll listener for Dashboard top bar visibility
   useEffect(() => {
     const handleScroll = () => {
