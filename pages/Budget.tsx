@@ -33,6 +33,7 @@ interface BudgetProps {
   onTransactionDeleted?: () => void; // Notify App to reload accounts/balances after stash top-up deletion
   onArchiveBudget?: (setup: SavedBudgetSetup) => Promise<void>; // Archive (close) a budget
   onReopenBudget?: (setup: SavedBudgetSetup) => Promise<void>; // Reopen an archived budget
+  userProfile?: any;
 }
 
 const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
@@ -247,6 +248,43 @@ const isCategoryLegacyForBudget = (
   return true; // has deactivatedAt and is still visible → always legacy
 };
 
+/** 
+ * PageHeader component mirroring Dashboard style
+ */
+const PageHeader: React.FC<{ 
+  title: string; 
+  subtitle: string; 
+  icon?: React.ReactNode; 
+  actions?: React.ReactNode;
+  backButton?: React.ReactNode;
+}> = ({ title, subtitle, icon, actions, backButton }) => {
+  const { getAccentClasses } = useTheme();
+  
+  return (
+    <header className="pt-12 mb-12 flex flex-col md:flex-row md:items-end justify-between gap-6 pr-4 md:pr-48">
+      <div className="flex-1">
+        <div className="flex items-center gap-3 mb-[-6px] ml-1">
+          {backButton}
+          <p className="text-2xl font-bold italic text-black/50 dark:text-gray-400 transition-colors duration-300">
+            {subtitle}
+          </p>
+        </div>
+        <div className="relative inline-block mt-2">
+          <div className="flex items-center gap-4">
+             {icon && <div className="z-10">{icon}</div>}
+             <h1 className="text-5xl md:text-7xl font-[950] uppercase tracking-tighter leading-none relative z-10 text-black dark:text-white transition-colors duration-300">
+              {title}
+            </h1>
+          </div>
+          <div className={`absolute bottom-1 left-0 w-[110%] h-5 ${getAccentClasses('bg')} opacity-40 -z-0 -rotate-1 -translate-x-2 transition-colors duration-300`} />
+        </div>
+        <div className={`h-2 w-32 mt-4 bg-black dark:bg-white/20 transition-colors duration-300`} />
+      </div>
+      {actions && <div className="flex items-center gap-3 mt-4 md:mt-0">{actions}</div>}
+    </header>
+  );
+};
+
 /**
  * Calculates the remaining amount for a saved budget setup.
  * Uses the same formula as the Budget Setup page's Month Summary:
@@ -309,7 +347,7 @@ const calculateBudgetRemaining = (
   return netIncome - setup.totalAmount;
 };
 
-const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSetups, setSavedSetups, onUpdateBiller, onMoveToTrash, onReloadSetups, onReloadBillers, onUpdateInstallment, installments = [], onTransactionCreated, onTransactionDeleted, onArchiveBudget, onReopenBudget }) => {
+const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSetups, setSavedSetups, onUpdateBiller, onMoveToTrash, onReloadSetups, onReloadBillers, onUpdateInstallment, installments = [], onTransactionCreated, onTransactionDeleted, onArchiveBudget, onReopenBudget, userProfile }) => {
   const { getAccentClasses } = useTheme();
   const [view, setView] = useState<'summary' | 'setup'>('summary');
   const [selectedMonth, setSelectedMonth] = useState(MONTHS[new Date().getMonth()]);
@@ -2107,27 +2145,24 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
 
     return (
       <div className="space-y-8 animate-in fade-in duration-500 w-full">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white dark:bg-gray-900 p-6 md:p-8 rounded-[2.5rem] border border-gray-100 dark:border-gray-800 shadow-sm transition-colors mb-2">
-          <div className="flex items-center gap-5">
+        <PageHeader 
+          title="Budget"
+          subtitle={`Hello, ${userProfile?.first_name || 'Budee'} !`}
+          icon={
             <div className={`w-14 h-14 rounded-2xl flex items-center justify-center text-white shadow-lg transition-colors ${getAccentClasses('bg')} ${getAccentClasses('shadow')}`}>
               <WalletIcon className="w-7 h-7" />
             </div>
-            <div>
-              <h1 className="text-2xl md:text-3xl font-black text-gray-900 dark:text-gray-100 uppercase tracking-tight transition-colors">Budget</h1>
-              <p className="text-gray-500 dark:text-gray-400 text-sm font-medium transition-colors">Review your monthly budget history</p>
-            </div>
-          </div>
-          
-          <div className="flex items-center gap-3 self-end sm:self-auto">
+          }
+          actions={
             <button type="button" onClick={handleOpenNew} className={`flex items-center gap-2 text-white px-5 py-3 rounded-xl font-bold transition-all shadow-md dark:shadow-none text-sm ${getAccentClasses('bg')} ${getAccentClasses('shadow')}`}>
               <Plus className="w-4 h-4" />
               <span className="hidden sm:inline">Open New</span>
             </button>
-          </div>
-        </div>
+          }
+        />
 
         {archiveStatusMsg && (
-          <div className={`flex items-center space-x-3 px-6 py-4 rounded-2xl text-sm font-bold ${archiveStatusMsg.type === 'success' ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'}`}>
+          <div className={`flex items-center space-x-3 px-6 py-4 rounded-2xl text-sm font-bold mb-6 ${archiveStatusMsg.type === 'success' ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'}`}>
             {archiveStatusMsg.type === 'success' ? <Check className="w-4 h-4 flex-shrink-0" /> : <AlertTriangle className="w-4 h-4 flex-shrink-0" />}
             <span>{archiveStatusMsg.msg}</span>
           </div>
@@ -2309,33 +2344,26 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
   return (
     <div className="space-y-8 animate-in slide-in-from-right-4 duration-500 pb-20 w-full">
       <div className="flex flex-col space-y-6">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white dark:bg-gray-900 p-6 md:p-8 rounded-[2.5rem] border border-gray-100 dark:border-gray-800 shadow-sm transition-colors">
-          <div className="flex items-center gap-5">
-            <button onClick={() => setView('summary')} className={`flex items-center justify-center w-12 h-12 md:w-14 md:h-14 rounded-2xl bg-gray-50 dark:bg-gray-800 text-gray-500 dark:text-gray-400 transition-all shrink-0 ${getAccentClasses('hoverLight')}`}>
-              <ArrowLeft className="w-6 h-6" />
+        <PageHeader 
+          title="Budget Setup"
+          subtitle={isReadOnly ? 'Archived — Read Only' : 'Configure Recurring Expenses'}
+          backButton={
+            <button onClick={() => setView('summary')} className={`flex items-center justify-center w-10 h-10 rounded-xl bg-gray-50 dark:bg-gray-800 text-gray-500 dark:text-gray-400 transition-all shrink-0 ${getAccentClasses('hoverLight')}`}>
+              <ArrowLeft className="w-5 h-5" />
             </button>
-            <div>
-              <h1 className="text-2xl md:text-3xl font-black text-gray-900 dark:text-gray-100 uppercase tracking-tight transition-colors">Budget Setup</h1>
-              <p className="text-gray-500 dark:text-gray-400 text-sm font-medium transition-colors">{isReadOnly ? 'Archived — Read Only' : 'Configure Recurring Expenses'}</p>
-            </div>
-          </div>
-          
-          <div className="flex items-center gap-3 self-end sm:self-auto flex-wrap justify-end">
+          }
+          actions={
+            <div className="flex items-center gap-3 flex-wrap justify-end">
             {/* Autosave Status Indicator */}
             {!isReadOnly && autoSaveStatus !== 'idle' && (
               <div className="flex items-center space-x-2 text-xs font-bold mr-2">
                 {autoSaveStatus === 'saving' && (
                   <>
                     <div className="w-4 h-4 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
-                    <span className="text-gray-600 dark:text-gray-300">Saving...</span>
+                    <span className="text-black/50 dark:text-white/50">Saving...</span>
                   </>
                 )}
-                {autoSaveStatus === 'saved' && (
-                  <>
-                    <Check className="w-4 h-4 text-green-600" />
-                    <span className="text-green-600">Saved</span>
-                  </>
-                )}
+                {autoSaveStatus === 'saved' && <Check className="w-4 h-4 text-green-600" />}
                 {autoSaveStatus === 'error' && (
                   <>
                     <AlertTriangle className="w-4 h-4 text-red-600" />
@@ -2376,8 +2404,9 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                 </button>
               </PinProtectedAction>
             )}
-          </div>
-        </div>
+            </div>
+          }
+        />
 
         {/* Read-only banner for archived budgets */}
         {isReadOnly && (

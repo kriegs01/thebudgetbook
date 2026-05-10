@@ -1314,16 +1314,16 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
         <header className={`fixed top-0 right-0 left-0 h-14 px-4 md:px-8 flex items-center justify-end transition-all duration-300 z-30 ${
           isSidebarOpen ? 'md:ml-56' : 'md:ml-20'
         } ${
-          (isScrolled || !isDashboard) ? `${getAccentClasses('bg')} shadow-lg border-b-4 border-black` : 'bg-transparent border-transparent'
+          isScrolled ? `${getAccentClasses('bg')} shadow-lg border-b-4 border-black` : 'bg-transparent border-transparent'
         }`}>
           <div className="flex items-center space-x-2 md:space-x-4">
             {/* Messages */}
             <div className="relative">
               <button 
                 onClick={() => setIsMessagesOpen(!isMessagesOpen)}
-                className={`relative p-2 border-[3px] border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] transition-all duration-200 -rotate-2 hover:rotate-0 hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none ${(isScrolled || !isDashboard) ? 'bg-white' : getAccentClasses('bg')} ${unreadMessagesCount > 0 && !isMessagesOpen ? 'animate-ring' : ''}`}
+                className={`relative p-2 border-[3px] border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] transition-all duration-200 -rotate-2 hover:rotate-0 hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none ${isScrolled ? 'bg-white' : getAccentClasses('bg')} ${unreadMessagesCount > 0 && !isMessagesOpen ? 'animate-ring' : ''}`}
               >
-                <MessageCircle className={`w-5 h-5 ${(isScrolled || !isDashboard) ? getAccentClasses('text') : 'text-white'}`} />
+                <MessageCircle className={`w-5 h-5 ${isScrolled ? getAccentClasses('text') : 'text-white'}`} />
                 {unreadMessagesCount > 0 && !isMessagesOpen && ( // Only show badge if not open
                   <span className="absolute -top-2 -right-2 flex items-center justify-center min-w-[20px] h-[20px] px-1 bg-yellow-300 text-black text-[10px] font-black border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] z-10">
                     {unreadMessagesCount > 99 ? '99+' : unreadMessagesCount}
@@ -1335,9 +1335,9 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
             <div className="relative">
               <button 
                 onClick={() => setIsNotificationsOpen(!isNotificationsOpen)}
-                className={`relative p-2 border-[3px] border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] transition-all duration-200 rotate-3 hover:rotate-0 hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none ${(isScrolled || !isDashboard) ? 'bg-white' : getAccentClasses('bg')}`}
+                className={`relative p-2 border-[3px] border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] transition-all duration-200 rotate-3 hover:rotate-0 hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none ${isScrolled ? 'bg-white' : getAccentClasses('bg')}`}
               >
-                <Bell className={`w-5 h-5 ${(isScrolled || !isDashboard) ? getAccentClasses('text') : 'text-white'}`} />
+                <Bell className={`w-5 h-5 ${isScrolled ? getAccentClasses('text') : 'text-white'}`} />
                 {((pendingRequests?.length || 0) + (pendingTransactions?.length || 0)) > 0 && (
                   <span className="absolute -top-1 -right-1 w-4 h-4 bg-yellow-300 border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] z-10"></span>
                 )}
@@ -1492,7 +1492,7 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
 
         <div 
           ref={scrollContainerRef}
-          className={`w-full flex-1 overflow-auto overscroll-none touch-pan-y ${isDashboard ? 'pt-0' : 'pt-14 px-4 pb-4 md:px-8 md:pb-6'}`} 
+          className="w-full flex-1 overflow-auto overscroll-none touch-pan-y pt-0 px-4 pb-4 md:px-8 md:pb-6" 
           style={{ WebkitOverflowScrolling: 'touch' }}
         >
             <Routes>
@@ -1500,6 +1500,7 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
               <Route path="/budget" element={
                 <Budget
                   items={budgetItems} 
+                  userProfile={userProfile}
                   accounts={accounts} 
                   billers={billers}
                   categories={categories}
