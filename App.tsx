@@ -1264,16 +1264,26 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
                     key={item.id}
                     to={item.path}
                     className={({ isActive }) =>
-                      `w-full flex items-center p-3 rounded-xl transition-colors ${
-                    isActive ? getAccentClasses('lightBg') : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800/50'
+                      `w-full flex items-center p-3 rounded-xl transition-colors group ${
+                        isActive ? 'bg-black/5 dark:bg-white/5' : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800/50'
                       }`
                     }
                     end={item.path === '/'}
                   >
-                    <div className={`${isSidebarOpen ? '' : 'mx-auto'} ${window.location.pathname === item.path ? getAccentClasses('text') : 'text-gray-400 dark:text-gray-500'} transition-colors`}>
-                      {item.icon}
-                    </div>
-                    {isSidebarOpen && <span className="ml-3 font-bold text-sm">{item.label}</span>}
+                    {({ isActive }) => (
+                      <>
+                        <div className={`shrink-0 w-10 h-10 rounded-xl flex items-center justify-center border-2 border-black transition-all duration-200 z-10 relative ${
+                          isSidebarOpen ? '' : 'mx-auto'
+                        } ${
+                          isActive 
+                            ? `${getAccentClasses('bg')} text-white shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] -rotate-3` 
+                            : 'bg-white dark:bg-gray-800 text-gray-400 dark:text-gray-500 shadow-none'
+                        } group-hover:rotate-0 group-hover:scale-110 group-hover:shadow-[3px_3px_0px_0px_rgba(0,0,0,1)]`}>
+                          {item.icon}
+                        </div>
+                        {isSidebarOpen && <span className={`ml-3 font-bold text-sm transition-colors ${isActive ? 'text-gray-900 dark:text-white' : 'text-gray-600 dark:text-gray-400'}`}>{item.label}</span>}
+                      </>
+                    )}
                   </NavLink>
                 );
               })}
@@ -1293,15 +1303,25 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
             <NavLink
               to="/settings"
               className={({ isActive }) =>
-                `w-full flex items-center p-3 rounded-xl transition-colors ${
-                    isActive ? getAccentClasses('lightBg') : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800/50'
+                `w-full flex items-center p-3 rounded-xl transition-colors group ${
+                  isActive ? 'bg-black/5 dark:bg-white/5' : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800/50'
                 }`
               }
             >
-              <div className={`${isSidebarOpen ? '' : 'mx-auto'} ${window.location.pathname === '/settings' ? getAccentClasses('text') : 'text-gray-400 dark:text-gray-500'} transition-colors`}>
-                <SlidersHorizontal className="w-5 h-5" />
-              </div>
-              {isSidebarOpen && <span className="ml-3 font-bold text-sm">Settings</span>}
+              {({ isActive }) => (
+                <>
+                  <div className={`shrink-0 w-10 h-10 rounded-xl flex items-center justify-center border-2 border-black transition-all duration-200 z-10 relative ${
+                    isSidebarOpen ? '' : 'mx-auto'
+                  } ${
+                    isActive 
+                      ? `${getAccentClasses('bg')} text-white shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] -rotate-3` 
+                      : 'bg-white dark:bg-gray-800 text-gray-400 dark:text-gray-500 shadow-none'
+                  } group-hover:rotate-0 group-hover:scale-110 group-hover:shadow-[3px_3px_0px_0px_rgba(0,0,0,1)]`}>
+                    <SlidersHorizontal className="w-5 h-5" />
+                  </div>
+                  {isSidebarOpen && <span className={`ml-3 font-bold text-sm transition-colors ${isActive ? 'text-gray-900 dark:text-white' : 'text-gray-600 dark:text-gray-400'}`}>Settings</span>}
+                </>
+              )}
             </NavLink>
           </div>
           </div>
