@@ -11,13 +11,13 @@ export const DashboardHeader: React.FC<DashboardHeaderProps> = ({ name }) => {
   return (
     <header className="pt-12 mb-12 pr-48">
       {/* Sub-header Greeting */}
-      <p className="text-2xl font-bold italic mb-[-6px] ml-1 text-black/50 dark:text-gray-400 transition-colors duration-300">
+      <p className="text-xl font-bold italic mb-[-6px] ml-1 text-black/50 dark:text-gray-400 transition-colors duration-300">
         Hi, {name} !
       </p>
 
       {/* Main Page Title */}
       <div className="relative inline-block">
-        <h1 className="text-7xl font-[950] uppercase tracking-tighter leading-none relative z-10 text-black dark:text-white transition-colors duration-300">
+        <h1 className="text-6xl font-[950] uppercase tracking-tighter leading-none relative z-10 text-black dark:text-white transition-colors duration-300">
           Dashboard
         </h1>
         {/* Retro Highlighter Accent */}

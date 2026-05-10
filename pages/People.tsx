@@ -30,14 +30,14 @@ const PageHeader: React.FC<{
       <div className="flex-1">
         <div className="flex items-center gap-3 mb-[-6px] ml-1">
           {backButton}
-          <p className="text-2xl font-bold italic text-black/50 dark:text-gray-400 transition-colors duration-300">
+          <p className="text-xl font-bold italic text-black/50 dark:text-gray-400 transition-colors duration-300">
             {subtitle}
           </p>
         </div>
         <div className="relative inline-block mt-2">
           <div className="flex items-center gap-4">
              {icon && <div className="z-10 shrink-0">{icon}</div>}
-             <h1 className="text-5xl md:text-7xl font-[950] uppercase tracking-tighter leading-none relative z-10 text-black dark:text-white transition-colors duration-300">
+             <h1 className="text-4xl md:text-6xl font-[950] uppercase tracking-tighter leading-none relative z-10 text-black dark:text-white transition-colors duration-300">
               {title}
             </h1>
           </div>
