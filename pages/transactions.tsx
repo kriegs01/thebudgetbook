@@ -49,6 +49,43 @@ type ContactOption = {
   budeeProfile?: SupabaseUserProfile;
 };
 
+/** 
+ * PageHeader component mirroring Dashboard style
+ */
+const PageHeader: React.FC<{ 
+  title: string; 
+  subtitle: string; 
+  icon?: React.ReactNode; 
+  actions?: React.ReactNode;
+  backButton?: React.ReactNode;
+}> = ({ title, subtitle, icon, actions, backButton }) => {
+  const { getAccentClasses } = useTheme();
+  
+  return (
+    <header className="pt-12 mb-12 flex flex-col md:flex-row md:items-end justify-between gap-6 md:pr-48">
+      <div className="flex-1">
+        <div className="flex items-center gap-3 mb-[-6px] ml-1">
+          {backButton}
+          <p className="text-2xl font-bold italic text-black/50 dark:text-gray-400 transition-colors duration-300">
+            {subtitle}
+          </p>
+        </div>
+        <div className="relative inline-block mt-2">
+          <div className="flex items-center gap-4">
+             {icon && <div className="z-10 shrink-0">{icon}</div>}
+             <h1 className="text-5xl md:text-7xl font-[950] uppercase tracking-tighter leading-none relative z-10 text-black dark:text-white transition-colors duration-300">
+              {title}
+            </h1>
+          </div>
+          <div className={`absolute bottom-1 left-0 w-[110%] h-5 ${getAccentClasses('bg')} opacity-40 -z-0 -rotate-1 -translate-x-2 transition-colors duration-300`} />
+        </div>
+        <div className={`h-2 w-32 mt-4 bg-black dark:bg-white/20 transition-colors duration-300`} />
+      </div>
+      {actions && <div className="flex items-center justify-end gap-3 mt-4 md:mt-0 w-full md:w-auto">{actions}</div>}
+    </header>
+  );
+};
+
 const ContactDropdown = ({ value, onChange, contacts, placeholder }: { value: string, onChange: (val: string) => void, contacts: ContactOption[], placeholder: string }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [search, setSearch] = useState(value);
@@ -644,23 +681,22 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ transactions, loadi
     <div className="min-h-screen bg-gray-50 dark:bg-gray-950 p-8 transition-colors duration-200">
       <div className="max-w-6xl mx-auto">
         {/* ── Header & Controllers ───────────────────────────────────────── */}
-        <div ref={headerRef} className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white dark:bg-gray-900 p-6 md:p-8 rounded-[2.5rem] border border-gray-100 dark:border-gray-800 shadow-sm transition-colors mb-6">
-          <div className="flex items-center gap-5">
-            <div className={`w-14 h-14 rounded-2xl flex items-center justify-center text-white shadow-lg transition-colors ${getAccentClasses('bg')} ${getAccentClasses('shadow')}`}>
-              <FileText className="w-7 h-7" />
-            </div>
-            <div>
-              <h1 className="text-2xl md:text-3xl font-black text-gray-900 dark:text-gray-100 uppercase tracking-tight transition-colors">Transactions</h1>
-              <p className="text-gray-500 dark:text-gray-400 text-sm font-medium transition-colors">Track and manage all your financial activities</p>
-            </div>
-          </div>
-          
-          <div className="flex items-center gap-3 self-end sm:self-auto">
-            <button onClick={() => setShowTypeModal(true)} className={`flex items-center gap-2 text-white px-5 py-3 rounded-xl font-bold transition-all shadow-md dark:shadow-none text-sm ${getAccentClasses('bg')} ${getAccentClasses('shadow')}`}>
-              <Plus className="w-4 h-4" />
-              <span className="hidden sm:inline">Add Transaction</span>
-            </button>
-          </div>
+        <div ref={headerRef}>
+          <PageHeader 
+            title="Transactions"
+            subtitle="Track and manage all your financial activities"
+            icon={
+              <div className={`w-14 h-14 rounded-2xl flex items-center justify-center text-white shadow-lg transition-colors ${getAccentClasses('bg')} ${getAccentClasses('shadow')}`}>
+                <FileText className="w-7 h-7" />
+              </div>
+            }
+            actions={
+              <button onClick={() => setShowTypeModal(true)} className={`flex items-center gap-2 text-white px-5 py-3 rounded-xl font-bold transition-all shadow-md dark:shadow-none text-sm ${getAccentClasses('bg')} ${getAccentClasses('shadow')}`}>
+                <Plus className="w-4 h-4" />
+                <span className="hidden sm:inline">Add Transaction</span>
+              </button>
+            }
+          />
         </div>
 
         {/* ── Filter Bar ──────────────────────────────────────────────────── */}

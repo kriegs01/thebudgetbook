@@ -261,7 +261,7 @@ const PageHeader: React.FC<{
   const { getAccentClasses } = useTheme();
   
   return (
-    <header className="pt-12 mb-12 flex flex-col md:flex-row md:items-end justify-between gap-6 pr-4 md:pr-48">
+    <header className="pt-12 mb-12 flex flex-col md:flex-row md:items-end justify-between gap-6 md:pr-48">
       <div className="flex-1">
         <div className="flex items-center gap-3 mb-[-6px] ml-1">
           {backButton}
@@ -271,7 +271,7 @@ const PageHeader: React.FC<{
         </div>
         <div className="relative inline-block mt-2">
           <div className="flex items-center gap-4">
-             {icon && <div className="z-10">{icon}</div>}
+             {icon && <div className="z-10 shrink-0">{icon}</div>}
              <h1 className="text-5xl md:text-7xl font-[950] uppercase tracking-tighter leading-none relative z-10 text-black dark:text-white transition-colors duration-300">
               {title}
             </h1>
@@ -280,7 +280,7 @@ const PageHeader: React.FC<{
         </div>
         <div className={`h-2 w-32 mt-4 bg-black dark:bg-white/20 transition-colors duration-300`} />
       </div>
-      {actions && <div className="flex items-center gap-3 mt-4 md:mt-0">{actions}</div>}
+      {actions && <div className="flex items-center justify-end gap-3 mt-4 md:mt-0 w-full md:w-auto">{actions}</div>}
     </header>
   );
 };
@@ -2147,7 +2147,7 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
       <div className="space-y-8 animate-in fade-in duration-500 w-full">
         <PageHeader 
           title="Budget"
-          subtitle={`Hello, ${userProfile?.first_name || 'Budee'} !`}
+          subtitle="Review your monthly budget history"
           icon={
             <div className={`w-14 h-14 rounded-2xl flex items-center justify-center text-white shadow-lg transition-colors ${getAccentClasses('bg')} ${getAccentClasses('shadow')}`}>
               <WalletIcon className="w-7 h-7" />
