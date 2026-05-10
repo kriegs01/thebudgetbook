@@ -1225,7 +1225,7 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
           .animate-ring { animation: ring 2s ease-in-out infinite; }`}
         </style>
         <div className="flex h-[100dvh] bg-gray-100 dark:bg-gray-950 w-full overflow-hidden fixed inset-0 transition-colors duration-200">
-        <aside className={`fixed inset-y-0 left-0 z-50 bg-gray-50 dark:bg-gray-900 border-r border-gray-200 dark:border-gray-800 transition-all duration-300 ease-in-out ${isSidebarOpen ? 'w-56' : 'hidden md:flex w-20'} overscroll-none`}> 
+        <aside className={`fixed inset-y-0 left-0 z-50 bg-gray-50 dark:bg-gray-900 border-r border-gray-200 dark:border-gray-800 transition-all duration-300 ease-in-out ${isSidebarOpen ? 'w-52' : 'hidden md:flex w-20'} overscroll-none`}> 
           <div className="flex flex-col h-full">
             <div className={`flex items-center h-14 px-4 border-b border-gray-100 dark:border-gray-800 ${isSidebarOpen ? 'justify-between' : 'justify-center'}`}>
               <div 
@@ -1255,7 +1255,7 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
                 </button>
               )}
             </div>
-            <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
+            <nav className="flex-1 px-2.5 py-3 space-y-1 overflow-y-auto">
               {navPreferences.filter(pref => pref.visible).map((pref) => {
                 const item = effectiveNavItems.find(n => n.id === pref.id);
                 if (!item) return null;
@@ -1264,7 +1264,7 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
                     key={item.id}
                     to={item.path}
                     className={({ isActive }) =>
-                      `w-full flex items-center p-3 rounded-xl transition-colors group ${
+                      `w-full flex items-center p-2 rounded-xl transition-colors group ${
                         isActive ? 'bg-black/5 dark:bg-white/5' : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800/50'
                       }`
                     }
@@ -1272,7 +1272,7 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
                   >
                     {({ isActive }) => (
                       <>
-                        <div className={`shrink-0 w-10 h-10 rounded-xl flex items-center justify-center border-2 border-black transition-all duration-200 z-10 relative ${
+                        <div className={`shrink-0 w-9 h-9 rounded-xl flex items-center justify-center border-2 border-black transition-all duration-200 z-10 relative ${
                           isSidebarOpen ? '' : 'mx-auto'
                         } ${
                           isActive 
@@ -1281,7 +1281,7 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
                         } group-hover:rotate-0 group-hover:scale-110 group-hover:shadow-[3px_3px_0px_0px_rgba(0,0,0,1)]`}>
                           {item.icon}
                         </div>
-                        {isSidebarOpen && <span className={`ml-3 font-bold text-sm transition-colors ${isActive ? 'text-gray-900 dark:text-white' : 'text-gray-600 dark:text-gray-400'}`}>{item.label}</span>}
+                        {isSidebarOpen && <span className={`ml-2.5 font-bold text-sm transition-colors ${isActive ? 'text-gray-900 dark:text-white' : 'text-gray-600 dark:text-gray-400'}`}>{item.label}</span>}
                       </>
                     )}
                   </NavLink>
@@ -1303,14 +1303,14 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
             <NavLink
               to="/settings"
               className={({ isActive }) =>
-                `w-full flex items-center p-3 rounded-xl transition-colors group ${
+                `w-full flex items-center p-2 rounded-xl transition-colors group ${
                   isActive ? 'bg-black/5 dark:bg-white/5' : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800/50'
                 }`
               }
             >
               {({ isActive }) => (
                 <>
-                  <div className={`shrink-0 w-10 h-10 rounded-xl flex items-center justify-center border-2 border-black transition-all duration-200 z-10 relative ${
+                  <div className={`shrink-0 w-9 h-9 rounded-xl flex items-center justify-center border-2 border-black transition-all duration-200 z-10 relative ${
                     isSidebarOpen ? '' : 'mx-auto'
                   } ${
                     isActive 
@@ -1319,14 +1319,14 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
                   } group-hover:rotate-0 group-hover:scale-110 group-hover:shadow-[3px_3px_0px_0px_rgba(0,0,0,1)]`}>
                     <SlidersHorizontal className="w-5 h-5" />
                   </div>
-                  {isSidebarOpen && <span className={`ml-3 font-bold text-sm transition-colors ${isActive ? 'text-gray-900 dark:text-white' : 'text-gray-600 dark:text-gray-400'}`}>Settings</span>}
+                  {isSidebarOpen && <span className={`ml-2.5 font-bold text-sm transition-colors ${isActive ? 'text-gray-900 dark:text-white' : 'text-gray-600 dark:text-gray-400'}`}>Settings</span>}
                 </>
               )}
             </NavLink>
           </div>
           </div>
         </aside>
-        <main className={`flex-1 bg-gray-100 dark:bg-gray-950 transition-all duration-300 ease-in-out ${isSidebarOpen ? 'md:ml-56' : 'md:ml-20'} h-full flex flex-col overflow-hidden`}> 
+        <main className={`flex-1 bg-gray-100 dark:bg-gray-950 transition-all duration-300 ease-in-out ${isSidebarOpen ? 'md:ml-52' : 'md:ml-20'} h-full flex flex-col overflow-hidden`}> 
         
         <TestModeBanner sidebarOpen={isSidebarOpen} />
 
