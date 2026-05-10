@@ -27,6 +27,43 @@ interface SettingsProps {
 
 const SETTING_MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 
+/** 
+ * PageHeader component mirroring Dashboard style
+ */
+const PageHeader: React.FC<{ 
+  title: string; 
+  subtitle: string; 
+  icon?: React.ReactNode; 
+  actions?: React.ReactNode;
+  backButton?: React.ReactNode;
+}> = ({ title, subtitle, icon, actions, backButton }) => {
+  const { getAccentClasses } = useTheme();
+  
+  return (
+    <header className="pt-12 mb-12 flex flex-col md:flex-row md:items-end justify-between gap-6">
+      <div className="flex-1">
+        <div className="flex items-center gap-3 mb-[-6px] ml-1">
+          {backButton}
+          <p className="text-xl font-bold italic text-black/50 dark:text-gray-400 transition-colors duration-300">
+            {subtitle}
+          </p>
+        </div>
+        <div className="relative inline-block mt-2">
+          <div className="flex items-center gap-4">
+             {icon && <div className="z-10 shrink-0">{icon}</div>}
+             <h1 className="text-4xl md:text-6xl font-[950] uppercase tracking-tighter leading-none relative z-10 text-black dark:text-white transition-colors duration-300">
+              {title}
+            </h1>
+          </div>
+          <div className={`absolute bottom-1 left-0 w-[110%] h-5 ${getAccentClasses('bg')} opacity-40 -z-0 -rotate-1 -translate-x-2 transition-colors duration-300`} />
+        </div>
+        <div className={`h-2 w-32 mt-4 bg-black dark:bg-white/20 transition-colors duration-300`} />
+      </div>
+      {actions && <div className="flex items-center justify-end gap-3 mt-4 md:mt-0 w-full md:w-auto">{actions}</div>}
+    </header>
+  );
+};
+
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
 /** Convert { month: 'March', year: '2026' } → Date(2026, 2, 1) */
@@ -127,7 +164,7 @@ const Settings: React.FC<SettingsProps> = ({ currency, setCurrency, categories, 
     setCategories(newCats); // Optimistic UI update
     if (user) {
       try {
-        const newSettings = { ...(userProfile?.settings || {}), categories: newCats };
+        const newSettings = { ...(userProfile?.settings || {}), categories: newCats, setupCompleted: true };
         await updateUserProfile(user.id, { settings: newSettings });
         await refreshProfile();
       } catch (error) {
@@ -873,7 +910,7 @@ const Settings: React.FC<SettingsProps> = ({ currency, setCurrency, categories, 
                 const newValue = !isPeopleEnabled;
                 setIsPeopleEnabled(newValue); // Optimistic UI
                 try {
-                  const newSettings = { ...(userProfile?.settings || {}), peopleEnabled: newValue };
+                  const newSettings = { ...(userProfile?.settings || {}), peopleEnabled: newValue, setupCompleted: true };
                   const { error } = await updateUserProfile(user.id, { settings: newSettings });
                   if (error) throw error;
                   
@@ -916,7 +953,7 @@ const Settings: React.FC<SettingsProps> = ({ currency, setCurrency, categories, 
                       const newValue = !isPeoplePageEnabled;
                       setIsPeoplePageEnabled(newValue); // Optimistic UI
                       try {
-                        const newSettings = { ...(userProfile?.settings || {}), usePeoplePage: newValue };
+                        const newSettings = { ...(userProfile?.settings || {}), usePeoplePage: newValue, setupCompleted: true };
                         const { error } = await updateUserProfile(user.id, { settings: newSettings });
                         if (error) throw error;
                         
@@ -1008,7 +1045,7 @@ const Settings: React.FC<SettingsProps> = ({ currency, setCurrency, categories, 
                   if (!user) return;
                   const newAccountId = e.target.value;
                   try {
-                    const newSettings = { ...(userProfile?.settings || {}), defaultReceiveAccountId: newAccountId };
+                  const newSettings = { ...(userProfile?.settings || {}), defaultReceiveAccountId: newAccountId, setupCompleted: true };
                     const { error } = await updateUserProfile(user.id, { settings: newSettings });
                     if (error) throw error;
                     await refreshProfile();
@@ -1613,21 +1650,20 @@ const Settings: React.FC<SettingsProps> = ({ currency, setCurrency, categories, 
   ];
 
   return (
-    <div className="max-w-3xl mx-auto space-y-4 animate-in slide-in-from-right-4 duration-500 pb-20">
-      <div className="bg-white dark:bg-gray-900 rounded-[3rem] border border-gray-100 dark:border-gray-800 shadow-sm overflow-hidden transition-colors">
-        <div className="p-6 md:p-8 border-b border-gray-100 dark:border-gray-800 flex items-center space-x-6 bg-gray-50/30 dark:bg-gray-800/30 transition-colors">
-          <div className={`w-16 h-16 md:w-20 md:h-20 rounded-2xl flex items-center justify-center text-white text-2xl md:text-3xl font-black shadow-2xl transition-colors ${getAccentClasses('bg')} ${getAccentClasses('shadow')}`}>
+    <div className="max-w-4xl mx-auto space-y-4 animate-in slide-in-from-right-4 duration-500 pb-20">
+      <PageHeader 
+        title="Settings"
+        subtitle="Make it truly yours"
+        icon={
+          <div className={`w-14 h-14 rounded-2xl flex items-center justify-center text-white border-[3px] border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] -rotate-3 transition-all hover:rotate-0 hover:scale-110 z-10 relative ${getAccentClasses('bg')}`}>
             {userProfile ? 
               `${userProfile.first_name.charAt(0)}${userProfile.last_name.charAt(0)}`.toUpperCase() :
               user?.email?.charAt(0).toUpperCase() || 'U'
             }
           </div>
-          <div>
-            <h2 className="text-2xl md:text-3xl font-black text-gray-900 dark:text-gray-100 uppercase tracking-tight transition-colors">Settings</h2>
-            <p className="text-gray-500 dark:text-gray-400 font-medium transition-colors">Personal Financial Profile & App Configuration</p>
-          </div>
-        </div>
-
+        }
+      />
+      <div className="bg-white dark:bg-gray-900 rounded-[3rem] border border-gray-100 dark:border-gray-800 shadow-sm overflow-hidden transition-colors">
         <div className="divide-y divide-gray-50 dark:divide-gray-800 transition-colors">
           {sections.map((section) => (
             <div key={section.id} className="p-2">

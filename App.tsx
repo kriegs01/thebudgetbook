@@ -1,6 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Menu, ChevronLeft, SlidersHorizontal, ArrowUp, ArrowDown, Eye, EyeOff, X, ChevronDown, LogOut, Lock, Users, Bell, MessageCircle } from 'lucide-react';
-import { BrowserRouter, Routes, Route, NavLink } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, NavLink, useLocation, Navigate } from 'react-router-dom';
+import { FloatingHUD } from './FloatingHUD';
 import { QueryClient, QueryClientProvider, useQueryClient } from '@tanstack/react-query';
 import { NAV_ITEMS, INITIAL_BUDGET, DEFAULT_SETUP, INITIAL_CATEGORIES } from './constants';
 import { getAllBillersFrontend, createBillerFrontend, updateBillerFrontend, deleteBillerFrontend } from './src/services/billersService';
@@ -44,7 +45,7 @@ import Auth from './pages/Auth';
 import UpdatePassword from './pages/update-password';
 import { useTransactions } from './src/hooks/useTransactions';
 import { useAccounts } from './src/hooks/useAccounts';
-import { useIncomingRequests, useUnreadMessagesCount } from './src/hooks/useBudies';
+import { useIncomingRequests, useUnreadMessagesCount, socialKeys } from './src/hooks/useBudies';
 import { SetupWizard } from './src/components/SetupWizard';
 import { Logo } from './src/components/Logo';
 import { MessagesInbox } from './src/components/MessagesInbox';
@@ -199,6 +200,10 @@ const AppContent: React.FC = () => {
 };
 
 const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<void> }> = ({ user, userProfile, signOut }) => {
+  const location = useLocation();
+  const isDashboard = location.pathname === '/';
+  const [isScrolled, setIsScrolled] = useState(false);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
@@ -211,14 +216,112 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
   const [resolvingIds, setResolvingIds] = useState<Set<string>>(new Set());
   const { getAccentClasses } = useTheme();
 
+  // Splash Screen State
+  const [showSplash, setShowSplash] = useState(true);
+  const [minSplashTimeElapsed, setMinSplashTimeElapsed] = useState(false);
+
+  // Scroll listener for Dashboard top bar visibility
+  useEffect(() => {
+    const handleScroll = () => {
+      if (scrollContainerRef.current) {
+        setIsScrolled(scrollContainerRef.current.scrollTop > 40);
+      }
+    };
+
+    const container = scrollContainerRef.current;
+    container?.addEventListener('scroll', handleScroll);
+    return () => container?.removeEventListener('scroll', handleScroll);
+  }, [isDashboard, showSplash]);
+
   const loadNotifications = async () => {
     const { data: pTxs } = await getPendingTransactions();
     if (pTxs) setPendingTransactions(pTxs);
   };
 
   useEffect(() => {
-    if (user) loadNotifications();
-  }, [user]);
+    if (!user) return;
+    
+    loadNotifications();
+
+    // Global Realtime Listeners for instant social alerts (Messages & Connections)
+    const channel = supabase
+      .channel(`global-social-alerts-${user.id}`)
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'messages' },
+        (payload) => {
+          if (payload.new && payload.new.receiver_id === user.id) {
+            console.log('[Realtime] New message received:', payload.new);
+            // Optimistically update the message notification badge instantly
+            queryClient.setQueryData(socialKeys.unreadMessages(), (old: number = 0) => old + 1);
+            // Delay network fetch slightly to avoid database read-replica lag
+            setTimeout(() => {
+              queryClient.invalidateQueries({ queryKey: socialKeys.unreadMessages() });
+            }, 500);
+          }
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'friendships' },
+        (payload) => {
+          if (payload.new && payload.new.friend_id === user.id) {
+            console.log('[Realtime] New connect request received:', payload.new);
+            setTimeout(() => {
+              refetchRequests(); // Force immediate refetch of the hook
+              queryClient.invalidateQueries({ queryKey: socialKeys.incomingRequests() });
+            }, 500);
+          }
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'friendships' },
+        (payload) => {
+          if (payload.new && (payload.new.user_id === user.id || payload.new.friend_id === user.id)) {
+            console.log('[Realtime] Connect request accepted:', payload.new);
+            setTimeout(() => {
+              queryClient.invalidateQueries({ queryKey: socialKeys.friendships() });
+            }, 500);
+          }
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'transactions' },
+        (payload) => {
+          console.log('[Realtime] Transaction change detected, updating notifications', payload);
+          
+          // 1. Optimistic Update (Replicating Messages Logic)
+          // Instantly update the UI without waiting for the network fetch
+          if (payload.eventType === 'INSERT' && payload.new) {
+            // Only show notification if the transaction was created by someone else
+            if (payload.new.user_id && payload.new.user_id !== user.id) {
+              setPendingTransactions((prev) => {
+                if (prev.some(tx => tx.id === payload.new.id)) return prev;
+                return [{ ...payload.new, sender_profile: null }, ...prev];
+              });
+            }
+          } else if (payload.eventType === 'UPDATE' && payload.new) {
+            setPendingTransactions((prev) => prev.filter(tx => tx.id !== payload.new.id));
+          }
+
+          // 2. Delayed Network Fetch (to grab joined data like the sender's real name)
+          setTimeout(() => {
+            loadNotifications();
+            queryClient.invalidateQueries({ queryKey: ['transactions'] });
+            queryClient.invalidateQueries({ queryKey: ['accounts'] });
+          }, 1200);
+        }
+      )
+      .subscribe((status) => {
+        console.log('[Realtime] Global alerts subscription status:', status);
+      });
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [user, queryClient]);
 
   const handleResolveTransaction = async (id: string, action: 'accept' | 'decline') => {
     if (resolvingIds.has(id)) return;
@@ -269,8 +372,18 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
   const [installmentsError, setInstallmentsError] = useState<string | null>(null);
 
   const { data: txData, isLoading: transactionsLoading } = useTransactions();
-  const transactions = txData?.formatted || [];
   const rawTransactions = txData?.raw || [];
+  // Ensure newly added database fields (like person_name) that might be stripped 
+  // by the hook's formatting are preserved and passed down to the UI components.
+  const transactions = (txData?.formatted || []).map((tx: any) => {
+    const raw = rawTransactions.find((r: any) => r.id === tx.id);
+    return {
+      ...tx,
+      person_name: raw?.person_name || tx.person_name,
+      borrower_name: raw?.borrower_name || tx.borrower_name,
+      transaction_type: raw?.transaction_type || tx.transaction_type
+    };
+  });
 
   const { data: rawAccounts = [], isLoading: accountsLoading, error: accountsQueryError } = useAccounts();
   const accountsError = accountsQueryError ? (accountsQueryError as Error).message : null;
@@ -291,26 +404,25 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
     }
 
     // Intercept New Users for Setup Wizard
-    if (userProfile) {
-      const isSetupCompleted = userProfile.settings?.setupCompleted;
-      const hasCustomCategories = userProfile.settings?.categories && userProfile.settings.categories.length > 0;
+    if (user?.created_at) {
+      const isSetupCompleted = userProfile?.settings?.setupCompleted;
+      const hasCustomCategories = userProfile?.settings?.categories && userProfile.settings.categories.length > 0;
       
-      if (!isSetupCompleted && !hasCustomCategories) {
+      // Calculate account age in days
+      const accountAgeDays = (new Date().getTime() - new Date(user.created_at).getTime()) / (1000 * 3600 * 24);
+      
+      if (accountAgeDays <= 7 && !isSetupCompleted && !hasCustomCategories) {
         setShowWizard(true);
       } else {
         setShowWizard(false);
       }
     }
-  }, [userProfile]);
+  }, [userProfile, user]);
 
   // Lifted Budget Setups State - now loaded from Supabase
   const [budgetSetups, setBudgetSetups] = useState<any[]>([]);
   const [budgetSetupsLoading, setBudgetSetupsLoading] = useState(true);
   const [budgetSetupsError, setBudgetSetupsError] = useState<string | null>(null);
-
-  // Splash Screen State
-  const [showSplash, setShowSplash] = useState(true);
-  const [minSplashTimeElapsed, setMinSplashTimeElapsed] = useState(false);
 
   useEffect(() => {
     const timer = setTimeout(() => setMinSplashTimeElapsed(true), 3000); // 3 seconds buffer
@@ -1097,8 +1209,6 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
   return (
     <>
         {showWizard && <SetupWizard onComplete={handleCompleteWizard} />}
-        <TestModeBanner sidebarOpen={isSidebarOpen} />
-        <BrowserRouter>
         <style>
           {`@import url('https://fonts.googleapis.com/css2?family=Titan+One&display=swap');
           .font-titan { font-family: 'Titan One', cursive; font-weight: 400; letter-spacing: 1px; }
@@ -1115,9 +1225,13 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
           .animate-ring { animation: ring 2s ease-in-out infinite; }`}
         </style>
         <div className="flex h-[100dvh] bg-gray-100 dark:bg-gray-950 w-full overflow-hidden fixed inset-0 transition-colors duration-200">
-        <aside className={`fixed inset-y-0 left-0 z-50 bg-gray-50 dark:bg-gray-900 border-r border-gray-200 dark:border-gray-800 transition-all duration-300 ease-in-out ${isSidebarOpen ? 'w-56' : 'hidden md:flex w-20'} overscroll-none`}> 
+        <aside className={`fixed inset-y-0 left-0 z-50 bg-gray-50 dark:bg-gray-900 transition-all duration-300 ease-in-out ${isSidebarOpen ? 'w-52' : 'hidden md:flex w-20'} overscroll-none ${
+          isScrolled ? 'border-r-4 border-black shadow-[2px_0px_0px_0px_rgba(0,0,0,1)]' : 'border-r border-gray-200 dark:border-gray-800'
+        }`}> 
           <div className="flex flex-col h-full">
-            <div className={`flex items-center h-14 px-4 border-b border-gray-100 dark:border-gray-800 ${isSidebarOpen ? 'justify-between' : 'justify-center'}`}>
+            <div className={`flex items-center h-14 px-4 transition-all duration-300 ${isSidebarOpen ? 'justify-between' : 'justify-center'} ${
+              isScrolled ? `${getAccentClasses('bg')} border-b-4 border-black` : 'border-b border-gray-100 dark:border-gray-800'
+            }`}>
               <div 
                 className="flex flex-row flex-nowrap items-center cursor-pointer active:scale-95 transition-transform"
                 onClick={() => !isSidebarOpen && setIsSidebarOpen(true)}
@@ -1140,12 +1254,12 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
               </div>
               
               {isSidebarOpen && (
-                <button onClick={() => setIsSidebarOpen(false)} className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-500 dark:text-gray-400 transition-colors ml-2 active:scale-95">
+                <button onClick={() => setIsSidebarOpen(false)} className={`p-2 rounded-lg transition-colors ml-2 active:scale-95 ${isScrolled ? 'hover:bg-black/10 text-white' : 'hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-500 dark:text-gray-400'}`}>
                   <ChevronLeft className="w-5 h-5" />
                 </button>
               )}
             </div>
-            <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
+            <nav className="flex-1 px-2.5 py-3 space-y-1 overflow-y-auto">
               {navPreferences.filter(pref => pref.visible).map((pref) => {
                 const item = effectiveNavItems.find(n => n.id === pref.id);
                 if (!item) return null;
@@ -1154,16 +1268,26 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
                     key={item.id}
                     to={item.path}
                     className={({ isActive }) =>
-                      `w-full flex items-center p-3 rounded-xl transition-colors ${
-                    isActive ? getAccentClasses('lightBg') : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800/50'
+                      `w-full flex items-center p-2 rounded-xl transition-colors group ${
+                        isActive ? 'bg-black/5 dark:bg-white/5' : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800/50'
                       }`
                     }
                     end={item.path === '/'}
                   >
-                    <div className={`${isSidebarOpen ? '' : 'mx-auto'} ${window.location.pathname === item.path ? getAccentClasses('text') : 'text-gray-400 dark:text-gray-500'} transition-colors`}>
-                      {item.icon}
-                    </div>
-                    {isSidebarOpen && <span className="ml-3 font-bold text-sm">{item.label}</span>}
+                    {({ isActive }) => (
+                      <>
+                        <div className={`shrink-0 w-9 h-9 rounded-xl flex items-center justify-center border-2 border-black transition-all duration-200 z-10 relative ${
+                          isSidebarOpen ? '' : 'mx-auto'
+                        } ${
+                          isActive 
+                            ? `${getAccentClasses('bg')} text-white shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] -rotate-3` 
+                            : 'bg-white dark:bg-gray-800 text-gray-400 dark:text-gray-500 shadow-none'
+                        } group-hover:rotate-0 group-hover:scale-110 group-hover:shadow-[3px_3px_0px_0px_rgba(0,0,0,1)]`}>
+                          {item.icon}
+                        </div>
+                        {isSidebarOpen && <span className={`ml-2.5 font-bold text-sm transition-colors ${isActive ? 'text-gray-900 dark:text-white' : 'text-gray-600 dark:text-gray-400'}`}>{item.label}</span>}
+                      </>
+                    )}
                   </NavLink>
                 );
               })}
@@ -1183,33 +1307,49 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
             <NavLink
               to="/settings"
               className={({ isActive }) =>
-                `w-full flex items-center p-3 rounded-xl transition-colors ${
-                    isActive ? getAccentClasses('lightBg') : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800/50'
+                `w-full flex items-center p-2 rounded-xl transition-colors group ${
+                  isActive ? 'bg-black/5 dark:bg-white/5' : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800/50'
                 }`
               }
             >
-              <div className={`${isSidebarOpen ? '' : 'mx-auto'} ${window.location.pathname === '/settings' ? getAccentClasses('text') : 'text-gray-400 dark:text-gray-500'} transition-colors`}>
-                <SlidersHorizontal className="w-5 h-5" />
-              </div>
-              {isSidebarOpen && <span className="ml-3 font-bold text-sm">Settings</span>}
+              {({ isActive }) => (
+                <>
+                  <div className={`shrink-0 w-9 h-9 rounded-xl flex items-center justify-center border-2 border-black transition-all duration-200 z-10 relative ${
+                    isSidebarOpen ? '' : 'mx-auto'
+                  } ${
+                    isActive 
+                      ? `${getAccentClasses('bg')} text-white shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] -rotate-3` 
+                      : 'bg-white dark:bg-gray-800 text-gray-400 dark:text-gray-500 shadow-none'
+                  } group-hover:rotate-0 group-hover:scale-110 group-hover:shadow-[3px_3px_0px_0px_rgba(0,0,0,1)]`}>
+                    <SlidersHorizontal className="w-5 h-5" />
+                  </div>
+                  {isSidebarOpen && <span className={`ml-2.5 font-bold text-sm transition-colors ${isActive ? 'text-gray-900 dark:text-white' : 'text-gray-600 dark:text-gray-400'}`}>Settings</span>}
+                </>
+              )}
             </NavLink>
           </div>
           </div>
         </aside>
-        <main className={`flex-1 bg-gray-100 dark:bg-gray-950 transition-all duration-300 ease-in-out ${isSidebarOpen ? 'md:ml-56' : 'md:ml-20'} h-full flex flex-col overflow-hidden`}> 
+        <main className={`flex-1 bg-gray-100 dark:bg-gray-950 transition-all duration-300 ease-in-out ${isSidebarOpen ? 'md:ml-52' : 'md:ml-20'} h-full flex flex-col overflow-hidden`}> 
         
-        {/* Top Navigation Bar */}
-        <header className="h-14 px-4 md:px-8 border-b border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-900 flex items-center justify-end shrink-0 transition-colors z-20">
+        <TestModeBanner sidebarOpen={isSidebarOpen} />
+
+        {/* Top Navigation Bar - Reactive for Dashboard, Static for others */}
+        <header className={`fixed top-0 right-0 left-0 h-14 px-4 md:px-8 flex items-center justify-end transition-all duration-300 z-30 ${
+          isSidebarOpen ? 'md:ml-52' : 'md:ml-20'
+        } ${
+          isScrolled ? `${getAccentClasses('bg')} shadow-lg border-b-4 border-black` : 'bg-transparent border-transparent'
+        }`}>
           <div className="flex items-center space-x-2 md:space-x-4">
             {/* Messages */}
             <div className="relative">
               <button 
                 onClick={() => setIsMessagesOpen(!isMessagesOpen)}
-                className={`relative p-2 text-gray-400 rounded-full transition-colors ${getAccentClasses('hoverLight')} ${isMessagesOpen ? 'bg-gray-100 dark:bg-gray-800' : ''} ${unreadMessagesCount > 0 && !isMessagesOpen ? 'animate-ring text-indigo-500 dark:text-indigo-400' : ''}`}
+                className={`relative p-2 border-[3px] border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] transition-all duration-200 -rotate-2 hover:rotate-0 hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none ${isScrolled ? 'bg-white' : getAccentClasses('bg')} ${unreadMessagesCount > 0 && !isMessagesOpen ? 'animate-ring' : ''}`}
               >
-                <MessageCircle className="w-5 h-5" />
-                {unreadMessagesCount > 0 && (
-                  <span className="absolute top-0 right-0 flex items-center justify-center min-w-[18px] h-[18px] px-1 bg-red-500 text-white text-[9px] font-black rounded-full border-2 border-white dark:border-gray-900">
+                <MessageCircle className={`w-5 h-5 ${isScrolled ? getAccentClasses('text') : 'text-white'}`} />
+                {unreadMessagesCount > 0 && !isMessagesOpen && ( // Only show badge if not open
+                  <span className="absolute -top-2 -right-2 flex items-center justify-center min-w-[20px] h-[20px] px-1 bg-yellow-300 text-black text-[10px] font-black border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] z-10">
                     {unreadMessagesCount > 99 ? '99+' : unreadMessagesCount}
                   </span>
                 )}
@@ -1219,11 +1359,11 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
             <div className="relative">
               <button 
                 onClick={() => setIsNotificationsOpen(!isNotificationsOpen)}
-                className={`relative p-2 text-gray-400 rounded-full transition-colors ${getAccentClasses('hoverLight')}`}
+                className={`relative p-2 border-[3px] border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] transition-all duration-200 rotate-3 hover:rotate-0 hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none ${isScrolled ? 'bg-white' : getAccentClasses('bg')}`}
               >
-                <Bell className="w-5 h-5" />
+                <Bell className={`w-5 h-5 ${isScrolled ? getAccentClasses('text') : 'text-white'}`} />
                 {((pendingRequests?.length || 0) + (pendingTransactions?.length || 0)) > 0 && (
-                  <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-red-500 rounded-full border-2 border-white dark:border-gray-900"></span>
+                  <span className="absolute -top-1 -right-1 w-4 h-4 bg-yellow-300 border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] z-10"></span>
                 )}
               </button>
 
@@ -1319,18 +1459,18 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
             <div className="relative ml-2 border-l border-gray-200 dark:border-gray-700 pl-4">
               <button 
                 onClick={() => setIsUserMenuOpen(!isUserMenuOpen)}
-                className="flex items-center space-x-2 p-1 pr-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 border border-transparent hover:border-gray-200 dark:hover:border-gray-700 transition-colors"
+                className="flex items-center space-x-2 p-1 pr-2 border-[3px] border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] bg-white hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none transition-all duration-200"
               >
-                <div className="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-600 font-bold text-sm">
+                <div className={`w-8 h-8 border-2 border-black ${isScrolled ? getAccentClasses('bg') : 'bg-white text-black'} flex items-center justify-center text-white font-bold text-sm transition-colors`}>
                   {userProfile ? 
                     `${userProfile.first_name.charAt(0)}${userProfile.last_name.charAt(0)}`.toUpperCase() :
                     user?.email?.charAt(0).toUpperCase() || 'U'
                   }
                 </div>
-                <span className="hidden sm:block text-sm font-semibold text-gray-700 dark:text-gray-300 truncate max-w-[120px]">
+                <span className="hidden sm:block text-sm font-black uppercase tracking-tight text-black truncate max-w-[120px]">
                   {userProfile ? userProfile.first_name : (user?.email?.split('@')[0] || 'User')}
                 </span>
-                <ChevronDown className={`w-4 h-4 text-gray-500 transition-transform ${isUserMenuOpen ? 'rotate-180' : ''}`} />
+                <ChevronDown className={`w-4 h-4 text-black transition-transform ${isUserMenuOpen ? 'rotate-180' : ''}`} />
               </button>
 
               {/* Dropdown Menu */}
@@ -1374,12 +1514,17 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
           </div>
         </header>
 
-        <div className="p-4 md:px-8 md:py-6 w-full flex-1 overflow-auto overscroll-none touch-pan-y" style={{ WebkitOverflowScrolling: 'touch' }}>
+        <div 
+          ref={scrollContainerRef}
+          className="w-full flex-1 overflow-auto overscroll-none touch-pan-y pt-0 px-4 pb-4 md:px-8 md:pb-6" 
+          style={{ WebkitOverflowScrolling: 'touch' }}
+        >
             <Routes>
               <Route path="/" element={<Dashboard accounts={accounts} budget={budgetItems} installments={installments} transactions={transactions} budgetSetups={budgetSetups} userProfile={userProfile} theme={theme} />} />
               <Route path="/budget" element={
                 <Budget
                   items={budgetItems} 
+                  userProfile={userProfile}
                   accounts={accounts} 
                   billers={billers}
                   categories={categories}
@@ -1521,7 +1666,8 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
                 <SupabaseDemo />
               } />
               <Route path="/update-password" element={<UpdatePassword />} />
-              {/* Add additional routes/pages as needed */}
+              {/* Start with Dashboard and redirect anything else unrecognized */}
+              <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
           </div>
         </main>
@@ -1578,7 +1724,6 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
         activeFriendId={activeChatFriendId}
         onClearActiveChat={() => setActiveChatFriendId(undefined)}
       />
-    </BrowserRouter>
     </>
   );
 };
@@ -1590,7 +1735,9 @@ const App: React.FC = () => {
       <TestEnvironmentProvider>
         <AuthProvider>
           <ThemeProvider>
-            <AppContent />
+            <BrowserRouter>
+              <AppContent />
+            </BrowserRouter>
           </ThemeProvider>
         </AuthProvider>
       </TestEnvironmentProvider>

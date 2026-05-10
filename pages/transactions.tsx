@@ -49,6 +49,43 @@ type ContactOption = {
   budeeProfile?: SupabaseUserProfile;
 };
 
+/** 
+ * PageHeader component mirroring Dashboard style
+ */
+const PageHeader: React.FC<{ 
+  title: string; 
+  subtitle: string; 
+  icon?: React.ReactNode; 
+  actions?: React.ReactNode;
+  backButton?: React.ReactNode;
+}> = ({ title, subtitle, icon, actions, backButton }) => {
+  const { getAccentClasses } = useTheme();
+  
+  return (
+    <header className="pt-12 mb-12 flex flex-col md:flex-row md:items-end justify-between gap-6">
+      <div className="flex-1">
+        <div className="flex items-center gap-3 mb-[-6px] ml-1">
+          {backButton}
+          <p className="text-xl font-bold italic text-black/50 dark:text-gray-400 transition-colors duration-300">
+            {subtitle}
+          </p>
+        </div>
+        <div className="relative inline-block mt-2">
+          <div className="flex items-center gap-4">
+             {icon && <div className="z-10 shrink-0">{icon}</div>}
+             <h1 className="text-4xl md:text-6xl font-[950] uppercase tracking-tighter leading-none relative z-10 text-black dark:text-white transition-colors duration-300">
+              {title}
+            </h1>
+          </div>
+          <div className={`absolute bottom-1 left-0 w-[110%] h-5 ${getAccentClasses('bg')} opacity-40 -z-0 -rotate-1 -translate-x-2 transition-colors duration-300`} />
+        </div>
+        <div className={`h-2 w-32 mt-4 bg-black dark:bg-white/20 transition-colors duration-300`} />
+      </div>
+      {actions && <div className="flex items-center justify-end gap-3 mt-4 md:mt-0 w-full md:w-auto">{actions}</div>}
+    </header>
+  );
+};
+
 const ContactDropdown = ({ value, onChange, contacts, placeholder }: { value: string, onChange: (val: string) => void, contacts: ContactOption[], placeholder: string }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [search, setSearch] = useState(value);
@@ -160,7 +197,8 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ transactions, loadi
     paymentMethodId: '',
     transactionType: 'payment',
     transferToAccountId: '',
-    borrowerName: '' // New field for loan transactions
+    borrowerName: '', // New field for loan transactions
+    personName: ''
   });
 
   // ── Filter state ──────────────────────────────────────────────────────────
@@ -199,7 +237,8 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ transactions, loadi
       // statement and should not appear in the global transaction list.
       if (tx.transaction_type === 'credit_payment') return false;
       const d = tx.date.slice(0, 10);
-      if (d < filterStartDate || d > filterEndDate) return false;
+      if (filterStartDate && d < filterStartDate) return false;
+      if (filterEndDate && d > filterEndDate) return false;
       if (filterPaymentMethods.size > 0 && !filterPaymentMethods.has(tx.paymentMethodId)) return false;
       return true;
     });
@@ -364,7 +403,8 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ transactions, loadi
       paymentMethodId: accounts.find(a => type === 'payment' ? a.classification !== 'Credit Card' : a.type !== 'Credit')?.id ?? (accounts[0]?.id ?? ''),
       transactionType: type,
       transferToAccountId: '',
-      borrowerName: ''
+      borrowerName: '',
+      personName: ''
     });
     setReceiptFile(null);
     setShowTypeModal(false);
@@ -381,7 +421,7 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ transactions, loadi
     setEditingTxId(null);
     setFormSource(null);
     setReceiptFile(null); // Clear receipt file
-    setForm({ name: '', date: todayIso(), amount: '', paymentMethodId: accounts[0]?.id ?? '', transactionType: 'payment', transferToAccountId: '', borrowerName: '' });
+    setForm({ name: '', date: todayIso(), amount: '', paymentMethodId: accounts[0]?.id ?? '', transactionType: 'payment', transferToAccountId: '', borrowerName: '', personName: '' });
   };
 
   const openEditForm = (tx: Transaction) => {
@@ -394,7 +434,8 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ transactions, loadi
       paymentMethodId: tx.paymentMethodId,
       transactionType: tx.transaction_type || 'payment',
       transferToAccountId: '',
-      borrowerName: tx.borrower_name || ''
+      borrowerName: tx.borrower_name || '',
+      personName: (tx as any).person_name || ''
     });
     setReceiptFile(null);
     setShowForm(true);
@@ -403,7 +444,7 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ transactions, loadi
   const executeTransactionSubmit = async () => {
     
     // Transfer creation logic (uses specialized service)
-    if (form.transactionType === 'transfer' && !editingTxId) {
+    if (form.transactionType === 'transfer' && transferTab === 'accounts' && !editingTxId) {
       if (!form.paymentMethodId || !form.transferToAccountId || !form.amount || !form.date) return;
       try {
         const { error } = await createTransfer(
@@ -437,7 +478,7 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ transactions, loadi
     let finalAmount = parseFloat(form.amount);
     if (form.transactionType === 'cash_in') {
       finalAmount = -Math.abs(finalAmount); // Money in (negative reduces debt / increases asset internally)
-    } else if (['withdraw', 'payment', 'loan'].includes(form.transactionType)) {
+    } else if (['withdraw', 'payment', 'loan', 'transfer'].includes(form.transactionType)) {
       finalAmount = Math.abs(finalAmount); // Money out
     }
     
@@ -640,23 +681,22 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ transactions, loadi
     <div className="min-h-screen bg-gray-50 dark:bg-gray-950 p-8 transition-colors duration-200">
       <div className="max-w-6xl mx-auto">
         {/* ── Header & Controllers ───────────────────────────────────────── */}
-        <div ref={headerRef} className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white dark:bg-gray-900 p-6 md:p-8 rounded-[2.5rem] border border-gray-100 dark:border-gray-800 shadow-sm transition-colors mb-6">
-          <div className="flex items-center gap-5">
-            <div className={`w-14 h-14 rounded-2xl flex items-center justify-center text-white shadow-lg transition-colors ${getAccentClasses('bg')} ${getAccentClasses('shadow')}`}>
-              <FileText className="w-7 h-7" />
-            </div>
-            <div>
-              <h1 className="text-2xl md:text-3xl font-black text-gray-900 dark:text-gray-100 uppercase tracking-tight transition-colors">Transactions</h1>
-              <p className="text-gray-500 dark:text-gray-400 text-sm font-medium transition-colors">Track and manage all your financial activities</p>
-            </div>
-          </div>
-          
-          <div className="flex items-center gap-3 self-end sm:self-auto">
-            <button onClick={() => setShowTypeModal(true)} className={`flex items-center gap-2 text-white px-5 py-3 rounded-xl font-bold transition-all shadow-md dark:shadow-none text-sm ${getAccentClasses('bg')} ${getAccentClasses('shadow')}`}>
-              <Plus className="w-4 h-4" />
-              <span className="hidden sm:inline">Add Transaction</span>
-            </button>
-          </div>
+        <div ref={headerRef}>
+          <PageHeader 
+            title="Transactions"
+            subtitle="Keep tabs on your funds"
+            icon={
+              <div className={`w-14 h-14 rounded-2xl flex items-center justify-center text-white border-[3px] border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] -rotate-3 transition-all hover:rotate-0 hover:scale-110 z-10 relative ${getAccentClasses('bg')}`}>
+                <FileText className="w-7 h-7" />
+              </div>
+            }
+            actions={
+              <button onClick={() => setShowTypeModal(true)} className={`flex items-center gap-2 text-white px-5 py-3 rounded-xl font-bold transition-all shadow-md dark:shadow-none text-sm ${getAccentClasses('bg')} ${getAccentClasses('shadow')}`}>
+                <Plus className="w-4 h-4" />
+                <span className="hidden sm:inline">Add Transaction</span>
+              </button>
+            }
+          />
         </div>
 
         {/* ── Filter Bar ──────────────────────────────────────────────────── */}
@@ -713,6 +753,13 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ transactions, loadi
                 </div>
               )}
             </div>
+            <button
+              type="button"
+              onClick={() => { setFilterStartDate(''); setFilterEndDate(''); }}
+              className="self-end px-3 py-2 text-xs font-bold text-indigo-600 bg-indigo-50 dark:bg-indigo-900/30 hover:bg-indigo-100 dark:hover:bg-indigo-900/50 rounded-xl transition-colors"
+            >
+              All Time
+            </button>
             <button
               type="button"
               onClick={resetFilters}
@@ -1251,8 +1298,10 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ transactions, loadi
                   <dd className="text-sm text-gray-700">{pm ? pm.bank : selectedTx.paymentMethodId}</dd>
                 </div>
                 <div className="flex justify-between">
-                  <dt className="text-[10px] font-black text-gray-400 uppercase tracking-widest self-center">Borrower</dt>
-                  <dd className="text-sm text-gray-700">{selectedTx.borrower_name || 'N/A'}</dd>
+                  <dt className="text-[10px] font-black text-gray-400 uppercase tracking-widest self-center">
+                    {selectedTx.transaction_type === 'loan' ? 'Borrower' : 'Recipient'}
+                  </dt>
+                  <dd className="text-sm text-gray-700">{selectedTx.borrower_name || (selectedTx as any).person_name || (selectedTx as any).personName || 'N/A'}</dd>
                 </div>
               </dl>
 

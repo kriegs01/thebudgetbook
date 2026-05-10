@@ -13,6 +13,43 @@ import { useAuth } from '../src/contexts/AuthContext';
 import { useQueryClient } from '@tanstack/react-query';
 import { useLocalPeople, useFriendships, useBudeeProfiles, socialKeys } from '../src/hooks/useBudies';
 
+/** 
+ * PageHeader component mirroring Dashboard style
+ */
+const PageHeader: React.FC<{ 
+  title: string; 
+  subtitle: string; 
+  icon?: React.ReactNode; 
+  actions?: React.ReactNode;
+  backButton?: React.ReactNode;
+}> = ({ title, subtitle, icon, actions, backButton }) => {
+  const { getAccentClasses } = useTheme();
+  
+  return (
+    <header className="pt-12 mb-12 flex flex-col md:flex-row md:items-end justify-between gap-6">
+      <div className="flex-1">
+        <div className="flex items-center gap-3 mb-[-6px] ml-1">
+          {backButton}
+          <p className="text-xl font-bold italic text-black/50 dark:text-gray-400 transition-colors duration-300">
+            {subtitle}
+          </p>
+        </div>
+        <div className="relative inline-block mt-2">
+          <div className="flex items-center gap-4">
+             {icon && <div className="z-10 shrink-0">{icon}</div>}
+             <h1 className="text-4xl md:text-6xl font-[950] uppercase tracking-tighter leading-none relative z-10 text-black dark:text-white transition-colors duration-300">
+              {title}
+            </h1>
+          </div>
+          <div className={`absolute bottom-1 left-0 w-[110%] h-5 ${getAccentClasses('bg')} opacity-40 -z-0 -rotate-1 -translate-x-2 transition-colors duration-300`} />
+        </div>
+        <div className={`h-2 w-32 mt-4 bg-black dark:bg-white/20 transition-colors duration-300`} />
+      </div>
+      {actions && <div className="flex items-center justify-end gap-3 mt-4 md:mt-0 w-full md:w-auto">{actions}</div>}
+    </header>
+  );
+};
+
 const formatCurrency = (val: number) =>
   new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP', minimumFractionDigits: 2 }).format(val);
 
@@ -379,16 +416,25 @@ export default function PeoplePage({ onStartChat }: PeoplePageProps) {
 
   const handleAddFriend = async (friendId: string, userProfile?: SupabaseUserProfile) => {
     setSentRequests(prev => new Set(prev).add(friendId));
+    
+    // Optimistically update the friendships cache so the UI updates instantly
+    if (user?.id) {
+      queryClient.setQueryData(socialKeys.friendships(), (oldData: SupabaseFriendship[] = []) => {
+        return [...oldData, { user_id: user.id, friend_id: friendId, status: 'pending' } as SupabaseFriendship];
+      });
+    }
+
     const { error } = await sendFriendRequest(friendId);
     if (error) {
-      alert('Failed to send friend request. You may have already sent one or they are already connected.');
       setSentRequests(prev => {
         const next = new Set(prev);
         next.delete(friendId);
         return next;
       });
+      // Revert cache on failure
+      queryClient.invalidateQueries({ queryKey: socialKeys.friendships() });
+      alert('Failed to send friend request. You may have already sent one or they are already connected.');
     } else {
-      alert('Friend request sent successfully!');
     queryClient.invalidateQueries({ queryKey: socialKeys.friendships() });
     }
   };
@@ -946,50 +992,49 @@ export default function PeoplePage({ onStartChat }: PeoplePageProps) {
         )}
 
         {/* ── Header & Controllers ───────────────────────────────────────── */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white dark:bg-gray-900 p-6 md:p-8 rounded-[2.5rem] border border-gray-100 dark:border-gray-800 shadow-sm transition-colors">
-          <div className="flex items-center gap-5">
-            <div className={`w-14 h-14 rounded-2xl flex items-center justify-center text-white shadow-lg transition-colors ${getAccentClasses('bg')} ${getAccentClasses('shadow')}`}>
+        <PageHeader 
+          title="People"
+          subtitle="Manage shared tracking and active loans"
+          icon={
+            <div className={`w-14 h-14 rounded-2xl flex items-center justify-center text-white border-[3px] border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] -rotate-3 transition-all hover:rotate-0 hover:scale-110 z-10 relative ${getAccentClasses('bg')}`}>
               <Users className="w-7 h-7" />
             </div>
-            <div>
-              <h1 className="text-2xl md:text-3xl font-black text-gray-900 dark:text-gray-100 uppercase tracking-tight transition-colors">People</h1>
-              <p className="text-gray-500 dark:text-gray-400 text-sm font-medium transition-colors">Manage shared tracking and active loans</p>
+          }
+          actions={
+            <div className="flex items-center gap-3 self-end sm:self-auto">
+              {mainTab === 'profiles' && (
+                <div className="bg-gray-100 dark:bg-gray-800/80 p-1 rounded-xl flex items-center border border-gray-200 dark:border-gray-700 transition-colors">
+                  <button 
+                    onClick={() => setViewMode('grid')}
+                    className={`p-2 rounded-lg transition-all ${viewMode === 'grid' ? 'bg-white dark:bg-gray-700 text-indigo-600 dark:text-indigo-400 shadow-sm' : 'text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'}`}
+                  >
+                    <LayoutGrid className="w-4 h-4" />
+                  </button>
+                  <button 
+                    onClick={() => setViewMode('list')}
+                    className={`p-2 rounded-lg transition-all ${viewMode === 'list' ? 'bg-white dark:bg-gray-700 text-indigo-600 dark:text-indigo-400 shadow-sm' : 'text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'}`}
+                  >
+                    <List className="w-4 h-4" />
+                  </button>
+                </div>
+              )}
+              <button
+                onClick={() => setShowFindFriendsModal(true)}
+                className={`flex items-center gap-2 bg-white dark:bg-gray-800 border px-5 py-3 rounded-xl font-bold transition-all shadow-sm ${getAccentClasses('text')} ${getAccentClasses('borderLight')} ${getAccentClasses('hoverLight')}`}
+              >
+                <Search className="w-4 h-4" />
+                <span className="hidden sm:inline">Find Friends</span>
+              </button>
+              <button 
+                onClick={() => setShowAddModal(true)} 
+                className={`flex items-center gap-2 text-white px-5 py-3 rounded-xl font-bold transition-all shadow-md dark:shadow-none ${getAccentClasses('bg')} ${getAccentClasses('shadow')}`}
+              >
+                <Plus className="w-4 h-4" />
+                <span className="hidden sm:inline">New Person</span>
+              </button>
             </div>
-          </div>
-          
-          <div className="flex items-center gap-3 self-end sm:self-auto">
-            {mainTab === 'profiles' && (
-              <div className="bg-gray-100 dark:bg-gray-800/80 p-1 rounded-xl flex items-center border border-gray-200 dark:border-gray-700 transition-colors">
-                <button 
-                  onClick={() => setViewMode('grid')}
-                  className={`p-2 rounded-lg transition-all ${viewMode === 'grid' ? 'bg-white dark:bg-gray-700 text-indigo-600 dark:text-indigo-400 shadow-sm' : 'text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'}`}
-                >
-                  <LayoutGrid className="w-4 h-4" />
-                </button>
-                <button 
-                  onClick={() => setViewMode('list')}
-                  className={`p-2 rounded-lg transition-all ${viewMode === 'list' ? 'bg-white dark:bg-gray-700 text-indigo-600 dark:text-indigo-400 shadow-sm' : 'text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'}`}
-                >
-                  <List className="w-4 h-4" />
-                </button>
-              </div>
-            )}
-            <button
-              onClick={() => setShowFindFriendsModal(true)}
-              className={`flex items-center gap-2 bg-white dark:bg-gray-800 border px-5 py-3 rounded-xl font-bold transition-all shadow-sm ${getAccentClasses('text')} ${getAccentClasses('borderLight')} ${getAccentClasses('hoverLight')}`}
-            >
-              <Search className="w-4 h-4" />
-              <span className="hidden sm:inline">Find Friends</span>
-            </button>
-            <button 
-              onClick={() => setShowAddModal(true)} 
-              className={`flex items-center gap-2 text-white px-5 py-3 rounded-xl font-bold transition-all shadow-md dark:shadow-none ${getAccentClasses('bg')} ${getAccentClasses('shadow')}`}
-            >
-              <Plus className="w-4 h-4" />
-              <span className="hidden sm:inline">New Person</span>
-            </button>
-          </div>
-        </div>
+          }
+        />
 
         <div className="flex gap-6 border-b border-gray-200 dark:border-gray-800 mb-6 px-2">
           <button

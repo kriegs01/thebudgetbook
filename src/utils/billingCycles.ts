@@ -82,11 +82,13 @@ export const calculateBillingCycles = (
       const daysInMonth = new Date(cycleStartDate.getFullYear(), cycleStartDate.getMonth() + 1, 0).getDate();
       const adjustedBillingDay = Math.min(billingDay, daysInMonth);
       cycleStartDate.setDate(adjustedBillingDay);
+      cycleStartDate.setHours(0, 0, 0, 0); // Ensure start is beginning of day
       
       // Calculate end date (day before next billing date)
       const cycleEndDate = new Date(cycleStartDate);
       cycleEndDate.setMonth(cycleEndDate.getMonth() + 1);
       cycleEndDate.setDate(cycleEndDate.getDate() - 1);
+      cycleEndDate.setHours(23, 59, 59, 999); // Ensure end covers the entire day
       
       cycles.push({ 
         startDate: new Date(cycleStartDate), 
@@ -108,11 +110,13 @@ export const calculateBillingCycles = (
       const daysInMonth = new Date(cycleStartDate.getFullYear(), cycleStartDate.getMonth() + 1, 0).getDate();
       const adjustedBillingDay = Math.min(billingDay, daysInMonth);
       cycleStartDate.setDate(adjustedBillingDay);
+      cycleStartDate.setHours(0, 0, 0, 0); // Ensure start is beginning of day
       
       // Calculate end date (day before next billing date)
       const cycleEndDate = new Date(cycleStartDate);
       cycleEndDate.setMonth(cycleEndDate.getMonth() + 1);
       cycleEndDate.setDate(cycleEndDate.getDate() - 1);
+      cycleEndDate.setHours(23, 59, 59, 999); // Ensure end covers the entire day
       
       cycles.push({ 
         startDate: new Date(cycleStartDate), 
@@ -129,11 +133,13 @@ export const calculateBillingCycles = (
       const daysInMonth = new Date(cycleStartDate.getFullYear(), cycleStartDate.getMonth() + 1, 0).getDate();
       const adjustedBillingDay = Math.min(billingDay, daysInMonth);
       cycleStartDate.setDate(adjustedBillingDay);
+      cycleStartDate.setHours(0, 0, 0, 0); // Ensure start is beginning of day
       
       // Calculate end date (day before next billing date)
       const cycleEndDate = new Date(cycleStartDate);
       cycleEndDate.setMonth(cycleEndDate.getMonth() + 1);
       cycleEndDate.setDate(cycleEndDate.getDate() - 1);
+      cycleEndDate.setHours(23, 59, 59, 999); // Ensure end covers the entire day
       
       cycles.push({ 
         startDate: new Date(cycleStartDate), 

@@ -30,6 +30,43 @@ interface InstallmentsProps {
   error?: string | null;
 }
 
+/** 
+ * PageHeader component mirroring Dashboard style
+ */
+const PageHeader: React.FC<{ 
+  title: string; 
+  subtitle: string; 
+  icon?: React.ReactNode; 
+  actions?: React.ReactNode;
+  backButton?: React.ReactNode;
+}> = ({ title, subtitle, icon, actions, backButton }) => {
+  const { getAccentClasses } = useTheme();
+  
+  return (
+    <header className="pt-12 mb-12 flex flex-col md:flex-row md:items-end justify-between gap-6">
+      <div className="flex-1">
+        <div className="flex items-center gap-3 mb-[-6px] ml-1">
+          {backButton}
+          <p className="text-xl font-bold italic text-black/50 dark:text-gray-400 transition-colors duration-300">
+            {subtitle}
+          </p>
+        </div>
+        <div className="relative inline-block mt-2">
+          <div className="flex items-center gap-4">
+             {icon && <div className="z-10 shrink-0">{icon}</div>}
+             <h1 className="text-4xl md:text-6xl font-[950] uppercase tracking-tighter leading-none relative z-10 text-black dark:text-white transition-colors duration-300">
+              {title}
+            </h1>
+          </div>
+          <div className={`absolute bottom-1 left-0 w-[110%] h-5 ${getAccentClasses('bg')} opacity-40 -z-0 -rotate-1 -translate-x-2 transition-colors duration-300`} />
+        </div>
+        <div className={`h-2 w-32 mt-4 bg-black dark:bg-white/20 transition-colors duration-300`} />
+      </div>
+      {actions && <div className="flex items-center justify-end gap-3 mt-4 md:mt-0 w-full md:w-auto">{actions}</div>}
+    </header>
+  );
+};
+
 const Installments: React.FC<InstallmentsProps> = ({ installments, accounts, billers = [], onAdd, onUpdate, onDelete, onPayInstallment, loading = false, error = null }) => {
   const { getAccentClasses } = useTheme();
   // Memoized first non-credit account ID to avoid redundant filtering
@@ -863,43 +900,42 @@ const Installments: React.FC<InstallmentsProps> = ({ installments, accounts, bil
       {/* Main Content */}
       {!loading && (
       <>
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white dark:bg-gray-900 p-6 md:p-8 rounded-[2.5rem] border border-gray-100 dark:border-gray-800 shadow-sm transition-colors mb-8">
-        <div className="flex items-center gap-5">
-            <div className={`w-14 h-14 rounded-2xl flex items-center justify-center text-white shadow-lg transition-colors ${getAccentClasses('bg')} ${getAccentClasses('shadow')}`}>
+      <PageHeader 
+        title="Installments"
+        subtitle="Big tickets—right on track"
+        icon={
+          <div className={`w-14 h-14 rounded-2xl flex items-center justify-center text-white border-[3px] border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] -rotate-3 transition-all hover:rotate-0 hover:scale-110 z-10 relative ${getAccentClasses('bg')}`}>
             <Calendar className="w-7 h-7" />
           </div>
-          <div>
-            <h1 className="text-2xl md:text-3xl font-black text-gray-900 dark:text-gray-100 uppercase tracking-tight transition-colors">Installments</h1>
-            <p className="text-gray-500 dark:text-gray-400 text-sm font-medium transition-colors">Manage your tracked installments and loans</p>
-          </div>
-        </div>
-        
-        <div className="flex items-center gap-3 self-end sm:self-auto">
-          <div className="flex items-center bg-gray-50 dark:bg-gray-800 rounded-xl p-1 space-x-1 transition-colors">
+        }
+        actions={
+          <div className="flex items-center gap-3 self-end sm:self-auto">
+            <div className="flex items-center bg-gray-50 dark:bg-gray-800 rounded-xl p-1 space-x-1 transition-colors">
+              <button 
+                onClick={() => setViewMode('card')}
+                className={`p-2 rounded-lg transition-colors ${viewMode === 'card' ? 'bg-white dark:bg-gray-700 shadow-sm text-indigo-600 dark:text-indigo-400' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'}`}
+                title="Card view"
+              >
+                <LayoutGrid className="w-4 h-4" />
+              </button>
+              <button 
+                onClick={() => setViewMode('list')}
+                className={`p-2 rounded-lg transition-colors ${viewMode === 'list' ? 'bg-white dark:bg-gray-700 shadow-sm text-indigo-600 dark:text-indigo-400' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'}`}
+                title="List view"
+              >
+                <List className="w-4 h-4" />
+              </button>
+            </div>
             <button 
-              onClick={() => setViewMode('card')}
-              className={`p-2 rounded-lg transition-colors ${viewMode === 'card' ? 'bg-white dark:bg-gray-700 shadow-sm text-indigo-600 dark:text-indigo-400' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'}`}
-              title="Card view"
+              onClick={() => setShowModal(true)}
+                className={`flex items-center gap-2 text-white px-5 py-3 rounded-xl font-bold transition-all shadow-md dark:shadow-none text-sm ${getAccentClasses('bg')} ${getAccentClasses('shadow')}`}
             >
-              <LayoutGrid className="w-4 h-4" />
-            </button>
-            <button 
-              onClick={() => setViewMode('list')}
-              className={`p-2 rounded-lg transition-colors ${viewMode === 'list' ? 'bg-white dark:bg-gray-700 shadow-sm text-indigo-600 dark:text-indigo-400' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'}`}
-              title="List view"
-            >
-              <List className="w-4 h-4" />
+              <Plus className="w-4 h-4" />
+              <span className="hidden sm:inline">New Installment</span>
             </button>
           </div>
-          <button 
-            onClick={() => setShowModal(true)}
-              className={`flex items-center gap-2 text-white px-5 py-3 rounded-xl font-bold transition-all shadow-md dark:shadow-none text-sm ${getAccentClasses('bg')} ${getAccentClasses('shadow')}`}
-          >
-            <Plus className="w-4 h-4" />
-            <span className="hidden sm:inline">New Installment</span>
-          </button>
-        </div>
-      </div>
+        }
+      />
 
       <div className={viewMode === 'card' ? "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6" : "space-y-4"}>
         {activeInstallmentsList.length > 0 ? (

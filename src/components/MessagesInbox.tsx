@@ -5,6 +5,7 @@ import { subscribeToIncomingMessages, getConversation, sendMessage, Message, mar
 import { supabase } from '../utils/supabaseClient';
 import { useFriendships, useBudeeProfiles, socialKeys } from '../hooks/useBudies';
 import { useQueryClient } from '@tanstack/react-query';
+import { useUnreadMessagesCount } from '../hooks/useBudies';
 
 interface MessagesInboxProps {
   isOpen: boolean;
@@ -38,6 +39,9 @@ export const MessagesInbox: React.FC<MessagesInboxProps> = ({ isOpen, onClose, c
   const friendIds = acceptedFriends.map(f => f.user_id === currentUserId ? f.friend_id : f.user_id);
   const { data: profiles, isLoading: isLoadingProfiles } = useBudeeProfiles(friendIds);
   const chatProfile = profiles?.find(p => p.user_id === internalChatId);
+  
+  // Listen to the global unread count to know when to refresh the inbox list
+  const { data: unreadCount } = useUnreadMessagesCount();
 
   // Sync external prop to internal state
   useEffect(() => {
@@ -51,13 +55,12 @@ export const MessagesInbox: React.FC<MessagesInboxProps> = ({ isOpen, onClose, c
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, isOpen, internalChatId]);
 
-  // Load Inbox Hub List View
+  // Load Inbox Hub List View (Re-runs when opened or when unread count changes)
   useEffect(() => {
     if (!isOpen || internalChatId) return;
 
     const fetchInbox = async () => {
-      // Only show the loading spinner on the very first load
-      if (!hasLoadedInboxRef.current) {
+      if (!hasLoadedInboxRef.current && inboxList.length === 0) {
         setIsLoadingInbox(true);
       }
       try {
@@ -74,9 +77,14 @@ export const MessagesInbox: React.FC<MessagesInboxProps> = ({ isOpen, onClose, c
 
         const combined = profiles.map(prof => {
           const msgs = recentMsgs?.filter(m => m.sender_id === prof.user_id || m.receiver_id === prof.user_id) || [];
+          
+          // Calculate unread count for this specific chat
+          const unreadCount = msgs.filter(m => m.receiver_id === currentUserId && !m.read_at).length;
+          
           return {
             profile: prof,
-            lastMessage: msgs[0] || null
+            lastMessage: msgs[0] || null,
+            unreadCount
           };
         }).sort((a, b) => {
           const timeA = a.lastMessage ? new Date(a.lastMessage.created_at).getTime() : 0;
@@ -94,7 +102,7 @@ export const MessagesInbox: React.FC<MessagesInboxProps> = ({ isOpen, onClose, c
     };
 
     if (!isLoadingProfiles) fetchInbox();
-  }, [isOpen, internalChatId, currentUserId, profiles, isLoadingProfiles]);
+  }, [isOpen, internalChatId, currentUserId, profiles, isLoadingProfiles, unreadCount]);
 
   // Load history and subscribe to live updates
   useEffect(() => {
@@ -112,6 +120,8 @@ export const MessagesInbox: React.FC<MessagesInboxProps> = ({ isOpen, onClose, c
           const unreadIds = data.filter(m => m.receiver_id === currentUserId && !m.read_at).map(m => m.id);
           if (unreadIds.length > 0) {
             await markMessagesAsRead(unreadIds);
+            // Optimistically clear the unread notification badge
+            queryClient.setQueryData(socialKeys.unreadMessages(), (old: number = 0) => Math.max(0, old - unreadIds.length));
             queryClient.invalidateQueries({ queryKey: socialKeys.unreadMessages() });
           }
         }
@@ -124,10 +134,26 @@ export const MessagesInbox: React.FC<MessagesInboxProps> = ({ isOpen, onClose, c
 
     // Start Realtime Subscription
     const channel = subscribeToIncomingMessages(currentUserId, async (newMsg: Message) => {
+      // Optimistically update the inbox list with the new message instantly
+      setInboxList(prevList => {
+        return prevList.map(item => {
+          if (item.profile.user_id === newMsg.sender_id) {
+            return {
+              ...item,
+              lastMessage: newMsg,
+              unreadCount: newMsg.sender_id === internalChatId ? item.unreadCount : item.unreadCount + 1
+            };
+          }
+          return item;
+        });
+      });
+
       if (newMsg.sender_id === internalChatId) {
         setMessages((prev) => [...prev, newMsg]);
         // Mark single message as read if chat is actively open
         await markMessagesAsRead([newMsg.id]);
+        // Instantly offset the global +1 to prevent badge blip
+        queryClient.setQueryData(socialKeys.unreadMessages(), (old: number = 0) => Math.max(0, old - 1));
         queryClient.invalidateQueries({ queryKey: socialKeys.unreadMessages() });
       } else {
         // Update badge if receiving a message while looking at another screen
@@ -237,10 +263,17 @@ export const MessagesInbox: React.FC<MessagesInboxProps> = ({ isOpen, onClose, c
                     {(item.profile.first_name?.charAt(0) || '') + (item.profile.last_name?.charAt(0) || '') || '?'}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <div className="flex justify-between items-baseline mb-1">
+                  <div className="flex justify-between items-center mb-1">
+                    <div className="flex items-center gap-2 min-w-0">
                       <h4 className="text-sm font-bold text-gray-900 dark:text-gray-100 truncate">
                         {item.profile.first_name} {item.profile.last_name}
                       </h4>
+                      {item.unreadCount > 0 && (
+                        <span className="bg-red-500 text-white text-[9px] font-black px-1.5 py-0.5 rounded-full shrink-0">
+                          {item.unreadCount}
+                        </span>
+                      )}
+                    </div>
                       {item.lastMessage && (
                         <span className="text-[10px] font-bold text-gray-400 whitespace-nowrap ml-2">
                           {new Date(item.lastMessage.created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
