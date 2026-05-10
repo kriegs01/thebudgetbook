@@ -1332,7 +1332,7 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
 
         {/* Top Navigation Bar - Reactive for Dashboard, Static for others */}
         <header className={`fixed top-0 right-0 left-0 h-14 px-4 md:px-8 flex items-center justify-end transition-all duration-300 z-30 ${
-          isSidebarOpen ? 'md:ml-56' : 'md:ml-20'
+          isSidebarOpen ? 'md:ml-52' : 'md:ml-20'
         } ${
           isScrolled ? `${getAccentClasses('bg')} shadow-lg border-b-4 border-black` : 'bg-transparent border-transparent'
         }`}>
