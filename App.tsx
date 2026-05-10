@@ -303,9 +303,7 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
     };
 
     const container = scrollContainerRef.current;
-    if (isDashboard) {
-      container?.addEventListener('scroll', handleScroll);
-    }
+    container?.addEventListener('scroll', handleScroll);
     return () => container?.removeEventListener('scroll', handleScroll);
   }, [isDashboard, showSplash]);
 
@@ -1387,12 +1385,10 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
         <TestModeBanner sidebarOpen={isSidebarOpen} />
 
         {/* Top Navigation Bar - Reactive for Dashboard, Static for others */}
-        <header className={`h-14 px-4 md:px-8 flex items-center justify-end transition-all duration-300 z-30 ${
-          isDashboard
-            ? `fixed top-0 right-0 left-0 ${isSidebarOpen ? 'md:ml-56' : 'md:ml-20'} ${
-                isScrolled ? `${getAccentClasses('bg')} shadow-lg border-b-4 border-black` : 'bg-transparent border-transparent'
-              }`
-            : `border-b-4 border-black ${getAccentClasses('lightBg')} shrink-0`
+        <header className={`fixed top-0 right-0 left-0 h-14 px-4 md:px-8 flex items-center justify-end transition-all duration-300 z-30 ${
+          isSidebarOpen ? 'md:ml-56' : 'md:ml-20'
+        } ${
+          isScrolled ? `${getAccentClasses('bg')} shadow-lg border-b-4 border-black` : 'bg-transparent border-transparent'
         }`}>
           <div className="flex items-center space-x-2 md:space-x-4">
             {/* Messages */}
@@ -1403,7 +1399,7 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
               >
                 <MessageCircle className={`w-5 h-5 ${isScrolled ? getAccentClasses('text') : 'text-white'}`} />
                 {unreadMessagesCount > 0 && !isMessagesOpen && ( // Only show badge if not open
-                  <span className="absolute -top-2 -right-2 flex items-center justify-center min-w-[20px] h-[20px] px-1 bg-yellow-300 text-black text-[10px] font-black border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]">
+                  <span className="absolute -top-2 -right-2 flex items-center justify-center min-w-[20px] h-[20px] px-1 bg-yellow-300 text-black text-[10px] font-black border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] z-10">
                     {unreadMessagesCount > 99 ? '99+' : unreadMessagesCount}
                   </span>
                 )}
@@ -1417,7 +1413,7 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
               >
                 <Bell className={`w-5 h-5 ${isScrolled ? getAccentClasses('text') : 'text-white'}`} />
                 {((pendingRequests?.length || 0) + (pendingTransactions?.length || 0)) > 0 && (
-                  <span className="absolute -top-1 -right-1 w-4 h-4 bg-yellow-300 border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]"></span>
+                  <span className="absolute -top-1 -right-1 w-4 h-4 bg-yellow-300 border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] z-10"></span>
                 )}
               </button>
 
@@ -1513,15 +1509,15 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
             <div className="relative ml-2 border-l border-gray-200 dark:border-gray-700 pl-4">
               <button 
                 onClick={() => setIsUserMenuOpen(!isUserMenuOpen)}
-                className={`flex items-center space-x-2 p-1 pr-2 border-[3px] border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] bg-white hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none transition-all duration-200`}
+                className="flex items-center space-x-2 p-1 pr-2 border-[3px] border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] bg-white hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none transition-all duration-200"
               >
-                <div className={`w-8 h-8 border-2 border-black ${getAccentClasses('bg')} flex items-center justify-center text-white font-bold text-sm transition-colors`}>
+                <div className={`w-8 h-8 border-2 border-black ${isScrolled ? getAccentClasses('bg') : 'bg-white text-black'} flex items-center justify-center text-white font-bold text-sm transition-colors`}>
                   {userProfile ? 
                     `${userProfile.first_name.charAt(0)}${userProfile.last_name.charAt(0)}`.toUpperCase() :
                     user?.email?.charAt(0).toUpperCase() || 'U'
                   }
                 </div>
-                <span className={`hidden sm:block text-sm font-black uppercase tracking-tight text-black truncate max-w-[120px]`}>
+                <span className="hidden sm:block text-sm font-black uppercase tracking-tight text-black truncate max-w-[120px]">
                   {userProfile ? userProfile.first_name : (user?.email?.split('@')[0] || 'User')}
                 </span>
                 <ChevronDown className={`w-4 h-4 text-black transition-transform ${isUserMenuOpen ? 'rotate-180' : ''}`} />
@@ -1570,7 +1566,7 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
 
         <div 
           ref={scrollContainerRef}
-          className={`w-full flex-1 overflow-auto overscroll-none touch-pan-y ${isDashboard ? 'pt-0' : 'p-4 md:px-8 md:py-6'}`} 
+          className={`w-full flex-1 overflow-auto overscroll-none touch-pan-y ${isDashboard ? 'pt-0' : 'pt-14 px-4 pb-4 md:px-8 md:pb-6'}`} 
           style={{ WebkitOverflowScrolling: 'touch' }}
         >
             <Routes>
