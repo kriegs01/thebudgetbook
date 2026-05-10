@@ -500,10 +500,6 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
   const [budgetSetupsLoading, setBudgetSetupsLoading] = useState(true);
   const [budgetSetupsError, setBudgetSetupsError] = useState<string | null>(null);
 
-  // Splash Screen State
-  const [showSplash, setShowSplash] = useState(true);
-  const [minSplashTimeElapsed, setMinSplashTimeElapsed] = useState(false);
-
   useEffect(() => {
     const timer = setTimeout(() => setMinSplashTimeElapsed(true), 3000); // 3 seconds buffer
     return () => clearTimeout(timer);
