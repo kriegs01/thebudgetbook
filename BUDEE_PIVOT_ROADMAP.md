@@ -86,6 +86,7 @@ This document unifies all parked ideas, feature enhancements, and architectural 
 ## 🗄️ Archive / Completed
 *Completed tasks, features, and resolved bugs.*
 
+- [x] **Visual Cohesion Refinement:** Harmonized sidebar and top-bar transitions during scroll (Continuous Frame approach) and refined shadow offsets for the retro sticker aesthetic.
 - [x] **Retro Sticker UI Foundation:** Implemented thick-border "sticker" icons with hard shadows and rotation for Page Headers and Nav Drawer.
 - [x] **Brand Voice Update:** Refreshed all page subtitles (Transactions, Billers, etc.) to align with the new Budee personality.
 - [x] **Sidebar & Header Cleanup:** Tightened navigation spacing, fixed top-bar alignment, and adjusted action button positioning for better utility.
