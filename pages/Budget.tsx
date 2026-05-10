@@ -2149,7 +2149,7 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
           title="Budget"
           subtitle="Vibe check for the Month"
           icon={
-            <div className={`w-14 h-14 rounded-2xl flex items-center justify-center text-white shadow-lg transition-colors ${getAccentClasses('bg')} ${getAccentClasses('shadow')}`}>
+            <div className={`w-14 h-14 rounded-2xl flex items-center justify-center text-white border-[3px] border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] -rotate-3 transition-all hover:rotate-0 hover:scale-110 z-10 relative ${getAccentClasses('bg')}`}>
               <WalletIcon className="w-7 h-7" />
             </div>
           }
@@ -2347,6 +2347,11 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
         <PageHeader 
           title="Budget Setup"
           subtitle={isReadOnly ? 'Archived — Read Only' : 'Configure Recurring Expenses'}
+          icon={
+            <div className={`w-14 h-14 rounded-2xl flex items-center justify-center text-white border-[3px] border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] -rotate-3 transition-all hover:rotate-0 hover:scale-110 z-10 relative ${getAccentClasses('bg')}`}>
+              <WalletIcon className="w-7 h-7" />
+            </div>
+          }
           backButton={
             <button onClick={() => setView('summary')} className={`flex items-center justify-center w-10 h-10 rounded-xl bg-gray-50 dark:bg-gray-800 text-gray-500 dark:text-gray-400 transition-all shrink-0 ${getAccentClasses('hoverLight')}`}>
               <ArrowLeft className="w-5 h-5" />

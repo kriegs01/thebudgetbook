@@ -1655,7 +1655,7 @@ const Settings: React.FC<SettingsProps> = ({ currency, setCurrency, categories, 
         title="Settings"
         subtitle="Make it truly yours"
         icon={
-          <div className={`w-14 h-14 rounded-2xl flex items-center justify-center text-white shadow-lg transition-colors ${getAccentClasses('bg')} ${getAccentClasses('shadow')}`}>
+          <div className={`w-14 h-14 rounded-2xl flex items-center justify-center text-white border-[3px] border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] -rotate-3 transition-all hover:rotate-0 hover:scale-110 z-10 relative ${getAccentClasses('bg')}`}>
             {userProfile ? 
               `${userProfile.first_name.charAt(0)}${userProfile.last_name.charAt(0)}`.toUpperCase() :
               user?.email?.charAt(0).toUpperCase() || 'U'
