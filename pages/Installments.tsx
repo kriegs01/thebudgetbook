@@ -43,7 +43,7 @@ const PageHeader: React.FC<{
   const { getAccentClasses } = useTheme();
   
   return (
-    <header className="pt-12 mb-12 flex flex-col md:flex-row md:items-end justify-between gap-6 md:pr-48">
+    <header className="pt-12 mb-12 flex flex-col md:flex-row md:items-end justify-between gap-6">
       <div className="flex-1">
         <div className="flex items-center gap-3 mb-[-6px] ml-1">
           {backButton}
