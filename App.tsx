@@ -168,80 +168,6 @@ const formatTransaction = (supabaseTransaction: SupabaseTransaction): Transactio
   paymentMethodId: supabaseTransaction.payment_method_id,
 });
 
-// NEW: Layout Wrapper to handle conditional UI (floating stickers vs top bar)
-const AppLayout: React.FC<any> = (props) => {
-  const location = useLocation();
-  const isDashboard = location.pathname === '/';
-  const { getAccentClasses } = useTheme();
-
-  return (
-    <div className="flex h-[100dvh] bg-gray-100 dark:bg-gray-950 w-full overflow-hidden fixed inset-0 transition-colors duration-200">
-      <aside className={`fixed inset-y-0 left-0 z-50 bg-gray-50 dark:bg-gray-900 border-r border-gray-200 dark:border-gray-800 transition-all duration-300 ease-in-out ${props.isSidebarOpen ? 'w-56' : 'hidden md:flex w-20'} overscroll-none`}> 
-        <div className="flex flex-col h-full">
-          <div className={`flex items-center h-14 px-4 border-b border-gray-100 dark:border-gray-800 ${props.isSidebarOpen ? 'justify-between' : 'justify-center'}`}>
-            <div 
-              className="flex flex-row flex-nowrap items-center cursor-pointer active:scale-95 transition-transform"
-              onClick={() => !props.isSidebarOpen && props.setIsSidebarOpen(true)}
-            >
-              <img src="/iconapp.png" alt="Budee Mascot" className={`drop-shadow-md transition-all duration-300 z-10 ${props.isSidebarOpen ? 'w-10 h-10 -mr-5 rotate-[15deg]' : 'w-8 h-8'}`} />
-              {props.isSidebarOpen && <div className="mt-1 ml-1"><Logo className="text-3xl" /></div>}
-            </div>
-            {props.isSidebarOpen && (
-              <button onClick={() => props.setIsSidebarOpen(false)} className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-500 transition-colors ml-2"><ChevronLeft className="w-5 h-5" /></button>
-            )}
-          </div>
-          <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
-            {props.navPreferences.filter((p: any) => p.visible).map((pref: any) => {
-              const item = props.effectiveNavItems.find((n: any) => n.id === pref.id);
-              if (!item) return null;
-              return (
-                <NavLink key={item.id} to={item.path} className={({ isActive }) => `w-full flex items-center p-3 rounded-xl transition-colors ${isActive ? getAccentClasses('lightBg') : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800/50'}`} end={item.path === '/'}>
-                  <div className={`${props.isSidebarOpen ? '' : 'mx-auto'} ${location.pathname === item.path ? getAccentClasses('text') : 'text-gray-400'} transition-colors`}>{item.icon}</div>
-                  {props.isSidebarOpen && <span className="ml-3 font-bold text-sm">{item.label}</span>}
-                </NavLink>
-              );
-            })}
-          </nav>
-        </div>
-      </aside>
-
-      <main className={`flex-1 bg-gray-100 dark:bg-gray-950 transition-all duration-300 ease-in-out ${props.isSidebarOpen ? 'md:ml-56' : 'md:ml-20'} h-full flex flex-col overflow-hidden`}> 
-        
-        {/* SHOW OLD TOP BAR ONLY IF NOT ON DASHBOARD */}
-        {!isDashboard && (
-          <header className="h-14 px-4 md:px-8 border-b border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-900 flex items-center justify-end shrink-0 transition-colors z-20">
-            <div className="flex items-center space-x-2 md:space-x-4"> {/* Adjusted spacing */}
-              <button onClick={() => props.setIsMessagesOpen(!props.isMessagesOpen)} className={`p-2 text-gray-400 rounded-full transition-colors ${getAccentClasses('hoverLight')}`}>
-                <MessageCircle className={`w-5 h-5 ${getAccentClasses('text')}`} />
-              </button>
-              <button onClick={() => props.setIsNotificationsOpen(!props.isNotificationsOpen)} className={`p-2 text-gray-400 rounded-full transition-colors ${getAccentClasses('hoverLight')}`}>
-                <Bell className={`w-5 h-5 ${getAccentClasses('text')}`} />
-              </button>
-              <div className="relative ml-2 border-l border-gray-200 dark:border-gray-700 pl-4">
-                <button onClick={() => props.setIsUserMenuOpen(!props.isUserMenuOpen)} className={`flex items-center space-x-2 p-1 pr-2 rounded-full ${getAccentClasses('hoverLight')} transition-colors`}>
-                  <div className={`w-8 h-8 rounded-full ${getAccentClasses('lightBg')} flex items-center justify-center ${getAccentClasses('text')} font-bold text-sm`}>
-                    {props.userProfile ? `${props.userProfile.first_name.charAt(0)}${props.userProfile.last_name.charAt(0)}`.toUpperCase() : 'U'}
-                  </div>
-                </button>
-              </div>
-            </div>
-          </header>
-        )}
-
-        {/* SHOW FLOATING HUD ONLY ON DASHBOARD */}
-        {isDashboard && <FloatingHUD userName={props.userProfile?.first_name || 'Budee'} />}
-
-        <div className={`w-full flex-1 overflow-auto overscroll-none touch-pan-y ${isDashboard ? 'pt-0' : 'p-4 md:px-8 md:py-6'}`}>
-          {props.children}
-        </div>
-      </main>
-
-      {/* Reuse Modals and Drawers logic here by passing them as children or props */}
-      <MessagesInbox isOpen={props.isMessagesOpen} onClose={() => props.setIsMessagesOpen(false)} currentUserId={props.user.id} />
-    </div>
-  );
-};
-
 const queryClient = new QueryClient();
 
 // Main App Content (Protected)
@@ -1388,16 +1314,16 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
         <header className={`fixed top-0 right-0 left-0 h-14 px-4 md:px-8 flex items-center justify-end transition-all duration-300 z-30 ${
           isSidebarOpen ? 'md:ml-56' : 'md:ml-20'
         } ${
-          isScrolled ? `${getAccentClasses('bg')} shadow-lg border-b-4 border-black` : 'bg-transparent border-transparent'
+          (isScrolled || !isDashboard) ? `${getAccentClasses('bg')} shadow-lg border-b-4 border-black` : 'bg-transparent border-transparent'
         }`}>
           <div className="flex items-center space-x-2 md:space-x-4">
             {/* Messages */}
             <div className="relative">
               <button 
                 onClick={() => setIsMessagesOpen(!isMessagesOpen)}
-                className={`relative p-2 border-[3px] border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] transition-all duration-200 -rotate-2 hover:rotate-0 hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none ${isScrolled ? 'bg-white' : getAccentClasses('bg')} ${unreadMessagesCount > 0 && !isMessagesOpen ? 'animate-ring' : ''}`}
+                className={`relative p-2 border-[3px] border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] transition-all duration-200 -rotate-2 hover:rotate-0 hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none ${(isScrolled || !isDashboard) ? 'bg-white' : getAccentClasses('bg')} ${unreadMessagesCount > 0 && !isMessagesOpen ? 'animate-ring' : ''}`}
               >
-                <MessageCircle className={`w-5 h-5 ${isScrolled ? getAccentClasses('text') : 'text-white'}`} />
+                <MessageCircle className={`w-5 h-5 ${(isScrolled || !isDashboard) ? getAccentClasses('text') : 'text-white'}`} />
                 {unreadMessagesCount > 0 && !isMessagesOpen && ( // Only show badge if not open
                   <span className="absolute -top-2 -right-2 flex items-center justify-center min-w-[20px] h-[20px] px-1 bg-yellow-300 text-black text-[10px] font-black border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] z-10">
                     {unreadMessagesCount > 99 ? '99+' : unreadMessagesCount}
@@ -1409,9 +1335,9 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
             <div className="relative">
               <button 
                 onClick={() => setIsNotificationsOpen(!isNotificationsOpen)}
-                className={`relative p-2 border-[3px] border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] transition-all duration-200 rotate-3 hover:rotate-0 hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none ${isScrolled ? 'bg-white' : getAccentClasses('bg')}`}
+                className={`relative p-2 border-[3px] border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] transition-all duration-200 rotate-3 hover:rotate-0 hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none ${(isScrolled || !isDashboard) ? 'bg-white' : getAccentClasses('bg')}`}
               >
-                <Bell className={`w-5 h-5 ${isScrolled ? getAccentClasses('text') : 'text-white'}`} />
+                <Bell className={`w-5 h-5 ${(isScrolled || !isDashboard) ? getAccentClasses('text') : 'text-white'}`} />
                 {((pendingRequests?.length || 0) + (pendingTransactions?.length || 0)) > 0 && (
                   <span className="absolute -top-1 -right-1 w-4 h-4 bg-yellow-300 border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] z-10"></span>
                 )}
