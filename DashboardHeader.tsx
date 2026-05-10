@@ -12,7 +12,7 @@ export const DashboardHeader: React.FC<DashboardHeaderProps> = ({ name }) => {
     <header className="pt-12 mb-12 pr-48">
       {/* Sub-header Greeting */}
       <p className={`text-2xl font-bold italic mb-[-6px] ml-1 ${isDarkMode ? 'text-gray-300/70' : 'text-black/50'}`}>
-        Hello, {name} 
+        Hello, {name} !
       </p>
 
       {/* Main Page Title */}

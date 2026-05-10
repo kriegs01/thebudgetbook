@@ -1390,18 +1390,18 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
         <header className={`h-14 px-4 md:px-8 flex items-center justify-end transition-all duration-300 z-30 ${
           isDashboard
             ? `fixed top-0 right-0 left-0 ${isSidebarOpen ? 'md:ml-56' : 'md:ml-20'} ${
-                isScrolled ? 'bg-white/90 dark:bg-gray-900/90 backdrop-blur-xl border-b border-gray-200 dark:border-gray-800 shadow-lg' : 'bg-transparent border-transparent'
+                isScrolled ? `${getAccentClasses('bg')} shadow-lg border-b border-white/20` : 'bg-transparent border-transparent'
               }`
-            : "border-b border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-900 shrink-0"
+            : `border-b border-gray-200 dark:border-gray-800 ${getAccentClasses('lightBg')} shrink-0`
         }`}>
           <div className="flex items-center space-x-2 md:space-x-4">
             {/* Messages */}
             <div className="relative">
               <button 
                 onClick={() => setIsMessagesOpen(!isMessagesOpen)}
-                className={`relative p-2 rounded-full transition-colors ${getAccentClasses('hoverLight')} ${isMessagesOpen ? getAccentClasses('lightBg') : ''} ${unreadMessagesCount > 0 && !isMessagesOpen ? `animate-ring ${getAccentClasses('text')}` : ''}`}
+                className={`relative p-2 rounded-full transition-colors ${isScrolled ? 'hover:bg-white/20' : getAccentClasses('hoverLight')} ${isMessagesOpen ? 'bg-white/20' : ''} ${unreadMessagesCount > 0 && !isMessagesOpen ? 'animate-ring' : ''}`}
               >
-                <MessageCircle className={`w-5 h-5 ${getAccentClasses('text')}`} />
+                <MessageCircle className={`w-5 h-5 ${isScrolled ? 'text-white' : getAccentClasses('text')}`} />
                 {unreadMessagesCount > 0 && !isMessagesOpen && ( // Only show badge if not open
                   <span className="absolute top-0 right-0 flex items-center justify-center min-w-[18px] h-[18px] px-1 bg-red-500 text-white text-[9px] font-black rounded-full border-2 border-white dark:border-gray-900">
                     {unreadMessagesCount > 99 ? '99+' : unreadMessagesCount}
@@ -1413,9 +1413,9 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
             <div className="relative">
               <button 
                 onClick={() => setIsNotificationsOpen(!isNotificationsOpen)}
-                className={`relative p-2 rounded-full transition-colors ${getAccentClasses('hoverLight')}`}
+                className={`relative p-2 rounded-full transition-colors ${isScrolled ? 'hover:bg-white/20' : getAccentClasses('hoverLight')}`}
               >
-                <Bell className={`w-5 h-5 ${getAccentClasses('text')}`} />
+                <Bell className={`w-5 h-5 ${isScrolled ? 'text-white' : getAccentClasses('text')}`} />
                 {((pendingRequests?.length || 0) + (pendingTransactions?.length || 0)) > 0 && (
                   <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-red-500 rounded-full border-2 border-white dark:border-gray-900"></span>
                 )}
@@ -1513,18 +1513,18 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
             <div className="relative ml-2 border-l border-gray-200 dark:border-gray-700 pl-4">
               <button 
                 onClick={() => setIsUserMenuOpen(!isUserMenuOpen)}
-                className={`flex items-center space-x-2 p-1 pr-2 rounded-full ${getAccentClasses('hoverLight')} border border-transparent hover:border-gray-200 dark:hover:border-gray-700 transition-colors`}
+                className={`flex items-center space-x-2 p-1 pr-2 rounded-full ${isScrolled ? 'hover:bg-white/20' : getAccentClasses('hoverLight')} border border-transparent transition-colors`}
               >
-                <div className={`w-8 h-8 rounded-full ${getAccentClasses('lightBg')} flex items-center justify-center ${getAccentClasses('text')} font-bold text-sm`}>
+                <div className={`w-8 h-8 rounded-full ${isScrolled ? 'bg-white text-gray-900' : `${getAccentClasses('lightBg')} ${getAccentClasses('text')}`} flex items-center justify-center font-bold text-sm transition-colors`}>
                   {userProfile ? 
                     `${userProfile.first_name.charAt(0)}${userProfile.last_name.charAt(0)}`.toUpperCase() :
                     user?.email?.charAt(0).toUpperCase() || 'U'
                   }
                 </div>
-                <span className="hidden sm:block text-sm font-semibold text-gray-700 dark:text-gray-300 truncate max-w-[120px]">
+                <span className={`hidden sm:block text-sm font-semibold truncate max-w-[120px] ${isScrolled ? 'text-white' : 'text-gray-700 dark:text-gray-300'}`}>
                   {userProfile ? userProfile.first_name : (user?.email?.split('@')[0] || 'User')}
                 </span>
-                <ChevronDown className={`w-4 h-4 text-gray-500 transition-transform ${isUserMenuOpen ? 'rotate-180' : ''}`} />
+                <ChevronDown className={`w-4 h-4 transition-transform ${isUserMenuOpen ? 'rotate-180' : ''} ${isScrolled ? 'text-white/70' : 'text-gray-500'}`} />
               </button>
 
               {/* Dropdown Menu */}
