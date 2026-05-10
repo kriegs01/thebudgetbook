@@ -1388,8 +1388,10 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
 
         {/* Top Navigation Bar - Reactive for Dashboard, Static for others */}
         <header className={`h-14 px-4 md:px-8 flex items-center justify-end transition-all duration-500 z-30 ${
-          isDashboard 
-            ? `fixed top-0 right-0 left-0 ${isScrolled ? 'translate-y-0 opacity-100' : '-translate-y-full opacity-0 pointer-events-none'} ${isSidebarOpen ? 'md:ml-56' : 'md:ml-20'} bg-white/80 dark:bg-gray-900/80 backdrop-blur-md border-b border-gray-100 dark:border-gray-800 shadow-sm`
+          isDashboard
+            ? `fixed top-0 right-0 left-0 ${isSidebarOpen ? 'md:ml-56' : 'md:ml-20'} ${
+                isScrolled ? 'bg-white/80 dark:bg-gray-900/80 backdrop-blur-md border-b border-gray-100 dark:border-gray-800 shadow-sm' : 'bg-transparent border-transparent'
+              }`
             : "border-b border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-900 shrink-0"
         }`}>
           <div className="flex items-center space-x-2 md:space-x-4">
