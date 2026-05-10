@@ -684,7 +684,7 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ transactions, loadi
         <div ref={headerRef}>
           <PageHeader 
             title="Transactions"
-            subtitle="Track and manage all your financial activities"
+            subtitle="Keep tabs on your funds"
             icon={
               <div className={`w-14 h-14 rounded-2xl flex items-center justify-center text-white shadow-lg transition-colors ${getAccentClasses('bg')} ${getAccentClasses('shadow')}`}>
                 <FileText className="w-7 h-7" />

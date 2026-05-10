@@ -200,7 +200,7 @@ const WalletsPage: React.FC<WalletsPageProps> = ({ accounts }) => {
         <>
           <PageHeader 
             title="Wallets"
-            subtitle="Configure your stashes — savings, allowance, shared expenses, and more."
+            subtitle="For the essentials and the plot-twists"
             icon={
               <div className={`w-14 h-14 rounded-2xl flex items-center justify-center text-white shadow-lg transition-colors ${getAccentClasses('bg')} ${getAccentClasses('shadow')}`}>
                 <WalletCards className="w-7 h-7" />

@@ -1394,7 +1394,7 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
         <>
           <PageHeader 
             title="Billers"
-            subtitle="Manage recurring bills and payment schedules"
+            subtitle="Your forever-bills, on autopilot"
             icon={
               <div className={`w-14 h-14 rounded-2xl flex items-center justify-center text-white shadow-lg transition-colors ${getAccentClasses('bg')} ${getAccentClasses('shadow')}`}>
                 <Receipt className="w-7 h-7" />

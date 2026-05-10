@@ -902,7 +902,7 @@ const Installments: React.FC<InstallmentsProps> = ({ installments, accounts, bil
       <>
       <PageHeader 
         title="Installments"
-        subtitle="Manage your tracked installments and loans"
+        subtitle="Big tickets—right on track"
         icon={
           <div className={`w-14 h-14 rounded-2xl flex items-center justify-center text-white shadow-lg transition-colors ${getAccentClasses('bg')} ${getAccentClasses('shadow')}`}>
             <Calendar className="w-7 h-7" />

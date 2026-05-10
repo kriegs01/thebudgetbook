@@ -431,7 +431,7 @@ const Accounts: React.FC<AccountsProps> = ({ accounts, onAdd, onDelete, onEdit, 
       <>
       <PageHeader 
         title="Accounts"
-        subtitle="Manage your bank accounts and credit cards"
+        subtitle="Cards and Vaults— at a glance"
         icon={
           <div className={`w-14 h-14 rounded-2xl flex items-center justify-center text-white shadow-lg transition-colors ${getAccentClasses('bg')} ${getAccentClasses('shadow')}`}>
             <Landmark className="w-7 h-7" />
