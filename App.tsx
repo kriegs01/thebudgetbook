@@ -210,16 +210,16 @@ const AppLayout: React.FC<any> = (props) => {
         {/* SHOW OLD TOP BAR ONLY IF NOT ON DASHBOARD */}
         {!isDashboard && (
           <header className="h-14 px-4 md:px-8 border-b border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-900 flex items-center justify-end shrink-0 transition-colors z-20">
-            <div className="flex items-center space-x-2 md:space-x-4">
+            <div className="flex items-center space-x-2 md:space-x-4"> {/* Adjusted spacing */}
               <button onClick={() => props.setIsMessagesOpen(!props.isMessagesOpen)} className={`p-2 text-gray-400 rounded-full transition-colors ${getAccentClasses('hoverLight')}`}>
-                <MessageCircle className="w-5 h-5" />
+                <MessageCircle className={`w-5 h-5 ${getAccentClasses('text')}`} />
               </button>
               <button onClick={() => props.setIsNotificationsOpen(!props.isNotificationsOpen)} className={`p-2 text-gray-400 rounded-full transition-colors ${getAccentClasses('hoverLight')}`}>
-                <Bell className="w-5 h-5" />
+                <Bell className={`w-5 h-5 ${getAccentClasses('text')}`} />
               </button>
               <div className="relative ml-2 border-l border-gray-200 dark:border-gray-700 pl-4">
-                <button onClick={() => props.setIsUserMenuOpen(!props.isUserMenuOpen)} className="flex items-center space-x-2 p-1 pr-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
-                  <div className="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-600 font-bold text-sm">
+                <button onClick={() => props.setIsUserMenuOpen(!props.isUserMenuOpen)} className={`flex items-center space-x-2 p-1 pr-2 rounded-full ${getAccentClasses('hoverLight')} transition-colors`}>
+                  <div className={`w-8 h-8 rounded-full ${getAccentClasses('lightBg')} flex items-center justify-center ${getAccentClasses('text')} font-bold text-sm`}>
                     {props.userProfile ? `${props.userProfile.first_name.charAt(0)}${props.userProfile.last_name.charAt(0)}`.toUpperCase() : 'U'}
                   </div>
                 </button>
@@ -1399,10 +1399,10 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
             <div className="relative">
               <button 
                 onClick={() => setIsMessagesOpen(!isMessagesOpen)}
-                className={`relative p-2 text-gray-400 rounded-full transition-colors ${getAccentClasses('hoverLight')} ${isMessagesOpen ? 'bg-gray-100 dark:bg-gray-800' : ''} ${unreadMessagesCount > 0 && !isMessagesOpen ? 'animate-ring text-indigo-500 dark:text-indigo-400' : ''}`}
+                className={`relative p-2 rounded-full transition-colors ${getAccentClasses('hoverLight')} ${isMessagesOpen ? getAccentClasses('lightBg') : ''} ${unreadMessagesCount > 0 && !isMessagesOpen ? `animate-ring ${getAccentClasses('text')}` : ''}`}
               >
-                <MessageCircle className="w-5 h-5" />
-                {unreadMessagesCount > 0 && (
+                <MessageCircle className={`w-5 h-5 ${getAccentClasses('text')}`} />
+                {unreadMessagesCount > 0 && !isMessagesOpen && ( // Only show badge if not open
                   <span className="absolute top-0 right-0 flex items-center justify-center min-w-[18px] h-[18px] px-1 bg-red-500 text-white text-[9px] font-black rounded-full border-2 border-white dark:border-gray-900">
                     {unreadMessagesCount > 99 ? '99+' : unreadMessagesCount}
                   </span>
@@ -1413,9 +1413,9 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
             <div className="relative">
               <button 
                 onClick={() => setIsNotificationsOpen(!isNotificationsOpen)}
-                className={`relative p-2 text-gray-400 rounded-full transition-colors ${getAccentClasses('hoverLight')}`}
+                className={`relative p-2 rounded-full transition-colors ${getAccentClasses('hoverLight')}`}
               >
-                <Bell className="w-5 h-5" />
+                <Bell className={`w-5 h-5 ${getAccentClasses('text')}`} />
                 {((pendingRequests?.length || 0) + (pendingTransactions?.length || 0)) > 0 && (
                   <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-red-500 rounded-full border-2 border-white dark:border-gray-900"></span>
                 )}
@@ -1513,9 +1513,9 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
             <div className="relative ml-2 border-l border-gray-200 dark:border-gray-700 pl-4">
               <button 
                 onClick={() => setIsUserMenuOpen(!isUserMenuOpen)}
-                className="flex items-center space-x-2 p-1 pr-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 border border-transparent hover:border-gray-200 dark:hover:border-gray-700 transition-colors"
+                className={`flex items-center space-x-2 p-1 pr-2 rounded-full ${getAccentClasses('hoverLight')} border border-transparent hover:border-gray-200 dark:hover:border-gray-700 transition-colors`}
               >
-                <div className="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-600 font-bold text-sm">
+                <div className={`w-8 h-8 rounded-full ${getAccentClasses('lightBg')} flex items-center justify-center ${getAccentClasses('text')} font-bold text-sm`}>
                   {userProfile ? 
                     `${userProfile.first_name.charAt(0)}${userProfile.last_name.charAt(0)}`.toUpperCase() :
                     user?.email?.charAt(0).toUpperCase() || 'U'
