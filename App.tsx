@@ -48,6 +48,7 @@ import { useAccounts } from './src/hooks/useAccounts';
 import { useIncomingRequests, useUnreadMessagesCount, socialKeys } from './src/hooks/useBudies';
 import { SetupWizard } from './src/components/SetupWizard';
 import { Logo } from './src/components/Logo';
+import useMediaQuery from './src/hooks/useMediaQuery';
 import { MessagesInbox } from './src/components/MessagesInbox';
 
 // Helper function to convert UI Account to Supabase format
@@ -205,6 +206,7 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
   const [isScrolled, setIsScrolled] = useState(false);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+	const isMobile = useMediaQuery('(max-width: 767px)');
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
   const [isMessagesOpen, setIsMessagesOpen] = useState(false);
@@ -1225,6 +1227,12 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
           .animate-ring { animation: ring 2s ease-in-out infinite; }`}
         </style>
         <div className="flex h-[100dvh] bg-gray-100 dark:bg-gray-950 w-full overflow-hidden fixed inset-0 transition-colors duration-200">
+				{isSidebarOpen && isMobile && (
+        <div
+          className="fixed inset-0 bg-black/50 z-40 md:hidden"
+          onClick={() => setIsSidebarOpen(false)}
+        />
+      )}
         <aside className={`fixed inset-y-0 left-0 z-50 bg-gray-50 dark:bg-gray-900 transition-all duration-300 ease-in-out ${isSidebarOpen ? 'w-52' : 'hidden md:flex w-20'} overscroll-none ${
           isScrolled ? 'border-r-4 border-black shadow-[2px_0px_0px_0px_rgba(0,0,0,1)]' : 'border-r border-gray-200 dark:border-gray-800'
         }`}> 
@@ -1335,11 +1343,23 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
         <TestModeBanner sidebarOpen={isSidebarOpen} />
 
         {/* Top Navigation Bar - Reactive for Dashboard, Static for others */}
-        <header className={`fixed top-0 right-0 left-0 h-14 px-4 md:px-8 flex items-center justify-end transition-all duration-300 z-30 ${
-          isSidebarOpen ? 'md:ml-52' : 'md:ml-20'
+        <header className={`fixed top-0 right-0 left-0 h-14 px-4 md:px-8 flex items-center justify-between transition-all duration-300 z-30 ${
+          isSidebarOpen && !isMobile ? 'md:ml-52' : isMobile ? '' : 'md:ml-20'
         } ${
           isScrolled ? `${getAccentClasses('bg')} shadow-lg border-b-4 border-black` : 'bg-transparent border-transparent'
         }`}>
+          <div className="flex items-center space-x-2">
+            {isMobile && (
+              <button
+                onClick={() => setIsSidebarOpen(!isSidebarOpen)}
+                className={`relative p-2 -ml-2 border-[3px] border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] transition-all duration-200 -rotate-3 hover:rotate-0 hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none ${isScrolled ? 'bg-white' : getAccentClasses('bg')}`}>
+                <Menu className={`w-5 h-5 ${isScrolled ? getAccentClasses('text') : 'text-white'}`} />
+              </button>
+            )}
+          </div>
+
+          <div className="flex-1 md:hidden" />
+
           <div className="flex items-center space-x-2 md:space-x-4">
             {/* Messages */}
             <div className="relative">

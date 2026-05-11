@@ -7,6 +7,7 @@ This document unifies all parked ideas, feature enhancements, and architectural 
 ## ⏯️ Resumption Plan
 *Immediate next steps to finalize the UI transition.*
 
+- [ ] **Mobile Top Padding:** Add spacing between the subtitle and top bar on mobile for `Budgets`, `Billers`, `Installments`, `Accounts`, `Wallet`, `People`, and `Settings` pages to ensure visual consistency.
 - [ ] **Retro Sticker Login Page:** Update the `Auth.tsx` layout and elements to match the heavy pop-art aesthetic.
 - [ ] **Unified Modal Overhaul:** Apply thick borders, offset shadows, and retro styling to all action modals app-wide.
 
@@ -86,6 +87,7 @@ This document unifies all parked ideas, feature enhancements, and architectural 
 ## 🗄️ Archive / Completed
 *Completed tasks, features, and resolved bugs.*
 
+- [x] **Dashboard & Budget Page Responsiveness:** Overhauled the `Dashboard.tsx` and `Budget.tsx` pages to be fully responsive. Adjusted padding, made headers and controls stackable on mobile, and ensured a consistent, user-friendly layout across all screen sizes.
 - [x] **Visual Cohesion Refinement:** Harmonized sidebar and top-bar transitions during scroll (Continuous Frame approach) and refined shadow offsets for the retro sticker aesthetic.
 - [x] **Retro Sticker UI Foundation:** Implemented thick-border "sticker" icons with hard shadows and rotation for Page Headers and Nav Drawer.
 - [x] **Brand Voice Update:** Refreshed all page subtitles (Transactions, Billers, etc.) to align with the new Budee personality.
