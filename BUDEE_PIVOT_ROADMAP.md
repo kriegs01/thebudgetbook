@@ -21,20 +21,20 @@ This document unifies all parked ideas, feature enhancements, and architectural 
 ### ⭐ Key Initiatives
 *High-level goals for this phase.*
 
-- [ ] **Stash & Allowance Rework:** Transition the "Fixed" budget category into a more robust "Stash" system. This involves creating dedicated "Stash Wallets" that users can fund and draw from, replacing the legacy concept of monthly allowances.
+- [X] **Stash & Allowance Rework:** Transition the "Fixed" budget category into a more robust "Stash" system. This involves creating dedicated "Stash Wallets" that users can fund and draw from, replacing the legacy concept of monthly allowances.
 - [ ] **Multiplayer MVP:** Implement the foundational backend and frontend components for shared financial spaces. This is the first step towards social budgeting.
 - [ ] **UI Refresh:** Overhaul the visual identity of the app to be more modern, friendly, and visually engaging, moving away from the current minimalist aesthetic.
 
 ### ✨ Features & Enhancements
 *Specific, actionable items to be implemented.*
 
-- [ ] **Budget Setup:** Add a "Stash" category to the budget setup screen.
-- [ ] **Stash Wallets:** Create a new table for "Stash Wallets" with fields for `name`, `target_amount`, `current_balance`, and `user_id`.
-- [ ] **Friendship System:**
-    - [ ] Create a `friendships` table with columns for `user_id_1`, `user_id_2`, and `status` (e.g., 'pending', 'accepted').
-    - [ ] Develop a "People" page where users can send, accept, and reject friend requests.
-- [ ] **Transaction Tagging:**
-    - [ ] Add a `tagged_user_id` column to the `transactions` table.
+- [X] **Budget Setup:** Add a "Stash" category to the budget setup screen.
+- [X] **Stash Wallets:** Create a new table for "Stash Wallets" with fields for `name`, `target_amount`, `current_balance`, and `user_id`.
+- [X] **Friendship System:**
+    - [X] Create a `friendships` table with columns for `user_id_1`, `user_id_2`, and `status` (e.g., 'pending', 'accepted').
+    - [X] Develop a "People" page where users can send, accept, and reject friend requests.
+- [ ] **Transaction Tagging:**. [WHAT IS THIS FOR?]
+    - [X] Add a `tagged_user_id` column to the `transactions` table.
     - [ ] Allow users to tag a friend in a transaction.
 - [ ] **Shared Spaces:** 
     - [ ] Design a new "Shared Spaces" feature where users can create a group with friends.
@@ -53,7 +53,7 @@ This document unifies all parked ideas, feature enhancements, and architectural 
 ### ⭐ Key Initiatives
 - [ ] **Shared Budgets:** Allow users within a "Shared Space" to contribute to a unified budget.
 - [ ] **Activity Feed:** Create a social feed to show friends' financial activities (with privacy controls).
-- [ ] **Notifications:** Implement a notification system for friend requests, shared space invites, and transaction tags.
+- [X] **Notifications:** Implement a notification system for friend requests, shared space invites, and transaction tags.
 
 ### ✨ Features & Enhancements
 - [ ] **Shared Budget Setup:** Adapt the budget setup screen for shared spaces.
@@ -65,7 +65,7 @@ This document unifies all parked ideas, feature enhancements, and architectural 
 ## 🐛 Current Bugs
 *A prioritized list of bugs that are actively being worked on or are pending investigation.*
 
-*(No pending bugs!)*
+- [ ] Budget Setup page- Categories table are currently showing duplicate header labels "e.g. Stashes" 
 
 ---
 
