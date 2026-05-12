@@ -53,7 +53,9 @@ This document unifies all parked ideas, feature enhancements, and architectural 
 - [ ] **Shared Budget Setup:** Adapt the budget setup screen for shared spaces.
 - [ ] **Feed Component:** Build the UI for the social activity feed.
 - [ ] **Notification Panel:** Create a dropdown or page to display notifications.
-
+- [ ] ** PWA Enhancement- 
+    [ ]Add Reminders feature: add a reminder feature for sent and borrowed amounts from budee
+    
 ---
 
 ## 🐛 Current Bugs

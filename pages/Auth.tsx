@@ -1,6 +1,22 @@
 import React, { useState } from 'react';
-import { Lock, Mail, AlertCircle, Loader } from 'lucide-react';
+import { Lock, Mail, AlertCircle, Loader, ArrowLeft } from 'lucide-react';
 import { useAuth } from '../src/contexts/AuthContext';
+import { Logo } from '../src/components/Logo'; // Import the logo
+
+const AuthInput = ({ id, type, value, onChange, placeholder, icon: Icon, disabled }: any) => (
+  <div className="relative">
+    <input
+      id={id}
+      type={type}
+      value={value}
+      onChange={onChange}
+      placeholder={placeholder}
+      disabled={disabled}
+      className="w-full px-4 py-3 text-gray-800 bg-gray-100 border-2 border-gray-900 rounded-lg shadow-[3px_3px_0px_#000] focus:outline-none focus:ring-2 focus:ring-yellow-400 focus:bg-white transition-all"
+    />
+    {Icon && <Icon className="absolute top-1/2 right-4 -translate-y-1/2 w-5 h-5 text-gray-500" />}
+  </div>
+);
 
 const Auth: React.FC = () => {
   const [mode, setMode] = useState<'login' | 'signup' | 'reset'>('login');
@@ -15,35 +31,26 @@ const Auth: React.FC = () => {
 
   const { signIn, signUp, resetPassword } = useAuth();
 
-  const validateEmail = (email: string) => {
-    const re = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    return re.test(email);
-  };
-
-  const validatePassword = (password: string) => {
-    // At least 6 characters
-    return password.length >= 6;
-  };
+  const validateEmail = (email: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+  const validatePassword = (password: string) => password.length >= 6;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
     setSuccess('');
 
-    // Validation for reset mode
-    if (mode === 'reset') {
-      if (!validateEmail(email)) {
-        setError('Please enter a valid email address');
-        return;
-      }
+    if (!validateEmail(email)) {
+      return setError('Please enter a valid email address');
+    }
 
+    if (mode === 'reset') {
       setLoading(true);
       try {
         const { error } = await resetPassword(email);
         if (error) {
-          setError(error.message || 'Failed to send reset email. Please try again.');
+          setError(error.message || 'Failed to send reset email.');
         } else {
-          setSuccess('Password reset link has been sent to your email. Please check your inbox.');
+          setSuccess('Password reset link sent! Check your inbox.');
           setEmail('');
         }
       } catch (err: any) {
@@ -54,31 +61,16 @@ const Auth: React.FC = () => {
       return;
     }
 
-    // Validation for login/signup modes
-    if (!validateEmail(email)) {
-      setError('Please enter a valid email address');
-      return;
-    }
-
     if (!validatePassword(password)) {
-      setError('Password must be at least 6 characters long');
-      return;
+      return setError('Password must be at least 6 characters long');
     }
 
     if (mode === 'signup') {
-      if (!firstName.trim()) {
-        setError('Please enter your first name');
-        return;
+      if (!firstName.trim() || !lastName.trim()) {
+        return setError('Please enter your first and last name');
       }
-
-      if (!lastName.trim()) {
-        setError('Please enter your last name');
-        return;
-      }
-
       if (password !== confirmPassword) {
-        setError('Passwords do not match');
-        return;
+        return setError('Passwords do not match');
       }
     }
 
@@ -87,16 +79,13 @@ const Auth: React.FC = () => {
     try {
       if (mode === 'login') {
         const { error } = await signIn(email, password);
-        if (error) {
-          setError(error.message || 'Failed to sign in. Please check your credentials.');
-        }
+        if (error) setError(error.message || 'Failed to sign in.');
       } else {
         const { error } = await signUp(email, password, firstName, lastName);
         if (error) {
-          setError(error.message || 'Failed to sign up. Please try again.');
+          setError(error.message || 'Failed to sign up.');
         } else {
-          setSuccess('Account created successfully! Please check your email to verify your account.');
-          // Clear form
+          setSuccess('Account created! Check your email to verify.');
           setEmail('');
           setPassword('');
           setConfirmPassword('');
@@ -112,295 +101,91 @@ const Auth: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900 flex items-center justify-center p-4 transition-colors">
-      <style>
-        {`@import url('https://fonts.googleapis.com/css2?family=Titan+One&display=swap');
-        .font-titan { font-family: 'Titan One', cursive; font-weight: 400; letter-spacing: 1px; }`}
-      </style>
-      <div className="max-w-md w-full">
-        {/* Logo/Header */}
-        <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-16 h-16 bg-blue-600 rounded-2xl mb-4">
-            <Lock className="w-8 h-8 text-white" />
-          </div>
-          <h1 className="text-5xl md:text-6xl font-titan bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent mb-2 transition-colors">Budee</h1>
-          <p className="text-gray-600 dark:text-gray-400 transition-colors">
-            {mode === 'login' ? 'Sign in to your account' : mode === 'signup' ? 'Create your account' : 'Reset your password'}
+    <div className="min-h-screen bg-[#FCF6E8] font-sans flex items-center justify-center p-4">
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=Titan+One&display=swap');
+        .font-titan { font-family: 'Titan One', cursive; }
+      `}</style>
+      
+      <div className="max-w-sm w-full">
+        {/* Updated Logo Section */}
+        <div className="mb-8 flex flex-col items-center justify-center">
+            <div className="flex items-center justify-center">
+                <img src="/iconapp.png" alt="Budee Mascot" className="h-20 w-20 drop-shadow-lg transform rotate-[15deg] -mr-4 z-10" />
+                <Logo className="text-6xl" />
+            </div>
+          <p className="text-gray-600 mt-4">
+            {mode === 'login' ? 'Welcome back, bud!' : mode === 'signup' ? "Let's get you started!" : "No worries, we'll fix it!"}
           </p>
         </div>
 
-        {/* Auth Card */}
-        <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-xl p-8 dark:border dark:border-gray-800 transition-colors">
-          {/* Mode Toggle - Only show for login/signup */}
-          {mode !== 'reset' && (
-            <div className="flex bg-gray-100 dark:bg-gray-800 rounded-lg p-1 mb-6 transition-colors">
-              <button
-                type="button"
-                onClick={() => {
-                  setMode('login');
-                  setError('');
-                  setSuccess('');
-                }}
-                className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-all ${
-                  mode === 'login'
-                    ? 'bg-white text-blue-600 shadow-sm dark:bg-gray-700 dark:text-blue-400'
-                    : 'text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-200'
-                }`}
-              >
-                Login
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setMode('signup');
-                  setError('');
-                  setSuccess('');
-                }}
-                className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-all ${
-                  mode === 'signup'
-                    ? 'bg-white text-blue-600 shadow-sm dark:bg-gray-700 dark:text-blue-400'
-                    : 'text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-200'
-                }`}
-              >
-                Sign Up
-              </button>
-            </div>
-          )}
-
-          {/* Back to Login Link for Reset Mode */}
+        <div className="bg-white border-[3px] border-black rounded-2xl shadow-[8px_8px_0px_#000] p-8">
           {mode === 'reset' && (
-            <div className="mb-6">
-              <button
-                type="button"
-                onClick={() => {
-                  setMode('login');
-                  setError('');
-                  setSuccess('');
-                }}
-                className="text-sm text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 font-medium flex items-center transition-colors"
-              >
-                ← Back to Login
-              </button>
-            </div>
+            <button onClick={() => setMode('login')} className="text-sm text-[#4A90E2] hover:underline mb-4 flex items-center">
+              <ArrowLeft size={16} className="mr-1" /> Back to Login
+            </button>
           )}
 
-          {/* Error Message */}
           {error && (
-            <div className="mb-4 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800/30 rounded-lg flex items-start transition-colors">
-              <AlertCircle className="w-5 h-5 text-red-600 dark:text-red-400 mr-2 flex-shrink-0 mt-0.5" />
-              <p className="text-sm text-red-800 dark:text-red-400">{error}</p>
+            <div className="mb-4 p-3 bg-red-100 border-2 border-red-500 rounded-lg flex items-center">
+              <AlertCircle className="w-5 h-5 text-red-600 mr-2" />
+              <p className="text-sm text-red-800">{error}</p>
             </div>
           )}
 
-          {/* Success Message */}
           {success && (
-            <div className="mb-4 p-3 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800/30 rounded-lg transition-colors">
-              <p className="text-sm text-green-800 dark:text-green-400">{success}</p>
+            <div className="mb-4 p-3 bg-green-100 border-2 border-green-500 rounded-lg">
+              <p className="text-sm text-green-800">{success}</p>
             </div>
           )}
 
-          {/* Form */}
           <form onSubmit={handleSubmit} className="space-y-4">
-            {/* Reset Password Description */}
-            {mode === 'reset' && (
-              <div className="mb-4">
-                <p className="text-sm text-gray-600 dark:text-gray-400 transition-colors">
-                  Enter your email address and we'll send you a link to reset your password.
-                </p>
-              </div>
-            )}
-
-            {/* First Name Field (only for signup) */}
             {mode === 'signup' && (
-              <div>
-                <label htmlFor="firstName" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 transition-colors">
-                  First Name
-                </label>
-                <input
-                  id="firstName"
-                  type="text"
-                  value={firstName}
-                  onChange={(e) => setFirstName(e.target.value)}
-                  className="w-full px-4 py-3 border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 rounded-lg focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent transition-all"
-                  placeholder="John"
-                  required
-                  disabled={loading}
-                />
+              <div className="grid grid-cols-2 gap-4">
+                <AuthInput id="firstName" type="text" value={firstName} onChange={(e) => setFirstName(e.target.value)} placeholder="First Name" disabled={loading} />
+                <AuthInput id="lastName" type="text" value={lastName} onChange={(e) => setLastName(e.target.value)} placeholder="Last Name" disabled={loading} />
               </div>
             )}
+            
+            <AuthInput id="email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Email Address" icon={Mail} disabled={loading} />
 
-            {/* Last Name Field (only for signup) */}
-            {mode === 'signup' && (
-              <div>
-                <label htmlFor="lastName" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 transition-colors">
-                  Last Name
-                </label>
-                <input
-                  id="lastName"
-                  type="text"
-                  value={lastName}
-                  onChange={(e) => setLastName(e.target.value)}
-                  className="w-full px-4 py-3 border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 rounded-lg focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent transition-all"
-                  placeholder="Doe"
-                  required
-                  disabled={loading}
-                />
-              </div>
-            )}
-
-            {/* Email Field */}
-            <div>
-              <label htmlFor="email" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 transition-colors">
-                Email Address
-              </label>
-              <div className="relative">
-                <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400 dark:text-gray-500" />
-                <input
-                  id="email"
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  className="w-full pl-10 pr-4 py-3 border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 rounded-lg focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent transition-all"
-                  placeholder="you@example.com"
-                  required
-                  disabled={loading}
-                />
-              </div>
-            </div>
-
-            {/* Password Field */}
             {mode !== 'reset' && (
-              <div>
-                <label htmlFor="password" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 transition-colors">
-                  Password
-                </label>
-                <div className="relative">
-                  <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400 dark:text-gray-500" />
-                  <input
-                    id="password"
-                    type="password"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    className="w-full pl-10 pr-4 py-3 border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 rounded-lg focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent transition-all"
-                    placeholder="••••••••"
-                    required
-                    disabled={loading}
-                  />
-                </div>
+              <>
+                <AuthInput id="password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Password" icon={Lock} disabled={loading} />
                 {mode === 'signup' && (
-                  <p className="mt-1 text-xs text-gray-500 dark:text-gray-400 transition-colors">
-                    Must be at least 6 characters long
-                  </p>
+                  <AuthInput id="confirmPassword" type="password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} placeholder="Confirm Password" icon={Lock} disabled={loading} />
                 )}
-              </div>
+              </>
             )}
 
-            {/* Confirm Password Field (only for signup) */}
-            {mode === 'signup' && (
-              <div>
-                <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 transition-colors">
-                  Confirm Password
-                </label>
-                <div className="relative">
-                  <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400 dark:text-gray-500" />
-                  <input
-                    id="confirmPassword"
-                    type="password"
-                    value={confirmPassword}
-                    onChange={(e) => setConfirmPassword(e.target.value)}
-                    className="w-full pl-10 pr-4 py-3 border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 rounded-lg focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent transition-all"
-                    placeholder="••••••••"
-                    required
-                    disabled={loading}
-                  />
-                </div>
-              </div>
-            )}
-
-            {/* Submit Button */}
             <button
               type="submit"
               disabled={loading}
-              className="w-full bg-blue-600 text-white py-3 rounded-lg font-medium hover:bg-blue-700 focus:ring-4 focus:ring-blue-200 dark:focus:ring-blue-900 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
+              className={`w-full text-white py-3 rounded-lg font-bold shadow-[4px_4px_0px_#000] transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center text-lg ${loading ? 'bg-gray-400' : 'bg-[#4ECDC4] hover:bg-[#45B7D1] active:shadow-none active:translate-x-1 active:translate-y-1'}`}
             >
               {loading ? (
                 <>
                   <Loader className="w-5 h-5 mr-2 animate-spin" />
-                  {mode === 'login' ? 'Signing in...' : mode === 'signup' ? 'Creating account...' : 'Sending reset link...'}
+                  Please wait...
                 </>
               ) : (
-                <>{mode === 'login' ? 'Sign In' : mode === 'signup' ? 'Sign Up' : 'Send Reset Link'}</>
+                <>{mode === 'login' ? 'Sign In' : mode === 'signup' ? 'Create Account' : 'Send Reset Link'}</>
               )}
             </button>
           </form>
 
-          {/* Forgot Password Link (only for login mode) */}
           {mode === 'login' && (
-            <div className="mt-4 text-center">
-              <button
-                type="button"
-                onClick={() => {
-                  setMode('reset');
-                  setError('');
-                  setSuccess('');
-                }}
-                className="text-sm text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 font-medium transition-colors"
-              >
-                Forgot your password?
-              </button>
-            </div>
+            <p className="text-center text-sm mt-6">
+              No account? <button onClick={() => setMode('signup')} className="text-[#FF6B6B] font-bold hover:underline">Sign up!</button>
+              <span className="mx-2">·</span>
+              <button onClick={() => setMode('reset')} className="text-gray-500 hover:underline">Forgot password?</button>
+            </p>
           )}
-
-          {/* Additional Info */}
-          {mode === 'login' && (
-            <div className="mt-6 text-center">
-              <p className="text-sm text-gray-600 dark:text-gray-400 transition-colors">
-                Don't have an account?{' '}
-                <button
-                  type="button"
-                  onClick={() => setMode('signup')}
-                  className="text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 font-medium transition-colors"
-                >
-                  Sign up
-                </button>
-              </p>
-            </div>
+           {mode === 'signup' && (
+            <p className="text-center text-sm mt-6">
+              Already have an account? <button onClick={() => setMode('login')} className="text-[#4A90E2] font-bold hover:underline">Log in!</button>
+            </p>
           )}
-
-          {mode === 'signup' && (
-            <div className="mt-6 text-center">
-              <p className="text-sm text-gray-600 dark:text-gray-400 transition-colors">
-                Already have an account?{' '}
-                <button
-                  type="button"
-                  onClick={() => setMode('login')}
-                  className="text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 font-medium transition-colors"
-                >
-                  Sign in
-                </button>
-              </p>
-            </div>
-          )}
-
-          {mode === 'reset' && (
-            <div className="mt-6 text-center">
-              <p className="text-sm text-gray-600 dark:text-gray-400 transition-colors">
-                Remember your password?{' '}
-                <button
-                  type="button"
-                  onClick={() => setMode('login')}
-                  className="text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 font-medium transition-colors"
-                >
-                  Sign in
-                </button>
-              </p>
-            </div>
-          )}
-        </div>
-
-        {/* Footer */}
-        <div className="mt-8 text-center text-sm text-gray-500 dark:text-gray-500 transition-colors">
-          <p>Your personal finance data is secure and private</p>
         </div>
       </div>
     </div>

@@ -1166,12 +1166,14 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
     }
   };
 
-  if (showSplash) {
+    if (showSplash) {
     return (
-      <div className="fixed inset-0 z-[9999] flex flex-col items-center justify-center bg-gradient-to-br from-blue-100 via-gray-50 to-purple-100 dark:from-gray-950 dark:via-gray-900 dark:to-gray-950 transition-colors duration-300">
+      <div className="fixed inset-0 z-[9999] flex flex-col items-center justify-center bg-[#FCF6E8]">
         <style>
           {`@import url('https://fonts.googleapis.com/css2?family=Titan+One&display=swap');
+          @import url('https://fonts.googleapis.com/css2?family=Fredoka+One&display=swap');
           .font-titan { font-family: 'Titan One', cursive; font-weight: 400; letter-spacing: 1px; }
+          .font-brand { font-family: 'Fredoka One', cursive; }
           @keyframes squeeze-mascot {
             0% { transform: translateY(16px) rotate(15deg); }
             5% { transform: translateY(16px) rotate(15deg); }
@@ -1183,30 +1185,34 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
           }
           .animate-squeeze-mascot {
             animation: squeeze-mascot 1.8s ease-in-out forwards;
+          }
+          @keyframes flicker {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.6; }
+          }
+          .animate-flicker {
+            animation: flicker 1.5s ease-in-out infinite;
           }`}
         </style>
         <div className="text-center animate-in fade-in zoom-in duration-700">
-          <div className="w-24 h-24 bg-white dark:bg-gray-900 rounded-3xl shadow-2xl flex items-center justify-center mx-auto mb-8 relative overflow-hidden border border-gray-100 dark:border-gray-800">
-            <div className="absolute inset-0 bg-blue-50/50 dark:bg-blue-900/10 animate-pulse"></div>
-            <div className="w-10 h-10 border-4 border-blue-100 dark:border-gray-800 border-t-blue-600 dark:border-t-blue-500 rounded-full animate-spin relative z-10"></div>
-          </div>
           <div className="flex flex-row flex-nowrap justify-center items-center mb-6 active:scale-95 transition-transform">
             <img 
               src="/iconapp.png" 
               alt="Budee Mascot" 
-              className="w-24 h-24 md:w-32 md:h-32 drop-shadow-2xl z-10 -mr-10 md:-mr-12 rotate-[15deg] animate-squeeze-mascot hover:scale-105 hover:rotate-12 transition-all duration-300" 
+              className="w-24 h-24 md:w-32 md:h-32 drop-shadow-2xl z-10 -mr-10 md:-mr-12 rotate-[15deg] animate-squeeze-mascot" 
             />
             <div className="mt-2 md:mt-4">
               <Logo className="text-6xl md:text-8xl" />
             </div>
           </div>
-          <p className="text-gray-500 dark:text-gray-400 font-medium text-sm max-w-[260px] mx-auto leading-relaxed animate-pulse">
-            Loading your financial data and preparing your dashboard...
+          <p className="font-brand text-xl text-gray-600 tracking-wider animate-flicker">
+            Getting your budget ready...
           </p>
         </div>
       </div>
     );
   }
+
 
   return (
     <>
@@ -1536,7 +1542,7 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
 
         <div 
           ref={scrollContainerRef}
-          className="w-full flex-1 overflow-auto overscroll-none touch-pan-y pt-0 px-4 pb-4 md:px-8 md:pb-6" 
+          className="w-full flex-1 overflow-auto pt-0 px-4 pb-4 md:px-8 md:pb-6" 
           style={{ WebkitOverflowScrolling: 'touch' }}
         >
             <Routes>
