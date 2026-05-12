@@ -8,9 +8,8 @@ This document unifies all parked ideas, feature enhancements, and architectural 
 *Immediate next steps to finalize the UI transition.*
 
 - [ ] **Persist Budget view state in URL** to prevent reset on reload.
-- [ ] **Fix Budget Setup header padding**
-- [ ] **Mobile Top Padding:** Add spacing between the subtitle and top bar on mobile for \`Budgets\`, \`Billers\`, \`Installments\`, \`Accounts\`, \`Wallet\`, \`People\`, and \`Settings\` pages to ensure visual consistency.
-- [ ] **Retro Sticker Login Page:** Update the \`Auth.tsx\` layout and elements to match the heavy pop-art aesthetic.
+- [ ] **Mobile Top Padding:** Add spacing between the subtitle and top bar on mobile for `Budgets`, `Billers`, `Installments`, `Accounts`, `Wallet`, `People`, and `Settings` pages to ensure visual consistency. *(Note: Partially implemented; needs to be applied to all pages.)*
+- [ ] **Retro Sticker Login Page:** Update the `Auth.tsx` layout and elements to match the heavy pop-art aesthetic.
 - [ ] **Unified Modal Overhaul:** Apply thick borders, offset shadows, and retro styling to all action modals app-wide.
 
 ---
@@ -33,9 +32,9 @@ This document unifies all parked ideas, feature enhancements, and architectural 
 - [X] **Friendship System:**
     - [X] Create a `friendships` table with columns for `user_id_1`, `user_id_2`, and `status` (e.g., 'pending', 'accepted').
     - [X] Develop a "People" page where users can send, accept, and reject friend requests.
-- [ ] **Transaction Tagging:**. [WHAT IS THIS FOR?]
+- [x] **Transaction Tagging:**
     - [X] Add a `tagged_user_id` column to the `transactions` table.
-    - [ ] Allow users to tag a friend in a transaction.
+    - [x] Allow users to tag a friend in a transaction.
 - [ ] **Shared Spaces:** 
     - [ ] Design a new "Shared Spaces" feature where users can create a group with friends.
     - [ ] Implement a `spaces` table and a `space_members` pivot table.
@@ -62,16 +61,11 @@ This document unifies all parked ideas, feature enhancements, and architectural 
 
 ---
 
-## 🐛 Current Bugs
-*A prioritized list of bugs that are actively being worked on or are pending investigation.*
-
-- [ ] Budget Setup page- Categories table are currently showing duplicate header labels "e.g. Stashes" 
-
----
-
 ## 🗄️ Archive / Completed
 *Completed tasks, features, and resolved bugs.*
 
+- [x] **Budget Setup page - Categories table header duplication:** Fixed an issue where the headers in the budget categories table (e.g., "Stashes") were showing duplicate labels.
+- [x] **Fix Budget Setup header padding:** Adjusted padding on the Budget Setup screen for better visual alignment.
 - [x] **Stash & Allowance Rework:** Initial planning and data modeling for the "Stash" wallet system.
 - [x] **UI Refresh:** Initial design mockups and component library updates for the new retro-pop aesthetic.
 - [x] **Onboarding Flow:** Fix issue where the "People" feature toggle in the onboarding wizard was not being correctly saved, causing the feature to be disabled by default.
@@ -81,5 +75,5 @@ This document unifies all parked ideas, feature enhancements, and architectural 
 - [x] **Credit Account Statement:** Fixed issue where adding transactions dated exactly on the billing period end date causes them to be missing from the statement.
 - [x] **Transactions:** Fixed "Transfer to Friends" functionality which is currently not working.
 - [x] **Dashboard Debit Accounts:** Fixed issue where the debit accounts overview does not display the amount actually utilized/spent for each account.
-- [x] **Budget Setup Header:** Refactored the \`PageHeader\` component to conditionally hide the subtitle and reposition the back button for a cleaner layout on the setup screen.
-- [x] **\`Budget.tsx\` Syntax Errors:** Resolved a series of critical syntax errors (including missing exports and component closings) that were causing the Budget page to fail with a white screen.
+- [x] **Budget Setup Header:** Refactored the `PageHeader` component to conditionally hide the subtitle and reposition the back button for a cleaner layout on the setup screen.
+- [x] **`Budget.tsx` Syntax Errors:** Resolved a series of critical syntax errors (including missing exports and component closings) that were causing the Budget page to fail with a white screen.
