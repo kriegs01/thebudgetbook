@@ -7,6 +7,7 @@ This document unifies all parked ideas, feature enhancements, and architectural 
 ## ⏯️ Resumption Plan
 *Immediate next steps to finalize the UI transition.*
 
+- [ ] **Persist Budget view state in URL** to prevent reset on reload.
 - [ ] **Fix Budget Setup header padding**
 - [ ] **Mobile Top Padding:** Add spacing between the subtitle and top bar on mobile for \`Budgets\`, \`Billers\`, \`Installments\`, \`Accounts\`, \`Wallet\`, \`People\`, and \`Settings\` pages to ensure visual consistency.
 - [ ] **Retro Sticker Login Page:** Update the \`Auth.tsx\` layout and elements to match the heavy pop-art aesthetic.

@@ -2346,7 +2346,7 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
   const legacyMode = isLegacyBudget(selectedYear, selectedMonth);
 
   return (
-    <div className="space-y-8 animate-in slide-in-from-right-4 duration-500 pb-20 w-full">
+    <div className={`space-y-8 animate-in slide-in-from-right-4 duration-500 pb-20 w-full ${isMobile ? 'pt-10' : ''}`}>
       <div className="flex flex-col space-y-6">
         <PageHeader 
           title="Budget Setup"
