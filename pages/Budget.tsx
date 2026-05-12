@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { BudgetItem, Account, Biller, PaymentSchedule, CategorizedSetupItem, SavedBudgetSetup, BudgetCategory, Installment, Wallet } from '../types';
 import { Plus, Check, ChevronDown, Trash2, Save, FileText, Wallet as WalletIcon, ArrowRight, ArrowLeft, Upload, CheckCircle2, X, AlertTriangle, Info, Eye, ZoomIn, ZoomOut, Download, Archive, RotateCcw, Lock, List } from 'lucide-react';
@@ -14,9 +13,10 @@ import { getPaymentSchedulesByPeriod, recordPaymentViaTransaction } from '../src
 import { combineDateWithCurrentTime } from '../src/utils/dateUtils';
 import { getWalletsForCurrentUser } from '../src/services/walletsService';
 import { useTheme } from '../src/contexts/ThemeContext';
+import useMediaQuery from '../src/hooks/useMediaQuery';
 
 interface BudgetProps {
-  items: BudgetItem[];
+  items: BudgetItem[]; 
   accounts: Account[];
   billers: Biller[];
   categories: BudgetCategory[];
@@ -259,15 +259,17 @@ const PageHeader: React.FC<{
   backButton?: React.ReactNode;
 }> = ({ title, subtitle, icon, actions, backButton }) => {
   const { getAccentClasses } = useTheme();
-  
+  const isMobile = useMediaQuery('(max-width: 767px)');
+
   return (
-    <header className="pt-12 mb-12 flex flex-col md:flex-row md:items-end justify-between gap-6">
+    <header className={`${isMobile ? 'pt-4' : 'pt-12'} mb-12 flex flex-row items-center justify-between gap-6`}>
       <div className="flex-1">
         <div className="flex items-center gap-3 mb-[-6px] ml-1">
-          {backButton}
-          <p className="text-xl font-bold italic text-black/50 dark:text-gray-400 transition-colors duration-300">
-            {subtitle}
-          </p>
+          {!backButton && (
+            <p className="text-xl font-bold italic text-black/50 dark:text-gray-400 transition-colors duration-300">
+              {subtitle}
+            </p>
+          )}
         </div>
         <div className="relative inline-block mt-2">
           <div className="flex items-center gap-4">
@@ -279,8 +281,9 @@ const PageHeader: React.FC<{
           <div className={`absolute bottom-1 left-0 w-[110%] h-5 ${getAccentClasses('bg')} opacity-40 -z-0 -rotate-1 -translate-x-2 transition-colors duration-300`} />
         </div>
         <div className={`h-2 w-32 mt-4 bg-black dark:bg-white/20 transition-colors duration-300`} />
+        {backButton && <div className="mt-6">{backButton}</div>}
       </div>
-      {actions && <div className="flex items-center justify-end gap-3 mt-4 md:mt-0 w-full md:w-auto">{actions}</div>}
+      {actions && <div className="flex items-center justify-end gap-3">{actions}</div>}
     </header>
   );
 };
@@ -349,6 +352,7 @@ const calculateBudgetRemaining = (
 
 const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSetups, setSavedSetups, onUpdateBiller, onMoveToTrash, onReloadSetups, onReloadBillers, onUpdateInstallment, installments = [], onTransactionCreated, onTransactionDeleted, onArchiveBudget, onReopenBudget, userProfile }) => {
   const { getAccentClasses } = useTheme();
+  const isMobile = useMediaQuery('(max-width: 767px)');
   const [view, setView] = useState<'summary' | 'setup'>('summary');
   const [selectedMonth, setSelectedMonth] = useState(MONTHS[new Date().getMonth()]);
   const [selectedTiming, setSelectedTiming] = useState<'1/2' | '2/2'>('1/2');
@@ -2144,7 +2148,7 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
     };
 
     return (
-      <div className="space-y-8 animate-in fade-in duration-500 w-full">
+<div className={`space-y-8 animate-in fade-in duration-500 w-full max-w-7xl mx-auto ${isMobile ? 'pt-10' : ''}`}>
         <PageHeader 
           title="Budget"
           subtitle="Vibe check for the Month"
@@ -3877,7 +3881,7 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
       {confirmModal.show && <ConfirmDialog {...confirmModal} onClose={() => setConfirmModal(p => ({ ...p, show: false }))} />}
     </div>
   );
-};
+}
 
 const ConfirmDialog: React.FC<{ show: boolean; title: string; message: string; onConfirm: () => void; onClose: () => void }> = ({ title, message, onConfirm, onClose }) => (
   <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-in fade-in">
@@ -3894,5 +3898,4 @@ const ConfirmDialog: React.FC<{ show: boolean; title: string; message: string; o
     </div>
   </div>
 );
-
 export default Budget;
