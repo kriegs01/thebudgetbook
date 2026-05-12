@@ -60,7 +60,6 @@ This document unifies all parked ideas, feature enhancements, and architectural 
 *A prioritized list of bugs that are actively being worked on or are pending investigation.*
 
 - [ ] **Payment Schedule Generation:** When a biller's deactivation date is the first of the month, the schedule for the previous month is not correctly generated, causing the biller to disappear one month too early.
-- [ ] **PWA Routing Issue:** When added to the home screen, clicking links (e.g., to the Dashboard) opens a separate web view instead of navigating within the app. Closing the web view does not take the user to the intended page.
 - [ ] **Budget Setup Categories:** The table for categories is showing duplicate header labels (e.g., "Stashes").
 
 ---
@@ -68,6 +67,7 @@ This document unifies all parked ideas, feature enhancements, and architectural 
 ## 🗄️ Archive / Completed
 *Completed tasks, features, and resolved bugs.*
 
+- [x] **PWA Routing Issue:** When added to the home screen, clicking links (e.g., to the Dashboard) opens a separate web view instead of navigating within the app. Closing the web view does not take the user to the intended page.
 - [x] **Fix Budget Setup header padding:** Adjusted padding on the Budget Setup screen for better visual alignment.
 - [x] **Stash & Allowance Rework:** Initial planning and data modeling for the "Stash" wallet system.
 - [x] **UI Refresh:** Initial design mockups and component library updates for the new retro-pop aesthetic.
