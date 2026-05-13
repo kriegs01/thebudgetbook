@@ -661,8 +661,8 @@ export const PinProtectionProvider: React.FC<{ children: ReactNode }> = ({ child
       {pinData.session.standby_locked && (
          <div className="fixed inset-0 z-[9999] bg-[#FCF6E8] flex flex-col items-center justify-center p-4 animate-in fade-in duration-500">
           <style>{`
-            @import url('https://fonts.googleapis.com/css2?family=Fredoka+One&display=swap');
-            .font-brand { font-family: 'Fredoka One', cursive; }
+            @import url('https://fonts.googleapis.com/css2?family=Titan+One&display=swap');
+            .font-brand { font-family: 'Titan One', cursive; }
           `}</style>
           
           <div className="text-center mb-8">

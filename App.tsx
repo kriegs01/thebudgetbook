@@ -1171,9 +1171,8 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
       <div className="fixed inset-0 z-[9999] flex flex-col items-center justify-center bg-[#FCF6E8]">
         <style>
           {`@import url('https://fonts.googleapis.com/css2?family=Titan+One&display=swap');
-          @import url('https://fonts.googleapis.com/css2?family=Fredoka+One&display=swap');
           .font-titan { font-family: 'Titan One', cursive; font-weight: 400; letter-spacing: 1px; }
-          .font-brand { font-family: 'Fredoka One', cursive; }
+          .font-brand { font-family: 'Titan One', cursive; }
           @keyframes squeeze-mascot {
             0% { transform: translateY(16px) rotate(15deg); }
             5% { transform: translateY(16px) rotate(15deg); }

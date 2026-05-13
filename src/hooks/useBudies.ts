@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { getFriendships, getIncomingFriendRequests, acceptFriendRequest, removeFriendship } from '../services/friendshipsService';
+import { getFriendships, getIncomingRequests, acceptFriendRequest, removeFriendship } from '../services/friendshipsService';
 import { getUnreadMessagesCount } from '../services/messagesService';
 import { getAllPeople } from '../services/peopleService';
 import { supabase } from '../utils/supabaseClient';
@@ -21,10 +21,10 @@ export function useFriendships() {
     queryKey: socialKeys.friendships(),
     queryFn: async () => {
       const { data, error } = await getFriendships();
-      if (error) throw error;
-      return data || [];
+      if (error) throw new Error(error.message || 'Could not fetch friendships.');
+      return data || []; // Ensure we always return an array
     },
-    enabled: !!user,
+    enabled: !!user, // Only run if the user is authenticated
     staleTime: 1000 * 60 * 5, // Data is fresh for 5 minutes
   });
 }
@@ -49,9 +49,9 @@ export function useIncomingRequests() {
   return useQuery({
     queryKey: socialKeys.incomingRequests(),
     queryFn: async () => {
-      const { data, error } = await getIncomingFriendRequests();
-      if (error) throw error;
-      return data || [];
+        const { data, error } = await getIncomingRequests();
+        if (error) throw new Error(error.message || 'Could not fetch requests.');
+        return data || [];
     },
     enabled: !!user,
     refetchInterval: 1000 * 60, // Poll every minute for new requests

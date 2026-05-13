@@ -263,28 +263,34 @@ const PageHeader: React.FC<{
 
   return (
     <header className={`${isMobile ? 'pt-4' : 'pt-12'} mb-12 flex flex-row items-center justify-between gap-6`}>
-      <div className="flex-1">
-        <div className="flex items-center gap-3 mb-[-6px] ml-1">
-          {!backButton && (
-            <p className="text-xl font-bold italic text-black/50 dark:text-gray-400 transition-colors duration-300">
-              {subtitle}
-            </p>
-          )}
-        </div>
-        <div className="relative inline-block mt-2">
-          <div className="flex items-center gap-4">
-             {icon && <div className="z-10 shrink-0">{icon}</div>}
-             <h1 className="text-4xl md:text-6xl font-[950] uppercase tracking-tighter leading-none relative z-10 text-black dark:text-white transition-colors duration-300">
-              {title}
-            </h1>
-          </div>
-          <div className={`absolute bottom-1 left-0 w-[110%] h-5 ${getAccentClasses('bg')} opacity-40 -z-0 -rotate-1 -translate-x-2 transition-colors duration-300`} />
-        </div>
-        <div className={`h-2 w-32 mt-4 bg-black dark:bg-white/20 transition-colors duration-300`} />
-        {backButton && <div className="mt-6">{backButton}</div>}
+  <div className="flex-1">
+    {/* TITLE is now rendered first */}
+    <div className="relative inline-block">
+      <div className="flex items-center gap-4">
+         {icon && <div className="z-10 shrink-0">{icon}</div>}
+         <h1 className="text-4xl md:text-6xl font-[950] uppercase tracking-tighter leading-none relative z-10 text-black dark:text-white transition-colors duration-300">
+          {title}
+        </h1>
       </div>
-      {actions && <div className="flex items-center justify-end gap-3">{actions}</div>}
-    </header>
+      <div className={`absolute bottom-1 left-0 w-[110%] h-5 ${getAccentClasses('bg')} opacity-40 -z-0 -rotate-1 -translate-x-2 transition-colors duration-300`} />
+    </div>
+
+    {/* SUBTITLE is now rendered second */}
+    <div className="flex items-center gap-3 mt-1 ml-1">
+      {!backButton && (
+        <p className="text-xl font-bold italic text-black/50 dark:text-gray-400 transition-colors duration-300">
+          {subtitle}
+        </p>
+      )}
+    </div>
+
+    <div className={`h-2 w-32 mt-2 bg-black dark:bg-white/20 transition-colors duration-300`} />
+
+    {backButton && <div className="mt-6">{backButton}</div>}
+  </div>
+  {actions && <div className="flex items-center justify-end gap-3">{actions}</div>}
+</header>
+
   );
 };
 
@@ -2348,95 +2354,74 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
   return (
     <div className={`space-y-8 animate-in slide-in-from-right-4 duration-500 pb-20 w-full ${isMobile ? 'pt-10' : ''}`}>
       <div className="flex flex-col space-y-6">
+                                        <div className="flex flex-col">
+        {/* --- Header (Unchanged for both mobile and desktop) --- */}
         <PageHeader 
           title="Budget Setup"
-          subtitle={isReadOnly ? 'Archived — Read Only' : 'Configure Recurring Expenses'}
+          subtitle={isReadOnly ? 'Archived — Read Only' : 'Your Money-Pie for the month of:'}
           icon={
             <div className={`w-14 h-14 rounded-2xl flex items-center justify-center text-white border-[3px] border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] -rotate-3 transition-all hover:rotate-0 hover:scale-110 z-10 relative ${getAccentClasses('bg')}`}>
               <WalletIcon className="w-7 h-7" />
             </div>
           }
-          backButton={
-            <button onClick={() => setView('summary')} className={`flex items-center justify-center w-10 h-10 rounded-xl bg-gray-50 dark:bg-gray-800 text-gray-500 dark:text-gray-400 transition-all shrink-0 ${getAccentClasses('hoverLight')}`}>
-              <ArrowLeft className="w-5 h-5" />
-            </button>
-          }
-          actions={
+          // The actions prop is now handled below for desktop
+          actions={isMobile ? null : (
             <div className="flex items-center gap-3 flex-wrap justify-end">
-            {/* Autosave Status Indicator */}
-            {!isReadOnly && autoSaveStatus !== 'idle' && (
-              <div className="flex items-center space-x-2 text-xs font-bold mr-2">
-                {autoSaveStatus === 'saving' && (
-                  <>
-                    <div className="w-4 h-4 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
-                    <span className="text-black/50 dark:text-white/50">Saving...</span>
-                  </>
-                )}
-                {autoSaveStatus === 'saved' && <Check className="w-4 h-4 text-green-600" />}
-                {autoSaveStatus === 'error' && (
-                  <>
-                    <AlertTriangle className="w-4 h-4 text-red-600" />
-                    <span className="text-red-600">Error</span>
-                  </>
-                )}
-              </div>
-            )}
-            {currentSetup && isReadOnly && (
-              <PinProtectedAction featureId="budget_modifications" onVerified={() => handleReopenSetup(currentSetup)} actionLabel="Reopen Budget">
-                <button
-                  onClick={(e) => e.preventDefault()}
-                  disabled={archiveSubmitting}
-                  className="flex items-center gap-2 bg-indigo-50 text-indigo-700 px-5 py-3 rounded-xl font-bold text-sm hover:bg-indigo-100 transition-all disabled:opacity-50"
-                >
-                  <RotateCcw className="w-4 h-4" />
-                  <span className="hidden sm:inline">Reopen</span>
-                </button>
-              </PinProtectedAction>
-            )}
-            {currentSetup && !isReadOnly && (
-              <PinProtectedAction featureId="budget_modifications" onVerified={() => handleArchiveSetup(currentSetup)} actionLabel="Close Budget">
-                <button
-                  onClick={(e) => e.preventDefault()}
-                  disabled={archiveSubmitting}
-                  className="flex items-center gap-2 bg-amber-50 text-amber-700 px-5 py-3 rounded-xl font-bold text-sm hover:bg-amber-100 transition-all disabled:opacity-50"
-                >
-                  <Archive className="w-4 h-4" />
-                  <span className="hidden sm:inline">Close</span>
-                </button>
-              </PinProtectedAction>
-            )}
-            {!isReadOnly && (
-              <PinProtectedAction featureId="budget_modifications" onVerified={handleSaveSetup} actionLabel="Save Budget">
-                <button onClick={(e) => e.preventDefault()} className={`flex items-center gap-2 text-white px-5 py-3 rounded-xl font-bold transition-all shadow-md dark:shadow-none text-sm ${getAccentClasses('bg')} ${getAccentClasses('shadow')}`}>
-                  <Save className="w-4 h-4" />
-                  <span className="hidden sm:inline">Save</span>
-                </button>
-              </PinProtectedAction>
-            )}
+              {!isReadOnly && autoSaveStatus !== 'idle' && ( <div className="flex items-center space-x-2 text-xs font-bold mr-2"> {autoSaveStatus === 'saving' && (<><div className="w-4 h-4 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin"></div><span className="text-black/50 dark:text-white/50">Saving...</span></>)} {autoSaveStatus === 'saved' && <Check className="w-4 h-4 text-green-600" />} {autoSaveStatus === 'error' && (<><AlertTriangle className="w-4 h-4 text-red-600" /><span className="text-red-600">Error</span></>)} </div> )}
+              {currentSetup && isReadOnly && (<PinProtectedAction featureId="budget_modifications" onVerified={() => handleReopenSetup(currentSetup)} actionLabel="Reopen Budget"><button onClick={(e) => e.preventDefault()} disabled={archiveSubmitting} className="flex items-center gap-2 bg-indigo-50 text-indigo-700 px-5 py-3 rounded-xl font-bold text-sm hover:bg-indigo-100 transition-all disabled:opacity-50"><RotateCcw className="w-4 h-4" /><span className="hidden sm:inline">Reopen</span></button></PinProtectedAction>)}
+              {currentSetup && !isReadOnly && (<PinProtectedAction featureId="budget_modifications" onVerified={() => handleArchiveSetup(currentSetup)} actionLabel="Close Budget"><button onClick={(e) => e.preventDefault()} disabled={archiveSubmitting} className="flex items-center gap-2 bg-amber-50 text-amber-700 px-5 py-3 rounded-xl font-bold text-sm hover:bg-amber-100 transition-all disabled:opacity-50"><Archive className="w-4 h-4" /><span className="hidden sm:inline">Close</span></button></PinProtectedAction>)}
+              {!isReadOnly && (<PinProtectedAction featureId="budget_modifications" onVerified={handleSaveSetup} actionLabel="Save Budget"><button onClick={(e) => e.preventDefault()} className={`flex items-center gap-2 text-white px-5 py-3 rounded-xl font-bold transition-all shadow-md dark:shadow-none text-sm ${getAccentClasses('bg')} ${getAccentClasses('shadow')}`}><Save className="w-4 h-4" /><span className="hidden sm:inline">Save</span></button></PinProtectedAction>)}
             </div>
-          }
+          )}
         />
 
-        {/* Read-only banner for archived budgets */}
-        {isReadOnly && (
-          <div className="flex items-center space-x-3 bg-amber-50 border border-amber-200 rounded-2xl px-6 py-4">
-            <Lock className="w-5 h-5 text-amber-600 flex-shrink-0" />
-            <p className="text-sm font-bold text-amber-800">This budget is closed and archived. You can view it, but cannot make changes. Use <span className="font-black">Reopen</span> to edit it again.</p>
-          </div>
-        )}
+        {/* --- Control Bar (Responsive) --- */}
+        <div className="flex items-center justify-between w-full md:justify-center md:space-x-6 mt-[-1.5rem] md:mt-0 mb-6">
+            {/* Left: Back Button */}
+            <div className="flex-none">
+                <button onClick={() => setView('summary')} className={`flex items-center justify-center w-10 h-10 rounded-xl bg-gray-50 dark:bg-gray-800 text-gray-500 dark:text-gray-400 transition-all shrink-0 ${getAccentClasses('hoverLight')}`}>
+                    <ArrowLeft className="w-5 h-5" />
+                </button>
+            </div>
 
-        <div className="flex justify-center items-center space-x-6">
-          <select value={selectedMonth} onChange={(e) => setSelectedMonth(e.target.value)} disabled={isReadOnly} className={`bg-white dark:bg-gray-900 dark:border-gray-800 border border-gray-100 rounded-[1.5rem] px-8 py-4 font-black shadow-sm outline-none disabled:opacity-60 disabled:cursor-not-allowed transition-colors ${getAccentClasses('text')}`}>
-            {MONTHS.map(m => <option key={m} value={m}>{m}</option>)}
-          </select>
-          <select value={selectedTiming} onChange={(e) => setSelectedTiming(e.target.value as '1/2' | '2/2')} disabled={isReadOnly} className={`bg-white dark:bg-gray-900 dark:border-gray-800 border border-gray-100 rounded-[1.5rem] px-8 py-4 font-black shadow-sm outline-none disabled:opacity-60 disabled:cursor-not-allowed transition-colors ${getAccentClasses('text')}`}>
-            <option value="1/2">1/2</option>
-            <option value="2/2">2/2</option>
-          </select>
-          {legacyMode && (
-            <span className="text-[10px] font-black text-gray-400 dark:text-gray-500 bg-gray-100 dark:bg-gray-800 px-4 py-2 rounded-full uppercase tracking-widest">Legacy Budget</span>
-          )}
+            {/* Center: Dropdowns */}
+            <div className="flex-grow flex justify-center items-center space-x-2 md:flex-grow-0">
+                <select value={selectedMonth} onChange={(e) => setSelectedMonth(e.target.value)} disabled={isReadOnly} className={`bg-white dark:bg-gray-900 dark:border-gray-800 border border-gray-100 rounded-xl md:rounded-[1.5rem] h-10 md:h-auto px-3 md:px-8 md:py-4 font-bold md:font-black text-xs md:text-base shadow-sm outline-none disabled:opacity-60 disabled:cursor-not-allowed transition-colors text-center appearance-none ${getAccentClasses('text')}`}>
+                    {MONTHS.map(m => <option key={m} value={m}>{m}</option>)}
+                </select>
+                <select value={selectedTiming} onChange={(e) => setSelectedTiming(e.target.value as '1/2' | '2/2')} disabled={isReadOnly} className={`bg-white dark:bg-gray-900 dark:border-gray-800 border border-gray-100 rounded-xl md:rounded-[1.5rem] h-10 md:h-auto px-3 md:px-8 md:py-4 font-bold md:font-black text-xs md:text-base shadow-sm outline-none disabled:opacity-60 disabled:cursor-not-allowed transition-colors ${getAccentClasses('text')}`}>
+                    <option value="1/2">1/2</option>
+                    <option value="2/2">2/2</option>
+                </select>
+                {legacyMode && (
+                  <span className="hidden md:block text-[10px] font-black text-gray-400 dark:text-gray-500 bg-gray-100 dark:bg-gray-800 px-4 py-2 rounded-full uppercase tracking-widest">Legacy Budget</span>
+                )}
+            </div>
+
+            {/* Right: Actions (Mobile Only) */}
+            <div className="flex-none flex items-center gap-2 md:hidden">
+              {currentSetup && !isReadOnly && (
+                <PinProtectedAction featureId="budget_modifications" onVerified={() => handleArchiveSetup(currentSetup)} actionLabel="Close Budget">
+                  <button onClick={(e) => e.preventDefault()} disabled={archiveSubmitting} className="flex items-center justify-center w-10 h-10 rounded-xl bg-amber-50 text-amber-700 hover:bg-amber-100 transition-all disabled:opacity-50" aria-label="Close">
+                    <Archive className="w-4 h-4" />
+                  </button>
+                </PinProtectedAction>
+              )}
+              {!isReadOnly && (
+                <PinProtectedAction featureId="budget_modifications" onVerified={handleSaveSetup} actionLabel="Save Budget">
+                  <button onClick={(e) => e.preventDefault()} className={`flex items-center justify-center w-10 h-10 rounded-xl text-white shadow-md dark:shadow-none ${getAccentClasses('bg')} ${getAccentClasses('shadow')}`} aria-label="Save">
+                    <Save className="w-4 h-4" />
+                  </button>
+                </PinProtectedAction>
+              )}
+            </div>
         </div>
+      </div>
+
+
+
+
+
       </div>
 
       {/* Budget Summary and Month Summary side-by-side */}
@@ -2591,7 +2576,6 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
         <div className="bg-white dark:bg-gray-900 rounded-[3rem] shadow-sm border border-gray-100 dark:border-gray-800 overflow-hidden w-full transition-colors">
           <div className="px-8 py-5 border-b border-gray-50 dark:border-gray-800/50 bg-gray-50/30 dark:bg-gray-800/30 flex justify-between items-center transition-colors">
             <h3 className="text-xs font-black text-gray-900 dark:text-gray-100 uppercase tracking-[0.25em]">Stash</h3>
-            <h3 className="text-sm font-bold text-gray-900 dark:text-gray-100 uppercase tracking-[0.2em]">Stash</h3>
             <div className="flex items-center space-x-3">
               {stashStatusMsg && (
                 <span className={`text-xs font-bold px-3 py-1 rounded-xl ${stashStatusMsg.type === 'success' ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'}`}>
@@ -2704,7 +2688,6 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
               <div className="px-8 py-5 border-b border-gray-50 dark:border-gray-800/50 bg-gray-50/30 dark:bg-gray-800/30 flex justify-between items-center transition-colors">
                 <div className="flex items-center space-x-2">
                   <h3 className="text-xs font-black text-gray-900 dark:text-gray-100 uppercase tracking-[0.25em]">{cat.name}</h3>
-                  <h3 className="text-sm font-bold text-gray-900 dark:text-gray-100 uppercase tracking-[0.2em]">{cat.name}</h3>
                   {(cat.flexiMode ?? true) && <span className="text-[9px] font-black text-green-600 bg-green-50 border border-green-200 dark:bg-green-900/30 dark:border-green-800/50 dark:text-green-400 px-2 py-0.5 rounded-full uppercase tracking-wider">Flexi</span>}
                   {isLegacyCategory && <span className="text-[9px] font-black text-amber-600 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full uppercase tracking-wider" aria-label="Legacy category — use Stash for new savings/allowance items" title="This category is legacy. Use Stash for new savings/allowance items.">Legacy</span>}
                 </div>
@@ -2857,7 +2840,6 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
               <div className="px-8 py-5 border-b border-gray-50 dark:border-gray-800/50 bg-gray-50/30 dark:bg-gray-800/30 flex justify-between items-center transition-colors">
                 <div className="flex items-center space-x-2">
                   <h3 className="text-xs font-black text-gray-900 dark:text-gray-100 uppercase tracking-[0.25em]">{cat.name}</h3>
-                  <h3 className="text-sm font-bold text-gray-900 dark:text-gray-100 uppercase tracking-[0.2em]">{cat.name}</h3>
                   {(cat.flexiMode ?? true) && <span className="text-[9px] font-black text-green-600 bg-green-50 border border-green-200 dark:bg-green-900/30 dark:border-green-800/50 dark:text-green-400 px-2 py-0.5 rounded-full uppercase tracking-wider">Flexi</span>}
                   {isLegacyCategory && <span className="text-[9px] font-black text-amber-600 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full uppercase tracking-wider">Legacy</span>}
                 </div>
@@ -3256,7 +3238,6 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                 <div className="px-8 py-5 border-b border-gray-50 dark:border-gray-800/50 bg-gray-50/30 dark:bg-gray-800/30 flex justify-between items-center transition-colors">
                   <div>
                     <h3 className="text-xs font-black text-gray-900 dark:text-gray-100 uppercase tracking-[0.25em]">Credit Card Purchases</h3>
-                    <h3 className="text-sm font-bold text-gray-900 dark:text-gray-100 uppercase tracking-[0.2em]">Credit Card Purchases</h3>
                     <p className="text-[10px] text-gray-500 font-medium mt-1">{account.bank} • {relevantCycle.cycleLabel}</p>
                   </div>
                   <span className="text-lg font-black text-purple-600">{formatCurrency(relevantCycle.totalAmount)}</span>

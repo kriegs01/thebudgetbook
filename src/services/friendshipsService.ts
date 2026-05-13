@@ -1,4 +1,4 @@
-import { supabase } from './supabaseClient';
+import { supabase } from '../utils/supabaseClient';
 
 // Helper to get current user ID safely
 const getCurrentUserId = async () => {
@@ -10,6 +10,25 @@ const getCurrentUserId = async () => {
     return null;
   }
   return user.id;
+};
+
+export const searchUsers = async (query: string) => {
+  const userId = await getCurrentUserId();
+  if (!userId) return { data: [], error: null };
+
+  const { data, error } = await supabase
+    .from('user_profiles')
+    .select('*')
+    .or(`username.ilike.%${query}%,email.ilike.%${query}%`)
+    .neq('user_id', userId) // Exclude self
+    .limit(10);
+
+  if (error) {
+    console.error('Error searching users:', error);
+    return { data: null, error };
+  }
+
+  return { data, error: null };
 };
 
 export const getFriendships = async () => {
