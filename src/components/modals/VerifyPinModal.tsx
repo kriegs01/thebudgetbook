@@ -2,6 +2,37 @@ import React, { useState, useEffect } from 'react';
 import { X, Eye, EyeOff, Lock, AlertTriangle } from 'lucide-react';
 import { usePinProtection } from '../../hooks/usePinProtection';
 
+const PasswordShapes = ({ password }) => {
+    const colors = ['#4ECDC4', '#FF6B6B', '#FBBF24']; // Teal, Magenta, Yellow
+    const shapes = [
+      // Circle
+      <svg width="20" height="20" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <circle cx="8" cy="8" r="6" stroke="currentColor" strokeWidth="2"/>
+      </svg>,
+      // Triangle
+      <svg width="20" height="20" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M8 2L1 14H15L8 2Z" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" strokeLinecap="round"/>
+      </svg>,
+      // Square
+      <svg width="20" height="20" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <rect x="2" y="2" width="12" height="12" rx="2" stroke="currentColor" strokeWidth="2"/>
+      </svg>
+    ];
+  
+    return (
+      <div className="flex items-center space-x-2" aria-hidden="true">
+        {password.split('').map((_, index) => {
+          const Shape = React.cloneElement(shapes[index % shapes.length], { key: index });
+          return (
+            <span key={index} style={{ color: colors[index % colors.length] }}>
+              {Shape}
+            </span>
+          );
+        })}
+      </div>
+    );
+  };
+
 interface VerifyPinModalProps {
   show: boolean;
   onClose: () => void;
@@ -152,6 +183,11 @@ export const VerifyPinModal: React.FC<VerifyPinModalProps> = ({
                 PIN Code
               </label>
               <div className="relative">
+                {!showPin && pin && (
+                  <div className="absolute inset-0 z-10 flex items-center justify-center pointer-events-none">
+                    <PasswordShapes password={pin} />
+                  </div>
+                )}
                 <input
                   type={showPin ? 'text' : 'password'}
                   value={pin}
@@ -162,10 +198,10 @@ export const VerifyPinModal: React.FC<VerifyPinModalProps> = ({
                       setError('');
                     }
                   }}
-                  placeholder="••••"
+                  placeholder={pin ? '' : '••••'}
                   maxLength={6}
                   autoFocus
-                  className="w-full bg-gray-50 dark:bg-gray-800 border-2 border-gray-200 dark:border-gray-700 text-gray-900 dark:text-gray-100 rounded-2xl p-4 text-2xl text-center font-bold tracking-widest outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors"
+                  className={`w-full bg-gray-50 dark:bg-gray-800 border-2 border-gray-200 dark:border-gray-700 rounded-2xl p-4 text-2xl text-center font-bold outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors ${!showPin && pin ? 'text-transparent tracking-widest caret-transparent' : 'tracking-widest text-gray-900 dark:text-gray-100'}`}
                 />
                 <button
                   type="button"

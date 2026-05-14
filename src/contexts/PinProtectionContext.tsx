@@ -3,6 +3,37 @@ import { supabase } from '../utils/supabaseClient';
 import { updateUserProfile, getUserProfile } from '../services/userProfileService';
 import { Lock } from 'lucide-react';
 
+const PasswordShapes = ({ password }) => {
+  const colors = ['#4ECDC4', '#FF6B6B', '#FBBF24']; // Teal, Magenta, Yellow
+  const shapes = [
+    // Circle
+    <svg width="20" height="20" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <circle cx="8" cy="8" r="6" stroke="currentColor" strokeWidth="2"/>
+    </svg>,
+    // Triangle
+    <svg width="20" height="20" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <path d="M8 2L1 14H15L8 2Z" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" strokeLinecap="round"/>
+    </svg>,
+    // Square
+    <svg width="20" height="20" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <rect x="2" y="2" width="12" height="12" rx="2" stroke="currentColor" strokeWidth="2"/>
+    </svg>
+  ];
+
+  return (
+    <div className="flex items-center space-x-2" aria-hidden="true">
+      {password.split('').map((_, index) => {
+        const Shape = React.cloneElement(shapes[index % shapes.length], { key: index });
+        return (
+          <span key={index} style={{ color: colors[index % colors.length] }}>
+            {Shape}
+          </span>
+        );
+      })}
+    </div>
+  );
+};
+
 interface PinProtectionSettings {
   session_timeout: number; // minutes
   max_attempts: number;
@@ -680,15 +711,22 @@ export const PinProtectionProvider: React.FC<{ children: ReactNode }> = ({ child
           
           <form onSubmit={handleStandbySubmit} className="w-full max-w-xs space-y-6">
             <div>
+              <div className="relative">
+                {standbyPin && (
+                  <div className="absolute inset-0 z-10 flex items-center justify-center pointer-events-none">
+                    <PasswordShapes password={standbyPin} />
+                  </div>
+                )}
               <input
                 type="password"
                 value={standbyPin}
                 onChange={(e) => { setStandbyPin(e.target.value); setStandbyError(false); }}
-                className={`w-full px-4 py-3 text-gray-800 bg-white border-2 border-gray-900 rounded-lg shadow-[3px_3px_0px_#000] focus:outline-none focus:ring-2 focus:ring-yellow-400 text-center text-3xl font-brand tracking-[0.5em] transition-all ${standbyError ? 'border-red-500 text-red-500' : 'text-gray-900'}`}
+                className={`w-full px-4 py-3 text-gray-800 bg-white border-2 border-gray-900 rounded-lg shadow-[3px_3px_0px_#000] focus:outline-none focus:ring-2 focus:ring-yellow-400 text-center text-3xl font-brand transition-all ${standbyError ? 'border-red-500' : ''} ${standbyPin ? 'text-transparent caret-transparent' : 'tracking-[0.5em]'}`}
                 placeholder="••••"
                 maxLength={6}
                 autoFocus
               />
+              </div>
               {standbyError && <p className="text-red-500 text-sm font-bold mt-3 text-center uppercase tracking-widest">Incorrect PIN</p>}
               {isLockedOut() && <p className="text-red-500 text-sm font-bold mt-3 text-center uppercase tracking-widest">Too many attempts. Try again later.</p>}
             </div>

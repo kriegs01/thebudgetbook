@@ -102,7 +102,7 @@ const supabaseToBiller = (supabaseBiller: any): Biller => ({
   activationDate: supabaseBiller.activation_date,
   deactivationDate: supabaseBiller.deactivation_c,
   status: supabaseBiller.status,
-  schedules: supabaseBiller.schedules,
+  schedules: biller.schedules,
 });
 
 // Helper function to convert UI Installment to Supabase format
@@ -857,7 +857,7 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
       );
 
       if (transactionError || !transaction) {
-        console.error('Failed to create transaction:', transactionError);
+        console.error('Error creating transaction:', transactionError);
         // Payment schedule was updated but transaction failed - not ideal but acceptable
         console.warn('[App] Payment schedule updated but transaction creation failed');
       } else {
@@ -1239,7 +1239,7 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
         />
       )}
         <aside className={`fixed inset-y-0 left-0 z-50 bg-gray-50 dark:bg-gray-900 transition-all duration-300 ease-in-out ${isSidebarOpen ? 'w-52' : 'hidden md:flex w-20'} overscroll-none ${
-          isScrolled ? 'border-r-4 border-black shadow-[2px_0px_0px_0px_rgba(0,0,0,1)]' : 'border-r border-gray-200 dark:border-gray-800'
+          isScrolled ? 'border-r border-gray-200 dark:border-gray-800' : 'border-none'
         }`}> 
           <div className="flex flex-col h-full">
             <div className={`flex items-center h-14 px-4 transition-all duration-300 ${isSidebarOpen ? 'justify-between' : 'justify-center'} ${
@@ -1357,7 +1357,7 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
             {isMobile && (
               <button
                 onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-                className={`relative p-2 -ml-2 border-[3px] border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] transition-all duration-200 -rotate-3 hover:rotate-0 hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none ${isScrolled ? 'bg-white' : getAccentClasses('bg')}`}>
+                className={`relative p-2 -ml-2 border-[3px] border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] transition-all duration-200 hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none ${isScrolled ? 'bg-white' : getAccentClasses('bg')}`}>
                 <Menu className={`w-5 h-5 ${isScrolled ? getAccentClasses('text') : 'text-white'}`} />
               </button>
             )}
@@ -1370,7 +1370,7 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
             <div className="relative">
               <button 
                 onClick={() => setIsMessagesOpen(!isMessagesOpen)}
-                className={`relative p-2 border-[3px] border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] transition-all duration-200 -rotate-2 hover:rotate-0 hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none ${isScrolled ? 'bg-white' : getAccentClasses('bg')} ${unreadMessagesCount > 0 && !isMessagesOpen ? 'animate-ring' : ''}`}
+                className={`relative p-2 border-[3px] border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] transition-all duration-200 hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none ${isScrolled ? 'bg-white' : getAccentClasses('bg')} ${unreadMessagesCount > 0 && !isMessagesOpen ? 'animate-ring' : ''}`}
               >
                 <MessageCircle className={`w-5 h-5 ${isScrolled ? getAccentClasses('text') : 'text-white'}`} />
                 {unreadMessagesCount > 0 && !isMessagesOpen && ( // Only show badge if not open
@@ -1384,8 +1384,7 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
             <div className="relative">
               <button 
                 onClick={() => setIsNotificationsOpen(!isNotificationsOpen)}
-                className={`relative p-2 border-[3px] border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] transition-all duration-200 rotate-3 hover:rotate-0 hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none ${isScrolled ? 'bg-white' : getAccentClasses('bg')}`}
-              >
+                className={`relative p-2 border-[3px] border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] transition-all duration-200 hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none ${isScrolled ? 'bg-white' : getAccentClasses('bg')}`}>
                 <Bell className={`w-5 h-5 ${isScrolled ? getAccentClasses('text') : 'text-white'}`} />
                 {((pendingRequests?.length || 0) + (pendingTransactions?.length || 0)) > 0 && (
                   <span className="absolute -top-1 -right-1 w-4 h-4 bg-yellow-300 border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] z-10"></span>
@@ -1484,9 +1483,9 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
             <div className="relative ml-2 border-l border-gray-200 dark:border-gray-700 pl-4">
               <button 
                 onClick={() => setIsUserMenuOpen(!isUserMenuOpen)}
-                className="flex items-center space-x-2 p-1 pr-2 border-[3px] border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] bg-white hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none transition-all duration-200"
+                className="relative flex items-center space-x-2 p-1 pr-2 border-[3px] border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] bg-white hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none transition-all duration-200"
               >
-                <div className={`w-8 h-8 border-2 border-black ${isScrolled ? getAccentClasses('bg') : 'bg-white text-black'} flex items-center justify-center text-white font-bold text-sm transition-colors`}>
+                <div className={`w-7 h-7 border-2 border-black ${isScrolled ? getAccentClasses('bg') : 'bg-white text-black'} flex items-center justify-center text-white font-bold text-sm transition-colors`}>
                   {userProfile ? 
                     `${userProfile.first_name.charAt(0)}${userProfile.last_name.charAt(0)}`.toUpperCase() :
                     user?.email?.charAt(0).toUpperCase() || 'U'

@@ -8,8 +8,8 @@ This document unifies all parked ideas, feature enhancements, and architectural 
 *Immediate next steps to finalize the UI transition.*
 
 - [ ] **Persist Budget view state in URL** to prevent reset on reload.
-- [ ] **Mobile Top Padding:** Add spacing between the subtitle and top bar on mobile for \`Billers\`, \`Installments\`, \`Accounts\`, \`Wallet\`, \`People\`, and \`Settings\` pages to ensure visual consistency. *(Note: Partially implemented; needs to be applied to all pages.)*
-- [ ] **Retro Sticker Login Page:** Update the \`Auth.tsx\` layout and elements to match the heavy pop-art aesthetic.
+- [ ] **Mobile Top Padding:** Add spacing between the subtitle and top bar on mobile for `Billers`, `Installments`, `Accounts`, `Wallet`, `People`, and `Settings` pages to ensure visual consistency. *(Note: Partially implemented; needs to be applied to all pages.)*
+- [ ] **Retro Sticker Login Page:** Update the `Auth.tsx` layout and elements to match the heavy pop-art aesthetic.
 - [ ] **Unified Modal Overhaul:** Apply thick borders, offset shadows, and retro styling to all action modals app-wide.
 
 ---
@@ -52,6 +52,8 @@ This document unifies all parked ideas, feature enhancements, and architectural 
 - [ ] **End-to-End Testing:** Implement initial end-to-end tests for critical user flows (e.g., login, budget creation, transaction logging).
 
 ### Medium Priority
+- [ ] **Smart Budget Creation:** Refactor the 'Open New' button logic on the Budget page to automatically select the next logical month and timing (1/2 or 2/2) based on the most recent existing budget setup. This will streamline the process of creating consecutive budget plans.
+- [ ] **Budget Setup Gallery:** Implement a "cover flow" style carousel for budget setups, where one item is centered and focused, and users can swipe to bring other budgets to the center stage.
 - [ ] **Offline Mode (PWA):**
   - [ ] Implement service workers for basic offline viewing of cached data.
   - [ ] Queue mutations (creates, updates, deletes) and sync when back online.
@@ -61,6 +63,9 @@ This document unifies all parked ideas, feature enhancements, and architectural 
 ---
 
 ## ✅ Done
+- [x] **Budget Setup Header Refinement:** Further improved the `PageHeader` component for visual consistency across all screen sizes.
+    - **Dynamic Highlight:** The decorative highlight is now dynamically sized to perfectly match the full width of the title and its accompanying icon.
+    - **Fluid Typography:** Implemented fluid font sizing for the title and subtitle, allowing them to scale smoothly with the viewport and preventing text from wrapping on smaller screens.
 - [x] **PWA Routing Issue:** When added to the home screen, clicking links (e.g., to the Dashboard) opens a separate web view instead of navigating within the app. Closing the web view does not take the user to the intended page.
 - [x] **Fix Budget Setup header padding:** Adjusted padding on the Budget Setup screen for better visual alignment.
 - [x] **Stash & Allowance Rework:** Initial planning and data modeling for the "Stash" wallet system.
@@ -72,6 +77,10 @@ This document unifies all parked ideas, feature enhancements, and architectural 
 - [x] **Credit Account Statement:** Fixed issue where adding transactions dated exactly on the billing period end date causes them to be missing from the statement.
 - [x] **Transactions:** Fixed "Transfer to Friends" functionality which is currently not working.
 - [x] **Dashboard Debit Accounts:** Fixed issue where the debit accounts overview does not display the amount actually utilized/spent for each account.
-- [x] **Budget Setup Header:** Refactored the \`PageHeader\` component to conditionally hide the subtitle and reposition the back button for a cleaner layout on the setup screen.
-- [x] **\`Budget.tsx\` Syntax Errors:** Resolved a series of critical syntax errors (including missing exports and component closings) that were causing the Budget page to fail with a white screen.
+- [x] **Budget Setup Header:** Refactored the `PageHeader` component to conditionally hide the subtitle and reposition the back button for a cleaner layout on the setup screen.
+- [x] **`Budget.tsx` Syntax Errors:** Resolved a series of critical syntax errors (including missing exports and component closings) that were causing the Budget page to fail with a white screen.
 - [x] **Budget Page Header Refactor:** Swapped the position of the title and subtitle in the PageHeader component for better information hierarchy and adjusted layout spacing.
+- [x] **Budget Pay Button:** Fixed a bug where the "Pay" button was not appearing for manually added items in flexible budget categories (e.g., Utilities, Subscriptions).
+- [x] **UI Cleanup (Top Bar & Budget Setup):** Implemented a series of minor UI refinements for better visual consistency.
+    - **Top Bar:** Removed rotation effects from header buttons and corrected the user profile button's shadow and size for alignment.
+    - **Budget Setup Page:** Left-aligned the back button on desktop views to improve layout and control placement.

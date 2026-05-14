@@ -261,38 +261,72 @@ const PageHeader: React.FC<{
   const { getAccentClasses } = useTheme();
   const isMobile = useMediaQuery('(max-width: 767px)');
 
+  // Create a ref for the title's CONTAINER element
+  const titleContainerRef = useRef<HTMLDivElement>(null);
+  const [highlightWidth, setHighlightWidth] = useState(0);
+
+  // This effect will measure the width of the icon + title container
+  useEffect(() => {
+    const calculateWidth = () => {
+      if (titleContainerRef.current) {
+        setHighlightWidth(titleContainerRef.current.offsetWidth);
+      }
+    };
+
+    calculateWidth();
+    window.addEventListener('resize', calculateWidth);
+    return () => window.removeEventListener('resize', calculateWidth);
+  }, [title]); // Rerun if the title text changes
+
   return (
-    <header className={`${isMobile ? 'pt-4' : 'pt-12'} mb-12 flex flex-row items-center justify-between gap-6`}>
-  <div className="flex-1">
-    {/* TITLE is now rendered first */}
-    <div className="relative inline-block">
-      <div className="flex items-center gap-4">
-         {icon && <div className="z-10 shrink-0">{icon}</div>}
-         <h1 className="text-4xl md:text-6xl font-[950] uppercase tracking-tighter leading-none relative z-10 text-black dark:text-white transition-colors duration-300">
-          {title}
-        </h1>
-      </div>
-      <div className={`absolute bottom-1 left-0 w-[110%] h-5 ${getAccentClasses('bg')} opacity-40 -z-0 -rotate-1 -translate-x-2 transition-colors duration-300`} />
-    </div>
+    <header className={`${isMobile ? 'pt-8' : 'pt-12'} mb-12 flex flex-row items-center justify-between gap-6`}>
+        <div className="flex-1">
+            {/* Title container, which positions the highlight */}
+            <div className="relative inline-block">
+                <div
+                    ref={titleContainerRef} // Attach the ref to the container div
+                    className="flex items-center gap-4"
+                >
+                    {icon && <div className="z-10 shrink-0">{icon}</div>}
 
-    {/* SUBTITLE is now rendered second */}
-    <div className="flex items-center gap-3 mt-1 ml-1">
-      {!backButton && (
-        <p className="text-xl font-bold italic text-black/50 dark:text-gray-400 transition-colors duration-300">
-          {subtitle}
-        </p>
-      )}
-    </div>
+                    <h1
+                        className="text-[clamp(2rem,7.5vw,3.75rem)] font-[950] uppercase tracking-tighter leading-none relative z-10 text-black dark:text-white transition-colors duration-300"
 
-    <div className={`h-2 w-32 mt-2 bg-black dark:bg-white/20 transition-colors duration-300`} />
+                    >
+                        {title}
+                    </h1>
+                </div>
+                {/* The highlight's width is now set dynamically from the container's width */}
+                {highlightWidth > 0 && (
+                    <div
+                        className={`absolute bottom-1 left-0 h-5 ${getAccentClasses('bg')} opacity-40 -z-0 -rotate-1 -translate-x-2 transition-colors duration-300`}
+                        style={{ width: `${highlightWidth}px` }}
+                    />
+                )}
+            </div>
 
-    {backButton && <div className="mt-6">{backButton}</div>}
-  </div>
-  {actions && <div className="flex items-center justify-end gap-3">{actions}</div>}
-</header>
+            {/* Subtitle container (no longer used for measurement) */}
+            <div className="flex items-center gap-3 mt-1 ml-1">
+                {!backButton && (
+                    <p
+                        className="text-[clamp(1rem,3vw,1.25rem)] font-bold italic text-black/50 dark:text-gray-400 transition-colors duration-300"
 
+                    >
+                        {subtitle}
+                    </p>
+                )}
+            </div>
+
+            <div className={`h-2 w-32 mt-2 bg-black dark:bg-white/20 transition-colors duration-300`} />
+
+            {backButton && <div className="mt-6">{backButton}</div>}
+        </div>
+        {actions && <div className="flex items-center justify-end gap-3">{actions}</div>}
+    </header>
   );
 };
+
+
 
 /**
  * Calculates the remaining amount for a saved budget setup.
@@ -2164,7 +2198,8 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
             </div>
           }
           actions={
-            <button type="button" onClick={handleOpenNew} className={`flex items-center gap-2 text-white px-5 py-3 rounded-xl font-bold transition-all shadow-md dark:shadow-none text-sm ${getAccentClasses('bg')} ${getAccentClasses('shadow')}`}>
+            <button type="button" onClick={handleOpenNew} className={`flex items-center gap-2 text-white px-5 py-3 rounded-xl font-bold text-sm border-[3px] border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] transition-all duration-200 hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none ${getAccentClasses('bg')}`}>
+
               <Plus className="w-4 h-4" />
               <span className="hidden sm:inline">Open New</span>
             </button>
@@ -2375,10 +2410,10 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
           )}
         />
 
-        {/* --- Control Bar (Responsive) --- */}
-        <div className="flex items-center justify-between w-full md:justify-center md:space-x-6 mt-[-1.5rem] md:mt-0 mb-6">
+                {/* --- Control Bar (Responsive) --- */}
+        <div className="flex items-center justify-between w-full md:justify-center mt-[-1.5rem] md:mt-0 mb-6 md:relative">
             {/* Left: Back Button */}
-            <div className="flex-none">
+            <div className="flex-none md:absolute md:left-0 md:top-1/2 md:-translate-y-1/2">
                 <button onClick={() => setView('summary')} className={`flex items-center justify-center w-10 h-10 rounded-xl bg-gray-50 dark:bg-gray-800 text-gray-500 dark:text-gray-400 transition-all shrink-0 ${getAccentClasses('hoverLight')}`}>
                     <ArrowLeft className="w-5 h-5" />
                 </button>
@@ -2416,6 +2451,7 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
               )}
             </div>
         </div>
+
       </div>
 
 
@@ -2980,15 +3016,15 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                                   </>
                                 )
                               )}
-                              {/* Add Pay button or checkmark for Purchases category items that are not billers */}
-                              {!isBiller && cat.name === 'Purchases' && item.name !== 'New Item' && parseFloat(item.amount) > 0 && (
+                                                            {/* Add Pay button or checkmark for manually-added items in flexi categories */}
+                              {!isBiller && (cat.flexiMode ?? true) && item.name !== 'New Item' && parseFloat(item.amount) > 0 && (
                                 isPaid ? (
                                   <>
                                     <CheckCircle2 className="w-4 h-4 text-green-500" aria-label="Payment completed" title="Paid" />
                                     <button onClick={() => { const tx = findExistingTransaction(item.name, item.amount, selectedMonth); if (tx) openDirectPaymentModal(tx, `${item.name} - ${selectedMonth}`); }} title="View payment records" className="text-gray-400 hover:text-indigo-600 transition-colors rounded-full p-1 hover:bg-indigo-50"><Info className="w-3.5 h-3.5" /></button>
                                   </>
                                 ) : !isReadOnly ? (
-                                  <button 
+                                  <button
                                     onClick={() => {
                                       setTransactionFormData({
                                         id: '',
@@ -3006,6 +3042,7 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                                   </button>
                                 ) : null
                               )}
+
                               {!isReadOnly && <button onClick={() => handleSetupToggle(cat.name, item.id)} className={`w-8 h-8 rounded-xl border-2 transition-all flex items-center justify-center ${item.included ? 'bg-indigo-600 border-indigo-600 text-white' : 'border-gray-200'}`}><Check className="w-4 h-4" /></button>}
                             </div>
                           </td>
