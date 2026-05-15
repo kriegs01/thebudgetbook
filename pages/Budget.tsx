@@ -1,3 +1,7 @@
+// pages/Budget.tsx - (Line ~4)
+import { useSearchParams } from 'react-router-dom';
+// pages/Budget.tsx - (Line ~4)
+import { useNavigate } from 'react-router-dom';
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { BudgetItem, Account, Biller, PaymentSchedule, CategorizedSetupItem, SavedBudgetSetup, BudgetCategory, Installment, Wallet } from '../types';
 import { Plus, Check, ChevronDown, Trash2, Save, FileText, Wallet as WalletIcon, ArrowRight, ArrowLeft, Upload, CheckCircle2, X, AlertTriangle, Info, Eye, ZoomIn, ZoomOut, Download, Archive, RotateCcw, Lock, List } from 'lucide-react';
@@ -397,6 +401,45 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
   const [selectedMonth, setSelectedMonth] = useState(MONTHS[new Date().getMonth()]);
   const [selectedTiming, setSelectedTiming] = useState<'1/2' | '2/2'>('1/2');
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear()); // REFACTOR: Track budget year for accurate payment schedule loading
+
+  // pages/Budget.tsx - (Inside the Budget component, after the existing useState hooks)
+
+  const [searchParams, setSearchParams] = useSearchParams();
+  const navigate = useNavigate();
+
+  // On initial load, set the view state from URL params
+  useEffect(() => {
+    const viewParam = searchParams.get('view');
+    const monthParam = searchParams.get('month');
+    const yearParam = searchParams.get('year');
+    const timingParam = searchParams.get('timing');
+
+    if (viewParam === 'setup') {
+      if (monthParam) setSelectedMonth(monthParam);
+      if (yearParam) setSelectedYear(parseInt(yearParam, 10));
+      if (timingParam === '1/2' || timingParam === '2/2') setSelectedTiming(timingParam);
+      
+      // Directly transition to setup view if specified in URL
+      setView('setup');
+    }
+  }, []); // Run only once on component mount
+  // pages/Budget.tsx - (After the previous useEffect)
+
+  // When view state changes, update the URL search params
+  useEffect(() => {
+    const params = new URLSearchParams();
+    if (view === 'setup') {
+      params.set('view', 'setup');
+      params.set('month', selectedMonth);
+      params.set('year', String(selectedYear));
+      params.set('timing', selectedTiming);
+      navigate(`?${params.toString()}`, { replace: true });
+    } else {
+      // Clear params when returning to summary view
+      navigate('', { replace: true });
+    }
+  }, [view, selectedMonth, selectedYear, selectedTiming, navigate]);
+
 
   // Categorized Setup State
   const [setupData, setSetupData] = useState<{ [key: string]: CategorizedSetupItem[] }>({});

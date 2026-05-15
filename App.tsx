@@ -235,6 +235,13 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
     return () => container?.removeEventListener('scroll', handleScroll);
   }, [isDashboard, showSplash]);
 
+  // Global scroll-to-top on page change
+  useEffect(() => {
+    if (scrollContainerRef.current) {
+      scrollContainerRef.current.scrollTop = 0;
+    }
+  }, [location.pathname]);
+
   const loadNotifications = async () => {
     const { data: pTxs } = await getPendingTransactions();
     if (pTxs) setPendingTransactions(pTxs);

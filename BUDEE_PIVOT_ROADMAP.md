@@ -34,6 +34,9 @@ This document unifies all parked ideas, feature enhancements, and architectural 
 - [ ] **Group Stash (Shared Wallets):**
   - [ ] Enable creation of shared "Stash" wallets for group savings goals.
   - [ ] Track contributions from each member.
+- [ ] **Goals & Wishlists:**
+  - [ ] Allow users to create shareable wishlists with items (link, image, price).
+  - [ ] Mark items as "purchased" to automatically create a transaction.
 
 ### Low Priority
 - [ ] **Feed Activity:**
