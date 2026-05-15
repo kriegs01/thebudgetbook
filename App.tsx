@@ -1287,6 +1287,11 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
                   <NavLink
                     key={item.id}
                     to={item.path}
+                    onClick={() => {
+                      if (isMobile) {
+                        setIsSidebarOpen(false);
+                      }
+                    }}
                     className={({ isActive }) =>
                       `w-full flex items-center p-2 rounded-xl transition-colors group ${
                         isActive ? 'bg-black/5 dark:bg-white/5' : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800/50'
@@ -1326,6 +1331,11 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
           <div className="p-3 border-t border-gray-100 dark:border-gray-800 transition-colors">
             <NavLink
               to="/settings"
+              onClick={() => {
+                if (isMobile) {
+                  setIsSidebarOpen(false);
+                }
+              }}
               className={({ isActive }) =>
                 `w-full flex items-center p-2 rounded-xl transition-colors group ${
                   isActive ? 'bg-black/5 dark:bg-white/5' : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800/50'

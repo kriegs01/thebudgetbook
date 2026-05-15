@@ -228,7 +228,16 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ transactions, loadi
   const [filterEndDate, setFilterEndDate] = useState<string>(getLastDayOfCurrentYearIso());
   const [filterPaymentMethods, setFilterPaymentMethods] = useState<Set<string>>(new Set());
   const [showPaymentMethodDropdown, setShowPaymentMethodDropdown] = useState(false);
+  const [isFiltersOpen, setIsFiltersOpen] = useState(true);
   const pmDropdownRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (isMobile) {
+      setIsFiltersOpen(false);
+    } else {
+      setIsFiltersOpen(true);
+    }
+  }, [isMobile]);
 
   // ── Select / batch-delete state ───────────────────────────────────────────
   const [isSelectMode, setIsSelectMode] = useState(false);
@@ -700,346 +709,313 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ transactions, loadi
         : `${filterPaymentMethods.size} selected`;
 
   return (
-<div className="min-h-screen bg-gray-50 dark:bg-gray-950 transition-colors duration-200 pt-8">
-      <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
-        {/* ── Header & Controllers ───────────────────────────────────────── */}
-        <div ref={headerRef}>
-          <PageHeader 
-            title="Transactions"
-            subtitle="Keep tabs on your funds"
-            icon={
-              <div className={`w-14 h-14 rounded-2xl flex items-center justify-center text-white border-[3px] border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] -rotate-3 transition-all hover:rotate-0 hover:scale-110 z-10 relative ${getAccentClasses('bg')}`}>
-                <FileText className="w-7 h-7" />
+    <>
+      <div className={`min-h-screen bg-gray-50 dark:bg-gray-950 transition-colors duration-200 overflow-x-hidden ${isMobile ? 'pt-10' : 'pt-8'}`}>
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 w-full">
+          {/* ── Header & Controllers ───────────────────────────────────────── */}
+          <div ref={headerRef}>
+            <PageHeader 
+              title="Transactions"
+              subtitle="Keep tabs on your funds"
+              icon={
+                <div className={`w-14 h-14 rounded-2xl flex items-center justify-center text-white border-[3px] border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] -rotate-3 transition-all hover:rotate-0 hover:scale-110 z-10 relative ${getAccentClasses('bg')}`}>
+                  <FileText className="w-7 h-7" />
+                </div>
+              }
+              actions={
+                !isMobile && (
+                  <button onClick={() => setShowTypeModal(true)} className={`flex items-center gap-2 text-white px-5 py-3 rounded-xl font-bold transition-all text-sm border-[3px] border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[2px] hover:translate-y-[2px] ${getAccentClasses('bg')}`}>
+                    <Plus className="w-4 h-4" />
+                    <span>Add Transaction</span>
+                  </button>
+                )
+              }
+            />
+          </div>
+
+          {/* ── Filter Bar ──────────────────────────────────────────────────── */}
+          <div className="bg-white dark:bg-gray-900 border-4 border-black rounded-2xl shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] mb-6">
+            <button
+              className="p-4 flex justify-between items-center w-full disabled:cursor-auto"
+              onClick={() => setIsFiltersOpen(p => !p)}
+              disabled={!isMobile}
+            >
+              <div className="flex items-center gap-3">
+                <Filter className="w-5 h-5 text-gray-400" />
+                <h3 className="text-sm font-bold uppercase text-gray-600 dark:text-gray-400 tracking-widest">
+                  Filters
+                </h3>
               </div>
-            }
-            actions={
-              <button onClick={() => setShowTypeModal(true)} className={`flex items-center gap-2 text-white px-5 py-3 rounded-xl font-bold transition-all text-sm border-[3px] border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[2px] hover:translate-y-[2px] ${getAccentClasses('bg')}`}>
-                <Plus className="w-4 h-4" />
-                <span className="hidden sm:inline">Add Transaction</span>
-              </button>
-            }
-          />
-        </div>
-
-        {/* ── Filter Bar ──────────────────────────────────────────────────── */}
-        <div className="bg-white dark:bg-gray-900 border-4 border-black rounded-2xl shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] p-4 mb-6">
-          <div className="flex flex-wrap items-end gap-3">
-            <Filter className="w-4 h-4 text-gray-400 self-center mb-1 shrink-0" />
-            <div className="flex flex-col gap-1">
-              <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Start Date</label>
-              <input
-                type="date"
-                value={filterStartDate}
-                min={FILTER_MIN_DATE}
-                max={filterEndDate}
-                onChange={e => setFilterStartDate(e.target.value)}
-                className={`bg-white dark:bg-gray-800 border-2 border-black dark:border-gray-700 rounded-xl px-3 py-2 text-sm font-bold outline-none focus:ring-offset-2 ${getAccentClasses('focus-ring')} transition-all`}
-              />
-            </div>
-            <div className="flex flex-col gap-1">
-              <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">End Date</label>
-              <input
-                type="date"
-                value={filterEndDate}
-                min={filterStartDate}
-                onChange={e => setFilterEndDate(e.target.value)}
-                className={`bg-white dark:bg-gray-800 border-2 border-black dark:border-gray-700 rounded-xl px-3 py-2 text-sm font-bold outline-none focus:ring-offset-2 ${getAccentClasses('focus-ring')} transition-all`}
-              />
-            </div>
-            <div className="flex flex-col gap-1 relative" ref={pmDropdownRef}>
-              <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Payment Method</label>
-              <button
-                type="button"
-                onClick={() => setShowPaymentMethodDropdown(p => !p)}
-                className={`flex items-center gap-2 w-full justify-between bg-white dark:bg-gray-800 border-2 border-black dark:border-gray-700 rounded-xl px-3 py-2 text-sm font-bold outline-none focus:ring-offset-2 ${getAccentClasses('focus-ring')} transition-all`}
-              >
-                <span>{pmFilterLabel}</span>
-                <ChevronDown className="w-4 h-4 text-gray-400 shrink-0" />
-              </button>
-              {showPaymentMethodDropdown && (
-                <div className="absolute top-full left-0 mt-1 z-30 bg-white dark:bg-gray-900 rounded-xl shadow-lg border border-gray-100 dark:border-gray-800 min-w-[180px] py-2 transition-colors">
-                  {accounts.map(a => (
-                    <label key={a.id} className="flex items-center gap-2 px-4 py-2 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
-                      <input
-                        type="checkbox"
-                        checked={filterPaymentMethods.has(a.id)}
-                        onChange={() => togglePaymentMethodFilter(a.id)}
-                        className="rounded"
-                      />
-                      <span className="text-sm font-medium text-gray-700 dark:text-gray-300">{a.bank}</span>
-                    </label>
-                  ))}
-                  {accounts.length === 0 && (
-                    <p className="px-4 py-2 text-sm text-gray-400">No accounts</p>
-                  )}
-                </div>
+              {isMobile && (
+                <ChevronDown className={`w-6 h-6 text-gray-400 transition-transform ${isFiltersOpen ? 'rotate-180' : ''}`} />
               )}
-            </div>
-            <button
-              type="button"
-              onClick={() => { setFilterStartDate(''); setFilterEndDate(''); }}
-              className={`self-end px-4 py-2.5 text-xs font-bold rounded-xl border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] transition-all hover:shadow-none hover:translate-x-[0.5px] hover:translate-y-[0.5px] ${getAccentClasses('bg')} text-white`}
-            >
-              All Time
             </button>
-            <button
-              type="button"
-              onClick={resetFilters}
-              className="self-end px-4 py-2.5 text-xs font-bold rounded-xl border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] transition-all hover:shadow-none hover:translate-x-[0.5px] hover:translate-y-[0.5px] bg-black text-white"
-            >
-              Reset
-            </button>
-          </div>
-        </div>
 
-        {/* ── Total Spend Dashboard ────────────────────────────────────────── */}
-        <div className="mb-6">
-          <div className={`${getAccentClasses('bg')} border-4 border-black rounded-2xl shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] p-5 text-white`}>
-            <p className="text-xs font-black uppercase tracking-widest text-indigo-200 mb-1">Total Spend</p>
-            <p className="text-3xl font-black">{formatCurrency(totalSpend)}</p>
-            <p className="text-xs text-indigo-300 mt-1">Based on current filter · {filteredTransactions.length} transaction{filteredTransactions.length !== 1 ? 's' : ''}</p>
-          </div>
-        </div>
-
-        <div className="bg-white dark:bg-gray-900 border-4 border-black rounded-2xl shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] overflow-hidden transition-colors">
-          <div className="px-6 py-4 border-b-4 border-black flex items-center justify-between transition-colors">
-            <h2 className="text-sm font-bold uppercase text-gray-600 dark:text-gray-400 tracking-widest">All transactions</h2>
-            <div className="flex items-center gap-2">
-              <div className="text-sm text-gray-500">{filteredTransactions.length} items</div>
-              {/* Batch delete trash icon — shown only when ≥1 selected */}
-              {isSelectMode && selectedIds.size > 0 && (
-                <button
-                  onClick={() => setShowBatchConfirm(true)}
-                  title="Delete selected"
-                  aria-label="Delete selected transactions"
-                  className="flex items-center gap-1 px-3 py-1.5 bg-red-500 hover:bg-red-600 text-white text-xs font-bold rounded-lg border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] transition-all hover:shadow-none hover:translate-x-[0.5px] hover:translate-y-[0.5px]"
-                >
-                  <Trash2 className="w-4 h-4" />
-                  <span>{selectedIds.size}</span>
-                </button>
-              )}
-              {/* Select toggle */}
-              <button
-                onClick={toggleSelectMode}
-                title={isSelectMode ? 'Cancel selection' : 'Select transactions'}
-                aria-label={isSelectMode ? 'Cancel selection' : 'Select transactions'}
-                className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-lg border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] transition-all hover:shadow-none hover:translate-x-[0.5px] hover:translate-y-[0.5px] ${isSelectMode ? 'bg-black text-white' : getAccentClasses('bg') + ' text-white'}`}>
-                {isSelectMode ? <CheckSquare className="w-4 h-4" /> : <Square className="w-4 h-4" />}
-                <span>Select</span>
-              </button>
-            </div>
-          </div>
-
-          <div className="overflow-x-auto">
-            <div className="p-4">
-              {isLoading || loading ? (
-                <div className="text-center py-8 text-gray-500">Loading transactions...</div>
-              ) : (
-                <TransactionList
-                  transactions={filteredTransactions}
-                  accounts={accounts}
-                  isSelectMode={isSelectMode}
-                  selectedIds={selectedIds}
-                  onToggleId={toggleId}
-                  onSelectAll={toggleAllVisible}
-                  allVisibleSelected={allVisibleSelected}
-                  onViewDetails={setSelectedTx}
-                  onEdit={openEditForm}
-                  onDelete={removeTx}
-                />
-              )}
-              {filteredTransactions.length === 0 && !isLoading && (
-                   <div className="text-center py-16 px-6 bg-gray-50 dark:bg-gray-800/50 rounded-2xl border-2 border-dashed border-gray-300 dark:border-gray-700">
-                      <FileText className="w-12 h-12 mx-auto text-gray-300 dark:text-gray-600" />
-                      <p className="font-bold mt-4 text-gray-800 dark:text-gray-200">No transactions found</p>
-                      <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">There are no transactions for the selected date range and payment methods.</p>
-                  </div>
-              )}
-            </div>
-          </div>
-        </div>
-
-        {/* QA: Consistent Transaction Form - with receipt upload, exclude credit accounts */}
-        {showForm && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-black/60 backdrop-blur-md">
-          <div className="w-full max-w-md bg-white dark:bg-gray-900 border-4 border-black rounded-2xl shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] p-6 md:p-8 relative transition-all -rotate-1 max-h-[95vh] overflow-y-auto">
-            {formSource === 'top' && !editingTxId && (
-              <button 
-                onClick={() => { setShowForm(false); setShowTypeModal(true); setFormSource(null); }} 
-                className="absolute left-4 top-4 md:left-6 md:top-6 p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full transition-colors"
-                aria-label="Back to type selection"
-              >
-                <ArrowLeft className="w-5 h-5 text-gray-400" />
-              </button>
-            )}
-            {(formSource === 'fab' || editingTxId) && (
-              <button 
-                onClick={closeForm} 
-                className="absolute right-4 top-4 md:right-6 md:top-6 p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full transition-colors"
-                aria-label="Close"
-              >
-                <X className="w-5 h-5 text-gray-400" />
-              </button>
-            )}
-            <h2 className={`text-xl md:text-2xl font-black text-gray-900 dark:text-gray-100 mb-1 ${formSource === 'top' && !editingTxId ? 'mt-8 md:mt-6' : ''}`}>
-            {editingTxId ? 'Edit Transaction' : 
-              form.transactionType === 'withdraw' ? 'Withdraw Funds' :
-              form.transactionType === 'cash_in' ? 'Cash In' :
-              form.transactionType === 'transfer' ? 'Transfer Funds' :
-              form.transactionType === 'loan' ? 'Record Loan' :
-              `Add New ${TRANSACTION_TYPES.find(t => t.id === form.transactionType)?.label || 'Transaction'}`
-            }
-            </h2>
-          <p className="text-gray-500 text-xs md:text-sm mb-6">
-            {editingTxId ? 'Update the transaction details below' : 
-              form.transactionType === 'withdraw' ? 'Record an ATM withdrawal or cash out' :
-              form.transactionType === 'cash_in' ? 'Record incoming funds' :
-              form.transactionType === 'transfer' ? 'Move money between accounts' :
-              form.transactionType === 'loan' ? 'Record money lent out' :
-              'Record a payment transaction'
-            }
-          </p>
-              <form onSubmit={onSubmit} className="space-y-4 md:space-y-5">
-                {/* Conditional Name Field — Hide for Transfers since they auto-generate names */}
-                {(form.transactionType !== 'transfer' || editingTxId) && (
-                  <div>
-                <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">
-                  {['withdraw', 'cash_in', 'loan', 'transfer'].includes(form.transactionType) ? 'Label' : 'Name'}
-                </label>
-                    <input 
-                      value={form.name} 
-                      onChange={e => setForm(f => ({ ...f, name: e.target.value }))} 
-                      required 
-                  placeholder={
-                    form.transactionType === 'withdraw' ? 'e.g. ATM Withdrawal' :
-                    form.transactionType === 'cash_in' ? 'e.g. Salary, Deposit' :
-                    form.transactionType === 'loan' ? 'e.g. Loan to John' :
-                    'e.g. Groceries, Gas, etc.'
-                  }
-                  className={`w-full bg-white dark:bg-gray-800 border-2 border-black dark:border-gray-700 rounded-xl p-3.5 font-bold outline-none focus:ring-offset-2 ${getAccentClasses('ring')} transition-all text-sm`}
+            {isFiltersOpen && (
+              <div className="p-4 pt-2 sm:pt-4 border-t-4 sm:border-t-0 border-black sm:border-transparent">
+                <div className="flex flex-col sm:flex-row sm:flex-wrap sm:items-end gap-3">
+                  <div className="flex flex-col gap-1">
+                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Start Date</label>
+                    <input
+                      type="date"
+                      value={filterStartDate}
+                      min={FILTER_MIN_DATE}
+                      max={filterEndDate}
+                      onChange={e => setFilterStartDate(e.target.value)}
+                      className={`bg-white dark:bg-gray-800 border-2 border-black dark:border-gray-700 rounded-xl px-3 py-2 text-sm font-bold outline-none focus:ring-offset-2 ${getAccentClasses('focus-ring')} transition-all`}
                     />
                   </div>
-                )}
-
-                <div>
-                  <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Amount</label>
-                  <div className="relative">
-                    <span className="absolute left-4 top-1/2 -translate-y-1/2 font-bold text-gray-400">₱</span>
-                    <input 
-                      type="number" 
-                      step="0.01" 
-                      min="0"
-                      value={form.amount} 
-                      onChange={e => setForm(f => ({ ...f, amount: e.target.value }))} 
-                      required 
-                      className={`w-full bg-white dark:bg-gray-800 border-2 border-black dark:border-gray-700 rounded-xl p-3.5 pl-8 text-lg font-black outline-none focus:ring-offset-2 ${getAccentClasses('ring')} transition-all`}
+                  <div className="flex flex-col gap-1">
+                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">End Date</label>
+                    <input
+                      type="date"
+                      value={filterEndDate}
+                      min={filterStartDate}
+                      onChange={e => setFilterEndDate(e.target.value)}
+                      className={`bg-white dark:bg-gray-800 border-2 border-black dark:border-gray-700 rounded-xl px-3 py-2 text-sm font-bold outline-none focus:ring-offset-2 ${getAccentClasses('focus-ring')} transition-all`}
                     />
                   </div>
-                </div>
-
-                {form.transactionType === 'transfer' && !editingTxId ? (
-                  <>
-                    {/* Tab Selector */}
-                    <div className={`flex p-1 bg-gray-200 dark:bg-gray-800 rounded-xl mb-4 mt-2 border-2 border-black`}>
-                      <button
-                        type="button"
-                        onClick={() => setTransferTab('accounts')}
-                        className={`flex-1 flex items-center justify-center gap-2 py-2.5 px-3 rounded-lg text-xs md:text-sm font-bold transition-all ${transferTab === 'accounts' ? `bg-white dark:bg-gray-900 border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] ${getAccentClasses('text')}` : 'text-gray-500'}`}>
-                        <ArrowLeftRight className="w-4 h-4" />
-                        <span>My Accounts</span>
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setTransferTab('friends')}
-                        className={`flex-1 flex items-center justify-center gap-2 py-2.5 px-3 rounded-lg text-xs md:text-sm font-bold transition-all ${transferTab === 'friends' ? `bg-white dark:bg-gray-900 border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] ${getAccentClasses('text')}` : 'text-gray-500'}`}>
-                        <User className="w-4 h-4" />
-                        <span>Friends</span>
-                      </button>
-                    </div>
-
-                    {/* TAB 1: MY ACCOUNTS */}
-                    {transferTab === 'accounts' && (
-                      <div className="space-y-4 md:space-y-5 animate-in fade-in slide-in-from-left-4 duration-300">
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 relative">
-                          {/* Swap Accounts Button */}
-                          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 mt-0 sm:mt-3 flex items-center justify-center pointer-events-none z-10">
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setForm(f => {
-                                  const newFrom = f.transferToAccountId || accounts.find(a => a.type !== 'Credit' && a.id !== f.paymentMethodId)?.id || f.paymentMethodId;
-                                  return {
-                                    ...f,
-                                    paymentMethodId: newFrom,
-                                    transferToAccountId: f.paymentMethodId
-                                  };
-                                });
-                              }}
-                              className={`pointer-events-auto w-10 h-10 rounded-full bg-white dark:bg-gray-700 border-4 border-white dark:border-gray-900 flex items-center justify-center text-gray-500 transition-all shadow-sm ${getAccentClasses('hoverLight')}`}
-                              title="Swap accounts"
-                            >
-                              <ArrowLeftRight className="w-4 h-4 rotate-90 sm:rotate-0" />
-                            </button>
-                          </div>
-                          <div>
-                            <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Transfer From</label>
-                            {accounts.length === 0 ? (
-                              <div className="text-xs text-red-600 p-4">No accounts available</div>
-                            ) : (
-                              <select 
-                                value={form.paymentMethodId} 
-                                onChange={e => setForm(f => ({ ...f, paymentMethodId: e.target.value }))} 
-                                className={`w-full min-w-0 bg-white dark:bg-gray-800 border-2 border-black dark:border-gray-700 rounded-xl p-3.5 font-bold text-sm appearance-none outline-none focus:ring-offset-2 ${getAccentClasses('ring')}`}>
-                                {accounts.filter(a => a.type !== 'Credit').map(a => <option key={a.id} value={a.id}>{a.bank}</option>)}
-                              </select>
-                            )}
-                          </div>
-                          <div>
-                            <label className={`block text-[10px] font-black ${getAccentClasses('text')} uppercase tracking-widest mb-2`}>Transfer To</label>
-                            <select 
-                              value={form.transferToAccountId} 
-                              onChange={e => setForm(f => ({ ...f, transferToAccountId: e.target.value }))} 
-                              className={`w-full min-w-0 bg-white dark:bg-gray-800 border-2 ${getAccentClasses('border')} rounded-xl p-3.5 font-bold text-sm appearance-none outline-none focus:ring-offset-2 ${getAccentClasses('ring')}`}>
-                              <option value="">Select Destination</option>
-                              {accounts.filter(a => a.id !== form.paymentMethodId && a.type !== 'Credit').map(a => (
-                                <option key={a.id} value={a.id}>{a.bank}</option>
-                              ))}
-                            </select>
-                          </div>
-                        </div>
-                        <div>
-                          <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Transfer Fee (Optional)</label>
-                          <div className="relative mb-4">
-                            <span className="absolute left-4 top-1/2 -translate-y-1/2 font-bold text-gray-400">₱</span>
+                  <div className="flex flex-col gap-1 relative" ref={pmDropdownRef}>
+                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Payment Method</label>
+                    <button
+                      type="button"
+                      onClick={() => setShowPaymentMethodDropdown(p => !p)}
+                      className={`flex items-center gap-2 w-full justify-between bg-white dark:bg-gray-800 border-2 border-black dark:border-gray-700 rounded-xl px-3 py-2 text-sm font-bold outline-none focus:ring-offset-2 ${getAccentClasses('focus-ring')} transition-all`}
+                    >
+                      <span>{pmFilterLabel}</span>
+                      <ChevronDown className="w-4 h-4 text-gray-400 shrink-0" />
+                    </button>
+                    {showPaymentMethodDropdown && (
+                      <div className="absolute top-full left-0 mt-1 z-30 bg-white dark:bg-gray-900 rounded-xl shadow-lg border border-gray-100 dark:border-gray-800 min-w-[180px] py-2 transition-colors">
+                        {accounts.map(a => (
+                          <label key={a.id} className="flex items-center gap-2 px-4 py-2 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
                             <input
-                              type="number"
-                              step="0.01"
-                              min="0"
-                              value={form.feeAmount}
-                              onChange={e => setForm(f => ({ ...f, feeAmount: e.target.value }))}
-                              placeholder="0.00"
-                              className={`w-full bg-white dark:bg-gray-800 border-2 border-black dark:border-gray-700 rounded-xl p-3.5 pl-8 font-bold outline-none focus:ring-offset-2 ${getAccentClasses('ring')} transition-all text-sm`}
+                              type="checkbox"
+                              checked={filterPaymentMethods.has(a.id)}
+                              onChange={() => togglePaymentMethodFilter(a.id)}
+                              className="rounded"
                             />
-                          </div>
-                          <p className="text-[10px] text-gray-500 mt-[-10px] mb-4 font-medium">Logged as separate expense.</p>
-
-                          <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Date</label>
-                          <input 
-                            type="date" 
-                            value={form.date} 
-                            onChange={e => setForm(f => ({ ...f, date: e.target.value }))} 
-                            required 
-                            className={`w-full min-w-0 bg-white dark:bg-gray-800 border-2 border-black dark:border-gray-700 rounded-xl p-3.5 font-bold outline-none focus:ring-offset-2 ${getAccentClasses('ring')} transition-all text-sm`}
-                          />
-                        </div>
+                            <span className="text-sm font-medium text-gray-700 dark:text-gray-300">{a.bank}</span>
+                          </label>
+                        ))}
+                        {accounts.length === 0 && (
+                          <p className="px-4 py-2 text-sm text-gray-400">No accounts</p>
+                        )}
                       </div>
                     )}
-                    
-                    {/* TAB 2: FRIENDS */}
-                    {transferTab === 'friends' && (
-                      <div className="space-y-4 md:space-y-5 animate-in fade-in slide-in-from-right-4 duration-300">
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => { setFilterStartDate(''); setFilterEndDate(''); }}
+                    className={`self-end px-4 py-2.5 text-xs font-bold rounded-xl border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] transition-all hover:shadow-none hover:translate-x-[0.5px] hover:translate-y-[0.5px] ${getAccentClasses('bg')} text-white`}
+                  >
+                    All Time
+                  </button>
+                  <button
+                    type="button"
+                    onClick={resetFilters}
+                    className="self-end px-4 py-2.5 text-xs font-bold rounded-xl border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] transition-all hover:shadow-none hover:translate-x-[0.5px] hover:translate-y-[0.5px] bg-black text-white"
+                  >
+                    Reset
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* ── Total Spend Dashboard ────────────────────────────────────────── */}
+          <div className="mb-6 w-full">
+            <div className={`${getAccentClasses('bg')} border-4 border-black rounded-2xl shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] p-5 text-white w-full`}>
+              <p className="text-xs font-black uppercase tracking-widest text-indigo-200 mb-1">Total Spend</p>
+              <p className="text-3xl font-black">{formatCurrency(totalSpend)}</p>
+              <p className="text-xs text-indigo-300 mt-1">Based on current filter · {filteredTransactions.length} transaction{filteredTransactions.length !== 1 ? 's' : ''}</p>
+            </div>
+          </div>
+
+          <div className="bg-white dark:bg-gray-900 border-4 border-black rounded-2xl shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] overflow-hidden transition-colors w-full max-w-full">
+            <div className="px-6 py-4 border-b-4 border-black flex items-center justify-between transition-colors">
+              <h2 className="text-sm font-bold uppercase text-gray-600 dark:text-gray-400 tracking-widest">All transactions</h2>
+              <div className="flex items-center gap-2">
+                <div className="text-sm text-gray-500">{filteredTransactions.length} items</div>
+                {/* Batch delete trash icon — shown only when ≥1 selected */}
+                {isSelectMode && selectedIds.size > 0 && (
+                  <button
+                    onClick={() => setShowBatchConfirm(true)}
+                    title="Delete selected"
+                    aria-label="Delete selected transactions"
+                    className="flex items-center gap-1 px-3 py-1.5 bg-red-500 hover:bg-red-600 text-white text-xs font-bold rounded-lg border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] transition-all hover:shadow-none hover:translate-x-[0.5px] hover:translate-y-[0.5px]"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                    <span>{selectedIds.size}</span>
+                  </button>
+                )}
+                {/* Select toggle */}
+                <button
+                  onClick={toggleSelectMode}
+                  title={isSelectMode ? 'Cancel selection' : 'Select transactions'}
+                  aria-label={isSelectMode ? 'Cancel selection' : 'Select transactions'}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-lg border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] transition-all hover:shadow-none hover:translate-x-[0.5px] hover:translate-y-[0.5px] ${isSelectMode ? 'bg-black text-white' : getAccentClasses('bg') + ' text-white'}`}>
+                  {isSelectMode ? <CheckSquare className="w-4 h-4" /> : <Square className="w-4 h-4" />}
+                  <span>Select</span>
+                </button>
+              </div>
+            </div>
+
+            <div className="w-full overflow-x-auto">
+              <div className="p-4">
+                {isLoading || loading ? (
+                  <div className="text-center py-8 text-gray-500">Loading transactions...</div>
+                ) : (
+                  <TransactionList
+                    transactions={filteredTransactions}
+                    accounts={accounts}
+                    isSelectMode={isSelectMode}
+                    selectedIds={selectedIds}
+                    onToggleId={toggleId}
+                    onSelectAll={toggleAllVisible}
+                    allVisibleSelected={allVisibleSelected}
+                    onViewDetails={setSelectedTx}
+                    onEdit={openEditForm}
+                    onDelete={removeTx}
+                  />
+                )}
+                {filteredTransactions.length === 0 && !isLoading && (
+                     <div className="text-center py-16 px-6 bg-gray-50 dark:bg-gray-800/50 rounded-2xl border-2 border-dashed border-gray-300 dark:border-gray-700">
+                        <FileText className="w-12 h-12 mx-auto text-gray-300 dark:text-gray-600" />
+                        <p className="font-bold mt-4 text-gray-800 dark:text-gray-200">No transactions found</p>
+                        <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">There are no transactions for the selected date range and payment methods.</p>
+                    </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* QA: Consistent Transaction Form - with receipt upload, exclude credit accounts */}
+      {showForm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-black/60 backdrop-blur-md">
+        <div className="w-full max-w-md bg-white dark:bg-gray-900 border-4 border-black rounded-2xl shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] p-6 md:p-8 relative transition-all -rotate-1 max-h-[95vh] overflow-y-auto">
+          {formSource === 'top' && !editingTxId && (
+            <button 
+              onClick={() => { setShowForm(false); setShowTypeModal(true); setFormSource(null); }} 
+              className="absolute left-4 top-4 md:left-6 md:top-6 p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full transition-colors"
+              aria-label="Back to type selection"
+            >
+              <ArrowLeft className="w-5 h-5 text-gray-400" />
+            </button>
+          )}
+          {(formSource === 'fab' || editingTxId) && (
+            <button 
+              onClick={closeForm} 
+              className="absolute right-4 top-4 md:right-6 md:top-6 p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full transition-colors"
+              aria-label="Close"
+            >
+              <X className="w-5 h-5 text-gray-400" />
+            </button>
+          )}
+          <h2 className={`text-xl md:text-2xl font-black text-gray-900 dark:text-gray-100 mb-1 ${formSource === 'top' && !editingTxId ? 'mt-8 md:mt-6' : ''}`}>
+          {editingTxId ? 'Edit Transaction' : 
+            form.transactionType === 'withdraw' ? 'Withdraw Funds' :
+            form.transactionType === 'cash_in' ? 'Cash In' :
+            form.transactionType === 'transfer' ? 'Transfer Funds' :
+            form.transactionType === 'loan' ? 'Record Loan' :
+            `Add New ${TRANSACTION_TYPES.find(t => t.id === form.transactionType)?.label || 'Transaction'}`
+          }
+          </h2>
+        <p className="text-gray-500 text-xs md:text-sm mb-6">
+          {editingTxId ? 'Update the transaction details below' : 
+            form.transactionType === 'withdraw' ? 'Record an ATM withdrawal or cash out' :
+            form.transactionType === 'cash_in' ? 'Record incoming funds' :
+            form.transactionType === 'transfer' ? 'Move money between accounts' :
+            form.transactionType === 'loan' ? 'Record money lent out' :
+            'Record a payment transaction'
+          }
+        </p>
+            <form onSubmit={onSubmit} className="space-y-4 md:space-y-5">
+              {/* Conditional Name Field — Hide for Transfers since they auto-generate names */}
+              {(form.transactionType !== 'transfer' || editingTxId) && (
+                <div>
+              <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">
+                {['withdraw', 'cash_in', 'loan', 'transfer'].includes(form.transactionType) ? 'Label' : 'Name'}
+              </label>
+                  <input 
+                    value={form.name} 
+                    onChange={e => setForm(f => ({ ...f, name: e.target.value }))} 
+                    required 
+                placeholder={
+                  form.transactionType === 'withdraw' ? 'e.g. ATM Withdrawal' :
+                  form.transactionType === 'cash_in' ? 'e.g. Salary, Deposit' :
+                  form.transactionType === 'loan' ? 'e.g. Loan to John' :
+                  'e.g. Groceries, Gas, etc.'
+                }
+                className={`w-full bg-white dark:bg-gray-800 border-2 border-black dark:border-gray-700 rounded-xl p-3.5 font-bold outline-none focus:ring-offset-2 ${getAccentClasses('ring')} transition-all text-sm`}
+                  />
+                </div>
+              )}
+
+              <div>
+                <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Amount</label>
+                <div className="relative">
+                  <span className="absolute left-4 top-1/2 -translate-y-1/2 font-bold text-gray-400">₱</span>
+                  <input 
+                    type="number" 
+                    step="0.01" 
+                    min="0"
+                    value={form.amount} 
+                    onChange={e => setForm(f => ({ ...f, amount: e.target.value }))} 
+                    required 
+                    className={`w-full bg-white dark:bg-gray-800 border-2 border-black dark:border-gray-700 rounded-xl p-3.5 pl-8 text-lg font-black outline-none focus:ring-offset-2 ${getAccentClasses('ring')} transition-all`}
+                  />
+                </div>
+              </div>
+
+              {form.transactionType === 'transfer' && !editingTxId ? (
+                <>
+                  {/* Tab Selector */}
+                  <div className={`flex p-1 bg-gray-200 dark:bg-gray-800 rounded-xl mb-4 mt-2 border-2 border-black`}>
+                    <button
+                      type="button"
+                      onClick={() => setTransferTab('accounts')}
+                      className={`flex-1 flex items-center justify-center gap-2 py-2.5 px-3 rounded-lg text-xs md:text-sm font-bold transition-all ${transferTab === 'accounts' ? `bg-white dark:bg-gray-900 border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] ${getAccentClasses('text')}` : 'text-gray-500'}`}>
+                      <ArrowLeftRight className="w-4 h-4" />
+                      <span>My Accounts</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setTransferTab('friends')}
+                      className={`flex-1 flex items-center justify-center gap-2 py-2.5 px-3 rounded-lg text-xs md:text-sm font-bold transition-all ${transferTab === 'friends' ? `bg-white dark:bg-gray-900 border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] ${getAccentClasses('text')}` : 'text-gray-500'}`}>
+                      <User className="w-4 h-4" />
+                      <span>Friends</span>
+                    </button>
+                  </div>
+
+                  {/* TAB 1: MY ACCOUNTS */}
+                  {transferTab === 'accounts' && (
+                    <div className="space-y-4 md:space-y-5 animate-in fade-in slide-in-from-left-4 duration-300">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 relative">
+                        {/* Swap Accounts Button */}
+                        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 mt-0 sm:mt-3 flex items-center justify-center pointer-events-none z-10">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setForm(f => {
+                                const newFrom = f.transferToAccountId || accounts.find(a => a.type !== 'Credit' && a.id !== f.paymentMethodId)?.id || f.paymentMethodId;
+                                return {
+                                  ...f,
+                                  paymentMethodId: newFrom,
+                                  transferToAccountId: f.paymentMethodId
+                                };
+                              });
+                            }}
+                            className={`pointer-events-auto w-10 h-10 rounded-full bg-white dark:bg-gray-700 border-4 border-white dark:border-gray-900 flex items-center justify-center text-gray-500 transition-all shadow-sm ${getAccentClasses('hoverLight')}`}
+                            title="Swap accounts"
+                          >
+                            <ArrowLeftRight className="w-4 h-4 rotate-90 sm:rotate-0" />
+                          </button>
+                        </div>
                         <div>
-                          <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">From Account</label>
+                          <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Transfer From</label>
                           {accounts.length === 0 ? (
                             <div className="text-xs text-red-600 p-4">No accounts available</div>
                           ) : (
@@ -1051,117 +1027,173 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ transactions, loadi
                             </select>
                           )}
                         </div>
-                        
                         <div>
-                          <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">To Who?</label>
-                          <ContactDropdown 
-                            contacts={selectableContacts}
-                            value={form.personName || ''} 
-                            onChange={val => setForm(f => ({ ...f, personName: val }))}
-                            placeholder="e.g. John Doe"
-                          />
-                        </div>
-
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                          <div>
-                            <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">For What? (Optional)</label>
-                            <input 
-                              value={form.name} 
-                              onChange={e => setForm(f => ({ ...f, name: e.target.value }))} 
-                              placeholder="e.g. Dinner" 
-                              className={`w-full bg-white dark:bg-gray-800 border-2 border-black dark:border-gray-700 rounded-xl p-3.5 font-bold outline-none focus:ring-offset-2 ${getAccentClasses('ring')} transition-all text-sm`}
-                            />
-                          </div>
-                          <div>
-                            <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Date</label>
-                            <input 
-                              type="date" 
-                              value={form.date} 
-                              onChange={e => setForm(f => ({ ...f, date: e.target.value }))} 
-                              required 
-                              className={`w-full bg-white dark:bg-gray-800 border-2 border-black dark:border-gray-700 rounded-xl p-3.5 font-bold outline-none focus:ring-offset-2 ${getAccentClasses('ring')} transition-all text-sm`}
-                            />
-                          </div>
+                          <label className={`block text-[10px] font-black ${getAccentClasses('text')} uppercase tracking-widest mb-2`}>Transfer To</label>
+                          <select 
+                            value={form.transferToAccountId} 
+                            onChange={e => setForm(f => ({ ...f, transferToAccountId: e.target.value }))} 
+                            className={`w-full min-w-0 bg-white dark:bg-gray-800 border-2 ${getAccentClasses('border')} rounded-xl p-3.5 font-bold text-sm appearance-none outline-none focus:ring-offset-2 ${getAccentClasses('ring')}`}>
+                            <option value="">Select Destination</option>
+                            {accounts.filter(a => a.id !== form.paymentMethodId && a.type !== 'Credit').map(a => (
+                              <option key={a.id} value={a.id}>{a.bank}</option>
+                            ))}
+                          </select>
                         </div>
                       </div>
-                    )}
-                  </>
-                ) : (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">
-                        {['withdraw', 'cash_in', 'loan', 'transfer'].includes(form.transactionType) ? 'Date' : 'Date Paid'}
-                      </label>
-                      <input 
-                        type="date" 
-                        value={form.date} 
-                        onChange={e => setForm(f => ({ ...f, date: e.target.value }))} 
-                        required 
-                        className={`w-full min-w-0 bg-white dark:bg-gray-800 border-2 border-black dark:border-gray-700 rounded-xl p-3.5 font-bold outline-none focus:ring-offset-2 ${getAccentClasses('ring')} transition-all text-sm`}
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">
-                        {['withdraw', 'cash_in', 'loan', 'transfer'].includes(form.transactionType) ? 'Account' : 'Payment Method'}
-                      </label>
-                      {accounts.length === 0 ? (
-                        <div className="text-xs text-red-600 p-4">No accounts available</div>
-                      ) : (
-                        <select 
-                          value={form.paymentMethodId} 
-                          onChange={e => setForm(f => ({ ...f, paymentMethodId: e.target.value }))} 
-                          className={`w-full min-w-0 bg-white dark:bg-gray-800 border-2 border-black dark:border-gray-700 rounded-xl p-3.5 font-bold text-sm appearance-none outline-none focus:ring-offset-2 ${getAccentClasses('ring')}`}>
-                          {accounts.filter(a => form.transactionType === 'payment' ? a.classification !== 'Credit Card' : a.type !== 'Credit').map(a => <option key={a.id} value={a.id}>{a.bank}</option>)}
-                        </select>
-                      )}
-                    </div>
-                  </div>
-                )}
+                      <div>
+                        <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Transfer Fee (Optional)</label>
+                        <div className="relative mb-4">
+                          <span className="absolute left-4 top-1/2 -translate-y-1/2 font-bold text-gray-400">₱</span>
+                          <input
+                            type="number"
+                            step="0.01"
+                            min="0"
+                            value={form.feeAmount}
+                            onChange={e => setForm(f => ({ ...f, feeAmount: e.target.value }))}
+                            placeholder="0.00"
+                            className={`w-full bg-white dark:bg-gray-800 border-2 border-black dark:border-gray-700 rounded-xl p-3.5 pl-8 font-bold outline-none focus:ring-offset-2 ${getAccentClasses('ring')} transition-all text-sm`}
+                          />
+                        </div>
+                        <p className="text-[10px] text-gray-500 mt-[-10px] mb-4 font-medium">Logged as separate expense.</p>
 
-                {/* Borrower Field for Loan Transactions */}
-                {form.transactionType === 'loan' && userProfile?.settings?.peopleEnabled && (
+                        <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Date</label>
+                        <input 
+                          type="date" 
+                          value={form.date} 
+                          onChange={e => setForm(f => ({ ...f, date: e.target.value }))} 
+                          required 
+                          className={`w-full min-w-0 bg-white dark:bg-gray-800 border-2 border-black dark:border-gray-700 rounded-xl p-3.5 font-bold outline-none focus:ring-offset-2 ${getAccentClasses('ring')} transition-all text-sm`}
+                        />
+                      </div>
+                    </div>
+                  )}
+                  
+                  {/* TAB 2: FRIENDS */}
+                  {transferTab === 'friends' && (
+                    <div className="space-y-4 md:space-y-5 animate-in fade-in slide-in-from-right-4 duration-300">
+                      <div>
+                        <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">From Account</label>
+                        {accounts.length === 0 ? (
+                          <div className="text-xs text-red-600 p-4">No accounts available</div>
+                        ) : (
+                          <select 
+                            value={form.paymentMethodId} 
+                            onChange={e => setForm(f => ({ ...f, paymentMethodId: e.target.value }))} 
+                            className={`w-full min-w-0 bg-white dark:bg-gray-800 border-2 border-black dark:border-gray-700 rounded-xl p-3.5 font-bold text-sm appearance-none outline-none focus:ring-offset-2 ${getAccentClasses('ring')}`}>
+                            {accounts.filter(a => a.type !== 'Credit').map(a => <option key={a.id} value={a.id}>{a.bank}</option>)}
+                          </select>
+                        )}
+                      </div>
+                      
+                      <div>
+                        <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">To Who?</label>
+                        <ContactDropdown 
+                          contacts={selectableContacts}
+                          value={form.personName || ''} 
+                          onChange={val => setForm(f => ({ ...f, personName: val }))}
+                          placeholder="e.g. John Doe"
+                        />
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">For What? (Optional)</label>
+                          <input 
+                            value={form.name} 
+                            onChange={e => setForm(f => ({ ...f, name: e.target.value }))} 
+                            placeholder="e.g. Dinner" 
+                            className={`w-full bg-white dark:bg-gray-800 border-2 border-black dark:border-gray-700 rounded-xl p-3.5 font-bold outline-none focus:ring-offset-2 ${getAccentClasses('ring')} transition-all text-sm`}
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Date</label>
+                          <input 
+                            type="date" 
+                            value={form.date} 
+                            onChange={e => setForm(f => ({ ...f, date: e.target.value }))} 
+                            required 
+                            className={`w-full bg-white dark:bg-gray-800 border-2 border-black dark:border-gray-700 rounded-xl p-3.5 font-bold outline-none focus:ring-offset-2 ${getAccentClasses('ring')} transition-all text-sm`}
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </>
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Borrower (Optional)</label>
-                    <ContactDropdown 
-                      contacts={selectableContacts}
-                      value={form.borrowerName || ''}
-                      onChange={val => setForm(f => ({ ...f, borrowerName: val }))}
-                      placeholder="Select or type borrower"
+                    <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">
+                      {['withdraw', 'cash_in', 'loan', 'transfer'].includes(form.transactionType) ? 'Date' : 'Date Paid'}
+                    </label>
+                    <input 
+                      type="date" 
+                      value={form.date} 
+                      onChange={e => setForm(f => ({ ...f, date: e.target.value }))} 
+                      required 
+                      className={`w-full min-w-0 bg-white dark:bg-gray-800 border-2 border-black dark:border-gray-700 rounded-xl p-3.5 font-bold outline-none focus:ring-offset-2 ${getAccentClasses('ring')} transition-all text-sm`}
                     />
-                    {people.length === 0 && (
-                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">Add people in Settings to see them here.</p>
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">
+                      {['withdraw', 'cash_in', 'loan', 'transfer'].includes(form.transactionType) ? 'Account' : 'Payment Method'}
+                    </label>
+                    {accounts.length === 0 ? (
+                      <div className="text-xs text-red-600 p-4">No accounts available</div>
+                    ) : (
+                      <select 
+                        value={form.paymentMethodId} 
+                        onChange={e => setForm(f => ({ ...f, paymentMethodId: e.target.value }))} 
+                        className={`w-full min-w-0 bg-white dark:bg-gray-800 border-2 border-black dark:border-gray-700 rounded-xl p-3.5 font-bold text-sm appearance-none outline-none focus:ring-offset-2 ${getAccentClasses('ring')}`}>
+                        {accounts.filter(a => form.transactionType === 'payment' ? a.classification !== 'Credit Card' : a.type !== 'Credit').map(a => <option key={a.id} value={a.id}>{a.bank}</option>)}
+                      </select>
                     )}
                   </div>
-                )}
+                </div>
+              )}
 
-            {form.transactionType === 'payment' && (
+              {/* Borrower Field for Loan Transactions */}
+              {form.transactionType === 'loan' && userProfile?.settings?.peopleEnabled && (
                 <div>
-                  <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Upload Receipt (Optional)</label>
-                  <div className="relative">
-                    <input
-                      type="file"
-                      accept="image/*,application/pdf"
-                      className="absolute inset-0 opacity-0 cursor-pointer"
-                      onChange={e => setReceiptFile(e.target.files?.[0] ?? null)}
-                    />
-                  <div className={`w-full bg-white dark:bg-gray-800 border-2 border-black border-dashed rounded-xl p-5 md:p-6 text-center text-sm transition-all ${getAccentClasses('hoverLight')}`}>
-                      <span className="font-bold">{receiptFile ? receiptFile.name : 'Click or drag to upload receipt'}</span>
-                    </div>
+                  <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Borrower (Optional)</label>
+                  <ContactDropdown 
+                    contacts={selectableContacts}
+                    value={form.borrowerName || ''}
+                    onChange={val => setForm(f => ({ ...f, borrowerName: val }))}
+                    placeholder="Select or type borrower"
+                  />
+                  {people.length === 0 && (
+                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">Add people in Settings to see them here.</p>
+                  )}
+                </div>
+              )}
+
+          {form.transactionType === 'payment' && (
+              <div>
+                <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Upload Receipt (Optional)</label>
+                <div className="relative">
+                  <input
+                    type="file"
+                    accept="image/*,application/pdf"
+                    className="absolute inset-0 opacity-0 cursor-pointer"
+                    onChange={e => setReceiptFile(e.target.files?.[0] ?? null)}
+                  />
+                <div className={`w-full bg-white dark:bg-gray-800 border-2 border-black border-dashed rounded-xl p-5 md:p-6 text-center text-sm transition-all ${getAccentClasses('hoverLight')}`}>
+                    <span className="font-bold">{receiptFile ? receiptFile.name : 'Click or drag to upload receipt'}</span>
                   </div>
                 </div>
-            )}
+              </div>
+          )}
 
-                <div className="flex space-x-3 pt-2 md:pt-4">
-                  <button type="button" onClick={closeForm} className="flex-1 bg-gray-200 dark:bg-gray-700 py-3.5 rounded-xl font-bold text-gray-800 dark:text-gray-200 border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[1px] hover:translate-y-[1px] transition-all">Cancel</button>
-                  <button type="submit" disabled={accounts.length === 0 || (form.transactionType === 'transfer' && !editingTxId && transferTab === 'accounts' && !form.transferToAccountId) || (form.transactionType === 'transfer' && !editingTxId && transferTab === 'friends' && !form.personName)} className={`flex-1 bg-green-400 text-black py-3.5 rounded-xl font-bold border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[1px] hover:translate-y-[1px] transition-all disabled:opacity-50 disabled:bg-gray-300`}>
-                    {editingTxId ? 'Update' : form.transactionType === 'transfer' ? (transferTab === 'friends' ? 'Send to Friend' : 'Complete Transfer') : 'Submit'}
-                  </button>
-                </div>
-              </form>
-            </div>
+              <div className="flex space-x-3 pt-2 md:pt-4">
+                <button type="button" onClick={closeForm} className="flex-1 bg-gray-200 dark:bg-gray-700 py-3.5 rounded-xl font-bold text-gray-800 dark:text-gray-200 border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[1px] hover:translate-y-[1px] transition-all">Cancel</button>
+                <button type="submit" disabled={accounts.length === 0 || (form.transactionType === 'transfer' && !editingTxId && transferTab === 'accounts' && !form.transferToAccountId) || (form.transactionType === 'transfer' && !editingTxId && transferTab === 'friends' && !form.personName)} className={`flex-1 bg-green-400 text-black py-3.5 rounded-xl font-bold border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[1px] hover:translate-y-[1px] transition-all disabled:opacity-50 disabled:bg-gray-300`}>
+                  {editingTxId ? 'Update' : form.transactionType === 'transfer' ? (transferTab === 'friends' ? 'Send to Friend' : 'Complete Transfer') : 'Submit'}
+                </button>
+              </div>
+            </form>
           </div>
-        )}
-      </div>
+        </div>
+      )}
 
       {/* ── Batch Delete Confirmation Modal ─────────────────────────────────── */}
       {showBatchConfirm && (
@@ -1360,7 +1392,7 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ transactions, loadi
       )}
 
       {/* Floating Action Button (FAB) with Fan Layout */}
-      {showFloatingAdd && (
+      {(isMobile || showFloatingAdd) && (
         <div className="fixed bottom-8 right-8 z-40 animate-in fade-in zoom-in duration-300">
           {/* Backdrop when fan is open */}
           {showFabMenu && <div className="fixed inset-0 z-30" onClick={() => setShowFabMenu(false)} />}
@@ -1452,7 +1484,7 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ transactions, loadi
       )}
 
       {confirmModal.show && <ConfirmDialog {...confirmModal} onClose={() => setConfirmModal(p => ({ ...p, show: false }))} />}
-    </div>
+    </>
   );
 };
 

@@ -216,7 +216,7 @@ const Dashboard: React.FC<DashboardProps> = ({ accounts, budget, installments, t
   const debitAccounts = accounts.filter(a => a.type === 'Debit');
 
   return (
-    <div className={`animate-in fade-in duration-500 max-w-7xl mx-auto ${isMobile ? 'pt-4' : ''}`}>
+    <div className={`animate-in fade-in duration-500 max-w-7xl mx-auto w-full overflow-hidden ${isMobile ? 'pt-10' : 'pt-4'}`}>
       {/* Greeting Header */}
       <DashboardHeader name={userProfile?.first_name || 'Budee User'} />
 
