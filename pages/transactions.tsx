@@ -701,7 +701,7 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ transactions, loadi
 
   return (
 <div className="min-h-screen bg-gray-50 dark:bg-gray-950 transition-colors duration-200 pt-8">
-      <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 w-full">
         {/* ── Header & Controllers ───────────────────────────────────────── */}
         <div ref={headerRef}>
           <PageHeader 
@@ -723,7 +723,7 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ transactions, loadi
 
         {/* ── Filter Bar ──────────────────────────────────────────────────── */}
         <div className="bg-white dark:bg-gray-900 border-4 border-black rounded-2xl shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] p-4 mb-6">
-          <div className="flex flex-wrap items-end gap-3">
+          <div className="flex flex-col sm:flex-row sm:flex-wrap sm:items-end gap-3">
             <Filter className="w-4 h-4 text-gray-400 self-center mb-1 shrink-0" />
             <div className="flex flex-col gap-1">
               <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Start Date</label>
@@ -793,15 +793,15 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ transactions, loadi
         </div>
 
         {/* ── Total Spend Dashboard ────────────────────────────────────────── */}
-        <div className="mb-6">
-          <div className={`${getAccentClasses('bg')} border-4 border-black rounded-2xl shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] p-5 text-white`}>
+        <div className="mb-6 w-full">
+          <div className={`${getAccentClasses('bg')} border-4 border-black rounded-2xl shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] p-5 text-white w-full`}>
             <p className="text-xs font-black uppercase tracking-widest text-indigo-200 mb-1">Total Spend</p>
             <p className="text-3xl font-black">{formatCurrency(totalSpend)}</p>
             <p className="text-xs text-indigo-300 mt-1">Based on current filter · {filteredTransactions.length} transaction{filteredTransactions.length !== 1 ? 's' : ''}</p>
           </div>
         </div>
 
-        <div className="bg-white dark:bg-gray-900 border-4 border-black rounded-2xl shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] overflow-hidden transition-colors">
+        <div className="bg-white dark:bg-gray-900 border-4 border-black rounded-2xl shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] overflow-hidden transition-colors w-full max-w-full">
           <div className="px-6 py-4 border-b-4 border-black flex items-center justify-between transition-colors">
             <h2 className="text-sm font-bold uppercase text-gray-600 dark:text-gray-400 tracking-widest">All transactions</h2>
             <div className="flex items-center gap-2">
@@ -830,7 +830,7 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ transactions, loadi
             </div>
           </div>
 
-          <div className="overflow-x-auto">
+          <div className="w-full overflow-x-auto">
             <div className="p-4">
               {isLoading || loading ? (
                 <div className="text-center py-8 text-gray-500">Loading transactions...</div>
