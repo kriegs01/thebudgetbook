@@ -189,6 +189,7 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ transactions, loadi
   const [showForm, setShowForm] = useState(false);
   const [editingTxId, setEditingTxId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const headerRef = useRef<HTMLDivElement>(null);
   const [showFloatingAdd, setShowFloatingAdd] = useState(false);
@@ -829,30 +830,32 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ transactions, loadi
             </div>
           </div>
 
-          <div className="p-4">
-            {isLoading || loading ? (
-              <div className="text-center py-8 text-gray-500">Loading transactions...</div>
-            ) : (
-              <TransactionList
-                transactions={filteredTransactions}
-                accounts={accounts}
-                isSelectMode={isSelectMode}
-                selectedIds={selectedIds}
-                onToggleId={toggleId}
-                onSelectAll={toggleAllVisible}
-                allVisibleSelected={allVisibleSelected}
-                onViewDetails={setSelectedTx}
-                onEdit={openEditForm}
-                onDelete={removeTx}
-              />
-            )}
-            {filteredTransactions.length === 0 && !isLoading && (
-                 <div className="text-center py-16 px-6 bg-gray-50 dark:bg-gray-800/50 rounded-2xl border-2 border-dashed border-gray-300 dark:border-gray-700">
-                    <FileText className="w-12 h-12 mx-auto text-gray-300 dark:text-gray-600" />
-                    <p className="font-bold mt-4 text-gray-800 dark:text-gray-200">No transactions found</p>
-                    <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">There are no transactions for the selected date range and payment methods.</p>
-                </div>
-            )}
+          <div className="overflow-x-auto">
+            <div className="p-4">
+              {isLoading || loading ? (
+                <div className="text-center py-8 text-gray-500">Loading transactions...</div>
+              ) : (
+                <TransactionList
+                  transactions={filteredTransactions}
+                  accounts={accounts}
+                  isSelectMode={isSelectMode}
+                  selectedIds={selectedIds}
+                  onToggleId={toggleId}
+                  onSelectAll={toggleAllVisible}
+                  allVisibleSelected={allVisibleSelected}
+                  onViewDetails={setSelectedTx}
+                  onEdit={openEditForm}
+                  onDelete={removeTx}
+                />
+              )}
+              {filteredTransactions.length === 0 && !isLoading && (
+                   <div className="text-center py-16 px-6 bg-gray-50 dark:bg-gray-800/50 rounded-2xl border-2 border-dashed border-gray-300 dark:border-gray-700">
+                      <FileText className="w-12 h-12 mx-auto text-gray-300 dark:text-gray-600" />
+                      <p className="font-bold mt-4 text-gray-800 dark:text-gray-200">No transactions found</p>
+                      <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">There are no transactions for the selected date range and payment methods.</p>
+                  </div>
+              )}
+            </div>
           </div>
         </div>
 
