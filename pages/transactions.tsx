@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { Plus, Info, Eye, ZoomIn, ZoomOut, Download, X, ArrowLeft, Pencil, Trash2, CheckSquare, Square, ChevronDown, Filter, AlertTriangle, ArrowUpFromLine, ArrowDownToLine, ArrowLeftRight, Landmark, CreditCard, FileText, User, UserPlus } from 'lucide-react';
 import { PinProtectedAction } from '../src/components/PinProtectedAction';
 import { useAuth } from '../src/contexts/AuthContext';
@@ -178,6 +179,17 @@ interface TransactionsPageProps {
   onTransactionDeleted?: () => void;
   onTransactionCreated?: () => void;
 }
+
+const Portal: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+    return () => setMounted(false);
+  }, []);
+
+  return mounted ? createPortal(children, document.body) : null;
+};
 
 const TransactionsPage: React.FC<TransactionsPageProps> = ({ transactions, loading = false, onTransactionDeleted, onTransactionCreated }) => {
   const { getAccentClasses } = useTheme();
@@ -892,130 +904,194 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ transactions, loadi
         </div>
       </div>
 
+    <Portal>
       {/* QA: Consistent Transaction Form - with receipt upload, exclude credit accounts */}
       {showForm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-black/60 backdrop-blur-md">
-        <div className="w-full max-w-md bg-white dark:bg-gray-900 border-4 border-black rounded-2xl shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] p-6 md:p-8 relative transition-all -rotate-1 max-h-[95vh] overflow-y-auto">
-          {formSource === 'top' && !editingTxId && (
-            <button 
-              onClick={() => { setShowForm(false); setShowTypeModal(true); setFormSource(null); }} 
-              className="absolute left-4 top-4 md:left-6 md:top-6 p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full transition-colors"
-              aria-label="Back to type selection"
-            >
-              <ArrowLeft className="w-5 h-5 text-gray-400" />
-            </button>
-          )}
-          {(formSource === 'fab' || editingTxId) && (
-            <button 
-              onClick={closeForm} 
-              className="absolute right-4 top-4 md:right-6 md:top-6 p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full transition-colors"
-              aria-label="Close"
-            >
-              <X className="w-5 h-5 text-gray-400" />
-            </button>
-          )}
-          <h2 className={`text-xl md:text-2xl font-black text-gray-900 dark:text-gray-100 mb-1 ${formSource === 'top' && !editingTxId ? 'mt-8 md:mt-6' : ''}`}>
-          {editingTxId ? 'Edit Transaction' : 
-            form.transactionType === 'withdraw' ? 'Withdraw Funds' :
-            form.transactionType === 'cash_in' ? 'Cash In' :
-            form.transactionType === 'transfer' ? 'Transfer Funds' :
-            form.transactionType === 'loan' ? 'Record Loan' :
-            `Add New ${TRANSACTION_TYPES.find(t => t.id === form.transactionType)?.label || 'Transaction'}`
-          }
-          </h2>
-        <p className="text-gray-500 text-xs md:text-sm mb-6">
-          {editingTxId ? 'Update the transaction details below' : 
-            form.transactionType === 'withdraw' ? 'Record an ATM withdrawal or cash out' :
-            form.transactionType === 'cash_in' ? 'Record incoming funds' :
-            form.transactionType === 'transfer' ? 'Move money between accounts' :
-            form.transactionType === 'loan' ? 'Record money lent out' :
-            'Record a payment transaction'
-          }
-        </p>
-            <form onSubmit={onSubmit} className="space-y-4 md:space-y-5">
-              {/* Conditional Name Field — Hide for Transfers since they auto-generate names */}
-              {(form.transactionType !== 'transfer' || editingTxId) && (
-                <div>
-              <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">
-                {['withdraw', 'cash_in', 'loan', 'transfer'].includes(form.transactionType) ? 'Label' : 'Name'}
-              </label>
-                  <input 
-                    value={form.name} 
-                    onChange={e => setForm(f => ({ ...f, name: e.target.value }))} 
-                    required 
-                placeholder={
-                  form.transactionType === 'withdraw' ? 'e.g. ATM Withdrawal' :
-                  form.transactionType === 'cash_in' ? 'e.g. Salary, Deposit' :
-                  form.transactionType === 'loan' ? 'e.g. Loan to John' :
-                  'e.g. Groceries, Gas, etc.'
-                }
-                className={`w-full bg-white dark:bg-gray-800 border-2 border-black dark:border-gray-700 rounded-xl p-3.5 font-bold outline-none focus:ring-offset-2 ${getAccentClasses('ring')} transition-all text-sm`}
-                  />
-                </div>
+        <div className="fixed inset-0 z-[999] flex items-center justify-center p-2 sm:p-4 bg-black/60 backdrop-blur-md">
+          <div className="w-full max-w-md bg-white dark:bg-gray-900 border-4 border-black rounded-2xl shadow-2xl sm:shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] transition-all max-h-[95vh] flex flex-col">
+            {/* --- MODAL HEADER --- */}
+            <div className="flex-shrink-0 p-6 md:p-8 pb-4 md:pb-6 relative">
+              {formSource === 'top' && !editingTxId && (
+                <button 
+                  onClick={() => { setShowForm(false); setShowTypeModal(true); setFormSource(null); }} 
+                  className="absolute left-4 top-4 md:left-6 md:top-6 p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full transition-colors"
+                  aria-label="Back to type selection"
+                >
+                  <ArrowLeft className="w-5 h-5 text-gray-400" />
+                </button>
               )}
+              {(formSource === 'fab' || editingTxId) && (
+                <button 
+                  onClick={closeForm} 
+                  className="absolute right-4 top-4 md:right-6 md:top-6 p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full transition-colors"
+                  aria-label="Close"
+                >
+                  <X className="w-5 h-5 text-gray-400" />
+                </button>
+              )}
+              <h2 className={`text-xl md:text-2xl font-black text-gray-900 dark:text-gray-100 mb-1 ${formSource === 'top' && !editingTxId ? 'mt-8 md:mt-6' : ''}`}>
+                {editingTxId ? 'Edit Transaction' : 
+                  form.transactionType === 'withdraw' ? 'Withdraw Funds' :
+                  form.transactionType === 'cash_in' ? 'Cash In' :
+                  form.transactionType === 'transfer' ? 'Transfer Funds' :
+                  form.transactionType === 'loan' ? 'Record Loan' :
+                  `Add New ${TRANSACTION_TYPES.find(t => t.id === form.transactionType)?.label || 'Transaction'}`
+                }
+              </h2>
+              <p className="text-gray-500 text-xs md:text-sm">
+                {editingTxId ? 'Update the transaction details below' : 
+                  form.transactionType === 'withdraw' ? 'Record an ATM withdrawal or cash out' :
+                  form.transactionType === 'cash_in' ? 'Record incoming funds' :
+                  form.transactionType === 'transfer' ? 'Move money between accounts' :
+                  form.transactionType === 'loan' ? 'Record money lent out' :
+                  'Record a payment transaction'
+                }
+              </p>
+            </div>
 
-              <div>
-                <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Amount</label>
-                <div className="relative">
-                  <span className="absolute left-4 top-1/2 -translate-y-1/2 font-bold text-gray-400">₱</span>
-                  <input 
-                    type="number" 
-                    step="0.01" 
-                    min="0"
-                    value={form.amount} 
-                    onChange={e => setForm(f => ({ ...f, amount: e.target.value }))} 
-                    required 
-                    className={`w-full bg-white dark:bg-gray-800 border-2 border-black dark:border-gray-700 rounded-xl p-3.5 pl-8 text-lg font-black outline-none focus:ring-offset-2 ${getAccentClasses('ring')} transition-all`}
-                  />
-                </div>
-              </div>
-
-              {form.transactionType === 'transfer' && !editingTxId ? (
-                <>
-                  {/* Tab Selector */}
-                  <div className={`flex p-1 bg-gray-200 dark:bg-gray-800 rounded-xl mb-4 mt-2 border-2 border-black`}>
-                    <button
-                      type="button"
-                      onClick={() => setTransferTab('accounts')}
-                      className={`flex-1 flex items-center justify-center gap-2 py-2.5 px-3 rounded-lg text-xs md:text-sm font-bold transition-all ${transferTab === 'accounts' ? `bg-white dark:bg-gray-900 border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] ${getAccentClasses('text')}` : 'text-gray-500'}`}>
-                      <ArrowLeftRight className="w-4 h-4" />
-                      <span>My Accounts</span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setTransferTab('friends')}
-                      className={`flex-1 flex items-center justify-center gap-2 py-2.5 px-3 rounded-lg text-xs md:text-sm font-bold transition-all ${transferTab === 'friends' ? `bg-white dark:bg-gray-900 border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] ${getAccentClasses('text')}` : 'text-gray-500'}`}>
-                      <User className="w-4 h-4" />
-                      <span>Friends</span>
-                    </button>
+            {/* --- SCROLLABLE FORM CONTENT --- */}
+            <div className="flex-1 overflow-y-auto overflow-x-hidden px-6 md:px-8">
+              <form id="transaction-form" onSubmit={onSubmit} className="space-y-4 md:space-y-5">
+                {/* Conditional Name Field — Hide for Transfers since they auto-generate names */}
+                {(form.transactionType !== 'transfer' || editingTxId) && (
+                  <div>
+                    <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">
+                      {['withdraw', 'cash_in', 'loan', 'transfer'].includes(form.transactionType) ? 'Label' : 'Name'}
+                    </label>
+                    <input 
+                      value={form.name} 
+                      onChange={e => setForm(f => ({ ...f, name: e.target.value }))} 
+                      required 
+                      placeholder={
+                        form.transactionType === 'withdraw' ? 'e.g. ATM Withdrawal' :
+                        form.transactionType === 'cash_in' ? 'e.g. Salary, Deposit' :
+                        form.transactionType === 'loan' ? 'e.g. Loan to John' :
+                        'e.g. Groceries, Gas, etc.'
+                      }
+                      className={`w-full bg-white dark:bg-gray-800 border-2 border-black dark:border-gray-700 rounded-xl p-3.5 font-bold outline-none focus:ring-offset-2 ${getAccentClasses('ring')} transition-all text-sm`}
+                    />
                   </div>
+                )}
 
-                  {/* TAB 1: MY ACCOUNTS */}
-                  {transferTab === 'accounts' && (
-                    <div className="space-y-4 md:space-y-5 animate-in fade-in slide-in-from-left-4 duration-300">
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 relative">
-                        {/* Swap Accounts Button */}
-                        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 mt-0 sm:mt-3 flex items-center justify-center pointer-events-none z-10">
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setForm(f => {
-                                const newFrom = f.transferToAccountId || accounts.find(a => a.type !== 'Credit' && a.id !== f.paymentMethodId)?.id || f.paymentMethodId;
-                                return {
-                                  ...f,
-                                  paymentMethodId: newFrom,
-                                  transferToAccountId: f.paymentMethodId
-                                };
-                              });
-                            }}
-                            className={`pointer-events-auto w-10 h-10 rounded-full bg-white dark:bg-gray-700 border-4 border-white dark:border-gray-900 flex items-center justify-center text-gray-500 transition-all shadow-sm ${getAccentClasses('hoverLight')}`}
-                            title="Swap accounts"
-                          >
-                            <ArrowLeftRight className="w-4 h-4 rotate-90 sm:rotate-0" />
-                          </button>
+                <div>
+                  <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Amount</label>
+                  <div className="relative">
+                    <span className="absolute left-4 top-1/2 -translate-y-1/2 font-bold text-gray-400">₱</span>
+                    <input 
+                      type="number" 
+                      step="0.01" 
+                      min="0"
+                      value={form.amount} 
+                      onChange={e => setForm(f => ({ ...f, amount: e.target.value }))} 
+                      required 
+                      className={`w-full bg-white dark:bg-gray-800 border-2 border-black dark:border-gray-700 rounded-xl p-3.5 pl-8 text-lg font-black outline-none focus:ring-offset-2 ${getAccentClasses('ring')} transition-all`}
+                    />
+                  </div>
+                </div>
+
+                {form.transactionType === 'transfer' && !editingTxId ? (
+                  <>
+                    {/* Tab Selector */}
+                    <div className={`flex p-1 bg-gray-200 dark:bg-gray-800 rounded-xl mb-4 mt-2 border-2 border-black`}>
+                      <button
+                        type="button"
+                        onClick={() => setTransferTab('accounts')}
+                        className={`flex-1 flex items-center justify-center gap-2 py-2.5 px-3 rounded-lg text-xs md:text-sm font-bold transition-all ${transferTab === 'accounts' ? `bg-white dark:bg-gray-900 border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] ${getAccentClasses('text')}` : 'text-gray-500'}`}>
+                        <ArrowLeftRight className="w-4 h-4" />
+                        <span>My Accounts</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setTransferTab('friends')}
+                        className={`flex-1 flex items-center justify-center gap-2 py-2.5 px-3 rounded-lg text-xs md:text-sm font-bold transition-all ${transferTab === 'friends' ? `bg-white dark:bg-gray-900 border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] ${getAccentClasses('text')}` : 'text-gray-500'}`}>
+                        <User className="w-4 h-4" />
+                        <span>Friends</span>
+                      </button>
+                    </div>
+
+                    {/* TAB 1: MY ACCOUNTS */}
+                    {transferTab === 'accounts' && (
+                      <div className="space-y-4 md:space-y-5 animate-in fade-in slide-in-from-left-4 duration-300">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 relative">
+                          {/* Swap Accounts Button */}
+                          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 mt-0 sm:mt-3 flex items-center justify-center pointer-events-none z-10">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setForm(f => {
+                                  const newFrom = f.transferToAccountId || accounts.find(a => a.type !== 'Credit' && a.id !== f.paymentMethodId)?.id || f.paymentMethodId;
+                                  return {
+                                    ...f,
+                                    paymentMethodId: newFrom,
+                                    transferToAccountId: f.paymentMethodId
+                                  };
+                                });
+                              }}
+                              className={`pointer-events-auto w-10 h-10 rounded-full bg-white dark:bg-gray-700 border-4 border-white dark:border-gray-900 flex items-center justify-center text-gray-500 transition-all shadow-sm ${getAccentClasses('hoverLight')}`}
+                              title="Swap accounts"
+                            >
+                              <ArrowLeftRight className="w-4 h-4 rotate-90 sm:rotate-0" />
+                            </button>
+                          </div>
+                          <div>
+                            <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Transfer From</label>
+                            {accounts.length === 0 ? (
+                              <div className="text-xs text-red-600 p-4">No accounts available</div>
+                            ) : (
+                              <select 
+                                value={form.paymentMethodId} 
+                                onChange={e => setForm(f => ({ ...f, paymentMethodId: e.target.value }))} 
+                                className={`w-full min-w-0 bg-white dark:bg-gray-800 border-2 border-black dark:border-gray-700 rounded-xl p-3.5 font-bold text-sm appearance-none outline-none focus:ring-offset-2 ${getAccentClasses('ring')}`}>
+                                {accounts.filter(a => a.type !== 'Credit').map(a => <option key={a.id} value={a.id}>{a.bank}</option>)}
+                              </select>
+                            )}
+                          </div>
+                          <div>
+                            <label className={`block text-[10px] font-black ${getAccentClasses('text')} uppercase tracking-widest mb-2`}>Transfer To</label>
+                            <select 
+                              value={form.transferToAccountId} 
+                              onChange={e => setForm(f => ({ ...f, transferToAccountId: e.target.value }))} 
+                              className={`w-full min-w-0 bg-white dark:bg-gray-800 border-2 ${getAccentClasses('border')} rounded-xl p-3.5 font-bold text-sm appearance-none outline-none focus:ring-offset-2 ${getAccentClasses('ring')}`}>
+                              <option value="">Select Destination</option>
+                              {accounts.filter(a => a.id !== form.paymentMethodId && a.type !== 'Credit').map(a => (
+                                <option key={a.id} value={a.id}>{a.bank}</option>
+                              ))}
+                            </select>
+                          </div>
                         </div>
                         <div>
-                          <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Transfer From</label>
+                          <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Transfer Fee (Optional)</label>
+                          <div className="relative mb-4">
+                            <span className="absolute left-4 top-1/2 -translate-y-1/2 font-bold text-gray-400">₱</span>
+                            <input
+                              type="number"
+                              step="0.01"
+                              min="0"
+                              value={form.feeAmount}
+                              onChange={e => setForm(f => ({ ...f, feeAmount: e.target.value }))}
+                              placeholder="0.00"
+                              className={`w-full bg-white dark:bg-gray-800 border-2 border-black dark:border-gray-700 rounded-xl p-3.5 pl-8 font-bold outline-none focus:ring-offset-2 ${getAccentClasses('ring')} transition-all text-sm`}
+                            />
+                          </div>
+                          <p className="text-[10px] text-gray-500 mt-[-10px] mb-4 font-medium">Logged as separate expense.</p>
+
+                          <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Date</label>
+                          <input 
+                            type="date" 
+                            value={form.date} 
+                            onChange={e => setForm(f => ({ ...f, date: e.target.value }))} 
+                            required 
+                            className={`w-full min-w-0 bg-white dark:bg-gray-800 border-2 border-black dark:border-gray-700 rounded-xl p-3.5 font-bold outline-none focus:ring-offset-2 ${getAccentClasses('ring')} transition-all text-sm`}
+                          />
+                        </div>
+                      </div>
+                    )}
+                    
+                    {/* TAB 2: FRIENDS */}
+                    {transferTab === 'friends' && (
+                      <div className="space-y-4 md:space-y-5 animate-in fade-in slide-in-from-right-4 duration-300">
+                        <div>
+                          <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">From Account</label>
                           {accounts.length === 0 ? (
                             <div className="text-xs text-red-600 p-4">No accounts available</div>
                           ) : (
@@ -1027,205 +1103,158 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ transactions, loadi
                             </select>
                           )}
                         </div>
+                        
                         <div>
-                          <label className={`block text-[10px] font-black ${getAccentClasses('text')} uppercase tracking-widest mb-2`}>Transfer To</label>
-                          <select 
-                            value={form.transferToAccountId} 
-                            onChange={e => setForm(f => ({ ...f, transferToAccountId: e.target.value }))} 
-                            className={`w-full min-w-0 bg-white dark:bg-gray-800 border-2 ${getAccentClasses('border')} rounded-xl p-3.5 font-bold text-sm appearance-none outline-none focus:ring-offset-2 ${getAccentClasses('ring')}`}>
-                            <option value="">Select Destination</option>
-                            {accounts.filter(a => a.id !== form.paymentMethodId && a.type !== 'Credit').map(a => (
-                              <option key={a.id} value={a.id}>{a.bank}</option>
-                            ))}
-                          </select>
-                        </div>
-                      </div>
-                      <div>
-                        <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Transfer Fee (Optional)</label>
-                        <div className="relative mb-4">
-                          <span className="absolute left-4 top-1/2 -translate-y-1/2 font-bold text-gray-400">₱</span>
-                          <input
-                            type="number"
-                            step="0.01"
-                            min="0"
-                            value={form.feeAmount}
-                            onChange={e => setForm(f => ({ ...f, feeAmount: e.target.value }))}
-                            placeholder="0.00"
-                            className={`w-full bg-white dark:bg-gray-800 border-2 border-black dark:border-gray-700 rounded-xl p-3.5 pl-8 font-bold outline-none focus:ring-offset-2 ${getAccentClasses('ring')} transition-all text-sm`}
+                          <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">To Who?</label>
+                          <ContactDropdown 
+                            contacts={selectableContacts}
+                            value={form.personName || ''} 
+                            onChange={val => setForm(f => ({ ...f, personName: val }))}
+                            placeholder="e.g. John Doe"
                           />
                         </div>
-                        <p className="text-[10px] text-gray-500 mt-[-10px] mb-4 font-medium">Logged as separate expense.</p>
 
-                        <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Date</label>
-                        <input 
-                          type="date" 
-                          value={form.date} 
-                          onChange={e => setForm(f => ({ ...f, date: e.target.value }))} 
-                          required 
-                          className={`w-full min-w-0 bg-white dark:bg-gray-800 border-2 border-black dark:border-gray-700 rounded-xl p-3.5 font-bold outline-none focus:ring-offset-2 ${getAccentClasses('ring')} transition-all text-sm`}
-                        />
-                      </div>
-                    </div>
-                  )}
-                  
-                  {/* TAB 2: FRIENDS */}
-                  {transferTab === 'friends' && (
-                    <div className="space-y-4 md:space-y-5 animate-in fade-in slide-in-from-right-4 duration-300">
-                      <div>
-                        <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">From Account</label>
-                        {accounts.length === 0 ? (
-                          <div className="text-xs text-red-600 p-4">No accounts available</div>
-                        ) : (
-                          <select 
-                            value={form.paymentMethodId} 
-                            onChange={e => setForm(f => ({ ...f, paymentMethodId: e.target.value }))} 
-                            className={`w-full min-w-0 bg-white dark:bg-gray-800 border-2 border-black dark:border-gray-700 rounded-xl p-3.5 font-bold text-sm appearance-none outline-none focus:ring-offset-2 ${getAccentClasses('ring')}`}>
-                            {accounts.filter(a => a.type !== 'Credit').map(a => <option key={a.id} value={a.id}>{a.bank}</option>)}
-                          </select>
-                        )}
-                      </div>
-                      
-                      <div>
-                        <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">To Who?</label>
-                        <ContactDropdown 
-                          contacts={selectableContacts}
-                          value={form.personName || ''} 
-                          onChange={val => setForm(f => ({ ...f, personName: val }))}
-                          placeholder="e.g. John Doe"
-                        />
-                      </div>
-
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                        <div>
-                          <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">For What? (Optional)</label>
-                          <input 
-                            value={form.name} 
-                            onChange={e => setForm(f => ({ ...f, name: e.target.value }))} 
-                            placeholder="e.g. Dinner" 
-                            className={`w-full bg-white dark:bg-gray-800 border-2 border-black dark:border-gray-700 rounded-xl p-3.5 font-bold outline-none focus:ring-offset-2 ${getAccentClasses('ring')} transition-all text-sm`}
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Date</label>
-                          <input 
-                            type="date" 
-                            value={form.date} 
-                            onChange={e => setForm(f => ({ ...f, date: e.target.value }))} 
-                            required 
-                            className={`w-full bg-white dark:bg-gray-800 border-2 border-black dark:border-gray-700 rounded-xl p-3.5 font-bold outline-none focus:ring-offset-2 ${getAccentClasses('ring')} transition-all text-sm`}
-                          />
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                          <div>
+                            <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">For What? (Optional)</label>
+                            <input 
+                              value={form.name} 
+                              onChange={e => setForm(f => ({ ...f, name: e.target.value }))} 
+                              placeholder="e.g. Dinner" 
+                              className={`w-full bg-white dark:bg-gray-800 border-2 border-black dark:border-gray-700 rounded-xl p-3.5 font-bold outline-none focus:ring-offset-2 ${getAccentClasses('ring')} transition-all text-sm`}
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Date</label>
+                            <input 
+                              type="date" 
+                              value={form.date} 
+                              onChange={e => setForm(f => ({ ...f, date: e.target.value }))} 
+                              required 
+                              className={`w-full bg-white dark:bg-gray-800 border-2 border-black dark:border-gray-700 rounded-xl p-3.5 font-bold outline-none focus:ring-offset-2 ${getAccentClasses('ring')} transition-all text-sm`}
+                            />
+                          </div>
                         </div>
                       </div>
+                    )}
+                  </>
+                ) : (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">
+                        {['withdraw', 'cash_in', 'loan', 'transfer'].includes(form.transactionType) ? 'Date' : 'Date Paid'}
+                      </label>
+                      <input 
+                        type="date" 
+                        value={form.date} 
+                        onChange={e => setForm(f => ({ ...f, date: e.target.value }))} 
+                        required 
+                        className={`w-full min-w-0 bg-white dark:bg-gray-800 border-2 border-black dark:border-gray-700 rounded-xl p-3.5 font-bold outline-none focus:ring-offset-2 ${getAccentClasses('ring')} transition-all text-sm`}
+                      />
                     </div>
-                  )}
-                </>
-              ) : (
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">
-                      {['withdraw', 'cash_in', 'loan', 'transfer'].includes(form.transactionType) ? 'Date' : 'Date Paid'}
-                    </label>
-                    <input 
-                      type="date" 
-                      value={form.date} 
-                      onChange={e => setForm(f => ({ ...f, date: e.target.value }))} 
-                      required 
-                      className={`w-full min-w-0 bg-white dark:bg-gray-800 border-2 border-black dark:border-gray-700 rounded-xl p-3.5 font-bold outline-none focus:ring-offset-2 ${getAccentClasses('ring')} transition-all text-sm`}
-                    />
+                    <div>
+                      <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">
+                        {['withdraw', 'cash_in', 'loan', 'transfer'].includes(form.transactionType) ? 'Account' : 'Payment Method'}
+                      </label>
+                      {accounts.length === 0 ? (
+                        <div className="text-xs text-red-600 p-4">No accounts available</div>
+                      ) : (
+                        <select 
+                          value={form.paymentMethodId} 
+                          onChange={e => setForm(f => ({ ...f, paymentMethodId: e.target.value }))} 
+                          className={`w-full min-w-0 bg-white dark:bg-gray-800 border-2 border-black dark:border-gray-700 rounded-xl p-3.5 font-bold text-sm appearance-none outline-none focus:ring-offset-2 ${getAccentClasses('ring')}`}>
+                          {accounts.filter(a => form.transactionType === 'payment' ? a.classification !== 'Credit Card' : a.type !== 'Credit').map(a => <option key={a.id} value={a.id}>{a.bank}</option>)}
+                        </select>
+                      )}
+                    </div>
                   </div>
+                )}
+
+                {/* Borrower Field for Loan Transactions */}
+                {form.transactionType === 'loan' && userProfile?.settings?.peopleEnabled && (
                   <div>
-                    <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">
-                      {['withdraw', 'cash_in', 'loan', 'transfer'].includes(form.transactionType) ? 'Account' : 'Payment Method'}
-                    </label>
-                    {accounts.length === 0 ? (
-                      <div className="text-xs text-red-600 p-4">No accounts available</div>
-                    ) : (
-                      <select 
-                        value={form.paymentMethodId} 
-                        onChange={e => setForm(f => ({ ...f, paymentMethodId: e.target.value }))} 
-                        className={`w-full min-w-0 bg-white dark:bg-gray-800 border-2 border-black dark:border-gray-700 rounded-xl p-3.5 font-bold text-sm appearance-none outline-none focus:ring-offset-2 ${getAccentClasses('ring')}`}>
-                        {accounts.filter(a => form.transactionType === 'payment' ? a.classification !== 'Credit Card' : a.type !== 'Credit').map(a => <option key={a.id} value={a.id}>{a.bank}</option>)}
-                      </select>
+                    <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Borrower (Optional)</label>
+                    <ContactDropdown 
+                      contacts={selectableContacts}
+                      value={form.borrowerName || ''}
+                      onChange={val => setForm(f => ({ ...f, borrowerName: val }))}
+                      placeholder="Select or type borrower"
+                    />
+                    {people.length === 0 && (
+                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">Add people in Settings to see them here.</p>
                     )}
                   </div>
-                </div>
-              )}
+                )}
 
-              {/* Borrower Field for Loan Transactions */}
-              {form.transactionType === 'loan' && userProfile?.settings?.peopleEnabled && (
-                <div>
-                  <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Borrower (Optional)</label>
-                  <ContactDropdown 
-                    contacts={selectableContacts}
-                    value={form.borrowerName || ''}
-                    onChange={val => setForm(f => ({ ...f, borrowerName: val }))}
-                    placeholder="Select or type borrower"
-                  />
-                  {people.length === 0 && (
-                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">Add people in Settings to see them here.</p>
-                  )}
-                </div>
-              )}
-
-          {form.transactionType === 'payment' && (
-              <div>
-                <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Upload Receipt (Optional)</label>
-                <div className="relative">
-                  <input
-                    type="file"
-                    accept="image/*,application/pdf"
-                    className="absolute inset-0 opacity-0 cursor-pointer"
-                    onChange={e => setReceiptFile(e.target.files?.[0] ?? null)}
-                  />
-                <div className={`w-full bg-white dark:bg-gray-800 border-2 border-black border-dashed rounded-xl p-5 md:p-6 text-center text-sm transition-all ${getAccentClasses('hoverLight')}`}>
-                    <span className="font-bold">{receiptFile ? receiptFile.name : 'Click or drag to upload receipt'}</span>
+                {form.transactionType === 'payment' && (
+                  <div>
+                    <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Upload Receipt (Optional)</label>
+                    <div className="relative">
+                      <input
+                        type="file"
+                        accept="image/*,application/pdf"
+                        className="absolute inset-0 opacity-0 cursor-pointer"
+                        onChange={e => setReceiptFile(e.target.files?.[0] ?? null)}
+                      />
+                      <div className={`w-full bg-white dark:bg-gray-800 border-2 border-black border-dashed rounded-xl p-5 md:p-6 text-center text-sm transition-all ${getAccentClasses('hoverLight')}`}>
+                        <span className="font-bold">{receiptFile ? receiptFile.name : 'Click or drag to upload receipt'}</span>
+                      </div>
+                    </div>
                   </div>
-                </div>
-              </div>
-          )}
+                )}
+              </form>
+            </div>
 
-              <div className="flex space-x-3 pt-2 md:pt-4">
+            {/* --- MODAL FOOTER --- */}
+            <div className="flex-shrink-0 p-6 md:p-8 pt-4 md:pt-6">
+              <div className="flex space-x-3">
                 <button type="button" onClick={closeForm} className="flex-1 bg-gray-200 dark:bg-gray-700 py-3.5 rounded-xl font-bold text-gray-800 dark:text-gray-200 border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[1px] hover:translate-y-[1px] transition-all">Cancel</button>
-                <button type="submit" disabled={accounts.length === 0 || (form.transactionType === 'transfer' && !editingTxId && transferTab === 'accounts' && !form.transferToAccountId) || (form.transactionType === 'transfer' && !editingTxId && transferTab === 'friends' && !form.personName)} className={`flex-1 bg-green-400 text-black py-3.5 rounded-xl font-bold border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[1px] hover:translate-y-[1px] transition-all disabled:opacity-50 disabled:bg-gray-300`}>
+                <button type="submit" form="transaction-form" disabled={accounts.length === 0 || (form.transactionType === 'transfer' && !editingTxId && transferTab === 'accounts' && !form.transferToAccountId) || (form.transactionType === 'transfer' && !editingTxId && transferTab === 'friends' && !form.personName)} className={`flex-1 bg-green-400 text-black py-3.5 rounded-xl font-bold border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[1px] hover:translate-y-[1px] transition-all disabled:opacity-50 disabled:bg-gray-300`}>
                   {editingTxId ? 'Update' : form.transactionType === 'transfer' ? (transferTab === 'friends' ? 'Send to Friend' : 'Complete Transfer') : 'Submit'}
                 </button>
               </div>
-            </form>
+            </div>
           </div>
         </div>
       )}
 
       {/* ── Batch Delete Confirmation Modal ─────────────────────────────────── */}
       {showBatchConfirm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-md">
-          <div className="w-full max-w-sm bg-white dark:bg-gray-900 border-4 border-black rounded-2xl shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] p-8 transition-all -rotate-1">
-            <h2 className="text-xl font-black text-gray-900 dark:text-gray-200 mb-3">Confirm Deletion</h2>
-            <p className="text-sm text-gray-600 dark:text-gray-400 mb-6">
-              You are deleting <span className="font-black text-red-600">{selectedIds.size}</span> transaction{selectedIds.size !== 1 ? 's' : ''}, and this will be irreversible. Do you want to proceed?
-            </p>
-            <div className="flex gap-4">
-              <button
-                type="button"
-                onClick={() => setShowBatchConfirm(false)}
-                disabled={isBatchDeleting}
-                className="flex-1 bg-gray-200 dark:bg-gray-700 py-3 rounded-xl font-bold text-gray-800 dark:text-gray-200 border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[1px] hover:translate-y-[1px] transition-all"
-              >
-                Cancel
-              </button>
-            <PinProtectedAction
-              featureId="transaction_deletions"
-              onVerified={handleBatchDelete}
-              actionLabel="Delete Multiple Transactions"
-            >
-              <button
-                type="button"
-                onClick={(e) => e.preventDefault()}
-                disabled={isBatchDeleting}
-                className="flex-1 bg-red-500 text-white py-3 rounded-xl font-bold border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[1px] hover:translate-y-[1px] transition-all disabled:opacity-50"
-              >
-                {isBatchDeleting ? 'Deleting…' : 'Yes, Delete'}
-              </button>
-            </PinProtectedAction>
+        <div className="fixed inset-0 z-[1000] flex items-center justify-center p-2 sm:p-4 bg-black/60 backdrop-blur-md">
+          <div className="w-full max-w-sm bg-white dark:bg-gray-900 border-4 border-black rounded-2xl shadow-2xl sm:shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] p-6 md:p-8 transition-all flex flex-col max-h-[95vh]">
+            <div className="flex-shrink-0">
+                <h2 className="text-xl font-black text-gray-900 dark:text-gray-200 mb-3">Confirm Deletion</h2>
+            </div>
+            <div className="flex-1 overflow-y-auto overflow-x-hidden">
+                <p className="text-sm text-gray-600 dark:text-gray-400 mb-6">
+                You are deleting <span className="font-black text-red-600">{selectedIds.size}</span> transaction{selectedIds.size !== 1 ? 's' : ''}, and this will be irreversible. Do you want to proceed?
+                </p>
+            </div>
+            <div className="flex-shrink-0 pt-6">
+                <div className="flex gap-4">
+                <button
+                    type="button"
+                    onClick={() => setShowBatchConfirm(false)}
+                    disabled={isBatchDeleting}
+                    className="flex-1 bg-gray-200 dark:bg-gray-700 py-3 rounded-xl font-bold text-gray-800 dark:text-gray-200 border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[1px] hover:translate-y-[1px] transition-all"
+                >
+                    Cancel
+                </button>
+                <PinProtectedAction
+                    featureId="transaction_deletions"
+                    onVerified={handleBatchDelete}
+                    actionLabel="Delete Multiple Transactions"
+                >
+                    <button
+                    type="button"
+                    onClick={(e) => e.preventDefault()}
+                    disabled={isBatchDeleting}
+                    className="flex-1 bg-red-500 text-white py-3 rounded-xl font-bold border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[1px] hover:translate-y-[1px] transition-all disabled:opacity-50"
+                    >
+                    {isBatchDeleting ? 'Deleting…' : 'Yes, Delete'}
+                    </button>
+                </PinProtectedAction>
+                </div>
             </div>
           </div>
         </div>
@@ -1235,73 +1264,77 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ transactions, loadi
       {selectedTx && (() => {
         const pm = accounts.find(a => a.id === selectedTx.paymentMethodId);
         return (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-md" onClick={() => setSelectedTx(null)}>
-            <div className="w-full max-w-md bg-white dark:bg-gray-900 border-4 border-black rounded-2xl shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] p-8 relative transition-all rotate-1" onClick={e => e.stopPropagation()}>
-              <button
-                onClick={() => setSelectedTx(null)}
-                className="absolute top-4 right-4 text-gray-400 hover:text-gray-700 p-2 rounded-full hover:bg-gray-100 transition-colors"
-                aria-label="Close"
-              >
-                <X className="w-5 h-5" />
-              </button>
-              <h2 className="text-2xl font-black text-gray-900 dark:text-gray-200 mb-6">Transaction Details</h2>
-              <dl className="space-y-4 mb-6">
-                <div className="flex justify-between">
-                  <dt className="text-[10px] font-black text-gray-400 uppercase tracking-widest self-center">Name</dt>
-                  <dd className="text-sm font-bold text-gray-900 dark:text-gray-100">{selectedTx.name}</dd>
-                </div>
-                <div className="flex justify-between">
-                  <dt className="text-[10px] font-black text-gray-400 uppercase tracking-widest self-center">Date</dt>
-                  <dd className="text-sm text-gray-900 dark:text-gray-100">
-                    {new Date(selectedTx.date).toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' })}
-                    <span className="ml-2 text-xs text-gray-400">{new Date(selectedTx.date).toLocaleTimeString()}</span>
-                  </dd>
-                </div>
-                <div className="flex justify-between">
-                  <dt className="text-[10px] font-black text-gray-400 uppercase tracking-widest self-center">Amount</dt>
-                  <dd className={`text-sm font-bold ${selectedTx.amount > 0 ? 'text-red-600' : 'text-green-600'}`}>
-                    {formatCurrency(-selectedTx.amount)}
-                  </dd>
-                </div>
-                <div className="flex justify-between">
-                  <dt className="text-[10px] font-black text-gray-400 uppercase tracking-widest self-center">Payment Method</dt>
-                  <dd className="text-sm text-gray-700 dark:text-gray-300">{pm ? pm.bank : selectedTx.paymentMethodId}</dd>
-                </div>
-                <div className="flex justify-between">
-                  <dt className="text-[10px] font-black text-gray-400 uppercase tracking-widest self-center">
-                    {selectedTx.transaction_type === 'loan' ? 'Borrower' : 'Recipient'}
-                  </dt>
-                  <dd className="text-sm text-gray-700 dark:text-gray-300">{selectedTx.borrower_name || (selectedTx as any).person_name || (selectedTx as any).personName || 'N/A'}</dd>
-                </div>
-              </dl>
-
-              <div>
-                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-3">Receipt</p>
-                {selectedTx.receiptUrl ? (
-                  receiptSignedUrl === undefined ? (
-                    <div className="text-sm text-gray-400">Loading receipt…</div>
-                  ) : receiptSignedUrl ? (
-                    <div className="flex items-center space-x-3">
-                      <img
-                        src={receiptSignedUrl}
-                        alt="Receipt thumbnail"
-                        className="w-16 h-16 rounded-xl object-cover border-2 border-black"
-                        onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
-                      />
-                      <button
-                        onClick={() => { setZoom(0.5); setPreviewReceiptUrl(receiptSignedUrl); }}
-                        title="Preview receipt"
-                        className={`flex items-center space-x-1 px-3 py-2 rounded-xl text-sm font-bold border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[1px] hover:translate-y-[1px] transition-all ${getAccentClasses('lightBg')}`}>
-                        <Eye className="w-4 h-4" />
-                        <span>Preview</span>
-                      </button>
+          <div className="fixed inset-0 z-[1000] flex items-center justify-center p-2 sm:p-4 bg-black/60 backdrop-blur-md" onClick={() => setSelectedTx(null)}>
+            <div className="w-full max-w-md bg-white dark:bg-gray-900 border-4 border-black rounded-2xl shadow-2xl sm:shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] p-6 md:p-8 relative transition-all flex flex-col max-h-[95vh]" onClick={e => e.stopPropagation()}>
+              <div className='flex-shrink-0'>
+                <button
+                    onClick={() => setSelectedTx(null)}
+                    className="absolute top-4 right-4 text-gray-400 hover:text-gray-700 p-2 rounded-full hover:bg-gray-100 transition-colors"
+                    aria-label="Close"
+                >
+                    <X className="w-5 h-5" />
+                </button>
+                <h2 className="text-2xl font-black text-gray-900 dark:text-gray-200 mb-6">Transaction Details</h2>
+              </div>
+              <div className="flex-1 overflow-y-auto overflow-x-hidden pr-2 -mr-2">
+                <dl className="space-y-4 mb-6">
+                    <div className="flex justify-between">
+                    <dt className="text-[10px] font-black text-gray-400 uppercase tracking-widest self-center">Name</dt>
+                    <dd className="text-sm font-bold text-gray-900 dark:text-gray-100">{selectedTx.name}</dd>
                     </div>
-                  ) : (
-                    <p className="text-sm text-gray-400 italic">Could not load receipt preview.</p>
-                  )
-                ) : (
-                  <p className="text-sm text-gray-400 italic">No receipt attached</p>
-                )}
+                    <div className="flex justify-between">
+                    <dt className="text-[10px] font-black text-gray-400 uppercase tracking-widest self-center">Date</dt>
+                    <dd className="text-sm text-gray-900 dark:text-gray-100">
+                        {new Date(selectedTx.date).toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' })}
+                        <span className="ml-2 text-xs text-gray-400">{new Date(selectedTx.date).toLocaleTimeString()}</span>
+                    </dd>
+                    </div>
+                    <div className="flex justify-between">
+                    <dt className="text-[10px] font-black text-gray-400 uppercase tracking-widest self-center">Amount</dt>
+                    <dd className={`text-sm font-bold ${selectedTx.amount > 0 ? 'text-red-600' : 'text-green-600'}`}>
+                        {formatCurrency(-selectedTx.amount)}
+                    </dd>
+                    </div>
+                    <div className="flex justify-between">
+                    <dt className="text-[10px] font-black text-gray-400 uppercase tracking-widest self-center">Payment Method</dt>
+                    <dd className="text-sm text-gray-700 dark:text-gray-300">{pm ? pm.bank : selectedTx.paymentMethodId}</dd>
+                    </div>
+                    <div className="flex justify-between">
+                    <dt className="text-[10px] font-black text-gray-400 uppercase tracking-widest self-center">
+                        {selectedTx.transaction_type === 'loan' ? 'Borrower' : 'Recipient'}
+                    </dt>
+                    <dd className="text-sm text-gray-700 dark:text-gray-300">{selectedTx.borrower_name || (selectedTx as any).person_name || (selectedTx as any).personName || 'N/A'}</dd>
+                    </div>
+                </dl>
+
+                <div>
+                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-3">Receipt</p>
+                    {selectedTx.receiptUrl ? (
+                    receiptSignedUrl === undefined ? (
+                        <div className="text-sm text-gray-400">Loading receipt…</div>
+                    ) : receiptSignedUrl ? (
+                        <div className="flex items-center space-x-3">
+                        <img
+                            src={receiptSignedUrl}
+                            alt="Receipt thumbnail"
+                            className="w-16 h-16 rounded-xl object-cover border-2 border-black"
+                            onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
+                        />
+                        <button
+                            onClick={() => { setZoom(0.5); setPreviewReceiptUrl(receiptSignedUrl); }}
+                            title="Preview receipt"
+                            className={`flex items-center space-x-1 px-3 py-2 rounded-xl text-sm font-bold border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[1px] hover:translate-y-[1px] transition-all ${getAccentClasses('lightBg')}`}>
+                            <Eye className="w-4 h-4" />
+                            <span>Preview</span>
+                        </button>
+                        </div>
+                    ) : (
+                        <p className="text-sm text-gray-400 italic">Could not load receipt preview.</p>
+                    )
+                    ) : (
+                    <p className="text-sm text-gray-400 italic">No receipt attached</p>
+                    )}
+                </div>
               </div>
             </div>
           </div>
@@ -1310,7 +1343,7 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ transactions, loadi
 
       {/* Receipt Preview Modal — overlays the details modal without dimming the background */}
       {previewReceiptUrl && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4" onClick={() => setPreviewReceiptUrl(null)}>
+        <div className="fixed inset-0 z-[2000] flex items-center justify-center p-4" onClick={() => setPreviewReceiptUrl(null)}>
           <div className="w-full max-w-2xl bg-white rounded-3xl shadow-2xl flex flex-col overflow-hidden" style={{ maxHeight: '90vh' }} onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between p-4 border-b border-gray-100">
               <h3 className="text-base font-black text-gray-900 uppercase tracking-widest">Receipt Preview</h3>
@@ -1366,8 +1399,8 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ transactions, loadi
 
       {/* Type Selection Modal for Top Button */}
       {showTypeModal && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md animate-in fade-in">
-          <div className="w-full max-w-lg bg-white dark:bg-gray-900 border-4 border-black rounded-2xl shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] p-10 relative transition-all animate-in zoom-in-95">
+        <div className="fixed inset-0 z-[999] flex items-center justify-center p-2 sm:p-4 bg-black/60 backdrop-blur-md animate-in fade-in">
+          <div className="w-full max-w-lg bg-white dark:bg-gray-900 border-4 border-black rounded-2xl shadow-2xl sm:shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] p-6 sm:p-10 relative transition-all animate-in zoom-in-95">
             <button onClick={() => setShowTypeModal(false)} className="absolute top-6 right-6 text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors" aria-label="Close">
               <X className="w-5 h-5" />
             </button>
@@ -1435,8 +1468,8 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ transactions, loadi
 
       {/* Intercept Modal for Unlinked Budies */}
       {pendingProfileModal && (
-        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in">
-          <div className="bg-white dark:bg-gray-900 rounded-2xl w-full max-w-sm p-8 border-4 border-black shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] relative transition-all animate-in zoom-in-95 flex flex-col items-center text-center -rotate-1">
+        <div className="fixed inset-0 z-[1000] flex items-center justify-center p-2 sm:p-4 bg-black/60 backdrop-blur-sm animate-in fade-in">
+          <div className="bg-white dark:bg-gray-900 rounded-2xl w-full max-w-sm p-6 md:p-8 border-4 border-black shadow-2xl sm:shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] relative transition-all animate-in zoom-in-95 flex flex-col items-center text-center">
             <div className={`w-16 h-16 rounded-3xl flex items-center justify-center mb-6 transition-colors border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] ${getAccentClasses('lightBg')}`}>
               <UserPlus className="w-8 h-8" />
             </div>
@@ -1484,24 +1517,33 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ transactions, loadi
       )}
 
       {confirmModal.show && <ConfirmDialog {...confirmModal} onClose={() => setConfirmModal(p => ({ ...p, show: false }))} />}
+      </Portal>
     </>
   );
 };
 
 const ConfirmDialog: React.FC<{ show: boolean; title: string; message: string; onConfirm: () => void; onClose: () => void }> = ({ title, message, onConfirm, onClose }) => (
-  <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-in fade-in">
-    <div className="bg-white dark:bg-gray-900 rounded-2xl w-full max-w-sm p-10 border-4 border-black shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] animate-in zoom-in-95 flex flex-col items-center text-center transition-all rotate-1">
-      <div className="w-16 h-16 bg-red-50 dark:bg-red-900/20 text-red-600 rounded-3xl flex items-center justify-center mb-6 border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]">
-        <AlertTriangle className="w-8 h-8" />
-      </div>
-      <h3 className="text-xl font-black text-gray-900 dark:text-gray-100 mb-2 uppercase tracking-tight">{title}</h3>
-      <p className="text-sm text-gray-500 dark:text-gray-400 mb-8 font-medium leading-relaxed">{message}</p>
-      <div className="flex flex-col w-full space-y-3">
-        <button onClick={onConfirm} className="w-full bg-red-500 text-white py-4 rounded-xl font-black uppercase tracking-widest text-[10px] border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[1px] hover:translate-y-[1px] transition-all">Proceed</button>
-        <button onClick={onClose} className="w-full bg-gray-200 dark:bg-gray-700 py-4 rounded-xl font-black uppercase tracking-widest text-[10px] text-gray-800 dark:text-gray-200 border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[1px] hover:translate-y-[1px] transition-all">Cancel</button>
-      </div>
-    </div>
-  </div>
+    <Portal>
+        <div className="fixed inset-0 z-[2000] flex items-center justify-center p-2 sm:p-4 bg-black/70 backdrop-blur-sm animate-in fade-in">
+            <div className="bg-white dark:bg-gray-900 rounded-2xl w-full max-w-sm p-6 sm:p-10 border-4 border-black shadow-2xl sm:shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] animate-in zoom-in-95 flex flex-col items-center text-center transition-all max-h-[95vh]">
+                <div className="flex-shrink-0">
+                    <div className="w-16 h-16 bg-red-50 dark:bg-red-900/20 text-red-600 rounded-3xl flex items-center justify-center mb-6 border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]">
+                        <AlertTriangle className="w-8 h-8" />
+                    </div>
+                    <h3 className="text-xl font-black text-gray-900 dark:text-gray-100 mb-2 uppercase tracking-tight">{title}</h3>
+                </div>
+                <div className="flex-1 overflow-y-auto overflow-x-hidden mb-8">
+                    <p className="text-sm text-gray-500 dark:text-gray-400 font-medium leading-relaxed">{message}</p>
+                </div>
+                <div className="flex-shrink-0 w-full">
+                    <div className="flex flex-col w-full space-y-3">
+                        <button onClick={onConfirm} className="w-full bg-red-500 text-white py-4 rounded-xl font-black uppercase tracking-widest text-[10px] border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[1px] hover:translate-y-[1px] transition-all">Proceed</button>
+                        <button onClick={onClose} className="w-full bg-gray-200 dark:bg-gray-700 py-4 rounded-xl font-black uppercase tracking-widest text-[10px] text-gray-800 dark:text-gray-200 border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[1px] hover:translate-y-[1px] transition-all">Cancel</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </Portal>
 );
 
 export default TransactionsPage;

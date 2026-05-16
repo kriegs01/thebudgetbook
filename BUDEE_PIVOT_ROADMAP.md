@@ -11,7 +11,6 @@ This document unifies all parked ideas, feature enhancements, and architectural 
 - [ ] **Mobile Top Padding:** Add spacing between the subtitle and top bar on mobile for `Billers`, `Installments`, `Accounts`, `Wallet`, `People`, and `Settings` pages to ensure visual consistency. *(Note: Partially implemented; needs to be applied to all pages.)*
 - [ ] **Retro Sticker Login Page:** Update the `Auth.tsx` layout and elements to match the heavy pop-art aesthetic.
 - [ ] **Unified Modal Overhaul:** Apply thick borders, offset shadows, and retro styling to all action modals app-wide.
-- [ ] **Responsive Transaction Modals:** Ensure retro sticker-themed transaction modals (payment, loans, transfer) are proportionally sized on mobile, overlay the top bar, and do not cause horizontal scrolling.
 - [ ] **Disable PWA Zoom:** Prevent zooming in the PWA on mobile devices to maintain a consistent, app-like experience.
 - [ ] **Card-Style Budget List:** Apply a card-based layout to the budget setups list on the Budget page to improve readability and visual organization on mobile.
 - [ ] **Password Autofill Bug:** Dot masked password showing when using passwords/autofill instead of randomized shapes.
@@ -71,6 +70,7 @@ This document unifies all parked ideas, feature enhancements, and architectural 
 ---
 
 ## ✅ Done
+- [x] **Responsive Transaction Modals:** Ensured retro sticker-themed transaction modals (payment, loans, transfer) are proportionally sized on mobile, overlay the top bar, and do not cause horizontal scrolling.
 - [x] **Budget Setup Header Refinement:** Further improved the `PageHeader` component for visual consistency across all screen sizes.
     - **Dynamic Highlight:** The decorative highlight is now dynamically sized to perfectly match the full width of the title and its accompanying icon.
     - **Fluid Typography:** Implemented fluid font sizing for the title and subtitle, allowing them to scale smoothly with the viewport and preventing text from wrapping on smaller screens.
