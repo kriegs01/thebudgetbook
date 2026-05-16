@@ -11,7 +11,10 @@ This document unifies all parked ideas, feature enhancements, and architectural 
 - [ ] **Mobile Top Padding:** Add spacing between the subtitle and top bar on mobile for `Billers`, `Installments`, `Accounts`, `Wallet`, `People`, and `Settings` pages to ensure visual consistency. *(Note: Partially implemented; needs to be applied to all pages.)*
 - [ ] **Retro Sticker Login Page:** Update the `Auth.tsx` layout and elements to match the heavy pop-art aesthetic.
 - [ ] **Unified Modal Overhaul:** Apply thick borders, offset shadows, and retro styling to all action modals app-wide.
-- [ ] Applying card layout in budget setups list in budget page or mobile view to improve readability
+- [ ] **Responsive Transaction Modals:** Ensure retro sticker-themed transaction modals (payment, loans, transfer) are proportionally sized on mobile, overlay the top bar, and do not cause horizontal scrolling.
+- [ ] **Disable PWA Zoom:** Prevent zooming in the PWA on mobile devices to maintain a consistent, app-like experience.
+- [ ] **Card-Style Budget List:** Apply a card-based layout to the budget setups list on the Budget page to improve readability and visual organization on mobile.
+- [ ] **Password Autofill Bug:** Dot masked password showing when using passwords/autofill instead of randomized shapes.
 
 ---
 
@@ -56,6 +59,7 @@ This document unifies all parked ideas, feature enhancements, and architectural 
 - [ ] **End-to-End Testing:** Implement initial end-to-end tests for critical user flows (e.g., login, budget creation, transaction logging).
 
 ### Medium Priority
+- [ ] **Themed In-App Numpad:** Design and implement a retro sticker-themed numeric keypad for PIN and amount inputs to ensure brand consistency.
 - [ ] **Smart Budget Creation:** Refactor the 'Open New' button logic on the Budget page to automatically select the next logical month and timing (1/2 or 2/2) based on the most recent existing budget setup. This will streamline the process of creating consecutive budget plans.
 - [ ] **Budget Setup Gallery:** Implement a "cover flow" style carousel for budget setups, where one item is centered and focused, and users can swipe to bring other budgets to the center stage.
 - [ ] **Offline Mode (PWA):**
