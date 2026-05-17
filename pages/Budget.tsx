@@ -1,26 +1,25 @@
-// pages/Budget.tsx - (Line ~4)
+// pages/Budget.tsx
 import { useSearchParams } from 'react-router-dom';
-// pages/Budget.tsx - (Line ~4)
 import { useNavigate } from 'react-router-dom';
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { BudgetItem, Account, Biller, PaymentSchedule, CategorizedSetupItem, SavedBudgetSetup, BudgetCategory, Installment, Wallet } from '../types';
 import { Plus, Check, ChevronDown, Trash2, Save, FileText, Wallet as WalletIcon, ArrowRight, ArrowLeft, Upload, CheckCircle2, X, AlertTriangle, Info, Eye, ZoomIn, ZoomOut, Download, Archive, RotateCcw, Lock, List } from 'lucide-react';
 import { PinProtectedAction } from '../src/components/PinProtectedAction';
 import { createBudgetSetupFrontend, updateBudgetSetupFrontend, archiveBudgetSetup, reopenBudgetSetup } from '../src/services/budgetSetupsService';
-import { IconSquircleButton } from '../src/components/IconSquircleButton';
 import { createTransaction, getAllTransactions, updateTransaction, updateTransactionAndSyncSchedule, createPaymentScheduleTransaction, uploadTransactionReceipt, getTransactionsByPaymentSchedule, getReceiptSignedUrl, deleteTransactionAndRevertSchedule, getAllStashTransactions } from '../src/services/transactionsService';
 import type { SupabaseTransaction, SupabaseMonthlyPaymentSchedule } from '../src/types/supabase';
-import { getInstallmentPaymentSchedule, aggregateCreditCardPurchases } from '../src/utils/paymentStatus'; // PROTOTYPE: Import payment status utilities
-import { getScheduleExpectedAmount } from '../src/utils/linkedAccountUtils'; // ENHANCEMENT: Import for linked account amount calculation
-import { getBillerAmountForDate } from '../src/utils/billers'; // For scheduled increases fallback
+import { getInstallmentPaymentSchedule, aggregateCreditCardPurchases } from '../src/utils/paymentStatus';
+import { getScheduleExpectedAmount } from '../src/utils/linkedAccountUtils';
+import { getBillerAmountForDate } from '../src/utils/billers';
 import { getPaymentSchedulesByPeriod, recordPaymentViaTransaction } from '../src/services/paymentSchedulesService';
 import { combineDateWithCurrentTime } from '../src/utils/dateUtils';
 import { getWalletsForCurrentUser } from '../src/services/walletsService';
 import { useTheme } from '../src/contexts/ThemeContext';
 import useMediaQuery from '../src/hooks/useMediaQuery';
+import { BudgetSetupsList } from '../src/components/BudgetSetupsList';
 
 interface BudgetProps {
-  items: BudgetItem[]; 
+  items: BudgetItem[];
   accounts: Account[];
   billers: Biller[];
   categories: BudgetCategory[];
@@ -31,28 +30,17 @@ interface BudgetProps {
   onMoveToTrash?: (setup: SavedBudgetSetup) => void;
   onReloadSetups?: () => Promise<void>;
   onReloadBillers?: () => Promise<void>;
-  onUpdateInstallment?: (installment: Installment) => Promise<void>; // For updating installment payments
-  installments?: Installment[]; // PROTOTYPE: Installments for Loans section
-  onTransactionCreated?: () => void; // Notify App to reload accounts/balances after stash top-up
-  onTransactionDeleted?: () => void; // Notify App to reload accounts/balances after stash top-up deletion
-  onArchiveBudget?: (setup: SavedBudgetSetup) => Promise<void>; // Archive (close) a budget
-  onReopenBudget?: (setup: SavedBudgetSetup) => Promise<void>; // Reopen an archived budget
+  onUpdateInstallment?: (installment: Installment) => Promise<void>;
+  installments?: Installment[];
+  onTransactionCreated?: () => void;
+  onTransactionDeleted?: () => void;
+  onArchiveBudget?: (setup: SavedBudgetSetup) => Promise<void>;
+  onReopenBudget?: (setup: SavedBudgetSetup) => Promise<void>;
   userProfile?: any;
 }
 
 const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 
-/**
- * Checks whether a biller should appear in a budget for the given month/year,
- * based on its activation and deactivation dates.
- *
- * A biller is considered active for a period when:
- *   activationDate <= selectedPeriod  (inclusive)
- *   AND (no deactivationDate OR selectedPeriod < deactivationDate)
- *
- * The deactivation month is treated as the FIRST inactive month (matches
- * the calculateStatus logic in Billers.tsx).
- */
 const isBillerActiveForPeriod = (biller: Biller, month: string, year: number): boolean => {
   const monthIdx = MONTHS.indexOf(month);
   if (monthIdx === -1) return false;
@@ -61,12 +49,10 @@ const isBillerActiveForPeriod = (biller: Biller, month: string, year: number): b
   const actMonthIdx = MONTHS.indexOf(biller.activationDate.month);
   if (isNaN(actYear) || actMonthIdx === -1) return false;
 
-  // Selected period must be on or after the activation date
   if (year < actYear || (year === actYear && monthIdx < actMonthIdx)) {
     return false;
   }
 
-  // Selected period must be before the deactivation date (deact month = first inactive month)
   if (biller.deactivationDate) {
     const deactYear = parseInt(biller.deactivationDate.year);
     const deactMonthIdx = MONTHS.indexOf(biller.deactivationDate.month);
@@ -80,38 +66,27 @@ const isBillerActiveForPeriod = (biller: Biller, month: string, year: number): b
   return true;
 };
 
-// Budget setup status constants
 const BUDGET_SETUP_STATUS = {
   SAVED: 'Saved',
   ACTIVE: 'Active',
   COMPLETED: 'Completed'
 } as const;
 
-// Autosave configuration constants
-const AUTO_SAVE_DEBOUNCE_MS = 3000; // 3 seconds debounce for autosave
-const AUTO_SAVE_STATUS_TIMEOUT_MS = 3000; // How long to show status messages
+const AUTO_SAVE_DEBOUNCE_MS = 3000;
+const AUTO_SAVE_STATUS_TIMEOUT_MS = 3000;
 
-// Transaction matching configuration
-const TRANSACTION_AMOUNT_TOLERANCE = 1; // ±1 peso tolerance for amount matching (accounts for rounding differences)
-const TRANSACTION_MIN_NAME_LENGTH = 3; // Minimum length for partial name matching to avoid false positives
-const TRANSACTION_DATE_GRACE_DAYS = 7; // Allow transactions up to N days after budget month ends (for late payments)
+const TRANSACTION_AMOUNT_TOLERANCE = 1;
+const TRANSACTION_MIN_NAME_LENGTH = 3;
+const TRANSACTION_DATE_GRACE_DAYS = 7;
 
-// Schedule payments modal transaction type
 type BudgetScheduleTx = { id: string; name: string; amount: number; date: string; paymentMethodId: string; receiptUrl?: string | null };
 
-// Receipt preview zoom constants
 const ZOOM_INCREMENT = 0.25;
 const MIN_ZOOM = 0.25;
 const MAX_ZOOM = 4;
 
-// The first month where new stash-based budgets are in use.
-// Budgets before this date are considered "legacy" (fixed billers, no real transactions).
-const STASH_GO_LIVE = new Date(2026, 2, 1); // March 1, 2026
+const STASH_GO_LIVE = new Date(2026, 2, 1);
 
-/**
- * Returns true if the given year/month predates the stash go-live date.
- * Legacy budgets use schedule/flag paid status; new budgets use real transactions.
- */
 const isLegacyBudget = (year: number, month: string): boolean => {
   const monthIdx = MONTHS.indexOf(month);
   if (monthIdx === -1) return false;
@@ -119,41 +94,18 @@ const isLegacyBudget = (year: number, month: string): boolean => {
   return budgetStart < STASH_GO_LIVE;
 };
 
-/**
- * Parse an ISO lifecycle date string ("YYYY-MM-DD") as local-time month start.
- *
- * Using local time (not UTC) keeps lifecycle comparisons consistent with
- * `new Date(year, monthIndex, 1)` used for the budget month itself.
- * Without this, `new Date('2026-03-01')` is parsed as UTC midnight, which in
- * UTC+ timezones falls on the previous day locally, causing off-by-one errors.
- */
 const parseIsoMonthStart = (iso: string): Date => {
   const [y, m] = iso.split('-').map(Number);
-  return new Date(y, m - 1, 1); // local time — day is always 01
+  return new Date(y, m - 1, 1);
 };
 
-/**
- * Returns true if a category should be considered "active" for the given budget month/year.
- *
- * Rules (in priority order):
- * 1. Deactivation only (`deactivatedAt` set, no `reactivatedFrom`):
- *    - Active for months strictly BEFORE deactivatedAt; hidden from that month onwards.
- * 2. Deactivation + reactivation (`deactivatedAt` AND `reactivatedFrom` set):
- *    - Active before deactivatedAt.
- *    - Hidden in the gap [deactivatedAt, reactivatedFrom).
- *    - Active again from reactivatedFrom onwards (inclusive).
- * 3. Reactivation only (`reactivatedFrom` set, no `deactivatedAt`):
- *    - Active from reactivatedFrom onwards; hidden before it.
- * 4. No lifecycle dates: active if `cat.active !== false`.
- * - Handles missing/invalid month names gracefully (returns true to avoid accidentally hiding sections).
- */
 const isCategoryActiveForBudget = (
   cat: BudgetCategory,
   selectedYear: number,
   selectedMonthName: string
 ): boolean => {
   const monthIndex = MONTHS.indexOf(selectedMonthName);
-  if (monthIndex < 0) return cat.active !== false; // fallback: don't hide accidentally
+  if (monthIndex < 0) return cat.active !== false;
 
   const budgetMonthStart = new Date(selectedYear, monthIndex, 1);
   const deactivationDate = cat.deactivatedAt ? parseIsoMonthStart(cat.deactivatedAt) : null;
@@ -163,35 +115,23 @@ const isCategoryActiveForBudget = (
     return cat.active !== false;
   }
 
-  // Deactivation only
   if (deactivationDate && !reactivationDate) {
     return budgetMonthStart < deactivationDate;
   }
 
-  // Reactivation only (rare)
   if (!deactivationDate && reactivationDate) {
     return budgetMonthStart >= reactivationDate;
   }
 
-  // Deactivation + reactivation gap logic
   if (budgetMonthStart < deactivationDate!) {
-    return true; // before deactivation
+    return true;
   }
   if (reactivationDate && budgetMonthStart >= reactivationDate) {
-    return true; // from reactivation onwards
+    return true;
   }
-  return false; // in the gap [deactivatedAt, reactivatedFrom)
+  return false;
 };
 
-/**
- * Returns true if a category section should be rendered for the given budget month/year.
- *
- * Key distinction from `isCategoryActiveForBudget`:
- * - When a `deactivatedAt` date is set and the budget month is AT or AFTER that cutoff
- *   (and before any `reactivatedFrom`), the section is NEVER rendered — even if `setupData`
- *   still has items. This prevents legacy data from leaking into months at/after the cutoff.
- * - Before the cutoff, or after reactivation, the section renders if the category is active OR has data.
- */
 const shouldRenderCategorySection = (
   cat: BudgetCategory,
   hasData: boolean,
@@ -200,7 +140,6 @@ const shouldRenderCategorySection = (
 ): boolean => {
   const isActive = isCategoryActiveForBudget(cat, selectedYear, selectedMonthName);
 
-  // Hard cutoff: if the category is in its deactivation gap, never render
   if (cat.deactivatedAt) {
     const monthIndex = MONTHS.indexOf(selectedMonthName);
     if (monthIndex >= 0) {
@@ -219,14 +158,6 @@ const shouldRenderCategorySection = (
   return isActive || hasData;
 };
 
-/**
- * Returns true if a "Legacy" label should be shown for the category in the given month.
- *
- * A category is "Legacy" for a given month when:
- * - It has a `deactivatedAt` date, AND
- * - It is currently visible (before the deactivation cutoff, or after reactivation), AND
- * - If `legacyFrom` is set, the budget month must be >= legacyFrom.
- */
 const isCategoryLegacyForBudget = (
   cat: BudgetCategory,
   selectedYear: number,
@@ -240,21 +171,16 @@ const isCategoryLegacyForBudget = (
   const budgetMonthStart = new Date(selectedYear, monthIndex, 1);
   const deactivationDate = parseIsoMonthStart(cat.deactivatedAt);
 
-  // Must be visible (before deactivation cutoff)
   if (budgetMonthStart >= deactivationDate) return false;
 
-  // If legacyFrom is set, only show label from that month onwards
   if (cat.legacyFrom) {
     const legacyFromDate = parseIsoMonthStart(cat.legacyFrom);
     return budgetMonthStart >= legacyFromDate;
   }
 
-  return true; // has deactivatedAt and is still visible → always legacy
+  return true;
 };
 
-/** 
- * PageHeader component mirroring Dashboard style
- */
 const PageHeader: React.FC<{ 
   title: string; 
   subtitle: string; 
@@ -265,11 +191,9 @@ const PageHeader: React.FC<{
   const { getAccentClasses } = useTheme();
   const isMobile = useMediaQuery('(max-width: 767px)');
 
-  // Create a ref for the title's CONTAINER element
   const titleContainerRef = useRef<HTMLDivElement>(null);
   const [highlightWidth, setHighlightWidth] = useState(0);
 
-  // This effect will measure the width of the icon + title container
   useEffect(() => {
     const calculateWidth = () => {
       if (titleContainerRef.current) {
@@ -280,27 +204,23 @@ const PageHeader: React.FC<{
     calculateWidth();
     window.addEventListener('resize', calculateWidth);
     return () => window.removeEventListener('resize', calculateWidth);
-  }, [title]); // Rerun if the title text changes
+  }, [title]);
 
   return (
     <header className={`${isMobile ? 'pt-8' : 'pt-12'} mb-12 flex flex-row items-center justify-between gap-6`}>
         <div className="flex-1">
-            {/* Title container, which positions the highlight */}
             <div className="relative inline-block">
                 <div
-                    ref={titleContainerRef} // Attach the ref to the container div
+                    ref={titleContainerRef}
                     className="flex items-center gap-4"
                 >
                     {icon && <div className="z-10 shrink-0">{icon}</div>}
-
                     <h1
                         className="text-[clamp(2rem,7.5vw,3.75rem)] font-[950] uppercase tracking-tighter leading-none relative z-10 text-black dark:text-white transition-colors duration-300"
-
                     >
                         {title}
                     </h1>
                 </div>
-                {/* The highlight's width is now set dynamically from the container's width */}
                 {highlightWidth > 0 && (
                     <div
                         className={`absolute bottom-1 left-0 h-5 ${getAccentClasses('bg')} opacity-40 -z-0 -rotate-1 -translate-x-2 transition-colors duration-300`}
@@ -309,12 +229,10 @@ const PageHeader: React.FC<{
                 )}
             </div>
 
-            {/* Subtitle container (no longer used for measurement) */}
             <div className="flex items-center gap-3 mt-1 ml-1">
                 {!backButton && (
                     <p
                         className="text-[clamp(1rem,3vw,1.25rem)] font-bold italic text-black/50 dark:text-gray-400 transition-colors duration-300"
-
                     >
                         {subtitle}
                     </p>
@@ -330,14 +248,6 @@ const PageHeader: React.FC<{
   );
 };
 
-
-
-/**
- * Calculates the remaining amount for a saved budget setup.
- * Uses the same formula as the Budget Setup page's Month Summary:
- *   remaining = salaryToUse + totalOtherIncome - setup.totalAmount
- * where salaryToUse = _actualSalary if set, 0 if other income exists, otherwise _projectedSalary.
- */
 const calculateBudgetRemaining = (
   setup: SavedBudgetSetup,
   transactions: SupabaseTransaction[],
@@ -400,14 +310,11 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
   const [view, setView] = useState<'summary' | 'setup'>('summary');
   const [selectedMonth, setSelectedMonth] = useState(MONTHS[new Date().getMonth()]);
   const [selectedTiming, setSelectedTiming] = useState<'1/2' | '2/2'>('1/2');
-  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear()); // REFACTOR: Track budget year for accurate payment schedule loading
-
-  // pages/Budget.tsx - (Inside the Budget component, after the existing useState hooks)
+  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
 
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
 
-  // On initial load, set the view state from URL params
   useEffect(() => {
     const viewParam = searchParams.get('view');
     const monthParam = searchParams.get('month');
@@ -419,13 +326,10 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
       if (yearParam) setSelectedYear(parseInt(yearParam, 10));
       if (timingParam === '1/2' || timingParam === '2/2') setSelectedTiming(timingParam);
       
-      // Directly transition to setup view if specified in URL
       setView('setup');
     }
-  }, []); // Run only once on component mount
-  // pages/Budget.tsx - (After the previous useEffect)
+  }, []);
 
-  // When view state changes, update the URL search params
   useEffect(() => {
     const params = new URLSearchParams();
     if (view === 'setup') {
@@ -435,61 +339,44 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
       params.set('timing', selectedTiming);
       navigate(`?${params.toString()}`, { replace: true });
     } else {
-      // Clear params when returning to summary view
       navigate('', { replace: true });
     }
   }, [view, selectedMonth, selectedYear, selectedTiming, navigate]);
 
-
-  // Categorized Setup State
   const [setupData, setSetupData] = useState<{ [key: string]: CategorizedSetupItem[] }>({});
   const [removedIds, setRemovedIds] = useState<Set<string>>(new Set());
   
-  // Ref to track if user is currently interacting with an input to prevent sync-jumps
   const isFocusedRef = useRef(false);
 
-  // PROTOTYPE: Track excluded installments (by default all are included)
   const [excludedInstallmentIds, setExcludedInstallmentIds] = useState<Set<string>>(new Set());
 
-  // Month Summary State - stored in Supabase with setup data
   const [projectedSalary, setProjectedSalary] = useState<string>('11000');
   const [actualSalary, setActualSalary] = useState<string>('');
   const [isProjectedFocused, setIsProjectedFocused] = useState(false);
   const [isActualFocused, setIsActualFocused] = useState(false);
 
-  // Transactions state - used for matching payments
   const [transactions, setTransactions] = useState<SupabaseTransaction[]>([]);
   
-  // Wallets (Stash) state
   const [wallets, setWallets] = useState<Wallet[]>([]);
-  // Dedicated stash top-up transactions state (queries directly by wallet_id IS NOT NULL)
   const [stashTopUps, setStashTopUps] = useState<SupabaseTransaction[]>([]);
-  // Wallet IDs excluded from the grand total (persisted in setup data as _excludedWalletIds)
   const [excludedWalletIds, setExcludedWalletIds] = useState<Set<string>>(new Set());
 
-  // Stash funding modal state
   const [fundModal, setFundModal] = useState<{ wallet: Wallet } | null>(null);
   const [fundForm, setFundForm] = useState({ amount: '', date: '', notes: '' });
   const [fundSubmitting, setFundSubmitting] = useState(false);
   const [stashInfoModal, setStashInfoModal] = useState<{ wallet: Wallet } | null>(null);
   const [stashStatusMsg, setStashStatusMsg] = useState<{ msg: string; type: 'success' | 'error' } | null>(null);
 
-  // Archive/reopen operation status
   const [archiveStatusMsg, setArchiveStatusMsg] = useState<{ msg: string; type: 'success' | 'error' } | null>(null);
   const [archiveSubmitting, setArchiveSubmitting] = useState(false);
 
-  // Collapsible archived section on summary view
   const [showArchived, setShowArchived] = useState(false);
 
-  // REFACTOR: Payment schedules state - source of truth for payment status
   const [paymentSchedules, setPaymentSchedules] = useState<SupabaseMonthlyPaymentSchedule[]>([]);
 
-  // Load from saved setup when month/timing changes
   useEffect(() => {
     const existingSetup = savedSetups.find(s => s.month === selectedMonth && s.timing === selectedTiming);
     if (existingSetup && existingSetup.data) {
-      // QA: Prevent unnecessary state updates if data matches current local state
-      // This stops the "pulling away" jump in PWAs after autosave reloads the list
       const incomingData = existingSetup.data;
       const currentDataStr = JSON.stringify(setupData);
       const incomingDataStr = JSON.stringify(Object.fromEntries(
@@ -500,35 +387,29 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
         setSetupData(incomingData as any);
       }
 
-      // Only update salary fields if they actually changed
       const newProjected = incomingData._projectedSalary ?? '11000';
       const newActual = incomingData._actualSalary ?? '';
       if (newProjected !== projectedSalary) setProjectedSalary(newProjected);
       if (newActual !== actualSalary) setActualSalary(newActual);
 
-      // Restore excluded installment IDs from persisted setup data
       if (Array.isArray(existingSetup.data._excludedInstallmentIds)) {
         setExcludedInstallmentIds(new Set(existingSetup.data._excludedInstallmentIds));
       } else {
         setExcludedInstallmentIds(new Set());
       }
-      // Restore excluded wallet IDs from persisted setup data
       if (Array.isArray(existingSetup.data._excludedWalletIds)) {
         setExcludedWalletIds(new Set(existingSetup.data._excludedWalletIds));
       } else {
         setExcludedWalletIds(new Set());
       }
     } else {
-      // Reset to defaults if no saved setup
       setProjectedSalary('11000');
       setActualSalary('');
       setExcludedInstallmentIds(new Set());
       setExcludedWalletIds(new Set());
     }
-  }, [selectedMonth, selectedTiming, savedSetups]); // Keep savedSetups so we sync across devices, but logic above prevents jitters
+  }, [selectedMonth, selectedTiming, savedSetups]);
 
-  // Load transactions for matching payment status
-  // Only loads once on mount to avoid excessive DB queries
   useEffect(() => {
     const loadTransactions = async () => {
       try {
@@ -536,7 +417,6 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
         if (error) {
           console.error('[Budget] Failed to load transactions:', error);
         } else if (data) {
-          // Filter transactions to last 24 months to improve performance
           const twoYearsAgo = new Date();
           twoYearsAgo.setFullYear(twoYearsAgo.getFullYear() - 2);
           
@@ -546,7 +426,6 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
           });
           
           setTransactions(recentTransactions);
-          console.log('[Budget] Loaded transactions:', recentTransactions.length, 'of', data.length);
         }
       } catch (error) {
         console.error('[Budget] Error loading transactions:', error);
@@ -554,9 +433,8 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
     };
 
     loadTransactions();
-  }, []); // Load once on mount, reload happens after creating transactions
+  }, []);
 
-  // Load wallets and stash top-ups for the Stash section
   useEffect(() => {
     const loadWalletsAndStash = async () => {
       try {
@@ -581,7 +459,6 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
     loadWalletsAndStash();
   }, []);
 
-  /** Reloads stash top-up transactions from the DB. */
   const reloadStashTopUps = useCallback(async () => {
     try {
       const { data, error } = await getAllStashTransactions();
@@ -595,7 +472,6 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
     }
   }, []);
 
-  /** Returns all stash top-up transactions for a wallet within the selected budget month. */
   const getStashTopUps = useCallback((walletId: string): SupabaseTransaction[] => {
     const monthIndex = MONTHS.indexOf(selectedMonth);
     return stashTopUps.filter(tx => {
@@ -605,9 +481,6 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
     });
   }, [stashTopUps, selectedMonth, selectedYear]);
 
-  /** Computes funded/remaining/isFunded aggregates for a wallet in the selected month.
-   * Amounts in the DB are stored as negative (cash_in convention), so Math.abs is used
-   * to compute the positive funded total for display and comparison. */
   const getStashAggregates = useCallback((wallet: Wallet) => {
     const topUps = getStashTopUps(wallet.id);
     const funded = topUps.reduce((sum, tx) => sum + Math.abs(tx.amount), 0);
@@ -616,18 +489,12 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
     return { funded, remaining, isFunded, topUps };
   }, [getStashTopUps]);
 
-  /** Opens the Fund Stash modal, pre-filling the amount with the remaining balance.
-   * The date is defaulted to a date within the selected budget month/year so that
-   * getStashTopUps correctly picks up the transaction in the status and info modal.
-   * If today falls within the selected budget month/year, today's local date is used;
-   * otherwise the 1st of the selected budget month is used. */
   const handleOpenFundModal = useCallback((wallet: Wallet) => {
     const { remaining } = getStashAggregates(wallet);
     const now = new Date();
     const selectedMonthIndex = MONTHS.indexOf(selectedMonth);
     const isCurrentPeriod =
       now.getFullYear() === selectedYear && now.getMonth() === selectedMonthIndex;
-    // Build default date using local date components (not UTC) to avoid midnight boundary issues
     let defaultDate: string;
     if (isCurrentPeriod) {
       defaultDate = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
@@ -642,23 +509,18 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
     setFundModal({ wallet });
   }, [getStashAggregates, selectedMonth, selectedYear]);
 
-  /** Submits the Fund Stash form, creating a stash top-up transaction. */
   const handleFundSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!fundModal) return;
     const amount = parseFloat(fundForm.amount);
     if (isNaN(amount) || amount <= 0) return;
-    // Capture wallet details before the modal is closed so they remain accessible
-    // in the async steps that follow setFundModal(null).
     const walletId = fundModal.wallet.id;
     const walletName = fundModal.wallet.name;
     const walletAccountId = fundModal.wallet.accountId;
     setFundSubmitting(true);
     try {
-      // Build the base payload without wallet_id so we can retry without it if needed.
       const stashTxBase = {
         name: `Stash top-up - ${walletName} (${selectedMonth} ${selectedYear})`,
-        // Negative amount: cash_in = money IN to the linked account (adds to balance per sign convention)
         amount: -amount,
         date: combineDateWithCurrentTime(fundForm.date),
         payment_method_id: walletAccountId,
@@ -668,35 +530,24 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
         related_transaction_id: null,
         receipt_url: null,
       };
-      // First attempt: include wallet_id so the transaction is linked to the stash wallet.
       let creationResult = await createTransaction({ ...stashTxBase, wallet_id: walletId });
-      // If the wallet_id column doesn't exist yet in this environment (migration pending),
-      // PostgREST returns a column-not-found error.  Retry without wallet_id so the
-      // transaction is at least created; the optimistic frontend state will still show it
-      // as a funded stash entry via safeNewTx below.
       if (creationResult.error) {
         const errMsg = JSON.stringify(creationResult.error).toLowerCase();
         if (errMsg.includes('wallet_id') || errMsg.includes('42703') || errMsg.includes('column')) {
-          console.warn('[Budget] wallet_id column not available, retrying without it:', creationResult.error);
           creationResult = await createTransaction(stashTxBase);
         }
       }
       const { data: newTx, error } = creationResult;
       if (error) throw error;
-      // Build a safe tx with wallet_id explicitly set.  The DB row returned by
-      // createTransaction may omit wallet_id if the migration hasn't been applied
-      // to the target table yet, which would cause getStashTopUps to filter it out.
       const safeNewTx: SupabaseTransaction | null = newTx
         ? { ...(newTx as SupabaseTransaction), wallet_id: walletId }
         : null;
-      // Optimistic update: show funded state immediately (deduplicate by id)
       if (safeNewTx) {
         setStashTopUps(prev => [safeNewTx, ...prev.filter(t => t.id !== safeNewTx.id)]);
       }
       setFundModal(null);
       setStashStatusMsg({ msg: `Funded stash '${walletName}' by ${formatCurrency(amount)}`, type: 'success' });
       setTimeout(() => setStashStatusMsg(null), 3000);
-      // Update budget setup status to Active when stash is being funded
       const existingSetup = savedSetups.find(s => s.month === selectedMonth && s.timing === selectedTiming);
       if (existingSetup && existingSetup.status !== BUDGET_SETUP_STATUS.ACTIVE) {
         const { error: statusError } = await updateBudgetSetupFrontend({
@@ -709,11 +560,6 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
           await onReloadSetups();
         }
       }
-      // Reload from DB and merge: if the new tx isn't in the DB results (e.g. the
-      // wallet_id column migration hasn't been applied yet), keep the optimistic tx
-      // so the row and info modal continue to reflect the fund.
-      // Also reload the main transactions list so the Transactions page and account
-      // balances immediately reflect the new top-up.
       const [stashResult] = await Promise.all([
         getAllStashTransactions(),
         reloadTransactions(),
@@ -722,14 +568,11 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
       if (!reloadError && freshData !== null) {
         const freshTopUps = freshData as SupabaseTransaction[];
         if (safeNewTx && !freshTopUps.some(t => t.id === safeNewTx.id)) {
-          // New tx absent from DB result — keep it alongside the refreshed list
           setStashTopUps([safeNewTx, ...freshTopUps]);
         } else {
           setStashTopUps(freshTopUps);
         }
       }
-      // If reload errors, the optimistic state set above remains intact
-      // Notify parent to reload accounts so balances immediately reflect the new top-up.
       if (onTransactionCreated) onTransactionCreated();
     } catch (err) {
       console.error('[Budget] Error funding stash:', err);
@@ -740,7 +583,6 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
     }
   };
 
-  /** Toggles a wallet's inclusion in the grand total computation. */
   const handleWalletIncludeToggle = useCallback((walletId: string) => {
     setExcludedWalletIds(prev => {
       const next = new Set(prev);
@@ -753,9 +595,6 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
     });
   }, []);
 
-  /** Confirms and deletes a stash top-up transaction.
-   * Uses deleteTransactionAndRevertSchedule which safely handles null payment_schedule_id
-   * and also cleans up any credit_payment counterpart transactions. */
   const handleDeleteStashTopUp = (txId: string, amount: number) => {
     const absAmount = Math.abs(amount);
     setConfirmModal({
@@ -770,10 +609,7 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
           setStashStatusMsg({ msg: 'Failed to delete top-up.', type: 'error' });
         } else {
           setStashStatusMsg({ msg: 'Top-up deleted.', type: 'success' });
-          // Reload stash top-ups AND the main transactions list so the Transactions page
-          // and account balances reflect the deletion immediately.
           await Promise.all([reloadStashTopUps(), reloadTransactions()]);
-          // Notify parent to reload accounts so balances immediately reflect the deletion.
           if (onTransactionDeleted) onTransactionDeleted();
         }
         setTimeout(() => setStashStatusMsg(null), 3000);
@@ -781,19 +617,15 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
     });
   };
   
-  // REFACTOR: Load payment schedules for the selected month
-  // This provides accurate payment status from the monthly_payment_schedules table
   useEffect(() => {
     const loadPaymentSchedules = async () => {
       try {
-        // REVIEW FIX: Use selectedYear instead of current year to handle historical/future budgets
         const { data, error } = await getPaymentSchedulesByPeriod(selectedMonth, selectedYear);
         
         if (error) {
           console.error('[Budget] Failed to load payment schedules:', error);
         } else if (data) {
           setPaymentSchedules(data);
-          console.log('[Budget] Loaded payment schedules for', selectedMonth, selectedYear, ':', data.length, 'schedules');
         }
       } catch (error) {
         console.error('[Budget] Error loading payment schedules:', error);
@@ -801,23 +633,19 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
     };
     
     loadPaymentSchedules();
-  }, [selectedMonth, selectedYear]); // REVIEW FIX: Reload when month or year changes
+  }, [selectedMonth, selectedYear]);
 
-  // Autosave State
   const [autoSaveStatus, setAutoSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const autoSaveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const lastSavedDataRef = useRef<string>('');
 
-  // Modal States
-  // REFACTOR: Use schedule.id for payment schedule linking (removed redundant paymentScheduleId field)
   const [showPayModal, setShowPayModal] = useState<{ 
     biller: Biller, 
-    schedule: PaymentSchedule; // schedule.id contains the payment schedule ID for linking
-    expectedAmount?: number; // Override when DB expected_amount is 0 (e.g. Loans billers)
+    schedule: PaymentSchedule;
+    expectedAmount?: number;
   } | null>(null);
-  // QA: Add transactionId to support editing from Pay modal
   const [payFormData, setPayFormData] = useState({
-    transactionId: '', // Empty for new, set for editing
+    transactionId: '',
     amount: '',
     receipt: '',
     datePaid: new Date().toISOString().split('T')[0],
@@ -825,23 +653,19 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
   });
   const [payReceiptFile, setPayReceiptFile] = useState<File | null>(null);
 
-  // QA: Transaction form modal for Purchases (supports create and edit)
-  // Fix for Issue #6: Enable transaction editing
   const [showTransactionModal, setShowTransactionModal] = useState(false);
   
-  // Default transaction form state - used for resetting
   const getDefaultTransactionFormData = () => ({
     id: '',
     name: '',
     date: new Date().toISOString().split('T')[0],
     amount: '',
     accountId: accounts[0]?.id || '',
-    paymentScheduleId: '' // FIX: Add payment schedule ID for linking installment payments
+    paymentScheduleId: ''
   });
   
   const [transactionFormData, setTransactionFormData] = useState(getDefaultTransactionFormData());
 
-  // Salary Cash-In state
   const [showSalaryModal, setShowSalaryModal] = useState(false);
   const [showIncomeRecordsModal, setShowIncomeRecordsModal] = useState(false);
   const [salaryFormData, setSalaryFormData] = useState({
@@ -863,18 +687,12 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
     onConfirm: () => {},
   });
 
-  // Schedule payments modal (consolidated payment records for a budget item)
-  // scheduleId is present for schedule-based modals and null for direct-payment modals
   const [schedulePaymentsModal, setSchedulePaymentsModal] = useState<{ label: string; scheduleId: string | null; transactions: BudgetScheduleTx[] } | null>(null);
   const [loadingScheduleTx, setLoadingScheduleTx] = useState(false);
   const [scheduleSignedUrls, setScheduleSignedUrls] = useState<Record<string, string | null>>({});
   const [previewReceiptUrl, setPreviewReceiptUrl] = useState<string | null>(null);
   const [zoom, setZoom] = useState(0.5);
 
-  /**
-   * QA: Returns the sum of monthly amounts from installments linked to a Loans biller,
-   * or null when the biller is not a Loans type or has no linked installments.
-   */
   const getLinkedInstallmentsAmount = useCallback((biller: Biller): number | null => {
     if (!biller.category.startsWith('Loans')) return null;
     const linked = installments.filter(inst => inst.billerId === biller.id);
@@ -882,7 +700,6 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
     return linked.reduce((sum, inst) => sum + inst.monthlyAmount, 0);
   }, [installments]);
 
-  // Sync effect with Billers and Categories
   useEffect(() => {
     if (view === 'setup') {
       setSetupData(prev => {
@@ -899,8 +716,6 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
             !removedIds.has(b.id)
           );
 
-          // Remove billers that don't match the current timing or are not active for this period
-          // ENHANCEMENT: Also update amounts for existing billers (in case of linked account changes)
           const filteredExisting = newData[cat.name].filter(item => {
             if (item.isBiller) {
               const biller = billers.find(b => b.id === item.id);
@@ -908,13 +723,11 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                 biller.timing === selectedTiming &&
                 isBillerActiveForPeriod(biller, selectedMonth, selectedYear);
             }
-            return true; // Keep non-biller items
+            return true;
           }).map(item => {
-            // ENHANCEMENT: Update amount for existing biller items
             if (item.isBiller) {
               const biller = billers.find(b => b.id === item.id);
               if (biller) {
-                // QA: For Loans billers, use linked installment monthly amounts first
                 const instAmount = getLinkedInstallmentsAmount(biller);
                 if (instAmount !== null) {
                   return { ...item, amount: instAmount.toFixed(2) };
@@ -936,7 +749,6 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
             }
             return item;
           }).filter(item => {
-            // QA: Exclude Loans biller rows that still resolve to 0 amount
             if (item.isBiller) {
               const biller = billers.find(b => b.id === item.id);
               if (biller?.category.startsWith('Loans') && parseFloat(item.amount) === 0) {
@@ -952,17 +764,14 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
             .map(b => {
               const schedule = b.schedules.find(s => s.month === selectedMonth);
               
-              // QA: For Loans billers, use linked installment monthly amounts first
               let amount: number;
               const instAmount = getLinkedInstallmentsAmount(b);
               if (instAmount !== null) {
                 amount = instAmount;
               } else if (schedule) {
-                // ENHANCEMENT: For linked billers, calculate amount from transactions
                 const { amount: calculatedAmount } = getScheduleExpectedAmount(b, schedule, accounts, transactions);
                 amount = calculatedAmount;
               } else {
-                // No schedule found — still apply any active scheduled increase
                 const dateStr = `${selectedYear}-${String(MONTHS.indexOf(selectedMonth) + 1).padStart(2, '0')}-01`;
                 amount = getBillerAmountForDate(b, dateStr);
               }
@@ -976,7 +785,6 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                 isBiller: true
               };
             })
-            // QA: Exclude Loans billers that resolve to 0 amount
             .filter(item => {
               const biller = billers.find(b => b.id === item.id);
               if (biller?.category.startsWith('Loans') && parseFloat(item.amount) === 0) {
@@ -1002,37 +810,21 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
     }).format(val);
   };
 
-  /**
-   * QA: Check if installment should be displayed for selected month
-   * Shows installments that have started on or before the selected month
-   * AND whose last payment month (startDate + termDuration - 1) is on or after the selected month.
-   * Fix for Issue #2: Incorrect installment scheduling
-   */
   const shouldShowInstallment = useCallback((installment: Installment, month: string, year?: number): boolean => {
-    // If no start date is set, always show (backward compatibility)
     if (!installment.startDate) return true;
     
-    // Parse installment start date (format: YYYY-MM)
     const [startYear, startMonth] = installment.startDate.split('-').map(Number);
     
-    // Parse selected month
     const selectedMonthIndex = MONTHS.indexOf(month);
     if (selectedMonthIndex === -1) return false;
     
-    // Determine target year (use provided year or current year)
     const targetYear = year || new Date().getFullYear();
 
-    // Use a monotonic month counter (months since year 0) to compare periods safely
     const startMonthAbs = startYear * 12 + (startMonth - 1);
     const selectedMonthAbs = targetYear * 12 + selectedMonthIndex;
 
-    // Installment must have started on or before the selected month
     if (startMonthAbs > selectedMonthAbs) return false;
 
-    // Installment must not be past its last payment month.
-    // Last payment month = startDate + (termDuration - 1).
-    // termDuration is stored as e.g. "12 months" (set by installmentsAdapter.ts:
-    // `${supabase.term_duration} months`) — extract the leading integer.
     const termMonths = parseInt(installment.termDuration, 10);
     if (!isNaN(termMonths) && termMonths > 0) {
       const lastPaymentMonthAbs = startMonthAbs + (termMonths - 1);
@@ -1040,13 +832,8 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
     }
 
     return true;
-  }, []); // MONTHS is a constant, no need to include in deps
+  }, []);
 
-  /**
-   * REFACTOR: Get payment schedule for a biller or installment
-   * Uses the monthly_payment_schedules table as the source of truth.
-   * Optional month/year parameters allow explicit period filtering.
-   */
   const getPaymentSchedule = useCallback((
     sourceType: 'biller' | 'installment',
     sourceId: string,
@@ -1062,10 +849,6 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
     );
   }, [paymentSchedules]);
   
-  /**
-   * REFACTOR: Check if an item is fully paid using payment schedules
-   * Only returns true when status === 'paid' (not partial)
-   */
   const checkIfPaidBySchedule = useCallback((
     sourceType: 'biller' | 'installment',
     sourceId: string
@@ -1075,9 +858,6 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
     return schedule.status === 'paid';
   }, [getPaymentSchedule]);
 
-  /**
-   * Check if an item has a partial payment using payment schedules
-   */
   const checkIfPartialBySchedule = useCallback((
     sourceType: 'biller' | 'installment',
     sourceId: string
@@ -1087,68 +867,48 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
     return schedule.status === 'partial' && schedule.amount_paid > 0;
   }, [getPaymentSchedule]);
 
-  /**
-   * Check if an item is paid by matching transactions
-   * Matches by name (with minimum length), amount (within tolerance), and date (within month/year)
-   */
   const checkIfPaidByTransaction = useCallback((
     itemName: string, 
     itemAmount: string | number, 
     month: string,
-    year?: number // Optional year parameter for viewing past budgets
+    year?: number
   ): boolean => {
     const amount = typeof itemAmount === 'string' ? parseFloat(itemAmount) : itemAmount;
     if (isNaN(amount) || amount <= 0) return false;
 
-    // Get month index (0-11) for date comparison
     const monthIndex = MONTHS.indexOf(month);
     if (monthIndex === -1) return false;
 
-    // Determine target year (use provided year or current year)
     const targetYear = year || new Date().getFullYear();
 
-    // Find matching transaction
     const matchingTransaction = transactions.find(tx => {
-      // Check name match with minimum length requirement to avoid false positives
       const itemNameLower = itemName.toLowerCase();
       const txNameLower = tx.name.toLowerCase();
       
-      // Require at least TRANSACTION_MIN_NAME_LENGTH characters to match
       const nameMatch = (
         (txNameLower.includes(itemNameLower) && itemNameLower.length >= TRANSACTION_MIN_NAME_LENGTH) ||
         (itemNameLower.includes(txNameLower) && txNameLower.length >= TRANSACTION_MIN_NAME_LENGTH)
       );
       
-      // Check amount match (within tolerance)
       const amountMatch = Math.abs(tx.amount - amount) <= TRANSACTION_AMOUNT_TOLERANCE;
       
-      // Check date match with grace period for late payments
-      // Allow:
-      // 1. Transactions in the same month and year
-      // 2. Transactions in December of previous year (for January budgets)
-      // 3. Transactions within TRANSACTION_DATE_GRACE_DAYS after month ends
       const txDate = new Date(tx.date);
       const txMonth = txDate.getMonth();
       const txYear = txDate.getFullYear();
       
       let dateMatch = false;
       
-      // Same month and year
       if (txMonth === monthIndex && txYear === targetYear) {
         dateMatch = true;
       }
-      // December of previous year for January budgets
       else if (monthIndex === 0 && txMonth === 11 && txYear === targetYear - 1) {
         dateMatch = true;
       }
-      // Within grace period after month ends (next month only, within first N days)
       else if (txMonth === (monthIndex + 1) % 12) {
-        const budgetMonthEnd = new Date(targetYear, monthIndex + 1, 0); // Last day of budget month
+        const budgetMonthEnd = new Date(targetYear, monthIndex + 1, 0);
         const daysDifference = Math.floor((txDate.getTime() - budgetMonthEnd.getTime()) / (1000 * 60 * 60 * 24));
         
-        // Ensure transaction is after month end and within grace period
         if (daysDifference > 0 && daysDifference <= TRANSACTION_DATE_GRACE_DAYS) {
-          // Handle year transition for December -> January
           const expectedYear = monthIndex === 11 ? targetYear + 1 : targetYear;
           if (txYear === expectedYear) {
             dateMatch = true;
@@ -1159,29 +919,9 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
       return nameMatch && amountMatch && dateMatch;
     });
 
-    if (matchingTransaction) {
-      console.log(`[Budget] ✓ Found matching transaction for "${itemName}":`, {
-        txName: matchingTransaction.name,
-        txAmount: matchingTransaction.amount,
-        txDate: matchingTransaction.date,
-        itemAmount: amount
-      });
-    } else {
-      console.log(`[Budget] ✗ No matching transaction for "${itemName}" (${amount}) in ${month}`, {
-        totalTransactions: transactions.length,
-        itemAmount: amount,
-        month,
-        targetYear: year || new Date().getFullYear()
-      });
-    }
-
     return !!matchingTransaction;
   }, [transactions]);
 
-  /**
-   * QA: Find existing transaction for an item
-   * Fix for Issue: Transaction editing from Pay modal
-   */
   const findExistingTransaction = useCallback((
     itemName: string, 
     itemAmount: string | number, 
@@ -1218,9 +958,6 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
     });
   }, [transactions]);
 
-  /**
-   * Reload transactions from Supabase
-   */
   const reloadTransactions = useCallback(async () => {
     try {
       const { data, error } = await getAllTransactions();
@@ -1228,32 +965,25 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
         console.error('[Budget] Failed to reload transactions:', error);
       } else if (data) {
         setTransactions(data);
-        console.log('[Budget] Reloaded transactions:', data.length);
       }
     } catch (error) {
       console.error('[Budget] Error reloading transactions:', error);
     }
   }, []);
 
-  /**
-   * REFACTOR: Reload payment schedules from Supabase
-   */
   const reloadPaymentSchedules = useCallback(async () => {
     try {
-      // REVIEW FIX: Use selectedYear to match the loadPaymentSchedules logic
       const { data, error } = await getPaymentSchedulesByPeriod(selectedMonth, selectedYear);
       if (error) {
         console.error('[Budget] Failed to reload payment schedules:', error);
       } else if (data) {
         setPaymentSchedules(data);
-        console.log('[Budget] Reloaded payment schedules:', data.length);
       }
     } catch (error) {
       console.error('[Budget] Error reloading payment schedules:', error);
     }
   }, [selectedMonth, selectedYear]);
 
-  /** Open the consolidated payment records modal for a payment schedule */
   const openSchedulePaymentsModal = async (scheduleId: string, label: string) => {
     setLoadingScheduleTx(true);
     setScheduleSignedUrls({});
@@ -1274,7 +1004,6 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
     }
   };
 
-  /** Open the payment records modal for a non-schedule item (e.g. Purchases) */
   const openDirectPaymentModal = (tx: SupabaseTransaction, label: string) => {
     const txEntry: BudgetScheduleTx = { id: tx.id, name: tx.name, amount: tx.amount, date: tx.date, paymentMethodId: tx.payment_method_id, receiptUrl: tx.receipt_url ?? null };
     setScheduleSignedUrls({});
@@ -1286,9 +1015,6 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
     }
   };
 
-  /** Delete a payment transaction from the payment records modal.
-   * The cascade-delete in deleteTransactionAndRevertSchedule also removes any linked
-   * credit_payment counterpart on the associated credit account. */
   const handleDeleteScheduleTx = async (txId: string) => {
     setConfirmModal({
       show: true,
@@ -1299,11 +1025,9 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
         try {
           const { error } = await deleteTransactionAndRevertSchedule(txId);
           if (error) throw error;
-          // Reload the modal to reflect the deletion
           if (schedulePaymentsModal?.scheduleId) {
             await openSchedulePaymentsModal(schedulePaymentsModal.scheduleId, schedulePaymentsModal.label);
           } else {
-            // For direct-payment modals (no scheduleId), just close — no reload needed
             setSchedulePaymentsModal(null);
           }
         } catch (err) {
@@ -1314,15 +1038,9 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
     });
   };
 
-  /**
-   * Auto-save budget setup with debouncing
-   * Automatically saves changes after 3 seconds of inactivity
-   */
   const autoSave = useCallback(async () => {
-    // Only auto-save in setup view
     if (view !== 'setup') return;
     
-    // Prepare data including salary information (use structuredClone for better performance)
     const dataToSave = {
       ...structuredClone(setupData),
       _projectedSalary: projectedSalary,
@@ -1331,14 +1049,11 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
       _excludedWalletIds: [...excludedWalletIds]
     };
     
-    // Check if data has actually changed
     const currentDataString = JSON.stringify(dataToSave);
     if (currentDataString === lastSavedDataRef.current) {
-      console.log('[Budget] No changes detected, skipping auto-save');
       return;
     }
     
-    // Calculate total for regular items
     let regularItemsTotal = 0;
     Object.values(setupData)
       .filter((value): value is CategorizedSetupItem[] => Array.isArray(value))
@@ -1353,35 +1068,27 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
         });
       });
 
-    // Calculate installments total (same logic as categorySummary)
     const installmentsTotal = installments
       .filter(inst => {
         if (inst.isArchived) return false;
         const timingMatch = !inst.timing || inst.timing === selectedTiming;
         const scheduleForMonth = getPaymentSchedule('installment', inst.id, selectedMonth, selectedYear);
         const isActiveForPeriod = scheduleForMonth !== undefined || shouldShowInstallment(inst, selectedMonth, selectedYear);
-        // Only hide when there is NO schedule for this period AND the total is fully paid.
-        // When a schedule exists for the viewed period, always keep the row visible so the
-        // user can see the paid/partial indicator rather than the row disappearing on payment.
         const isFinished = !scheduleForMonth && inst.totalAmount > 0 && inst.paidAmount >= inst.totalAmount;
         const notExcluded = !excludedInstallmentIds.has(inst.id);
         return timingMatch && isActiveForPeriod && !isFinished && notExcluded;
       })
       .reduce((sum, inst) => sum + inst.monthlyAmount, 0);
 
-    // Grand total includes both regular items AND installments AND included stash wallets
-    // Use the actual funded amount when it exceeds the target (over-funded stash)
     const stashTotal = wallets.filter(w => !excludedWalletIds.has(w.id)).reduce((s, w) => s + Math.max(w.amount, getStashAggregates(w).funded), 0);
     const total = regularItemsTotal + installmentsTotal + stashTotal;
     
     try {
       setAutoSaveStatus('saving');
-      console.log('[Budget] Auto-saving budget setup...');
       
       const existingSetup = savedSetups.find(s => s.month === selectedMonth && s.timing === selectedTiming);
       
       if (existingSetup) {
-        // Update existing setup
         const updatedSetup: SavedBudgetSetup = {
           ...existingSetup,
           totalAmount: total,
@@ -1392,13 +1099,11 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
         const { error } = await updateBudgetSetupFrontend(updatedSetup);
         
         if (error) {
-          console.error('[Budget] Auto-save failed:', error);
           setAutoSaveStatus('error');
           setTimeout(() => setAutoSaveStatus('idle'), AUTO_SAVE_STATUS_TIMEOUT_MS);
           return;
         }
       } else {
-        // Create new setup
         const newSetup: Omit<SavedBudgetSetup, 'id'> = {
           month: selectedMonth,
           timing: selectedTiming,
@@ -1410,22 +1115,18 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
         const { error } = await createBudgetSetupFrontend(newSetup);
         
         if (error) {
-          console.error('[Budget] Auto-save failed:', error);
           setAutoSaveStatus('error');
           setTimeout(() => setAutoSaveStatus('idle'), AUTO_SAVE_STATUS_TIMEOUT_MS);
           return;
         }
       }
       
-      // Update last saved data reference
       lastSavedDataRef.current = currentDataString;
       
-      // Reload setups to get fresh data
       if (onReloadSetups) {
         await onReloadSetups();
       }
       
-      console.log('[Budget] Auto-save completed successfully');
       setAutoSaveStatus('saved');
       setTimeout(() => setAutoSaveStatus('idle'), 2000);
     } catch (error) {
@@ -1433,39 +1134,31 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
       setAutoSaveStatus('error');
       setTimeout(() => setAutoSaveStatus('idle'), AUTO_SAVE_STATUS_TIMEOUT_MS);
     }
-  }, [view, setupData, projectedSalary, actualSalary, selectedMonth, selectedTiming, savedSetups, excludedInstallmentIds, excludedWalletIds, wallets, getStashAggregates, onReloadSetups]);
+  }, [view, setupData, projectedSalary, actualSalary, selectedMonth, selectedTiming, savedSetups, excludedInstallmentIds, excludedWalletIds, wallets, getStashAggregates, onReloadSetups, installments, getPaymentSchedule, shouldShowInstallment]);
 
-  /**
-   * Debounced auto-save trigger
-   * Waits for specified delay after last change before auto-saving
-   */
   const triggerAutoSave = useCallback(() => {
-    // Clear any existing timeout
     if (autoSaveTimeoutRef.current) {
       clearTimeout(autoSaveTimeoutRef.current);
     }
     
-    // Set new timeout for auto-save
     autoSaveTimeoutRef.current = setTimeout(() => {
       autoSave();
     }, AUTO_SAVE_DEBOUNCE_MS);
   }, [autoSave]);
 
-  // Trigger auto-save when setupData, projectedSalary, actualSalary, excludedInstallmentIds, or excludedWalletIds changes
   useEffect(() => {
     if (view === 'setup') {
       triggerAutoSave();
     }
   }, [setupData, projectedSalary, actualSalary, excludedInstallmentIds, excludedWalletIds, view, triggerAutoSave]);
 
-  // Cleanup timeout on component unmount only
   useEffect(() => {
     return () => {
       if (autoSaveTimeoutRef.current) {
         clearTimeout(autoSaveTimeoutRef.current);
       }
     };
-  }, []); // Empty dependency array ensures this only runs on unmount
+  }, []);
 
   const handleSetupToggle = (category: string, id: string) => {
     setSetupData(prev => ({
@@ -1486,7 +1179,6 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
   };
 
   const addItemToCategory = (category: string) => {
-    // For all categories, add a blank item
     const newItem: CategorizedSetupItem = {
       id: Math.random().toString(36).substr(2, 9),
       name: 'New Item',
@@ -1499,8 +1191,6 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
     }));
   };
 
-  // QA: Exclude item from current Budget Setup view only (doesn't delete master record)
-  // Fix for Issue #4: Exclude button behavior
   const removeItemFromCategory = (category: string, id: string, name: string) => {
     setConfirmModal({
       show: true,
@@ -1517,66 +1207,38 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
     });
   };
 
-  /**
-   * Save budget setup to Supabase
-   * This replaces the previous localStorage-based persistence
-   */
   const handleSaveSetup = async () => {
-    console.log('[Budget] ===== Starting budget setup save =====');
-    console.log('[Budget] Selected month:', selectedMonth);
-    console.log('[Budget] Selected timing:', selectedTiming);
-    console.log('[Budget] Current setupData type:', typeof setupData);
-    console.log('[Budget] Current setupData keys:', Object.keys(setupData));
-    
-    // Calculate total for regular items
     let regularItemsTotal = 0;
-    // Filter out non-array values (like _projectedSalary, _actualSalary) before iterating
     Object.values(setupData)
       .filter((value): value is CategorizedSetupItem[] => Array.isArray(value))
       .forEach(catItems => {
         catItems.forEach(item => {
           if (item.included) {
             const amount = parseFloat(item.amount);
-            if (isNaN(amount)) {
-              console.warn(`[Budget] Invalid amount for item "${item.name}": "${item.amount}"`);
-            } else {
+            if (!isNaN(amount)) {
               regularItemsTotal += amount;
             }
           }
         });
       });
 
-    // Calculate installments total (same logic as categorySummary)
     const installmentsTotal = installments
       .filter(inst => {
         if (inst.isArchived) return false;
         const timingMatch = !inst.timing || inst.timing === selectedTiming;
         const scheduleForMonth = getPaymentSchedule('installment', inst.id, selectedMonth, selectedYear);
         const isActiveForPeriod = scheduleForMonth !== undefined || shouldShowInstallment(inst, selectedMonth, selectedYear);
-        // Only hide when there is NO schedule for this period AND the total is fully paid.
-        // When a schedule exists for the viewed period, always keep the row visible so the
-        // user can see the paid/partial indicator rather than the row disappearing on payment.
         const isFinished = !scheduleForMonth && inst.totalAmount > 0 && inst.paidAmount >= inst.totalAmount;
         const notExcluded = !excludedInstallmentIds.has(inst.id);
         return timingMatch && isActiveForPeriod && !isFinished && notExcluded;
       })
       .reduce((sum, inst) => sum + inst.monthlyAmount, 0);
 
-    // Grand total includes both regular items AND installments AND included stash wallets
-    // Use the actual funded amount when it exceeds the target (over-funded stash)
     const stashTotal = wallets.filter(w => !excludedWalletIds.has(w.id)).reduce((s, w) => s + Math.max(w.amount, getStashAggregates(w).funded), 0);
     const total = regularItemsTotal + installmentsTotal + stashTotal;
 
-    console.log('[Budget] Regular items total:', regularItemsTotal);
-    console.log('[Budget] Installments total:', installmentsTotal);
-    console.log('[Budget] Stash total:', stashTotal);
-    console.log('[Budget] Grand total amount:', total);
-
     const existingSetup = savedSetups.find(s => s.month === selectedMonth && s.timing === selectedTiming);
-    console.log('[Budget] Existing setup found:', !!existingSetup);
     
-    // Prepare data including salary information
-    // Deep clone to avoid reference issues - cannot use spread for nested objects
     const dataToSave = {
       ...JSON.parse(JSON.stringify(setupData)),
       _projectedSalary: projectedSalary,
@@ -1585,16 +1247,8 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
       _excludedWalletIds: [...excludedWalletIds]
     };
     
-    console.log('[Budget] Data to save type:', typeof dataToSave);
-    console.log('[Budget] Data to save keys:', Object.keys(dataToSave));
-    console.log('[Budget] Projected salary:', projectedSalary);
-    console.log('[Budget] Actual salary:', actualSalary);
-    
     try {
       if (existingSetup) {
-        console.log('[Budget] Updating existing setup, ID:', existingSetup.id);
-        
-        // Update existing setup in Supabase
         const updatedSetup: SavedBudgetSetup = {
           ...existingSetup,
           totalAmount: total,
@@ -1602,28 +1256,17 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
           status: BUDGET_SETUP_STATUS.SAVED
         };
         
-        const { data, error } = await updateBudgetSetupFrontend(updatedSetup);
+        const { error } = await updateBudgetSetupFrontend(updatedSetup);
         
         if (error) {
-          console.error('[Budget] Error updating budget setup:', error);
-          const errorMessage = error?.message || 'Unknown error occurred';
-          alert(`Failed to save budget setup: ${errorMessage}`);
+          alert(`Failed to save budget setup: ${error?.message || 'Unknown error occurred'}`);
           return;
         }
         
-        console.log('[Budget] Budget setup updated successfully');
-        console.log('[Budget] Updated record ID:', data?.id);
-        console.log('[Budget] Updated record data type:', data?.data ? typeof data.data : 'undefined');
-        console.log('[Budget] Updated record data keys:', data?.data ? Object.keys(data.data) : []);
-        
-        // Reload setups from Supabase to get fresh data
         if (onReloadSetups) {
           await onReloadSetups();
         }
       } else {
-        console.log('[Budget] Creating new setup');
-        
-        // Create new setup in Supabase
         const newSetup: Omit<SavedBudgetSetup, 'id'> = {
           month: selectedMonth,
           timing: selectedTiming,
@@ -1632,46 +1275,29 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
           data: dataToSave
         };
         
-        const { data, error } = await createBudgetSetupFrontend(newSetup);
+        const { error } = await createBudgetSetupFrontend(newSetup);
         
         if (error) {
-          console.error('[Budget] Error creating budget setup:', error);
-          const errorMessage = error?.message || 'Unknown error occurred';
-          alert(`Failed to save budget setup: ${errorMessage}`);
+          alert(`Failed to save budget setup: ${error?.message || 'Unknown error occurred'}`);
           return;
         }
         
-        console.log('[Budget] Budget setup created successfully');
-        console.log('[Budget] Created record ID:', data?.id);
-        console.log('[Budget] Created record data type:', data?.data ? typeof data.data : 'undefined');
-        console.log('[Budget] Created record data keys:', data?.data ? Object.keys(data.data) : []);
-        
-        // Reload setups from Supabase to get the new one with generated ID
         if (onReloadSetups) {
           await onReloadSetups();
         }
       }
       
-      console.log('[Budget] ===== Budget setup save completed successfully =====');
       setView('summary');
     } catch (error) {
-      console.error('[Budget] Error in handleSaveSetup:', error);
-      const errorMessage = (error as any)?.message || 'Unknown error occurred';
-      alert(`Failed to save budget setup: ${errorMessage}`);
+      alert(`Failed to save budget setup: ${(error as any)?.message || 'Unknown error occurred'}`);
     }
   };
 
-  // QA: Handle transaction create/update
-  // Fix for Issue #6: Enable transaction editing
   const handleTransactionSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
     const isEditing = !!transactionFormData.id;
     const paymentScheduleId = transactionFormData.paymentScheduleId;
-    
-    console.log(`[Budget] ${isEditing ? 'Updating' : 'Creating'} transaction in Supabase`);
-    console.log('[Budget] Transaction data:', transactionFormData);
-    console.log('[Budget] Payment schedule ID:', paymentScheduleId);
     
     try {
       let transactionData, transactionError;
@@ -1684,7 +1310,6 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
       }
 
       if (isEditing) {
-        // Update existing transaction and recalculate the linked payment schedule
         const transaction = {
           name: transactionFormData.name,
           date: combineDateWithCurrentTime(transactionFormData.date),
@@ -1695,8 +1320,6 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
         transactionData = result.data;
         transactionError = result.error;
       } else if (paymentScheduleId) {
-        // FIX: Create transaction linked to payment schedule (for installments)
-        console.log('[Budget] Creating transaction with payment schedule link');
         const result = await createPaymentScheduleTransaction(
           paymentScheduleId,
           {
@@ -1709,9 +1332,7 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
         transactionData = result.data;
         transactionError = result.error;
         
-        // FIX: Update payment schedule status
         if (!transactionError && transactionData) {
-          console.log('[Budget] Updating payment schedule status');
           const { error: scheduleError } = await recordPaymentViaTransaction(
             paymentScheduleId,
             {
@@ -1725,12 +1346,8 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
           
           if (scheduleError) {
             console.error('[Budget] Failed to update payment schedule:', scheduleError);
-          } else {
-            console.log('[Budget] Payment schedule updated successfully');
           }
 
-          // If this is an installment payment, update the installment's cumulative paidAmount
-          // so that the Loans section reflects the new total and reloadInstallments is triggered.
           const linkedSchedule = paymentSchedules.find(s => s.id === paymentScheduleId);
           if (linkedSchedule?.source_type === 'installment') {
             const inst = installments.find(i => i.id === linkedSchedule.source_id);
@@ -1740,14 +1357,12 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                 ...inst,
                 paidAmount: inst.paidAmount + amountPaidDelta
               });
-              console.log('[Budget] Installment paidAmount updated after schedule payment:', inst.name, '+', amountPaidDelta);
             } else if (!onUpdateInstallment) {
               console.warn('[Budget] onUpdateInstallment callback not provided; installment paidAmount will not be synced');
             }
           }
         }
       } else {
-        // Create new transaction without schedule link (for purchases)
         const transaction = {
           name: transactionFormData.name,
           date: combineDateWithCurrentTime(transactionFormData.date),
@@ -1760,24 +1375,16 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
       }
       
       if (transactionError) {
-        console.error(`[Budget] Failed to ${isEditing ? 'update' : 'save'} transaction:`, transactionError);
         alert(`Failed to ${isEditing ? 'update' : 'save'} transaction. Please try again.`);
         return;
       }
       
-      console.log(`[Budget] Transaction ${isEditing ? 'updated' : 'saved'} successfully:`, transactionData);
-      
-      // Reload transactions to update paid status
       await reloadTransactions();
-      
-      // Always reload payment schedules after any transaction change to keep status current
       await reloadPaymentSchedules();
       
-      // Close the modal and reset form to defaults
       setShowTransactionModal(false);
       setTransactionFormData(getDefaultTransactionFormData());
     } catch (e) {
-      console.error('[Budget] Error saving transaction:', e);
       alert('Failed to save transaction. Please try again.');
     }
   };
@@ -1790,7 +1397,6 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
 
     const transaction = {
       name: salaryFormData.name,
-      // Negative amount: cash_in = money IN to the linked account (adds to balance per sign convention)
       amount: -Math.abs(amount),
       date: combineDateWithCurrentTime(salaryFormData.date),
       payment_method_id: salaryFormData.accountId,
@@ -1806,12 +1412,10 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
       await reloadTransactions();
       if (onTransactionCreated) onTransactionCreated();
     } catch (error) {
-      console.error('[Budget] Error creating salary transaction:', error);
       alert('Failed to record salary. Please try again.');
     }
   };
 
-  // REFACTOR: Handle Pay modal submission - uses payment schedules
   const handlePaySubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!showPayModal) return;
@@ -1819,14 +1423,11 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
     try {
       const { biller, schedule } = showPayModal;
       const isEditing = !!payFormData.transactionId;
-      const paymentScheduleId = schedule.id; // Use schedule.id for payment schedule linking
-      
-      console.log(`[Budget] ${isEditing ? 'Updating' : 'Creating'} transaction for payment`);
+      const paymentScheduleId = schedule.id;
       
       let transactionData, transactionError;
       
       if (isEditing) {
-        // Update existing transaction
         const transaction = {
           name: `${biller.name} - ${schedule.month} ${schedule.year}`,
           date: combineDateWithCurrentTime(payFormData.datePaid),
@@ -1837,8 +1438,6 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
         transactionData = result.data;
         transactionError = result.error;
       } else if (paymentScheduleId) {
-        // REFACTOR: Create new transaction linked to payment schedule
-        // This is the primary path for recording payments from Budget Setup
         const result = await createPaymentScheduleTransaction(
           paymentScheduleId,
           {
@@ -1851,11 +1450,6 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
         transactionData = result.data;
         transactionError = result.error;
       } else {
-        // REVIEW FIX: Fallback path for schedules without IDs
-        // This should rarely happen as all schedules in monthly_payment_schedules have UUIDs
-        // If this path executes, it indicates missing schedule generation or data migration issue
-        console.warn('[Budget] No payment schedule ID available, creating transaction without link');
-        console.warn('[Budget] This may indicate schedules were not generated for this biller');
         const transaction = {
           name: `${biller.name} - ${schedule.month} ${schedule.year}`,
           date: combineDateWithCurrentTime(payFormData.datePaid),
@@ -1868,35 +1462,26 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
       }
       
       if (transactionError) {
-        console.error(`[Budget] Failed to ${isEditing ? 'update' : 'create'} transaction:`, transactionError);
-        alert(`Failed to ${isEditing ? 'update' : 'save'} transaction. Please try again.`);
+        alert(`Failed to ${isEditing ? 'update' : 'create'} transaction. Please try again.`);
         return;
       }
       
-      console.log(`[Budget] Transaction ${isEditing ? 'updated' : 'created'} successfully:`, transactionData);
-      
-      // Upload receipt to storage if a file was selected
       if (payReceiptFile && transactionData?.id) {
         const { path, error: uploadError } = await uploadTransactionReceipt(transactionData.id, payReceiptFile);
         if (uploadError || !path) {
-          console.error('[Budget] Receipt upload failed:', uploadError);
-          // Non-fatal: transaction was saved, just warn the user
           alert('Payment saved, but receipt upload failed. You can re-attach it from the transaction details.');
         } else {
           await updateTransaction(transactionData.id, { receipt_url: path });
-          console.log('[Budget] Receipt uploaded and linked to transaction:', path);
         }
       }
 
-      // If this biller is linked to a credit account, record a credit_payment on that account
-      // so the outstanding balance and available credit are updated automatically.
       if (!isEditing && biller.linkedAccountId && transactionData?.id) {
         const linkedAccount = accounts.find(a => a.id === biller.linkedAccountId);
         if (linkedAccount?.type === 'Credit') {
-          const { error: creditTxError } = await createTransaction({
+          await createTransaction({
             name: `${biller.name} - ${schedule.month} ${schedule.year}`,
             date: combineDateWithCurrentTime(payFormData.datePaid),
-            amount: -Math.abs(parseFloat(payFormData.amount)), // negative → reduces outstanding balance
+            amount: -Math.abs(parseFloat(payFormData.amount)),
             payment_method_id: biller.linkedAccountId,
             transaction_type: 'credit_payment',
             notes: null,
@@ -1904,18 +1489,11 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
             related_transaction_id: transactionData.id,
             receipt_url: null,
           });
-          if (creditTxError) {
-            console.error('[Budget] Failed to create credit account payment transaction:', creditTxError);
-          } else {
-            console.log('[Budget] Credit account payment transaction created for linked account:', biller.linkedAccountId);
-          }
         }
       }
       
-      // REFACTOR: Update payment schedule in monthly_payment_schedules table
       if (paymentScheduleId) {
-        console.log('[Budget] Recording payment in payment schedule');
-        const { error: scheduleError } = await recordPaymentViaTransaction(
+        await recordPaymentViaTransaction(
           paymentScheduleId,
           {
             transactionName: `${biller.name} - ${schedule.month} ${schedule.year}`,
@@ -1926,32 +1504,14 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
             expectedAmount: showPayModal.expectedAmount ?? schedule.expectedAmount,
           }
         );
-        
-        if (scheduleError) {
-          console.error('[Budget] Failed to update payment schedule:', scheduleError);
-          // Continue anyway - transaction was created successfully
-        } else {
-          console.log('[Budget] Payment schedule updated successfully');
-        }
       }
       
-      // Update the biller's payment schedule using schedule ID for exact matching
-      // BACKWARD COMPATIBILITY: Still update Biller.schedules JSONB for older code
       const updatedSchedules = biller.schedules.map(s => {
-        // Match by ID if available (checking for null/undefined explicitly), otherwise fallback to month/year matching
         const isMatch = (schedule.id != null) ? 
           (s.id === schedule.id) : 
           (s.month === schedule.month && s.year === schedule.year);
           
         if (isMatch) {
-          console.log(`[Budget] MATCHED schedule for update:`, {
-            scheduleId: s.id,
-            scheduleMonth: s.month,
-            scheduleYear: s.year,
-            paymentDate: payFormData.datePaid,
-            amount: parseFloat(payFormData.amount),
-            matchedBy: (schedule.id != null) ? 'ID' : 'month/year'
-          });
           return { 
             ...s, 
             amountPaid: parseFloat(payFormData.amount), 
@@ -1963,65 +1523,41 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
         return s;
       });
       
-      console.log('[Budget] All updated schedules:', updatedSchedules.map(s => ({
-        id: s.id,
-        month: s.month,
-        year: s.year,
-        amountPaid: s.amountPaid,
-        datePaid: s.datePaid
-      })));
-      
-      console.log('[Budget] Updating biller with new schedule');
       await onUpdateBiller({ ...biller, schedules: updatedSchedules });
       
-      // FIX: Update linked installment's paidAmount if this biller is linked to an installment
       if (biller.category.startsWith('Loans') && installments && installments.length > 0) {
         const linkedInstallment = installments.find(inst => inst.billerId === biller.id);
         if (linkedInstallment && onUpdateInstallment) {
-          console.log('[Budget] Found linked installment, updating paidAmount');
           const updatedInstallment: Installment = {
             ...linkedInstallment,
             paidAmount: linkedInstallment.paidAmount + parseFloat(payFormData.amount)
           };
           await onUpdateInstallment(updatedInstallment);
-          console.log('[Budget] Installment paidAmount updated successfully');
         }
       }
       
-      // FIX: Update budget setup status to reflect payment activity
       const existingSetup = savedSetups.find(s => 
         s.month === schedule.month && s.timing === selectedTiming
       );
       if (existingSetup) {
-        console.log('[Budget] Updating budget setup status after payment');
         const updatedSetup: SavedBudgetSetup = {
           ...existingSetup,
-          status: BUDGET_SETUP_STATUS.ACTIVE // Mark as Active when payments are being made
+          status: BUDGET_SETUP_STATUS.ACTIVE
         };
         await updateBudgetSetupFrontend(updatedSetup);
-        console.log('[Budget] Budget setup status updated to Active');
         
-        // Reload setups to refresh UI
         if (onReloadSetups) {
           await onReloadSetups();
         }
       }
       
-      // Reload transactions and payment schedules to update paid status
       await reloadTransactions();
-      
-      // REFACTOR: Reload payment schedules to reflect the updated status
       await reloadPaymentSchedules();
       
-      // Explicitly reload billers to ensure UI updates
       if (onReloadBillers) {
-        console.log('[Budget] Reloading billers after payment');
         await onReloadBillers();
       }
       
-      console.log('[Budget] Payment completed successfully');
-      
-      // Only close modal on success and reset form
       setShowPayModal(null);
       setPayFormData({
         transactionId: '',
@@ -2032,9 +1568,7 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
       });
       setPayReceiptFile(null);
     } catch (error) {
-      console.error('Failed to update payment:', error);
       alert('Failed to process payment. Please try again.');
-      // Keep modal open so user can retry
     }
   };
 
@@ -2049,28 +1583,15 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
   };
 
   const handleLoadSetup = (setup: SavedBudgetSetup) => {
-    console.log('[Budget] ===== Loading budget setup =====');
-    console.log('[Budget] Setup ID:', setup.id);
-    console.log('[Budget] Setup month:', setup.month);
-    console.log('[Budget] Setup timing:', setup.timing);
-    console.log('[Budget] Setup data type:', typeof setup.data);
-    console.log('[Budget] Setup data keys:', setup.data ? Object.keys(setup.data) : []);
-    
-    // Validate that setup.data is an object before loading
     if (typeof setup.data !== 'object' || setup.data === null || Array.isArray(setup.data)) {
-      console.error('[Budget] Invalid setup data structure:', typeof setup.data, Array.isArray(setup.data));
       alert('Cannot load this setup: data structure is invalid');
       return;
     }
     
-    // Deep clone the data to avoid reference issues
     const loadedData = JSON.parse(JSON.stringify(setup.data));
-    console.log('[Budget] Loaded data type:', typeof loadedData);
-    console.log('[Budget] Loaded data keys:', Object.keys(loadedData));
     
     setSetupData(loadedData);
     setRemovedIds(new Set());
-    // Restore excluded installment IDs from loaded setup data
     if (Array.isArray(loadedData._excludedInstallmentIds)) {
       setExcludedInstallmentIds(new Set(loadedData._excludedInstallmentIds));
     } else {
@@ -2079,8 +1600,6 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
     setSelectedMonth(setup.month);
     setSelectedTiming(setup.timing as '1/2' | '2/2');
     setView('setup');
-    
-    console.log('[Budget] ===== Budget setup loaded successfully =====');
   };
 
   const handleArchiveSetup = (setup: SavedBudgetSetup) => {
@@ -2129,72 +1648,40 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
     const activeSetups = savedSetups.filter(s => !s.isArchived);
     const archivedSetups = savedSetups.filter(s => s.isArchived);
 
-    const renderSetupRow = (setup: SavedBudgetSetup) => {
-      const remaining = calculateBudgetRemaining(setup, transactions, selectedYear);
-      return (
-      <tr key={setup.id} className="hover:bg-gray-50/50 dark:hover:bg-gray-800/50 transition-colors group">
-        <td className="p-8 pl-12">
-          <div className="flex items-center space-x-5">
-            <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shadow-sm ${setup.isArchived ? 'bg-amber-50 dark:bg-amber-900/20 text-amber-500' : 'bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400 shadow-indigo-50/50'}`}>
-              {setup.isArchived ? <Archive className="w-6 h-6" /> : <FileText className="w-6 h-6" />}
-            </div>
-            <span className="text-base font-black text-gray-900 dark:text-gray-100 tracking-tight">{setup.month}</span>
-          </div>
-        </td>
-        <td className="p-8"><span className="text-[10px] font-black text-gray-500 dark:text-gray-400 bg-gray-100/80 dark:bg-gray-800 px-4 py-1.5 rounded-full uppercase tracking-widest">{setup.timing}</span></td>
-        <td className="p-8"><span className="text-base font-black text-gray-900 dark:text-gray-100 tracking-tight">{formatCurrency(setup.totalAmount)}</span></td>
-        <td className="p-8">
-          <span className={`text-base font-black tracking-tight ${remaining >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-500 dark:text-red-400'}`}>
-            {formatCurrency(remaining)}
-          </span>
-        </td>
-        <td className="p-8">
-          {setup.isArchived ? (
-            <span className="text-[10px] font-black uppercase tracking-[0.15em] px-4 py-1.5 rounded-full bg-amber-100 text-amber-700">Archived</span>
-          ) : (
-            <span className={`text-[10px] font-black uppercase tracking-[0.15em] px-4 py-1.5 rounded-full ${setup.status === BUDGET_SETUP_STATUS.ACTIVE ? 'bg-green-100 text-green-700' : 'bg-blue-100 text-blue-700'}`}>
-              {setup.status}
-            </span>
-          )}
-        </td>
-        <td className="p-6 pr-8 text-center">
-          <div className="flex justify-center items-center gap-2">
-            {setup.isArchived ? (
-              <>
-                <PinProtectedAction
-                  featureId="budget_modifications"
-                  onVerified={() => handleReopenSetup(setup)}
-                  actionLabel="Reopen Budget"
-                >
-                  <IconSquircleButton
-                    variant="reopen"
-                    onClick={(e) => e.preventDefault()}
-                    disabled={archiveSubmitting}
-                    aria-label="Reopen budget"
-                  >
-                    <RotateCcw className="w-4 h-4" />
-                  </IconSquircleButton>
-                </PinProtectedAction>
-              </>
-            ) : (
-              <>
-                <PinProtectedAction
-                  featureId="budget_modifications"
-                  onVerified={() => handleArchiveSetup(setup)}
-                  actionLabel="Close Budget"
-                >
-                  <IconSquircleButton
-                    variant="close"
-                    onClick={(e) => e.preventDefault()}
-                    disabled={archiveSubmitting}
-                    aria-label="Close budget"
-                  >
-                    <Archive className="w-4 h-4" />
-                  </IconSquircleButton>
-                </PinProtectedAction>
-                <PinProtectedAction
-                  featureId="budget_modifications"
-                  onVerified={() => {
+    return (
+        <div className={`space-y-8 animate-in fade-in duration-500 w-full max-w-7xl mx-auto ${isMobile ? 'pt-10' : ''}`}>
+            <PageHeader 
+              title="Budget"
+              subtitle="Vibe check for the Month"
+              icon={
+                <div className={`w-14 h-14 rounded-2xl flex items-center justify-center text-white border-[3px] border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] -rotate-3 transition-all hover:rotate-0 hover:scale-110 z-10 relative ${getAccentClasses('bg')}`}>
+                  <WalletIcon className="w-7 h-7" />
+                </div>
+              }
+              actions={
+                <button type="button" onClick={handleOpenNew} className={`flex items-center gap-2 text-white px-5 py-3 rounded-xl font-bold text-sm border-[3px] border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] transition-all duration-200 hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none ${getAccentClasses('bg')}`}>
+                  <Plus className="w-4 h-4" />
+                  <span className="hidden sm:inline">Open New</span>
+                </button>
+              }
+            />
+
+            {archiveStatusMsg && (
+              <div className={`flex items-center space-x-3 px-6 py-4 rounded-2xl text-sm font-bold mb-6 ${archiveStatusMsg.type === 'success' ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'}`}>
+                {archiveStatusMsg.type === 'success' ? <Check className="w-4 h-4 flex-shrink-0" /> : <AlertTriangle className="w-4 h-4 flex-shrink-0" />}
+                <span>{archiveStatusMsg.msg}</span>
+              </div>
+            )}
+
+            <div className="bg-white/40 dark:bg-gray-900/40 backdrop-blur-xl rounded-[3rem] shadow-sm border border-gray-100 dark:border-gray-800 p-2 w-full transition-colors">
+              <div className="bg-white dark:bg-gray-900 rounded-[2.5rem] overflow-hidden w-full transition-colors">
+                <BudgetSetupsList
+                  setups={activeSetups}
+                  title="Active Budgets"
+                  isArchived={false}
+                  onLoadSetup={handleLoadSetup}
+                  onArchiveSetup={handleArchiveSetup}
+                  onMoveToTrash={(setup) => {
                     setConfirmModal({
                       show: true,
                       title: 'Move to Trash',
@@ -2205,124 +1692,45 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                       }
                     });
                   }}
-                  actionLabel="Remove Budget"
-                >
-                  <IconSquircleButton
-                    variant="remove"
-                    onClick={(e) => e.preventDefault()}
-                    aria-label="Remove budget"
+                  formatCurrency={formatCurrency}
+                  calculateBudgetRemaining={(setup) => calculateBudgetRemaining(setup, transactions, selectedYear)}
+                  archiveSubmitting={archiveSubmitting}
+                />
+              </div>
+            </div>
+
+            {archivedSetups.length > 0 && (
+              <div className="bg-white/40 dark:bg-gray-900/40 backdrop-blur-xl rounded-[3rem] shadow-sm border border-amber-100 dark:border-amber-900/30 p-2 w-full transition-colors">
+                <div className="bg-white dark:bg-gray-900 rounded-[2.5rem] overflow-hidden w-full transition-colors">
+                  <button
+                    type="button"
+                    onClick={() => setShowArchived(prev => !prev)}
+                    className="w-full flex items-center justify-between p-8 pl-12 pr-12 hover:bg-amber-50/40 dark:hover:bg-amber-900/20 transition-colors rounded-[2.5rem]"
                   >
-                    <Trash2 className="w-4 h-4" />
-                  </IconSquircleButton>
-                </PinProtectedAction>
-              </>
-            )}
-            <IconSquircleButton
-              variant="open"
-              onClick={() => handleLoadSetup(setup)}
-              aria-label="Open budget"
-            >
-              <ArrowRight className="w-4 h-4" />
-            </IconSquircleButton>
-          </div>
-        </td>
-      </tr>
-      );
-    };
-
-    return (
-<div className={`space-y-8 animate-in fade-in duration-500 w-full max-w-7xl mx-auto ${isMobile ? 'pt-10' : ''}`}>
-        <PageHeader 
-          title="Budget"
-          subtitle="Vibe check for the Month"
-          icon={
-            <div className={`w-14 h-14 rounded-2xl flex items-center justify-center text-white border-[3px] border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] -rotate-3 transition-all hover:rotate-0 hover:scale-110 z-10 relative ${getAccentClasses('bg')}`}>
-              <WalletIcon className="w-7 h-7" />
-            </div>
-          }
-          actions={
-            <button type="button" onClick={handleOpenNew} className={`flex items-center gap-2 text-white px-5 py-3 rounded-xl font-bold text-sm border-[3px] border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] transition-all duration-200 hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none ${getAccentClasses('bg')}`}>
-
-              <Plus className="w-4 h-4" />
-              <span className="hidden sm:inline">Open New</span>
-            </button>
-          }
-        />
-
-        {archiveStatusMsg && (
-          <div className={`flex items-center space-x-3 px-6 py-4 rounded-2xl text-sm font-bold mb-6 ${archiveStatusMsg.type === 'success' ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'}`}>
-            {archiveStatusMsg.type === 'success' ? <Check className="w-4 h-4 flex-shrink-0" /> : <AlertTriangle className="w-4 h-4 flex-shrink-0" />}
-            <span>{archiveStatusMsg.msg}</span>
-          </div>
-        )}
-
-        {/* Active budgets */}
-        <div className="bg-white/40 dark:bg-gray-900/40 backdrop-blur-xl rounded-[3rem] shadow-sm border border-gray-100 dark:border-gray-800 p-2 w-full transition-colors">
-          <div className="bg-white dark:bg-gray-900 rounded-[2.5rem] overflow-hidden w-full transition-colors">
-            <div className="overflow-x-auto w-full">
-              <table className="w-full text-left">
-                <thead>
-                  <tr className="border-b border-gray-50 dark:border-gray-800/50">
-                    <th className="p-8 pl-12 text-[10px] font-black text-gray-400 uppercase tracking-[0.3em]">Month</th>
-                    <th className="p-8 text-[10px] font-black text-gray-400 uppercase tracking-[0.3em]">Timing</th>
-                    <th className="p-8 text-[10px] font-black text-gray-400 uppercase tracking-[0.3em]">Total Budget</th>
-                    <th className="p-8 text-[10px] font-black text-gray-400 uppercase tracking-[0.3em]">Remaining</th>
-                    <th className="p-8 text-[10px] font-black text-gray-400 uppercase tracking-[0.3em]">Status</th>
-                    <th className="p-6 pr-8 text-center text-[10px] font-black text-gray-400 uppercase tracking-[0.3em]">Actions</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-50 dark:divide-gray-800/50">
-                  {activeSetups.length > 0 ? (
-                    activeSetups.map(renderSetupRow)
-                  ) : (
-                    <tr><td colSpan={6} className="p-24 text-center text-gray-400 dark:text-gray-500 font-bold uppercase tracking-widest">No history found</td></tr>
+                    <div className="flex items-center space-x-3">
+                      <Archive className="w-5 h-5 text-amber-500" />
+                      <span className="text-xs font-black text-amber-700 dark:text-amber-500 uppercase tracking-[0.25em]">Archived Budgets ({archivedSetups.length})</span>
+                    </div>
+                    <ChevronDown className={`w-5 h-5 text-amber-400 transition-transform ${showArchived ? 'rotate-180' : ''}`} />
+                  </button>
+                  {showArchived && (
+                    <BudgetSetupsList
+                      setups={archivedSetups}
+                      title="Archived Budgets"
+                      isArchived={true}
+                      onLoadSetup={handleLoadSetup}
+                      onReopenSetup={handleReopenSetup}
+                      formatCurrency={formatCurrency}
+                      calculateBudgetRemaining={(setup) => calculateBudgetRemaining(setup, transactions, selectedYear)}
+                      archiveSubmitting={archiveSubmitting}
+                    />
                   )}
-                </tbody>
-              </table>
-            </div>
-          </div>
+                </div>
+              </div>
+            )}
+
+            {confirmModal.show && <ConfirmDialog {...confirmModal} onClose={() => setConfirmModal(p => ({ ...p, show: false }))} />}
         </div>
-
-        {/* Archived budgets – collapsible */}
-        {archivedSetups.length > 0 && (
-          <div className="bg-white/40 dark:bg-gray-900/40 backdrop-blur-xl rounded-[3rem] shadow-sm border border-amber-100 dark:border-amber-900/30 p-2 w-full transition-colors">
-            <div className="bg-white dark:bg-gray-900 rounded-[2.5rem] overflow-hidden w-full transition-colors">
-              <button
-                type="button"
-                onClick={() => setShowArchived(prev => !prev)}
-                className="w-full flex items-center justify-between p-8 pl-12 pr-12 hover:bg-amber-50/40 dark:hover:bg-amber-900/20 transition-colors rounded-[2.5rem]"
-              >
-                <div className="flex items-center space-x-3">
-                  <Archive className="w-5 h-5 text-amber-500" />
-                  <span className="text-xs font-black text-amber-700 dark:text-amber-500 uppercase tracking-[0.25em]">Archived Budgets ({archivedSetups.length})</span>
-                </div>
-                <ChevronDown className={`w-5 h-5 text-amber-400 transition-transform ${showArchived ? 'rotate-180' : ''}`} />
-              </button>
-              {showArchived && (
-                <div className="overflow-x-auto w-full border-t border-amber-50 dark:border-amber-900/20">
-                  <table className="w-full text-left">
-                    <thead>
-                      <tr className="border-b border-amber-50 dark:border-amber-900/20">
-                        <th className="p-8 pl-12 text-[10px] font-black text-gray-400 uppercase tracking-[0.3em]">Month</th>
-                        <th className="p-8 text-[10px] font-black text-gray-400 uppercase tracking-[0.3em]">Timing</th>
-                        <th className="p-8 text-[10px] font-black text-gray-400 uppercase tracking-[0.3em]">Total Budget</th>
-                        <th className="p-8 text-[10px] font-black text-gray-400 uppercase tracking-[0.3em]">Remaining</th>
-                        <th className="p-8 text-[10px] font-black text-gray-400 uppercase tracking-[0.3em]">Status</th>
-                        <th className="p-6 pr-8 text-center text-[10px] font-black text-gray-400 uppercase tracking-[0.3em]">Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-amber-50 dark:divide-amber-900/20">
-                      {archivedSetups.map(renderSetupRow)}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </div>
-          </div>
-        )}
-
-        {confirmModal.show && <ConfirmDialog {...confirmModal} onClose={() => setConfirmModal(p => ({ ...p, show: false }))} />}
-      </div>
     );
   }
 
@@ -2343,7 +1751,6 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
       const items = setupData[cat.name] || [];
       const itemsTotal = items.filter(i => i.included).reduce((sum, item) => sum + (parseFloat(item.amount) || 0), 0);
 
-      // FIX: Include installments for Loans category (same logic as Setup view)
       let installmentsTotal = 0;
       if (cat.name === 'Loans') {
         installmentsTotal = installments
@@ -2352,9 +1759,6 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
             const timingMatch = !inst.timing || inst.timing === selectedTiming;
             const scheduleForMonth = getPaymentSchedule('installment', inst.id, selectedMonth, selectedYear);
             const isActiveForPeriod = scheduleForMonth !== undefined || shouldShowInstallment(inst, selectedMonth, selectedYear);
-            // Only hide when there is NO schedule for this period AND the total is fully paid.
-            // When a schedule exists for the viewed period, always keep the row visible so the
-            // user can see the paid/partial indicator rather than the row disappearing on payment.
             const isFinished = !scheduleForMonth && inst.totalAmount > 0 && inst.paidAmount >= inst.totalAmount;
             const notExcluded = !excludedInstallmentIds.has(inst.id);
             return timingMatch && isActiveForPeriod && !isFinished && notExcluded;
@@ -2364,20 +1768,15 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
 
       return { category: cat.name, total: itemsTotal + installmentsTotal };
     });
-  // Include stash wallet targets for wallets not excluded from the grand total
-  // Use the actual funded amount when it exceeds the target (over-funded stash)
   const stashTotal = wallets.filter(w => !excludedWalletIds.has(w.id)).reduce((s, w) => s + Math.max(w.amount, getStashAggregates(w).funded), 0);
   const grandTotal = categorySummary.reduce((sum, cat) => sum + cat.total, 0) + stashTotal;
 
-  // Calculate Month Summary values
   const totalSpend = grandTotal;
   
-  // Calculate Other Income (Side gigs, bonuses, etc.)
   const currentMonthIndex = MONTHS.indexOf(selectedMonth);
   const allIncomeTxs = transactions.filter(tx => {
     if (tx.transaction_type !== 'cash_in') return false;
     
-    // Only include explicitly tagged income records, or legacy entries named "Salary"/"Income"
     const isTaggedIncome = tx.notes?.startsWith('Income Record');
     const nameLower = tx.name.trim().toLowerCase();
     const isLegacyIncome = nameLower === 'salary' || nameLower === 'income';
@@ -2387,12 +1786,10 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
     const txDate = new Date(tx.date);
     if (txDate.getMonth() !== currentMonthIndex || txDate.getFullYear() !== selectedYear) return false;
 
-    // Filter strictly by the selected timing period (1/2 or 2/2)
     let matchesTiming = false;
     if (tx.notes?.includes(' - 1/2') || tx.notes?.includes(' - 2/2')) {
       matchesTiming = tx.notes.includes(` - ${selectedTiming}`);
     } else {
-      // Fallback for older legacy entries: Split the month at the 15th
       const estimatedTiming = txDate.getDate() <= 15 ? '1/2' : '2/2';
       matchesTiming = estimatedTiming === selectedTiming;
     }
@@ -2424,7 +1821,6 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
 
   const remaining = netIncome - totalSpend;
 
-  // Determine read-only state for the current setup
   const currentSetup = savedSetups.find(s => s.month === selectedMonth && s.timing === selectedTiming);
   const isReadOnly = currentSetup?.isArchived ?? false;
   const legacyMode = isLegacyBudget(selectedYear, selectedMonth);
@@ -2432,8 +1828,6 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
   return (
     <div className={`space-y-8 animate-in slide-in-from-right-4 duration-500 pb-20 w-full ${isMobile ? 'pt-10' : ''}`}>
       <div className="flex flex-col space-y-6">
-                                        <div className="flex flex-col">
-        {/* --- Header (Unchanged for both mobile and desktop) --- */}
         <PageHeader 
           title="Budget Setup"
           subtitle={isReadOnly ? 'Archived — Read Only' : 'Your Money-Pie for the month of:'}
@@ -2442,7 +1836,6 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
               <WalletIcon className="w-7 h-7" />
             </div>
           }
-          // The actions prop is now handled below for desktop
           actions={isMobile ? null : (
             <div className="flex items-center gap-3 flex-wrap justify-end">
               {!isReadOnly && autoSaveStatus !== 'idle' && ( <div className="flex items-center space-x-2 text-xs font-bold mr-2"> {autoSaveStatus === 'saving' && (<><div className="w-4 h-4 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin"></div><span className="text-black/50 dark:text-white/50">Saving...</span></>)} {autoSaveStatus === 'saved' && <Check className="w-4 h-4 text-green-600" />} {autoSaveStatus === 'error' && (<><AlertTriangle className="w-4 h-4 text-red-600" /><span className="text-red-600">Error</span></>)} </div> )}
@@ -2453,16 +1846,13 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
           )}
         />
 
-                {/* --- Control Bar (Responsive) --- */}
         <div className="flex items-center justify-between w-full md:justify-center mt-[-1.5rem] md:mt-0 mb-6 md:relative">
-            {/* Left: Back Button */}
             <div className="flex-none md:absolute md:left-0 md:top-1/2 md:-translate-y-1/2">
                 <button onClick={() => setView('summary')} className={`flex items-center justify-center w-10 h-10 rounded-xl bg-gray-50 dark:bg-gray-800 text-gray-500 dark:text-gray-400 transition-all shrink-0 ${getAccentClasses('hoverLight')}`}>
                     <ArrowLeft className="w-5 h-5" />
                 </button>
             </div>
 
-            {/* Center: Dropdowns */}
             <div className="flex-grow flex justify-center items-center space-x-2 md:flex-grow-0">
                 <select value={selectedMonth} onChange={(e) => setSelectedMonth(e.target.value)} disabled={isReadOnly} className={`bg-white dark:bg-gray-900 dark:border-gray-800 border border-gray-100 rounded-xl md:rounded-[1.5rem] h-10 md:h-auto px-3 md:px-8 md:py-4 font-bold md:font-black text-xs md:text-base shadow-sm outline-none disabled:opacity-60 disabled:cursor-not-allowed transition-colors text-center appearance-none ${getAccentClasses('text')}`}>
                     {MONTHS.map(m => <option key={m} value={m}>{m}</option>)}
@@ -2476,7 +1866,6 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                 )}
             </div>
 
-            {/* Right: Actions (Mobile Only) */}
             <div className="flex-none flex items-center gap-2 md:hidden">
               {currentSetup && !isReadOnly && (
                 <PinProtectedAction featureId="budget_modifications" onVerified={() => handleArchiveSetup(currentSetup)} actionLabel="Close Budget">
@@ -2494,18 +1883,9 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
               )}
             </div>
         </div>
-
       </div>
 
-
-
-
-
-      </div>
-
-      {/* Budget Summary and Month Summary side-by-side */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        {/* Budget Summary - Compact Version */}
         <div className="bg-white dark:bg-gray-900 rounded-[3rem] shadow-sm border border-gray-100 dark:border-gray-800 overflow-hidden w-full transition-colors">
           <div className="p-4 border-b border-gray-50 dark:border-gray-800/50 bg-gray-50/30 dark:bg-gray-800/30"><h3 className="text-xs font-black text-gray-900 dark:text-gray-100 uppercase tracking-[0.25em] text-center">BUDGET SUMMARY</h3></div>
           <table className="w-full text-left">
@@ -2522,7 +1902,6 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
           </table>
         </div>
 
-        {/* Month Summary - New Component */}
         <div className="bg-white dark:bg-gray-900 rounded-[3rem] shadow-sm border border-gray-100 dark:border-gray-800 overflow-hidden w-full transition-colors">
           <div className="p-4 border-b border-gray-50 dark:border-gray-800/50 bg-gray-50/30 dark:bg-gray-800/30"><h3 className="text-xs font-black text-gray-900 dark:text-gray-100 uppercase tracking-[0.25em] text-center">MONTH SUMMARY</h3></div>
           <table className="w-full text-left">
@@ -2648,9 +2027,7 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
         </div>
       </div>
 
-      {/* Category Tables - Full Width and Stacked for FIXED, UTILITIES, LOANS, SUBSCRIPTIONS, PURCHASES */}
       <div className="space-y-6">
-        {/* Stash section - wallets from the wallets table */}
         {wallets.length > 0 && (
         <div className="bg-white dark:bg-gray-900 rounded-[3rem] shadow-sm border border-gray-100 dark:border-gray-800 overflow-hidden w-full transition-colors">
           <div className="px-8 py-5 border-b border-gray-50 dark:border-gray-800/50 bg-gray-50/30 dark:bg-gray-800/30 flex justify-between items-center transition-colors">
@@ -2755,7 +2132,6 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
         </div>
         )}
 
-        {/* Fixed category - full width with account and settle columns */}
         {categories.filter(cat => cat.name === 'Fixed').map((cat) => {
           const items = setupData[cat.name] || [];
           const shouldRenderCategory = shouldRenderCategorySection(cat, items.length > 0, selectedYear, selectedMonth);
@@ -2874,40 +2250,28 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
           );
         })}
 
-        {/* Other full-width categories: Utilities, Loans, Subscriptions, Purchases, and custom categories */}
         {categories.filter(cat => cat.name !== 'Fixed').map((cat) => {
           const items = setupData[cat.name] || [];
           
-          // QA: For Loans category, filter installments by timing, payment schedule existence, and completion status
-          // Show installments that have a DB schedule for this month OR (no schedule yet) pass the date check.
-          // Always exclude installments that are fully paid off.
           let relevantInstallments: Installment[] = [];
           if (cat.name === 'Loans') {
             relevantInstallments = installments.filter(inst => {
               if (inst.isArchived) return false;
-              // Filter by timing (if set, must match selected timing)
               const timingMatch = !inst.timing || inst.timing === selectedTiming;
-              // Use schedule existence when available; fall back to date-based check for older installments
               const scheduleForMonth = getPaymentSchedule('installment', inst.id, selectedMonth, selectedYear);
               const isActiveForPeriod = scheduleForMonth !== undefined || shouldShowInstallment(inst, selectedMonth, selectedYear);
-              // Only hide when there is NO schedule for this period AND the total is fully paid.
-              // When a schedule exists for the viewed period, always keep the row visible so the
-              // user can see the paid/partial indicator rather than the row disappearing on payment.
               const isFinished = !scheduleForMonth && inst.totalAmount > 0 && inst.paidAmount >= inst.totalAmount;
               return timingMatch && isActiveForPeriod && !isFinished;
             });
           }
 
-          // Lifecycle: show if currently active OR has data (items or installments for Loans)
           const hasData = items.length > 0 || (cat.name === 'Loans' && relevantInstallments.length > 0);
           const shouldRenderCategory = shouldRenderCategorySection(cat, hasData, selectedYear, selectedMonth);
           if (!shouldRenderCategory) return null;
 
-          // Flexi mode: only show Add Item when category allows manual items AND is still active
           const canAddItems = !isReadOnly && (cat.flexiMode ?? true) && isCategoryActiveForBudget(cat, selectedYear, selectedMonth);
           const isLegacyCategory = isCategoryLegacyForBudget(cat, selectedYear, selectedMonth);
           
-          // PROTOTYPE: Calculate total including installment monthly amounts (only included ones)
           const itemsTotal = items.filter(i => i.included).reduce((s, i) => s + (parseFloat(i.amount) || 0), 0);
           const installmentsTotal = relevantInstallments
             .filter(inst => !excludedInstallmentIds.has(inst.id))
@@ -2937,42 +2301,20 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                   <tbody className="divide-y divide-gray-50 dark:divide-gray-800/50">
                     {items.length > 0 ? items.map((item) => {
                       let isPaid = false, isPartial = false, linkedBiller, paymentSchedule;
-                      const isBiller = item.isBiller || billers.some(b => b.id === item.id);
+                      const isBillerItem = item.isBiller || billers.some(b => b.id === item.id);
                       
-                      if (isBiller) {
+                      if (isBillerItem) {
                         linkedBiller = billers.find(b => b.id === item.id);
                         
-                        // REFACTOR: Use payment schedule from monthly_payment_schedules table
                         paymentSchedule = getPaymentSchedule('biller', item.id);
                         
-                        console.log(`[Budget] Checking payment for ${item.name} in ${selectedMonth}:`, {
-                          foundPaymentSchedule: !!paymentSchedule,
-                          scheduleId: paymentSchedule?.id,
-                          scheduleStatus: paymentSchedule?.status,
-                          amountPaid: paymentSchedule?.amount_paid,
-                          expectedAmount: paymentSchedule?.expected_amount
-                        });
-                        
-                        // REFACTOR: Use payment schedule status for accurate payment tracking
                         if (paymentSchedule) {
                           isPaid = checkIfPaidBySchedule('biller', item.id);
                           isPartial = checkIfPartialBySchedule('biller', item.id);
-                          if (isPaid) {
-                            console.log(`[Budget] Item ${item.name} in ${selectedMonth}: PAID via payment schedule`, {
-                              scheduleId: paymentSchedule.id,
-                              amountPaid: paymentSchedule.amount_paid,
-                              datePaid: paymentSchedule.date_paid
-                            });
-                          }
                         } else {
-                          // Fallback to transaction matching if no schedule found
                           isPaid = checkIfPaidByTransaction(item.name, item.amount, selectedMonth);
-                          if (isPaid) {
-                            console.log(`[Budget] Item ${item.name} in ${selectedMonth}: PAID via transaction matching (no payment schedule)`);
-                          }
                         }
                       } else {
-                        // For non-biller items (like Purchases), only check transactions
                         isPaid = checkIfPaidByTransaction(item.name, item.amount, selectedMonth);
                       }
                       return (
@@ -2988,7 +2330,7 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                           </td>
                           <td className="p-4 text-center">
                             <div className="flex items-center justify-center space-x-2">
-                              {isBiller && (
+                              {isBillerItem && (
                                 isPaid ? (
                                   <>
                                     <CheckCircle2 className="w-4 h-4 text-green-500" aria-label="Payment completed" title="Paid" />
@@ -3013,10 +2355,8 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                                   {!isReadOnly && <button 
                                     onClick={() => { 
                                       if(linkedBiller && paymentSchedule) {
-                                        // REFACTOR: Use payment schedule from monthly_payment_schedules table
-                                        // Create a compatible schedule object for the modal
                                         const scheduleForModal: PaymentSchedule = {
-                                          id: paymentSchedule.id, // schedule.id will be used for payment linking
+                                          id: paymentSchedule.id,
                                           month: paymentSchedule.month,
                                           year: paymentSchedule.year.toString(),
                                           expectedAmount: paymentSchedule.expected_amount,
@@ -3026,22 +2366,18 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                                           accountId: paymentSchedule.account_id || undefined
                                         };
                                         
-                                        // REVIEW FIX: Find latest transaction if multiple exist
-                                        // Sort by date descending to get the most recent transaction
                                         const linkedTransactions = transactions
                                           .filter(tx => tx.payment_schedule_id === paymentSchedule.id)
                                           .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-                                        const existingTx = linkedTransactions[0]; // Get latest transaction
+                                        const existingTx = linkedTransactions[0];
                                         
                                         setShowPayModal({
                                           biller: linkedBiller, 
-                                          schedule: scheduleForModal, // schedule.id is included here
-                                          expectedAmount: parseFloat(item.amount) // Use calculated amount (correct for Loans)
+                                          schedule: scheduleForModal,
+                                          expectedAmount: parseFloat(item.amount)
                                         }); 
                                         const today = new Date().toISOString().split('T')[0];
                                         setPayFormData({
-                                          // When partial, always create a NEW transaction for the remaining amount.
-                                          // Never reuse the existing partial transaction ID, which would overwrite it.
                                           transactionId: isPartial ? '' : (existingTx?.id || ''),
                                           amount: isPartial
                                             ? Math.max(0, parseFloat(item.amount) - paymentSchedule.amount_paid).toFixed(2)
@@ -3059,8 +2395,7 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                                   </>
                                 )
                               )}
-                                                            {/* Add Pay button or checkmark for manually-added items in flexi categories */}
-                              {!isBiller && (cat.flexiMode ?? true) && item.name !== 'New Item' && parseFloat(item.amount) > 0 && (
+                              {!isBillerItem && (cat.flexiMode ?? true) && item.name !== 'New Item' && parseFloat(item.amount) > 0 && (
                                 isPaid ? (
                                   <>
                                     <CheckCircle2 className="w-4 h-4 text-green-500" aria-label="Payment completed" title="Paid" />
@@ -3075,7 +2410,7 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                                         date: new Date().toISOString().split('T')[0],
                                         amount: item.amount,
                                         accountId: item.accountId || accounts[0]?.id || '',
-                                        paymentScheduleId: '' // No schedule for regular purchases
+                                        paymentScheduleId: ''
                                       });
                                       setShowTransactionModal(true);
                                     }}
@@ -3099,71 +2434,41 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                         </td>
                       </tr>
                     )}
-                    {/* PROTOTYPE: Render installments for Loans category */}
                     {cat.name === 'Loans' && relevantInstallments.length > 0 && (
                       <>
                         {relevantInstallments.map((installment) => {
                           const account = accounts.find(a => a.id === installment.accountId);
                           const isIncluded = !excludedInstallmentIds.has(installment.id);
                           
-                          // REFACTOR: Use payment schedule for accurate status
                           let isPaid = false, isPartial = false;
                           const installmentSchedule = getPaymentSchedule('installment', installment.id, selectedMonth, selectedYear);
                           
                           if (installmentSchedule) {
-                            // Use payment schedule status
                             isPaid = checkIfPaidBySchedule('installment', installment.id);
                             isPartial = checkIfPartialBySchedule('installment', installment.id);
-                            console.log('[Budget] Installment payment check via schedule:', {
-                              name: installment.name,
-                              selectedMonth,
-                              scheduleId: installmentSchedule.id,
-                              status: installmentSchedule.status,
-                              amountPaid: installmentSchedule.amount_paid,
-                              isPaid,
-                              isPartial
-                            });
                           } else if (installment.startDate) {
-                            // Fallback to cumulative calculation if no schedule found
                             try {
-                              // Parse start date (format: YYYY-MM)
                               const [startYear, startMonthNum] = installment.startDate.split('-').map(Number);
-                              const startMonthIndex = startMonthNum - 1; // Convert to 0-based index
+                              const startMonthIndex = startMonthNum - 1;
                               
-                              // Get current month index
                               const currentYear = new Date().getFullYear();
                               const selectedMonthIndex = MONTHS.indexOf(selectedMonth);
                               
-                              // Calculate months passed (accounting for years)
                               const monthsPassed = (currentYear - startYear) * 12 + (selectedMonthIndex - startMonthIndex);
                               
                               if (monthsPassed >= 0) {
-                                // Check if this month's installment is paid based on cumulative amount
                                 const expectedPaidByThisMonth = (monthsPassed + 1) * installment.monthlyAmount;
                                 isPaid = installment.paidAmount >= expectedPaidByThisMonth;
-                                
-                                console.log('[Budget] Installment payment check (fallback):', {
-                                  name: installment.name,
-                                  selectedMonth,
-                                  monthsPassed,
-                                  expectedPaidByThisMonth,
-                                  actualPaidAmount: installment.paidAmount,
-                                  isPaid
-                                });
                               }
                             } catch (error) {
-                              console.error('[Budget] Error calculating installment payment status:', error);
-                              // Fallback to unpaid if calculation fails
                               isPaid = false;
                             }
                           }
                           
-                          // Fallback transaction lookup for Info button when no payment schedule exists
                           const fallbackInstallmentTx = !installmentSchedule && (isPaid || isPartial)
                             ? findExistingTransaction(installment.name, installment.monthlyAmount, selectedMonth)
                             : undefined;
 
-                          // Unified Info button click handler (schedule-based or fallback transaction)
                           const installmentInfoClick = installmentSchedule
                             ? () => openSchedulePaymentsModal(installmentSchedule.id, `${installment.name} - ${selectedMonth}`)
                             : fallbackInstallmentTx
@@ -3171,792 +2476,791 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                               : null;
 
                           return (
-                            <tr key={`installment-${installment.id}`} className={`${isIncluded ? 'bg-blue-50/30 dark:bg-blue-900/10' : 'bg-gray-50 dark:bg-gray-800/50 opacity-60'}`}>
-                              <td className="p-4 pl-10">
-                                <div className="flex items-center gap-2">
-                                  <span className="text-sm font-bold text-gray-900 dark:text-gray-100">{installment.name}</span>
-                                  <span className="text-[9px] font-bold px-2 py-0.5 bg-blue-100 rounded text-blue-600">
-                                    INSTALLMENT {installment.timing ? `• ${installment.timing}` : ''}
-                                  </span>
-                                </div>
-                                {account && (
-                                  <div className="text-[10px] text-gray-400 font-medium mt-1">
-                                    {account.bank} • {installment.termDuration}
-                                  </div>
-                                )}
-                              </td>
-                              <td className="p-4">
-                                <div className="flex items-center space-x-1">
-                                  <span className="text-gray-400 dark:text-gray-500 font-bold">₱</span>
-                                  <span className="text-sm font-black">{formatCurrency(installment.monthlyAmount).replace('₱', '')}</span>
-                                </div>
-                              </td>
-                              <td className="p-4 text-center">
-                                <div className="flex items-center justify-center space-x-2">
-                                  {isPaid ? (
-                                    <>
-                                      <CheckCircle2 className="w-4 h-4 text-green-500" aria-label="Payment completed" title="Paid" />
-                                      {installmentInfoClick && (
-                                        <button onClick={installmentInfoClick} title="View payment records" className="text-gray-400 hover:text-indigo-600 transition-colors rounded-full p-1 hover:bg-indigo-50">
-                                          <Info className="w-3.5 h-3.5" />
-                                        </button>
-                                      )}
-                                    </>
-                                  ) : (
-                                    <>
-                                      {isPartial && (
-                                        <>
-                                          {installmentSchedule && (
-                                            <span className="text-[9px] font-bold px-2 py-0.5 bg-yellow-100 text-yellow-700 rounded uppercase" title={`Paid ₱${installmentSchedule.amount_paid} of ₱${installmentSchedule.expected_amount}`}>
-                                              Partial
-                                            </span>
-                                          )}
-                                          {installmentInfoClick && (
-                                            <button onClick={installmentInfoClick} title="View payment records" className="text-gray-400 hover:text-indigo-600 transition-colors rounded-full p-1 hover:bg-indigo-50">
-                                              <Info className="w-3.5 h-3.5" />
-                                            </button>
-                                          )}
-                                        </>
-                                      )}
-                                    {!isReadOnly && <button 
-                                      onClick={() => {
-                                        // FIX: Include payment schedule ID for proper linking
-                                        setTransactionFormData({
-                                          id: '',
-                                          name: `${installment.name} - ${selectedMonth} ${new Date().getFullYear()}`,
-                                          date: new Date().toISOString().split('T')[0],
-                                          amount: isPartial && installmentSchedule
-                                            ? Math.max(0, installmentSchedule.expected_amount - installmentSchedule.amount_paid).toFixed(2)
-                                          : installment.monthlyAmount.toFixed(2),
-                                          accountId: installment.accountId || accounts[0]?.id || '',
-                                          paymentScheduleId: installmentSchedule?.id || '' // FIX: Pass schedule ID
-                                        });
-                                        setShowTransactionModal(true);
-                                      }}
-                                      className="px-3 py-1 bg-indigo-600 text-white text-[9px] font-black uppercase rounded-lg hover:bg-indigo-700 transition-colors"
-                                    >
-                                      {isPartial ? 'Pay Remaining' : 'Pay'}
-                                    </button>}
-                                    </>
-                                  )}
-                                  {!isReadOnly && <button 
-                                    onClick={() => {
-                                      setExcludedInstallmentIds(prev => {
-                                        const newSet = new Set(prev);
-                                        if (newSet.has(installment.id)) {
-                                          newSet.delete(installment.id);
-                                        } else {
-                                          newSet.add(installment.id);
-                                        }
-                                        return newSet;
-                                      });
-                                    }}
-                                    className={`w-8 h-8 rounded-xl border-2 transition-all flex items-center justify-center ${isIncluded ? 'bg-indigo-600 border-indigo-600 text-white' : 'border-gray-200'}`}
-                                  >
-                                    <Check className="w-4 h-4" />
-                                  </button>}
-                                </div>
-                              </td>
-                              <td className="p-4 pr-10 text-right">
-                                {!isReadOnly && <button 
-                                  onClick={() => {
-                                    setConfirmModal({
-                                      show: true,
-                                      title: 'Exclude Installment',
-                                      message: `Are you sure you want to exclude "${installment.name}" from this budget period? This will not delete the installment, just exclude it from this budget.`,
-                                      onConfirm: () => {
-                                        setExcludedInstallmentIds(prev => new Set([...prev, installment.id]));
-                                        setConfirmModal(prev => ({ ...prev, show: false }));
-                                      }
-                                    });
-                                  }}
-                                  className="text-[9px] font-black text-red-500 uppercase tracking-widest border border-red-50 px-2 py-1 rounded-lg hover:bg-red-50 transition-colors"
-                                >
-                                  Exclude
-                                </button>}
-                              </td>
-                            </tr>
-                          );
-                        })}
-                      </>
-                    )}
-                  </tbody>
-                </table>
-                {canAddItems && <button onClick={() => addItemToCategory(cat.name)} className="w-full p-4 text-[10px] font-black text-gray-400 uppercase hover:text-indigo-600 border-t border-gray-50">+ Add Item</button>}
-              </div>
-            </div>
-          );
-        })}
-
-        {/* PROTOTYPE: Credit Card Regular Purchases Section */}
-        {(() => {
-          // Get all credit card accounts
-          const creditCardAccounts = accounts.filter(acc => acc.classification === 'Credit Card' && acc.billingDate);
-          
-          if (creditCardAccounts.length === 0) return null;
-          
-          // Aggregate purchases for each credit card for the selected month
-          const monthIndex = MONTHS.indexOf(selectedMonth);
-          const currentYear = new Date().getFullYear();
-          
-          return creditCardAccounts.map(account => {
-            const cycleSummaries = aggregateCreditCardPurchases(account, transactions, installments);
-            
-            // Find the cycle that contains the selected month
-            const relevantCycle = cycleSummaries.find(cycle => {
-              const cycleMonth = cycle.cycleStart.getMonth();
-              const cycleYear = cycle.cycleStart.getFullYear();
-              // Match if cycle overlaps with selected month
-              return (cycleMonth === monthIndex && cycleYear === currentYear) ||
-                     (cycle.cycleEnd.getMonth() === monthIndex && cycle.cycleEnd.getFullYear() === currentYear);
+    <tr key={`installment-${installment.id}`} className={`${isIncluded ? 'bg-blue-50/30 dark:bg-blue-900/10' : 'bg-gray-50 dark:bg-gray-800/50 opacity-60'}`}>
+      <td className="p-4 pl-10">
+        <div className="flex items-center gap-2">
+          <span className="text-sm font-bold text-gray-900 dark:text-gray-100">{installment.name}</span>
+          <span className="text-[9px] font-bold px-2 py-0.5 bg-blue-100 rounded text-blue-600">
+            INSTALLMENT {installment.timing ? `• ${installment.timing}` : ''}
+          </span>
+        </div>
+        {account && (
+          <div className="text-[10px] text-gray-400 font-medium mt-1">
+            {account.bank} • {installment.termDuration}
+          </div>
+        )}
+      </td>
+      <td className="p-4">
+        <div className="flex items-center space-x-1">
+          <span className="text-gray-400 dark:text-gray-500 font-bold">₱</span>
+          <span className="text-sm font-black">{formatCurrency(installment.monthlyAmount).replace('₱', '')}</span>
+        </div>
+      </td>
+      <td className="p-4 text-center">
+        <div className="flex items-center justify-center space-x-2">
+          {isPaid ? (
+            <>
+              <CheckCircle2 className="w-4 h-4 text-green-500" aria-label="Payment completed" title="Paid" />
+              {installmentInfoClick && (
+                <button onClick={installmentInfoClick} title="View payment records" className="text-gray-400 hover:text-indigo-600 transition-colors rounded-full p-1 hover:bg-indigo-50">
+                  <Info className="w-3.5 h-3.5" />
+                </button>
+              )}
+            </>
+          ) : (
+            <>
+              {isPartial && (
+                <>
+                  {installmentSchedule && (
+                    <span className="text-[9px] font-bold px-2 py-0.5 bg-yellow-100 text-yellow-700 rounded uppercase" title={`Paid ₱${installmentSchedule.amount_paid} of ₱${installmentSchedule.expected_amount}`}>
+                      Partial
+                    </span>
+                  )}
+                  {installmentInfoClick && (
+                    <button onClick={installmentInfoClick} title="View payment records" className="text-gray-400 hover:text-indigo-600 transition-colors rounded-full p-1 hover:bg-indigo-50">
+                      <Info className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                </>
+              )}
+            {!isReadOnly && <button 
+              onClick={() => {
+                setTransactionFormData({
+                  id: '',
+                  name: `${installment.name} - ${selectedMonth} ${new Date().getFullYear()}`,
+                  date: new Date().toISOString().split('T')[0],
+                  amount: isPartial && installmentSchedule
+                    ? Math.max(0, installmentSchedule.expected_amount - installmentSchedule.amount_paid).toFixed(2)
+                  : installment.monthlyAmount.toFixed(2),
+                  accountId: installment.accountId || accounts[0]?.id || '',
+                  paymentScheduleId: installmentSchedule?.id || ''
+                });
+                setShowTransactionModal(true);
+              }}
+              className="px-3 py-1 bg-indigo-600 text-white text-[9px] font-black uppercase rounded-lg hover:bg-indigo-700 transition-colors"
+            >
+              {isPartial ? 'Pay Remaining' : 'Pay'}
+            </button>}
+            </>
+          )}
+          {!isReadOnly && <button 
+            onClick={() => {
+              setExcludedInstallmentIds(prev => {
+                const newSet = new Set(prev);
+                if (newSet.has(installment.id)) {
+                  newSet.delete(installment.id);
+                } else {
+                  newSet.add(installment.id);
+                }
+                return newSet;
+              });
+            }}
+            className={`w-8 h-8 rounded-xl border-2 transition-all flex items-center justify-center ${isIncluded ? 'bg-indigo-600 border-indigo-600 text-white' : 'border-gray-200'}`}
+          >
+            <Check className="w-4 h-4" />
+          </button>}
+        </div>
+      </td>
+      <td className="p-4 pr-10 text-right">
+        {!isReadOnly && <button 
+          onClick={() => {
+            setConfirmModal({
+              show: true,
+              title: 'Exclude Installment',
+              message: `Are you sure you want to exclude "${installment.name}" from this budget period? This will not delete the installment, just exclude it from this budget.`,
+              onConfirm: () => {
+                setExcludedInstallmentIds(prev => new Set([...prev, installment.id]));
+                setConfirmModal(prev => ({ ...prev, show: false }));
+              }
             });
-            
-            if (!relevantCycle || relevantCycle.transactionCount === 0) return null;
-            
-            return (
-              <div key={`cc-${account.id}`} className="bg-white dark:bg-gray-900 rounded-[3rem] shadow-sm border border-gray-100 dark:border-gray-800 overflow-hidden w-full transition-colors">
-                <div className="px-8 py-5 border-b border-gray-50 dark:border-gray-800/50 bg-gray-50/30 dark:bg-gray-800/30 flex justify-between items-center transition-colors">
-                  <div>
-                    <h3 className="text-xs font-black text-gray-900 dark:text-gray-100 uppercase tracking-[0.25em]">Credit Card Purchases</h3>
-                    <p className="text-[10px] text-gray-500 font-medium mt-1">{account.bank} • {relevantCycle.cycleLabel}</p>
-                  </div>
-                  <span className="text-lg font-black text-purple-600">{formatCurrency(relevantCycle.totalAmount)}</span>
-                </div>
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left">
-                    <thead>
-                      <tr className="text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase border-b border-gray-50 dark:border-gray-800/50">
-                        <th className="p-4 pl-10">Transaction</th>
-                        <th className="p-4">Date</th>
-                        <th className="p-4">Amount</th>
-                        <th className="p-4 pr-10 text-right"></th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-50 dark:divide-gray-800/50">
-                      {relevantCycle.transactions.map((tx) => (
-                        <tr key={tx.id} className="bg-purple-50/20 dark:bg-purple-900/10">
-                          <td className="p-4 pl-10">
-                            <span className="text-sm font-bold text-gray-900 dark:text-gray-100">{tx.name}</span>
-                          </td>
-                          <td className="p-4">
-                            <span className="text-xs text-gray-500 font-medium">
-                              {new Date(tx.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-                            </span>
-                          </td>
-                          <td className="p-4">
-                            <div className="flex items-center space-x-1">
-                              <span className="text-gray-400 dark:text-gray-500 font-bold">₱</span>
-                              <span className="text-sm font-black">{formatCurrency(tx.amount).replace('₱', '')}</span>
-                            </div>
-                          </td>
-                          <td className="p-4 pr-10 text-right">
-                            {/* QA: Add edit button for transactions - Fix for Issue #6 */}
-                            <button
-                              onClick={() => {
-                                // Format date as YYYY-MM-DD for input (split directly to avoid UTC shift)
-                                const dateStr = tx.date.split('T')[0];
-                                setTransactionFormData({
-                                  id: tx.id,
-                                  name: tx.name,
-                                  date: dateStr,
-                                amount: tx.amount.toFixed(2),
-                                  accountId: tx.payment_method_id,
-                                  paymentScheduleId: tx.payment_schedule_id || '' // FIX: Preserve schedule ID when editing
-                                });
-                                setShowTransactionModal(true);
-                              }}
-                              className="text-[9px] font-black text-indigo-600 uppercase tracking-widest border border-indigo-100 px-2 py-1 rounded-lg hover:bg-indigo-50 transition-colors"
-                            >
-                              Edit
-                            </button>
-                          </td>
-                        </tr>
-                      ))}
-                      <tr className="bg-purple-100/30 dark:bg-purple-900/20">
-                        <td colSpan={2} className="p-4 pl-10 text-xs font-black text-gray-700 dark:text-gray-300 uppercase">
-                          Total Regular Purchases
-                        </td>
-                        <td className="p-4">
-                          <div className="flex items-center space-x-1">
-                            <span className="text-gray-400 dark:text-gray-500 font-bold">₱</span>
-                            <span className="text-sm font-black text-purple-600">{formatCurrency(relevantCycle.totalAmount).replace('₱', '')}</span>
-                          </div>
-                        </td>
-                        <td className="p-4 pr-10 text-right">
-                          <span className="text-[9px] font-bold text-purple-600 uppercase tracking-widest">
-                            {relevantCycle.transactionCount} txn(s)
-                          </span>
-                        </td>
-                      </tr>
-                    </tbody>
-                  </table>
-                  <div className="p-4 border-t border-gray-50 dark:border-gray-800/50 bg-gray-50/50 dark:bg-gray-800/30">
-                    <p className="text-[10px] text-gray-500 font-medium text-center">
-                      <span className="font-bold">PROTOTYPE:</span> Regular credit card purchases are auto-aggregated from transactions. 
-                      Excludes installment payments.
-                    </p>
-                  </div>
-                </div>
-              </div>
-            );
-          });
-        })()}
-
-      </div>
-
-      {showPayModal && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md animate-in fade-in">
-          <div className="bg-white rounded-3xl w-full max-w-md p-10 shadow-2xl animate-in zoom-in-95 relative">
-            <button onClick={() => setShowPayModal(null)} className="absolute right-6 top-6 p-2 hover:bg-gray-100 rounded-full transition-colors">
-              <X className="w-6 h-6 text-gray-400" />
-            </button>
-            {/* QA: Consistent Pay form - receipt upload added back, name in title */}
-            <h2 className="text-2xl font-black text-gray-900 mb-2">
-              Pay {showPayModal.biller.name}
-            </h2>
-            <p className="text-gray-500 text-sm mb-8">
-              {payFormData.transactionId 
-                ? `Updating payment for ${showPayModal.schedule.month}`
-                : `Recording payment for ${showPayModal.schedule.month}`}
-            </p>
-            <form onSubmit={handlePaySubmit} className="space-y-6">
-              <div>
-                <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Amount</label>
-                <div className="relative">
-                  <span className="absolute left-4 top-1/2 -translate-y-1/2 font-bold text-gray-400">₱</span>
-                  <input required type="number" step="0.01" value={payFormData.amount} onChange={(e) => setPayFormData({...payFormData, amount: e.target.value})} className="w-full bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-transparent rounded-2xl p-4 pl-8 outline-none text-xl font-black focus:ring-2 focus:ring-indigo-500 transition-all" />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Date Paid</label>
-                  <input required type="date" value={payFormData.datePaid} onChange={(e) => setPayFormData({...payFormData, datePaid: e.target.value})} className="w-full min-w-0 bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-transparent rounded-2xl px-3 py-4 outline-none font-bold text-sm transition-colors" />
-                </div>
-                <div>
-                  <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Payment Method</label>
-                  <select value={payFormData.accountId} onChange={(e) => setPayFormData({...payFormData, accountId: e.target.value})} className="w-full min-w-0 bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-transparent rounded-2xl px-3 py-4 outline-none font-bold text-sm appearance-none transition-colors">
-                    {accounts.map(acc => <option key={acc.id} value={acc.id}>{acc.bank} ({acc.classification})</option>)}
-                  </select>
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Upload Receipt (Optional)</label>
-                <div className="relative">
-                  <input type="file" className="absolute inset-0 opacity-0 cursor-pointer" onChange={(e) => { const f = e.target.files?.[0] || null; setPayReceiptFile(f); setPayFormData({...payFormData, receipt: f?.name || ''}); }} />
-                  <div className="w-full bg-gray-50 dark:bg-gray-800 border-2 border-dashed border-gray-200 dark:border-gray-700 rounded-2xl p-6 text-center text-sm text-gray-500 hover:border-indigo-300 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 transition-all flex flex-col items-center">
-                    <Upload className="w-8 h-8 mb-2 text-indigo-400" />
-                    <span className="font-bold">{payFormData.receipt || 'Click or drag to upload receipt'}</span>
-                  </div>
-                </div>
-              </div>
-              <div className="flex space-x-4 pt-4">
-                <button type="button" onClick={() => setShowPayModal(null)} className="flex-1 bg-gray-100 dark:bg-gray-800 py-4 rounded-2xl font-bold text-gray-500 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors">Cancel</button>
-                <button type="submit" className="flex-1 bg-green-600 text-white py-4 rounded-2xl font-bold hover:bg-green-700 shadow-xl shadow-green-100 dark:shadow-none transition-all">
-                  {payFormData.transactionId ? 'Update Payment' : 'Submit Payment'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* QA: Consistent Transaction Form Modal - with receipt upload */}
-      {showTransactionModal && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md animate-in fade-in">
-          <div className="bg-white dark:bg-gray-900 rounded-3xl w-full max-w-md p-10 shadow-2xl animate-in zoom-in-95 relative transition-colors">
-            <button onClick={() => setShowTransactionModal(false)} className="absolute right-6 top-6 p-2 hover:bg-gray-100 rounded-full transition-colors">
-              <X className="w-6 h-6 text-gray-400" />
-            </button>
-            <h2 className="text-2xl font-black text-gray-900 dark:text-gray-100 mb-2">
-              {transactionFormData.id ? `Edit Payment` : `Pay ${transactionFormData.name || 'Item'}`}
-            </h2>
-            <p className="text-gray-500 text-sm mb-8">
-              {transactionFormData.id 
-                ? 'Update the payment details below' 
-                : 'Record a payment transaction'}
-            </p>
-            <form onSubmit={handleTransactionSubmit} className="space-y-6">
-              <div>
-                <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Amount</label>
-                <div className="relative">
-                  <span className="absolute left-4 top-1/2 -translate-y-1/2 font-bold text-gray-400">₱</span>
-                  <input 
-                    required 
-                    type="number" 
-                    min="0" 
-                    step="0.01" 
-                    value={transactionFormData.amount} 
-                    onChange={(e) => setTransactionFormData({...transactionFormData, amount: e.target.value})} 
-                    className="w-full bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-transparent rounded-2xl p-4 pl-8 outline-none text-xl font-black focus:ring-2 focus:ring-indigo-500 transition-all" 
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Date Paid</label>
-                  <input 
-                    required 
-                    type="date" 
-                    value={transactionFormData.date} 
-                    onChange={(e) => setTransactionFormData({...transactionFormData, date: e.target.value})} 
-                    className="w-full min-w-0 bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-transparent rounded-2xl px-3 py-4 outline-none font-bold text-sm transition-colors" 
-                  />
-                </div>
-                <div>
-                  <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Payment Method</label>
-                  <select 
-                    value={transactionFormData.accountId} 
-                    onChange={(e) => setTransactionFormData({...transactionFormData, accountId: e.target.value})} 
-                    className="w-full min-w-0 bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-transparent rounded-2xl px-3 py-4 outline-none font-bold text-sm appearance-none transition-colors"
-                  >
-                    {accounts.map(acc => <option key={acc.id} value={acc.id}>{acc.bank} ({acc.classification})</option>)}
-                  </select>
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Upload Receipt (Optional)</label>
-                <div className="relative">
-                  <input type="file" className="absolute inset-0 opacity-0 cursor-pointer" />
-                  <div className="w-full bg-gray-50 dark:bg-gray-800 border-2 border-dashed border-gray-200 dark:border-gray-700 rounded-2xl p-6 text-center text-sm text-gray-500 hover:border-indigo-300 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 transition-all flex flex-col items-center">
-                    <Upload className="w-8 h-8 mb-2 text-indigo-400" />
-                    <span className="font-bold">Click or drag to upload receipt</span>
-                  </div>
-                </div>
-              </div>
-
-              <div className="flex space-x-4 pt-4">
-                <button type="button" onClick={() => setShowTransactionModal(false)} className="flex-1 bg-gray-100 dark:bg-gray-800 py-4 rounded-2xl font-bold text-gray-500 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors">Cancel</button>
-                <button type="submit" className="flex-1 bg-green-600 text-white py-4 rounded-2xl font-bold hover:bg-green-700 shadow-xl shadow-green-100 dark:shadow-none transition-all">
-                  {transactionFormData.id ? 'Update Payment' : 'Submit Payment'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* Fund Stash Modal */}
-      {fundModal && (
-        <div className="fixed inset-0 z-[150] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md" onClick={() => setFundModal(null)}>
-          <div className="w-full max-w-md bg-white rounded-3xl p-8 shadow-2xl relative" onClick={e => e.stopPropagation()}>
-            <button onClick={() => setFundModal(null)} className="absolute top-4 right-4 text-gray-400 hover:text-gray-700 p-2 rounded-full hover:bg-gray-100 transition-colors" aria-label="Close"><X className="w-5 h-5" /></button>
-            <div className="flex items-center space-x-3 mb-6">
-              <div className="w-12 h-12 bg-indigo-50 text-indigo-600 rounded-2xl flex items-center justify-center">
-                <Plus className="w-6 h-6" />
-              </div>
-              <div>
-                <h2 className="text-xl font-black text-gray-900 uppercase tracking-tight">Fund Stash</h2>
-                <p className="text-xs text-gray-500 font-medium">{fundModal.wallet.name}</p>
-              </div>
-            </div>
-            <form onSubmit={handleFundSubmit} className="space-y-5">
-              <div>
-                <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Amount <span className="text-red-500">*</span></label>
-                <div className="flex items-center border border-gray-200 rounded-2xl px-4 py-3 focus-within:border-indigo-400 transition-colors">
-                  <span className="text-gray-400 font-bold mr-2">₱</span>
-                  <input
-                    type="number"
-                    min="0.01"
-                    step="0.01"
-                    value={fundForm.amount}
-                    onChange={e => setFundForm(f => ({ ...f, amount: e.target.value }))}
-                    placeholder="0.00"
-                    required
-                    className="flex-1 bg-transparent border-none outline-none text-sm font-black text-indigo-600"
-                  />
-                </div>
-              </div>
-              <div>
-                <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Date <span className="text-red-500">*</span></label>
-                <input
-                  type="date"
-                  value={fundForm.date}
-                  onChange={e => setFundForm(f => ({ ...f, date: e.target.value }))}
-                  min={(() => { const mi = MONTHS.indexOf(selectedMonth); return `${selectedYear}-${String(mi + 1).padStart(2, '0')}-01`; })()}
-                  max={(() => { const mi = MONTHS.indexOf(selectedMonth); const last = new Date(selectedYear, mi + 1, 0).getDate(); return `${selectedYear}-${String(mi + 1).padStart(2, '0')}-${String(last).padStart(2, '0')}`; })()}
-                  required
-                  className="w-full border border-gray-200 rounded-2xl px-4 py-3 text-sm font-bold text-gray-800 outline-none focus:border-indigo-400 transition-colors"
-                />
-              </div>
-              <div>
-                <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Notes <span className="text-gray-300">(optional)</span></label>
-                <input
-                  type="text"
-                  value={fundForm.notes}
-                  onChange={e => setFundForm(f => ({ ...f, notes: e.target.value }))}
-                  placeholder="e.g. Monthly allocation"
-                  className="w-full border border-gray-200 rounded-2xl px-4 py-3 text-sm text-gray-700 outline-none focus:border-indigo-400 transition-colors"
-                />
-              </div>
-              <div className="flex flex-col space-y-3 pt-2">
-                <button
-                  type="submit"
-                  disabled={fundSubmitting}
-                  className="w-full bg-indigo-600 text-white py-4 rounded-2xl font-black uppercase tracking-widest text-[10px] hover:bg-indigo-700 transition-all disabled:opacity-60"
-                >
-                  {fundSubmitting ? 'Funding…' : 'Fund Stash'}
-                </button>
-                <button type="button" onClick={() => setFundModal(null)} className="w-full bg-gray-100 text-gray-500 py-4 rounded-2xl font-black uppercase tracking-widest text-[10px] hover:bg-gray-200 transition-all">
-                  Cancel
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* Stash Info Modal */}
-      {stashInfoModal && (() => {
-        const { funded, remaining, topUps } = getStashAggregates(stashInfoModal.wallet);
-        const linkedAccount = accounts.find(a => a.id === stashInfoModal.wallet.accountId);
-        return (
-          <div className="fixed inset-0 z-[150] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md" onClick={() => setStashInfoModal(null)}>
-            <div className="w-full max-w-lg bg-white rounded-3xl p-8 shadow-2xl relative max-h-[85vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
-              <button onClick={() => setStashInfoModal(null)} className="absolute top-4 right-4 text-gray-400 hover:text-gray-700 p-2 rounded-full hover:bg-gray-100 transition-colors" aria-label="Close"><X className="w-5 h-5" /></button>
-              <div className="flex items-center space-x-3 mb-6">
-                <div className="w-12 h-12 bg-indigo-50 text-indigo-600 rounded-2xl flex items-center justify-center">
-                  <Info className="w-6 h-6" />
-                </div>
-                <div>
-                  <h2 className="text-xl font-black text-gray-900 uppercase tracking-tight">Stash Info</h2>
-                  <p className="text-xs text-gray-500 font-medium">{stashInfoModal.wallet.name} · {selectedMonth} {selectedYear}</p>
-                </div>
-              </div>
-              {/* Summary */}
-              <div className="grid grid-cols-3 gap-4 mb-6">
-                <div className="bg-gray-50 rounded-2xl p-4 text-center">
-                  <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Target</p>
-                  <p className="text-base font-black text-indigo-600">{formatCurrency(stashInfoModal.wallet.amount)}</p>
-                </div>
-                <div className="bg-green-50 rounded-2xl p-4 text-center">
-                  <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Funded</p>
-                  <p className="text-base font-black text-green-600">{formatCurrency(funded)}</p>
-                </div>
-                <div className="bg-orange-50 rounded-2xl p-4 text-center">
-                  <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Remaining</p>
-                  <p className="text-base font-black text-orange-600">{formatCurrency(remaining)}</p>
-                </div>
-              </div>
-              {linkedAccount && (
-                <p className="text-xs text-gray-500 mb-5 font-medium">Account: <span className="text-gray-700 font-bold">{linkedAccount.bank} ({linkedAccount.classification})</span></p>
-              )}
-              {/* Top-ups list */}
-              <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-3">Top-ups this month</h3>
-              {topUps.length === 0 ? (
-                <p className="text-sm text-gray-400 italic py-4 text-center">No top-ups for this stash this month. Fund this stash to see top-ups here.</p>
-              ) : (
-                <div className="space-y-3">
-                  {topUps.map(tx => (
-                    <div key={tx.id} className="bg-gray-50 rounded-2xl p-4 flex items-center justify-between">
-                      <div className="space-y-0.5">
-                        <p className="text-sm font-bold text-gray-900">{tx.name}</p>
-                        <p className="text-xs text-gray-500">{new Date(tx.date).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })}</p>
-                        {tx.notes && <p className="text-xs text-gray-400 italic">{tx.notes}</p>}
-                      </div>
-                      <div className="flex items-center space-x-3">
-                        <span className="text-sm font-black text-indigo-600">{formatCurrency(Math.abs(tx.amount))}</span>
-                        <PinProtectedAction
-                          featureId="transaction_deletions"
-                          onVerified={() => handleDeleteStashTopUp(tx.id, tx.amount)}
-                          actionLabel="Delete Top-up"
-                        >
-                          <button
-                            onClick={(e) => e.preventDefault()}
-                            aria-label={`Delete top-up of ${formatCurrency(Math.abs(tx.amount))} from ${new Date(tx.date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}`}
-                            className="text-red-400 hover:text-red-600 p-1.5 rounded-xl hover:bg-red-50 transition-colors"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
-                        </PinProtectedAction>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
-        );
-      })()}
-      {schedulePaymentsModal && (
-        <div className="fixed inset-0 z-[150] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md" onClick={() => setSchedulePaymentsModal(null)}>
-          <div className="w-full max-w-lg bg-white rounded-3xl p-8 shadow-2xl relative max-h-[85vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
-            <button onClick={() => setSchedulePaymentsModal(null)} className="absolute top-4 right-4 text-gray-400 hover:text-gray-700 p-2 rounded-full hover:bg-gray-100 transition-colors" aria-label="Close"><X className="w-5 h-5" /></button>
-            <h2 className="text-2xl font-black text-gray-900 mb-1">Payment Records</h2>
-            <p className="text-gray-500 text-sm mb-6">{schedulePaymentsModal.label}</p>
-            {loadingScheduleTx ? (
-              <div className="text-center py-8 text-gray-400">Loading...</div>
-            ) : schedulePaymentsModal.transactions.length === 0 ? (
-              <div className="text-center py-8 text-gray-400 italic">No payment records found.</div>
-            ) : (
-              <div className="space-y-4">
-                {schedulePaymentsModal.transactions.map(tx => {
-                  const pmName = accounts.find(a => a.id === tx.paymentMethodId)?.bank || tx.paymentMethodId;
-                  const signedUrl = scheduleSignedUrls[tx.id];
-                  return (
-                    <div key={tx.id} className="bg-gray-50 rounded-2xl p-4 space-y-2">
-                      <div className="flex justify-between">
-                        <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Name</span>
-                        <span className="text-sm font-bold text-gray-900">{tx.name}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Amount</span>
-                        <span className="text-sm font-bold text-red-600">{formatCurrency(tx.amount)}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Payment Method</span>
-                        <span className="text-sm text-gray-700">{pmName}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Date</span>
-                        <span className="text-sm text-gray-700">{new Date(tx.date).toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' })}</span>
-                      </div>
-                      {tx.receiptUrl && (
-                        <div className="flex items-center space-x-3 pt-1">
-                          {signedUrl ? (
-                            <>
-                              <img src={signedUrl} alt={`Receipt for ${tx.name}`} className="w-12 h-12 rounded-xl object-cover border border-gray-200" onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
-                              <button onClick={() => { setZoom(0.5); setPreviewReceiptUrl(signedUrl); }} title="Preview receipt" className="flex items-center space-x-1 px-3 py-1.5 rounded-xl bg-indigo-50 text-indigo-600 hover:bg-indigo-100 transition-colors text-xs font-bold">
-                                <Eye className="w-3.5 h-3.5" /><span>Preview</span>
-                              </button>
-                            </>
-                          ) : (
-                            <span className="text-xs text-gray-400 italic">Loading receipt…</span>
-                          )}
-                        </div>
-                      )}
-                      <div className="flex justify-end pt-1">
-                        <PinProtectedAction
-                          featureId="transaction_deletions"
-                          onVerified={() => handleDeleteScheduleTx(tx.id)}
-                          actionLabel="Delete Payment Record"
-                        >
-                          <button
-                            onClick={(e) => e.preventDefault()}
-                            title="Delete payment record"
-                            className="flex items-center space-x-1 px-3 py-1.5 rounded-xl bg-red-50 text-red-600 hover:bg-red-100 transition-colors text-xs font-bold"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" /><span>Delete</span>
-                          </button>
-                        </PinProtectedAction>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* Receipt Preview Modal */}
-      {previewReceiptUrl && (
-        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4" onClick={() => setPreviewReceiptUrl(null)}>
-          <div className="w-full max-w-2xl bg-white rounded-3xl shadow-2xl flex flex-col overflow-hidden" style={{ maxHeight: '90vh' }} onClick={e => e.stopPropagation()}>
-            <div className="flex items-center justify-between p-4 border-b border-gray-100">
-              <h3 className="text-base font-black text-gray-900 uppercase tracking-widest">Receipt Preview</h3>
-              <div className="flex items-center space-x-2">
-                <button onClick={() => setZoom(z => Math.max(MIN_ZOOM, parseFloat((z - ZOOM_INCREMENT).toFixed(2))))} title="Zoom out" className="p-2 rounded-xl hover:bg-gray-100 text-gray-600 transition-colors" aria-label="Zoom out"><ZoomOut className="w-4 h-4" /></button>
-                <span className="text-xs font-bold text-gray-500 w-10 text-center">{Math.round(zoom * 100)}%</span>
-                <button onClick={() => setZoom(z => Math.min(MAX_ZOOM, parseFloat((z + ZOOM_INCREMENT).toFixed(2))))} title="Zoom in" className="p-2 rounded-xl hover:bg-gray-100 text-gray-600 transition-colors" aria-label="Zoom in"><ZoomIn className="w-4 h-4" /></button>
-                <a href={previewReceiptUrl} download target="_blank" rel="noreferrer" title="Download receipt" className="p-2 rounded-xl hover:bg-indigo-50 text-indigo-600 transition-colors" aria-label="Download receipt"><Download className="w-4 h-4" /></a>
-                <button onClick={() => setPreviewReceiptUrl(null)} title="Close" className="p-2 rounded-xl hover:bg-gray-100 text-gray-600 transition-colors" aria-label="Close preview"><X className="w-4 h-4" /></button>
-              </div>
-            </div>
-            <div className="overflow-auto flex-1 p-4 flex justify-center">
-              <img src={previewReceiptUrl} alt={`Receipt — ${schedulePaymentsModal?.label || ''}`} style={{ width: `${zoom * 100}%`, height: 'auto', transition: 'width 0.2s' }} />
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Salary Cash In Modal */}
-      {showSalaryModal && (
-        <div className="fixed inset-0 z-[150] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md animate-in fade-in" onClick={() => setShowSalaryModal(false)}>
-          <div className="bg-white dark:bg-gray-900 rounded-3xl w-full max-w-md p-10 shadow-2xl animate-in zoom-in-95 relative transition-colors" onClick={e => e.stopPropagation()}>
-            <button onClick={() => setShowSalaryModal(false)} className="absolute right-6 top-6 p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full transition-colors">
-              <X className="w-6 h-6 text-gray-400" />
-            </button>
-            <h2 className="text-2xl font-black text-gray-900 dark:text-gray-100 mb-2">Record Income</h2>
-            <p className="text-gray-500 text-sm mb-8">Add this income to your account balance</p>
-            
-            <form onSubmit={handleSalaryCashIn} className="space-y-6">
-              <div>
-                <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Transaction Name</label>
-                <input required type="text" value={salaryFormData.name} onChange={(e) => setSalaryFormData({...salaryFormData, name: e.target.value})} className="w-full bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-transparent rounded-2xl p-4 outline-none font-bold focus:ring-2 focus:ring-indigo-500 transition-all" />
-              </div>
-
-              <div>
-                <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Amount</label>
-                <div className="relative">
-                  <span className="absolute left-4 top-1/2 -translate-y-1/2 font-bold text-gray-400">₱</span>
-                  <input required type="number" min="0.01" step="0.01" value={salaryFormData.amount} onChange={(e) => setSalaryFormData({...salaryFormData, amount: e.target.value})} className="w-full bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-transparent rounded-2xl p-4 pl-8 outline-none text-xl font-black focus:ring-2 focus:ring-indigo-500 transition-all" />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Date Received</label>
-                  <input required type="date" value={salaryFormData.date} onChange={(e) => setSalaryFormData({...salaryFormData, date: e.target.value})} className="w-full min-w-0 bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-transparent rounded-2xl px-3 py-4 outline-none font-bold text-sm transition-colors" />
-                </div>
-                <div>
-                  <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Deposit Account</label>
-                  <select required value={salaryFormData.accountId} onChange={(e) => setSalaryFormData({...salaryFormData, accountId: e.target.value})} className="w-full min-w-0 bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-transparent rounded-2xl px-3 py-4 outline-none font-bold text-sm appearance-none transition-colors">
-                    <option value="" disabled>Select Account</option>
-                    {accounts.filter(a => a.type === 'Debit').map(acc => <option key={acc.id} value={acc.id}>{acc.bank} ({acc.classification})</option>)}
-                  </select>
-                </div>
-              </div>
-
-              <div className="flex space-x-4 pt-4">
-                <button type="button" onClick={() => setShowSalaryModal(false)} className="flex-1 bg-gray-100 dark:bg-gray-800 py-4 rounded-2xl font-bold text-gray-500 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors">Cancel</button>
-                <button type="submit" className="flex-1 bg-green-600 text-white py-4 rounded-2xl font-bold hover:bg-green-700 shadow-xl shadow-green-100 dark:shadow-none transition-all">Record Income</button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* Income Records Modal */}
-      {showIncomeRecordsModal && (
-        <div className="fixed inset-0 z-[150] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md animate-in fade-in" onClick={() => setShowIncomeRecordsModal(false)}>
-          <div className="bg-white dark:bg-gray-900 rounded-3xl w-full max-w-lg p-8 shadow-2xl relative max-h-[85vh] overflow-y-auto transition-colors" onClick={e => e.stopPropagation()}>
-            <button onClick={() => setShowIncomeRecordsModal(false)} className="absolute top-6 right-6 p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full transition-colors">
-              <X className="w-5 h-5 text-gray-400 dark:text-gray-500" />
-            </button>
-            <div className="flex items-center justify-between mb-6">
-              <div>
-                <h2 className="text-2xl font-black text-gray-900 dark:text-gray-100 mb-1">Income Records</h2>
-                <p className="text-gray-500 dark:text-gray-400 text-sm">{selectedMonth} {selectedYear}</p>
-              </div>
-              <button
-                onClick={() => {
-                  setShowIncomeRecordsModal(false);
-                  const debitAccounts = accounts.filter(a => a.type === 'Debit');
-                  setSalaryFormData({
-                    name: '',
-                    amount: '',
-                    date: new Date().toISOString().split('T')[0],
-                    accountId: debitAccounts[0]?.id || ''
-                  });
-                  setShowSalaryModal(true);
-                }}
-                className="flex items-center gap-2 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 px-4 py-2 rounded-xl font-bold hover:bg-indigo-100 dark:hover:bg-indigo-900/50 transition-colors text-sm"
-              >
-                <Plus className="w-4 h-4" />
-                Add Income
-              </button>
-            </div>
-
-            {allIncomeTxs.length === 0 ? (
-              <div className="text-center py-8 text-gray-400 dark:text-gray-500 italic">No income records found.</div>
-            ) : (
-              <div className="space-y-4">
-                {allIncomeTxs.map(tx => {
-                  const pmName = accounts.find(a => a.id === tx.payment_method_id)?.bank || tx.payment_method_id;
-                  return (
-                    <div key={tx.id} className="bg-gray-50 dark:bg-gray-800/50 rounded-2xl p-4 space-y-2 transition-colors">
-                      <div className="flex justify-between items-start">
-                        <div className="space-y-2 flex-1">
-                          <div className="flex justify-between">
-                            <span className="text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest">Name</span>
-                            <span className="text-sm font-bold text-gray-900 dark:text-gray-100">{tx.name}</span>
-                          </div>
-                          <div className="flex justify-between">
-                            <span className="text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest">Amount</span>
-                            <span className="text-sm font-bold text-green-600 dark:text-green-400">{formatCurrency(Math.abs(tx.amount))}</span>
-                          </div>
-                          <div className="flex justify-between">
-                            <span className="text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest">Deposit To</span>
-                            <span className="text-sm text-gray-700 dark:text-gray-300">{pmName}</span>
-                          </div>
-                          <div className="flex justify-between">
-                            <span className="text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest">Date</span>
-                            <span className="text-sm text-gray-700 dark:text-gray-300">{new Date(tx.date).toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' })}</span>
-                          </div>
-                        </div>
-                        <div className="flex flex-col items-end pl-4 space-y-2">
-                          <button
-                            onClick={() => { 
-                              setTransactionFormData({
-                                id: tx.id,
-                                name: tx.name,
-                                amount: Math.abs(tx.amount).toFixed(2),
-                                date: tx.date.split('T')[0],
-                                accountId: tx.payment_method_id,
-                                paymentScheduleId: tx.payment_schedule_id || '',
-                                transactionType: tx.transaction_type || 'cash_in'
-                              });
-                              setShowIncomeRecordsModal(false);
-                              setShowTransactionModal(true);
-                            }}
-                            className="text-[9px] font-black text-indigo-600 dark:text-indigo-400 uppercase tracking-widest border border-indigo-100 dark:border-indigo-900/30 px-2 py-1 rounded-lg hover:bg-indigo-50 dark:hover:bg-indigo-900/50 transition-colors"
-                          >
-                            Edit
-                          </button>
-                          <PinProtectedAction
-                            featureId="transaction_deletions"
-                            onVerified={async () => {
-                              try {
-                                const { error } = await deleteTransactionAndRevertSchedule(tx.id);
-                                if (error) throw error;
-
-                              const nameLower = tx.name.trim().toLowerCase();
-                              const isSalaryRecord = nameLower === 'salary' || nameLower === 'income';
-                              const actualSalaryParsed = parseFloat(actualSalary);
-                              if (isSalaryRecord || (!isNaN(actualSalaryParsed) && Math.abs(tx.amount) === actualSalaryParsed)) {
-                                setActualSalary('');
-                              }
-
-                                await reloadTransactions();
-                                if (onTransactionDeleted) onTransactionDeleted();
-                              } catch (err) {
-                                console.error('[Budget] Error deleting income transaction:', err);
-                                alert('Failed to delete transaction. Please try again.');
-                              }
-                            }}
-                            actionLabel="Delete Income Record"
-                          >
-                            <button
-                              onClick={(e) => e.preventDefault()}
-                              title="Delete income record"
-                              className="text-[9px] font-black text-red-500 dark:text-red-400 uppercase tracking-widest border border-red-100 dark:border-red-900/30 px-2 py-1 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/50 transition-colors"
-                            >
-                              Delete
-                            </button>
-                          </PinProtectedAction>
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-
-      {confirmModal.show && <ConfirmDialog {...confirmModal} onClose={() => setConfirmModal(p => ({ ...p, show: false }))} />}
-    </div>
+          }}
+          className="text-[9px] font-black text-red-500 uppercase tracking-widest border border-red-50 px-2 py-1 rounded-lg hover:bg-red-50 transition-colors"
+        >
+          Exclude
+        </button>}
+      </td>
+    </tr>
   );
-}
+})}
+</>
+)}
+</tbody>
+</table>
+{canAddItems && <button onClick={() => addItemToCategory(cat.name)} className="w-full p-4 text-[10px] font-black text-gray-400 uppercase hover:text-indigo-600 border-t border-gray-50">+ Add Item</button>}
+</div>
+</div>
+);
+})}
 
-const ConfirmDialog: React.FC<{ show: boolean; title: string; message: string; onConfirm: () => void; onClose: () => void }> = ({ title, message, onConfirm, onClose }) => (
-  <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-in fade-in">
-    <div className="bg-white dark:bg-gray-900 rounded-[2.5rem] w-full max-w-sm p-10 shadow-2xl animate-in zoom-in-95 flex flex-col items-center text-center transition-colors">
-      <div className="w-16 h-16 bg-red-50 dark:bg-red-900/20 text-red-600 rounded-3xl flex items-center justify-center mb-6">
-        <AlertTriangle className="w-8 h-8" />
+{/* PROTOTYPE: Credit Card Regular Purchases Section */}
+{(() => {
+// Get all credit card accounts
+const creditCardAccounts = accounts.filter(acc => acc.classification === 'Credit Card' && acc.billingDate);
+
+if (creditCardAccounts.length === 0) return null;
+
+// Aggregate purchases for each credit card for the selected month
+const monthIndex = MONTHS.indexOf(selectedMonth);
+const currentYear = new Date().getFullYear();
+
+return creditCardAccounts.map(account => {
+const cycleSummaries = aggregateCreditCardPurchases(account, transactions, installments);
+
+// Find the cycle that contains the selected month
+const relevantCycle = cycleSummaries.find(cycle => {
+  const cycleMonth = cycle.cycleStart.getMonth();
+  const cycleYear = cycle.cycleStart.getFullYear();
+  // Match if cycle overlaps with selected month
+  return (cycleMonth === monthIndex && cycleYear === currentYear) ||
+         (cycle.cycleEnd.getMonth() === monthIndex && cycle.cycleEnd.getFullYear() === currentYear);
+});
+
+if (!relevantCycle || relevantCycle.transactionCount === 0) return null;
+
+return (
+  <div key={`cc-${account.id}`} className="bg-white dark:bg-gray-900 rounded-[3rem] shadow-sm border border-gray-100 dark:border-gray-800 overflow-hidden w-full transition-colors">
+    <div className="px-8 py-5 border-b border-gray-50 dark:border-gray-800/50 bg-gray-50/30 dark:bg-gray-800/30 flex justify-between items-center transition-colors">
+      <div>
+        <h3 className="text-xs font-black text-gray-900 dark:text-gray-100 uppercase tracking-[0.25em]">Credit Card Purchases</h3>
+        <p className="text-[10px] text-gray-500 font-medium mt-1">{account.bank} • {relevantCycle.cycleLabel}</p>
       </div>
-      <h3 className="text-xl font-black text-gray-900 dark:text-gray-100 mb-2 uppercase tracking-tight">{title}</h3>
-      <p className="text-sm text-gray-500 dark:text-gray-400 mb-8 font-medium leading-relaxed">{message}</p>
-      <div className="flex flex-col w-full space-y-3">
-        <button onClick={onConfirm} className="w-full bg-red-600 text-white py-4 rounded-2xl font-black uppercase tracking-widest text-[10px] hover:bg-red-700 transition-all">Proceed</button>
-        <button onClick={onClose} className="w-full bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-300 py-4 rounded-2xl font-black uppercase tracking-widest text-[10px] hover:bg-gray-200 dark:hover:bg-gray-700 transition-all">Cancel</button>
+      <span className="text-lg font-black text-purple-600">{formatCurrency(relevantCycle.totalAmount)}</span>
+    </div>
+    <div className="overflow-x-auto">
+      <table className="w-full text-left">
+        <thead>
+          <tr className="text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase border-b border-gray-50 dark:border-gray-800/50">
+            <th className="p-4 pl-10">Transaction</th>
+            <th className="p-4">Date</th>
+            <th className="p-4">Amount</th>
+            <th className="p-4 pr-10 text-right"></th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-gray-50 dark:divide-gray-800/50">
+          {relevantCycle.transactions.map((tx) => (
+            <tr key={tx.id} className="bg-purple-50/20 dark:bg-purple-900/10">
+              <td className="p-4 pl-10">
+                <span className="text-sm font-bold text-gray-900 dark:text-gray-100">{tx.name}</span>
+              </td>
+              <td className="p-4">
+                <span className="text-xs text-gray-500 font-medium">
+                  {new Date(tx.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                </span>
+              </td>
+              <td className="p-4">
+                <div className="flex items-center space-x-1">
+                  <span className="text-gray-400 dark:text-gray-500 font-bold">₱</span>
+                  <span className="text-sm font-black">{formatCurrency(tx.amount).replace('₱', '')}</span>
+                </div>
+              </td>
+              <td className="p-4 pr-10 text-right">
+                {/* QA: Add edit button for transactions - Fix for Issue #6 */}
+                <button
+                  onClick={() => {
+                    // Format date as YYYY-MM-DD for input (split directly to avoid UTC shift)
+                    const dateStr = tx.date.split('T')[0];
+                    setTransactionFormData({
+                      id: tx.id,
+                      name: tx.name,
+                      date: dateStr,
+                    amount: tx.amount.toFixed(2),
+                      accountId: tx.payment_method_id,
+                      paymentScheduleId: tx.payment_schedule_id || '' // FIX: Preserve schedule ID when editing
+                    });
+                    setShowTransactionModal(true);
+                  }}
+                  className="text-[9px] font-black text-indigo-600 uppercase tracking-widest border border-indigo-100 px-2 py-1 rounded-lg hover:bg-indigo-50 transition-colors"
+                >
+                  Edit
+                </button>
+              </td>
+            </tr>
+          ))}
+          <tr className="bg-purple-100/30 dark:bg-purple-900/20">
+            <td colSpan={2} className="p-4 pl-10 text-xs font-black text-gray-700 dark:text-gray-300 uppercase">
+              Total Regular Purchases
+            </td>
+            <td className="p-4">
+              <div className="flex items-center space-x-1">
+                <span className="text-gray-400 dark:text-gray-500 font-bold">₱</span>
+                <span className="text-sm font-black text-purple-600">{formatCurrency(relevantCycle.totalAmount).replace('₱', '')}</span>
+              </div>
+            </td>
+            <td className="p-4 pr-10 text-right">
+              <span className="text-[9px] font-bold text-purple-600 uppercase tracking-widest">
+                {relevantCycle.transactionCount} txn(s)
+              </span>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+      <div className="p-4 border-t border-gray-50 dark:border-gray-800/50 bg-gray-50/50 dark:bg-gray-800/30">
+        <p className="text-[10px] text-gray-500 font-medium text-center">
+          <span className="font-bold">PROTOTYPE:</span> Regular credit card purchases are auto-aggregated from transactions. 
+          Excludes installment payments.
+        </p>
       </div>
     </div>
   </div>
 );
+});
+})()}
+
+</div>
+
+{showPayModal && (
+<div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md animate-in fade-in">
+  <div className="bg-white rounded-3xl w-full max-w-md p-10 shadow-2xl animate-in zoom-in-95 relative">
+    <button onClick={() => setShowPayModal(null)} className="absolute right-6 top-6 p-2 hover:bg-gray-100 rounded-full transition-colors">
+      <X className="w-6 h-6 text-gray-400" />
+    </button>
+    {/* QA: Consistent Pay form - receipt upload added back, name in title */}
+    <h2 className="text-2xl font-black text-gray-900 mb-2">
+      Pay {showPayModal.biller.name}
+    </h2>
+    <p className="text-gray-500 text-sm mb-8">
+      {payFormData.transactionId 
+        ? `Updating payment for ${showPayModal.schedule.month}`
+        : `Recording payment for ${showPayModal.schedule.month}`}
+    </p>
+    <form onSubmit={handlePaySubmit} className="space-y-6">
+      <div>
+        <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Amount</label>
+        <div className="relative">
+          <span className="absolute left-4 top-1/2 -translate-y-1/2 font-bold text-gray-400">₱</span>
+          <input required type="number" step="0.01" value={payFormData.amount} onChange={(e) => setPayFormData({...payFormData, amount: e.target.value})} className="w-full bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-transparent rounded-2xl p-4 pl-8 outline-none text-xl font-black focus:ring-2 focus:ring-indigo-500 transition-all" />
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div>
+          <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Date Paid</label>
+          <input required type="date" value={payFormData.datePaid} onChange={(e) => setPayFormData({...payFormData, datePaid: e.target.value})} className="w-full min-w-0 bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-transparent rounded-2xl px-3 py-4 outline-none font-bold text-sm transition-colors" />
+        </div>
+        <div>
+          <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Payment Method</label>
+          <select value={payFormData.accountId} onChange={(e) => setPayFormData({...payFormData, accountId: e.target.value})} className="w-full min-w-0 bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-transparent rounded-2xl px-3 py-4 outline-none font-bold text-sm appearance-none transition-colors">
+            {accounts.map(acc => <option key={acc.id} value={acc.id}>{acc.bank} ({acc.classification})</option>)}
+          </select>
+        </div>
+      </div>
+
+      <div>
+        <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Upload Receipt (Optional)</label>
+        <div className="relative">
+          <input type="file" className="absolute inset-0 opacity-0 cursor-pointer" onChange={(e) => { const f = e.target.files?.[0] || null; setPayReceiptFile(f); setPayFormData({...payFormData, receipt: f?.name || ''}); }} />
+          <div className="w-full bg-gray-50 dark:bg-gray-800 border-2 border-dashed border-gray-200 dark:border-gray-700 rounded-2xl p-6 text-center text-sm text-gray-500 hover:border-indigo-300 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 transition-all flex flex-col items-center">
+            <Upload className="w-8 h-8 mb-2 text-indigo-400" />
+            <span className="font-bold">{payFormData.receipt || 'Click or drag to upload receipt'}</span>
+          </div>
+        </div>
+      </div>
+      <div className="flex space-x-4 pt-4">
+        <button type="button" onClick={() => setShowPayModal(null)} className="flex-1 bg-gray-100 dark:bg-gray-800 py-4 rounded-2xl font-bold text-gray-500 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors">Cancel</button>
+        <button type="submit" className="flex-1 bg-green-600 text-white py-4 rounded-2xl font-bold hover:bg-green-700 shadow-xl shadow-green-100 dark:shadow-none transition-all">
+          {payFormData.transactionId ? 'Update Payment' : 'Submit Payment'}
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+)}
+
+{/* QA: Consistent Transaction Form Modal - with receipt upload */}
+{showTransactionModal && (
+<div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md animate-in fade-in">
+  <div className="bg-white dark:bg-gray-900 rounded-3xl w-full max-w-md p-10 shadow-2xl animate-in zoom-in-95 relative transition-colors">
+    <button onClick={() => setShowTransactionModal(false)} className="absolute right-6 top-6 p-2 hover:bg-gray-100 rounded-full transition-colors">
+      <X className="w-6 h-6 text-gray-400" />
+    </button>
+    <h2 className="text-2xl font-black text-gray-900 dark:text-gray-100 mb-2">
+      {transactionFormData.id ? `Edit Payment` : `Pay ${transactionFormData.name || 'Item'}`}
+    </h2>
+    <p className="text-gray-500 text-sm mb-8">
+      {transactionFormData.id 
+        ? 'Update the payment details below' 
+        : 'Record a payment transaction'}
+    </p>
+    <form onSubmit={handleTransactionSubmit} className="space-y-6">
+      <div>
+        <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Amount</label>
+        <div className="relative">
+          <span className="absolute left-4 top-1/2 -translate-y-1/2 font-bold text-gray-400">₱</span>
+          <input 
+            required 
+            type="number" 
+            min="0" 
+            step="0.01" 
+            value={transactionFormData.amount} 
+            onChange={(e) => setTransactionFormData({...transactionFormData, amount: e.target.value})} 
+            className="w-full bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-transparent rounded-2xl p-4 pl-8 outline-none text-xl font-black focus:ring-2 focus:ring-indigo-500 transition-all" 
+          />
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div>
+          <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Date Paid</label>
+          <input 
+            required 
+            type="date" 
+            value={transactionFormData.date} 
+            onChange={(e) => setTransactionFormData({...transactionFormData, date: e.target.value})} 
+            className="w-full min-w-0 bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-transparent rounded-2xl px-3 py-4 outline-none font-bold text-sm transition-colors" 
+          />
+        </div>
+        <div>
+          <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Payment Method</label>
+          <select 
+            value={transactionFormData.accountId} 
+            onChange={(e) => setTransactionFormData({...transactionFormData, accountId: e.target.value})} 
+            className="w-full min-w-0 bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-transparent rounded-2xl px-3 py-4 outline-none font-bold text-sm appearance-none transition-colors"
+          >
+            {accounts.map(acc => <option key={acc.id} value={acc.id}>{acc.bank} ({acc.classification})</option>)}
+          </select>
+        </div>
+      </div>
+
+      <div>
+        <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Upload Receipt (Optional)</label>
+        <div className="relative">
+          <input type="file" className="absolute inset-0 opacity-0 cursor-pointer" />
+          <div className="w-full bg-gray-50 dark:bg-gray-800 border-2 border-dashed border-gray-200 dark:border-gray-700 rounded-2xl p-6 text-center text-sm text-gray-500 hover:border-indigo-300 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 transition-all flex flex-col items-center">
+            <Upload className="w-8 h-8 mb-2 text-indigo-400" />
+            <span className="font-bold">Click or drag to upload receipt</span>
+          </div>
+        </div>
+      </div>
+
+      <div className="flex space-x-4 pt-4">
+        <button type="button" onClick={() => setShowTransactionModal(false)} className="flex-1 bg-gray-100 dark:bg-gray-800 py-4 rounded-2xl font-bold text-gray-500 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors">Cancel</button>
+        <button type="submit" className="flex-1 bg-green-600 text-white py-4 rounded-2xl font-bold hover:bg-green-700 shadow-xl shadow-green-100 dark:shadow-none transition-all">
+          {transactionFormData.id ? 'Update Payment' : 'Submit Payment'}
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+)}
+
+{/* Fund Stash Modal */}
+{fundModal && (
+<div className="fixed inset-0 z-[150] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md" onClick={() => setFundModal(null)}>
+  <div className="w-full max-w-md bg-white rounded-3xl p-8 shadow-2xl relative" onClick={e => e.stopPropagation()}>
+    <button onClick={() => setFundModal(null)} className="absolute top-4 right-4 text-gray-400 hover:text-gray-700 p-2 rounded-full hover:bg-gray-100 transition-colors" aria-label="Close"><X className="w-5 h-5" /></button>
+    <div className="flex items-center space-x-3 mb-6">
+      <div className="w-12 h-12 bg-indigo-50 text-indigo-600 rounded-2xl flex items-center justify-center">
+        <Plus className="w-6 h-6" />
+      </div>
+      <div>
+        <h2 className="text-xl font-black text-gray-900 uppercase tracking-tight">Fund Stash</h2>
+        <p className="text-xs text-gray-500 font-medium">{fundModal.wallet.name}</p>
+      </div>
+    </div>
+    <form onSubmit={handleFundSubmit} className="space-y-5">
+      <div>
+        <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Amount <span className="text-red-500">*</span></label>
+        <div className="flex items-center border border-gray-200 rounded-2xl px-4 py-3 focus-within:border-indigo-400 transition-colors">
+          <span className="text-gray-400 font-bold mr-2">₱</span>
+          <input
+            type="number"
+            min="0.01"
+            step="0.01"
+            value={fundForm.amount}
+            onChange={e => setFundForm(f => ({ ...f, amount: e.target.value }))}
+            placeholder="0.00"
+            required
+            className="flex-1 bg-transparent border-none outline-none text-sm font-black text-indigo-600"
+          />
+        </div>
+      </div>
+      <div>
+        <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Date <span className="text-red-500">*</span></label>
+        <input
+          type="date"
+          value={fundForm.date}
+          onChange={e => setFundForm(f => ({ ...f, date: e.target.value }))}
+          min={(() => { const mi = MONTHS.indexOf(selectedMonth); return `${selectedYear}-${String(mi + 1).padStart(2, '0')}-01`; })()}
+          max={(() => { const mi = MONTHS.indexOf(selectedMonth); const last = new Date(selectedYear, mi + 1, 0).getDate(); return `${selectedYear}-${String(mi + 1).padStart(2, '0')}-${String(last).padStart(2, '0')}`; })()}
+          required
+          className="w-full border border-gray-200 rounded-2xl px-4 py-3 text-sm font-bold text-gray-800 outline-none focus:border-indigo-400 transition-colors"
+        />
+      </div>
+      <div>
+        <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Notes <span className="text-gray-300">(optional)</span></label>
+        <input
+          type="text"
+          value={fundForm.notes}
+          onChange={e => setFundForm(f => ({ ...f, notes: e.target.value }))}
+          placeholder="e.g. Monthly allocation"
+          className="w-full border border-gray-200 rounded-2xl px-4 py-3 text-sm text-gray-700 outline-none focus:border-indigo-400 transition-colors"
+        />
+      </div>
+      <div className="flex flex-col space-y-3 pt-2">
+        <button
+          type="submit"
+          disabled={fundSubmitting}
+          className="w-full bg-indigo-600 text-white py-4 rounded-2xl font-black uppercase tracking-widest text-[10px] hover:bg-indigo-700 transition-all disabled:opacity-60"
+        >
+          {fundSubmitting ? 'Funding…' : 'Fund Stash'}
+        </button>
+        <button type="button" onClick={() => setFundModal(null)} className="w-full bg-gray-100 text-gray-500 py-4 rounded-2xl font-black uppercase tracking-widest text-[10px] hover:bg-gray-200 transition-all">
+          Cancel
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+)}
+
+{/* Stash Info Modal */}
+{stashInfoModal && (() => {
+const { funded, remaining, topUps } = getStashAggregates(stashInfoModal.wallet);
+const linkedAccount = accounts.find(a => a.id === stashInfoModal.wallet.accountId);
+return (
+  <div className="fixed inset-0 z-[150] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md" onClick={() => setStashInfoModal(null)}>
+    <div className="w-full max-w-lg bg-white rounded-3xl p-8 shadow-2xl relative max-h-[85vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+      <button onClick={() => setStashInfoModal(null)} className="absolute top-4 right-4 text-gray-400 hover:text-gray-700 p-2 rounded-full hover:bg-gray-100 transition-colors" aria-label="Close"><X className="w-5 h-5" /></button>
+      <div className="flex items-center space-x-3 mb-6">
+        <div className="w-12 h-12 bg-indigo-50 text-indigo-600 rounded-2xl flex items-center justify-center">
+          <Info className="w-6 h-6" />
+        </div>
+        <div>
+          <h2 className="text-xl font-black text-gray-900 uppercase tracking-tight">Stash Info</h2>
+          <p className="text-xs text-gray-500 font-medium">{stashInfoModal.wallet.name} · {selectedMonth} {selectedYear}</p>
+        </div>
+      </div>
+      {/* Summary */}
+      <div className="grid grid-cols-3 gap-4 mb-6">
+        <div className="bg-gray-50 rounded-2xl p-4 text-center">
+          <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Target</p>
+          <p className="text-base font-black text-indigo-600">{formatCurrency(stashInfoModal.wallet.amount)}</p>
+        </div>
+        <div className="bg-green-50 rounded-2xl p-4 text-center">
+          <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Funded</p>
+          <p className="text-base font-black text-green-600">{formatCurrency(funded)}</p>
+        </div>
+        <div className="bg-orange-50 rounded-2xl p-4 text-center">
+          <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Remaining</p>
+          <p className="text-base font-black text-orange-600">{formatCurrency(remaining)}</p>
+        </div>
+      </div>
+      {linkedAccount && (
+        <p className="text-xs text-gray-500 mb-5 font-medium">Account: <span className="text-gray-700 font-bold">{linkedAccount.bank} ({linkedAccount.classification})</span></p>
+      )}
+      {/* Top-ups list */}
+      <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-3">Top-ups this month</h3>
+      {topUps.length === 0 ? (
+        <p className="text-sm text-gray-400 italic py-4 text-center">No top-ups for this stash this month. Fund this stash to see top-ups here.</p>
+      ) : (
+        <div className="space-y-3">
+          {topUps.map(tx => (
+            <div key={tx.id} className="bg-gray-50 rounded-2xl p-4 flex items-center justify-between">
+              <div className="space-y-0.5">
+                <p className="text-sm font-bold text-gray-900">{tx.name}</p>
+                <p className="text-xs text-gray-500">{new Date(tx.date).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })}</p>
+                {tx.notes && <p className="text-xs text-gray-400 italic">{tx.notes}</p>}
+              </div>
+              <div className="flex items-center space-x-3">
+                <span className="text-sm font-black text-indigo-600">{formatCurrency(Math.abs(tx.amount))}</span>
+                <PinProtectedAction
+                  featureId="transaction_deletions"
+                  onVerified={() => handleDeleteStashTopUp(tx.id, tx.amount)}
+                  actionLabel="Delete Top-up"
+                >
+                  <button
+                    onClick={(e) => e.preventDefault()}
+                    aria-label={`Delete top-up of ${formatCurrency(Math.abs(tx.amount))} from ${new Date(tx.date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}`}
+                    className="text-red-400 hover:text-red-600 p-1.5 rounded-xl hover:bg-red-50 transition-colors"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                </PinProtectedAction>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  </div>
+);
+})()}
+{schedulePaymentsModal && (
+<div className="fixed inset-0 z-[150] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md" onClick={() => setSchedulePaymentsModal(null)}>
+  <div className="w-full max-w-lg bg-white rounded-3xl p-8 shadow-2xl relative max-h-[85vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+    <button onClick={() => setSchedulePaymentsModal(null)} className="absolute top-4 right-4 text-gray-400 hover:text-gray-700 p-2 rounded-full hover:bg-gray-100 transition-colors" aria-label="Close"><X className="w-5 h-5" /></button>
+    <h2 className="text-2xl font-black text-gray-900 mb-1">Payment Records</h2>
+    <p className="text-gray-500 text-sm mb-6">{schedulePaymentsModal.label}</p>
+    {loadingScheduleTx ? (
+      <div className="text-center py-8 text-gray-400">Loading...</div>
+    ) : schedulePaymentsModal.transactions.length === 0 ? (
+      <div className="text-center py-8 text-gray-400 italic">No payment records found.</div>
+    ) : (
+      <div className="space-y-4">
+        {schedulePaymentsModal.transactions.map(tx => {
+          const pmName = accounts.find(a => a.id === tx.paymentMethodId)?.bank || tx.paymentMethodId;
+          const signedUrl = scheduleSignedUrls[tx.id];
+          return (
+            <div key={tx.id} className="bg-gray-50 rounded-2xl p-4 space-y-2">
+              <div className="flex justify-between">
+                <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Name</span>
+                <span className="text-sm font-bold text-gray-900">{tx.name}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Amount</span>
+                <span className="text-sm font-bold text-red-600">{formatCurrency(tx.amount)}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Payment Method</span>
+                <span className="text-sm text-gray-700">{pmName}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Date</span>
+                <span className="text-sm text-gray-700">{new Date(tx.date).toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' })}</span>
+              </div>
+              {tx.receiptUrl && (
+                <div className="flex items-center space-x-3 pt-1">
+                  {signedUrl ? (
+                    <>
+                      <img src={signedUrl} alt={`Receipt for ${tx.name}`} className="w-12 h-12 rounded-xl object-cover border border-gray-200" onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
+                      <button onClick={() => { setZoom(0.5); setPreviewReceiptUrl(signedUrl); }} title="Preview receipt" className="flex items-center space-x-1 px-3 py-1.5 rounded-xl bg-indigo-50 text-indigo-600 hover:bg-indigo-100 transition-colors text-xs font-bold">
+                        <Eye className="w-3.5 h-3.5" /><span>Preview</span>
+                      </button>
+                    </>
+                  ) : (
+                    <span className="text-xs text-gray-400 italic">Loading receipt…</span>
+                  )}
+                </div>
+              )}
+              <div className="flex justify-end pt-1">
+                <PinProtectedAction
+                  featureId="transaction_deletions"
+                  onVerified={() => handleDeleteScheduleTx(tx.id)}
+                  actionLabel="Delete Payment Record"
+                >
+                  <button
+                    onClick={(e) => e.preventDefault()}
+                    title="Delete payment record"
+                    className="flex items-center space-x-1 px-3 py-1.5 rounded-xl bg-red-50 text-red-600 hover:bg-red-100 transition-colors text-xs font-bold"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" /><span>Delete</span>
+                  </button>
+                </PinProtectedAction>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    )}
+  </div>
+</div>
+)}
+
+{/* Receipt Preview Modal */}
+{previewReceiptUrl && (
+<div className="fixed inset-0 z-[200] flex items-center justify-center p-4" onClick={() => setPreviewReceiptUrl(null)}>
+  <div className="w-full max-w-2xl bg-white rounded-3xl shadow-2xl flex flex-col overflow-hidden" style={{ maxHeight: '90vh' }} onClick={e => e.stopPropagation()}>
+    <div className="flex items-center justify-between p-4 border-b border-gray-100">
+      <h3 className="text-base font-black text-gray-900 uppercase tracking-widest">Receipt Preview</h3>
+      <div className="flex items-center space-x-2">
+        <button onClick={() => setZoom(z => Math.max(MIN_ZOOM, parseFloat((z - ZOOM_INCREMENT).toFixed(2))))} title="Zoom out" className="p-2 rounded-xl hover:bg-gray-100 text-gray-600 transition-colors" aria-label="Zoom out"><ZoomOut className="w-4 h-4" /></button>
+        <span className="text-xs font-bold text-gray-500 w-10 text-center">{Math.round(zoom * 100)}%</span>
+        <button onClick={() => setZoom(z => Math.min(MAX_ZOOM, parseFloat((z + ZOOM_INCREMENT).toFixed(2))))} title="Zoom in" className="p-2 rounded-xl hover:bg-gray-100 text-gray-600 transition-colors" aria-label="Zoom in"><ZoomIn className="w-4 h-4" /></button>
+        <a href={previewReceiptUrl} download target="_blank" rel="noreferrer" title="Download receipt" className="p-2 rounded-xl hover:bg-indigo-50 text-indigo-600 transition-colors" aria-label="Download receipt"><Download className="w-4 h-4" /></a>
+        <button onClick={() => setPreviewReceiptUrl(null)} title="Close" className="p-2 rounded-xl hover:bg-gray-100 text-gray-600 transition-colors" aria-label="Close preview"><X className="w-4 h-4" /></button>
+      </div>
+    </div>
+    <div className="overflow-auto flex-1 p-4 flex justify-center">
+      <img src={previewReceiptUrl} alt={`Receipt — ${schedulePaymentsModal?.label || ''}`} style={{ width: `${zoom * 100}%`, height: 'auto', transition: 'width 0.2s' }} />
+    </div>
+  </div>
+</div>
+)}
+
+{/* Salary Cash In Modal */}
+{showSalaryModal && (
+<div className="fixed inset-0 z-[150] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md animate-in fade-in" onClick={() => setShowSalaryModal(false)}>
+  <div className="bg-white dark:bg-gray-900 rounded-3xl w-full max-w-md p-10 shadow-2xl animate-in zoom-in-95 relative transition-colors" onClick={e => e.stopPropagation()}>
+    <button onClick={() => setShowSalaryModal(false)} className="absolute right-6 top-6 p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full transition-colors">
+      <X className="w-6 h-6 text-gray-400" />
+    </button>
+    <h2 className="text-2xl font-black text-gray-900 dark:text-gray-100 mb-2">Record Income</h2>
+    <p className="text-gray-500 text-sm mb-8">Add this income to your account balance</p>
+    
+    <form onSubmit={handleSalaryCashIn} className="space-y-6">
+      <div>
+        <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Transaction Name</label>
+        <input required type="text" value={salaryFormData.name} onChange={(e) => setSalaryFormData({...salaryFormData, name: e.target.value})} className="w-full bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-transparent rounded-2xl p-4 outline-none font-bold focus:ring-2 focus:ring-indigo-500 transition-all" />
+      </div>
+
+      <div>
+        <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Amount</label>
+        <div className="relative">
+          <span className="absolute left-4 top-1/2 -translate-y-1/2 font-bold text-gray-400">₱</span>
+          <input required type="number" min="0.01" step="0.01" value={salaryFormData.amount} onChange={(e) => setSalaryFormData({...salaryFormData, amount: e.target.value})} className="w-full bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-transparent rounded-2xl p-4 pl-8 outline-none text-xl font-black focus:ring-2 focus:ring-indigo-500 transition-all" />
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div>
+          <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Date Received</label>
+          <input required type="date" value={salaryFormData.date} onChange={(e) => setSalaryFormData({...salaryFormData, date: e.target.value})} className="w-full min-w-0 bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-transparent rounded-2xl px-3 py-4 outline-none font-bold text-sm transition-colors" />
+        </div>
+        <div>
+          <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Deposit Account</label>
+          <select required value={salaryFormData.accountId} onChange={(e) => setSalaryFormData({...salaryFormData, accountId: e.target.value})} className="w-full min-w-0 bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-transparent rounded-2xl px-3 py-4 outline-none font-bold text-sm appearance-none transition-colors">
+            <option value="" disabled>Select Account</option>
+            {accounts.filter(a => a.type === 'Debit').map(acc => <option key={acc.id} value={acc.id}>{acc.bank} ({acc.classification})</option>)}
+          </select>
+        </div>
+      </div>
+
+      <div className="flex space-x-4 pt-4">
+        <button type="button" onClick={() => setShowSalaryModal(false)} className="flex-1 bg-gray-100 dark:bg-gray-800 py-4 rounded-2xl font-bold text-gray-500 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors">Cancel</button>
+        <button type="submit" className="flex-1 bg-green-600 text-white py-4 rounded-2xl font-bold hover:bg-green-700 shadow-xl shadow-green-100 dark:shadow-none transition-all">Record Income</button>
+      </div>
+    </form>
+  </div>
+</div>
+)}
+
+{/* Income Records Modal */}
+{showIncomeRecordsModal && (
+<div className="fixed inset-0 z-[150] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md animate-in fade-in" onClick={() => setShowIncomeRecordsModal(false)}>
+  <div className="bg-white dark:bg-gray-900 rounded-3xl w-full max-w-lg p-8 shadow-2xl relative max-h-[85vh] overflow-y-auto transition-colors" onClick={e => e.stopPropagation()}>
+    <button onClick={() => setShowIncomeRecordsModal(false)} className="absolute top-6 right-6 p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full transition-colors">
+      <X className="w-5 h-5 text-gray-400 dark:text-gray-500" />
+    </button>
+    <div className="flex items-center justify-between mb-6">
+      <div>
+        <h2 className="text-2xl font-black text-gray-900 dark:text-gray-100 mb-1">Income Records</h2>
+        <p className="text-gray-500 dark:text-gray-400 text-sm">{selectedMonth} {selectedYear}</p>
+      </div>
+      <button
+        onClick={() => {
+          setShowIncomeRecordsModal(false);
+          const debitAccounts = accounts.filter(a => a.type === 'Debit');
+          setSalaryFormData({
+            name: '',
+            amount: '',
+            date: new Date().toISOString().split('T')[0],
+            accountId: debitAccounts[0]?.id || ''
+          });
+          setShowSalaryModal(true);
+        }}
+        className="flex items-center gap-2 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 px-4 py-2 rounded-xl font-bold hover:bg-indigo-100 dark:hover:bg-indigo-900/50 transition-colors text-sm"
+      >
+        <Plus className="w-4 h-4" />
+        Add Income
+      </button>
+    </div>
+
+    {allIncomeTxs.length === 0 ? (
+      <div className="text-center py-8 text-gray-400 dark:text-gray-500 italic">No income records found.</div>
+    ) : (
+      <div className="space-y-4">
+        {allIncomeTxs.map(tx => {
+          const pmName = accounts.find(a => a.id === tx.payment_method_id)?.bank || tx.payment_method_id;
+          return (
+            <div key={tx.id} className="bg-gray-50 dark:bg-gray-800/50 rounded-2xl p-4 space-y-2 transition-colors">
+              <div className="flex justify-between items-start">
+                <div className="space-y-2 flex-1">
+                  <div className="flex justify-between">
+                    <span className="text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest">Name</span>
+                    <span className="text-sm font-bold text-gray-900 dark:text-gray-100">{tx.name}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest">Amount</span>
+                    <span className="text-sm font-bold text-green-600 dark:text-green-400">{formatCurrency(Math.abs(tx.amount))}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest">Deposit To</span>
+                    <span className="text-sm text-gray-700 dark:text-gray-300">{pmName}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest">Date</span>
+                    <span className="text-sm text-gray-700 dark:text-gray-300">{new Date(tx.date).toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' })}</span>
+                  </div>
+                </div>
+                <div className="flex flex-col items-end pl-4 space-y-2">
+                  <button
+                    onClick={() => { 
+                      setTransactionFormData({
+                        id: tx.id,
+                        name: tx.name,
+                        amount: Math.abs(tx.amount).toFixed(2),
+                        date: tx.date.split('T')[0],
+                        accountId: tx.payment_method_id,
+                        paymentScheduleId: tx.payment_schedule_id || '',
+                        transactionType: tx.transaction_type || 'cash_in'
+                      });
+                      setShowIncomeRecordsModal(false);
+                      setShowTransactionModal(true);
+                    }}
+                    className="text-[9px] font-black text-indigo-600 dark:text-indigo-400 uppercase tracking-widest border border-indigo-100 dark:border-indigo-900/30 px-2 py-1 rounded-lg hover:bg-indigo-50 dark:hover:bg-indigo-900/50 transition-colors"
+                  >
+                    Edit
+                  </button>
+                  <PinProtectedAction
+                    featureId="transaction_deletions"
+                    onVerified={async () => {
+                      try {
+                        const { error } = await deleteTransactionAndRevertSchedule(tx.id);
+                        if (error) throw error;
+
+                      const nameLower = tx.name.trim().toLowerCase();
+                      const isSalaryRecord = nameLower === 'salary' || nameLower === 'income';
+                      const actualSalaryParsed = parseFloat(actualSalary);
+                      if (isSalaryRecord || (!isNaN(actualSalaryParsed) && Math.abs(tx.amount) === actualSalaryParsed)) {
+                        setActualSalary('');
+                      }
+
+                        await reloadTransactions();
+                        if (onTransactionDeleted) onTransactionDeleted();
+                      } catch (err) {
+                        alert('Failed to delete transaction. Please try again.');
+                      }
+                    }}
+                    actionLabel="Delete Income Record"
+                  >
+                    <button
+                      onClick={(e) => e.preventDefault()}
+                      title="Delete income record"
+                      className="text-[9px] font-black text-red-500 dark:text-red-400 uppercase tracking-widest border border-red-100 dark:border-red-900/30 px-2 py-1 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/50 transition-colors"
+                    >
+                      Delete
+                    </button>
+                  </PinProtectedAction>
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    )}
+  </div>
+</div>
+)}
+
+{confirmModal.show && <ConfirmDialog {...confirmModal} onClose={() => setConfirmModal(p => ({ ...p, show: false }))} />}
+</div>
+);
+}
+
+const ConfirmDialog: React.FC<{ show: boolean; title: string; message: string; onConfirm: () => void; onClose: () => void }> = ({ title, message, onConfirm, onClose }) => (
+<div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-in fade-in">
+<div className="bg-white dark:bg-gray-900 rounded-[2.5rem] w-full max-w-sm p-10 shadow-2xl animate-in zoom-in-95 flex flex-col items-center text-center transition-colors">
+  <div className="w-16 h-16 bg-red-50 dark:bg-red-900/20 text-red-600 rounded-3xl flex items-center justify-center mb-6">
+    <AlertTriangle className="w-8 h-8" />
+  </div>
+  <h3 className="text-xl font-black text-gray-900 dark:text-gray-100 mb-2 uppercase tracking-tight">{title}</h3>
+  <p className="text-sm text-gray-500 dark:text-gray-400 mb-8 font-medium leading-relaxed">{message}</p>
+  <div className="flex flex-col w-full space-y-3">
+    <button onClick={onConfirm} className="w-full bg-red-600 text-white py-4 rounded-2xl font-black uppercase tracking-widest text-[10px] hover:bg-red-700 transition-all">Proceed</button>
+    <button onClick={onClose} className="w-full bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-300 py-4 rounded-2xl font-black uppercase tracking-widest text-[10px] hover:bg-gray-200 dark:hover:bg-gray-700 transition-all">Cancel</button>
+  </div>
+</div>
+</div>
+);
+
 export default Budget;

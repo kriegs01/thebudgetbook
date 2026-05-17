@@ -205,8 +205,8 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
   const isDashboard = location.pathname === '/';
   const [isScrolled, setIsScrolled] = useState(false);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
-  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
-	const isMobile = useMediaQuery('(max-width: 767px)');
+  const isMobile = useMediaQuery('(max-width: 767px)');
+  const [isSidebarOpen, setIsSidebarOpen] = useState(!isMobile);
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
   const [isMessagesOpen, setIsMessagesOpen] = useState(false);
@@ -221,6 +221,10 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
   // Splash Screen State
   const [showSplash, setShowSplash] = useState(true);
   const [minSplashTimeElapsed, setMinSplashTimeElapsed] = useState(false);
+
+  useEffect(() => {
+    setIsSidebarOpen(!isMobile);
+  }, [isMobile]);
 
   // Scroll listener for Dashboard top bar visibility
   useEffect(() => {
