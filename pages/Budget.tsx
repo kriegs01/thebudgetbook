@@ -207,7 +207,7 @@ const PageHeader: React.FC<{
   }, [title]);
 
   return (
-    <header className={`${isMobile ? 'pt-8' : 'pt-12'} mb-12 flex flex-row items-center justify-between gap-6`}>
+<header className={`${isMobile ? 'pt-8' : 'pt-12'} flex flex-row items-center justify-between gap-6`}>
         <div className="flex-1">
             <div className="relative inline-block">
                 <div
@@ -1673,10 +1673,9 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
               </div>
             )}
 
-            <div className="bg-white/40 dark:bg-gray-900/40 backdrop-blur-xl rounded-[3rem] shadow-sm border border-gray-100 dark:border-gray-800 p-2 w-full transition-colors">
-              <div className="bg-white dark:bg-gray-900 rounded-[2.5rem] overflow-hidden w-full transition-colors">
-                <BudgetSetupsList
-                  setups={activeSetups}
+<div className="bg-white dark:bg-gray-900 rounded-[2.5rem] border-[3px] border-black shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] overflow-hidden">
+    <BudgetSetupsList
+      setups={activeSetups}
                   title="Active Budgets"
                   isArchived={false}
                   onLoadSetup={handleLoadSetup}
@@ -1695,14 +1694,14 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                   formatCurrency={formatCurrency}
                   calculateBudgetRemaining={(setup) => calculateBudgetRemaining(setup, transactions, selectedYear)}
                   archiveSubmitting={archiveSubmitting}
-                />
+    />
               </div>
-            </div>
+
+
 
             {archivedSetups.length > 0 && (
-              <div className="bg-white/40 dark:bg-gray-900/40 backdrop-blur-xl rounded-[3rem] shadow-sm border border-amber-100 dark:border-amber-900/30 p-2 w-full transition-colors">
-                <div className="bg-white dark:bg-gray-900 rounded-[2.5rem] overflow-hidden w-full transition-colors">
-                  <button
+              <div className="bg-white dark:bg-gray-900 rounded-[2.5rem] border-[3px] border-black shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] overflow-hidden">
+    <button
                     type="button"
                     onClick={() => setShowArchived(prev => !prev)}
                     className="w-full flex items-center justify-between p-8 pl-12 pr-12 hover:bg-amber-50/40 dark:hover:bg-amber-900/20 transition-colors rounded-[2.5rem]"
@@ -1726,13 +1725,12 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                     />
                   )}
                 </div>
-              </div>
             )}
-
+        
             {confirmModal.show && <ConfirmDialog {...confirmModal} onClose={() => setConfirmModal(p => ({ ...p, show: false }))} />}
         </div>
     );
-  }
+}
 
   const categorySummary = categories
     .filter(cat => {
@@ -1846,7 +1844,7 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
           )}
         />
 
-        <div className="flex items-center justify-between w-full md:justify-center mt-[-1.5rem] md:mt-0 mb-6 md:relative">
+        <div className="flex items-center justify-between w-full md:justify-center mb-6 md:relative">
             <div className="flex-none md:absolute md:left-0 md:top-1/2 md:-translate-y-1/2">
                 <button onClick={() => setView('summary')} className={`flex items-center justify-center w-10 h-10 rounded-xl bg-gray-50 dark:bg-gray-800 text-gray-500 dark:text-gray-400 transition-all shrink-0 ${getAccentClasses('hoverLight')}`}>
                     <ArrowLeft className="w-5 h-5" />
@@ -1885,28 +1883,30 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        <div className="bg-white dark:bg-gray-900 rounded-[3rem] shadow-sm border border-gray-100 dark:border-gray-800 overflow-hidden w-full transition-colors">
-          <div className="p-4 border-b border-gray-50 dark:border-gray-800/50 bg-gray-50/30 dark:bg-gray-800/30"><h3 className="text-xs font-black text-gray-900 dark:text-gray-100 uppercase tracking-[0.25em] text-center">BUDGET SUMMARY</h3></div>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+        <div className="bg-white dark:bg-gray-900 rounded-[2.5rem] border-[3px] border-black shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] overflow-hidden w-full transition-colors">
+          <div className="p-4 border-b-2 border-black bg-gray-50/30 dark:bg-gray-800/30"><h3 className="text-xs font-black text-gray-900 dark:text-gray-100 uppercase tracking-[0.25em] text-center">BUDGET SUMMARY</h3></div>
           <table className="w-full text-left">
-            <thead><tr className="text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase border-b border-gray-50 dark:border-gray-800/50"><th className="p-3 pl-6">Category</th><th className="p-3 pr-6 text-right">Amount</th></tr></thead>
-            <tbody className="divide-y divide-gray-50 dark:divide-gray-800/50">
+            <thead><tr className="text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase border-b border-gray-100 dark:border-gray-800"><th className="p-3 pl-6">Category</th><th className="p-3 pr-6 text-right">Amount</th></tr></thead>
+            <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
               {categorySummary.map((item) => (
                 <tr key={item.category}><td className="p-3 pl-6 font-bold text-gray-700 dark:text-gray-300 text-sm">{item.category}</td><td className="p-3 pr-6 text-right font-black text-gray-900 dark:text-gray-100 text-sm">{formatCurrency(item.total)}</td></tr>
               ))}
               {stashTotal > 0 && (
                 <tr><td className="p-3 pl-6 font-bold text-gray-700 dark:text-gray-300 text-sm">Stash</td><td className="p-3 pr-6 text-right font-black text-gray-900 dark:text-gray-100 text-sm">{formatCurrency(stashTotal)}</td></tr>
               )}
-              <tr className="bg-indigo-50/30 dark:bg-indigo-900/20"><td className="p-3 pl-6 text-xs font-black text-indigo-600 dark:text-indigo-400 uppercase">Grand Total</td><td className="p-3 pr-6 text-right text-lg font-black text-indigo-600 dark:text-indigo-400">{formatCurrency(grandTotal)}</td></tr>
             </tbody>
+            <tfoot>
+              <tr className="bg-indigo-50/30 dark:bg-indigo-900/20"><td className="p-3 pl-6 text-xs font-black text-indigo-600 dark:text-indigo-400 uppercase">Grand Total</td><td className="p-3 pr-6 text-right text-lg font-black text-indigo-600 dark:text-indigo-400">{formatCurrency(grandTotal)}</td></tr>
+            </tfoot>
           </table>
         </div>
 
-        <div className="bg-white dark:bg-gray-900 rounded-[3rem] shadow-sm border border-gray-100 dark:border-gray-800 overflow-hidden w-full transition-colors">
-          <div className="p-4 border-b border-gray-50 dark:border-gray-800/50 bg-gray-50/30 dark:bg-gray-800/30"><h3 className="text-xs font-black text-gray-900 dark:text-gray-100 uppercase tracking-[0.25em] text-center">MONTH SUMMARY</h3></div>
+        <div className="bg-white dark:bg-gray-900 rounded-[2.5rem] border-[3px] border-black shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] overflow-hidden w-full transition-colors">
+          <div className="p-4 border-b-2 border-black bg-gray-50/30 dark:bg-gray-800/30"><h3 className="text-xs font-black text-gray-900 dark:text-gray-100 uppercase tracking-[0.25em] text-center">MONTH SUMMARY</h3></div>
           <table className="w-full text-left">
-            <thead><tr className="text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase border-b border-gray-50 dark:border-gray-800/50"><th className="p-3 pl-6">Item</th><th className="p-3 pr-6 text-right">Amount</th></tr></thead>
-            <tbody className="divide-y divide-gray-50 dark:divide-gray-800/50">
+            <thead><tr className="text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase border-b border-gray-100 dark:border-gray-800"><th className="p-3 pl-6">Item</th><th className="p-3 pr-6 text-right">Amount</th></tr></thead>
+            <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
               <tr>
                 <td className="p-3 pl-6 font-bold text-gray-700 dark:text-gray-300 text-sm">Projected Income</td>
                 <td className="p-3 pr-6 text-right">
@@ -2018,18 +2018,21 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                 <td className="p-3 pl-6 font-bold text-gray-700 dark:text-gray-300 text-sm">Total Spend</td>
                 <td className="p-3 pr-6 text-right font-black text-gray-900 dark:text-gray-100 text-sm">{formatCurrency(totalSpend)}</td>
               </tr>
+            </tbody>
+            <tfoot>
               <tr className={`${remaining >= 0 ? 'bg-green-50/30 dark:bg-green-900/10' : 'bg-red-50/30 dark:bg-red-900/10'}`}>
                 <td className="p-3 pl-6 text-xs font-black uppercase">Remaining</td>
                 <td className={`p-3 pr-6 text-right text-lg font-black ${remaining >= 0 ? 'text-green-600' : 'text-red-600'}`}>{formatCurrency(remaining)}</td>
               </tr>
-            </tbody>
+            </tfoot>
           </table>
         </div>
       </div>
 
+
       <div className="space-y-6">
         {wallets.length > 0 && (
-        <div className="bg-white dark:bg-gray-900 rounded-[3rem] shadow-sm border border-gray-100 dark:border-gray-800 overflow-hidden w-full transition-colors">
+          <div className="bg-white dark:bg-gray-900 rounded-[2.5rem] border-[3px] border-black shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] overflow-hidden w-full transition-colors">
           <div className="px-8 py-5 border-b border-gray-50 dark:border-gray-800/50 bg-gray-50/30 dark:bg-gray-800/30 flex justify-between items-center transition-colors">
             <h3 className="text-xs font-black text-gray-900 dark:text-gray-100 uppercase tracking-[0.25em]">Stash</h3>
             <div className="flex items-center space-x-3">

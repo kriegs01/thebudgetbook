@@ -7,7 +7,8 @@ This document unifies all parked ideas, feature enhancements, and architectural 
 ## ⏯️ Resumption Plan
 *Immediate next steps to finalize the UI transition.*
 
-- [ ] **Retro Sticker Theme:** Apply the retro sticker theme to the new card layout for the budget list.
+- [ ] **Budget Setups Page UI:** Resume mobile optimization and implement card layout for all budget item categories.
+- [x] **Retro Sticker Theme:** Apply the retro sticker theme to the new card layout for the budget list.
 - [ ] **Persist Budget view state in URL** to prevent reset on reload.
 - [ ] **Mobile Top Padding:** Add spacing between the subtitle and top bar on mobile for `Billers`, `Installments`, `Accounts`, `Wallet`, `People`, and `Settings` pages to ensure visual consistency. *(Note: Partially implemented; needs to be applied to all pages.)*
 - [ ] **Retro Sticker Login Page:** Update the `Auth.tsx` layout and elements to match the heavy pop-art aesthetic.
@@ -70,6 +71,7 @@ This document unifies all parked ideas, feature enhancements, and architectural 
 ---
 
 ## ✅ Done
+- [x] **Budget Setups Page (Partial):** Applied retro sticker theme to summary cards and fixed critical JSX rendering errors in `Budget.tsx`.
 - [x] **Card-Style Budget List:** Applied a card-based layout to the budget setups list on the Budget page, improving readability and visual organization on mobile.
 - [x] **Responsive Transaction Modals:** Ensured retro sticker-themed transaction modals (payment, loans, transfer) are proportionally sized on mobile, overlay the top bar, and do not cause horizontal scrolling.
 - [x] **Budget Setup Header Refinement:** Further improved the `PageHeader` component for visual consistency across all screen sizes.

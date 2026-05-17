@@ -1,9 +1,9 @@
-
+// src/components/BudgetSetupsList.tsx
 import React from 'react';
 import { SavedBudgetSetup } from '../../types';
-import { Archive, FileText, RotateCcw, Trash2, ArrowRight } from 'lucide-react';
-import { IconSquircleButton } from './IconSquircleButton';
+import { Archive, ArrowRight, Loader2, RotateCcw, Trash2 } from 'lucide-react';
 import { PinProtectedAction } from './PinProtectedAction';
+import { useTheme } from '../contexts/ThemeContext';
 import useMediaQuery from '../hooks/useMediaQuery';
 
 interface BudgetSetupsListProps {
@@ -16,7 +16,7 @@ interface BudgetSetupsListProps {
   onMoveToTrash?: (setup: SavedBudgetSetup) => void;
   formatCurrency: (value: number) => string;
   calculateBudgetRemaining: (setup: SavedBudgetSetup) => number;
-  archiveSubmitting?: boolean;
+  archiveSubmitting: boolean;
 }
 
 export const BudgetSetupsList: React.FC<BudgetSetupsListProps> = ({
@@ -31,163 +31,154 @@ export const BudgetSetupsList: React.FC<BudgetSetupsListProps> = ({
   calculateBudgetRemaining,
   archiveSubmitting,
 }) => {
+  const { getAccentClasses } = useTheme();
   const isMobile = useMediaQuery('(max-width: 767px)');
 
-  if (setups.length === 0) {
-    return (
-      <div className="p-24 text-center text-gray-400 dark:text-gray-500 font-bold uppercase tracking-widest">
-        No history found
-      </div>
-    );
-  }
+  const renderMobileList = () => (
+    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+      {setups.map((setup) => {
+        const remaining = calculateBudgetRemaining(setup);
+        const remainingColor = remaining >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400';
 
-  if (isMobile) {
-    return (
-      <div className="space-y-4 p-4">
-        {setups.map((setup) => {
-          const remaining = calculateBudgetRemaining(setup);
-          return (
-            <div key={setup.id} className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 p-4">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-3">
-                  <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${isArchived ? 'bg-amber-50 dark:bg-amber-900/20 text-amber-500' : 'bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400'}`}>
-                    {isArchived ? <Archive className="w-5 h-5" /> : <FileText className="w-5 h-5" />}
+        return (
+          <div 
+            key={setup.id} 
+            className="bg-white dark:bg-gray-900 rounded-2xl border-[3px] border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] overflow-hidden flex flex-col"
+          >
+            <div className="p-4 flex-grow flex flex-col">
+              <div className="flex justify-between items-start">
+                <div>
+                  <p className={`text-lg font-black uppercase tracking-tight ${getAccentClasses('text')}`}>{setup.month}</p>
+                  <p className="font-semibold text-gray-400 dark:text-gray-500 text-xs">{setup.timing} • <span className="font-bold">{setup.status}</span></p>
+                </div>
+                {onMoveToTrash && (
+                  <PinProtectedAction featureId="budget_deletions" onVerified={() => onMoveToTrash(setup)}>
+                    <button onClick={(e) => e.preventDefault()} className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/50 rounded-lg transition-colors">
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </PinProtectedAction>
+                )}
+              </div>
+        
+              <div className="mt-4 flex-grow flex items-center justify-between">
+                <div className="space-y-2">
+                  <div className="flex items-baseline gap-2">
+                    <span className="font-medium text-gray-500 dark:text-gray-400 text-xs">Total:</span>
+                    <span className="font-bold text-gray-800 dark:text-gray-200 text-sm">{formatCurrency(setup.totalAmount)}</span>
                   </div>
-                  <div>
-                    <span className="text-base font-black text-gray-900 dark:text-gray-100 tracking-tight">{setup.month}</span>
-                    <span className="text-xs text-gray-500 dark:text-gray-400 ml-2">{setup.timing}</span>
+                  <div className="flex items-baseline gap-2">
+                    <span className="font-medium text-gray-500 dark:text-gray-400 text-xs">Remaining:</span>
+                    <span className={`font-bold text-sm ${remainingColor}`}>{formatCurrency(remaining)}</span>
                   </div>
                 </div>
+
                 <div className="flex items-center gap-2">
                   {isArchived ? (
-                    <PinProtectedAction
-                      featureId="budget_modifications"
-                      onVerified={() => onReopenSetup?.(setup)}
-                      actionLabel="Reopen Budget"
-                    >
-                      <IconSquircleButton variant="reopen" onClick={(e) => e.preventDefault()} disabled={archiveSubmitting} aria-label="Reopen budget">
-                        <RotateCcw className="w-4 h-4" />
-                      </IconSquircleButton>
-                    </PinProtectedAction>
+                    onReopenSetup && (
+                      <PinProtectedAction featureId="budget_modifications" onVerified={() => onReopenSetup(setup)} actionLabel="Reopen Budget">
+                        <button
+                          onClick={(e) => e.preventDefault()}
+                          disabled={archiveSubmitting}
+                          className="w-10 h-10 bg-indigo-100 dark:bg-indigo-900/50 text-indigo-700 dark:text-indigo-300 font-bold text-sm p-2 rounded-xl border-[3px] border-black shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] hover:translate-x-[1px] hover:translate-y-[1px] hover:shadow-none active:translate-x-[3px] active:translate-y-[3px] active:shadow-none transition-all flex items-center justify-center"
+                        >
+                          {archiveSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <RotateCcw className="w-4 h-4" />}
+                        </button>
+                      </PinProtectedAction>
+                    )
                   ) : (
-                    <>
-                      <PinProtectedAction
-                        featureId="budget_modifications"
-                        onVerified={() => onArchiveSetup?.(setup)}
-                        actionLabel="Close Budget"
-                      >
-                        <IconSquircleButton variant="close" onClick={(e) => e.preventDefault()} disabled={archiveSubmitting} aria-label="Close budget">
-                          <Archive className="w-4 h-4" />
-                        </IconSquircleButton>
+                    onArchiveSetup && (
+                      <PinProtectedAction featureId="budget_modifications" onVerified={() => onArchiveSetup(setup)} actionLabel="Archive Budget">
+                        <button
+                          onClick={(e) => e.preventDefault()}
+                          disabled={archiveSubmitting}
+                          className="w-10 h-10 bg-amber-100 dark:bg-amber-900/50 text-amber-700 dark:text-amber-300 font-bold text-sm p-2 rounded-xl border-[3px] border-black shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] hover:translate-x-[1px] hover:translate-y-[1px] hover:shadow-none active:translate-x-[3px] active:translate-y-[3px] active:shadow-none transition-all flex items-center justify-center"
+                        >
+                          {archiveSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Archive className="w-4 h-4" />}
+                         </button>
                       </PinProtectedAction>
-                      <PinProtectedAction
-                        featureId="budget_modifications"
-                        onVerified={() => onMoveToTrash?.(setup)}
-                        actionLabel="Remove Budget"
-                      >
-                        <IconSquircleButton variant="remove" onClick={(e) => e.preventDefault()} aria-label="Remove budget">
-                          <Trash2 className="w-4 h-4" />
-                        </IconSquircleButton>
-                      </PinProtectedAction>
-                    </>
+                    )
                   )}
-                  <IconSquircleButton variant="open" onClick={() => onLoadSetup(setup)} aria-label="Open budget">
-                    <ArrowRight className="w-4 h-4" />
-                  </IconSquircleButton>
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-4 mt-4 text-sm">
-                <div>
-                  <div className="text-xs font-black text-gray-400 uppercase">Budget</div>
-                  <div className="font-black text-gray-900 dark:text-gray-100">{formatCurrency(setup.totalAmount)}</div>
-                </div>
-                <div>
-                  <div className="text-xs font-black text-gray-400 uppercase">Remaining</div>
-                  <div className={`font-black ${remaining >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-500 dark:text-red-400'}`}>{formatCurrency(remaining)}</div>
+                  <button
+                    onClick={() => onLoadSetup(setup)}
+                    className={`w-10 h-10 rounded-xl border-[3px] border-black shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] hover:translate-x-[1px] hover:translate-y-[1px] hover:shadow-none active:translate-x-[3px] active:translate-y-[3px] active:shadow-none transition-all flex items-center justify-center ${getAccentClasses('bg')}`}
+                  >
+                    <ArrowRight className="w-4 h-4 text-white" />
+                  </button>
                 </div>
               </div>
             </div>
-          );
-        })}
-      </div>
-    );
-  }
+          </div>
+        );
+      })}
+    </div>
+  );
 
-  return (
-    <div className="overflow-x-auto w-full">
+  const renderDesktopTable = () => (
+    <div className="overflow-x-auto">
       <table className="w-full text-left">
         <thead>
-          <tr className="border-b border-gray-50 dark:border-gray-800/50">
-            <th className="p-8 pl-12 text-[10px] font-black text-gray-400 uppercase tracking-[0.3em]">Month</th>
-            <th className="p-8 text-[10px] font-black text-gray-400 uppercase tracking-[0.3em]">Timing</th>
-            <th className="p-8 text-[10px] font-black text-gray-400 uppercase tracking-[0.3em]">Total Budget</th>
-            <th className="p-8 text-[10px] font-black text-gray-400 uppercase tracking-[0.3em]">Remaining</th>
-            <th className="p-8 text-[10px] font-black text-gray-400 uppercase tracking-[0.3em]">Status</th>
-            <th className="p-6 pr-8 text-center text-[10px] font-black text-gray-400 uppercase tracking-[0.3em]">Actions</th>
+          <tr className="text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase border-b border-gray-100 dark:border-gray-800">
+            <th className="p-4 pl-8">Month</th>
+            <th className="p-4">Status</th>
+            <th className="p-4 text-right">Total</th>
+            <th className="p-4 text-right">Remaining</th>
+            <th className="p-4 pr-8 text-right">Actions</th>
           </tr>
         </thead>
-        <tbody className="divide-y divide-gray-50 dark:divide-gray-800/50">
+        <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
           {setups.map((setup) => {
             const remaining = calculateBudgetRemaining(setup);
+            const remainingColor = remaining >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400';
+
             return (
-              <tr key={setup.id} className="hover:bg-gray-50/50 dark:hover:bg-gray-800/50 transition-colors group">
-                <td className="p-8 pl-12">
-                  <div className="flex items-center space-x-5">
-                    <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shadow-sm ${isArchived ? 'bg-amber-50 dark:bg-amber-900/20 text-amber-500' : 'bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400 shadow-indigo-50/50'}`}>
-                      {isArchived ? <Archive className="w-6 h-6" /> : <FileText className="w-6 h-6" />}
-                    </div>
-                    <span className="text-base font-black text-gray-900 dark:text-gray-100 tracking-tight">{setup.month}</span>
-                  </div>
+              <tr key={setup.id} className="hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
+                <td className="p-4 pl-8">
+                  <p className={`font-black uppercase tracking-tight ${getAccentClasses('text')}`}>{setup.month}</p>
+                  <p className="font-semibold text-gray-400 dark:text-gray-500 text-xs">{setup.timing}</p>
                 </td>
-                <td className="p-8"><span className="text-[10px] font-black text-gray-500 dark:text-gray-400 bg-gray-100/80 dark:bg-gray-800 px-4 py-1.5 rounded-full uppercase tracking-widest">{setup.timing}</span></td>
-                <td className="p-8"><span className="text-base font-black text-gray-900 dark:text-gray-100 tracking-tight">{formatCurrency(setup.totalAmount)}</span></td>
-                <td className="p-8">
-                  <span className={`text-base font-black tracking-tight ${remaining >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-500 dark:text-red-400'}`}>
-                    {formatCurrency(remaining)}
-                  </span>
-                </td>
-                <td className="p-8">
-                  <span className={`text-[10px] font-black uppercase tracking-[0.15em] px-4 py-1.5 rounded-full ${isArchived ? 'bg-amber-100 text-amber-700' : (setup.status === 'Active' ? 'bg-green-100 text-green-700' : 'bg-blue-100 text-blue-700')}`}>
-                    {isArchived ? 'Archived' : setup.status}
-                  </span>
-                </td>
-                <td className="p-6 pr-8 text-center">
-                  <div className="flex justify-center items-center gap-2">
-                    {isArchived ? (
-                      <PinProtectedAction
-                        featureId="budget_modifications"
-                        onVerified={() => onReopenSetup?.(setup)}
-                        actionLabel="Reopen Budget"
-                      >
-                        <IconSquircleButton variant="reopen" onClick={(e) => e.preventDefault()} disabled={archiveSubmitting} aria-label="Reopen budget">
-                          <RotateCcw className="w-4 h-4" />
-                        </IconSquircleButton>
+                <td className="p-4"><span className="text-xs font-bold bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 px-2 py-1 rounded-full">{setup.status}</span></td>
+                <td className="p-4 text-right font-bold text-gray-800 dark:text-gray-200">{formatCurrency(setup.totalAmount)}</td>
+                <td className={`p-4 text-right font-bold ${remainingColor}`}>{formatCurrency(remaining)}</td>
+                <td className="p-4 pr-8">
+                  <div className="flex items-center justify-end gap-2">
+                    {onMoveToTrash && (
+                      <PinProtectedAction featureId="budget_deletions" onVerified={() => onMoveToTrash(setup)}>
+                        <button onClick={(e) => e.preventDefault()} className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/50 rounded-lg transition-colors">
+                          <Trash2 className="w-4 h-4" />
+                        </button>
                       </PinProtectedAction>
-                    ) : (
-                      <>
-                        <PinProtectedAction
-                          featureId="budget_modifications"
-                          onVerified={() => onArchiveSetup?.(setup)}
-                          actionLabel="Close Budget"
-                        >
-                          <IconSquircleButton variant="close" onClick={(e) => e.preventDefault()} disabled={archiveSubmitting} aria-label="Close budget">
-                            <Archive className="w-4 h-4" />
-                          </IconSquircleButton>
-                        </PinProtectedAction>
-                        <PinProtectedAction
-                          featureId="budget_modifications"
-                          onVerified={() => onMoveToTrash?.(setup)}
-                          actionLabel="Remove Budget"
-                        >
-                          <IconSquircleButton variant="remove" onClick={(e) => e.preventDefault()} aria-label="Remove budget">
-                            <Trash2 className="w-4 h-4" />
-                          </IconSquircleButton>
-                        </PinProtectedAction>
-                      </>
                     )}
-                    <IconSquircleButton variant="open" onClick={() => onLoadSetup(setup)} aria-label="Open budget">
+                    {isArchived ? (
+                      onReopenSetup && (
+                        <PinProtectedAction featureId="budget_modifications" onVerified={() => onReopenSetup(setup)} actionLabel="Reopen Budget">
+                          <button
+                            onClick={(e) => e.preventDefault()}
+                            disabled={archiveSubmitting}
+                            className="p-2 bg-indigo-100 dark:bg-indigo-900/50 text-indigo-700 dark:text-indigo-300 font-bold text-sm rounded-lg transition-all flex items-center justify-center"
+                          >
+                            {archiveSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <RotateCcw className="w-4 h-4" />}
+                          </button>
+                        </PinProtectedAction>
+                      )
+                    ) : (
+                      onArchiveSetup && (
+                        <PinProtectedAction featureId="budget_modifications" onVerified={() => onArchiveSetup(setup)} actionLabel="Archive Budget">
+                          <button
+                            onClick={(e) => e.preventDefault()}
+                            disabled={archiveSubmitting}
+                            className="p-2 bg-amber-100 dark:bg-amber-900/50 text-amber-700 dark:text-amber-300 font-bold text-sm rounded-lg transition-all flex items-center justify-center"
+                          >
+                            {archiveSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Archive className="w-4 h-4" />}
+                           </button>
+                        </PinProtectedAction>
+                      )
+                    )}
+                    <button
+                      onClick={() => onLoadSetup(setup)}
+                      className={`p-2 rounded-lg text-white transition-all flex items-center justify-center ${getAccentClasses('bg')}`}
+                    >
                       <ArrowRight className="w-4 h-4" />
-                    </IconSquircleButton>
+                    </button>
                   </div>
                 </td>
               </tr>
@@ -195,6 +186,22 @@ export const BudgetSetupsList: React.FC<BudgetSetupsListProps> = ({
           })}
         </tbody>
       </table>
+    </div>
+  );
+
+  return (
+    <div>
+      <div className={isMobile ? "p-4" : "p-8"}>
+        <h2 className={`text-xs font-black text-gray-400 dark:text-gray-500 uppercase tracking-[0.25em] mb-6 ${!isMobile && 'px-8'}`}>{title}</h2>
+        {setups.length === 0 ? (
+          <div className="text-center py-12">
+            <p className="text-gray-500 font-bold">No {isArchived ? 'archived' : 'active'} budgets found.</p>
+            <p className="text-sm text-gray-400 mt-2">Click "Open New" to create a new budget setup.</p>
+          </div>
+        ) : (
+          isMobile ? renderMobileList() : renderDesktopTable()
+        )}
+      </div>
     </div>
   );
 };
