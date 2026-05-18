@@ -181,10 +181,10 @@ const isCategoryLegacyForBudget = (
   return true;
 };
 
-const PageHeader: React.FC<{ 
-  title: string; 
-  subtitle: string; 
-  icon?: React.ReactNode; 
+const PageHeader: React.FC<{
+  title: string;
+  subtitle: string;
+  icon?: React.ReactNode;
   actions?: React.ReactNode;
   backButton?: React.ReactNode;
 }> = ({ title, subtitle, icon, actions, backButton }) => {
@@ -207,7 +207,7 @@ const PageHeader: React.FC<{
   }, [title]);
 
   return (
-<header className={`${isMobile ? 'pt-8' : 'pt-12'} flex flex-row items-center justify-between gap-6`}>
+    <header className={`${isMobile ? 'pt-8' : 'pt-12'} flex flex-row items-center justify-between gap-6`}>
         <div className="flex-1">
             <div className="relative inline-block">
                 <div
@@ -639,8 +639,8 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
   const autoSaveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const lastSavedDataRef = useRef<string>('');
 
-  const [showPayModal, setShowPayModal] = useState<{ 
-    biller: Biller, 
+  const [showPayModal, setShowPayModal] = useState<{
+    biller: Biller,
     schedule: PaymentSchedule;
     expectedAmount?: number;
   } | null>(null);
@@ -708,8 +708,8 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
         categories.forEach(cat => {
           if (!newData[cat.name]) newData[cat.name] = [];
 
-          const matchingBillers = billers.filter(b => 
-            (b.category === cat.name || b.category.startsWith(`${cat.name} -`)) && 
+          const matchingBillers = billers.filter(b =>
+            (b.category === cat.name || b.category.startsWith(`${cat.name} -`)) &&
             b.timing === selectedTiming &&
             b.status === 'active' &&
             isBillerActiveForPeriod(b, selectedMonth, selectedYear) &&
@@ -802,11 +802,11 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
   }, [selectedMonth, selectedTiming, selectedYear, billers, view, removedIds, categories, getLinkedInstallmentsAmount]);
 
   const formatCurrency = (val: number) => {
-    return new Intl.NumberFormat('en-PH', { 
-      style: 'currency', 
+    return new Intl.NumberFormat('en-PH', {
+      style: 'currency',
       currency: 'PHP',
       minimumFractionDigits: 2,
-      maximumFractionDigits: 2 
+      maximumFractionDigits: 2
     }).format(val);
   };
 
@@ -868,8 +868,8 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
   }, [getPaymentSchedule]);
 
   const checkIfPaidByTransaction = useCallback((
-    itemName: string, 
-    itemAmount: string | number, 
+    itemName: string,
+    itemAmount: string | number,
     month: string,
     year?: number
   ): boolean => {
@@ -923,8 +923,8 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
   }, [transactions]);
 
   const findExistingTransaction = useCallback((
-    itemName: string, 
-    itemAmount: string | number, 
+    itemName: string,
+    itemAmount: string | number,
     month: string,
     year?: number
   ): SupabaseTransaction | undefined => {
@@ -951,7 +951,7 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
       const txMonth = txDate.getMonth();
       const txYear = txDate.getFullYear();
       
-      const dateMatch = (txMonth === monthIndex) && 
+      const dateMatch = (txMonth === monthIndex) &&
                        (txYear === targetYear || txYear === targetYear - 1);
 
       return nameMatch && amountMatch && dateMatch;
@@ -1163,7 +1163,7 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
   const handleSetupToggle = (category: string, id: string) => {
     setSetupData(prev => ({
       ...prev,
-      [category]: prev[category].map(item => 
+      [category]: prev[category].map(item =>
         item.id === id ? { ...item, included: !item.included } : item
       )
     }));
@@ -1172,7 +1172,7 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
   const handleSetupUpdate = (category: string, id: string, field: keyof CategorizedSetupItem, value: any) => {
     setSetupData(prev => ({
       ...prev,
-      [category]: prev[category].map(item => 
+      [category]: prev[category].map(item =>
         item.id === id ? { ...item, [field]: value } : item
       )
     }));
@@ -1507,17 +1507,17 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
       }
       
       const updatedSchedules = biller.schedules.map(s => {
-        const isMatch = (schedule.id != null) ? 
-          (s.id === schedule.id) : 
+        const isMatch = (schedule.id != null) ?
+          (s.id === schedule.id) :
           (s.month === schedule.month && s.year === schedule.year);
           
         if (isMatch) {
-          return { 
-            ...s, 
-            amountPaid: parseFloat(payFormData.amount), 
-            receipt: payFormData.receipt || `${biller.name}_${schedule.month}`, 
-            datePaid: payFormData.datePaid, 
-            accountId: payFormData.accountId 
+          return {
+            ...s,
+            amountPaid: parseFloat(payFormData.amount),
+            receipt: payFormData.receipt || `${biller.name}_${schedule.month}`,
+            datePaid: payFormData.datePaid,
+            accountId: payFormData.accountId
           };
         }
         return s;
@@ -1536,7 +1536,7 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
         }
       }
       
-      const existingSetup = savedSetups.find(s => 
+      const existingSetup = savedSetups.find(s =>
         s.month === schedule.month && s.timing === selectedTiming
       );
       if (existingSetup) {
@@ -1650,7 +1650,7 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
 
     return (
         <div className={`space-y-8 animate-in fade-in duration-500 w-full max-w-7xl mx-auto ${isMobile ? 'pt-10' : ''}`}>
-            <PageHeader 
+            <PageHeader
               title="Budget"
               subtitle="Vibe check for the Month"
               icon={
@@ -1673,9 +1673,9 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
               </div>
             )}
 
-<div className="bg-white dark:bg-gray-900 rounded-[2.5rem] border-[3px] border-black shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] overflow-hidden">
-    <BudgetSetupsList
-      setups={activeSetups}
+            <div className="bg-white dark:bg-gray-900 rounded-[2.5rem] border-[3px] border-black shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] overflow-hidden">
+                <BudgetSetupsList
+                  setups={activeSetups}
                   title="Active Budgets"
                   isArchived={false}
                   onLoadSetup={handleLoadSetup}
@@ -1694,14 +1694,14 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                   formatCurrency={formatCurrency}
                   calculateBudgetRemaining={(setup) => calculateBudgetRemaining(setup, transactions, selectedYear)}
                   archiveSubmitting={archiveSubmitting}
-    />
-              </div>
+                />
+            </div>
 
 
 
             {archivedSetups.length > 0 && (
               <div className="bg-white dark:bg-gray-900 rounded-[2.5rem] border-[3px] border-black shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] overflow-hidden">
-    <button
+                <button
                     type="button"
                     onClick={() => setShowArchived(prev => !prev)}
                     className="w-full flex items-center justify-between p-8 pl-12 pr-12 hover:bg-amber-50/40 dark:hover:bg-amber-900/20 transition-colors rounded-[2.5rem]"
@@ -1826,7 +1826,7 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
   return (
     <div className={`space-y-8 animate-in slide-in-from-right-4 duration-500 pb-20 w-full ${isMobile ? 'pt-10' : ''}`}>
       <div className="flex flex-col space-y-6">
-        <PageHeader 
+        <PageHeader
           title="Budget Setup"
           subtitle={isReadOnly ? 'Archived — Read Only' : 'Your Money-Pie for the month of:'}
           icon={
@@ -1846,36 +1846,36 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
 
         <div className="flex items-center justify-between w-full md:justify-center mb-6 md:relative">
             <div className="flex-none md:absolute md:left-0 md:top-1/2 md:-translate-y-1/2">
-                <button onClick={() => setView('summary')} className={`flex items-center justify-center w-10 h-10 rounded-xl bg-gray-50 dark:bg-gray-800 text-gray-500 dark:text-gray-400 transition-all shrink-0 ${getAccentClasses('hoverLight')}`}>
-                    <ArrowLeft className="w-5 h-5" />
+                <button
+                    onClick={() => setView('summary')}
+                    className="flex items-center justify-center w-12 h-12 rounded-2xl bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 border-[3px] border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] transition-all hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none active:translate-x-[4px] active:translate-y-[4px]"
+                >
+                    <ArrowLeft className="w-6 h-6" />
                 </button>
             </div>
 
             <div className="flex-grow flex justify-center items-center space-x-2 md:flex-grow-0">
-                <select value={selectedMonth} onChange={(e) => setSelectedMonth(e.target.value)} disabled={isReadOnly} className={`bg-white dark:bg-gray-900 dark:border-gray-800 border border-gray-100 rounded-xl md:rounded-[1.5rem] h-10 md:h-auto px-3 md:px-8 md:py-4 font-bold md:font-black text-xs md:text-base shadow-sm outline-none disabled:opacity-60 disabled:cursor-not-allowed transition-colors text-center appearance-none ${getAccentClasses('text')}`}>
+                <select value={selectedMonth} onChange={(e) => setSelectedMonth(e.target.value)} disabled={isReadOnly} className={`bg-white dark:bg-gray-900 dark:border-black border-[3px] border-black rounded-2xl h-12 px-4 font-bold text-base shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] outline-none disabled:opacity-60 disabled:cursor-not-allowed transition-all hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none active:translate-x-[4px] active:translate-y-[4px] text-center appearance-none ${getAccentClasses('text')}`}>
                     {MONTHS.map(m => <option key={m} value={m}>{m}</option>)}
                 </select>
-                <select value={selectedTiming} onChange={(e) => setSelectedTiming(e.target.value as '1/2' | '2/2')} disabled={isReadOnly} className={`bg-white dark:bg-gray-900 dark:border-gray-800 border border-gray-100 rounded-xl md:rounded-[1.5rem] h-10 md:h-auto px-3 md:px-8 md:py-4 font-bold md:font-black text-xs md:text-base shadow-sm outline-none disabled:opacity-60 disabled:cursor-not-allowed transition-colors ${getAccentClasses('text')}`}>
+                <select value={selectedTiming} onChange={(e) => setSelectedTiming(e.target.value as '1/2' | '2/2')} disabled={isReadOnly} className={`bg-white dark:bg-gray-900 dark:border-black border-[3px] border-black rounded-2xl h-12 px-4 font-bold text-base shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] outline-none disabled:opacity-60 disabled:cursor-not-allowed transition-all hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none active:translate-x-[4px] active:translate-y-[4px] ${getAccentClasses('text')}`}>
                     <option value="1/2">1/2</option>
                     <option value="2/2">2/2</option>
                 </select>
-                {legacyMode && (
-                  <span className="hidden md:block text-[10px] font-black text-gray-400 dark:text-gray-500 bg-gray-100 dark:bg-gray-800 px-4 py-2 rounded-full uppercase tracking-widest">Legacy Budget</span>
-                )}
             </div>
 
             <div className="flex-none flex items-center gap-2 md:hidden">
               {currentSetup && !isReadOnly && (
                 <PinProtectedAction featureId="budget_modifications" onVerified={() => handleArchiveSetup(currentSetup)} actionLabel="Close Budget">
-                  <button onClick={(e) => e.preventDefault()} disabled={archiveSubmitting} className="flex items-center justify-center w-10 h-10 rounded-xl bg-amber-50 text-amber-700 hover:bg-amber-100 transition-all disabled:opacity-50" aria-label="Close">
-                    <Archive className="w-4 h-4" />
+                  <button onClick={(e) => e.preventDefault()} disabled={archiveSubmitting} className="flex items-center justify-center w-12 h-12 rounded-2xl bg-amber-100 text-amber-700 border-[3px] border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] transition-all hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none active:translate-x-[4px] active:translate-y-[4px]" aria-label="Close">
+                    <Archive className="w-5 h-5" />
                   </button>
                 </PinProtectedAction>
               )}
               {!isReadOnly && (
                 <PinProtectedAction featureId="budget_modifications" onVerified={handleSaveSetup} actionLabel="Save Budget">
-                  <button onClick={(e) => e.preventDefault()} className={`flex items-center justify-center w-10 h-10 rounded-xl text-white shadow-md dark:shadow-none ${getAccentClasses('bg')} ${getAccentClasses('shadow')}`} aria-label="Save">
-                    <Save className="w-4 h-4" />
+                  <button onClick={(e) => e.preventDefault()} className={`flex items-center justify-center w-12 h-12 rounded-2xl text-white border-[3px] border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] transition-all hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none active:translate-x-[4px] active:translate-y-[4px] ${getAccentClasses('bg')}`} aria-label="Save">
+                    <Save className="w-5 h-5" />
                   </button>
                 </PinProtectedAction>
               )}
@@ -1912,7 +1912,7 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                 <td className="p-3 pr-6 text-right">
                   <div className="flex items-center justify-end">
                     {!isProjectedFocused ? (
-                      <span 
+                      <span
                         className={`text-sm font-black text-gray-900 dark:text-gray-100 ${!isReadOnly ? 'cursor-pointer hover:text-indigo-600 dark:hover:text-indigo-400' : ''} transition-colors`}
                         onClick={() => !isReadOnly && setIsProjectedFocused(true)}
                       >
@@ -1921,13 +1921,13 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                     ) : (
                       <div className="flex items-center justify-end space-x-1">
                         <span className="text-gray-400 dark:text-gray-500 font-bold text-sm">₱</span>
-                        <input 
+                        <input
                           autoFocus
-                          type="number" 
+                          type="number"
                           min="0"
                           step="0.01"
-                          value={projectedSalary} 
-                          onChange={(e) => setProjectedSalary(e.target.value)} 
+                          value={projectedSalary}
+                          onChange={(e) => setProjectedSalary(e.target.value)}
                           onFocus={() => { isFocusedRef.current = true; }}
                           onBlur={() => { isFocusedRef.current = false; setIsProjectedFocused(false); }}
                           disabled={isReadOnly}
@@ -1944,7 +1944,7 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                 <td className="p-3 pr-6 text-right">
                   <div className="flex items-center justify-end space-x-2">
                     {!isActualFocused ? (
-                      <span 
+                      <span
                         className={`text-sm font-black ${actualSalary ? 'text-gray-900 dark:text-gray-100' : 'text-gray-400 dark:text-gray-500 italic'} ${!isReadOnly ? 'cursor-pointer hover:text-indigo-600 dark:hover:text-indigo-400' : ''} transition-colors`}
                         onClick={() => !isReadOnly && setIsActualFocused(true)}
                       >
@@ -1953,13 +1953,13 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                     ) : (
                       <div className="flex items-center justify-end space-x-1">
                         <span className="text-gray-400 dark:text-gray-500 font-bold text-sm">₱</span>
-                        <input 
+                        <input
                           autoFocus
-                          type="number" 
+                          type="number"
                           min="0"
                           step="0.01"
-                          value={actualSalary} 
-                          onChange={(e) => setActualSalary(e.target.value)} 
+                          value={actualSalary}
+                          onChange={(e) => setActualSalary(e.target.value)}
                           onFocus={() => { isFocusedRef.current = true; }}
                           onBlur={() => { isFocusedRef.current = false; setIsActualFocused(false); }}
                           disabled={isReadOnly}
@@ -2028,234 +2028,9 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
           </table>
         </div>
       </div>
-
-
       <div className="space-y-6">
-        {wallets.length > 0 && (
-          <div className="bg-white dark:bg-gray-900 rounded-[2.5rem] border-[3px] border-black shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] overflow-hidden w-full transition-colors">
-          <div className="px-8 py-5 border-b border-gray-50 dark:border-gray-800/50 bg-gray-50/30 dark:bg-gray-800/30 flex justify-between items-center transition-colors">
-            <h3 className="text-xs font-black text-gray-900 dark:text-gray-100 uppercase tracking-[0.25em]">Stash</h3>
-            <div className="flex items-center space-x-3">
-              {stashStatusMsg && (
-                <span className={`text-xs font-bold px-3 py-1 rounded-xl ${stashStatusMsg.type === 'success' ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'}`}>
-                  {stashStatusMsg.msg}
-                </span>
-              )}
-              <span className="text-lg font-black text-indigo-600">
-                {formatCurrency(wallets.filter(w => !excludedWalletIds.has(w.id)).reduce((s, w) => s + Math.max(w.amount, getStashAggregates(w).funded), 0))}
-              </span>
-            </div>
-          </div>
-          <div className="overflow-x-auto">
-              <table className="w-full text-left">
-                <thead>
-                  <tr className="text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase border-b border-gray-50 dark:border-gray-800/50">
-                    <th className="p-4 pl-10">Name</th>
-                    <th className="p-4">Target</th>
-                    <th className="p-4">Account</th>
-                    <th className="p-4 text-center">Info</th>
-                    <th className="p-4 text-center">Actions</th>
-                    <th className="p-4 pr-10 text-right"></th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-50 dark:divide-gray-800/50">
-                  {wallets.map((wallet) => {
-                    const linkedAccount = accounts.find(a => a.id === wallet.accountId);
-                    const { funded, isFunded } = getStashAggregates(wallet);
-                    const isIncluded = !excludedWalletIds.has(wallet.id);
-                    const isOverFunded = funded > wallet.amount && wallet.amount > 0;
-                    const isExactlyFunded = funded === wallet.amount && wallet.amount > 0;
-                    return (
-                      <tr key={wallet.id} className={`${isIncluded ? 'bg-white dark:bg-gray-900' : 'bg-gray-50 dark:bg-gray-800/50 opacity-60'}`}>
-                        <td className="p-4 pl-10">
-                          <span className="text-sm font-bold text-gray-900 dark:text-gray-100">{wallet.name}</span>
-                        </td>
-                        <td className="p-4">
-                          <span className="text-sm font-black text-indigo-600">{formatCurrency(wallet.amount)}</span>
-                        </td>
-                        <td className="p-4">
-                          <span className="text-sm text-gray-600 dark:text-gray-400">
-                            {linkedAccount ? `${linkedAccount.bank} (${linkedAccount.classification})` : wallet.accountId}
-                          </span>
-                        </td>
-                        <td className="p-4 text-center">
-                          <div className="flex items-center justify-center space-x-2">
-                            {isOverFunded ? (
-                              <span aria-label={`Overfunded by ${formatCurrency(funded - wallet.amount)}`} className="text-xs font-black text-blue-600 px-2 py-1 bg-blue-50 rounded-lg">Overfunded +{formatCurrency(funded - wallet.amount)}</span>
-                            ) : isExactlyFunded ? (
-                              <span aria-label="Fully funded this month" className="text-xs font-black text-green-600 px-2 py-1 bg-green-50 rounded-lg">Funded</span>
-                            ) : (
-                              <span aria-label="Not yet funded" className="text-xs text-gray-400">—</span>
-                            )}
-                            <button
-                              onClick={() => setStashInfoModal({ wallet })}
-                              title="View stash details"
-                              className="text-gray-400 hover:text-indigo-600 transition-colors rounded-full p-1 hover:bg-indigo-50"
-                            >
-                              <Info className="w-3.5 h-3.5" />
-                            </button>
-                          </div>
-                        </td>
-                        <td className="p-4 text-center">
-                          {!isReadOnly && (isFunded ? (
-                            <button
-                              onClick={() => handleOpenFundModal(wallet)}
-                              title="Add more to this stash"
-                              className="w-7 h-7 inline-flex items-center justify-center rounded-full bg-indigo-50 text-indigo-600 hover:bg-indigo-100 transition-colors"
-                            >
-                              <Plus className="w-3.5 h-3.5" />
-                            </button>
-                          ) : (
-                            <button
-                              onClick={() => handleOpenFundModal(wallet)}
-                              className="inline-flex items-center space-x-1 px-3 py-1 rounded-xl bg-indigo-50 text-indigo-600 hover:bg-indigo-100 transition-colors text-xs font-bold"
-                            >
-                              <Plus className="w-3 h-3" />
-                              <span>Fund</span>
-                            </button>
-                          ))}
-                        </td>
-                        <td className="p-4 pr-10 text-right">
-                          {!isReadOnly && (
-                            <button
-                              onClick={() => handleWalletIncludeToggle(wallet.id)}
-                              title={isIncluded ? 'Exclude from grand total' : 'Include in grand total'}
-                              className={`w-8 h-8 rounded-xl border-2 transition-all flex items-center justify-center ${isIncluded ? 'bg-indigo-600 border-indigo-600 text-white' : 'border-gray-200'}`}
-                            >
-                              <Check className="w-4 h-4" />
-                            </button>
-                          )}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-          </div>
-        </div>
-        )}
-
-        {categories.filter(cat => cat.name === 'Fixed').map((cat) => {
+        {categories.map((cat) => {
           const items = setupData[cat.name] || [];
-          const shouldRenderCategory = shouldRenderCategorySection(cat, items.length > 0, selectedYear, selectedMonth);
-          if (!shouldRenderCategory) return null;
-          const canAddItems = !isReadOnly && (cat.flexiMode ?? true) && isCategoryActiveForBudget(cat, selectedYear, selectedMonth);
-          const isLegacyCategory = isCategoryLegacyForBudget(cat, selectedYear, selectedMonth);
-          return (
-            <div key={cat.id} className="bg-white dark:bg-gray-900 rounded-[3rem] shadow-sm border border-gray-100 dark:border-gray-800 overflow-hidden w-full transition-colors">
-              <div className="px-8 py-5 border-b border-gray-50 dark:border-gray-800/50 bg-gray-50/30 dark:bg-gray-800/30 flex justify-between items-center transition-colors">
-                <div className="flex items-center space-x-2">
-                  <h3 className="text-xs font-black text-gray-900 dark:text-gray-100 uppercase tracking-[0.25em]">{cat.name}</h3>
-                  {(cat.flexiMode ?? true) && <span className="text-[9px] font-black text-green-600 bg-green-50 border border-green-200 dark:bg-green-900/30 dark:border-green-800/50 dark:text-green-400 px-2 py-0.5 rounded-full uppercase tracking-wider">Flexi</span>}
-                  {isLegacyCategory && <span className="text-[9px] font-black text-amber-600 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full uppercase tracking-wider" aria-label="Legacy category — use Stash for new savings/allowance items" title="This category is legacy. Use Stash for new savings/allowance items.">Legacy</span>}
-                </div>
-                <span className="text-lg font-black text-indigo-600">{formatCurrency(items.filter(i => i.included).reduce((s, i) => s + (parseFloat(i.amount) || 0), 0))}</span>
-              </div>
-              <div className="overflow-x-auto">
-                <table className="w-full text-left">
-                  <thead>
-                    <tr className="text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase border-b border-gray-50 dark:border-gray-800/50">
-                      <th className="p-4 pl-10">Name</th>
-                      <th className="p-4">Amount</th>
-                      <th className="p-4">Account</th>
-                      <th className="p-4 text-center">Actions</th>
-                      <th className="p-4 pr-10 text-right"></th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-50 dark:divide-gray-800/50">
-                    {items.length > 0 ? items.map((item) => {
-                      return (
-                        <tr key={item.id} className={`${item.included ? 'bg-white dark:bg-gray-900' : 'bg-gray-50 dark:bg-gray-800/50 opacity-60'}`}>
-                          <td className="p-4 pl-10">
-                            <input 
-                              type="text" 
-                              value={item.name} 
-                              onChange={(e) => handleSetupUpdate(cat.name, item.id, 'name', e.target.value)} 
-                              disabled={isReadOnly}
-                              className="bg-transparent border-none text-sm font-bold w-full disabled:cursor-default dark:text-gray-100" 
-                            />
-                          </td>
-                          <td className="p-4">
-                            <div className="flex items-center space-x-1">
-                              <span className="text-gray-400 dark:text-gray-500 font-bold">₱</span>
-                              <input 
-                                type="number" 
-                                value={item.amount} 
-                                onChange={(e) => handleSetupUpdate(cat.name, item.id, 'amount', e.target.value)} 
-                              onFocus={() => { isFocusedRef.current = true; }}
-                              onBlur={() => { isFocusedRef.current = false; }}
-                                disabled={isReadOnly}
-                                className="bg-transparent border-none text-sm font-black w-24 disabled:cursor-default dark:text-gray-100" 
-                              />
-                            </div>
-                          </td>
-                          <td className="p-4">
-                            <select 
-                              value={item.accountId || ''} 
-                              onChange={(e) => handleSetupUpdate(cat.name, item.id, 'accountId', e.target.value)}
-                              disabled={isReadOnly}
-                              className="bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-1.5 text-xs font-bold text-gray-700 dark:text-gray-300 outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 disabled:opacity-60 disabled:cursor-not-allowed"
-                            >
-                              <option value="">Select Account</option>
-                              {accounts.filter(acc => acc.type === 'Debit').map(acc => (
-                                <option key={acc.id} value={acc.id}>
-                                  {acc.bank} ({acc.classification})
-                                </option>
-                              ))}
-                            </select>
-                          </td>
-                          <td className="p-4 text-center">
-                            <div className="flex items-center justify-center space-x-2">
-                              {item.settled ? (
-                                <CheckCircle2 className="w-4 h-4 text-green-500" aria-label="Item settled" title="Settled" />
-                              ) : !isReadOnly ? (
-                                <button 
-                                  onClick={() => handleSetupUpdate(cat.name, item.id, 'settled', true)}
-                                  className="px-3 py-1 bg-green-600 text-white text-[9px] font-black uppercase rounded-lg hover:bg-green-700 transition-colors"
-                                >
-                                  Settle
-                                </button>
-                              ) : null}
-                              {!isReadOnly && (
-                                <button 
-                                  onClick={() => handleSetupToggle(cat.name, item.id)} 
-                                  className={`w-8 h-8 rounded-xl border-2 transition-all flex items-center justify-center ${item.included ? 'bg-indigo-600 border-indigo-600 text-white' : 'border-gray-200'}`}
-                                >
-                                  <Check className="w-4 h-4" />
-                                </button>
-                              )}
-                            </div>
-                          </td>
-                          <td className="p-4 pr-10 text-right">
-                            {!isReadOnly && (
-                              <button 
-                                onClick={() => removeItemFromCategory(cat.name, item.id, item.name)} 
-                                className="text-[9px] font-black text-red-500 uppercase tracking-widest border border-red-50 px-2 py-1 rounded-lg"
-                              >
-                                Exclude
-                              </button>
-                            )}
-                          </td>
-                        </tr>
-                      );
-                    }) : (
-                      <tr>
-                        <td colSpan={5} className="p-8 text-center text-gray-400 text-sm font-medium">
-                          No items yet. Click "Add Item" below to get started.
-                        </td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
-                {canAddItems && <button onClick={() => addItemToCategory(cat.name)} className="w-full p-4 text-[10px] font-black text-gray-400 uppercase hover:text-indigo-600 border-t border-gray-50">+ Add Item</button>}
-              </div>
-            </div>
-          );
-        })}
-
-        {categories.filter(cat => cat.name !== 'Fixed').map((cat) => {
-          const items = setupData[cat.name] || [];
-          
           let relevantInstallments: Installment[] = [];
           if (cat.name === 'Loans') {
             relevantInstallments = installments.filter(inst => {
@@ -2282,8 +2057,8 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
           const categoryTotal = itemsTotal + installmentsTotal;
           
           return (
-            <div key={cat.id} className="bg-white dark:bg-gray-900 rounded-[3rem] shadow-sm border border-gray-100 dark:border-gray-800 overflow-hidden w-full transition-colors">
-              <div className="px-8 py-5 border-b border-gray-50 dark:border-gray-800/50 bg-gray-50/30 dark:bg-gray-800/30 flex justify-between items-center transition-colors">
+            <div key={cat.id} className="bg-white dark:bg-gray-900 rounded-[2.5rem] border-[3px] border-black shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] overflow-hidden w-full transition-colors">
+              <div className="px-8 py-5 border-b-2 border-black bg-gray-50/30 dark:bg-gray-800/30 flex justify-between items-center transition-colors">
                 <div className="flex items-center space-x-2">
                   <h3 className="text-xs font-black text-gray-900 dark:text-gray-100 uppercase tracking-[0.25em]">{cat.name}</h3>
                   {(cat.flexiMode ?? true) && <span className="text-[9px] font-black text-green-600 bg-green-50 border border-green-200 dark:bg-green-900/30 dark:border-green-800/50 dark:text-green-400 px-2 py-0.5 rounded-full uppercase tracking-wider">Flexi</span>}
@@ -2291,979 +2066,348 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                 </div>
                 <span className="text-lg font-black text-indigo-600">{formatCurrency(categoryTotal)}</span>
               </div>
-              <div className="overflow-x-auto">
-                <table className="w-full text-left">
-                  <thead>
-                    <tr className="text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase border-b border-gray-50 dark:border-gray-800/50">
-                      <th className="p-4 pl-10">Name</th>
-                      <th className="p-4">Amount</th>
-                      <th className="p-4 text-center">Actions</th>
-                      <th className="p-4 pr-10 text-right"></th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-50 dark:divide-gray-800/50">
-                    {items.length > 0 ? items.map((item) => {
-                      let isPaid = false, isPartial = false, linkedBiller, paymentSchedule;
-                      const isBillerItem = item.isBiller || billers.some(b => b.id === item.id);
-                      
-                      if (isBillerItem) {
-                        linkedBiller = billers.find(b => b.id === item.id);
+              <div className={isMobile ? "p-4 space-y-4" : "overflow-x-auto"}>
+                {isMobile ? (
+                  <>
+                    {(items.length === 0 && relevantInstallments.length === 0) && (
+                      <div className="p-8 text-center text-gray-400 text-sm font-medium">
+                        No items yet.
+                        {canAddItems && ' Click "Add Item" below to get started.'}
+                      </div>
+                    )}
+                    {items.map(item => {
+                        let isPaid = false, isPartial = false, linkedBiller, paymentSchedule;
+                        const isBillerItem = item.isBiller || billers.some(b => b.id === item.id);
                         
-                        paymentSchedule = getPaymentSchedule('biller', item.id);
-                        
-                        if (paymentSchedule) {
-                          isPaid = checkIfPaidBySchedule('biller', item.id);
-                          isPartial = checkIfPartialBySchedule('biller', item.id);
+                        if (isBillerItem) {
+                          linkedBiller = billers.find(b => b.id === item.id);
+                          paymentSchedule = getPaymentSchedule('biller', item.id);
+                          if (paymentSchedule) {
+                            isPaid = checkIfPaidBySchedule('biller', item.id);
+                            isPartial = checkIfPartialBySchedule('biller', item.id);
+                          } else {
+                            isPaid = checkIfPaidByTransaction(item.name, item.amount, selectedMonth);
+                          }
                         } else {
                           isPaid = checkIfPaidByTransaction(item.name, item.amount, selectedMonth);
                         }
-                      } else {
-                        isPaid = checkIfPaidByTransaction(item.name, item.amount, selectedMonth);
-                      }
                       return (
-                        <tr key={item.id} className={`${item.included ? 'bg-white dark:bg-gray-900' : 'bg-gray-50 dark:bg-gray-800/50 opacity-60'}`}>
-                          <td className="p-4 pl-10"><input type="text" value={item.name} onChange={(e) => handleSetupUpdate(cat.name, item.id, 'name', e.target.value)} disabled={isReadOnly} className="bg-transparent border-none text-sm font-bold w-full disabled:cursor-default dark:text-gray-100" /></td>
-                          <td className="p-4">
-                            <div className="flex items-center space-x-1"><span className="text-gray-400 dark:text-gray-500 font-bold">₱</span><input type="number" value={item.amount} 
-                              onChange={(e) => handleSetupUpdate(cat.name, item.id, 'amount', e.target.value)} 
-                              onFocus={() => { isFocusedRef.current = true; }}
-                              onBlur={() => { isFocusedRef.current = false; }}
-                              disabled={isReadOnly} className="bg-transparent border-none text-sm font-black w-24 disabled:cursor-default dark:text-gray-100" 
-                            /></div>
-                          </td>
-                          <td className="p-4 text-center">
-                            <div className="flex items-center justify-center space-x-2">
-                              {isBillerItem && (
+                        <div key={item.id} className={`${item.included ? 'bg-white dark:bg-gray-800' : 'bg-gray-100 dark:bg-gray-800/50 opacity-70'} rounded-2xl border-[3px] border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] p-4 space-y-3`}>
+                          <div className="flex justify-between items-start gap-2">
+                            <input type="text" value={item.name} onChange={(e) => handleSetupUpdate(cat.name, item.id, 'name', e.target.value)} disabled={isReadOnly} className="bg-transparent border-none text-base font-bold w-full disabled:cursor-default dark:text-gray-100 focus:ring-0 p-0" />
+                            {!isReadOnly && (
+                              <button onClick={() => handleSetupToggle(cat.name, item.id)} className={`w-10 h-10 rounded-xl border-[3px] border-black transition-all flex items-center justify-center shrink-0 ${item.included ? 'bg-indigo-600 text-white' : 'bg-gray-100'}`}>
+                                <Check className="w-5 h-5" />
+                              </button>
+                            )}
+                          </div>
+                          <div className="flex items-end justify-between gap-2">
+                             <div className="flex items-center space-x-1">
+                                <span className="text-gray-400 dark:text-gray-500 font-bold">₱</span>
+                                <input type="number" value={item.amount} onChange={(e) => handleSetupUpdate(cat.name, item.id, 'amount', e.target.value)} onFocus={() => { isFocusedRef.current = true; }} onBlur={() => { isFocusedRef.current = false; }} disabled={isReadOnly} className="bg-transparent border-none text-lg font-black w-28 disabled:cursor-default dark:text-gray-100 focus:ring-0 p-0" />
+                             </div>
+                             <div className="flex items-center justify-end space-x-2">
+                               {isBillerItem && (
                                 isPaid ? (
                                   <>
-                                    <CheckCircle2 className="w-4 h-4 text-green-500" aria-label="Payment completed" title="Paid" />
+                                    <CheckCircle2 className="w-5 h-5 text-green-500" aria-label="Payment completed" title="Paid" />
                                     {paymentSchedule && (
                                       <button onClick={() => openSchedulePaymentsModal(paymentSchedule.id, `${item.name} - ${selectedMonth}`)} title="View payment records" className="text-gray-400 hover:text-indigo-600 transition-colors rounded-full p-1 hover:bg-indigo-50">
-                                        <Info className="w-3.5 h-3.5" />
+                                        <Info className="w-4 h-4" />
                                       </button>
                                     )}
                                   </>
                                 ) : (
                                   <>
                                     {isPartial && paymentSchedule && (
-                                      <>
-                                        <span className="text-[9px] font-bold px-2 py-0.5 bg-yellow-100 text-yellow-700 rounded uppercase" title={`Paid ₱${paymentSchedule.amount_paid} of ₱${parseFloat(item.amount)}`}>
-                                          Partial
-                                        </span>
-                                        <button onClick={() => openSchedulePaymentsModal(paymentSchedule.id, `${item.name} - ${selectedMonth}`)} title="View payment records" className="text-gray-400 hover:text-indigo-600 transition-colors rounded-full p-1 hover:bg-indigo-50">
-                                          <Info className="w-3.5 h-3.5" />
-                                        </button>
-                                      </>
+                                      <button onClick={() => openSchedulePaymentsModal(paymentSchedule.id, `${item.name} - ${selectedMonth}`)} title="View payment records" className="text-gray-400 hover:text-indigo-600 transition-colors rounded-full p-1 hover:bg-indigo-50">
+                                        <Info className="w-4 h-4" />
+                                      </button>
                                     )}
                                   {!isReadOnly && <button 
                                     onClick={() => { 
                                       if(linkedBiller && paymentSchedule) {
                                         const scheduleForModal: PaymentSchedule = {
-                                          id: paymentSchedule.id,
-                                          month: paymentSchedule.month,
-                                          year: paymentSchedule.year.toString(),
-                                          expectedAmount: paymentSchedule.expected_amount,
-                                          amountPaid: paymentSchedule.amount_paid,
-                                          datePaid: paymentSchedule.date_paid || undefined,
-                                          receipt: paymentSchedule.receipt || undefined,
-                                          accountId: paymentSchedule.account_id || undefined
+                                          id: paymentSchedule.id, month: paymentSchedule.month, year: paymentSchedule.year.toString(),
+                                          expectedAmount: paymentSchedule.expected_amount, amountPaid: paymentSchedule.amount_paid,
+                                          datePaid: paymentSchedule.date_paid, receipt: paymentSchedule.receipt, accountId: paymentSchedule.account_id
                                         };
-                                        
-                                        const linkedTransactions = transactions
-                                          .filter(tx => tx.payment_schedule_id === paymentSchedule.id)
-                                          .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-                                        const existingTx = linkedTransactions[0];
-                                        
-                                        setShowPayModal({
-                                          biller: linkedBiller, 
-                                          schedule: scheduleForModal,
-                                          expectedAmount: parseFloat(item.amount)
-                                        }); 
-                                        const today = new Date().toISOString().split('T')[0];
+                                        setShowPayModal({ biller: linkedBiller, schedule: scheduleForModal, expectedAmount: parseFloat(item.amount) });
+                                        const amountToPay = isPartial ? Math.max(0, parseFloat(item.amount) - paymentSchedule.amount_paid).toFixed(2) : item.amount;
                                         setPayFormData({
-                                          transactionId: isPartial ? '' : (existingTx?.id || ''),
-                                          amount: isPartial
-                                            ? Math.max(0, parseFloat(item.amount) - paymentSchedule.amount_paid).toFixed(2)
-                                          : existingTx?.amount.toFixed(2) || item.amount,
-                                          receipt: (!isPartial && existingTx) ? 'Receipt on file' : '',
-                                          datePaid: (!isPartial && existingTx) ? new Date(existingTx.date).toISOString().split('T')[0] : today,
-                                          accountId: existingTx?.payment_method_id || payFormData.accountId
-                                        }); 
+                                            ...payFormData,
+                                            amount: amountToPay,
+                                            receipt: '',
+                                            datePaid: new Date().toISOString().split('T')[0],
+                                            transactionId: ''
+                                        });
                                       } 
                                     }} 
-                                    className="px-3 py-1 bg-indigo-600 text-white text-[9px] font-black uppercase rounded-lg hover:bg-indigo-700 transition-colors"
+                                    className="px-4 py-2 bg-indigo-600 text-white text-xs font-black uppercase rounded-xl border-[3px] border-black shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] hover:translate-x-[1px] hover:translate-y-[1px] hover:shadow-none active:translate-x-[3px] active:translate-y-[3px] active:shadow-none transition-all"
                                   >
-                                    {isPartial ? 'Pay Remaining' : 'Pay'}
+                                    {isPartial ? 'Pay Rem.' : 'Pay'}
                                   </button>}
                                   </>
                                 )
                               )}
                               {!isBillerItem && (cat.flexiMode ?? true) && item.name !== 'New Item' && parseFloat(item.amount) > 0 && (
                                 isPaid ? (
-                                  <>
-                                    <CheckCircle2 className="w-4 h-4 text-green-500" aria-label="Payment completed" title="Paid" />
-                                    <button onClick={() => { const tx = findExistingTransaction(item.name, item.amount, selectedMonth); if (tx) openDirectPaymentModal(tx, `${item.name} - ${selectedMonth}`); }} title="View payment records" className="text-gray-400 hover:text-indigo-600 transition-colors rounded-full p-1 hover:bg-indigo-50"><Info className="w-3.5 h-3.5" /></button>
-                                  </>
+                                  <CheckCircle2 className="w-5 h-5 text-green-500" aria-label="Payment completed" title="Paid" />
                                 ) : !isReadOnly ? (
                                   <button
                                     onClick={() => {
-                                      setTransactionFormData({
-                                        id: '',
-                                        name: item.name,
-                                        date: new Date().toISOString().split('T')[0],
-                                        amount: item.amount,
-                                        accountId: item.accountId || accounts[0]?.id || '',
-                                        paymentScheduleId: ''
-                                      });
+                                      setTransactionFormData({ id: '', name: item.name, date: new Date().toISOString().split('T')[0], amount: item.amount, accountId: item.accountId || accounts[0]?.id || '', paymentScheduleId: '' });
                                       setShowTransactionModal(true);
                                     }}
-                                    className="px-3 py-1 bg-indigo-600 text-white text-[9px] font-black uppercase rounded-lg hover:bg-indigo-700 transition-colors"
-                                  >
-                                    Pay
-                                  </button>
+                                    className="px-4 py-2 bg-indigo-600 text-white text-xs font-black uppercase rounded-xl border-[3px] border-black shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] hover:translate-x-[1px] hover:translate-y-[1px] hover:shadow-none active:translate-x-[3px] active:translate-y-[3px] active:shadow-none transition-all"
+                                  >Pay</button>
                                 ) : null
                               )}
-
-                              {!isReadOnly && <button onClick={() => handleSetupToggle(cat.name, item.id)} className={`w-8 h-8 rounded-xl border-2 transition-all flex items-center justify-center ${item.included ? 'bg-indigo-600 border-indigo-600 text-white' : 'border-gray-200'}`}><Check className="w-4 h-4" /></button>}
+                             </div>
+                          </div>
+                        </div>
+                      )
+                    })}
+                    {/* FIX: Pay button logic for mobile installments */}
+                    {relevantInstallments.map(installment => {
+                      const isIncluded = !excludedInstallmentIds.has(installment.id);
+                      let isPaid = false, isPartial = false;
+                      const installmentSchedule = getPaymentSchedule('installment', installment.id, selectedMonth, selectedYear);
+                      if (installmentSchedule) {
+                        isPaid = checkIfPaidBySchedule('installment', installment.id);
+                        isPartial = checkIfPartialBySchedule('installment', installment.id);
+                      }
+                      
+                      return (
+                        <div key={`installment-mob-${installment.id}`} className={`${isIncluded ? 'bg-blue-50/30 dark:bg-blue-900/20' : 'bg-gray-100 dark:bg-gray-800/50 opacity-70'} rounded-2xl border-[3px] border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] p-4 space-y-3`}>
+                          <div className="flex justify-between items-start gap-2">
+                            <div>
+                               <span className="font-bold text-base text-gray-900 dark:text-gray-100">{installment.name}</span>
+                               <div className="flex items-center gap-2 mt-1">
+                                 <span className="text-[9px] font-bold px-2 py-0.5 bg-blue-100 dark:bg-blue-900/50 rounded text-blue-600 dark:text-blue-300">INSTALLMENT</span>
+                                 {installment.timing && <span className="text-[9px] font-bold text-gray-500">{installment.timing}</span>}
+                               </div>
                             </div>
-                          </td>
-                          <td className="p-4 pr-10 text-right">{!isReadOnly && <button onClick={() => removeItemFromCategory(cat.name, item.id, item.name)} className="text-[9px] font-black text-red-500 uppercase tracking-widest border border-red-50 px-2 py-1 rounded-lg">Exclude</button>}</td>
-                        </tr>
-                      );
-                    }) : (cat.name === 'Loans' && relevantInstallments.length > 0) ? null : (
-                      <tr>
-                        <td colSpan={4} className="p-8 text-center text-gray-400 text-sm font-medium">
-                          No items yet. Click "Add Item" below to get started.
-                        </td>
+                            {!isReadOnly && (
+                              <button onClick={() => setExcludedInstallmentIds(prev => { const n = new Set(prev); if(n.has(installment.id)) n.delete(installment.id); else n.add(installment.id); return n; })} className={`w-10 h-10 rounded-xl border-[3px] border-black transition-all flex items-center justify-center shrink-0 ${isIncluded ? 'bg-indigo-600 text-white' : 'bg-gray-100'}`}>
+                                <Check className="w-5 h-5" />
+                              </button>
+                            )}
+                          </div>
+                          <div className="flex items-end justify-between gap-2">
+                            <span className="text-lg font-black text-gray-900 dark:text-gray-100">{formatCurrency(installment.monthlyAmount)}</span>
+                            <div className="flex items-center justify-end space-x-2">
+                              {isPaid ? <CheckCircle2 className="w-5 h-5 text-green-500" /> : !isReadOnly && (
+                                <button
+                                  onClick={() => {
+                                    setTransactionFormData({ id: '', name: `${installment.name} - ${selectedMonth} ${selectedYear}`, date: new Date().toISOString().split('T')[0], amount: isPartial && installmentSchedule ? Math.max(0, installmentSchedule.expected_amount - installmentSchedule.amount_paid).toFixed(2) : installment.monthlyAmount.toFixed(2), accountId: installment.accountId || accounts[0]?.id || '', paymentScheduleId: installmentSchedule?.id || '' });
+                                    setShowTransactionModal(true);
+                                  }}
+                                  className="px-4 py-2 bg-indigo-600 text-white text-xs font-black uppercase rounded-xl border-[3px] border-black shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] hover:translate-x-[1px] hover:translate-y-[1px] hover:shadow-none active:translate-x-[3px] active:translate-y-[3px] active:shadow-none transition-all"
+                                >{isPartial ? 'Pay Rem.' : 'Pay'}</button>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </>
+                ) : (
+                  <table className="w-full text-left">
+                    <thead>
+                      <tr className="text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase border-b border-gray-100 dark:border-gray-800/50">
+                        <th className="p-4 pl-10">Name</th>
+                        <th className="p-4">Amount</th>
+                        <th className="p-4 text-center">Actions</th>
+                        <th className="p-4 pr-10 text-right"></th>
                       </tr>
-                    )}
-                    {cat.name === 'Loans' && relevantInstallments.length > 0 && (
-                      <>
-                        {relevantInstallments.map((installment) => {
-                          const account = accounts.find(a => a.id === installment.accountId);
-                          const isIncluded = !excludedInstallmentIds.has(installment.id);
-                          
-                          let isPaid = false, isPartial = false;
-                          const installmentSchedule = getPaymentSchedule('installment', installment.id, selectedMonth, selectedYear);
-                          
-                          if (installmentSchedule) {
-                            isPaid = checkIfPaidBySchedule('installment', installment.id);
-                            isPartial = checkIfPartialBySchedule('installment', installment.id);
-                          } else if (installment.startDate) {
-                            try {
-                              const [startYear, startMonthNum] = installment.startDate.split('-').map(Number);
-                              const startMonthIndex = startMonthNum - 1;
-                              
-                              const currentYear = new Date().getFullYear();
-                              const selectedMonthIndex = MONTHS.indexOf(selectedMonth);
-                              
-                              const monthsPassed = (currentYear - startYear) * 12 + (selectedMonthIndex - startMonthIndex);
-                              
-                              if (monthsPassed >= 0) {
-                                const expectedPaidByThisMonth = (monthsPassed + 1) * installment.monthlyAmount;
-                                isPaid = installment.paidAmount >= expectedPaidByThisMonth;
+                    </thead>
+                    <tbody className="divide-y divide-gray-100 dark:divide-gray-800/50">
+                      {(items.length > 0 || relevantInstallments.length > 0) ? (
+                        <>
+                          {items.map((item) => {
+                            let isPaid = false, isPartial = false, linkedBiller, paymentSchedule;
+                            const isBillerItem = item.isBiller || billers.some(b => b.id === item.id);
+                            
+                            if (isBillerItem) {
+                              linkedBiller = billers.find(b => b.id === item.id);
+                              paymentSchedule = getPaymentSchedule('biller', item.id);
+                              if (paymentSchedule) {
+                                isPaid = checkIfPaidBySchedule('biller', item.id);
+                                isPartial = checkIfPartialBySchedule('biller', item.id);
+                              } else {
+                                isPaid = checkIfPaidByTransaction(item.name, item.amount, selectedMonth);
                               }
-                            } catch (error) {
-                              isPaid = false;
+                            } else {
+                              isPaid = checkIfPaidByTransaction(item.name, item.amount, selectedMonth);
                             }
-                          }
-                          
-                          const fallbackInstallmentTx = !installmentSchedule && (isPaid || isPartial)
-                            ? findExistingTransaction(installment.name, installment.monthlyAmount, selectedMonth)
-                            : undefined;
+                            return (
+                              <tr key={item.id} className={`${item.included ? 'bg-white dark:bg-gray-900' : 'bg-gray-50 dark:bg-gray-800/50 opacity-60'}`}>
+                                <td className="p-4 pl-10"><input type="text" value={item.name} onChange={(e) => handleSetupUpdate(cat.name, item.id, 'name', e.target.value)} disabled={isReadOnly} className="bg-transparent border-none text-sm font-bold w-full disabled:cursor-default dark:text-gray-100" /></td>
+                                <td className="p-4">
+                                  <div className="flex items-center space-x-1"><span className="text-gray-400 dark:text-gray-500 font-bold">₱</span><input type="number" value={item.amount} 
+                                    onChange={(e) => handleSetupUpdate(cat.name, item.id, 'amount', e.target.value)} 
+                                    onFocus={() => {}}
+                                    onBlur={() => {}}
+                                    disabled={isReadOnly} className="bg-transparent border-none text-sm font-black w-24 disabled:cursor-default dark:text-gray-100" 
+                                  /></div>
+                                </td>
+                                <td className="p-4 text-center">
+                                  <div className="flex items-center justify-center space-x-2">
+                                    {isBillerItem && (
+                                      isPaid ? (
+                                        <>
+                                          <CheckCircle2 className="w-4 h-4 text-green-500" aria-label="Payment completed" title="Paid" />
+                                          {paymentSchedule && (
+                                            <button onClick={() => openSchedulePaymentsModal(paymentSchedule.id, `${item.name} - ${selectedMonth}`)} title="View payment records" className="text-gray-400 hover:text-indigo-600 transition-colors rounded-full p-1 hover:bg-indigo-50">
+                                              <Info className="w-3.5 h-3.5" />
+                                            </button>
+                                          )}
+                                        </>
+                                      ) : (
+                                        <>
+                                          {isPartial && paymentSchedule && (
+                                            <>
+                                              <span className="text-[9px] font-bold px-2 py-0.5 bg-yellow-100 text-yellow-700 rounded uppercase" title={`Paid ₱${paymentSchedule.amount_paid} of ₱${parseFloat(item.amount)}`}>
+                                                Partial
+                                              </span>
+                                              <button onClick={() => openSchedulePaymentsModal(paymentSchedule.id, `${item.name} - ${selectedMonth}`)} title="View payment records" className="text-gray-400 hover:text-indigo-600 transition-colors rounded-full p-1 hover:bg-indigo-50">
+                                                <Info className="w-3.5 h-3.5" />
+                                              </button>
+                                            </>
+                                          )}
+                                        {!isReadOnly && <button 
+                                          onClick={() => { 
+                                            if(linkedBiller && paymentSchedule) {
+                                              const scheduleForModal: PaymentSchedule = {
+                                                id: paymentSchedule.id,
+                                                month: paymentSchedule.month,
+                                                year: paymentSchedule.year.toString(),
+                                                expectedAmount: paymentSchedule.expected_amount,
+                                                amountPaid: paymentSchedule.amount_paid,
+                                                datePaid: paymentSchedule.date_paid || undefined,
+                                                receipt: paymentSchedule.receipt || undefined,
+                                                accountId: paymentSchedule.account_id || undefined
+                                              };
+                                              
+                                              const linkedTransactions = transactions
+                                                .filter(tx => tx.payment_schedule_id === paymentSchedule.id)
+                                                .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+                                              const existingTx = linkedTransactions[0];
+                                              
+                                              setShowPayModal({
+                                                biller: linkedBiller, 
+                                                schedule: scheduleForModal,
+                                                expectedAmount: parseFloat(item.amount)
+                                              }); 
+                                              const today = new Date().toISOString().split('T')[0];
+                                              setPayFormData({
+                                                transactionId: isPartial ? '' : (existingTx?.id || ''),
+                                                amount: isPartial
+                                                  ? Math.max(0, parseFloat(item.amount) - paymentSchedule.amount_paid).toFixed(2)
+                                                  : existingTx?.amount.toFixed(2) || item.amount,
+                                                receipt: (!isPartial && existingTx) ? 'Receipt on file' : '',
+                                                datePaid: (!isPartial && existingTx) ? new Date(existingTx.date).toISOString().split('T')[0] : today,
+                                                accountId: existingTx?.payment_method_id || ''
+                                              }); 
+                                            } 
+                                          }} 
+                                          className="px-3 py-1 bg-indigo-600 text-white text-[9px] font-black uppercase rounded-lg hover:bg-indigo-700 transition-colors"
+                                        >
+                                          {isPartial ? 'Pay Remaining' : 'Pay'}
+                                        </button>}
+                                        </>
+                                      )
+                                    )}
+                                    {!isBillerItem && (cat.flexiMode ?? true) && item.name !== 'New Item' && parseFloat(item.amount) > 0 && (
+                                      isPaid ? (
+                                        <>
+                                          <CheckCircle2 className="w-4 h-4 text-green-500" aria-label="Payment completed" title="Paid" />
+                                          <button onClick={() => { const tx = findExistingTransaction(item.name, item.amount, selectedMonth); if (tx) openDirectPaymentModal(tx, `${item.name} - ${selectedMonth}`); }} title="View payment records" className="text-gray-400 hover:text-indigo-600 transition-colors rounded-full p-1 hover:bg-indigo-50"><Info className="w-3.5 h-3.5" /></button>
+                                        </>
+                                      ) : !isReadOnly ? (
+                                        <button
+                                          onClick={() => {
+                                            setTransactionFormData({
+                                              id: '',
+                                              name: item.name,
+                                              date: new Date().toISOString().split('T')[0],
+                                              amount: item.amount,
+                                              accountId: item.accountId || accounts[0]?.id || '',
+                                              paymentScheduleId: ''
+                                            });
+                                            setShowTransactionModal(true);
+                                          }}
+                                          className="px-3 py-1 bg-indigo-600 text-white text-[9px] font-black uppercase rounded-lg hover:bg-indigo-700 transition-colors"
+                                        >
+                                          Pay
+                                        </button>
+                                      ) : null
+                                    )}
 
-                          const installmentInfoClick = installmentSchedule
-                            ? () => openSchedulePaymentsModal(installmentSchedule.id, `${installment.name} - ${selectedMonth}`)
-                            : fallbackInstallmentTx
-                              ? () => openDirectPaymentModal(fallbackInstallmentTx, `${installment.name} - ${selectedMonth}`)
-                              : null;
+                                    {!isReadOnly && <button onClick={() => handleSetupToggle(cat.name, item.id)} className={`w-8 h-8 rounded-xl border-2 transition-all flex items-center justify-center ${item.included ? 'bg-indigo-600 border-indigo-600 text-white' : 'border-gray-200'}`}><Check className="w-4 h-4" /></button>}
+                                  </div>
+                                </td>
+                                <td className="p-4 pr-10 text-right">{!isReadOnly && <button onClick={() => removeItemFromCategory(cat.name, item.id, item.name)} className="text-[9px] font-black text-red-500 uppercase tracking-widest border border-red-50 px-2 py-1 rounded-lg">Exclude</button>}</td>
+                              </tr>
+                            );
+                          })}
+                          {relevantInstallments.map((installment) => {
+                            const account = accounts.find(a => a.id === installment.accountId);
+                            const isIncluded = !excludedInstallmentIds.has(installment.id);
+                            let isPaid = false, isPartial = false;
+                            const installmentSchedule = getPaymentSchedule('installment', installment.id, selectedMonth, selectedYear);
+                            if (installmentSchedule) {
+                              isPaid = checkIfPaidBySchedule('installment', installment.id);
+                              isPartial = checkIfPartialBySchedule('installment', installment.id);
+                            }
 
-                          return (
-    <tr key={`installment-${installment.id}`} className={`${isIncluded ? 'bg-blue-50/30 dark:bg-blue-900/10' : 'bg-gray-50 dark:bg-gray-800/50 opacity-60'}`}>
-      <td className="p-4 pl-10">
-        <div className="flex items-center gap-2">
-          <span className="text-sm font-bold text-gray-900 dark:text-gray-100">{installment.name}</span>
-          <span className="text-[9px] font-bold px-2 py-0.5 bg-blue-100 rounded text-blue-600">
-            INSTALLMENT {installment.timing ? `• ${installment.timing}` : ''}
-          </span>
-        </div>
-        {account && (
-          <div className="text-[10px] text-gray-400 font-medium mt-1">
-            {account.bank} • {installment.termDuration}
-          </div>
-        )}
-      </td>
-      <td className="p-4">
-        <div className="flex items-center space-x-1">
-          <span className="text-gray-400 dark:text-gray-500 font-bold">₱</span>
-          <span className="text-sm font-black">{formatCurrency(installment.monthlyAmount).replace('₱', '')}</span>
-        </div>
-      </td>
-      <td className="p-4 text-center">
-        <div className="flex items-center justify-center space-x-2">
-          {isPaid ? (
-            <>
-              <CheckCircle2 className="w-4 h-4 text-green-500" aria-label="Payment completed" title="Paid" />
-              {installmentInfoClick && (
-                <button onClick={installmentInfoClick} title="View payment records" className="text-gray-400 hover:text-indigo-600 transition-colors rounded-full p-1 hover:bg-indigo-50">
-                  <Info className="w-3.5 h-3.5" />
-                </button>
-              )}
-            </>
-          ) : (
-            <>
-              {isPartial && (
-                <>
-                  {installmentSchedule && (
-                    <span className="text-[9px] font-bold px-2 py-0.5 bg-yellow-100 text-yellow-700 rounded uppercase" title={`Paid ₱${installmentSchedule.amount_paid} of ₱${installmentSchedule.expected_amount}`}>
-                      Partial
-                    </span>
-                  )}
-                  {installmentInfoClick && (
-                    <button onClick={installmentInfoClick} title="View payment records" className="text-gray-400 hover:text-indigo-600 transition-colors rounded-full p-1 hover:bg-indigo-50">
-                      <Info className="w-3.5 h-3.5" />
-                    </button>
-                  )}
-                </>
-              )}
-            {!isReadOnly && <button 
-              onClick={() => {
-                setTransactionFormData({
-                  id: '',
-                  name: `${installment.name} - ${selectedMonth} ${new Date().getFullYear()}`,
-                  date: new Date().toISOString().split('T')[0],
-                  amount: isPartial && installmentSchedule
-                    ? Math.max(0, installmentSchedule.expected_amount - installmentSchedule.amount_paid).toFixed(2)
-                  : installment.monthlyAmount.toFixed(2),
-                  accountId: installment.accountId || accounts[0]?.id || '',
-                  paymentScheduleId: installmentSchedule?.id || ''
-                });
-                setShowTransactionModal(true);
-              }}
-              className="px-3 py-1 bg-indigo-600 text-white text-[9px] font-black uppercase rounded-lg hover:bg-indigo-700 transition-colors"
-            >
-              {isPartial ? 'Pay Remaining' : 'Pay'}
-            </button>}
-            </>
-          )}
-          {!isReadOnly && <button 
-            onClick={() => {
-              setExcludedInstallmentIds(prev => {
-                const newSet = new Set(prev);
-                if (newSet.has(installment.id)) {
-                  newSet.delete(installment.id);
-                } else {
-                  newSet.add(installment.id);
-                }
-                return newSet;
-              });
-            }}
-            className={`w-8 h-8 rounded-xl border-2 transition-all flex items-center justify-center ${isIncluded ? 'bg-indigo-600 border-indigo-600 text-white' : 'border-gray-200'}`}
-          >
-            <Check className="w-4 h-4" />
-          </button>}
-        </div>
-      </td>
-      <td className="p-4 pr-10 text-right">
-        {!isReadOnly && <button 
-          onClick={() => {
-            setConfirmModal({
-              show: true,
-              title: 'Exclude Installment',
-              message: `Are you sure you want to exclude "${installment.name}" from this budget period? This will not delete the installment, just exclude it from this budget.`,
-              onConfirm: () => {
-                setExcludedInstallmentIds(prev => new Set([...prev, installment.id]));
-                setConfirmModal(prev => ({ ...prev, show: false }));
-              }
-            });
-          }}
-          className="text-[9px] font-black text-red-500 uppercase tracking-widest border border-red-50 px-2 py-1 rounded-lg hover:bg-red-50 transition-colors"
-        >
-          Exclude
-        </button>}
-      </td>
-    </tr>
-  );
-})}
-</>
-)}
-</tbody>
-</table>
-{canAddItems && <button onClick={() => addItemToCategory(cat.name)} className="w-full p-4 text-[10px] font-black text-gray-400 uppercase hover:text-indigo-600 border-t border-gray-50">+ Add Item</button>}
-</div>
-</div>
-);
-})}
-
-{/* PROTOTYPE: Credit Card Regular Purchases Section */}
-{(() => {
-// Get all credit card accounts
-const creditCardAccounts = accounts.filter(acc => acc.classification === 'Credit Card' && acc.billingDate);
-
-if (creditCardAccounts.length === 0) return null;
-
-// Aggregate purchases for each credit card for the selected month
-const monthIndex = MONTHS.indexOf(selectedMonth);
-const currentYear = new Date().getFullYear();
-
-return creditCardAccounts.map(account => {
-const cycleSummaries = aggregateCreditCardPurchases(account, transactions, installments);
-
-// Find the cycle that contains the selected month
-const relevantCycle = cycleSummaries.find(cycle => {
-  const cycleMonth = cycle.cycleStart.getMonth();
-  const cycleYear = cycle.cycleStart.getFullYear();
-  // Match if cycle overlaps with selected month
-  return (cycleMonth === monthIndex && cycleYear === currentYear) ||
-         (cycle.cycleEnd.getMonth() === monthIndex && cycle.cycleEnd.getFullYear() === currentYear);
-});
-
-if (!relevantCycle || relevantCycle.transactionCount === 0) return null;
-
-return (
-  <div key={`cc-${account.id}`} className="bg-white dark:bg-gray-900 rounded-[3rem] shadow-sm border border-gray-100 dark:border-gray-800 overflow-hidden w-full transition-colors">
-    <div className="px-8 py-5 border-b border-gray-50 dark:border-gray-800/50 bg-gray-50/30 dark:bg-gray-800/30 flex justify-between items-center transition-colors">
-      <div>
-        <h3 className="text-xs font-black text-gray-900 dark:text-gray-100 uppercase tracking-[0.25em]">Credit Card Purchases</h3>
-        <p className="text-[10px] text-gray-500 font-medium mt-1">{account.bank} • {relevantCycle.cycleLabel}</p>
-      </div>
-      <span className="text-lg font-black text-purple-600">{formatCurrency(relevantCycle.totalAmount)}</span>
-    </div>
-    <div className="overflow-x-auto">
-      <table className="w-full text-left">
-        <thead>
-          <tr className="text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase border-b border-gray-50 dark:border-gray-800/50">
-            <th className="p-4 pl-10">Transaction</th>
-            <th className="p-4">Date</th>
-            <th className="p-4">Amount</th>
-            <th className="p-4 pr-10 text-right"></th>
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-gray-50 dark:divide-gray-800/50">
-          {relevantCycle.transactions.map((tx) => (
-            <tr key={tx.id} className="bg-purple-50/20 dark:bg-purple-900/10">
-              <td className="p-4 pl-10">
-                <span className="text-sm font-bold text-gray-900 dark:text-gray-100">{tx.name}</span>
-              </td>
-              <td className="p-4">
-                <span className="text-xs text-gray-500 font-medium">
-                  {new Date(tx.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-                </span>
-              </td>
-              <td className="p-4">
-                <div className="flex items-center space-x-1">
-                  <span className="text-gray-400 dark:text-gray-500 font-bold">₱</span>
-                  <span className="text-sm font-black">{formatCurrency(tx.amount).replace('₱', '')}</span>
-                </div>
-              </td>
-              <td className="p-4 pr-10 text-right">
-                {/* QA: Add edit button for transactions - Fix for Issue #6 */}
-                <button
-                  onClick={() => {
-                    // Format date as YYYY-MM-DD for input (split directly to avoid UTC shift)
-                    const dateStr = tx.date.split('T')[0];
-                    setTransactionFormData({
-                      id: tx.id,
-                      name: tx.name,
-                      date: dateStr,
-                    amount: tx.amount.toFixed(2),
-                      accountId: tx.payment_method_id,
-                      paymentScheduleId: tx.payment_schedule_id || '' // FIX: Preserve schedule ID when editing
-                    });
-                    setShowTransactionModal(true);
-                  }}
-                  className="text-[9px] font-black text-indigo-600 uppercase tracking-widest border border-indigo-100 px-2 py-1 rounded-lg hover:bg-indigo-50 transition-colors"
-                >
-                  Edit
-                </button>
-              </td>
-            </tr>
-          ))}
-          <tr className="bg-purple-100/30 dark:bg-purple-900/20">
-            <td colSpan={2} className="p-4 pl-10 text-xs font-black text-gray-700 dark:text-gray-300 uppercase">
-              Total Regular Purchases
-            </td>
-            <td className="p-4">
-              <div className="flex items-center space-x-1">
-                <span className="text-gray-400 dark:text-gray-500 font-bold">₱</span>
-                <span className="text-sm font-black text-purple-600">{formatCurrency(relevantCycle.totalAmount).replace('₱', '')}</span>
-              </div>
-            </td>
-            <td className="p-4 pr-10 text-right">
-              <span className="text-[9px] font-bold text-purple-600 uppercase tracking-widest">
-                {relevantCycle.transactionCount} txn(s)
-              </span>
-            </td>
-          </tr>
-        </tbody>
-      </table>
-      <div className="p-4 border-t border-gray-50 dark:border-gray-800/50 bg-gray-50/50 dark:bg-gray-800/30">
-        <p className="text-[10px] text-gray-500 font-medium text-center">
-          <span className="font-bold">PROTOTYPE:</span> Regular credit card purchases are auto-aggregated from transactions. 
-          Excludes installment payments.
-        </p>
-      </div>
-    </div>
-  </div>
-);
-});
-})()}
-
-</div>
-
-{showPayModal && (
-<div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md animate-in fade-in">
-  <div className="bg-white rounded-3xl w-full max-w-md p-10 shadow-2xl animate-in zoom-in-95 relative">
-    <button onClick={() => setShowPayModal(null)} className="absolute right-6 top-6 p-2 hover:bg-gray-100 rounded-full transition-colors">
-      <X className="w-6 h-6 text-gray-400" />
-    </button>
-    {/* QA: Consistent Pay form - receipt upload added back, name in title */}
-    <h2 className="text-2xl font-black text-gray-900 mb-2">
-      Pay {showPayModal.biller.name}
-    </h2>
-    <p className="text-gray-500 text-sm mb-8">
-      {payFormData.transactionId 
-        ? `Updating payment for ${showPayModal.schedule.month}`
-        : `Recording payment for ${showPayModal.schedule.month}`}
-    </p>
-    <form onSubmit={handlePaySubmit} className="space-y-6">
-      <div>
-        <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Amount</label>
-        <div className="relative">
-          <span className="absolute left-4 top-1/2 -translate-y-1/2 font-bold text-gray-400">₱</span>
-          <input required type="number" step="0.01" value={payFormData.amount} onChange={(e) => setPayFormData({...payFormData, amount: e.target.value})} className="w-full bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-transparent rounded-2xl p-4 pl-8 outline-none text-xl font-black focus:ring-2 focus:ring-indigo-500 transition-all" />
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <div>
-          <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Date Paid</label>
-          <input required type="date" value={payFormData.datePaid} onChange={(e) => setPayFormData({...payFormData, datePaid: e.target.value})} className="w-full min-w-0 bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-transparent rounded-2xl px-3 py-4 outline-none font-bold text-sm transition-colors" />
-        </div>
-        <div>
-          <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Payment Method</label>
-          <select value={payFormData.accountId} onChange={(e) => setPayFormData({...payFormData, accountId: e.target.value})} className="w-full min-w-0 bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-transparent rounded-2xl px-3 py-4 outline-none font-bold text-sm appearance-none transition-colors">
-            {accounts.map(acc => <option key={acc.id} value={acc.id}>{acc.bank} ({acc.classification})</option>)}
-          </select>
-        </div>
-      </div>
-
-      <div>
-        <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Upload Receipt (Optional)</label>
-        <div className="relative">
-          <input type="file" className="absolute inset-0 opacity-0 cursor-pointer" onChange={(e) => { const f = e.target.files?.[0] || null; setPayReceiptFile(f); setPayFormData({...payFormData, receipt: f?.name || ''}); }} />
-          <div className="w-full bg-gray-50 dark:bg-gray-800 border-2 border-dashed border-gray-200 dark:border-gray-700 rounded-2xl p-6 text-center text-sm text-gray-500 hover:border-indigo-300 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 transition-all flex flex-col items-center">
-            <Upload className="w-8 h-8 mb-2 text-indigo-400" />
-            <span className="font-bold">{payFormData.receipt || 'Click or drag to upload receipt'}</span>
-          </div>
-        </div>
-      </div>
-      <div className="flex space-x-4 pt-4">
-        <button type="button" onClick={() => setShowPayModal(null)} className="flex-1 bg-gray-100 dark:bg-gray-800 py-4 rounded-2xl font-bold text-gray-500 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors">Cancel</button>
-        <button type="submit" className="flex-1 bg-green-600 text-white py-4 rounded-2xl font-bold hover:bg-green-700 shadow-xl shadow-green-100 dark:shadow-none transition-all">
-          {payFormData.transactionId ? 'Update Payment' : 'Submit Payment'}
-        </button>
-      </div>
-    </form>
-  </div>
-</div>
-)}
-
-{/* QA: Consistent Transaction Form Modal - with receipt upload */}
-{showTransactionModal && (
-<div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md animate-in fade-in">
-  <div className="bg-white dark:bg-gray-900 rounded-3xl w-full max-w-md p-10 shadow-2xl animate-in zoom-in-95 relative transition-colors">
-    <button onClick={() => setShowTransactionModal(false)} className="absolute right-6 top-6 p-2 hover:bg-gray-100 rounded-full transition-colors">
-      <X className="w-6 h-6 text-gray-400" />
-    </button>
-    <h2 className="text-2xl font-black text-gray-900 dark:text-gray-100 mb-2">
-      {transactionFormData.id ? `Edit Payment` : `Pay ${transactionFormData.name || 'Item'}`}
-    </h2>
-    <p className="text-gray-500 text-sm mb-8">
-      {transactionFormData.id 
-        ? 'Update the payment details below' 
-        : 'Record a payment transaction'}
-    </p>
-    <form onSubmit={handleTransactionSubmit} className="space-y-6">
-      <div>
-        <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Amount</label>
-        <div className="relative">
-          <span className="absolute left-4 top-1/2 -translate-y-1/2 font-bold text-gray-400">₱</span>
-          <input 
-            required 
-            type="number" 
-            min="0" 
-            step="0.01" 
-            value={transactionFormData.amount} 
-            onChange={(e) => setTransactionFormData({...transactionFormData, amount: e.target.value})} 
-            className="w-full bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-transparent rounded-2xl p-4 pl-8 outline-none text-xl font-black focus:ring-2 focus:ring-indigo-500 transition-all" 
-          />
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <div>
-          <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Date Paid</label>
-          <input 
-            required 
-            type="date" 
-            value={transactionFormData.date} 
-            onChange={(e) => setTransactionFormData({...transactionFormData, date: e.target.value})} 
-            className="w-full min-w-0 bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-transparent rounded-2xl px-3 py-4 outline-none font-bold text-sm transition-colors" 
-          />
-        </div>
-        <div>
-          <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Payment Method</label>
-          <select 
-            value={transactionFormData.accountId} 
-            onChange={(e) => setTransactionFormData({...transactionFormData, accountId: e.target.value})} 
-            className="w-full min-w-0 bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-transparent rounded-2xl px-3 py-4 outline-none font-bold text-sm appearance-none transition-colors"
-          >
-            {accounts.map(acc => <option key={acc.id} value={acc.id}>{acc.bank} ({acc.classification})</option>)}
-          </select>
-        </div>
-      </div>
-
-      <div>
-        <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Upload Receipt (Optional)</label>
-        <div className="relative">
-          <input type="file" className="absolute inset-0 opacity-0 cursor-pointer" />
-          <div className="w-full bg-gray-50 dark:bg-gray-800 border-2 border-dashed border-gray-200 dark:border-gray-700 rounded-2xl p-6 text-center text-sm text-gray-500 hover:border-indigo-300 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 transition-all flex flex-col items-center">
-            <Upload className="w-8 h-8 mb-2 text-indigo-400" />
-            <span className="font-bold">Click or drag to upload receipt</span>
-          </div>
-        </div>
-      </div>
-
-      <div className="flex space-x-4 pt-4">
-        <button type="button" onClick={() => setShowTransactionModal(false)} className="flex-1 bg-gray-100 dark:bg-gray-800 py-4 rounded-2xl font-bold text-gray-500 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors">Cancel</button>
-        <button type="submit" className="flex-1 bg-green-600 text-white py-4 rounded-2xl font-bold hover:bg-green-700 shadow-xl shadow-green-100 dark:shadow-none transition-all">
-          {transactionFormData.id ? 'Update Payment' : 'Submit Payment'}
-        </button>
-      </div>
-    </form>
-  </div>
-</div>
-)}
-
-{/* Fund Stash Modal */}
-{fundModal && (
-<div className="fixed inset-0 z-[150] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md" onClick={() => setFundModal(null)}>
-  <div className="w-full max-w-md bg-white rounded-3xl p-8 shadow-2xl relative" onClick={e => e.stopPropagation()}>
-    <button onClick={() => setFundModal(null)} className="absolute top-4 right-4 text-gray-400 hover:text-gray-700 p-2 rounded-full hover:bg-gray-100 transition-colors" aria-label="Close"><X className="w-5 h-5" /></button>
-    <div className="flex items-center space-x-3 mb-6">
-      <div className="w-12 h-12 bg-indigo-50 text-indigo-600 rounded-2xl flex items-center justify-center">
-        <Plus className="w-6 h-6" />
-      </div>
-      <div>
-        <h2 className="text-xl font-black text-gray-900 uppercase tracking-tight">Fund Stash</h2>
-        <p className="text-xs text-gray-500 font-medium">{fundModal.wallet.name}</p>
-      </div>
-    </div>
-    <form onSubmit={handleFundSubmit} className="space-y-5">
-      <div>
-        <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Amount <span className="text-red-500">*</span></label>
-        <div className="flex items-center border border-gray-200 rounded-2xl px-4 py-3 focus-within:border-indigo-400 transition-colors">
-          <span className="text-gray-400 font-bold mr-2">₱</span>
-          <input
-            type="number"
-            min="0.01"
-            step="0.01"
-            value={fundForm.amount}
-            onChange={e => setFundForm(f => ({ ...f, amount: e.target.value }))}
-            placeholder="0.00"
-            required
-            className="flex-1 bg-transparent border-none outline-none text-sm font-black text-indigo-600"
-          />
-        </div>
-      </div>
-      <div>
-        <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Date <span className="text-red-500">*</span></label>
-        <input
-          type="date"
-          value={fundForm.date}
-          onChange={e => setFundForm(f => ({ ...f, date: e.target.value }))}
-          min={(() => { const mi = MONTHS.indexOf(selectedMonth); return `${selectedYear}-${String(mi + 1).padStart(2, '0')}-01`; })()}
-          max={(() => { const mi = MONTHS.indexOf(selectedMonth); const last = new Date(selectedYear, mi + 1, 0).getDate(); return `${selectedYear}-${String(mi + 1).padStart(2, '0')}-${String(last).padStart(2, '0')}`; })()}
-          required
-          className="w-full border border-gray-200 rounded-2xl px-4 py-3 text-sm font-bold text-gray-800 outline-none focus:border-indigo-400 transition-colors"
-        />
-      </div>
-      <div>
-        <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Notes <span className="text-gray-300">(optional)</span></label>
-        <input
-          type="text"
-          value={fundForm.notes}
-          onChange={e => setFundForm(f => ({ ...f, notes: e.target.value }))}
-          placeholder="e.g. Monthly allocation"
-          className="w-full border border-gray-200 rounded-2xl px-4 py-3 text-sm text-gray-700 outline-none focus:border-indigo-400 transition-colors"
-        />
-      </div>
-      <div className="flex flex-col space-y-3 pt-2">
-        <button
-          type="submit"
-          disabled={fundSubmitting}
-          className="w-full bg-indigo-600 text-white py-4 rounded-2xl font-black uppercase tracking-widest text-[10px] hover:bg-indigo-700 transition-all disabled:opacity-60"
-        >
-          {fundSubmitting ? 'Funding…' : 'Fund Stash'}
-        </button>
-        <button type="button" onClick={() => setFundModal(null)} className="w-full bg-gray-100 text-gray-500 py-4 rounded-2xl font-black uppercase tracking-widest text-[10px] hover:bg-gray-200 transition-all">
-          Cancel
-        </button>
-      </div>
-    </form>
-  </div>
-</div>
-)}
-
-{/* Stash Info Modal */}
-{stashInfoModal && (() => {
-const { funded, remaining, topUps } = getStashAggregates(stashInfoModal.wallet);
-const linkedAccount = accounts.find(a => a.id === stashInfoModal.wallet.accountId);
-return (
-  <div className="fixed inset-0 z-[150] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md" onClick={() => setStashInfoModal(null)}>
-    <div className="w-full max-w-lg bg-white rounded-3xl p-8 shadow-2xl relative max-h-[85vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
-      <button onClick={() => setStashInfoModal(null)} className="absolute top-4 right-4 text-gray-400 hover:text-gray-700 p-2 rounded-full hover:bg-gray-100 transition-colors" aria-label="Close"><X className="w-5 h-5" /></button>
-      <div className="flex items-center space-x-3 mb-6">
-        <div className="w-12 h-12 bg-indigo-50 text-indigo-600 rounded-2xl flex items-center justify-center">
-          <Info className="w-6 h-6" />
-        </div>
-        <div>
-          <h2 className="text-xl font-black text-gray-900 uppercase tracking-tight">Stash Info</h2>
-          <p className="text-xs text-gray-500 font-medium">{stashInfoModal.wallet.name} · {selectedMonth} {selectedYear}</p>
-        </div>
-      </div>
-      {/* Summary */}
-      <div className="grid grid-cols-3 gap-4 mb-6">
-        <div className="bg-gray-50 rounded-2xl p-4 text-center">
-          <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Target</p>
-          <p className="text-base font-black text-indigo-600">{formatCurrency(stashInfoModal.wallet.amount)}</p>
-        </div>
-        <div className="bg-green-50 rounded-2xl p-4 text-center">
-          <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Funded</p>
-          <p className="text-base font-black text-green-600">{formatCurrency(funded)}</p>
-        </div>
-        <div className="bg-orange-50 rounded-2xl p-4 text-center">
-          <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Remaining</p>
-          <p className="text-base font-black text-orange-600">{formatCurrency(remaining)}</p>
-        </div>
-      </div>
-      {linkedAccount && (
-        <p className="text-xs text-gray-500 mb-5 font-medium">Account: <span className="text-gray-700 font-bold">{linkedAccount.bank} ({linkedAccount.classification})</span></p>
-      )}
-      {/* Top-ups list */}
-      <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-3">Top-ups this month</h3>
-      {topUps.length === 0 ? (
-        <p className="text-sm text-gray-400 italic py-4 text-center">No top-ups for this stash this month. Fund this stash to see top-ups here.</p>
-      ) : (
-        <div className="space-y-3">
-          {topUps.map(tx => (
-            <div key={tx.id} className="bg-gray-50 rounded-2xl p-4 flex items-center justify-between">
-              <div className="space-y-0.5">
-                <p className="text-sm font-bold text-gray-900">{tx.name}</p>
-                <p className="text-xs text-gray-500">{new Date(tx.date).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })}</p>
-                {tx.notes && <p className="text-xs text-gray-400 italic">{tx.notes}</p>}
-              </div>
-              <div className="flex items-center space-x-3">
-                <span className="text-sm font-black text-indigo-600">{formatCurrency(Math.abs(tx.amount))}</span>
-                <PinProtectedAction
-                  featureId="transaction_deletions"
-                  onVerified={() => handleDeleteStashTopUp(tx.id, tx.amount)}
-                  actionLabel="Delete Top-up"
-                >
-                  <button
-                    onClick={(e) => e.preventDefault()}
-                    aria-label={`Delete top-up of ${formatCurrency(Math.abs(tx.amount))} from ${new Date(tx.date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}`}
-                    className="text-red-400 hover:text-red-600 p-1.5 rounded-xl hover:bg-red-50 transition-colors"
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </button>
-                </PinProtectedAction>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  </div>
-);
-})()}
-{schedulePaymentsModal && (
-<div className="fixed inset-0 z-[150] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md" onClick={() => setSchedulePaymentsModal(null)}>
-  <div className="w-full max-w-lg bg-white rounded-3xl p-8 shadow-2xl relative max-h-[85vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
-    <button onClick={() => setSchedulePaymentsModal(null)} className="absolute top-4 right-4 text-gray-400 hover:text-gray-700 p-2 rounded-full hover:bg-gray-100 transition-colors" aria-label="Close"><X className="w-5 h-5" /></button>
-    <h2 className="text-2xl font-black text-gray-900 mb-1">Payment Records</h2>
-    <p className="text-gray-500 text-sm mb-6">{schedulePaymentsModal.label}</p>
-    {loadingScheduleTx ? (
-      <div className="text-center py-8 text-gray-400">Loading...</div>
-    ) : schedulePaymentsModal.transactions.length === 0 ? (
-      <div className="text-center py-8 text-gray-400 italic">No payment records found.</div>
-    ) : (
-      <div className="space-y-4">
-        {schedulePaymentsModal.transactions.map(tx => {
-          const pmName = accounts.find(a => a.id === tx.paymentMethodId)?.bank || tx.paymentMethodId;
-          const signedUrl = scheduleSignedUrls[tx.id];
-          return (
-            <div key={tx.id} className="bg-gray-50 rounded-2xl p-4 space-y-2">
-              <div className="flex justify-between">
-                <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Name</span>
-                <span className="text-sm font-bold text-gray-900">{tx.name}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Amount</span>
-                <span className="text-sm font-bold text-red-600">{formatCurrency(tx.amount)}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Payment Method</span>
-                <span className="text-sm text-gray-700">{pmName}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Date</span>
-                <span className="text-sm text-gray-700">{new Date(tx.date).toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' })}</span>
-              </div>
-              {tx.receiptUrl && (
-                <div className="flex items-center space-x-3 pt-1">
-                  {signedUrl ? (
-                    <>
-                      <img src={signedUrl} alt={`Receipt for ${tx.name}`} className="w-12 h-12 rounded-xl object-cover border border-gray-200" onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
-                      <button onClick={() => { setZoom(0.5); setPreviewReceiptUrl(signedUrl); }} title="Preview receipt" className="flex items-center space-x-1 px-3 py-1.5 rounded-xl bg-indigo-50 text-indigo-600 hover:bg-indigo-100 transition-colors text-xs font-bold">
-                        <Eye className="w-3.5 h-3.5" /><span>Preview</span>
-                      </button>
-                    </>
-                  ) : (
-                    <span className="text-xs text-gray-400 italic">Loading receipt…</span>
-                  )}
-                </div>
-              )}
-              <div className="flex justify-end pt-1">
-                <PinProtectedAction
-                  featureId="transaction_deletions"
-                  onVerified={() => handleDeleteScheduleTx(tx.id)}
-                  actionLabel="Delete Payment Record"
-                >
-                  <button
-                    onClick={(e) => e.preventDefault()}
-                    title="Delete payment record"
-                    className="flex items-center space-x-1 px-3 py-1.5 rounded-xl bg-red-50 text-red-600 hover:bg-red-100 transition-colors text-xs font-bold"
-                  >
-                    <Trash2 className="w-3.5 h-3.5" /><span>Delete</span>
-                  </button>
-                </PinProtectedAction>
-              </div>
-            </div>
-          );
-        })}
-      </div>
-    )}
-  </div>
-</div>
-)}
-
-{/* Receipt Preview Modal */}
-{previewReceiptUrl && (
-<div className="fixed inset-0 z-[200] flex items-center justify-center p-4" onClick={() => setPreviewReceiptUrl(null)}>
-  <div className="w-full max-w-2xl bg-white rounded-3xl shadow-2xl flex flex-col overflow-hidden" style={{ maxHeight: '90vh' }} onClick={e => e.stopPropagation()}>
-    <div className="flex items-center justify-between p-4 border-b border-gray-100">
-      <h3 className="text-base font-black text-gray-900 uppercase tracking-widest">Receipt Preview</h3>
-      <div className="flex items-center space-x-2">
-        <button onClick={() => setZoom(z => Math.max(MIN_ZOOM, parseFloat((z - ZOOM_INCREMENT).toFixed(2))))} title="Zoom out" className="p-2 rounded-xl hover:bg-gray-100 text-gray-600 transition-colors" aria-label="Zoom out"><ZoomOut className="w-4 h-4" /></button>
-        <span className="text-xs font-bold text-gray-500 w-10 text-center">{Math.round(zoom * 100)}%</span>
-        <button onClick={() => setZoom(z => Math.min(MAX_ZOOM, parseFloat((z + ZOOM_INCREMENT).toFixed(2))))} title="Zoom in" className="p-2 rounded-xl hover:bg-gray-100 text-gray-600 transition-colors" aria-label="Zoom in"><ZoomIn className="w-4 h-4" /></button>
-        <a href={previewReceiptUrl} download target="_blank" rel="noreferrer" title="Download receipt" className="p-2 rounded-xl hover:bg-indigo-50 text-indigo-600 transition-colors" aria-label="Download receipt"><Download className="w-4 h-4" /></a>
-        <button onClick={() => setPreviewReceiptUrl(null)} title="Close" className="p-2 rounded-xl hover:bg-gray-100 text-gray-600 transition-colors" aria-label="Close preview"><X className="w-4 h-4" /></button>
-      </div>
-    </div>
-    <div className="overflow-auto flex-1 p-4 flex justify-center">
-      <img src={previewReceiptUrl} alt={`Receipt — ${schedulePaymentsModal?.label || ''}`} style={{ width: `${zoom * 100}%`, height: 'auto', transition: 'width 0.2s' }} />
-    </div>
-  </div>
-</div>
-)}
-
-{/* Salary Cash In Modal */}
-{showSalaryModal && (
-<div className="fixed inset-0 z-[150] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md animate-in fade-in" onClick={() => setShowSalaryModal(false)}>
-  <div className="bg-white dark:bg-gray-900 rounded-3xl w-full max-w-md p-10 shadow-2xl animate-in zoom-in-95 relative transition-colors" onClick={e => e.stopPropagation()}>
-    <button onClick={() => setShowSalaryModal(false)} className="absolute right-6 top-6 p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full transition-colors">
-      <X className="w-6 h-6 text-gray-400" />
-    </button>
-    <h2 className="text-2xl font-black text-gray-900 dark:text-gray-100 mb-2">Record Income</h2>
-    <p className="text-gray-500 text-sm mb-8">Add this income to your account balance</p>
-    
-    <form onSubmit={handleSalaryCashIn} className="space-y-6">
-      <div>
-        <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Transaction Name</label>
-        <input required type="text" value={salaryFormData.name} onChange={(e) => setSalaryFormData({...salaryFormData, name: e.target.value})} className="w-full bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-transparent rounded-2xl p-4 outline-none font-bold focus:ring-2 focus:ring-indigo-500 transition-all" />
-      </div>
-
-      <div>
-        <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Amount</label>
-        <div className="relative">
-          <span className="absolute left-4 top-1/2 -translate-y-1/2 font-bold text-gray-400">₱</span>
-          <input required type="number" min="0.01" step="0.01" value={salaryFormData.amount} onChange={(e) => setSalaryFormData({...salaryFormData, amount: e.target.value})} className="w-full bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-transparent rounded-2xl p-4 pl-8 outline-none text-xl font-black focus:ring-2 focus:ring-indigo-500 transition-all" />
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <div>
-          <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Date Received</label>
-          <input required type="date" value={salaryFormData.date} onChange={(e) => setSalaryFormData({...salaryFormData, date: e.target.value})} className="w-full min-w-0 bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-transparent rounded-2xl px-3 py-4 outline-none font-bold text-sm transition-colors" />
-        </div>
-        <div>
-          <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Deposit Account</label>
-          <select required value={salaryFormData.accountId} onChange={(e) => setSalaryFormData({...salaryFormData, accountId: e.target.value})} className="w-full min-w-0 bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-transparent rounded-2xl px-3 py-4 outline-none font-bold text-sm appearance-none transition-colors">
-            <option value="" disabled>Select Account</option>
-            {accounts.filter(a => a.type === 'Debit').map(acc => <option key={acc.id} value={acc.id}>{acc.bank} ({acc.classification})</option>)}
-          </select>
-        </div>
-      </div>
-
-      <div className="flex space-x-4 pt-4">
-        <button type="button" onClick={() => setShowSalaryModal(false)} className="flex-1 bg-gray-100 dark:bg-gray-800 py-4 rounded-2xl font-bold text-gray-500 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors">Cancel</button>
-        <button type="submit" className="flex-1 bg-green-600 text-white py-4 rounded-2xl font-bold hover:bg-green-700 shadow-xl shadow-green-100 dark:shadow-none transition-all">Record Income</button>
-      </div>
-    </form>
-  </div>
-</div>
-)}
-
-{/* Income Records Modal */}
-{showIncomeRecordsModal && (
-<div className="fixed inset-0 z-[150] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md animate-in fade-in" onClick={() => setShowIncomeRecordsModal(false)}>
-  <div className="bg-white dark:bg-gray-900 rounded-3xl w-full max-w-lg p-8 shadow-2xl relative max-h-[85vh] overflow-y-auto transition-colors" onClick={e => e.stopPropagation()}>
-    <button onClick={() => setShowIncomeRecordsModal(false)} className="absolute top-6 right-6 p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full transition-colors">
-      <X className="w-5 h-5 text-gray-400 dark:text-gray-500" />
-    </button>
-    <div className="flex items-center justify-between mb-6">
-      <div>
-        <h2 className="text-2xl font-black text-gray-900 dark:text-gray-100 mb-1">Income Records</h2>
-        <p className="text-gray-500 dark:text-gray-400 text-sm">{selectedMonth} {selectedYear}</p>
-      </div>
-      <button
-        onClick={() => {
-          setShowIncomeRecordsModal(false);
-          const debitAccounts = accounts.filter(a => a.type === 'Debit');
-          setSalaryFormData({
-            name: '',
-            amount: '',
-            date: new Date().toISOString().split('T')[0],
-            accountId: debitAccounts[0]?.id || ''
-          });
-          setShowSalaryModal(true);
-        }}
-        className="flex items-center gap-2 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 px-4 py-2 rounded-xl font-bold hover:bg-indigo-100 dark:hover:bg-indigo-900/50 transition-colors text-sm"
-      >
-        <Plus className="w-4 h-4" />
-        Add Income
-      </button>
-    </div>
-
-    {allIncomeTxs.length === 0 ? (
-      <div className="text-center py-8 text-gray-400 dark:text-gray-500 italic">No income records found.</div>
-    ) : (
-      <div className="space-y-4">
-        {allIncomeTxs.map(tx => {
-          const pmName = accounts.find(a => a.id === tx.payment_method_id)?.bank || tx.payment_method_id;
-          return (
-            <div key={tx.id} className="bg-gray-50 dark:bg-gray-800/50 rounded-2xl p-4 space-y-2 transition-colors">
-              <div className="flex justify-between items-start">
-                <div className="space-y-2 flex-1">
-                  <div className="flex justify-between">
-                    <span className="text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest">Name</span>
-                    <span className="text-sm font-bold text-gray-900 dark:text-gray-100">{tx.name}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest">Amount</span>
-                    <span className="text-sm font-bold text-green-600 dark:text-green-400">{formatCurrency(Math.abs(tx.amount))}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest">Deposit To</span>
-                    <span className="text-sm text-gray-700 dark:text-gray-300">{pmName}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest">Date</span>
-                    <span className="text-sm text-gray-700 dark:text-gray-300">{new Date(tx.date).toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' })}</span>
-                  </div>
-                </div>
-                <div className="flex flex-col items-end pl-4 space-y-2">
-                  <button
-                    onClick={() => { 
-                      setTransactionFormData({
-                        id: tx.id,
-                        name: tx.name,
-                        amount: Math.abs(tx.amount).toFixed(2),
-                        date: tx.date.split('T')[0],
-                        accountId: tx.payment_method_id,
-                        paymentScheduleId: tx.payment_schedule_id || '',
-                        transactionType: tx.transaction_type || 'cash_in'
-                      });
-                      setShowIncomeRecordsModal(false);
-                      setShowTransactionModal(true);
-                    }}
-                    className="text-[9px] font-black text-indigo-600 dark:text-indigo-400 uppercase tracking-widest border border-indigo-100 dark:border-indigo-900/30 px-2 py-1 rounded-lg hover:bg-indigo-50 dark:hover:bg-indigo-900/50 transition-colors"
-                  >
-                    Edit
-                  </button>
-                  <PinProtectedAction
-                    featureId="transaction_deletions"
-                    onVerified={async () => {
-                      try {
-                        const { error } = await deleteTransactionAndRevertSchedule(tx.id);
-                        if (error) throw error;
-
-                      const nameLower = tx.name.trim().toLowerCase();
-                      const isSalaryRecord = nameLower === 'salary' || nameLower === 'income';
-                      const actualSalaryParsed = parseFloat(actualSalary);
-                      if (isSalaryRecord || (!isNaN(actualSalaryParsed) && Math.abs(tx.amount) === actualSalaryParsed)) {
-                        setActualSalary('');
-                      }
-
-                        await reloadTransactions();
-                        if (onTransactionDeleted) onTransactionDeleted();
-                      } catch (err) {
-                        alert('Failed to delete transaction. Please try again.');
-                      }
-                    }}
-                    actionLabel="Delete Income Record"
-                  >
-                    <button
-                      onClick={(e) => e.preventDefault()}
-                      title="Delete income record"
-                      className="text-[9px] font-black text-red-500 dark:text-red-400 uppercase tracking-widest border border-red-100 dark:border-red-900/30 px-2 py-1 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/50 transition-colors"
-                    >
-                      Delete
-                    </button>
-                  </PinProtectedAction>
-                </div>
-              </div>
-            </div>
-          );
-        })}
-      </div>
-    )}
-  </div>
-</div>
-)}
-
-{confirmModal.show && <ConfirmDialog {...confirmModal} onClose={() => setConfirmModal(p => ({ ...p, show: false }))} />}
-</div>
-);
-}
-
-const ConfirmDialog: React.FC<{ show: boolean; title: string; message: string; onConfirm: () => void; onClose: () => void }> = ({ title, message, onConfirm, onClose }) => (
-<div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-in fade-in">
-<div className="bg-white dark:bg-gray-900 rounded-[2.5rem] w-full max-w-sm p-10 shadow-2xl animate-in zoom-in-95 flex flex-col items-center text-center transition-colors">
-  <div className="w-16 h-16 bg-red-50 dark:bg-red-900/20 text-red-600 rounded-3xl flex items-center justify-center mb-6">
-    <AlertTriangle className="w-8 h-8" />
-  </div>
-  <h3 className="text-xl font-black text-gray-900 dark:text-gray-100 mb-2 uppercase tracking-tight">{title}</h3>
-  <p className="text-sm text-gray-500 dark:text-gray-400 mb-8 font-medium leading-relaxed">{message}</p>
-  <div className="flex flex-col w-full space-y-3">
-    <button onClick={onConfirm} className="w-full bg-red-600 text-white py-4 rounded-2xl font-black uppercase tracking-widest text-[10px] hover:bg-red-700 transition-all">Proceed</button>
-    <button onClick={onClose} className="w-full bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-300 py-4 rounded-2xl font-black uppercase tracking-widest text-[10px] hover:bg-gray-200 dark:hover:bg-gray-700 transition-all">Cancel</button>
-  </div>
-</div>
-</div>
-);
-
-export default Budget;
+                            return (
+                              <tr key={`installment-${installment.id}`} className={`${isIncluded ? 'bg-blue-50/30 dark:bg-blue-900/10' : 'bg-gray-50 dark:bg-gray-800/50 opacity-60'}`}>
+                                <td className="p-4 pl-10">
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-sm font-bold text-gray-900 dark:text-gray-100">{installment.name}</span>
+                                    <span className="text-[9px] font-bold px-2 py-0.5 bg-blue-100 rounded text-blue-600">INSTALLMENT</span>
+                                  </div>
+                                </td>
+                                <td className="p-4">
+                                  <div className="flex items-center space-x-1">
+                                    <span className="text-gray-400 dark:text-gray-500 font-bold">₱</span>
+                                    <span className="text-sm font-black">{formatCurrency(installment.monthlyAmount).replace('₱', '')}</span>
+                                  </div>
+                                </td>
+                                <td className="p-4 text-center">
+                                  <div className="flex items-center justify-center space-x-2">
+                                    {isPaid ? (
+                                      <CheckCircle2 className="w-4 h-4 text-green-500" aria-label="Payment completed" title="Paid" />
+                                    ) : !isReadOnly && (
+                                      <button 
+                                        onClick={() => {
+                                          setTransactionFormData({ id: '', name: `${installment.name} - ${selectedMonth} ${selectedYear}`, date: new Date().toISOString().split('T')[0], amount: isPartial && installmentSchedule ? Math.max(0, installmentSchedule.expected_amount - installmentSchedule.amount_paid).toFixed(2) : installment.monthlyAmount.toFixed(2), accountId: installment.accountId || accounts[0]?.id || '', paymentScheduleId: installmentSchedule?.id || '' });
+                                          setShowTransactionModal(true);
+                                        }}
+                                        className="px-3 py-1 bg-indigo-600 text-white text-[9px] font-black uppercase rounded-lg hover:bg-indigo-700 transition-colors"
+                                      >
+                                        {isPartial ? 'Pay Remaining' : 'Pay'}
+                                      </button>
+                                    )}
+                                    {!isReadOnly && <button onClick={() => { setExcludedInstallmentIds(prev => { const newSet = new Set(prev); if (newSet.has(installment.id)) { newSet.delete(installment.id); } else { newSet.add(installment.id); } return newSet; }); }} className={`w-8 h-8 rounded-xl border-2 transition-all flex items-center justify-center ${isIncluded ? 'bg-indigo-600 border-indigo-600 text-white' : 'border-gray-200'}`}><Check className="w-4 h-4" /></button>}
+                                  </div>
+                                </td>
+                                <td className="p-4 pr-10 text-right">
+                                  {!isReadOnly && <button onClick={() => { setConfirmModal({ show: true, title: 'Exclude Installment', message: `Are you sure you want to exclude "${installment.name}" from this budget period?`, onConfirm: () => { setExcludedInstallmentIds(prev => new Set([...prev, installment.id])); setConfirmModal(prev => ({ ...prev, show: false })); } }); }} className="text-[9px] font-black text-red-500 uppercase tracking-widest border border-red-50 px-2 py-1 rounded-lg hover:bg-red-50 transition-colors">Exclude</button>}
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </>
+                      ) : (
+                        <tr>
+                          <td colSpan={4} className="p-8 text-center text-gray-400 text-sm font-medium">
+                            No items yet.
+                            {canAddItems && ' Click "Add Item" below to get started.'}
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
