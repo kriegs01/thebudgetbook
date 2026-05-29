@@ -7,8 +7,10 @@ This document unifies all parked ideas, feature enhancements, and architectural 
 ## ⏯️ Resumption Plan
 *Immediate next steps to finalize the UI transition.*
 
+- [ ] **Final Logo Polish:** Implement the final logo design: Titan One font in white with a black drop shadow. On splash screens, animate the logo text to cycle through the main accent colors before the app loads.
+- [ ] **Biller Modals Theming:** Apply the retro sticker theme to the "Edit Biller" and "Pay Schedule" modals to ensure a consistent user experience.
+- [ ] **Budget Page Layout:** Replicate Biller page's table/container margin/width for mobile consistency.
 - [ ] **Budget Setups Page UI:** Resume mobile optimization and implement card layout for all budget item categories.
-- [x] **Retro Sticker Theme:** Apply the retro sticker theme to the new card layout for the budget list.
 - [ ] **Persist Budget view state in URL** to prevent reset on reload.
 - [ ] **Mobile Top Padding:** Add spacing between the subtitle and top bar on mobile for `Billers`, `Installments`, `Accounts`, `Wallet`, `People`, and `Settings` pages to ensure visual consistency. *(Note: Partially implemented; needs to be applied to all pages.)*
 - [ ] **Retro Sticker Login Page:** Update the `Auth.tsx` layout and elements to match the heavy pop-art aesthetic.
@@ -71,6 +73,12 @@ This document unifies all parked ideas, feature enhancements, and architectural 
 ---
 
 ## ✅ Done
+- [x] **Biller View Page Overhaul:** Completely revamped the biller details page with the retro sticker theme.
+    - **Consistent Styling:** Applied the grayish card color and retro sticker buttons for a cohesive look.
+    - **Responsive Layout:** Ensured the biller details and payment schedule table are fully responsive and look great on all screen sizes.
+    - **Dynamic Theming:** The table header and other elements now react to the randomized accent color.
+    - **UI/UX Fixes:** Corrected button alignments, fixed the header title color issue, and improved overall layout and readability.
+    - **Design Documentation:** Created `Font Choice Options.md` to document typeface decisions.
 - [x] **Budget Setups Page (Partial):** Applied retro sticker theme to summary cards and fixed critical JSX rendering errors in `Budget.tsx`.
 - [x] **Card-Style Budget List:** Applied a card-based layout to the budget setups list on the Budget page, improving readability and visual organization on mobile.
 - [x] **Responsive Transaction Modals:** Ensured retro sticker-themed transaction modals (payment, loans, transfer) are proportionally sized on mobile, overlay the top bar, and do not cause horizontal scrolling.
