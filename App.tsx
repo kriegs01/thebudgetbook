@@ -43,6 +43,7 @@ import SettingsPage from './pages/Settings';
 import SupabaseDemo from './pages/SupabaseDemo';
 import Auth from './pages/Auth';
 import UpdatePassword from './pages/update-password';
+import GoalsPage from './pages/Goals';
 import { useTransactions } from './src/hooks/useTransactions';
 import { useAccounts } from './src/hooks/useAccounts';
 import { useIncomingRequests, useUnreadMessagesCount, socialKeys } from './src/hooks/useBudies';
@@ -1681,6 +1682,7 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
               <Route path="/accounts/statement" element={<StatementPage accounts={accounts} />} />
               <Route path="/wallets" element={<WalletsPage accounts={accounts} />} />
               <Route path="/wallets/view" element={<WalletView accounts={accounts} />} />
+              <Route path="/goals" element={<GoalsPage />} />
               <Route path="/settings" element={
                 <SettingsPage 
                   currency={currency}

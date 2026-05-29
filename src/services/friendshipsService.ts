@@ -77,6 +77,7 @@ export const getIncomingRequests = async () => {
     .from('friendships')
     .select(`
       id,
+      user_id,
       status,
       created_at,
       sender_profile:user_id ( first_name, last_name )
