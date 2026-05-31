@@ -1,8 +1,15 @@
-import React, { useRef, useState, useEffect } from 'react';
-import useMediaQuery from '../hooks/useMediaQuery';
-import { useTheme } from '../contexts/ThemeContext';
+import React, { useRef, useEffect, useState } from 'react';
+import useMediaQuery from '@/hooks/useMediaQuery';
+import { useTheme } from '@/contexts/ThemeContext';
 
-const PageHeader: React.FC<any> = ({ title, subtitle, icon, actions, backButton }) => {
+interface PageHeaderProps {
+  title: string;
+  subtitle: string;
+  icon?: React.ReactNode;
+  actions?: React.ReactNode;
+}
+
+const PageHeader: React.FC<PageHeaderProps> = ({ title, subtitle, icon, actions }) => {
   const { getAccentClasses } = useTheme();
   const isMobile = useMediaQuery('(max-width: 767px)');
   const titleContainerRef = useRef<HTMLDivElement>(null);
@@ -17,7 +24,6 @@ const PageHeader: React.FC<any> = ({ title, subtitle, icon, actions, backButton 
   return (
     <header className={`${isMobile ? 'pt-16' : 'pt-12'} flex flex-row items-center justify-between gap-6 mb-4`}>
       <div className="flex flex-1 items-center gap-6">
-        {backButton}
         <div className="flex-1">
           <div className="relative inline-block">
             <div ref={titleContainerRef} className="flex items-center gap-4">
@@ -33,12 +39,10 @@ const PageHeader: React.FC<any> = ({ title, subtitle, icon, actions, backButton 
               />
             )}
           </div>
-          <div className="flex items-center gap-3 mt-1 ml-1">
-            <p className="text-[clamp(1rem,3vw,1.25rem)] font-bold italic text-black/50 dark:text-gray-400 transition-colors duration-300">
-              {subtitle}
-            </p>
-          </div>
-          <div className={`h-2 w-32 mt-2 bg-black dark:bg-white/20 transition-colors duration-300`} />
+          <p className="text-[clamp(1rem,3vw,1.25rem)] font-bold italic text-black/50 dark:text-gray-400 mt-1 ml-1">
+            {subtitle}
+          </p>
+          <div className={`h-2 w-32 mt-2 bg-black dark:bg-white/20`} />
         </div>
       </div>
       {actions && <div className="flex items-center justify-end gap-3">{actions}</div>}

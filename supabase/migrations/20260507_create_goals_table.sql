@@ -12,3 +12,19 @@ ALTER TABLE goals
 
 ALTER TABLE goals
   ADD CONSTRAINT goals_user_id_fkey FOREIGN KEY (user_id) REFERENCES user_profiles (id) ON DELETE CASCADE;
+
+-- Enable Row Level Security
+ALTER TABLE goals ENABLE ROW LEVEL SECURITY;
+
+-- Add policies
+CREATE POLICY "Users can view their own goals" ON goals
+  FOR SELECT USING (auth.uid() = user_id);
+
+CREATE POLICY "Users can create their own goals" ON goals
+  FOR INSERT WITH CHECK (auth.uid() = user_id);
+
+CREATE POLICY "Users can update their own goals" ON goals
+  FOR UPDATE USING (auth.uid() = user_id);
+
+CREATE POLICY "Users can delete their own goals" ON goals
+  FOR DELETE USING (auth.uid() = user_id);
