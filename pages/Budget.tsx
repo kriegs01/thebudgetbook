@@ -1008,68 +1008,74 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
     itemName: string, 
     itemAmount: string | number, 
     month: string,
-    year?: number // Optional year parameter for viewing past budgets
+    year?: number,
+    timing?: '1/2' | '2/2'
   ): boolean => {
     const amount = typeof itemAmount === 'string' ? parseFloat(itemAmount) : itemAmount;
     if (isNaN(amount) || amount <= 0) return false;
 
-    // Get month index (0-11) for date comparison
     const monthIndex = MONTHS.indexOf(month);
     if (monthIndex === -1) return false;
 
-    // Determine target year (use provided year or current year)
     const targetYear = year || new Date().getFullYear();
 
-    // Find matching transaction
     const matchingTransaction = transactions.find(tx => {
-      // Check name match with minimum length requirement to avoid false positives
       const itemNameLower = itemName.toLowerCase();
       const txNameLower = tx.name.toLowerCase();
       
-      // Require at least TRANSACTION_MIN_NAME_LENGTH characters to match
       const nameMatch = (
         (txNameLower.includes(itemNameLower) && itemNameLower.length >= TRANSACTION_MIN_NAME_LENGTH) ||
         (itemNameLower.includes(txNameLower) && txNameLower.length >= TRANSACTION_MIN_NAME_LENGTH)
       );
       
-      // Check amount match (within tolerance)
       const amountMatch = Math.abs(tx.amount - amount) <= TRANSACTION_AMOUNT_TOLERANCE;
       
-      // Check date match with grace period for late payments
-      // Allow:
-      // 1. Transactions in the same month and year
-      // 2. Transactions in December of previous year (for January budgets)
-      // 3. Transactions within TRANSACTION_DATE_GRACE_DAYS after month ends
       const txDate = new Date(tx.date);
       const txMonth = txDate.getMonth();
       const txYear = txDate.getFullYear();
       
       let dateMatch = false;
+      let dateMatchType: 'same' | 'prev_dec_for_jan' | 'grace_next' | null = null;
       
-      // Same month and year
       if (txMonth === monthIndex && txYear === targetYear) {
         dateMatch = true;
+        dateMatchType = 'same';
       }
-      // December of previous year for January budgets
       else if (monthIndex === 0 && txMonth === 11 && txYear === targetYear - 1) {
         dateMatch = true;
+        dateMatchType = 'prev_dec_for_jan';
       }
-      // Within grace period after month ends (next month only, within first N days)
       else if (txMonth === (monthIndex + 1) % 12) {
         const budgetMonthEnd = new Date(targetYear, monthIndex + 1, 0); // Last day of budget month
         const daysDifference = Math.floor((txDate.getTime() - budgetMonthEnd.getTime()) / (1000 * 60 * 60 * 24));
         
-        // Ensure transaction is after month end and within grace period
         if (daysDifference > 0 && daysDifference <= TRANSACTION_DATE_GRACE_DAYS) {
-          // Handle year transition for December -> January
           const expectedYear = monthIndex === 11 ? targetYear + 1 : targetYear;
           if (txYear === expectedYear) {
             dateMatch = true;
+            dateMatchType = 'grace_next';
           }
         }
       }
 
-      return nameMatch && amountMatch && dateMatch;
+      const normalizedTxNotes = (tx.notes || '').toLowerCase();
+      const notesTimingMatch = normalizedTxNotes.match(/budget timing:\s*(1\/2|2\/2)/);
+      const notesTiming = notesTimingMatch?.[1] as ('1/2' | '2/2' | undefined);
+
+      let txTiming: '1/2' | '2/2' | undefined;
+      if (notesTiming) {
+        txTiming = notesTiming;
+      } else if (dateMatchType === 'same') {
+        txTiming = txDate.getDate() <= 15 ? '1/2' : '2/2';
+      } else if (dateMatchType === 'grace_next') {
+        txTiming = '2/2';
+      } else if (dateMatchType === 'prev_dec_for_jan') {
+        txTiming = '1/2';
+      }
+
+      const timingMatch = !timing || txTiming === timing;
+
+      return nameMatch && amountMatch && dateMatch && timingMatch;
     });
 
     if (matchingTransaction) {
@@ -1099,7 +1105,8 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
     itemName: string, 
     itemAmount: string | number, 
     month: string,
-    year?: number
+    year?: number,
+    timing?: '1/2' | '2/2'
   ): SupabaseTransaction | undefined => {
     const amount = typeof itemAmount === 'string' ? parseFloat(itemAmount) : itemAmount;
     if (isNaN(amount) || amount <= 0) return undefined;
@@ -1124,10 +1131,45 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
       const txMonth = txDate.getMonth();
       const txYear = txDate.getFullYear();
       
-      const dateMatch = (txMonth === monthIndex) && 
-                       (txYear === targetYear || txYear === targetYear - 1);
+      let dateMatch = false;
+      let dateMatchType: 'same' | 'prev_dec_for_jan' | 'grace_next' | null = null;
 
-      return nameMatch && amountMatch && dateMatch;
+      if (txMonth === monthIndex && txYear === targetYear) {
+        dateMatch = true;
+        dateMatchType = 'same';
+      } else if (monthIndex === 0 && txMonth === 11 && txYear === targetYear - 1) {
+        dateMatch = true;
+        dateMatchType = 'prev_dec_for_jan';
+      } else if (txMonth === (monthIndex + 1) % 12) {
+        const budgetMonthEnd = new Date(targetYear, monthIndex + 1, 0);
+        const daysDifference = Math.floor((txDate.getTime() - budgetMonthEnd.getTime()) / (1000 * 60 * 60 * 24));
+        if (daysDifference > 0 && daysDifference <= TRANSACTION_DATE_GRACE_DAYS) {
+          const expectedYear = monthIndex === 11 ? targetYear + 1 : targetYear;
+          if (txYear === expectedYear) {
+            dateMatch = true;
+            dateMatchType = 'grace_next';
+          }
+        }
+      }
+
+      const normalizedTxNotes = (tx.notes || '').toLowerCase();
+      const notesTimingMatch = normalizedTxNotes.match(/budget timing:\s*(1\/2|2\/2)/);
+      const notesTiming = notesTimingMatch?.[1] as ('1/2' | '2/2' | undefined);
+
+      let txTiming: '1/2' | '2/2' | undefined;
+      if (notesTiming) {
+        txTiming = notesTiming;
+      } else if (dateMatchType === 'same') {
+        txTiming = txDate.getDate() <= 15 ? '1/2' : '2/2';
+      } else if (dateMatchType === 'grace_next') {
+        txTiming = '2/2';
+      } else if (dateMatchType === 'prev_dec_for_jan') {
+        txTiming = '1/2';
+      }
+
+      const timingMatch = !timing || txTiming === timing;
+
+      return nameMatch && amountMatch && dateMatch && timingMatch;
     });
   }, [transactions]);
 
@@ -1616,7 +1658,8 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
             name: transactionFormData.name,
             date: combineDateWithCurrentTime(transactionFormData.date),
             amount: finalAmount,
-            paymentMethodId: transactionFormData.accountId
+            paymentMethodId: transactionFormData.accountId,
+            notes: `Budget Timing: ${selectedTiming}`
           }
         );
         transactionData = result.data;
@@ -1665,7 +1708,8 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
           name: transactionFormData.name,
           date: combineDateWithCurrentTime(transactionFormData.date),
           amount: finalAmount,
-          payment_method_id: transactionFormData.accountId
+          payment_method_id: transactionFormData.accountId,
+          notes: `Budget Timing: ${selectedTiming}`
         };
         const result = await createTransaction(transaction);
         transactionData = result.data;
@@ -1744,7 +1788,8 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
           name: `${biller.name} - ${schedule.month} ${schedule.year}`,
           date: combineDateWithCurrentTime(payFormData.datePaid),
           amount: parseFloat(payFormData.amount),
-          payment_method_id: payFormData.accountId
+          payment_method_id: payFormData.accountId,
+          notes: `Budget Timing: ${selectedTiming}`
         };
         const result = await updateTransaction(payFormData.transactionId, transaction);
         transactionData = result.data;
@@ -1758,7 +1803,8 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
             name: `${biller.name} - ${schedule.month} ${schedule.year}`,
             date: combineDateWithCurrentTime(payFormData.datePaid),
             amount: parseFloat(payFormData.amount),
-            paymentMethodId: payFormData.accountId
+            paymentMethodId: payFormData.accountId,
+            notes: `Budget Timing: ${selectedTiming}`
           }
         );
         transactionData = result.data;
@@ -1773,7 +1819,8 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
           name: `${biller.name} - ${schedule.month} ${schedule.year}`,
           date: combineDateWithCurrentTime(payFormData.datePaid),
           amount: parseFloat(payFormData.amount),
-          payment_method_id: payFormData.accountId
+          payment_method_id: payFormData.accountId,
+          notes: `Budget Timing: ${selectedTiming}`
         };
         const result = await createTransaction(transaction);
         transactionData = result.data;
@@ -2874,6 +2921,8 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                       let isPaid = false, isPartial = false, linkedBiller, paymentSchedule;
                       const isBiller = item.isBiller || billers.some(b => b.id === item.id);
                       
+                      const effectiveTiming = (item.timing as any) || selectedTiming;
+
                       if (isBiller) {
                         linkedBiller = billers.find(b => b.id === item.id);
                         
@@ -2901,14 +2950,14 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                           }
                         } else {
                           // Fallback to transaction matching if no schedule found
-                          isPaid = checkIfPaidByTransaction(item.name, item.amount, selectedMonth);
+                          isPaid = checkIfPaidByTransaction(item.name, item.amount, selectedMonth, selectedYear, effectiveTiming);
                           if (isPaid) {
                             console.log(`[Budget] Item ${item.name} in ${selectedMonth}: PAID via transaction matching (no payment schedule)`);
                           }
                         }
                       } else {
                         // For non-biller items (like Purchases), only check transactions
-                        isPaid = checkIfPaidByTransaction(item.name, item.amount, selectedMonth);
+                        isPaid = checkIfPaidByTransaction(item.name, item.amount, selectedMonth, selectedYear, effectiveTiming);
                       }
                       return (
                         <tr key={item.id} className={`${item.included ? 'bg-white dark:bg-gray-900' : 'bg-gray-50 dark:bg-gray-800/50 opacity-60'}`}>
@@ -2998,7 +3047,7 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                                 isPaid ? (
                                   <>
                                     <CheckCircle2 className="w-4 h-4 text-green-500" aria-label="Payment completed" title="Paid" />
-                                    <button onClick={() => { const tx = findExistingTransaction(item.name, item.amount, selectedMonth); if (tx) openDirectPaymentModal(tx, `${item.name} - ${selectedMonth}`); }} title="View payment records" className="text-gray-400 hover:text-indigo-600 transition-colors rounded-full p-1 hover:bg-indigo-50"><Info className="w-3.5 h-3.5" /></button>
+                                    <button onClick={() => { const tx = findExistingTransaction(item.name, item.amount, selectedMonth, selectedYear, effectiveTiming); if (tx) openDirectPaymentModal(tx, `${item.name} - ${selectedMonth}`); }} title="View payment records" className="text-gray-400 hover:text-indigo-600 transition-colors rounded-full p-1 hover:bg-indigo-50"><Info className="w-3.5 h-3.5" /></button>
                                   </>
                                 ) : !isReadOnly ? (
                                   <button 
@@ -3093,7 +3142,7 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                           
                           // Fallback transaction lookup for Info button when no payment schedule exists
                           const fallbackInstallmentTx = !installmentSchedule && (isPaid || isPartial)
-                            ? findExistingTransaction(installment.name, installment.monthlyAmount, selectedMonth)
+                            ? findExistingTransaction(installment.name, installment.monthlyAmount, selectedMonth, selectedYear, installment.timing ?? undefined)
                             : undefined;
 
                           // Unified Info button click handler (schedule-based or fallback transaction)
