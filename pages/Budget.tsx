@@ -2362,7 +2362,12 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                           return (
                             <tr key={item.id} className={`${item.included ? 'bg-white dark:bg-gray-900' : 'bg-gray-50 dark:bg-gray-800/50 opacity-60'}`}>
                               <td className="p-4 pl-10"><input type="text" value={item.name} onChange={(e) => handleSetupUpdate(cat.name, item.id, 'name', e.target.value)} disabled={isReadOnly} className="bg-transparent border-none text-sm font-bold w-full outline-none focus:bg-gray-100 dark:focus:bg-gray-800 rounded p-1 dark:text-gray-100" /></td>
-                              <td className="p-4 text-sm font-black">₱ {parseFloat(item.amount).toFixed(2)}</td>
+                              <td className="p-4">
+                                <div className="flex items-center space-x-1">
+                                  <span className="text-gray-400 dark:text-gray-500 font-bold">₱</span>
+                                  <input type="number" value={item.amount} onChange={(e) => handleSetupUpdate(cat.name, item.id, 'amount', e.target.value)} onFocus={() => { isFocusedRef.current = true; }} onBlur={() => { isFocusedRef.current = false; }} disabled={isReadOnly} className="bg-transparent border-none text-sm font-black w-24 outline-none dark:text-gray-100" />
+                                </div>
+                              </td>
                               <td className="p-4 text-center">
                                 <div className="flex items-center justify-center space-x-2">
                                   {isBillerItem && (isPaid ? (
