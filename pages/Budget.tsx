@@ -841,7 +841,8 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
     itemName: string, 
     itemAmount: string | number, 
     month: string,
-    year?: number
+    year?: number,
+    timing?: '1/2' | '2/2'
   ): boolean => {
     const amount = typeof itemAmount === 'string' ? parseFloat(itemAmount) : itemAmount;
     if (isNaN(amount) || amount <= 0) return false;
@@ -867,25 +868,44 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
       const txYear = txDate.getFullYear();
       
       let dateMatch = false;
+      let dateMatchType: 'same' | 'prev_dec_for_jan' | 'grace_next' | null = null;
       
       if (txMonth === monthIndex && txYear === targetYear) {
         dateMatch = true;
-      }
-      else if (monthIndex === 0 && txMonth === 11 && txYear === targetYear - 1) {
+        dateMatchType = 'same';
+      } else if (monthIndex === 0 && txMonth === 11 && txYear === targetYear - 1) {
         dateMatch = true;
-      }
-      else if (txMonth === (monthIndex + 1) % 12) {
+        dateMatchType = 'prev_dec_for_jan';
+      } else if (txMonth === (monthIndex + 1) % 12) {
         const budgetMonthEnd = new Date(targetYear, monthIndex + 1, 0);
         const daysDifference = Math.floor((txDate.getTime() - budgetMonthEnd.getTime()) / (1000 * 60 * 60 * 24));
         if (daysDifference > 0 && daysDifference <= TRANSACTION_DATE_GRACE_DAYS) {
           const expectedYear = monthIndex === 11 ? targetYear + 1 : targetYear;
           if (txYear === expectedYear) {
             dateMatch = true;
+            dateMatchType = 'grace_next';
           }
         }
       }
 
-      return nameMatch && amountMatch && dateMatch;
+      const normalizedTxNotes = (tx.notes || '').toLowerCase();
+      const notesTimingMatch = normalizedTxNotes.match(/budget timing:\s*(1\/2|2\/2)/);
+      const notesTiming = notesTimingMatch?.[1] as ('1/2' | '2/2' | undefined);
+
+      let txTiming: '1/2' | '2/2' | undefined;
+      if (notesTiming) {
+        txTiming = notesTiming;
+      } else if (dateMatchType === 'same') {
+        txTiming = txDate.getDate() <= 15 ? '1/2' : '2/2';
+      } else if (dateMatchType === 'grace_next') {
+        txTiming = '2/2';
+      } else if (dateMatchType === 'prev_dec_for_jan') {
+        txTiming = '1/2';
+      }
+
+      const timingMatch = !timing || txTiming === timing;
+
+      return nameMatch && amountMatch && dateMatch && timingMatch;
     });
 
     return !!matchingTransaction;
@@ -1201,7 +1221,8 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
           name: transactionFormData.name,
           date: combineDateWithCurrentTime(transactionFormData.date),
           amount: finalAmount,
-          payment_method_id: transactionFormData.accountId
+          payment_method_id: transactionFormData.accountId,
+          notes: `Budget Timing: ${selectedTiming}`
         };
         const result = await updateTransactionAndSyncSchedule(transactionFormData.id, transaction);
         transactionData = result.data;
@@ -1213,7 +1234,8 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
             name: transactionFormData.name,
             date: combineDateWithCurrentTime(transactionFormData.date),
             amount: finalAmount,
-            paymentMethodId: transactionFormData.accountId
+            paymentMethodId: transactionFormData.accountId,
+            notes: `Budget Timing: ${selectedTiming}`
           }
         );
         transactionData = result.data;
@@ -1252,7 +1274,8 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
           name: transactionFormData.name,
           date: combineDateWithCurrentTime(transactionFormData.date),
           amount: finalAmount,
-          payment_method_id: transactionFormData.accountId
+          payment_method_id: transactionFormData.accountId,
+          notes: `Budget Timing: ${selectedTiming}`
         };
         const result = await createTransaction(transaction);
         transactionData = result.data;
@@ -1315,7 +1338,8 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
           name: `${biller.name} - ${schedule.month} ${schedule.year}`,
           date: combineDateWithCurrentTime(payFormData.datePaid),
           amount: parseFloat(payFormData.amount),
-          payment_method_id: payFormData.accountId
+          payment_method_id: payFormData.accountId,
+          notes: `Budget Timing: ${selectedTiming}`
         };
         const result = await updateTransaction(payFormData.transactionId, transaction);
         transactionData = result.data;
@@ -1327,7 +1351,8 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
             name: `${biller.name} - ${schedule.month} ${schedule.year}`,
             date: combineDateWithCurrentTime(payFormData.datePaid),
             amount: parseFloat(payFormData.amount),
-            paymentMethodId: payFormData.accountId
+            paymentMethodId: payFormData.accountId,
+            notes: `Budget Timing: ${selectedTiming}`
           }
         );
         transactionData = result.data;
@@ -1337,7 +1362,8 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
           name: `${biller.name} - ${schedule.month} ${schedule.year}`,
           date: combineDateWithCurrentTime(payFormData.datePaid),
           amount: parseFloat(payFormData.amount),
-          payment_method_id: payFormData.accountId
+          payment_method_id: payFormData.accountId,
+          notes: `Budget Timing: ${selectedTiming}`
         };
         const result = await createTransaction(transaction);
         transactionData = result.data;
@@ -2179,6 +2205,7 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                     {items.length > 0 && items.map((item) => {
                       let isPaid = false, isPartial = false, linkedBiller, paymentSchedule;
                       const isBillerItem = item.isBiller || billers.some(b => b.id === item.id);
+                      const effectiveTiming = (item.timing as any) || selectedTiming;
                       if (isBillerItem) {
                         linkedBiller = billers.find(b => b.id === item.id);
                         paymentSchedule = getPaymentSchedule('biller', item.id, selectedMonth, selectedYear);
@@ -2186,10 +2213,10 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                           isPaid = checkIfPaidBySchedule('biller', item.id);
                           isPartial = checkIfPartialBySchedule('biller', item.id);
                         } else {
-                          isPaid = checkIfPaidByTransaction(item.name, item.amount, selectedMonth);
+                          isPaid = checkIfPaidByTransaction(item.name, item.amount, selectedMonth, selectedYear, effectiveTiming);
                         }
                       } else {
-                        isPaid = checkIfPaidByTransaction(item.name, item.amount, selectedMonth);
+                        isPaid = checkIfPaidByTransaction(item.name, item.amount, selectedMonth, selectedYear, effectiveTiming);
                       }
                       return (
                         <div key={item.id} className={`p-4 rounded-xl border-2 border-black bg-white dark:bg-gray-800 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] flex flex-col gap-3 transition-all ${item.included ? 'opacity-100' : 'opacity-60 bg-gray-50'}`}>
@@ -2207,6 +2234,7 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                             <div className="flex items-center space-x-2">
                               {isBillerItem && isPaid && <CheckCircle2 className="w-4 h-4 text-green-500" />}
                               {isBillerItem && isPartial && <span className="text-[9px] font-black bg-yellow-100 text-yellow-700 px-1.5 py-0.5 rounded border border-black">Partial</span>}
+                              {!isBillerItem && isPaid && <CheckCircle2 className="w-4 h-4 text-green-500" />}
                             </div>
                           </div>
                           <div className="flex items-center justify-end space-x-2 pt-2 border-t border-gray-100 dark:border-gray-700">
@@ -2234,6 +2262,25 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                                 className="px-3 py-1.5 bg-indigo-600 text-white text-[10px] font-black uppercase rounded-xl border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[1px] hover:translate-y-[1px] transition-all"
                               >
                                 {isPartial ? 'Pay Remaining' : 'Pay'}
+                              </button>
+                            )}
+                            {!isBillerItem && !isPaid && !isReadOnly && (cat.flexiMode ?? true) && item.name !== 'New Item' && parseFloat(item.amount) > 0 && (
+                              <button
+                                onClick={() => {
+                                  setTransactionFormData({
+                                    id: '',
+                                    name: item.name,
+                                    date: new Date().toISOString().split('T')[0],
+                                    amount: item.amount,
+                                    accountId: accounts[0]?.id || '',
+                                    paymentScheduleId: '',
+                                    transactionType: 'cash_out'
+                                  });
+                                  setShowTransactionModal(true);
+                                }}
+                                className="px-3 py-1.5 bg-indigo-600 text-white text-[10px] font-black uppercase rounded-xl border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[1px] hover:translate-y-[1px] transition-all"
+                              >
+                                Pay
                               </button>
                             )}
                             {!isReadOnly && (
@@ -2299,6 +2346,7 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                         {items.length > 0 ? items.map((item) => {
                           let isPaid = false, isPartial = false, linkedBiller, paymentSchedule;
                           const isBillerItem = item.isBiller || billers.some(b => b.id === item.id);
+                          const effectiveTiming = (item.timing as any) || selectedTiming;
                           if (isBillerItem) {
                             linkedBiller = billers.find(b => b.id === item.id);
                             paymentSchedule = getPaymentSchedule('biller', item.id, selectedMonth, selectedYear);
@@ -2306,10 +2354,10 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                               isPaid = checkIfPaidBySchedule('biller', item.id);
                               isPartial = checkIfPartialBySchedule('biller', item.id);
                             } else {
-                              isPaid = checkIfPaidByTransaction(item.name, item.amount, selectedMonth);
+                              isPaid = checkIfPaidByTransaction(item.name, item.amount, selectedMonth, selectedYear, effectiveTiming);
                             }
                           } else {
-                            isPaid = checkIfPaidByTransaction(item.name, item.amount, selectedMonth);
+                            isPaid = checkIfPaidByTransaction(item.name, item.amount, selectedMonth, selectedYear, effectiveTiming);
                           }
                           return (
                             <tr key={item.id} className={`${item.included ? 'bg-white dark:bg-gray-900' : 'bg-gray-50 dark:bg-gray-800/50 opacity-60'}`}>
@@ -2360,6 +2408,29 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                                       )}
                                       </>
                                     )
+                                  )}
+                                  {!isBillerItem && (cat.flexiMode ?? true) && item.name !== 'New Item' && parseFloat(item.amount) > 0 && (
+                                    isPaid ? (
+                                      <CheckCircle2 className="w-4 h-4 text-green-500" aria-label="Payment completed" title="Paid" />
+                                    ) : !isReadOnly ? (
+                                      <button
+                                        onClick={() => {
+                                          setTransactionFormData({
+                                            id: '',
+                                            name: item.name,
+                                            date: new Date().toISOString().split('T')[0],
+                                            amount: item.amount,
+                                            accountId: accounts[0]?.id || '',
+                                            paymentScheduleId: '',
+                                            transactionType: 'cash_out'
+                                          });
+                                          setShowTransactionModal(true);
+                                        }}
+                                        className="px-3 py-1.5 bg-indigo-600 text-white text-[10px] font-black uppercase rounded-xl border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[1px] hover:translate-y-[1px] transition-all"
+                                      >
+                                        Pay
+                                      </button>
+                                    ) : null
                                   )}
                                   {!isReadOnly && <button onClick={() => handleSetupToggle(cat.name, item.id)} className={`w-8 h-8 rounded-xl border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[0.5px] hover:translate-y-[0.5px] transition-all flex items-center justify-center ${item.included ? 'bg-indigo-600 border-indigo-600 text-white' : 'text-transparent border-gray-200'}`}><Check className="w-4 h-4" /></button>}
                                 </div>

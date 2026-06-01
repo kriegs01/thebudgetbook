@@ -25,7 +25,9 @@ export const SetupWizard: React.FC<SetupWizardProps> = ({ onComplete }) => {
     setCats([...cats, { 
       id: Math.random().toString(36).substring(2, 9), 
       name: newCat.trim(), 
-      subcategories: [] 
+      subcategories: [],
+      active: true,
+      flexiMode: true
     }]);
     setNewCat('');
   };

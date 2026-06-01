@@ -672,6 +672,7 @@ export const createPaymentScheduleTransaction = async (
     date: string;
     amount: number;
     paymentMethodId: string;
+    notes?: string | null;
   }
 ) => {
   try {
@@ -684,6 +685,7 @@ export const createPaymentScheduleTransaction = async (
       amount: transaction.amount,
       payment_method_id: transaction.paymentMethodId,
       payment_schedule_id: scheduleId,
+      notes: transaction.notes ?? null,
     };
 
     const { data, error } = await supabase
