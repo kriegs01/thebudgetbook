@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import useMediaQuery from '../src/hooks/useMediaQuery';
 import { Link } from 'react-router-dom';
 import { PinProtectedAction } from '../src/components/PinProtectedAction';
 import { Account, ViewMode, AccountClassification } from '../types';
@@ -51,9 +52,10 @@ const PageHeader: React.FC<{
   backButton?: React.ReactNode;
 }> = ({ title, subtitle, icon, actions, backButton }) => {
   const { getAccentClasses } = useTheme();
+  const isMobile = useMediaQuery('(max-width: 767px)');
   
   return (
-    <header className="pt-12 mb-4 flex flex-row items-center justify-between gap-6">
+    <header className={`${isMobile ? 'pt-16' : 'pt-12'} flex flex-row items-center justify-between gap-6 mb-4`}>
       <div className="flex flex-1 items-center gap-6">
         {backButton}
         <div className="flex-1">

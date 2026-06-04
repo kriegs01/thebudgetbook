@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import useMediaQuery from '../src/hooks/useMediaQuery';
 import { Installment, Account, ViewMode, Biller } from '../types';
 import { Plus, LayoutGrid, List, Calendar, Wallet, Trash2, X, Upload, AlertTriangle, Edit2, Eye, MoreVertical, Info, ZoomIn, ZoomOut, Download, Archive, CheckCircle2, ChevronDown } from 'lucide-react';
 import { PinProtectedAction } from '../src/components/PinProtectedAction';
@@ -40,9 +41,10 @@ const PageHeader: React.FC<{
   backButton?: React.ReactNode;
 }> = ({ title, subtitle, icon, actions, backButton }) => {
   const { getAccentClasses } = useTheme();
+  const isMobile = useMediaQuery('(max-width: 767px)');
   
   return (
-    <header className="pt-12 mb-4 flex flex-row items-center justify-between gap-6">
+    <header className={`${isMobile ? 'pt-16' : 'pt-12'} flex flex-row items-center justify-between gap-6 mb-4`}>
       <div className="flex flex-1 items-center gap-6">
         {backButton}
         <div className="flex-1">

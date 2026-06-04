@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import useMediaQuery from '../src/hooks/useMediaQuery';
 import { Users, Plus, LayoutGrid, List, MoreVertical, Trash2, ArrowRight, ArrowLeft, X, AlertTriangle, User, Landmark, ArrowUpFromLine, ArrowDownToLine, ArrowLeftRight, BanknoteArrowDown, ChevronDown, ChevronUp, Edit2, Search, UserPlus, CheckSquare, Clock, RefreshCw, Check, MessageCircle } from 'lucide-react';
 import { createPerson, deletePerson } from '../src/services/peopleService';
 import { getAllTransactions, createTransaction, deleteTransaction, updateTransaction, getUnsyncedHistoricalTransactionsCount, getUnsyncedHistoricalTransactions, syncSpecificHistoricalTransactions } from '../src/services/transactionsService';
@@ -24,9 +25,10 @@ const PageHeader: React.FC<{
   backButton?: React.ReactNode;
 }> = ({ title, subtitle, icon, actions, backButton }) => {
   const { getAccentClasses } = useTheme();
+  const isMobile = useMediaQuery('(max-width: 767px)');
   
   return (
-    <header className="pt-12 mb-4 flex flex-row items-center justify-between gap-6">
+    <header className={`${isMobile ? 'pt-16' : 'pt-12'} flex flex-row items-center justify-between gap-6 mb-4`}>
       <div className="flex flex-1 items-center gap-6">
         {backButton}
         <div className="flex-1">
