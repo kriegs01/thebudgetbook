@@ -801,10 +801,10 @@ const Installments: React.FC<InstallmentsProps> = ({ installments, accounts, bil
               View
             </button>
             {!archived && (
-              isFullyPaid ? (
+                isFullyPaid ? (
                 <button 
                   onClick={() => { setShowCloseModal(item); setCloseTagging('completed'); }}
-                  className="bg-amber-500 text-white px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest hover:bg-amber-600 transition-all"
+                  className="bg-amber-500 text-white px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest hover:bg-amber-600 transition-all border-2 border-black shadow-[2px_2px_0px_rgba(0,0,0,1)]"
                 >
                   Close
                 </button>
@@ -821,7 +821,7 @@ const Installments: React.FC<InstallmentsProps> = ({ installments, accounts, bil
                       accountId: defaultNonCreditAccountId
                     });
                   }}
-                  className="bg-indigo-600 text-white px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest hover:bg-indigo-700 transition-all"
+                  className="bg-indigo-600 text-white px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest hover:bg-indigo-700 transition-all border-2 border-black shadow-[2px_2px_0px_rgba(0,0,0,1)]"
                 >
                   Pay
                 </button>
@@ -945,7 +945,7 @@ const Installments: React.FC<InstallmentsProps> = ({ installments, accounts, bil
       {isMobile && (
         <div className="flex justify-end mb-4">
           <div className="flex items-center gap-3">
-            <div className="flex items-center bg-gray-50 dark:bg-gray-800 rounded-xl p-1 space-x-1 transition-colors">
+            <div className="flex items-center bg-gray-50 dark:bg-gray-800 rounded-xl p-1 space-x-1 transition-colors border-2 border-black shadow-[2px_2px_0px_rgba(0,0,0,1)]">
               <button 
                 onClick={() => setViewMode('card')}
                 className={`p-2 rounded-lg transition-colors ${viewMode === 'card' ? 'bg-white dark:bg-gray-700 shadow-sm text-indigo-600 dark:text-indigo-400' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'}`}
@@ -963,7 +963,7 @@ const Installments: React.FC<InstallmentsProps> = ({ installments, accounts, bil
             </div>
             <button 
               onClick={() => setShowModal(true)}
-                className={`flex items-center gap-2 text-white px-4 py-3 rounded-xl font-bold transition-all shadow-md dark:shadow-none text-sm ${getAccentClasses('bg')} ${getAccentClasses('shadow')}`}
+                className={`flex items-center gap-2 text-white px-4 py-3 rounded-xl font-bold transition-all text-sm ${getAccentClasses('bg')} ${getAccentClasses('shadow')} border-[3px] border-black shadow-[4px_4px_0px_rgba(0,0,0,1)] -rotate-3 hover:rotate-0 hover:scale-105`}
             >
               <Plus className="w-4 h-4" />
             </button>
@@ -1164,11 +1164,11 @@ const Installments: React.FC<InstallmentsProps> = ({ installments, accounts, bil
       {/* Standardized Modals */}
       {showPayModal && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md animate-in fade-in">
-          <div className="bg-white dark:bg-gray-900 rounded-3xl w-full max-w-md p-10 shadow-2xl animate-in zoom-in-95 relative transition-colors">
-            <button onClick={closePayModal} className="absolute right-6 top-6 p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full transition-colors">
+          <div className="bg-white dark:bg-gray-900 rounded-3xl w-full max-w-md p-10 shadow-2xl animate-in zoom-in-95 relative transition-colors border-2 border-black shadow-[6px_6px_0px_rgba(0,0,0,1)]">
+            <button onClick={closePayModal} className="absolute right-6 top-6 p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full transition-colors border-2 border-black shadow-[2px_2px_0px_rgba(0,0,0,1)]">
               <X className="w-6 h-6 text-gray-400 dark:text-gray-500" />
             </button>
-            <h2 className="text-2xl font-black text-gray-900 dark:text-gray-100 mb-2 transition-colors">Pay {showPayModal.name}</h2>
+            <h2 className="text-2xl font-titan normal-case tracking-tighter leading-none [text-shadow:-1px_-1px_0_#000,1px_-1px_0_#000,-1px_1px_0_#000,1px_1px_0_#000] drop-shadow-[3px_3px_0px_#000] mb-2">Pay {showPayModal.name}</h2>
             <p className="text-gray-500 dark:text-gray-400 text-sm mb-8 transition-colors">Recording a monthly installment payment</p>
             <form onSubmit={handlePaySubmit} className="space-y-6">
               <div>
@@ -1204,8 +1204,8 @@ const Installments: React.FC<InstallmentsProps> = ({ installments, accounts, bil
               </div>
 
               <div className="flex space-x-4 pt-4">
-                <button type="button" onClick={closePayModal} className="flex-1 bg-gray-100 dark:bg-gray-800 py-4 rounded-2xl font-bold text-gray-500 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors">Cancel</button>
-                <button type="submit" className="flex-1 bg-green-600 text-white py-4 rounded-2xl font-bold hover:bg-green-700 shadow-xl shadow-green-100 dark:shadow-none transition-all active:scale-95">Record Payment</button>
+                <button type="button" onClick={closePayModal} className="flex-1 bg-gray-100 dark:bg-gray-800 py-4 rounded-2xl font-bold text-gray-500 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors border-2 border-black shadow-[2px_2px_0px_rgba(0,0,0,1)]">Cancel</button>
+                <button type="submit" className="flex-1 bg-green-600 text-white py-4 rounded-2xl font-bold hover:bg-green-700 shadow-xl shadow-green-100 dark:shadow-none transition-all active:scale-95 border-2 border-black shadow-[4px_4px_0px_rgba(0,0,0,1)]">Record Payment</button>
               </div>
             </form>
           </div>
@@ -1381,7 +1381,7 @@ const Installments: React.FC<InstallmentsProps> = ({ installments, accounts, bil
                 <div className="space-y-2">
                   <h3 className="text-sm font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-4 transition-colors">Payment Schedule</h3>
                   {schedule.map((item, index) => (
-                    <div key={index} className={`flex items-center justify-between p-4 rounded-xl border transition-all ${
+                    <div key={index} className={`flex items-center justify-between p-4 rounded-xl border-2 border-black shadow-[2px_2px_0px_rgba(0,0,0,1)] transition-all ${
                       item.isPaid 
                         ? 'bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800/30' 
                         : item.isPartial 
@@ -1410,7 +1410,7 @@ const Installments: React.FC<InstallmentsProps> = ({ installments, accounts, bil
                           <button
                             onClick={() => openSchedulePaymentsModal(item.scheduleId!, item.month)}
                             title="View payment records"
-                            className="text-gray-400 dark:text-gray-500 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors rounded-full p-1 hover:bg-indigo-50 dark:hover:bg-indigo-900/30"
+                            className="text-gray-400 dark:text-gray-500 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors rounded-full p-1 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 border-2 border-black shadow-[2px_2px_0px_rgba(0,0,0,1)]"
                           >
                             <Info className="w-4 h-4" />
                           </button>
@@ -1430,7 +1430,7 @@ const Installments: React.FC<InstallmentsProps> = ({ installments, accounts, bil
                                 accountId: defaultNonCreditAccountId
                               });
                             }}
-                            className="bg-indigo-600 text-white px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest hover:bg-indigo-700 transition-all"
+                            className="bg-indigo-600 text-white px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest hover:bg-indigo-700 transition-all border-2 border-black shadow-[2px_2px_0px_rgba(0,0,0,1)]"
                           >
                             Pay
                           </button>
@@ -1454,9 +1454,9 @@ const Installments: React.FC<InstallmentsProps> = ({ installments, accounts, bil
       {/* Schedule Payments Modal */}
       {schedulePaymentsModal && (
         <div className="fixed inset-0 z-[150] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md" onClick={() => setSchedulePaymentsModal(null)}>
-          <div className="w-full max-w-lg bg-white rounded-3xl p-8 shadow-2xl relative max-h-[85vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
-            <button onClick={() => setSchedulePaymentsModal(null)} className="absolute top-4 right-4 text-gray-400 hover:text-gray-700 p-2 rounded-full hover:bg-gray-100 transition-colors" aria-label="Close"><X className="w-5 h-5" /></button>
-            <h2 className="text-2xl font-black text-gray-900 mb-1">Payment Records</h2>
+          <div className="w-full max-w-lg bg-white rounded-3xl p-8 shadow-2xl relative max-h-[85vh] overflow-y-auto border-2 border-black shadow-[6px_6px_0px_rgba(0,0,0,1)]" onClick={e => e.stopPropagation()}>
+            <button onClick={() => setSchedulePaymentsModal(null)} className="absolute top-4 right-4 text-gray-400 hover:text-gray-700 p-2 rounded-full hover:bg-gray-100 transition-colors border-2 border-black shadow-[2px_2px_0px_rgba(0,0,0,1)]" aria-label="Close"><X className="w-5 h-5" /></button>
+            <h2 className="text-2xl font-titan normal-case tracking-tighter leading-none [text-shadow:-1px_-1px_0_#000,1px_-1px_0_#000,-1px_1px_0_#000,1px_1px_0_#000] drop-shadow-[3px_3px_0px_#000] mb-1">Payment Records</h2>
             <p className="text-gray-500 text-sm mb-6">{schedulePaymentsModal.month}</p>
             {loadingScheduleTx ? (
               <div className="text-center py-8 text-gray-400">Loading...</div>
@@ -1468,7 +1468,7 @@ const Installments: React.FC<InstallmentsProps> = ({ installments, accounts, bil
                   const pmName = accounts.find(a => a.id === tx.paymentMethodId)?.bank || tx.paymentMethodId;
                   const signedUrl = scheduleSignedUrls[tx.id];
                   return (
-                    <div key={tx.id} className="bg-gray-50 rounded-2xl p-4 space-y-2">
+                    <div key={tx.id} className="bg-gray-50 rounded-2xl p-4 space-y-2 border-2 border-black shadow-[2px_2px_0px_rgba(0,0,0,1)]">
                       <div className="flex justify-between items-start">
                         <div className="space-y-2 flex-1">
                         <div className="flex justify-between">
@@ -1490,7 +1490,7 @@ const Installments: React.FC<InstallmentsProps> = ({ installments, accounts, bil
                         </div>
                         <button
                           onClick={() => { setEditingScheduleTx(tx); setEditScheduleTxForm({ name: tx.name, amount: Math.abs(tx.amount).toFixed(2), date: tx.date.split('T')[0] }); }}
-                          className="ml-3 mt-1 text-[9px] font-black text-indigo-600 uppercase tracking-widest border border-indigo-100 px-2 py-1 rounded-lg hover:bg-indigo-50 transition-colors flex-shrink-0"
+                          className="ml-3 mt-1 text-[9px] font-black text-indigo-600 uppercase tracking-widest px-2 py-1 rounded-lg hover:bg-indigo-50 transition-colors flex-shrink-0 border-2 border-black shadow-[2px_2px_0px_rgba(0,0,0,1)]"
                         >
                           <Edit2 className="w-3 h-3" />
                         </button>
@@ -1502,7 +1502,7 @@ const Installments: React.FC<InstallmentsProps> = ({ installments, accounts, bil
                           <button
                             onClick={(e) => e.preventDefault()}
                             title="Delete payment record"
-                            className="ml-1 mt-1 text-[9px] font-black text-red-500 uppercase tracking-widest border border-red-100 px-2 py-1 rounded-lg hover:bg-red-50 transition-colors flex-shrink-0"
+                            className="ml-1 mt-1 text-[9px] font-black text-red-500 uppercase tracking-widest px-2 py-1 rounded-lg hover:bg-red-50 transition-colors flex-shrink-0 border-2 border-black shadow-[2px_2px_0px_rgba(0,0,0,1)]"
                           >
                             <Trash2 className="w-3 h-3" />
                           </button>
@@ -1513,7 +1513,7 @@ const Installments: React.FC<InstallmentsProps> = ({ installments, accounts, bil
                           {signedUrl ? (
                             <>
                               <img src={signedUrl} alt="Receipt" className="w-12 h-12 rounded-xl object-cover border border-gray-200" onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
-                              <button onClick={() => { setZoom(0.5); setPreviewReceiptUrl(signedUrl); }} title="Preview receipt" className="flex items-center space-x-1 px-3 py-1.5 rounded-xl bg-indigo-50 text-indigo-600 hover:bg-indigo-100 transition-colors text-xs font-bold">
+                              <button onClick={() => { setZoom(0.5); setPreviewReceiptUrl(signedUrl); }} title="Preview receipt" className="flex items-center space-x-1 px-3 py-1.5 rounded-xl bg-indigo-50 text-indigo-600 hover:bg-indigo-100 transition-colors text-xs font-bold border-2 border-black shadow-[2px_2px_0px_rgba(0,0,0,1)]">
                                 <Eye className="w-3.5 h-3.5" /><span>Preview</span>
                               </button>
                             </>
