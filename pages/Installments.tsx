@@ -1168,7 +1168,7 @@ const Installments: React.FC<InstallmentsProps> = ({ installments, accounts, bil
             <button onClick={closePayModal} className="absolute right-6 top-6 p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full transition-colors border-2 border-black shadow-[2px_2px_0px_rgba(0,0,0,1)]">
               <X className="w-6 h-6 text-gray-400 dark:text-gray-500" />
             </button>
-            <h2 className="text-2xl font-titan normal-case tracking-tighter leading-none [text-shadow:-1px_-1px_0_#000,1px_-1px_0_#000,-1px_1px_0_#000,1px_1px_0_#000] drop-shadow-[3px_3px_0px_#000] mb-2">Pay {showPayModal.name}</h2>
+            <h2 className={`text-2xl font-titan normal-case tracking-tighter leading-none [text-shadow:-1px_-1px_0_#000,1px_-1px_0_#000,-1px_1px_0_#000,1px_1px_0_#000] drop-shadow-[3px_3px_0px_#000] ${getAccentClasses('text')} mb-2`}>Pay {showPayModal.name}</h2>
             <p className="text-gray-500 dark:text-gray-400 text-sm mb-8 transition-colors">Recording a monthly installment payment</p>
             <form onSubmit={handlePaySubmit} className="space-y-6">
               <div>
@@ -1456,7 +1456,7 @@ const Installments: React.FC<InstallmentsProps> = ({ installments, accounts, bil
         <div className="fixed inset-0 z-[150] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md" onClick={() => setSchedulePaymentsModal(null)}>
           <div className="w-full max-w-lg bg-white rounded-3xl p-8 shadow-2xl relative max-h-[85vh] overflow-y-auto border-2 border-black shadow-[6px_6px_0px_rgba(0,0,0,1)]" onClick={e => e.stopPropagation()}>
             <button onClick={() => setSchedulePaymentsModal(null)} className="absolute top-4 right-4 text-gray-400 hover:text-gray-700 p-2 rounded-full hover:bg-gray-100 transition-colors border-2 border-black shadow-[2px_2px_0px_rgba(0,0,0,1)]" aria-label="Close"><X className="w-5 h-5" /></button>
-            <h2 className="text-2xl font-titan normal-case tracking-tighter leading-none [text-shadow:-1px_-1px_0_#000,1px_-1px_0_#000,-1px_1px_0_#000,1px_1px_0_#000] drop-shadow-[3px_3px_0px_#000] mb-1">Payment Records</h2>
+            <h2 className={`text-2xl font-titan normal-case tracking-tighter leading-none [text-shadow:-1px_-1px_0_#000,1px_-1px_0_#000,-1px_1px_0_#000,1px_1px_0_#000] drop-shadow-[3px_3px_0px_#000] ${getAccentClasses('text')} mb-1`}>Payment Records</h2>
             <p className="text-gray-500 text-sm mb-6">{schedulePaymentsModal.month}</p>
             {loadingScheduleTx ? (
               <div className="text-center py-8 text-gray-400">Loading...</div>
