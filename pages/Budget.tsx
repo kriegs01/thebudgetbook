@@ -241,15 +241,15 @@ const calculateBudgetRemaining = (
   const projectedStr = setup.data._projectedSalary;
   const actualValue = actualStr && actualStr.trim() !== '' ? parseFloat(actualStr) : null;
   const projectedValue = parseFloat(projectedStr || '0') || 0;
-
+  
   const currentMonthIndex = MONTHS.indexOf(setup.month);
   const allIncomeTxs = transactions.filter(tx => {
     if (tx.transaction_type !== 'cash_in') return false;
-
+    
     const isTaggedIncome = tx.notes?.startsWith('Income Record');
     const nameLower = tx.name.trim().toLowerCase();
     const isLegacyIncome = nameLower === 'salary' || nameLower === 'income';
-
+    
     if (!isTaggedIncome && !isLegacyIncome) return false;
 
     const txDate = new Date(tx.date);
@@ -306,7 +306,7 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
       if (monthParam) setSelectedMonth(monthParam);
       if (yearParam) setSelectedYear(parseInt(yearParam, 10));
       if (timingParam === '1/2' || timingParam === '2/2') setSelectedTiming(timingParam);
-
+      
       setView('setup');
     }
   }, [searchParams]);
@@ -326,7 +326,7 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
 
   const [setupData, setSetupData] = useState<{ [key: string]: CategorizedSetupItem[] }>({});
   const [removedIds, setRemovedIds] = useState<Set<string>>(new Set());
-
+  
   const isFocusedRef = useRef(false);
   const [excludedInstallmentIds, setExcludedInstallmentIds] = useState<Set<string>>(new Set());
 
@@ -336,7 +336,7 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
   const [isActualFocused, setIsActualFocused] = useState(false);
 
   const [transactions, setTransactions] = useState<SupabaseTransaction[]>([]);
-
+  
   const [wallets, setWallets] = useState<Wallet[]>([]);
   const [stashTopUps, setStashTopUps] = useState<SupabaseTransaction[]>([]);
   const [excludedWalletIds, setExcludedWalletIds] = useState<Set<string>>(new Set());
@@ -399,12 +399,12 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
         } else if (data) {
           const twoYearsAgo = new Date();
           twoYearsAgo.setFullYear(twoYearsAgo.getFullYear() - 2);
-
+          
           const recentTransactions = data.filter(tx => {
             const txDate = new Date(tx.date);
             return txDate >= twoYearsAgo;
           });
-
+          
           setTransactions(recentTransactions);
         }
       } catch (error) {
@@ -2215,141 +2215,4 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                         paymentSchedule = getPaymentSchedule('biller', item.id, selectedMonth, selectedYear);
                         if (paymentSchedule) {
                           isPaid = checkIfPaidBySchedule('biller', item.id);
-                          isPartial = checkIfPartialBySchedule('biller', item.id);
-                        } else {
-                          isPaid = checkIfPaidByTransaction(item.name, item.amount, selectedMonth, selectedYear, effectiveTiming);
-                        }
-                      } else {
-                        isPaid = checkIfPaidByTransaction(item.name, item.amount, selectedMonth, selectedYear, effectiveTiming);
-                      }
-                      return (
-                        <div key={item.id} className={`p-4 rounded-xl border-2 border-black bg-white dark:bg-gray-800 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] flex flex-col gap-3 transition-all ${item.included ? 'opacity-100' : 'opacity-60 bg-gray-50'}`}>
-                          <div className="flex justify-between items-center gap-2">
-                            <input type="text" value={item.name} onChange={(e) => handleSetupUpdate(cat.name, item.id, 'name', e.target.value)} disabled={isReadOnly} className="bg-transparent border-none text-sm font-black w-full outline-none focus:bg-gray-100 dark:focus:bg-gray-800 rounded p-1 dark:text-gray-100" />
-                            {!isReadOnly && (
-                              <button onClick={() => handleSetupToggle(cat.name, item.id)} className={`w-8 h-8 rounded-xl border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[0.5px] hover:translate-y-[0.5px] flex items-center justify-center transition-all ${item.included ? 'bg-indigo-600 text-white' : 'bg-white dark:bg-gray-700 text-transparent'}`}><Check className="w-4 h-4" /></button>
-                            )}
-                          </div>
-                          <div className="flex justify-between items-center bg-gray-50 dark:bg-gray-900/50 p-2.5 rounded-lg border-2 border-black">
-                            <div className="flex items-center space-x-1">
-                              <span className="text-gray-400 dark:text-gray-500 font-bold text-sm">₱</span>
-                              <input type="number" value={item.amount} onChange={(e) => handleSetupUpdate(cat.name, item.id, 'amount', e.target.value)} disabled={isReadOnly} className="bg-transparent border-none text-sm font-black w-24 outline-none dark:text-gray-100" />
-                            </div>
-                            <div className="flex items-center space-x-2">
-                              {isBillerItem && isPaid && <CheckCircle2 className="w-4 h-4 text-green-500" />}
-                              {isBillerItem && isPartial && <span className="text-[9px] font-black bg-yellow-100 text-yellow-700 px-1.5 py-0.5 rounded border border-black">Partial</span>}
-                              {!isBillerItem && isPaid && <CheckCircle2 className="w-4 h-4 text-green-500" />}
-                            </div>
-                          </div>
-                          <div className="flex items-center justify-end space-x-2 pt-2 border-t border-gray-100 dark:border-gray-700">
-                            {isBillerItem && !isPaid && !isReadOnly && (
-                              <button 
-                                onClick={() => {
-                                  if(linkedBiller && paymentSchedule) {
-                                    const scheduleForModal: PaymentSchedule = {
-                                      id: paymentSchedule.id, month: paymentSchedule.month, year: paymentSchedule.year.toString(),
-                                      expectedAmount: paymentSchedule.expected_amount, amountPaid: paymentSchedule.amount_paid,
-                                      datePaid: paymentSchedule.date_paid || undefined, receipt: paymentSchedule.receipt || undefined, accountId: paymentSchedule.account_id || undefined
-                                    };
-                                    const linkedTransactions = transactions.filter(tx => tx.payment_schedule_id === paymentSchedule.id).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-                                    const existingTx = linkedTransactions[0];
-                                    setShowPayModal({ biller: linkedBiller, schedule: scheduleForModal, expectedAmount: parseFloat(item.amount) });
-                                    setPayFormData({
-                                      transactionId: isPartial ? '' : (existingTx?.id || ''),
-                                      amount: isPartial ? Math.max(0, parseFloat(item.amount) - paymentSchedule.amount_paid).toFixed(2) : existingTx?.amount.toFixed(2) || item.amount,
-                                      receipt: (!isPartial && existingTx) ? 'Receipt on file' : '',
-                                      datePaid: (!isPartial && existingTx) ? toLocalDateInputValue(existingTx.date) : getTodayIso(),
-                                      accountId: existingTx?.payment_method_id || payFormData.accountId
-                                    });
-                                  }
-                                }}
-                                className="px-3 py-1.5 bg-indigo-600 text-white text-[10px] font-black uppercase rounded-xl border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[1px] hover:translate-y-[1px] transition-all"
-                              >
-                                {isPartial ? 'Pay Remaining' : 'Pay'}
-                              </button>
-                            )}
-                            {!isBillerItem && !isPaid && !isReadOnly && (cat.flexiMode ?? true) && item.name !== 'New Item' && parseFloat(item.amount) > 0 && (
-                              <button
-                                onClick={() => {
-                                  setTransactionFormData({
-                                    id: '',
-                                    name: item.name,
-                                    date: getTodayIso(),
-                                    amount: item.amount,
-                                    accountId: accounts[0]?.id || '',
-                                    paymentScheduleId: '',
-                                    transactionType: 'cash_out'
-                                  });
-                                  setShowTransactionModal(true);
-                                }}
-                                className="px-3 py-1.5 bg-indigo-600 text-white text-[10px] font-black uppercase rounded-xl border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[1px] hover:translate-y-[1px] transition-all"
-                              >
-                                Pay
-                              </button>
-                            )}
-                            {!isReadOnly && (
-                              <button onClick={() => removeItemFromCategory(cat.name, item.id, item.name)} className="text-[10px] font-black text-red-500 uppercase tracking-widest border-2 border-black bg-white dark:bg-gray-800 px-3 py-1.5 rounded-xl shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[1px] hover:translate-y-[1px] transition-all">Exclude</button>
-                            )}
-                          </div>
-                        </div>
-                      );
-                    })}
-
-                    {cat.name === 'Loans' && relevantInstallments.length > 0 && relevantInstallments.map((installment) => {
-                      const isIncluded = !excludedInstallmentIds.has(installment.id);
-                      let isPaid = false, isPartial = false;
-                      const installmentSchedule = getPaymentSchedule('installment', installment.id, selectedMonth, selectedYear);
-                      if (installmentSchedule) {
-                        isPaid = checkIfPaidBySchedule('installment', installment.id);
-                        isPartial = checkIfPartialBySchedule('installment', installment.id);
-                      }
-                      return (
-                        <div key={`installment-${installment.id}`} className={`p-4 rounded-xl border-2 border-black bg-blue-50/20 dark:bg-blue-900/10 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] flex flex-col gap-3 transition-all ${isIncluded ? 'opacity-100' : 'opacity-60 bg-gray-50'}`}>
-                          <div className="flex justify-between items-start gap-2">
-                            <div>
-                              <span className="text-sm font-black text-gray-900 dark:text-gray-100 block">{installment.name}</span>
-                              <span className="text-[9px] font-black px-2 py-0.5 bg-blue-100 border border-black text-blue-600 rounded inline-block mt-1">INSTALLMENT</span>
-                            </div>
-                            {!isReadOnly && (
-                              <button onClick={() => setExcludedInstallmentIds(prev => { const next = new Set(prev); if(next.has(installment.id)) next.delete(installment.id); else next.add(installment.id); return next; })} className={`w-8 h-8 rounded-xl border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[0.5px] hover:translate-y-[0.5px] transition-all flex items-center justify-center ${isIncluded ? 'bg-indigo-600 text-white' : 'bg-white dark:bg-gray-700 text-transparent'}`}><Check className="w-4 h-4" /></button>
-                            )}
-                          </div>
-                          <div className="flex justify-between items-center bg-gray-50 dark:bg-gray-900/50 p-2.5 rounded-lg border-2 border-black">
-                            <span className="text-sm font-black">{formatCurrency(installment.monthlyAmount)}</span>
-                            {isPaid && <CheckCircle2 className="w-4 h-4 text-green-500" />}
-                          </div>
-                          <div className="flex items-center justify-end space-x-2 pt-2 border-t border-gray-100 dark:border-gray-700">
-                            {!isPaid && !isReadOnly && (
-                              <button 
-                                onClick={() => {
-                                  setTransactionFormData({
-                                    id: '', name: `${installment.name} - ${selectedMonth} ${new Date().getFullYear()}`, date: getTodayIso(),
-                                    amount: isPartial && installmentSchedule ? Math.max(0, installmentSchedule.expected_amount - installmentSchedule.amount_paid).toFixed(2) : installment.monthlyAmount.toFixed(2),
-                                    accountId: installment.accountId || accounts[0]?.id || '', paymentScheduleId: installmentSchedule?.id || '',
-                                    transactionType: 'loan_payment'
-                                  });
-                                  setShowTransactionModal(true);
-                                }}
-                                className="px-3 py-1.5 bg-indigo-600 text-white text-[10px] font-black uppercase rounded-xl border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[1px] hover:translate-y-[1px] transition-all"
-                              >
-                                Pay
-                              </button>
-                            )}
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                ) : (
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-left">
-                      <thead>
-                        <tr className="text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase border-b border-gray-50 dark:border-gray-800/50"><th className="p-4 pl-10">Name</th><th className="p-4">Amount</th><th className="p-4 text-center">Actions</th><th className="p-4 pr-10 text-right"></th></tr>
-                      </thead>
-                      <tbody className="divide-y divide-gray-50 dark:divide-gray-800/50">
-                        {items.length > 0 ? items.map((item) => {
-                          let isPaid = false, isPartial = false, linkedBiller, paymentSchedule;
-                          const isBillerItem = item.isBiller || billers.some(b => b.id === item.id);
-                          const effectiveTiming = (item.timing as any) || selectedTiming;
-                          if (isBillerItem) {
-                            linkedB
+                          isPartial = checkIfPartialBySchedule('biller', item.id
