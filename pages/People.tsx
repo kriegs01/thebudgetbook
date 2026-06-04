@@ -50,10 +50,6 @@ const PageHeader: React.FC<{
       </div>
       {actions && <div className="flex items-center justify-end gap-3">{actions}</div>}
     </header>
-        <div className={`h-2 w-32 mt-4 bg-black dark:bg-white/20 transition-colors duration-300`} />
-      </div>
-      {actions && <div className="flex items-center justify-end gap-3 mt-4 md:mt-0 w-full md:w-auto">{actions}</div>}
-    </header>
   );
 };
 
