@@ -73,6 +73,7 @@ const PageHeader: React.FC<{
 
 const Installments: React.FC<InstallmentsProps> = ({ installments, accounts, billers = [], onAdd, onUpdate, onDelete, onPayInstallment, loading = false, error = null }) => {
   const { getAccentClasses } = useTheme();
+  const isMobile = useMediaQuery('(max-width: 767px)');
   // Memoized first non-credit account ID to avoid redundant filtering
   const defaultNonCreditAccountId = useMemo(() => {
     return accounts.filter(acc => acc.classification !== 'Credit Card' && acc.type !== 'Credit')[0]?.id || '';
@@ -912,7 +913,7 @@ const Installments: React.FC<InstallmentsProps> = ({ installments, accounts, bil
             <Calendar className="w-7 h-7" />
           </div>
         }
-        actions={
+        actions={!isMobile ? (
           <div className="flex items-center gap-3 self-end sm:self-auto">
             <div className="flex items-center bg-gray-50 dark:bg-gray-800 rounded-xl p-1 space-x-1 transition-colors">
               <button 
@@ -938,8 +939,37 @@ const Installments: React.FC<InstallmentsProps> = ({ installments, accounts, bil
               <span className="hidden sm:inline">New Installment</span>
             </button>
           </div>
-        }
+        ) : undefined}
       />
+
+      {isMobile && (
+        <div className="flex justify-end mb-4">
+          <div className="flex items-center gap-3">
+            <div className="flex items-center bg-gray-50 dark:bg-gray-800 rounded-xl p-1 space-x-1 transition-colors">
+              <button 
+                onClick={() => setViewMode('card')}
+                className={`p-2 rounded-lg transition-colors ${viewMode === 'card' ? 'bg-white dark:bg-gray-700 shadow-sm text-indigo-600 dark:text-indigo-400' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'}`}
+                title="Card view"
+              >
+                <LayoutGrid className="w-4 h-4" />
+              </button>
+              <button 
+                onClick={() => setViewMode('list')}
+                className={`p-2 rounded-lg transition-colors ${viewMode === 'list' ? 'bg-white dark:bg-gray-700 shadow-sm text-indigo-600 dark:text-indigo-400' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'}`}
+                title="List view"
+              >
+                <List className="w-4 h-4" />
+              </button>
+            </div>
+            <button 
+              onClick={() => setShowModal(true)}
+                className={`flex items-center gap-2 text-white px-4 py-3 rounded-xl font-bold transition-all shadow-md dark:shadow-none text-sm ${getAccentClasses('bg')} ${getAccentClasses('shadow')}`}
+            >
+              <Plus className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+      )}
 
       <div className={viewMode === 'card' ? "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6" : "space-y-4"}>
         {activeInstallmentsList.length > 0 ? (
