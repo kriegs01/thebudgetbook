@@ -47,19 +47,20 @@ export const getFriendships = async () => {
       friend_profile:friend_id ( first_name, last_name )
     `)
     .or(`user_id.eq.${userId},friend_id.eq.${userId}`)
-    .eq('status', 'accepted');
+    .in('status', ['accepted', 'pending']);
 
   if (error) {
     console.error('Error fetching friendships:', error);
     return { data: null, error };
   }
 
-  // Normalize data to show the other person's profile
+  // Keep both user IDs while normalizing the profile for the other person
   const friends = data.map(f => {
     const isUserInitiator = f.user_id === userId;
     return {
       id: f.id,
-      friend_id: isUserInitiator ? f.friend_id : f.user_id,
+      user_id: f.user_id,
+      friend_id: f.friend_id,
       status: f.status,
       created_at: f.created_at,
       profile: isUserInitiator ? f.friend_profile : f.user_profile,
