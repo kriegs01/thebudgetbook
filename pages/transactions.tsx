@@ -75,7 +75,7 @@ const PageHeader: React.FC<{
         <div className="relative inline-block">
           <div ref={titleContainerRef} className="flex items-center gap-4">
             {icon && <div className="z-10 shrink-0">{icon}</div>}
-            <h1 className="text-[clamp(2rem,7.5vw,3.75rem)] font-[950] uppercase tracking-tighter leading-none relative z-10 text-black dark:text-white transition-colors duration-300">
+            <h1 className="text-[clamp(2rem,7.5vw,3.75rem)] font-titan normal-case tracking-tighter leading-none relative z-10 text-black dark:text-white transition-colors duration-300">
               {title}
             </h1>
           </div>
