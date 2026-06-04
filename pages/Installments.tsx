@@ -614,6 +614,10 @@ const Installments: React.FC<InstallmentsProps> = ({ installments, accounts, bil
           <div className="flex-1">
             <div className="flex items-center gap-2 mb-1">
               <h3 className={`font-black text-lg text-gray-900 dark:text-gray-100 transition-colors uppercase tracking-tight ${getAccentClasses('text').replace('text-', 'group-hover:text-')}`}>{item.name}</h3>
+              <span className="text-xs font-bold text-gray-500 dark:text-gray-400 flex items-center gap-1 ml-2">
+                <Wallet className="w-3.5 h-3.5 flex-shrink-0" />
+                <span className="truncate max-w-[10rem]">{account?.bank || 'Account'}</span>
+              </span>
               {archived && (
                 <span className={`text-[9px] font-black px-2 py-0.5 rounded uppercase tracking-wider ${
                   archStatus === 'terminated' ? 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400' :
@@ -705,10 +709,6 @@ const Installments: React.FC<InstallmentsProps> = ({ installments, accounts, bil
         </div>
 
         <div className="flex flex-col space-y-4 pt-2">
-          <div className="flex items-center space-x-2 text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest transition-colors">
-            <Wallet className="w-3.5 h-3.5 flex-shrink-0" />
-            <span className="truncate">{account?.bank || 'Account'}</span>
-          </div>
           <div className="flex items-center gap-2 w-full">
             <button 
               onClick={() => { setShowViewModal(item); }}
@@ -1006,8 +1006,8 @@ const Installments: React.FC<InstallmentsProps> = ({ installments, accounts, bil
       {/* Track Modal */}
       {showModal && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md">
-          <div className="bg-white dark:bg-gray-900 rounded-[2.5rem] w-full max-w-lg p-10 shadow-2xl animate-in zoom-in-95 max-h-[90vh] overflow-y-auto transition-colors">
-            <h2 className="text-2xl font-black text-gray-900 dark:text-gray-100 mb-6 uppercase tracking-tight transition-colors">Track New Installment</h2>
+          <div className="bg-white dark:bg-gray-900 rounded-[2.5rem] w-full max-w-lg p-10 shadow-2xl animate-in zoom-in-95 max-h-[90vh] overflow-y-auto transition-colors border-2 border-black shadow-[6px_6px_0px_rgba(0,0,0,0.08)]">
+            <h2 className={`text-2xl font-titan normal-case tracking-tighter leading-none ${getAccentClasses('text')} mb-6`}>Track New Installment</h2>
             <form onSubmit={handleSubmit} className="space-y-6">
               <div>
                 <label className="block text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-2 transition-colors">Item Name</label>
@@ -1095,7 +1095,7 @@ const Installments: React.FC<InstallmentsProps> = ({ installments, accounts, bil
                 <button 
                   type="submit" 
                   disabled={accounts.length === 0 || isSubmitting}
-                  className="flex-1 bg-indigo-600 text-white py-4 rounded-2xl font-black uppercase tracking-widest text-xs hover:bg-indigo-700 transition-all shadow-xl dark:shadow-none disabled:opacity-50 disabled:cursor-not-allowed"
+                  className={`flex-1 text-white py-4 rounded-2xl font-black uppercase tracking-widest text-xs transition-all disabled:opacity-50 disabled:cursor-not-allowed ${getAccentClasses('bg')} border-2 border-black filter drop-shadow-[0_12px_24px_rgba(0,0,0,0.12)]`}
                 >
                   {isSubmitting ? 'Saving...' : 'Start Tracking'}
                 </button>
@@ -1381,7 +1381,7 @@ const Installments: React.FC<InstallmentsProps> = ({ installments, accounts, bil
                 <div className="space-y-2">
                   <h3 className="text-sm font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-4 transition-colors">Payment Schedule</h3>
                   {schedule.map((item, index) => (
-                    <div key={index} className={`flex items-center justify-between p-4 rounded-xl border-2 border-black shadow-[2px_2px_0px_rgba(0,0,0,1)] transition-all ${
+                    <div key={index} className={`flex items-center justify-between p-4 rounded-xl border-4 border-black shadow-[6px_6px_0px_rgba(0,0,0,0.08)] filter drop-shadow-[0_6px_18px_rgba(0,0,0,0.06)] transition-all ${
                       item.isPaid 
                         ? 'bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800/30' 
                         : item.isPartial 
@@ -1454,7 +1454,7 @@ const Installments: React.FC<InstallmentsProps> = ({ installments, accounts, bil
       {/* Schedule Payments Modal */}
       {schedulePaymentsModal && (
         <div className="fixed inset-0 z-[150] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md" onClick={() => setSchedulePaymentsModal(null)}>
-          <div className="w-full max-w-lg bg-white rounded-3xl p-8 shadow-2xl relative max-h-[85vh] overflow-y-auto border-2 border-black shadow-[6px_6px_0px_rgba(0,0,0,1)]" onClick={e => e.stopPropagation()}>
+          <div className="w-full max-w-lg bg-white rounded-3xl p-8 shadow-2xl relative max-h-[85vh] overflow-y-auto border-4 border-black shadow-[8px_8px_0px_rgba(0,0,0,0.08)] filter drop-shadow-[0_10px_30px_rgba(0,0,0,0.08)]" onClick={e => e.stopPropagation()}>
             <button onClick={() => setSchedulePaymentsModal(null)} className="absolute top-4 right-4 text-gray-400 hover:text-gray-700 p-2 rounded-full hover:bg-gray-100 transition-colors border-2 border-black shadow-[2px_2px_0px_rgba(0,0,0,1)]" aria-label="Close"><X className="w-5 h-5" /></button>
             <h2 className={`text-2xl font-titan normal-case tracking-tighter leading-none [text-shadow:-1px_-1px_0_#000,1px_-1px_0_#000,-1px_1px_0_#000,1px_1px_0_#000] drop-shadow-[3px_3px_0px_#000] ${getAccentClasses('text')} mb-1`}>Payment Records</h2>
             <p className="text-gray-500 text-sm mb-6">{schedulePaymentsModal.month}</p>
