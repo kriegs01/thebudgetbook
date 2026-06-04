@@ -274,8 +274,13 @@ export default function PeoplePage({ onStartChat }: PeoplePageProps) {
 
     setIsSearching(true);
     const timer = setTimeout(async () => {
-      const { data } = await searchUsers(searchQuery.trim());
-      setSearchResults(data || []);
+      const { data, error } = await searchUsers(searchQuery.trim());
+      if (error) {
+        console.error('Search failed:', error);
+        setSearchResults([]);
+      } else {
+        setSearchResults(data || []);
+      }
       setIsSearching(false);
     }, 500); // 500ms debounce
 

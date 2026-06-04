@@ -19,15 +19,18 @@ export const searchUsers = async (query: string) => {
   const { data, error } = await supabase
     .from('user_profiles')
     .select('*')
-    .or(`username.ilike.%${query}%,email.ilike.%${query}%`)
+    .or(`username.ilike.%${query}%,email.ilike.%${query}%,first_name.ilike.%${query}%,last_name.ilike.%${query}%`)
     .neq('user_id', userId) // Exclude self
     .limit(10);
 
   if (error) {
     console.error('Error searching users:', error);
+    console.error('Search query:', query);
+    console.error('Filter applied:', `username.ilike.%${query}%,email.ilike.%${query}%,first_name.ilike.%${query}%,last_name.ilike.%${query}%`);
     return { data: null, error };
   }
 
+  console.log('Search results:', data);
   return { data, error: null };
 };
 
