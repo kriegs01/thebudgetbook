@@ -5,7 +5,7 @@ import { PinProtectedAction } from '../src/components/PinProtectedAction';
 import { getPaymentSchedulesBySource } from '../src/services/paymentSchedulesService';
 import { hasInstallmentPayments, deleteAllInstallmentPaymentsAndResetSchedules } from '../src/services/installmentsService';
 import { getTransactionsByPaymentSchedule, getReceiptSignedUrl, updateTransaction, updateTransactionAndSyncSchedule, deleteTransactionAndRevertSchedule } from '../src/services/transactionsService';
-import { combineDateWithCurrentTime } from '../src/utils/dateUtils';
+import { combineDateWithCurrentTime, getTodayIso } from '../src/utils/dateUtils';
 import type { SupabaseMonthlyPaymentSchedule, SupabaseTransaction } from '../src/types/supabase';
 import { supabase } from '../src/utils/supabaseClient';
 import { useTheme } from '../src/contexts/ThemeContext';
@@ -135,7 +135,7 @@ const Installments: React.FC<InstallmentsProps> = ({ installments, accounts, bil
   const [payFormData, setPayFormData] = useState({
     amount: '',
     receipt: '',
-    datePaid: new Date().toISOString().split('T')[0],
+    datePaid: getTodayIso(),
     accountId: defaultNonCreditAccountId
   });
   const [payReceiptFile, setPayReceiptFile] = useState<File | null>(null);
@@ -381,7 +381,7 @@ const Installments: React.FC<InstallmentsProps> = ({ installments, accounts, bil
       setPayFormData({
         amount: '',
         receipt: '',
-        datePaid: new Date().toISOString().split('T')[0],
+        datePaid: getTodayIso(),
         accountId: accounts[0]?.id || ''
       });
       setPayReceiptFile(null);
@@ -727,7 +727,7 @@ const Installments: React.FC<InstallmentsProps> = ({ installments, accounts, bil
                     setPayFormData({ 
                       amount: Math.max(0, item.monthlyAmount - currentPeriodPaid).toFixed(2),
                       receipt: '',
-                      datePaid: new Date().toISOString().split('T')[0],
+                      datePaid: getTodayIso(),
                       accountId: defaultNonCreditAccountId
                     });
                   }}
@@ -811,7 +811,7 @@ const Installments: React.FC<InstallmentsProps> = ({ installments, accounts, bil
                     setPayFormData({ 
                       amount: Math.max(0, item.monthlyAmount - currentPeriodPaid).toFixed(2),
                       receipt: '',
-                      datePaid: new Date().toISOString().split('T')[0],
+                      datePaid: getTodayIso(),
                       accountId: defaultNonCreditAccountId
                     });
                   }}
@@ -1391,7 +1391,7 @@ const Installments: React.FC<InstallmentsProps> = ({ installments, accounts, bil
                               setPayFormData({ 
                                 amount: Math.max(0, item.amount - item.amountPaid).toFixed(2),
                                 receipt: '',
-                                datePaid: new Date().toISOString().split('T')[0],
+                                datePaid: getTodayIso(),
                                 accountId: defaultNonCreditAccountId
                               });
                             }}

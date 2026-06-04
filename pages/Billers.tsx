@@ -6,7 +6,7 @@ import { Plus, Calendar, Receipt, ChevronDown, ChevronRight, Upload, CheckCircle
 import { PinProtectedAction } from '../src/components/PinProtectedAction';
 import { getAllTransactions, getTransactionsByPaymentSchedule, getReceiptSignedUrl, updateTransaction, updateTransactionAndSyncSchedule, deleteTransactionAndRevertSchedule } from '../src/services/transactionsService';
 import { getPaymentSchedulesBySource } from '../src/services/paymentSchedulesService';
-import { combineDateWithCurrentTime } from '../src/utils/dateUtils';
+import { combineDateWithCurrentTime, getTodayIso } from '../src/utils/dateUtils';
 import type { SupabaseTransaction, SupabaseMonthlyPaymentSchedule } from '../src/types/supabase';
 import { getScheduleExpectedAmount, getScheduleDisplayLabel, shouldUseLinkedAccount, getLinkedAccount } from '../src/utils/linkedAccountUtils';
 import { getDueDayForMonth, ordinalSuffix } from '../src/utils/billingCycles';
@@ -154,7 +154,7 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
   const [confirmModal, setConfirmModal] = useState<{ show: boolean; title: string; message: string; onConfirm: () => void; }>({ show: false, title: '', message: '', onConfirm: () => {}, });
   const [addFormData, setAddFormData] = useState({ name: '', category: categories[0]?.name || '', dueDate: '', expectedAmount: '', actMonth: MONTHS[(new Date().getMonth() + 1) % 12], actDay: '', actYear: new Date().getFullYear().toString(), deactMonth: '', deactYear: '', linkedAccountId: '' });
   const [editFormData, setEditFormData] = useState({ name: '', category: '', dueDate: '', expectedAmount: '', actMonth: '', actDay: '', actYear: '', deactMonth: '', deactYear: '', linkedAccountId: '', reactMonth: '', reactYear: '' });
-  const [payFormData, setPayFormData] = useState({ amount: '', receipt: '', datePaid: new Date().toISOString().split('T')[0], accountId: accounts[0]?.id || '' });
+  const [payFormData, setPayFormData] = useState({ amount: '', receipt: '', datePaid: getTodayIso(), accountId: accounts[0]?.id || '' });
   const [payReceiptFile, setPayReceiptFile] = useState<File | null>(null);
   type BillerScheduleTx = { id: string; name: string; amount: number; date: string; paymentMethodId: string; receiptUrl?: string | null };
   const [schedulePaymentsModal, setSchedulePaymentsModal] = useState<{ label: string; scheduleId: string; transactions: BillerScheduleTx[] } | null>(null);
@@ -438,7 +438,7 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
       if (onPayBiller) {
         await onPayBiller(biller.id, { amount: parseFloat(payFormData.amount), date: payFormData.datePaid, accountId: payFormData.accountId, receipt: payFormData.receipt || undefined, receiptFile: payReceiptFile || undefined, scheduleId: schedule.id, expectedAmount: showPayModal.expectedAmount });
         setShowPayModal(null);
-        setPayFormData({ amount: '', receipt: '', datePaid: new Date().toISOString().split('T')[0], accountId: accounts[0]?.id || '' });
+        setPayFormData({ amount: '', receipt: '', datePaid: getTodayIso(), accountId: accounts[0]?.id || '' });
         setPayReceiptFile(null);
         await loadPaymentSchedules();
       }

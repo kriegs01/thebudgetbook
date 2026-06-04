@@ -6,7 +6,7 @@ import { getAllAccountsFrontend } from '../src/services/accountsService';
 import { Account } from '../types';
 import { searchUsers, sendFriendRequest } from '../src/services/friendshipsService';
 import type { SupabasePerson, SupabaseTransaction, SupabaseUserProfile, SupabaseFriendship } from '../src/types/supabase';
-import { combineDateWithCurrentTime } from '../src/utils/dateUtils';
+import { combineDateWithCurrentTime, getTodayIso } from '../src/utils/dateUtils';
 import { useTheme } from '../src/contexts/ThemeContext';
 import { supabase } from '../src/utils/supabaseClient';
 import { useAuth } from '../src/contexts/AuthContext';
@@ -88,7 +88,7 @@ export default function PeoplePage({ onStartChat }: PeoplePageProps) {
 
   const [showLoanPaymentModal, setShowLoanPaymentModal] = useState(false);
   const [selectedLoan, setSelectedLoan] = useState<any | null>(null);
-  const [loanPaymentForm, setLoanPaymentForm] = useState({ amount: '', date: new Date().toISOString().split('T')[0], accountId: '' });
+  const [loanPaymentForm, setLoanPaymentForm] = useState({ amount: '', date: getTodayIso(), accountId: '' });
   
   const [expandedTxIds, setExpandedTxIds] = useState<Set<string>>(new Set());
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
@@ -363,7 +363,7 @@ export default function PeoplePage({ onStartChat }: PeoplePageProps) {
     } else {
       setShowLoanPaymentModal(false);
       setSelectedLoan(null);
-      setLoanPaymentForm({ amount: '', date: new Date().toISOString().split('T')[0], accountId: '' });
+      setLoanPaymentForm({ amount: '', date: getTodayIso(), accountId: '' });
       loadData();
     }
   };
@@ -671,7 +671,7 @@ export default function PeoplePage({ onStartChat }: PeoplePageProps) {
                                 e.stopPropagation();
                                 setSelectedLoan({ ...tx, remainingBalance, totalPaid, isBorrowed });
                                 const defaultAcc = accounts.find(a => a.type === 'Debit')?.id || '';
-                                setLoanPaymentForm({ amount: '', date: new Date().toISOString().split('T')[0], accountId: defaultAcc });
+                                setLoanPaymentForm({ amount: '', date: getTodayIso(), accountId: defaultAcc });
                                 setShowLoanPaymentModal(true);
                               }}
                               className={`flex items-center gap-1 px-3 py-1.5 ${isBorrowed ? 'bg-red-50 text-red-600 dark:bg-red-900/30 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/50' : 'bg-purple-50 text-purple-600 dark:bg-purple-900/30 dark:text-purple-400 hover:bg-purple-100 dark:hover:bg-purple-900/50'} rounded-lg text-[10px] font-black uppercase tracking-widest transition-colors`}

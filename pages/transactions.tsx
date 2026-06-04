@@ -9,7 +9,7 @@ import { getAllPeople, createPerson } from '../src/services/peopleService';
 import { getFriendships } from '../src/services/friendshipsService';
 import type { SupabasePerson, SupabaseUserProfile, SupabaseFriendship } from '../src/types/supabase';
 import { supabase } from '../src/utils/supabaseClient';
-import { combineDateWithCurrentTime, getTodayIso, getFirstDayOfCurrentYearIso, getLastDayOfCurrentYearIso } from '../src/utils/dateUtils';
+import { combineDateWithCurrentTime, getTodayIso, getFirstDayOfCurrentYearIso, getLastDayOfCurrentYearIso, toLocalDateInputValue } from '../src/utils/dateUtils';
 import { useTheme } from '../src/contexts/ThemeContext';
 import useMediaQuery from '../src/hooks/useMediaQuery';
 import { TransactionList } from '../src/components/TransactionList';
@@ -472,7 +472,7 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ transactions, loadi
     setFormSource(null);
     setForm({
       name: tx.name,
-      date: new Date(tx.date).toISOString().split('T')[0],
+      date: toLocalDateInputValue(tx.date),
       amount: Math.abs(tx.amount).toFixed(2), // Absolute value makes editing easier
       paymentMethodId: tx.paymentMethodId,
       transactionType: tx.transaction_type || 'payment',

@@ -167,6 +167,12 @@ const formatTransaction = (supabaseTransaction: SupabaseTransaction): Transactio
   date: supabaseTransaction.date,
   amount: supabaseTransaction.amount,
   paymentMethodId: supabaseTransaction.payment_method_id,
+  transaction_type: supabaseTransaction.transaction_type ?? null,
+  notes: supabaseTransaction.notes ?? null,
+  related_transaction_id: supabaseTransaction.related_transaction_id ?? null,
+  borrower_name: supabaseTransaction.borrower_name ?? null,
+  receiptUrl: supabaseTransaction.receipt_url ?? null,
+  person_name: (supabaseTransaction as any).person_name ?? null,
 });
 
 const queryClient = new QueryClient();

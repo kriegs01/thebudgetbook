@@ -40,12 +40,27 @@ export const combineDateWithCurrentTime = (dateString: string): string => {
   return selectedDate.toISOString();
 };
 
+export const toLocalDateInputValue = (value: string): string => {
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) {
+    return value.split('T')[0];
+  }
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
 /**
  * Gets today's date in ISO format (YYYY-MM-DD)
  * Useful for initializing date picker fields
  */
 export const getTodayIso = (): string => {
-  return new Date().toISOString().slice(0, 10);
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  const day = String(now.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
 };
 
 /**

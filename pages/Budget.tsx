@@ -12,7 +12,7 @@ import { aggregateCreditCardPurchases } from '../src/utils/paymentStatus';
 import { getScheduleExpectedAmount } from '../src/utils/linkedAccountUtils';
 import { getBillerAmountForDate } from '../src/utils/billers';
 import { getPaymentSchedulesByPeriod, recordPaymentViaTransaction } from '../src/services/paymentSchedulesService';
-import { combineDateWithCurrentTime } from '../src/utils/dateUtils';
+import { combineDateWithCurrentTime, getTodayIso, toLocalDateInputValue } from '../src/utils/dateUtils';
 import { getWalletsForCurrentUser } from '../src/services/walletsService';
 import { useTheme } from '../src/contexts/ThemeContext';
 import useMediaQuery from '../src/hooks/useMediaQuery';
@@ -625,7 +625,7 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
     transactionId: '',
     amount: '',
     receipt: '',
-    datePaid: new Date().toISOString().split('T')[0],
+    datePaid: getTodayIso(),
     accountId: accounts[0]?.id || ''
   });
   const [payReceiptFile, setPayReceiptFile] = useState<File | null>(null);
@@ -634,7 +634,7 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
   const getDefaultTransactionFormData = () => ({
     id: '',
     name: '',
-    date: new Date().toISOString().split('T')[0],
+    date: getTodayIso(),
     amount: '',
     accountId: accounts[0]?.id || '',
     paymentScheduleId: '',
@@ -647,7 +647,7 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
   const [salaryFormData, setSalaryFormData] = useState({
     name: 'Income',
     amount: '',
-    date: new Date().toISOString().split('T')[0],
+    date: getTodayIso(),
     accountId: ''
   });
   const [confirmModal, setConfirmModal] = useState<{
@@ -1471,7 +1471,7 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
         transactionId: '',
         amount: '',
         receipt: '',
-        datePaid: new Date().toISOString().split('T')[0],
+        datePaid: getTodayIso(),
         accountId: accounts[0]?.id || ''
       });
       setPayReceiptFile(null);
@@ -1896,7 +1896,7 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                             setSalaryFormData({
                               name: 'Income',
                               amount: actualSalary || projectedSalary || '',
-                              date: new Date().toISOString().split('T')[0],
+                              date: getTodayIso(),
                               accountId: debitAccounts[0]?.id || ''
                             });
                             setShowSalaryModal(true);
@@ -2254,7 +2254,7 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                                       transactionId: isPartial ? '' : (existingTx?.id || ''),
                                       amount: isPartial ? Math.max(0, parseFloat(item.amount) - paymentSchedule.amount_paid).toFixed(2) : existingTx?.amount.toFixed(2) || item.amount,
                                       receipt: (!isPartial && existingTx) ? 'Receipt on file' : '',
-                                      datePaid: (!isPartial && existingTx) ? new Date(existingTx.date).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
+                                      datePaid: (!isPartial && existingTx) ? toLocalDateInputValue(existingTx.date) : getTodayIso(),
                                       accountId: existingTx?.payment_method_id || payFormData.accountId
                                     });
                                   }
@@ -2270,7 +2270,7 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                                   setTransactionFormData({
                                     id: '',
                                     name: item.name,
-                                    date: new Date().toISOString().split('T')[0],
+                                    date: getTodayIso(),
                                     amount: item.amount,
                                     accountId: accounts[0]?.id || '',
                                     paymentScheduleId: '',
@@ -2319,7 +2319,7 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                               <button 
                                 onClick={() => {
                                   setTransactionFormData({
-                                    id: '', name: `${installment.name} - ${selectedMonth} ${new Date().getFullYear()}`, date: new Date().toISOString().split('T')[0],
+                                    id: '', name: `${installment.name} - ${selectedMonth} ${new Date().getFullYear()}`, date: getTodayIso(),
                                     amount: isPartial && installmentSchedule ? Math.max(0, installmentSchedule.expected_amount - installmentSchedule.amount_paid).toFixed(2) : installment.monthlyAmount.toFixed(2),
                                     accountId: installment.accountId || accounts[0]?.id || '', paymentScheduleId: installmentSchedule?.id || '',
                                     transactionType: 'loan_payment'
@@ -2401,7 +2401,7 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                                                 transactionId: isPartial ? '' : (existingTx?.id || ''),
                                                 amount: isPartial ? Math.max(0, parseFloat(item.amount) - paymentSchedule.amount_paid).toFixed(2) : existingTx?.amount.toFixed(2) || item.amount,
                                                 receipt: (!isPartial && existingTx) ? 'Receipt on file' : '',
-                                                datePaid: (!isPartial && existingTx) ? new Date(existingTx.date).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
+                                                datePaid: (!isPartial && existingTx) ? toLocalDateInputValue(existingTx.date) : getTodayIso(),
                                                 accountId: existingTx?.payment_method_id || payFormData.accountId
                                               });
                                             } 
@@ -2423,7 +2423,7 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                                           setTransactionFormData({
                                             id: '',
                                             name: item.name,
-                                            date: new Date().toISOString().split('T')[0],
+                                            date: getTodayIso(),
                                             amount: item.amount,
                                             accountId: accounts[0]?.id || '',
                                             paymentScheduleId: '',
@@ -2471,7 +2471,7 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                                       <button 
                                         onClick={() => {
                                           setTransactionFormData({
-                                            id: '', name: `${installment.name} - ${selectedMonth} ${new Date().getFullYear()}`, date: new Date().toISOString().split('T')[0],
+                                            id: '', name: `${installment.name} - ${selectedMonth} ${new Date().getFullYear()}`, date: getTodayIso(),
                                             amount: isPartial && installmentSchedule ? Math.max(0, installmentSchedule.expected_amount - installmentSchedule.amount_paid).toFixed(2) : installment.monthlyAmount.toFixed(2),
                                             accountId: installment.accountId || accounts[0]?.id || '', paymentScheduleId: installmentSchedule?.id || '',
                                             transactionType: 'loan_payment'
@@ -2789,7 +2789,7 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
             <button onClick={() => setShowIncomeRecordsModal(false)} className="absolute top-4 right-4 p-1.5 hover:bg-gray-100 rounded-full transition-colors"><X className="w-5 h-5 text-gray-400" /></button>
             <div className="flex items-center justify-between mb-4">
               <div><h2 className="text-lg font-black text-gray-900 dark:text-gray-100 mb-0.5">Income</h2><p className="text-gray-500 text-xs">{selectedMonth} {selectedYear}</p></div>
-              <button onClick={() => { setShowIncomeRecordsModal(false); const debitAccounts = accounts.filter(a => a.type === 'Debit'); setSalaryFormData({ name: 'Income', amount: '', date: new Date().toISOString().split('T')[0], accountId: debitAccounts[0]?.id || '' }); setShowSalaryModal(true); }} className="flex items-center gap-1 bg-indigo-50 border-2 border-black text-indigo-600 px-2.5 py-1.5 rounded-xl font-bold shadow-[1.5px_1.5px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[0.5px] hover:translate-y-[0.5px] transition-all text-xs"><Plus className="w-3.5 h-3.5" />Add</button>
+              <button onClick={() => { setShowIncomeRecordsModal(false); const debitAccounts = accounts.filter(a => a.type === 'Debit'); setSalaryFormData({ name: 'Income', amount: '', date: getTodayIso(), accountId: debitAccounts[0]?.id || '' }); setShowSalaryModal(true); }} className="flex items-center gap-1 bg-indigo-50 border-2 border-black text-indigo-600 px-2.5 py-1.5 rounded-xl font-bold shadow-[1.5px_1.5px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[0.5px] hover:translate-y-[0.5px] transition-all text-xs"><Plus className="w-3.5 h-3.5" />Add</button>
             </div>
             {allIncomeTxs.length === 0 ? <div className="text-center py-6 text-gray-400 text-xs italic">No income records found.</div> : (
               <div className="space-y-3">
