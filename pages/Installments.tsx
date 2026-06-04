@@ -712,7 +712,7 @@ const Installments: React.FC<InstallmentsProps> = ({ installments, accounts, bil
           <div className="flex items-center gap-2 w-full">
             <button 
               onClick={() => { setShowViewModal(item); }}
-              className={`flex-1 bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 px-4 py-3 rounded-xl text-xs font-black uppercase tracking-widest hover:bg-gray-200 dark:hover:bg-gray-700 transition-all text-center border-2 border-black shadow-[2px_2px_0px_rgba(0,0,0,1)] -rotate-1 hover:rotate-0`}
+              className={`flex-1 bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 px-4 py-3 rounded-xl text-xs font-black uppercase tracking-widest hover:bg-gray-200 dark:hover:bg-gray-700 transition-all text-center border-2 border-black shadow-[2px_2px_0px_rgba(0,0,0,1)]`}
             >
               View
             </button>
@@ -909,7 +909,7 @@ const Installments: React.FC<InstallmentsProps> = ({ installments, accounts, bil
         title="Installments"
         subtitle="Big tickets—right on track"
         icon={
-          <div className={`w-14 h-14 rounded-2xl flex items-center justify-center text-white border-[3px] border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] -rotate-3 transition-all hover:rotate-0 hover:scale-110 z-10 relative ${getAccentClasses('bg')}`}>
+              <div className={`w-14 h-14 rounded-2xl flex items-center justify-center text-white border-[3px] border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] transition-all hover:scale-110 z-10 relative ${getAccentClasses('bg')}`}>
             <Calendar className="w-7 h-7" />
           </div>
         }
@@ -933,7 +933,7 @@ const Installments: React.FC<InstallmentsProps> = ({ installments, accounts, bil
             </div>
             <button 
               onClick={() => setShowModal(true)}
-                className={`flex items-center gap-2 text-white px-5 py-3 rounded-xl font-bold transition-all text-sm ${getAccentClasses('bg')} ${getAccentClasses('shadow')} border-[3px] border-black shadow-[4px_4px_0px_rgba(0,0,0,1)] -rotate-3 hover:rotate-0 hover:scale-105`}
+                className={`flex items-center gap-2 text-white px-5 py-3 rounded-xl font-bold transition-all text-sm ${getAccentClasses('bg')} filter drop-shadow-[0_10px_30px_rgba(0,0,0,0.12)] border-[3px] border-black shadow-[4px_4px_0px_rgba(0,0,0,1)] hover:scale-105`}
             >
               <Plus className="w-4 h-4" />
               <span className="hidden sm:inline">New Installment</span>
@@ -963,7 +963,7 @@ const Installments: React.FC<InstallmentsProps> = ({ installments, accounts, bil
             </div>
             <button 
               onClick={() => setShowModal(true)}
-                className={`flex items-center gap-2 text-white px-4 py-3 rounded-xl font-bold transition-all text-sm ${getAccentClasses('bg')} ${getAccentClasses('shadow')} border-[3px] border-black shadow-[4px_4px_0px_rgba(0,0,0,1)] -rotate-3 hover:rotate-0 hover:scale-105`}
+                className={`flex items-center gap-2 text-white px-4 py-3 rounded-xl font-bold transition-all text-sm ${getAccentClasses('bg')} filter drop-shadow-[0_10px_30px_rgba(0,0,0,0.12)] border-[3px] border-black shadow-[4px_4px_0px_rgba(0,0,0,1)] hover:scale-105`}
             >
               <Plus className="w-4 h-4" />
             </button>
