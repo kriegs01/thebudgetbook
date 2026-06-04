@@ -609,7 +609,7 @@ const Installments: React.FC<InstallmentsProps> = ({ installments, accounts, bil
     const archStatus = getItemArchiveStatus(item);
 
     return (
-      <div key={item.id} className="bg-white dark:bg-gray-900 p-6 rounded-3xl shadow-sm border border-gray-100 dark:border-gray-800 hover:shadow-md transition-all group relative overflow-hidden">
+      <div key={item.id} className={`bg-white dark:bg-gray-900 p-6 rounded-3xl border-[3px] border-black shadow-[4px_4px_0px_rgba(0,0,0,1)] transition-all group relative overflow-hidden`}>
         <div className="flex justify-between items-start mb-4">
           <div className="flex-1">
             <div className="flex items-center gap-2 mb-1">
@@ -712,7 +712,7 @@ const Installments: React.FC<InstallmentsProps> = ({ installments, accounts, bil
           <div className="flex items-center gap-2 w-full">
             <button 
               onClick={() => { setShowViewModal(item); }}
-              className="flex-1 bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 px-4 py-3 rounded-xl text-xs font-black uppercase tracking-widest hover:bg-gray-200 dark:hover:bg-gray-700 transition-all text-center"
+              className={`flex-1 bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 px-4 py-3 rounded-xl text-xs font-black uppercase tracking-widest hover:bg-gray-200 dark:hover:bg-gray-700 transition-all text-center border-2 border-black shadow-[2px_2px_0px_rgba(0,0,0,1)] -rotate-1 hover:rotate-0`}
             >
               View
             </button>
@@ -720,7 +720,7 @@ const Installments: React.FC<InstallmentsProps> = ({ installments, accounts, bil
               isFullyPaid ? (
                 <button 
                   onClick={() => { setShowCloseModal(item); setCloseTagging('completed'); }}
-                  className="flex-1 bg-amber-500 text-white px-4 py-3 rounded-xl text-xs font-black uppercase tracking-widest hover:bg-amber-600 transition-all shadow-lg shadow-amber-100/50 dark:shadow-none text-center"
+                  className={`flex-1 bg-amber-500 text-white px-4 py-3 rounded-xl text-xs font-black uppercase tracking-widest hover:bg-amber-600 transition-all border-2 border-black shadow-[2px_2px_0px_rgba(0,0,0,1)] dark:shadow-none text-center`}
                 >
                   Close
                 </button>
@@ -737,7 +737,7 @@ const Installments: React.FC<InstallmentsProps> = ({ installments, accounts, bil
                       accountId: defaultNonCreditAccountId
                     });
                   }}
-                  className="flex-1 bg-indigo-600 text-white px-4 py-3 rounded-xl text-xs font-black uppercase tracking-widest hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-100 dark:shadow-none text-center"
+                  className={`flex-1 bg-indigo-600 text-white px-4 py-3 rounded-xl text-xs font-black uppercase tracking-widest hover:bg-indigo-700 transition-all border-2 border-black shadow-[2px_2px_0px_rgba(0,0,0,1)] dark:shadow-none text-center`}
                 >
                   Pay
                 </button>
@@ -915,7 +915,7 @@ const Installments: React.FC<InstallmentsProps> = ({ installments, accounts, bil
         }
         actions={!isMobile ? (
           <div className="flex items-center gap-3 self-end sm:self-auto">
-            <div className="flex items-center bg-gray-50 dark:bg-gray-800 rounded-xl p-1 space-x-1 transition-colors">
+            <div className="flex items-center bg-gray-50 dark:bg-gray-800 rounded-xl p-1 space-x-1 transition-colors border-2 border-black shadow-[2px_2px_0px_rgba(0,0,0,1)]">
               <button 
                 onClick={() => setViewMode('card')}
                 className={`p-2 rounded-lg transition-colors ${viewMode === 'card' ? 'bg-white dark:bg-gray-700 shadow-sm text-indigo-600 dark:text-indigo-400' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'}`}
@@ -933,7 +933,7 @@ const Installments: React.FC<InstallmentsProps> = ({ installments, accounts, bil
             </div>
             <button 
               onClick={() => setShowModal(true)}
-                className={`flex items-center gap-2 text-white px-5 py-3 rounded-xl font-bold transition-all shadow-md dark:shadow-none text-sm ${getAccentClasses('bg')} ${getAccentClasses('shadow')}`}
+                className={`flex items-center gap-2 text-white px-5 py-3 rounded-xl font-bold transition-all text-sm ${getAccentClasses('bg')} ${getAccentClasses('shadow')} border-[3px] border-black shadow-[4px_4px_0px_rgba(0,0,0,1)] -rotate-3 hover:rotate-0 hover:scale-105`}
             >
               <Plus className="w-4 h-4" />
               <span className="hidden sm:inline">New Installment</span>
@@ -1347,18 +1347,18 @@ const Installments: React.FC<InstallmentsProps> = ({ installments, accounts, bil
         
         return (
           <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md">
-            <div className="bg-white dark:bg-gray-900 rounded-[2.5rem] w-full max-w-3xl p-10 shadow-2xl animate-in zoom-in-95 max-h-[90vh] overflow-y-auto transition-colors">
+            <div className={`bg-white dark:bg-gray-900 rounded-[2.5rem] w-full max-w-3xl p-10 shadow-2xl animate-in zoom-in-95 max-h-[90vh] overflow-y-auto transition-colors border-[3px] border-black shadow-[6px_6px_0px_rgba(0,0,0,1)]`}>
               <div className="flex items-center justify-between mb-6">
                 <div>
-                  <h2 className="text-2xl font-black text-gray-900 dark:text-gray-100 uppercase tracking-tight transition-colors">{showViewModal.name}</h2>
+                  <h2 className={`text-2xl font-titan normal-case tracking-tighter leading-none [text-shadow:-1px_-1px_0_#000,1px_-1px_0_#000,-1px_1px_0_#000,1px_1px_0_#000] drop-shadow-[3px_3px_0px_#000] ${getAccentClasses('text')}`}>{showViewModal.name}</h2>
                   <p className="text-gray-500 dark:text-gray-400 text-sm mt-1 transition-colors">Monthly Payment Schedule</p>
                 </div>
-                <button onClick={() => setShowViewModal(null)} className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full transition-colors">
+                <button onClick={() => setShowViewModal(null)} className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full transition-colors border-2 border-black shadow-[2px_2px_0px_rgba(0,0,0,1)]">
                   <X className="w-6 h-6 text-gray-400 dark:text-gray-500" />
                 </button>
               </div>
               
-              <div className="bg-gray-50 dark:bg-gray-800/50 rounded-2xl p-6 mb-6 grid grid-cols-3 gap-4 transition-colors">
+              <div className="bg-gray-50 dark:bg-gray-800/50 rounded-2xl p-6 mb-6 grid grid-cols-3 gap-4 transition-colors border-2 border-black shadow-[2px_2px_0px_rgba(0,0,0,1)]">
                 <div>
                   <p className="text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-1 transition-colors">Total Amount</p>
                   <p className="text-lg font-black text-gray-900 dark:text-gray-100 transition-colors">{formatCurrency(showViewModal.totalAmount)}</p>
