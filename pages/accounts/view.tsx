@@ -412,11 +412,11 @@ const AccountFilteredTransactions: React.FC<AccountFilteredTransactionsProps> = 
     setIsSubmitting(true);
     try {
       const { error } = await createTransaction({
-        name: sendFriendForm.forWhat || `Payment to ${sendFriendForm.personName}`,
+        name: sendFriendForm.forWhat || `Transfer to ${sendFriendForm.personName}`,
         date: combineDateWithCurrentTime(sendFriendForm.date),
         amount: Math.abs(parseFloat(sendFriendForm.amount)), // Positive - money going out
         payment_method_id: accountId,
-        transaction_type: 'payment',
+        transaction_type: 'transfer',
         notes: null,
         payment_schedule_id: null,
         related_transaction_id: null,
@@ -425,14 +425,14 @@ const AccountFilteredTransactions: React.FC<AccountFilteredTransactionsProps> = 
 
       if (error) throw error;
       
-      showMessage('success', 'Payment sent successfully');
+      showMessage('success', 'Transfer sent successfully');
       setShowSendModal(false);
       setSendFriendForm({ forWhat: '', amount: '', personName: '', date: getTodayIso() });
       await loadTransactions();
       onTransactionCreated?.();
     } catch (error) {
       console.error('Error sending to friend:', error);
-      showMessage('error', 'Failed to send payment');
+      showMessage('error', 'Failed to send transfer');
     } finally {
       setIsSubmitting(false);
     }
@@ -641,9 +641,8 @@ const AccountFilteredTransactions: React.FC<AccountFilteredTransactionsProps> = 
   };
 
   const getTransactionTypeBadge = (type?: string) => {
-    if (!type || type === 'payment') return null;
-    
     const badges: Record<string, { color: string; label: string }> = {
+      payment: { color: 'bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300', label: 'Payment' },
       withdraw: { color: 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400', label: 'Withdraw' },
       transfer: { color: 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400', label: 'Transfer' },
       loan: { color: 'bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-400', label: 'Loan' },
@@ -652,7 +651,8 @@ const AccountFilteredTransactions: React.FC<AccountFilteredTransactionsProps> = 
       credit_payment: { color: 'bg-teal-100 dark:bg-teal-900/30 text-teal-700 dark:text-teal-400', label: 'Card Payment' },
     };
     
-    const badge = badges[type];
+    const key = type || 'payment';
+    const badge = badges[key];
     if (!badge) return null;
     
     return (
