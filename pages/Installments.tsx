@@ -44,7 +44,7 @@ const PageHeader: React.FC<{
   const isMobile = useMediaQuery('(max-width: 767px)');
   
   return (
-    <header className={`${isMobile ? 'pt-16' : 'pt-12'} flex flex-row items-center justify-between gap-6 mb-4`}>
+    <header className={`${isMobile ? 'pt-16' : 'pt-12'} flex flex-row items-center justify-between gap-6 mb-2`}>
       <div className="flex flex-1 items-center gap-6">
         {backButton}
         <div className="flex-1">
