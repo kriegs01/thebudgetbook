@@ -943,7 +943,7 @@ const Installments: React.FC<InstallmentsProps> = ({ installments, accounts, bil
       />
 
       {isMobile && (
-        <div className="flex justify-end mb-4">
+        <div className="flex justify-end mb-1">
           <div className="flex items-center gap-3">
             <div className="flex items-center bg-gray-50 dark:bg-gray-800 rounded-xl p-1 space-x-1 transition-colors border-2 border-black shadow-[2px_2px_0px_rgba(0,0,0,1)]">
               <button 
