@@ -202,7 +202,7 @@ const PageHeader: React.FC<{
             <div className="relative inline-block">
                 <div ref={titleContainerRef} className="flex items-center gap-4">
                     {icon && <div className="z-10 shrink-0">{icon}</div>}
-                    <h1 className="text-[clamp(2rem,7.5vw,3.75rem)] font-titan normal-case tracking-tighter leading-none relative z-10 text-black dark:text-white transition-colors duration-300">
+                    <h1 className={`font-titan text-[clamp(2rem,7.5vw,3.75rem)] normal-case tracking-tighter leading-none relative z-10 [text-shadow:-1px_-1px_0_#000,1px_-1px_0_#000,-1px_1px_0_#000,1px_1px_0_#000] drop-shadow-[3px_3px_0px_#000] ${icon ? getAccentClasses('text') : 'text-black dark:text-white'}`}>
                         {title}
                     </h1>
                 </div>
