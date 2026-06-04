@@ -44,7 +44,7 @@ const PageHeader: React.FC<{
   const isMobile = useMediaQuery('(max-width: 767px)');
   
   return (
-    <header className={`${isMobile ? 'pt-16' : 'pt-12'} flex flex-row items-center justify-between gap-6 mb-2`}>
+    <header className={`${isMobile ? 'pt-16' : 'pt-12'} flex flex-row items-center justify-between gap-6 mb-4`}>
       <div className="flex flex-1 items-center gap-6">
         {backButton}
         <div className="flex-1">
@@ -1011,32 +1011,32 @@ const Installments: React.FC<InstallmentsProps> = ({ installments, accounts, bil
             <form onSubmit={handleSubmit} className="space-y-6">
               <div>
                 <label className="block text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-2 transition-colors">Item Name</label>
-                <input required type="text" value={formData.name} onChange={(e) => setFormData({...formData, name: e.target.value})} className="w-full bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-transparent dark:border-gray-700 rounded-2xl p-4 outline-none focus:ring-2 focus:ring-indigo-500 font-bold transition-colors" placeholder="e.g. MacBook Pro" />
+                <input required type="text" value={formData.name} onChange={(e) => setFormData({...formData, name: e.target.value})} className="w-full bg-gray-50 dark:bg-gray-900 dark:text-gray-100 border-2 border-black rounded-2xl p-4 outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 font-bold transition-colors shadow-[2px_2px_0px_rgba(0,0,0,0.12)]" placeholder="e.g. MacBook Pro" />
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-2 transition-colors">Total Amount</label>
                   <div className="relative">
                     <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 dark:text-gray-500 font-bold transition-colors">₱</span>
-                    <input required type="number" value={formData.totalAmount} onChange={(e) => setFormData({...formData, totalAmount: e.target.value})} className="w-full bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-transparent dark:border-gray-700 rounded-2xl p-4 pl-8 outline-none focus:ring-2 focus:ring-indigo-500 font-black transition-colors" />
+                    <input required type="number" value={formData.totalAmount} onChange={(e) => setFormData({...formData, totalAmount: e.target.value})} className="w-full bg-gray-50 dark:bg-gray-900 dark:text-gray-100 border-2 border-black rounded-2xl p-4 pl-8 outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 font-black transition-colors shadow-[2px_2px_0px_rgba(0,0,0,0.12)]" />
                   </div>
                 </div>
                 <div>
                   <label className="block text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-2 transition-colors">Monthly Payment</label>
                   <div className="relative">
                     <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 dark:text-gray-500 font-bold transition-colors">₱</span>
-                    <input required type="number" value={formData.monthlyAmount} onChange={(e) => setFormData({...formData, monthlyAmount: e.target.value})} className="w-full bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-transparent dark:border-gray-700 rounded-2xl p-4 pl-8 outline-none focus:ring-2 focus:ring-indigo-500 font-black transition-colors" />
+                    <input required type="number" value={formData.monthlyAmount} onChange={(e) => setFormData({...formData, monthlyAmount: e.target.value})} className="w-full bg-gray-50 dark:bg-gray-900 dark:text-gray-100 border-2 border-black rounded-2xl p-4 pl-8 outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 font-black transition-colors shadow-[2px_2px_0px_rgba(0,0,0,0.12)]" />
                   </div>
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-2 transition-colors">Start Date</label>
-                  <input type="month" placeholder="YYYY-MM" value={formData.startDate} onChange={(e) => setFormData({...formData, startDate: e.target.value})} className="w-full bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-transparent dark:border-gray-700 rounded-2xl p-4 outline-none focus:ring-2 focus:ring-indigo-500 font-bold transition-colors" />
+                  <input type="month" placeholder="YYYY-MM" value={formData.startDate} onChange={(e) => setFormData({...formData, startDate: e.target.value})} className="w-full bg-gray-50 dark:bg-gray-900 dark:text-gray-100 border-2 border-black rounded-2xl p-4 outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 font-bold transition-colors shadow-[2px_2px_0px_rgba(0,0,0,0.12)]" />
                 </div>
                 <div>
                   <label className="block text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-2 transition-colors">Timing (PROTOTYPE)</label>
-                  <select value={formData.timing} onChange={(e) => setFormData({...formData, timing: e.target.value as '1/2' | '2/2'})} className="w-full bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-transparent dark:border-gray-700 rounded-2xl p-4 outline-none focus:ring-2 focus:ring-indigo-500 font-bold appearance-none transition-colors">
+                  <select value={formData.timing} onChange={(e) => setFormData({...formData, timing: e.target.value as '1/2' | '2/2'})} className="w-full bg-gray-50 dark:bg-gray-900 dark:text-gray-100 border-2 border-black rounded-2xl p-4 outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 font-bold appearance-none transition-colors shadow-[2px_2px_0px_rgba(0,0,0,0.12)]">
                     <option value="1/2">1/2</option>
                     <option value="2/2">2/2</option>
                   </select>
@@ -1052,24 +1052,24 @@ const Installments: React.FC<InstallmentsProps> = ({ installments, accounts, bil
                   value={formData.termDuration} 
                   onChange={(e) => setFormData({...formData, termDuration: e.target.value})} 
                   placeholder="e.g., 12, 24, 36"
-                  className="w-full bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-transparent dark:border-gray-700 rounded-2xl p-4 outline-none focus:ring-2 focus:ring-indigo-500 font-black transition-colors" 
+                  className="w-full bg-gray-50 dark:bg-gray-900 dark:text-gray-100 border-2 border-black rounded-2xl p-4 outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 font-black transition-colors shadow-[2px_2px_0px_rgba(0,0,0,0.12)]" 
                 />
               </div>
               <div>
                 <label className="block text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-2 transition-colors">Already Paid</label>
                 <div className="relative">
                   <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 dark:text-gray-500 font-bold transition-colors">₱</span>
-                  <input required type="number" value={formData.paidAmount} onChange={(e) => setFormData({...formData, paidAmount: e.target.value})} className="w-full bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-transparent dark:border-gray-700 rounded-2xl p-4 pl-8 outline-none focus:ring-2 focus:ring-indigo-500 font-black transition-colors" />
+                  <input required type="number" value={formData.paidAmount} onChange={(e) => setFormData({...formData, paidAmount: e.target.value})} className="w-full bg-gray-50 dark:bg-gray-900 dark:text-gray-100 border-2 border-black rounded-2xl p-4 pl-8 outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 font-black transition-colors shadow-[2px_2px_0px_rgba(0,0,0,0.12)]" />
                 </div>
               </div>
               <div>
                 <label className="block text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-2 transition-colors">Billing Account</label>
                 {accounts.length === 0 ? (
-                  <div className="w-full bg-red-50 dark:bg-red-900/20 border-2 border-red-200 dark:border-red-800 rounded-2xl p-4 transition-colors">
+                  <div className="w-full bg-red-50 dark:bg-red-900/20 border-2 border-black rounded-2xl p-4 shadow-[2px_2px_0px_rgba(0,0,0,0.12)] transition-colors">
                     <p className="text-red-600 dark:text-red-400 font-bold text-sm transition-colors">⚠️ No accounts available. Please create an account first.</p>
                   </div>
                 ) : (
-                  <select value={formData.accountId} onChange={(e) => setFormData({...formData, accountId: e.target.value})} className="w-full bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-transparent dark:border-gray-700 rounded-2xl p-4 outline-none focus:ring-2 focus:ring-indigo-500 font-bold appearance-none transition-colors">
+                  <select value={formData.accountId} onChange={(e) => setFormData({...formData, accountId: e.target.value})} className="w-full bg-gray-50 dark:bg-gray-900 dark:text-gray-100 border-2 border-black rounded-2xl p-4 outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 font-bold appearance-none transition-colors shadow-[2px_2px_0px_rgba(0,0,0,0.12)]">
                     {accounts.map(acc => (
                       <option key={acc.id} value={acc.id}>{acc.bank} - {acc.classification}</option>
                     ))}
@@ -1079,7 +1079,7 @@ const Installments: React.FC<InstallmentsProps> = ({ installments, accounts, bil
               {billers.filter(b => b.category.startsWith('Loans')).length > 0 && (
                 <div>
                   <label className="block text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-2 transition-colors">Link to Biller (Optional - For Loans)</label>
-                  <select value={formData.billerId} onChange={(e) => setFormData({...formData, billerId: e.target.value})} className="w-full bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-transparent dark:border-gray-700 rounded-2xl p-4 outline-none focus:ring-2 focus:ring-indigo-500 font-bold appearance-none transition-colors">
+                  <select value={formData.billerId} onChange={(e) => setFormData({...formData, billerId: e.target.value})} className="w-full bg-gray-50 dark:bg-gray-900 dark:text-gray-100 border-2 border-black rounded-2xl p-4 outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 font-bold appearance-none transition-colors shadow-[2px_2px_0px_rgba(0,0,0,0.12)]">
                     <option value="">None</option>
                     {billers.filter(b => b.category.startsWith('Loans')).map(biller => (
                       <option key={biller.id} value={biller.id}>{biller.name}</option>
