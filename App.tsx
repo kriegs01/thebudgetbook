@@ -874,7 +874,10 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
         {
           name: `${installment.name} - ${targetSchedule.month} ${targetSchedule.year}`,
           date: combineDateWithCurrentTime(payment.date),
-          amount: payment.amount,
+          amount: ((): number => {
+            const acct = accounts.find(a => a.id === payment.accountId);
+            return acct && acct.type === 'Credit' ? -Math.abs(payment.amount) : Math.abs(payment.amount);
+          })(),
           paymentMethodId: payment.accountId,
         }
       );
@@ -905,7 +908,7 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
       // Update the installment's paidAmount
       const updatedInstallment: Installment = {
         ...installment,
-        paidAmount: installment.paidAmount + payment.amount,
+        paidAmount: installment.paidAmount + Math.abs(payment.amount),
       };
 
       await updateInstallmentFrontend(updatedInstallment);
@@ -1018,7 +1021,10 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
         {
           name: `${biller.name} - ${targetSchedule.month} ${targetSchedule.year}`,
           date: combineDateWithCurrentTime(payment.date),
-          amount: payment.amount,
+          amount: ((): number => {
+            const acct = accounts.find(a => a.id === payment.accountId);
+            return acct && acct.type === 'Credit' ? -Math.abs(payment.amount) : Math.abs(payment.amount);
+          })(),
           paymentMethodId: payment.accountId,
         }
       );

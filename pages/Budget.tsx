@@ -1337,11 +1337,15 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
       
       let transactionData, transactionError;
       
+      const parsedAmount = parseFloat(payFormData.amount) || 0;
+      const selectedAccount = accounts.find(a => a.id === payFormData.accountId);
+      const finalAmount = selectedAccount && selectedAccount.type === 'Credit' ? -Math.abs(parsedAmount) : Math.abs(parsedAmount);
+
       if (isEditing) {
         const transaction = {
           name: `${biller.name} - ${schedule.month} ${schedule.year}`,
           date: combineDateWithCurrentTime(payFormData.datePaid),
-          amount: parseFloat(payFormData.amount),
+          amount: finalAmount,
           payment_method_id: payFormData.accountId,
           notes: `Budget Timing: ${selectedTiming}`
         };
@@ -1354,7 +1358,7 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
           {
             name: `${biller.name} - ${schedule.month} ${schedule.year}`,
             date: combineDateWithCurrentTime(payFormData.datePaid),
-            amount: parseFloat(payFormData.amount),
+            amount: finalAmount,
             paymentMethodId: payFormData.accountId,
             notes: `Budget Timing: ${selectedTiming}`
           }
@@ -1365,7 +1369,7 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
         const transaction = {
           name: `${biller.name} - ${schedule.month} ${schedule.year}`,
           date: combineDateWithCurrentTime(payFormData.datePaid),
-          amount: parseFloat(payFormData.amount),
+          amount: finalAmount,
           payment_method_id: payFormData.accountId,
           notes: `Budget Timing: ${selectedTiming}`
         };
