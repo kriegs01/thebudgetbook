@@ -638,7 +638,7 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
     amount: '',
     accountId: accounts[0]?.id || '',
     paymentScheduleId: '',
-    transactionType: 'cash_out'
+    transactionType: 'payment'
   });
   const [transactionFormData, setTransactionFormData] = useState(getDefaultTransactionFormData());
 
@@ -1214,16 +1214,15 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
       let transactionData, transactionError;
       
       let finalAmount = parseFloat(transactionFormData.amount);
-      if (transactionFormData.transactionType === 'cash_in' || transactionFormData.transactionType === 'loan_payment') {
+      if (transactionFormData.transactionType === 'cash_in') {
         finalAmount = -Math.abs(finalAmount);
       } else {
         finalAmount = Math.abs(finalAmount);
       }
 
-      const selectedAccountForTx = accounts.find(a => a.id === transactionFormData.accountId);
-      const txTypeForForm = selectedAccountForTx?.type === 'Credit'
-        ? (finalAmount < 0 ? 'credit_payment' : 'cash_out')
-        : (finalAmount < 0 ? 'cash_in' : 'cash_out');
+      const txTypeForForm = transactionFormData.transactionType === 'cash_in'
+        ? 'cash_in'
+        : 'payment';
 
       if (isEditing) {
         const transaction = {
@@ -1246,7 +1245,7 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
             amount: finalAmount,
             paymentMethodId: transactionFormData.accountId,
             notes: `Budget Timing: ${selectedTiming}`,
-            transaction_type: txTypeForForm
+            transactionType: txTypeForForm,
           }
         );
         transactionData = result.data;
@@ -1295,6 +1294,11 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
       }
       
       if (transactionError) {
+        const code = (transactionError as any)?.code;
+        if (code === '23514') {
+          alert('Failed to save transaction: your database is rejecting the transaction type. Please run the latest Supabase migrations (including credit_payment transaction type).');
+          return;
+        }
         alert(`Failed to ${isEditing ? 'update' : 'save'} transaction. Please try again.`);
         return;
       }
@@ -1432,7 +1436,7 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
       if (!isEditing && biller.linkedAccountId && transactionData?.id) {
         const linkedAccount = accounts.find(a => a.id === biller.linkedAccountId);
         if (linkedAccount?.type === 'Credit') {
-          await createTransaction({
+          const { error: creditPaymentError } = await createTransaction({
             name: `${biller.name} - ${schedule.month} ${schedule.year}`,
             date: combineDateWithCurrentTime(payFormData.datePaid),
             amount: -Math.abs(parseFloat(payFormData.amount)),
@@ -1443,6 +1447,10 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
             related_transaction_id: transactionData.id,
             receipt_url: null,
           });
+          const code = (creditPaymentError as any)?.code;
+          if (code === '23514') {
+            alert('Payment saved, but the credit card adjustment transaction failed because your database does not allow the credit_payment transaction type. Please run the latest Supabase migrations.');
+          }
         }
       }
       
@@ -2368,7 +2376,7 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                                     id: '', name: `${installment.name} - ${selectedMonth} ${new Date().getFullYear()}`, date: getTodayIso(),
                                     amount: isPartial && installmentSchedule ? Math.max(0, installmentSchedule.expected_amount - installmentSchedule.amount_paid).toFixed(2) : installment.monthlyAmount.toFixed(2),
                                     accountId: installment.accountId || accounts[0]?.id || '', paymentScheduleId: installmentSchedule?.id || '',
-                                    transactionType: 'loan_payment'
+                                    transactionType: 'payment'
                                   });
                                   setShowTransactionModal(true);
                                 }}
@@ -2520,7 +2528,7 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                                             id: '', name: `${installment.name} - ${selectedMonth} ${new Date().getFullYear()}`, date: getTodayIso(),
                                             amount: isPartial && installmentSchedule ? Math.max(0, installmentSchedule.expected_amount - installmentSchedule.amount_paid).toFixed(2) : installment.monthlyAmount.toFixed(2),
                                             accountId: installment.accountId || accounts[0]?.id || '', paymentScheduleId: installmentSchedule?.id || '',
-                                            transactionType: 'loan_payment'
+                                            transactionType: 'payment'
                                           });
                                           setShowTransactionModal(true);
                                         }}

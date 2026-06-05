@@ -874,23 +874,29 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
         {
           name: `${installment.name} - ${targetSchedule.month} ${targetSchedule.year}`,
           date: combineDateWithCurrentTime(payment.date),
-          amount: ((): number => {
-            const acct = accounts.find(a => a.id === payment.accountId);
-            return acct && acct.type === 'Credit' ? -Math.abs(payment.amount) : Math.abs(payment.amount);
-          })(),
+          amount: Math.abs(payment.amount),
           paymentMethodId: payment.accountId,
-          transaction_type: ((): string => {
-            const acct = accounts.find(a => a.id === payment.accountId);
-            const val = acct && acct.type === 'Credit' ? -Math.abs(payment.amount) : Math.abs(payment.amount);
-            return acct?.type === 'Credit' ? (val < 0 ? 'credit_payment' : 'cash_out') : (val < 0 ? 'cash_in' : 'cash_out');
-          })(),
+          transactionType: 'payment',
         }
       );
 
       if (transactionError || !transaction) {
         console.error('Error creating transaction:', transactionError);
-        // Payment schedule was updated but transaction failed - not ideal but acceptable
-        console.warn('[App] Payment schedule updated but transaction creation failed');
+        const fallbackResult = await createTransaction({
+          name: `${installment.name} - ${targetSchedule.month} ${targetSchedule.year}`,
+          date: combineDateWithCurrentTime(payment.date),
+          amount: payment.amount,
+          payment_method_id: payment.accountId,
+          transaction_type: 'payment',
+          notes: `Installment payment (schedule: ${targetSchedule.id})`,
+          payment_schedule_id: null,
+        });
+        if (fallbackResult.error) {
+          console.error('[App] Fallback transaction creation also failed:', fallbackResult.error);
+          alert('Payment schedule was marked paid, but the transaction could not be created. Please run the latest Supabase migrations (transactions.payment_schedule_id and transaction types) and try again.');
+        } else {
+          alert('Payment saved. The transaction was created, but could not be linked to the schedule due to a database mismatch. Please run the latest Supabase migrations.');
+        }
       } else {
         console.log('[App] Transaction created successfully:', {
           transactionId: transaction.id,
