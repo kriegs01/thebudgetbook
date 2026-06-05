@@ -879,6 +879,13 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
             return acct && acct.type === 'Credit' ? -Math.abs(payment.amount) : Math.abs(payment.amount);
           })(),
           paymentMethodId: payment.accountId,
+          transaction_type: ((): string => {
+            const val = ((): number => {
+              const acct = accounts.find(a => a.id === payment.accountId);
+              return acct && acct.type === 'Credit' ? -Math.abs(payment.amount) : Math.abs(payment.amount);
+            })();
+            return val < 0 ? 'cash_in' : 'cash_out';
+          })(),
         }
       );
 
@@ -1026,6 +1033,13 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
             return acct && acct.type === 'Credit' ? -Math.abs(payment.amount) : Math.abs(payment.amount);
           })(),
           paymentMethodId: payment.accountId,
+          transaction_type: ((): string => {
+            const val = ((): number => {
+              const acct = accounts.find(a => a.id === payment.accountId);
+              return acct && acct.type === 'Credit' ? -Math.abs(payment.amount) : Math.abs(payment.amount);
+            })();
+            return val < 0 ? 'cash_in' : 'cash_out';
+          })(),
         }
       );
 

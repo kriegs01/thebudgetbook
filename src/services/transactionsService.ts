@@ -686,6 +686,7 @@ export const createPaymentScheduleTransaction = async (
       payment_method_id: transaction.paymentMethodId,
       payment_schedule_id: scheduleId,
       notes: transaction.notes ?? null,
+      transaction_type: (transaction as any).transaction_type ?? null,
     };
 
     const { data, error } = await supabase

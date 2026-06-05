@@ -1226,6 +1226,7 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
           date: combineDateWithCurrentTime(transactionFormData.date),
           amount: finalAmount,
           payment_method_id: transactionFormData.accountId,
+          transaction_type: finalAmount < 0 ? 'cash_in' : 'cash_out',
           notes: `Budget Timing: ${selectedTiming}`
         };
         const result = await updateTransactionAndSyncSchedule(transactionFormData.id, transaction);
@@ -1239,7 +1240,8 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
             date: combineDateWithCurrentTime(transactionFormData.date),
             amount: finalAmount,
             paymentMethodId: transactionFormData.accountId,
-            notes: `Budget Timing: ${selectedTiming}`
+            notes: `Budget Timing: ${selectedTiming}`,
+            transaction_type: finalAmount < 0 ? 'cash_in' : 'cash_out'
           }
         );
         transactionData = result.data;
@@ -1279,9 +1281,10 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
           date: combineDateWithCurrentTime(transactionFormData.date),
           amount: finalAmount,
           payment_method_id: transactionFormData.accountId,
+          transaction_type: finalAmount < 0 ? 'cash_in' : 'cash_out',
           notes: `Budget Timing: ${selectedTiming}`
         };
-        const result = await createTransaction(transaction);
+        const result = await createTransaction(transaction as any);
         transactionData = result.data;
         transactionError = result.error;
       }
@@ -1360,8 +1363,9 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
             date: combineDateWithCurrentTime(payFormData.datePaid),
             amount: finalAmount,
             paymentMethodId: payFormData.accountId,
-            notes: `Budget Timing: ${selectedTiming}`
-          }
+            notes: `Budget Timing: ${selectedTiming}`,
+            transaction_type: finalAmount < 0 ? 'cash_in' : 'cash_out'
+          } as any
         );
         transactionData = result.data;
         transactionError = result.error;
@@ -1373,7 +1377,7 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
           payment_method_id: payFormData.accountId,
           notes: `Budget Timing: ${selectedTiming}`
         };
-        const result = await createTransaction(transaction);
+        const result = await createTransaction({ ...transaction, transaction_type: finalAmount < 0 ? 'cash_in' : 'cash_out' });
         transactionData = result.data;
         transactionError = result.error;
       }
