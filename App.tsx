@@ -411,6 +411,14 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
   const [categories, setCategories] = useState(INITIAL_CATEGORIES);
   const [theme, setTheme] = useState<'light' | 'dark'>('light');
   
+  // Preserve a locally chosen theme even while the user profile is still loading.
+  useEffect(() => {
+    const localTheme = localStorage.getItem('theme');
+    if (localTheme === 'dark' || localTheme === 'light') {
+      setTheme(localTheme);
+    }
+  }, []);
+
   // Wizard State
   const [showWizard, setShowWizard] = useState(false);
 
@@ -515,16 +523,14 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
 
   // Theme Initialization and Synchronization
   useEffect(() => {
-    let initialTheme: 'light' | 'dark' = 'light';
-    if (userProfile?.theme) {
-      initialTheme = userProfile.theme;
-    } else {
-      const localTheme = localStorage.getItem('theme');
-      if (localTheme === 'dark' || localTheme === 'light') {
-        initialTheme = localTheme;
-      } 
+    const localTheme = localStorage.getItem('theme');
+    if (localTheme === 'dark' || localTheme === 'light') {
+      return; // Keep the locally chosen theme if the user already selected one.
     }
-    setTheme(initialTheme);
+
+    if (userProfile?.theme === 'dark' || userProfile?.theme === 'light') {
+      setTheme(userProfile.theme);
+    }
   }, [userProfile]);
 
   useEffect(() => {
