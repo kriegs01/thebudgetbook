@@ -179,7 +179,7 @@ const queryClient = new QueryClient();
 
 // Main App Content (Protected)
 const AppContent: React.FC = () => {
-  const { user, userProfile, loading: authLoading, signOut } = useAuth();
+  const { user, userProfile, loading: authLoading, signOut, refreshProfile } = useAuth();
   const queryClient = useQueryClient();
 
   // Show auth page if not authenticated
@@ -1165,21 +1165,16 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
   const handleToggleTheme = async () => {
     const newTheme = theme === 'light' ? 'dark' : 'light';
     setTheme(newTheme);
-    
+    localStorage.setItem('theme', newTheme);
+
     if (user?.id) {
-      const { error } = await supabase
-        .from('user_profiles')
-        .update({ theme: newTheme })
-        .eq('user_id', user.id);
-      
+      const { data, error } = await updateUserProfile(user.id, { theme: newTheme });
       if (error) {
-        console.error("Failed to save theme to Supabase:", error);
-        localStorage.setItem('theme', newTheme); // Fallback
-      } else {
-        localStorage.removeItem('theme'); // Clean up if successfully cloud synced
+        console.error('Failed to save theme to Supabase:', error);
+      } else if (data) {
+        // Keep the authenticated profile state in sync with the new theme
+        await refreshProfile();
       }
-    } else {
-      localStorage.setItem('theme', newTheme);
     }
   };
 
