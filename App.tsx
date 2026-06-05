@@ -1033,18 +1033,17 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
           paymentMethodId: payment.accountId,
           transaction_type: ((): string => {
             const acct = accounts.find(a => a.id === payment.accountId);
-            const val = acct && acct.type === 'Credit' ? -Math.abs(payment.amount) : Math.abs(payment.amount);
-            return acct?.type === 'Credit' ? (val < 0 ? 'credit_payment' : 'cash_out') : (val < 0 ? 'cash_in' : 'cash_out');
+            return acct?.type === 'Credit' ? 'credit_payment' : 'payment';
           })(),
         }
       );
 
       if (transactionError || !transaction) {
-        console.error('Error creating transaction:', transactionError);
+        console.error('Error creating biller transaction:', transactionError);
         throw new Error('Failed to create transaction');
       }
 
-      console.log('[App] Transaction created successfully:', transaction.id);
+      console.log('[App] Biller transaction created successfully:', transaction.id);
 
       // Upload receipt to storage if a file was provided
       if (payment.receiptFile) {

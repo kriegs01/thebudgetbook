@@ -1349,8 +1349,8 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
       const selectedAccount = accounts.find(a => a.id === payFormData.accountId);
       const finalAmount = selectedAccount && selectedAccount.type === 'Credit' ? -Math.abs(parsedAmount) : Math.abs(parsedAmount);
       const payTransactionType = selectedAccount?.type === 'Credit'
-        ? (finalAmount < 0 ? 'credit_payment' : 'cash_out')
-        : (finalAmount < 0 ? 'cash_in' : 'cash_out');
+        ? 'credit_payment'
+        : 'payment';
       
       console.log('[Budget] handlePaySubmit starting:', {
         billerId: biller.id,
