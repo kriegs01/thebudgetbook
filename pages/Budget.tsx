@@ -1220,13 +1220,18 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
         finalAmount = Math.abs(finalAmount);
       }
 
+      const selectedAccountForTx = accounts.find(a => a.id === transactionFormData.accountId);
+      const txTypeForForm = selectedAccountForTx?.type === 'Credit'
+        ? (finalAmount < 0 ? 'credit_payment' : 'cash_out')
+        : (finalAmount < 0 ? 'cash_in' : 'cash_out');
+
       if (isEditing) {
         const transaction = {
           name: transactionFormData.name,
           date: combineDateWithCurrentTime(transactionFormData.date),
           amount: finalAmount,
           payment_method_id: transactionFormData.accountId,
-          transaction_type: finalAmount < 0 ? 'cash_in' : 'cash_out',
+          transaction_type: txTypeForForm as any,
           notes: `Budget Timing: ${selectedTiming}`
         };
         const result = await updateTransactionAndSyncSchedule(transactionFormData.id, transaction);
@@ -1241,7 +1246,7 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
             amount: finalAmount,
             paymentMethodId: transactionFormData.accountId,
             notes: `Budget Timing: ${selectedTiming}`,
-            transaction_type: finalAmount < 0 ? 'cash_in' : 'cash_out'
+            transaction_type: txTypeForForm
           }
         );
         transactionData = result.data;
@@ -1281,7 +1286,7 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
           date: combineDateWithCurrentTime(transactionFormData.date),
           amount: finalAmount,
           payment_method_id: transactionFormData.accountId,
-          transaction_type: finalAmount < 0 ? 'cash_in' : 'cash_out',
+          transaction_type: txTypeForForm as any,
           notes: `Budget Timing: ${selectedTiming}`
         };
         const result = await createTransaction(transaction as any);
@@ -1343,8 +1348,24 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
       const parsedAmount = parseFloat(payFormData.amount) || 0;
       const selectedAccount = accounts.find(a => a.id === payFormData.accountId);
       const finalAmount = selectedAccount && selectedAccount.type === 'Credit' ? -Math.abs(parsedAmount) : Math.abs(parsedAmount);
+      const payTransactionType = selectedAccount?.type === 'Credit'
+        ? (finalAmount < 0 ? 'credit_payment' : 'cash_out')
+        : (finalAmount < 0 ? 'cash_in' : 'cash_out');
+      
+      console.log('[Budget] handlePaySubmit starting:', {
+        billerId: biller.id,
+        billerName: biller.name,
+        isEditing,
+        paymentScheduleId,
+        accountId: payFormData.accountId,
+        selectedAccountType: selectedAccount?.type,
+        parsedAmount,
+        finalAmount,
+        payTransactionType
+      });
 
       if (isEditing) {
+        console.log('[Budget] Updating existing transaction:', payFormData.transactionId);
         const transaction = {
           name: `${biller.name} - ${schedule.month} ${schedule.year}`,
           date: combineDateWithCurrentTime(payFormData.datePaid),
@@ -1355,7 +1376,13 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
         const result = await updateTransaction(payFormData.transactionId, transaction);
         transactionData = result.data;
         transactionError = result.error;
+        console.log('[Budget] Update result:', { transactionData, transactionError });
       } else if (paymentScheduleId) {
+        console.log('[Budget] Creating payment schedule transaction:', {
+          paymentScheduleId,
+          amount: finalAmount,
+          transaction_type: payTransactionType
+        });
         const result = await createPaymentScheduleTransaction(
           paymentScheduleId,
           {
@@ -1364,12 +1391,14 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
             amount: finalAmount,
             paymentMethodId: payFormData.accountId,
             notes: `Budget Timing: ${selectedTiming}`,
-            transaction_type: finalAmount < 0 ? 'cash_in' : 'cash_out'
+            transaction_type: payTransactionType
           } as any
         );
         transactionData = result.data;
         transactionError = result.error;
+        console.log('[Budget] Create payment schedule result:', { transactionData, transactionError });
       } else {
+        console.log('[Budget] Creating standalone transaction:', { amount: finalAmount, transaction_type: payTransactionType });
         const transaction = {
           name: `${biller.name} - ${schedule.month} ${schedule.year}`,
           date: combineDateWithCurrentTime(payFormData.datePaid),
@@ -1377,15 +1406,19 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
           payment_method_id: payFormData.accountId,
           notes: `Budget Timing: ${selectedTiming}`
         };
-        const result = await createTransaction({ ...transaction, transaction_type: finalAmount < 0 ? 'cash_in' : 'cash_out' });
+        const result = await createTransaction({ ...transaction, transaction_type: payTransactionType } as any);
         transactionData = result.data;
         transactionError = result.error;
+        console.log('[Budget] Create standalone result:', { transactionData, transactionError });
       }
       
       if (transactionError) {
+        console.error('[Budget] Transaction error:', transactionError);
         alert(`Failed to ${isEditing ? 'update' : 'create'} transaction. Please try again.`);
         return;
       }
+      
+      console.log('[Budget] Transaction created successfully:', transactionData?.id);
       
       if (payReceiptFile && transactionData?.id) {
         const { path, error: uploadError } = await uploadTransactionReceipt(transactionData.id, payReceiptFile);
@@ -1488,6 +1521,7 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
       });
       setPayReceiptFile(null);
     } catch (error) {
+      console.error('[Budget] handlePaySubmit error:', error);
       alert('Failed to process payment. Please try again.');
     }
   };

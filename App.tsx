@@ -880,11 +880,9 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
           })(),
           paymentMethodId: payment.accountId,
           transaction_type: ((): string => {
-            const val = ((): number => {
-              const acct = accounts.find(a => a.id === payment.accountId);
-              return acct && acct.type === 'Credit' ? -Math.abs(payment.amount) : Math.abs(payment.amount);
-            })();
-            return val < 0 ? 'cash_in' : 'cash_out';
+            const acct = accounts.find(a => a.id === payment.accountId);
+            const val = acct && acct.type === 'Credit' ? -Math.abs(payment.amount) : Math.abs(payment.amount);
+            return acct?.type === 'Credit' ? (val < 0 ? 'credit_payment' : 'cash_out') : (val < 0 ? 'cash_in' : 'cash_out');
           })(),
         }
       );
@@ -1034,11 +1032,9 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
           })(),
           paymentMethodId: payment.accountId,
           transaction_type: ((): string => {
-            const val = ((): number => {
-              const acct = accounts.find(a => a.id === payment.accountId);
-              return acct && acct.type === 'Credit' ? -Math.abs(payment.amount) : Math.abs(payment.amount);
-            })();
-            return val < 0 ? 'cash_in' : 'cash_out';
+            const acct = accounts.find(a => a.id === payment.accountId);
+            const val = acct && acct.type === 'Credit' ? -Math.abs(payment.amount) : Math.abs(payment.amount);
+            return acct?.type === 'Credit' ? (val < 0 ? 'credit_payment' : 'cash_out') : (val < 0 ? 'cash_in' : 'cash_out');
           })(),
         }
       );
