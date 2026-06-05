@@ -15,15 +15,8 @@ export const Logo: React.FC<{ className?: string }> = ({ className = '' }) => {
     };
   }, []);
 
-  const stickerShadow = `
-    -2px -2px 0px #000,
-    2px -2px 0px #000,
-    -2px 2px 0px #000,
-    2px 2px 0px #000,
-    8px 8px 0px rgba(0,0,0,0.18)
-  `;
+  const letterShadow = '-1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 1px 1px 0 #000';
 
-  // Determine translate utility classes based on the animation step
   const getTransform = (hoverClass: string, squeezeClass: string) => {
     const y = step === 0 ? 'translate-y-4' : 'translate-y-0';
     const x = step === 2 ? squeezeClass : '';
@@ -33,38 +26,38 @@ export const Logo: React.FC<{ className?: string }> = ({ className = '' }) => {
   return (
     <div
       className={`relative flex items-center justify-center tracking-tight cursor-pointer group ${className}`}
-      style={{ filter: 'drop-shadow(10px 10px 0 rgba(0,0,0,0.18))' }}
+      style={{ filter: 'drop-shadow(3px 3px 0px rgba(0,0,0,0.9))' }}
     >
       <div
         className="relative z-10 flex items-center justify-center text-white pr-[10px] pb-[10px]"
-        style={{ WebkitTextStroke: '2px #000' }}
+        style={{ WebkitTextStroke: '1px #000' }}
       >
         <span
-          style={{ textShadow: stickerShadow }}
+          style={{ textShadow: letterShadow }}
           className={`font-titan transition-all duration-500 rotate-[-6deg] ${getTransform('group-hover:translate-x-2', 'translate-x-2')}`}
         >
           B
         </span>
         <span
-          style={{ textShadow: stickerShadow }}
+          style={{ textShadow: letterShadow }}
           className={`font-titan transition-all duration-500 rotate-[3deg] ${getTransform('group-hover:translate-x-1', 'translate-x-1')}`}
         >
           u
         </span>
         <span
-          style={{ textShadow: stickerShadow }}
+          style={{ textShadow: letterShadow }}
           className={`font-titan transition-all duration-500 rotate-[-4deg] ${getTransform('', '')}`}
         >
           d
         </span>
         <span
-          style={{ textShadow: stickerShadow }}
+          style={{ textShadow: letterShadow }}
           className={`font-titan transition-all duration-500 rotate-[5deg] ${getTransform('group-hover:-translate-x-1', '-translate-x-1')}`}
         >
           e
         </span>
         <span
-          style={{ textShadow: stickerShadow }}
+          style={{ textShadow: letterShadow }}
           className={`font-titan transition-all duration-500 rotate-[-3deg] ${getTransform('group-hover:-translate-x-2', '-translate-x-2')}`}
         >
           e
