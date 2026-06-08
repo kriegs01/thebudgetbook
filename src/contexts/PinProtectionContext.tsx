@@ -3,6 +3,37 @@ import { supabase } from '../utils/supabaseClient';
 import { updateUserProfile, getUserProfile } from '../services/userProfileService';
 import { Lock } from 'lucide-react';
 
+const PasswordShapes = ({ password }) => {
+  const colors = ['#4ECDC4', '#FF6B6B', '#FBBF24']; // Teal, Magenta, Yellow
+  const shapes = [
+    // Circle
+    <svg width="20" height="20" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <circle cx="8" cy="8" r="6" stroke="currentColor" strokeWidth="2"/>
+    </svg>,
+    // Triangle
+    <svg width="20" height="20" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <path d="M8 2L1 14H15L8 2Z" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" strokeLinecap="round"/>
+    </svg>,
+    // Square
+    <svg width="20" height="20" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <rect x="2" y="2" width="12" height="12" rx="2" stroke="currentColor" strokeWidth="2"/>
+    </svg>
+  ];
+
+  return (
+    <div className="flex items-center space-x-2" aria-hidden="true">
+      {password.split('').map((_, index) => {
+        const Shape = React.cloneElement(shapes[index % shapes.length], { key: index });
+        return (
+          <span key={index} style={{ color: colors[index % colors.length] }}>
+            {Shape}
+          </span>
+        );
+      })}
+    </div>
+  );
+};
+
 interface PinProtectionSettings {
   session_timeout: number; // minutes
   max_attempts: number;
@@ -659,28 +690,47 @@ export const PinProtectionProvider: React.FC<{ children: ReactNode }> = ({ child
 
       {/* App Standby Lock Screen Overlay */}
       {pinData.session.standby_locked && (
-        <div className="fixed inset-0 z-[9999] bg-white/95 dark:bg-gray-950/95 backdrop-blur-2xl flex flex-col items-center justify-center p-4 animate-in fade-in duration-500 transition-colors">
-          <div className="w-24 h-24 bg-indigo-50 dark:bg-indigo-500/20 text-indigo-600 dark:text-indigo-400 rounded-full flex items-center justify-center mb-6 shadow-[0_0_50px_-10px_rgba(99,102,241,0.2)] dark:shadow-[0_0_50px_-10px_rgba(99,102,241,0.4)] transition-colors">
-            <Lock className="w-12 h-12" />
+         <div className="fixed inset-0 z-[9999] bg-[#FCF6E8] flex flex-col items-center justify-center p-4 animate-in fade-in duration-500">
+          <style>{`
+            @import url('https://fonts.googleapis.com/css2?family=Titan+One&display=swap');
+            .font-brand { font-family: 'Titan One', cursive; }
+          `}</style>
+          
+          <div className="text-center mb-8">
+            <div className="inline-block p-4 bg-white border-[3px] border-black rounded-full shadow-[8px_8px_0px_#000]">
+              <Lock className="w-12 h-12 text-[#FF6B6B]" />
+            </div>
           </div>
-          <h2 className="text-3xl font-black text-gray-900 dark:text-white mb-2 transition-colors">Hi, {firstName || 'there'}!</h2>
-          <p className="text-gray-500 dark:text-gray-400 mb-10 font-medium tracking-wide transition-colors">Please enter your PIN to resume session</p>
+          
+          <h2 className="font-brand text-4xl text-[#FF6B6B] drop-shadow-[3px_3px_0px_#000] mb-2">
+            App Locked
+          </h2>
+          <p className="text-gray-600 mb-10 font-medium">
+            Hi, {firstName || 'there'}! Please enter your PIN to continue.
+          </p>
           
           <form onSubmit={handleStandbySubmit} className="w-full max-w-xs space-y-6">
             <div>
+              <div className="relative">
+                {standbyPin && (
+                  <div className="absolute inset-0 z-10 flex items-center justify-center pointer-events-none">
+                    <PasswordShapes password={standbyPin} />
+                  </div>
+                )}
               <input
                 type="password"
                 value={standbyPin}
                 onChange={(e) => { setStandbyPin(e.target.value); setStandbyError(false); }}
-                className={`w-full bg-gray-50 dark:bg-gray-900 border-2 ${standbyError ? 'border-red-500 text-red-500' : 'border-gray-200 dark:border-gray-800 text-gray-900 dark:text-white focus:border-indigo-500 dark:focus:border-indigo-500'} rounded-2xl p-4 text-center text-3xl font-black tracking-[0.5em] outline-none transition-colors`}
+                className={`w-full px-4 py-3 text-gray-800 bg-white border-2 border-gray-900 rounded-lg shadow-[3px_3px_0px_#000] focus:outline-none focus:ring-2 focus:ring-yellow-400 text-center text-3xl font-brand transition-all ${standbyError ? 'border-red-500' : ''} ${standbyPin ? 'text-transparent caret-transparent' : 'tracking-[0.5em]'}`}
                 placeholder="••••"
                 maxLength={6}
                 autoFocus
               />
+              </div>
               {standbyError && <p className="text-red-500 text-sm font-bold mt-3 text-center uppercase tracking-widest">Incorrect PIN</p>}
               {isLockedOut() && <p className="text-red-500 text-sm font-bold mt-3 text-center uppercase tracking-widest">Too many attempts. Try again later.</p>}
             </div>
-            <button type="submit" disabled={isLockedOut() || standbyPin.length < 4} className="w-full bg-indigo-600 text-white py-4 rounded-2xl font-black uppercase tracking-widest text-sm hover:bg-indigo-700 disabled:opacity-50 transition-colors shadow-lg shadow-indigo-200 dark:shadow-indigo-900/50">
+            <button type="submit" disabled={isLockedOut() || standbyPin.length < 4} className="w-full bg-[#4ECDC4] text-white py-3 rounded-lg font-bold shadow-[4px_4px_0px_#000] transition-all hover:bg-[#45B7D1] active:shadow-none active:translate-x-1 active:translate-y-1 disabled:opacity-50">
               Unlock
             </button>
           </form>

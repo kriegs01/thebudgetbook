@@ -1,171 +1,157 @@
 import { supabase } from '../utils/supabaseClient';
-import type { SupabaseFriendship, SupabaseResponse, SupabaseUserProfile } from '../types/supabase';
 
-// Helper to get current user ID
+// Helper to get current user ID safely
 const getCurrentUserId = async () => {
   const { data: { user } } = await supabase.auth.getUser();
-  return user?.id;
+  if (!user) {
+    // This might happen on initial load or if session is lost.
+    // The query will be re-run by React Query upon auth state change.
+    console.warn('User not available yet for friendship fetch.');
+    return null;
+  }
+  return user.id;
 };
 
-/**
- * Search for users to add as friends by name or handle
- */
-export const searchUsers = async (searchTerm: string): Promise<SupabaseResponse<SupabaseUserProfile[]>> => {
-  try {
-    const userId = await getCurrentUserId();
-    if (!userId) throw new Error('Not authenticated');
+export const searchUsers = async (query: string) => {
+  const userId = await getCurrentUserId();
+  if (!userId) return { data: [], error: null };
 
-    // Clean the search term (remove '@' if they typed a handle)
-    const cleanTerm = searchTerm.replace('@', '');
+  const { data, error } = await supabase
+    .from('user_profiles')
+    .select('*')
+    .or(`username.ilike.%${query}%,email.ilike.%${query}%,first_name.ilike.%${query}%,last_name.ilike.%${query}%`)
+    .neq('user_id', userId) // Exclude self
+    .limit(10);
 
-    // Split the search term by spaces to handle full name searches (e.g. "John Doe")
-    const words = cleanTerm.split(/\s+/).filter(Boolean);
-
-    let orQuery = '';
-
-    if (words.length === 1) {
-      const word = words[0];
-      orQuery = `first_name.ilike.%${word}%,last_name.ilike.%${word}%,email.ilike.%${word}%,username.ilike.%${word}%`;
-    } else if (words.length >= 2) {
-      const w1 = words[0];
-      const w2 = words.slice(1).join(' '); // Group the rest as the last name
-      // Using embedded 'and()' so it precisely matches "First Last" OR "Last First"
-      orQuery = `and(first_name.ilike.%${w1}%,last_name.ilike.%${w2}%),and(first_name.ilike.%${w2}%,last_name.ilike.%${w1}%),email.ilike.%${cleanTerm}%,username.ilike.%${cleanTerm}%`;
-    }
-
-    const { data, error } = await supabase
-      .from('user_profiles')
-      .select('*')
-      .neq('user_id', userId)
-      .or(orQuery)
-      .limit(10);
-
-    if (error) throw error;
-    return { data, error: null };
-  } catch (error: any) {
+  if (error) {
     console.error('Error searching users:', error);
+    console.error('Search query:', query);
+    console.error('Filter applied:', `username.ilike.%${query}%,email.ilike.%${query}%,first_name.ilike.%${query}%,last_name.ilike.%${query}%`);
     return { data: null, error };
   }
+
+  console.log('Search results:', data);
+  return { data, error: null };
 };
 
-/**
- * Send a new friend request
- */
-export const sendFriendRequest = async (friendId: string): Promise<SupabaseResponse<SupabaseFriendship>> => {
-  try {
-    const userId = await getCurrentUserId();
-    if (!userId) throw new Error('Not authenticated');
+export const getFriendships = async () => {
+  const userId = await getCurrentUserId();
+  if (!userId) return { data: [], error: null }; // Return empty if no user
 
-    const { data, error } = await supabase
-      .from('friendships')
-      .insert({
-        user_id: userId,
-        friend_id: friendId,
-        status: 'pending',
-      })
-      .select()
-      .single();
+  const { data, error } = await supabase
+    .from('friendships')
+    .select(`
+      id,
+      user_id,
+      friend_id,
+      status,
+      created_at,
+      user_profile:user_id ( first_name, last_name ),
+      friend_profile:friend_id ( first_name, last_name )
+    `)
+    .or(`user_id.eq.${userId},friend_id.eq.${userId}`)
+    .in('status', ['accepted', 'pending']);
 
-    if (error) throw error;
-    return { data, error: null };
-  } catch (error: any) {
-    console.error('Error sending friend request:', error);
-    return { data: null, error };
-  }
-};
-
-/**
- * Fetch all friendships (pending, accepted, blocked) involving the current user
- */
-export const getFriendships = async (): Promise<SupabaseResponse<SupabaseFriendship[]>> => {
-  try {
-    const userId = await getCurrentUserId();
-    if (!userId) throw new Error('Not authenticated');
-
-    const { data, error } = await supabase
-      .from('friendships')
-      .select(`*`)
-      .or(`user_id.eq.${userId},friend_id.eq.${userId}`);
-
-    if (error) throw error;
-    return { data, error: null };
-  } catch (error: any) {
+  if (error) {
     console.error('Error fetching friendships:', error);
     return { data: null, error };
   }
+
+  // Keep both user IDs while normalizing the profile for the other person
+  const friends = data.map(f => {
+    const isUserInitiator = f.user_id === userId;
+    return {
+      id: f.id,
+      user_id: f.user_id,
+      friend_id: f.friend_id,
+      status: f.status,
+      created_at: f.created_at,
+      profile: isUserInitiator ? f.friend_profile : f.user_profile,
+    };
+  });
+
+  return { data: friends, error: null };
 };
 
-/**
- * Accept an incoming friend request
- */
-export const acceptFriendRequest = async (friendshipId: string): Promise<SupabaseResponse<SupabaseFriendship>> => {
-  try {
-    const { data, error } = await supabase
-      .from('friendships')
-      .update({ status: 'accepted', updated_at: new Date().toISOString() })
-      .eq('id', friendshipId)
-      .select()
-      .single();
-
-    if (error) throw error;
-    return { data, error: null };
-  } catch (error: any) {
-    console.error('Error accepting friend request:', error);
-    return { data: null, error };
-  }
-};
-
-/**
- * Reject, cancel, or remove a friend
- */
-export const removeFriendship = async (friendshipId: string): Promise<SupabaseResponse<boolean>> => {
-  try {
-    const { error } = await supabase
-      .from('friendships')
-      .delete()
-      .eq('id', friendshipId);
-
-    if (error) throw error;
-    return { data: true, error: null };
-  } catch (error: any) {
-    console.error('Error removing friendship:', error);
-    return { data: null, error };
-  }
-};
-
-/**
- * Fetch incoming friend requests with the sender's profile attached
- */
-export const getIncomingFriendRequests = async (): Promise<SupabaseResponse<any[]>> => {
-  try {
+export const getIncomingRequests = async () => {
     const userId = await getCurrentUserId();
-    if (!userId) throw new Error('Not authenticated');
+    if (!userId) return { data: [], error: null };
 
-    const { data: friendships, error: fError } = await supabase
-      .from('friendships')
-      .select('*')
-      .eq('friend_id', userId)
-      .eq('status', 'pending');
+  const { data, error } = await supabase
+    .from('friendships')
+    .select(`
+      id,
+      status,
+      created_at,
+      sender_profile:user_id ( first_name, last_name )
+    `)
+    .eq('friend_id', userId)
+    .eq('status', 'pending');
 
-    if (fError) throw fError;
-    if (!friendships || friendships.length === 0) return { data: [], error: null };
-
-    const senderIds = friendships.map(f => f.user_id);
-    const { data: profiles, error: pError } = await supabase
-      .from('user_profiles')
-      .select('*')
-      .in('user_id', senderIds);
-
-    if (pError) throw pError;
-
-    const enrichedRequests = friendships.map(f => ({
-      ...f,
-      sender_profile: profiles?.find(p => p.user_id === f.user_id)
-    }));
-
-    return { data: enrichedRequests, error: null };
-  } catch (error: any) {
+  if (error) {
     console.error('Error fetching incoming requests:', error);
-    return { data: null, error };
   }
+
+  return { data, error };
+};
+
+export const acceptFriendRequest = async (requestId: string) => {
+  const { data, error } = await supabase
+    .from('friendships')
+    .update({ status: 'accepted' })
+    .eq('id', requestId)
+    .select();
+
+  if (error) console.error('Error accepting friend request:', error);
+  return { data, error };
+};
+
+export const removeFriendship = async (friendshipId: string) => {
+  const { data, error } = await supabase
+    .from('friendships')
+    .delete()
+    .eq('id', friendshipId);
+
+  if (error) console.error('Error removing friendship:', error);
+  return { data, error };
+};
+
+export const sendFriendRequest = async (friendId: string) => {
+    const userId = await getCurrentUserId();
+    if (!userId) return { data: null, error: new Error('User not authenticated') };
+
+  // Check if a friendship already exists
+  const { data: existing, error: existingError } = await supabase
+    .from('friendships')
+    .select('id, status')
+    .or(`(user_id.eq.${userId},friend_id.eq.${friendId}),(user_id.eq.${friendId},friend_id.eq.${userId})`)
+    .maybeSingle();
+
+  if (existingError) {
+    console.error('Error checking for existing friendship:', existingError);
+    return { data: null, error: existingError };
+  }
+
+  if (existing) {
+    if (existing.status === 'accepted') return { data: null, error: new Error('You are already friends.') };
+    if (existing.status === 'pending') return { data: null, error: new Error('A friend request is already pending.') };
+    if (existing.status === 'declined' || existing.status === 'blocked') {
+      // Allow re-sending request if it was declined/blocked previously by updating the status
+      const { data, error } = await supabase
+        .from('friendships')
+        .update({ status: 'pending', user_id: userId, friend_id: friendId })
+        .eq('id', existing.id)
+        .select();
+      return { data, error };
+    }
+  }
+
+  // If no previous record, create a new one
+  const { data, error } = await supabase
+    .from('friendships')
+    .insert({ user_id: userId, friend_id: friendId, status: 'pending' })
+    .select();
+
+  if (error) console.error('Error sending friend request:', error);
+  return { data, error };
 };

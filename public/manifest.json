@@ -1,0 +1,22 @@
+{
+  "name": "Budee",
+  "short_name": "Budee",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#4F46E5",
+  "scope": "/",
+  "description": "Your personal finance companion.",
+  "icons": [
+    {
+      "src": "/iconapp.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/iconapp.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}

@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { Plus, Info, Eye, ZoomIn, ZoomOut, Download, X, ArrowLeft, Pencil, Trash2, CheckSquare, Square, ChevronDown, Filter, AlertTriangle, ArrowUpFromLine, ArrowDownToLine, ArrowLeftRight, Landmark, CreditCard, FileText, User, UserPlus } from 'lucide-react';
 import { PinProtectedAction } from '../src/components/PinProtectedAction';
 import { useAuth } from '../src/contexts/AuthContext';
@@ -8,23 +9,13 @@ import { getAllPeople, createPerson } from '../src/services/peopleService';
 import { getFriendships } from '../src/services/friendshipsService';
 import type { SupabasePerson, SupabaseUserProfile, SupabaseFriendship } from '../src/types/supabase';
 import { supabase } from '../src/utils/supabaseClient';
-import { combineDateWithCurrentTime, getTodayIso, getFirstDayOfCurrentYearIso, getLastDayOfCurrentYearIso } from '../src/utils/dateUtils';
+import { combineDateWithCurrentTime, getTodayIso, getFirstDayOfCurrentYearIso, getLastDayOfCurrentYearIso, toLocalDateInputValue } from '../src/utils/dateUtils';
 import { useTheme } from '../src/contexts/ThemeContext';
+import useMediaQuery from '../src/hooks/useMediaQuery';
+import { TransactionList } from '../src/components/TransactionList';
+import type { Transaction, AccountOption } from '../types';
 
 const FILTER_MIN_DATE = '2025-01-01';
-
-type Transaction = {
-  id: string;
-  name: string;
-  date: string; // ISO
-  amount: number;
-  paymentMethodId: string; // account id
-  transaction_type?: string | null;
-  borrower_name?: string | null;
-  receiptUrl?: string | null;
-};
-
-type AccountOption = { id: string; bank: string; classification?: string; type?: string };
 
 // Use the utility function from dateUtils
 const todayIso = getTodayIso;
@@ -52,41 +43,71 @@ type ContactOption = {
 /** 
  * PageHeader component mirroring Dashboard style
  */
-const PageHeader: React.FC<{ 
-  title: string; 
-  subtitle: string; 
-  icon?: React.ReactNode; 
+const PageHeader: React.FC<{
+  title: string;
+  subtitle: string;
+  icon?: React.ReactNode;
   actions?: React.ReactNode;
   backButton?: React.ReactNode;
 }> = ({ title, subtitle, icon, actions, backButton }) => {
   const { getAccentClasses } = useTheme();
-  
+  const isMobile = useMediaQuery('(max-width: 767px)');
+  const titleContainerRef = useRef<HTMLDivElement>(null);
+  const [highlightWidth, setHighlightWidth] = useState(0);
+
+  useEffect(() => {
+    const calculateWidth = () => {
+      if (titleContainerRef.current) {
+        setHighlightWidth(titleContainerRef.current.offsetWidth);
+      }
+    };
+
+    calculateWidth();
+    // Recalculate on resize
+    window.addEventListener('resize', calculateWidth);
+    return () => window.removeEventListener('resize', calculateWidth);
+  }, [title]); // Rerun if title changes
+
   return (
-    <header className="pt-12 mb-12 flex flex-col md:flex-row md:items-end justify-between gap-6">
+    <header className={`${isMobile ? 'pt-10' : 'pt-12'} mb-12 flex flex-row items-center justify-between gap-6`}>
       <div className="flex-1">
-        <div className="flex items-center gap-3 mb-[-6px] ml-1">
-          {backButton}
-          <p className="text-xl font-bold italic text-black/50 dark:text-gray-400 transition-colors duration-300">
-            {subtitle}
-          </p>
-        </div>
-        <div className="relative inline-block mt-2">
-          <div className="flex items-center gap-4">
-             {icon && <div className="z-10 shrink-0">{icon}</div>}
-             <h1 className="text-4xl md:text-6xl font-[950] uppercase tracking-tighter leading-none relative z-10 text-black dark:text-white transition-colors duration-300">
+        {/* Title container for positioning the highlight */}
+        <div className="relative inline-block">
+          <div ref={titleContainerRef} className="flex items-center gap-4">
+            {icon && <div className="z-10 shrink-0">{icon}</div>}
+            <h1 className={`font-titan text-[clamp(2rem,7.5vw,3.75rem)] normal-case tracking-tighter leading-none relative z-10 [text-shadow:-1px_-1px_0_#000,1px_-1px_0_#000,-1px_1px_0_#000,1px_1px_0_#000] drop-shadow-[3px_3px_0px_#000] ${icon ? getAccentClasses('text') : 'text-black dark:text-white'}`}>
               {title}
             </h1>
           </div>
-          <div className={`absolute bottom-1 left-0 w-[110%] h-5 ${getAccentClasses('bg')} opacity-40 -z-0 -rotate-1 -translate-x-2 transition-colors duration-300`} />
+          {/* Dynamic highlight */}
+          {highlightWidth > 0 && (
+            <div
+              className={`absolute bottom-1 left-0 h-5 ${getAccentClasses('bg')} opacity-40 -z-0 -rotate-1 transition-colors duration-300`}
+              style={{ width: `${highlightWidth}px` }}
+            />
+          )}
         </div>
-        <div className={`h-2 w-32 mt-4 bg-black dark:bg-white/20 transition-colors duration-300`} />
+
+        {/* Subtitle container */}
+        <div className="flex items-center gap-3 mt-1 ml-1">
+          {backButton ? (
+            <div className="mt-6">{backButton}</div>
+          ) : (
+            <p className="text-[clamp(1rem,3vw,1.25rem)] font-bold italic text-black/50 dark:text-gray-400 transition-colors duration-300">
+              {subtitle}
+            </p>
+          )}
+        </div>
+
+        <div className={`h-2 w-32 mt-2 bg-black dark:bg-white/20 transition-colors duration-300`} />
       </div>
-      {actions && <div className="flex items-center justify-end gap-3 mt-4 md:mt-0 w-full md:w-auto">{actions}</div>}
+      {actions && <div className="flex items-center justify-end gap-3">{actions}</div>}
     </header>
   );
 };
 
 const ContactDropdown = ({ value, onChange, contacts, placeholder }: { value: string, onChange: (val: string) => void, contacts: ContactOption[], placeholder: string }) => {
+  const { getAccentClasses } = useTheme();
   const [isOpen, setIsOpen] = useState(false);
   const [search, setSearch] = useState(value);
   const wrapperRef = useRef<HTMLDivElement>(null);
@@ -112,7 +133,7 @@ const ContactDropdown = ({ value, onChange, contacts, placeholder }: { value: st
         onChange={e => { setSearch(e.target.value); onChange(e.target.value); setIsOpen(true); }}
         onFocus={() => setIsOpen(true)}
         placeholder={placeholder}
-        className="w-full bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-transparent rounded-xl p-3.5 pr-10 outline-none font-bold focus:ring-2 focus:ring-indigo-500 transition-all text-sm"
+        className={`w-full bg-white dark:bg-gray-800 border-2 border-black dark:border-gray-700 rounded-xl p-3.5 pr-10 font-bold outline-none focus:ring-offset-2 ${getAccentClasses('ring')} transition-all text-sm`}
       />
       {exactMatch && !isOpen && (
         <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none">
@@ -129,11 +150,11 @@ const ContactDropdown = ({ value, onChange, contacts, placeholder }: { value: st
         </div>
       )}
       {isOpen && filtered.length > 0 && (
-        <div className="absolute z-50 w-full mt-1 bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-800 rounded-xl shadow-lg max-h-48 overflow-y-auto">
+        <div className="absolute z-50 w-full mt-2 bg-white dark:bg-gray-900 border-2 border-black rounded-xl shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] max-h-48 overflow-y-auto">
           {filtered.map(c => (
-            <div key={c.id} onClick={() => { setSearch(c.name); onChange(c.name); setIsOpen(false); }} className="px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-800 cursor-pointer flex items-center justify-between transition-colors border-b border-gray-50 dark:border-gray-800/50 last:border-0">
+            <div key={c.id} onClick={() => { setSearch(c.name); onChange(c.name); setIsOpen(false); }} className={`px-4 py-3 cursor-pointer flex items-center justify-between transition-colors border-b-2 border-black last:border-0 ${getAccentClasses('hoverLight')}`}>
               <div className="flex flex-col min-w-0 pr-2">
-                <span className="text-sm font-bold text-gray-900 dark:text-gray-100 truncate">{c.name}</span>
+                <span className="text-sm font-bold truncate">{c.name}</span>
                 {c.handleOrEmail && <span className="text-[10px] text-gray-500 truncate">{c.handleOrEmail}</span>}
               </div>
               <div className="flex items-center gap-2 flex-shrink-0">
@@ -159,15 +180,28 @@ interface TransactionsPageProps {
   onTransactionCreated?: () => void;
 }
 
+const Portal: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+    return () => setMounted(false);
+  }, []);
+
+  return mounted ? createPortal(children, document.body) : null;
+};
+
 const TransactionsPage: React.FC<TransactionsPageProps> = ({ transactions, loading = false, onTransactionDeleted, onTransactionCreated }) => {
   const { getAccentClasses } = useTheme();
   const { userProfile } = useAuth();
+  const isMobile = useMediaQuery('(max-width: 767px)');
 
   const [accounts, setAccounts] = useState<AccountOption[]>([]);
   const [people, setPeople] = useState<SupabasePerson[]>([]);
   const [showForm, setShowForm] = useState(false);
   const [editingTxId, setEditingTxId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const headerRef = useRef<HTMLDivElement>(null);
   const [showFloatingAdd, setShowFloatingAdd] = useState(false);
@@ -206,7 +240,16 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ transactions, loadi
   const [filterEndDate, setFilterEndDate] = useState<string>(getLastDayOfCurrentYearIso());
   const [filterPaymentMethods, setFilterPaymentMethods] = useState<Set<string>>(new Set());
   const [showPaymentMethodDropdown, setShowPaymentMethodDropdown] = useState(false);
+  const [isFiltersOpen, setIsFiltersOpen] = useState(true);
   const pmDropdownRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (isMobile) {
+      setIsFiltersOpen(false);
+    } else {
+      setIsFiltersOpen(true);
+    }
+  }, [isMobile]);
 
   // ── Select / batch-delete state ───────────────────────────────────────────
   const [isSelectMode, setIsSelectMode] = useState(false);
@@ -429,7 +472,7 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ transactions, loadi
     setFormSource(null);
     setForm({
       name: tx.name,
-      date: new Date(tx.date).toISOString().split('T')[0],
+      date: toLocalDateInputValue(tx.date),
       amount: Math.abs(tx.amount).toFixed(2), // Absolute value makes editing easier
       paymentMethodId: tx.paymentMethodId,
       transactionType: tx.transaction_type || 'payment',
@@ -678,301 +721,254 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ transactions, loadi
         : `${filterPaymentMethods.size} selected`;
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-950 p-8 transition-colors duration-200">
-      <div className="max-w-6xl mx-auto">
-        {/* ── Header & Controllers ───────────────────────────────────────── */}
-        <div ref={headerRef}>
-          <PageHeader 
-            title="Transactions"
-            subtitle="Keep tabs on your funds"
-            icon={
-              <div className={`w-14 h-14 rounded-2xl flex items-center justify-center text-white border-[3px] border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] -rotate-3 transition-all hover:rotate-0 hover:scale-110 z-10 relative ${getAccentClasses('bg')}`}>
-                <FileText className="w-7 h-7" />
-              </div>
-            }
-            actions={
-              <button onClick={() => setShowTypeModal(true)} className={`flex items-center gap-2 text-white px-5 py-3 rounded-xl font-bold transition-all shadow-md dark:shadow-none text-sm ${getAccentClasses('bg')} ${getAccentClasses('shadow')}`}>
-                <Plus className="w-4 h-4" />
-                <span className="hidden sm:inline">Add Transaction</span>
-              </button>
-            }
-          />
-        </div>
-
-        {/* ── Filter Bar ──────────────────────────────────────────────────── */}
-        <div className="bg-white dark:bg-gray-900 dark:border-gray-800 border rounded-2xl shadow-sm p-4 mb-4 transition-colors">
-          <div className="flex flex-wrap items-end gap-3">
-            <Filter className="w-4 h-4 text-gray-400 self-center mb-1 shrink-0" />
-            <div className="flex flex-col gap-1">
-              <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Start Date</label>
-              <input
-                type="date"
-                value={filterStartDate}
-                min={FILTER_MIN_DATE}
-                max={filterEndDate}
-                onChange={e => setFilterStartDate(e.target.value)}
-                className="bg-gray-50 dark:bg-gray-800 dark:text-gray-100 rounded-xl px-3 py-2 text-sm font-bold border-transparent outline-none focus:ring-2 focus:ring-indigo-400 transition-colors"
-              />
-            </div>
-            <div className="flex flex-col gap-1">
-              <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">End Date</label>
-              <input
-                type="date"
-                value={filterEndDate}
-                min={filterStartDate}
-                onChange={e => setFilterEndDate(e.target.value)}
-                className="bg-gray-50 dark:bg-gray-800 dark:text-gray-100 rounded-xl px-3 py-2 text-sm font-bold border-transparent outline-none focus:ring-2 focus:ring-indigo-400 transition-colors"
-              />
-            </div>
-            <div className="flex flex-col gap-1 relative" ref={pmDropdownRef}>
-              <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Payment Method</label>
-              <button
-                type="button"
-                onClick={() => setShowPaymentMethodDropdown(p => !p)}
-                className="flex items-center gap-2 bg-gray-50 dark:bg-gray-800 dark:text-gray-100 rounded-xl px-3 py-2 text-sm font-bold border-transparent outline-none focus:ring-2 focus:ring-indigo-400 min-w-[140px] justify-between transition-colors"
-              >
-                <span>{pmFilterLabel}</span>
-                <ChevronDown className="w-4 h-4 text-gray-400 shrink-0" />
-              </button>
-              {showPaymentMethodDropdown && (
-                <div className="absolute top-full left-0 mt-1 z-30 bg-white dark:bg-gray-900 rounded-xl shadow-lg border border-gray-100 dark:border-gray-800 min-w-[180px] py-2 transition-colors">
-                  {accounts.map(a => (
-                    <label key={a.id} className="flex items-center gap-2 px-4 py-2 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
-                      <input
-                        type="checkbox"
-                        checked={filterPaymentMethods.has(a.id)}
-                        onChange={() => togglePaymentMethodFilter(a.id)}
-                        className="rounded"
-                      />
-                      <span className="text-sm font-medium text-gray-700 dark:text-gray-300">{a.bank}</span>
-                    </label>
-                  ))}
-                  {accounts.length === 0 && (
-                    <p className="px-4 py-2 text-sm text-gray-400">No accounts</p>
-                  )}
+    <>
+      <div className={`min-h-screen bg-gray-50 dark:bg-gray-950 transition-colors duration-200 overflow-x-hidden ${isMobile ? 'pt-10' : 'pt-8'}`}>
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 w-full">
+          {/* ── Header & Controllers ───────────────────────────────────────── */}
+          <div ref={headerRef}>
+            <PageHeader 
+              title="Transactions"
+              subtitle="Keep tabs on your funds"
+              icon={
+                <div className={`w-14 h-14 rounded-2xl flex items-center justify-center text-white border-[3px] border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] -rotate-3 transition-all hover:rotate-0 hover:scale-110 z-10 relative ${getAccentClasses('bg')}`}>
+                  <FileText className="w-7 h-7" />
                 </div>
+              }
+              actions={
+                !isMobile && (
+                  <button onClick={() => setShowTypeModal(true)} className={`flex items-center gap-2 text-white px-5 py-3 rounded-xl font-bold transition-all text-sm border-[3px] border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[2px] hover:translate-y-[2px] ${getAccentClasses('bg')}`}>
+                    <Plus className="w-4 h-4" />
+                    <span>Add Transaction</span>
+                  </button>
+                )
+              }
+            />
+          </div>
+
+          {/* ── Filter Bar ──────────────────────────────────────────────────── */}
+          <div className="bg-white dark:bg-gray-900 border-4 border-black rounded-2xl shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] mb-6">
+            <button
+              className="p-4 flex justify-between items-center w-full disabled:cursor-auto"
+              onClick={() => setIsFiltersOpen(p => !p)}
+              disabled={!isMobile}
+            >
+              <div className="flex items-center gap-3">
+                <Filter className="w-5 h-5 text-gray-400" />
+                <h3 className="text-sm font-bold uppercase text-gray-600 dark:text-gray-400 tracking-widest">
+                  Filters
+                </h3>
+              </div>
+              {isMobile && (
+                <ChevronDown className={`w-6 h-6 text-gray-400 transition-transform ${isFiltersOpen ? 'rotate-180' : ''}`} />
               )}
+            </button>
+
+            {isFiltersOpen && (
+              <div className="p-4 pt-2 sm:pt-4 border-t-4 sm:border-t-0 border-black sm:border-transparent">
+                <div className="flex flex-col sm:flex-row sm:flex-wrap sm:items-end gap-3">
+                  <div className="flex flex-col gap-1">
+                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Start Date</label>
+                    <input
+                      type="date"
+                      value={filterStartDate}
+                      min={FILTER_MIN_DATE}
+                      max={filterEndDate}
+                      onChange={e => setFilterStartDate(e.target.value)}
+                      className={`bg-white dark:bg-gray-800 border-2 border-black dark:border-gray-700 rounded-xl px-3 py-2 text-sm font-bold outline-none focus:ring-offset-2 ${getAccentClasses('focus-ring')} transition-all`}
+                    />
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">End Date</label>
+                    <input
+                      type="date"
+                      value={filterEndDate}
+                      min={filterStartDate}
+                      onChange={e => setFilterEndDate(e.target.value)}
+                      className={`bg-white dark:bg-gray-800 border-2 border-black dark:border-gray-700 rounded-xl px-3 py-2 text-sm font-bold outline-none focus:ring-offset-2 ${getAccentClasses('focus-ring')} transition-all`}
+                    />
+                  </div>
+                  <div className="flex flex-col gap-1 relative" ref={pmDropdownRef}>
+                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Payment Method</label>
+                    <button
+                      type="button"
+                      onClick={() => setShowPaymentMethodDropdown(p => !p)}
+                      className={`flex items-center gap-2 w-full justify-between bg-white dark:bg-gray-800 border-2 border-black dark:border-gray-700 rounded-xl px-3 py-2 text-sm font-bold outline-none focus:ring-offset-2 ${getAccentClasses('focus-ring')} transition-all`}
+                    >
+                      <span>{pmFilterLabel}</span>
+                      <ChevronDown className="w-4 h-4 text-gray-400 shrink-0" />
+                    </button>
+                    {showPaymentMethodDropdown && (
+                      <div className="absolute top-full left-0 mt-1 z-30 bg-white dark:bg-gray-900 rounded-xl shadow-lg border border-gray-100 dark:border-gray-800 min-w-[180px] py-2 transition-colors">
+                        {accounts.map(a => (
+                          <label key={a.id} className="flex items-center gap-2 px-4 py-2 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
+                            <input
+                              type="checkbox"
+                              checked={filterPaymentMethods.has(a.id)}
+                              onChange={() => togglePaymentMethodFilter(a.id)}
+                              className="rounded"
+                            />
+                            <span className="text-sm font-medium text-gray-700 dark:text-gray-300">{a.bank}</span>
+                          </label>
+                        ))}
+                        {accounts.length === 0 && (
+                          <p className="px-4 py-2 text-sm text-gray-400">No accounts</p>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => { setFilterStartDate(''); setFilterEndDate(''); }}
+                    className={`self-end px-4 py-2.5 text-xs font-bold rounded-xl border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] transition-all hover:shadow-none hover:translate-x-[0.5px] hover:translate-y-[0.5px] ${getAccentClasses('bg')} text-white`}
+                  >
+                    All Time
+                  </button>
+                  <button
+                    type="button"
+                    onClick={resetFilters}
+                    className="self-end px-4 py-2.5 text-xs font-bold rounded-xl border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] transition-all hover:shadow-none hover:translate-x-[0.5px] hover:translate-y-[0.5px] bg-black text-white"
+                  >
+                    Reset
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* ── Total Spend Dashboard ────────────────────────────────────────── */}
+          <div className="mb-6 w-full">
+            <div className={`${getAccentClasses('bg')} border-4 border-black rounded-2xl shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] p-5 text-white w-full`}>
+              <p className="text-xs font-black uppercase tracking-widest text-indigo-200 mb-1">Total Spend</p>
+              <p className="text-3xl font-black">{formatCurrency(totalSpend)}</p>
+              <p className="text-xs text-indigo-300 mt-1">Based on current filter · {filteredTransactions.length} transaction{filteredTransactions.length !== 1 ? 's' : ''}</p>
             </div>
-            <button
-              type="button"
-              onClick={() => { setFilterStartDate(''); setFilterEndDate(''); }}
-              className="self-end px-3 py-2 text-xs font-bold text-indigo-600 bg-indigo-50 dark:bg-indigo-900/30 hover:bg-indigo-100 dark:hover:bg-indigo-900/50 rounded-xl transition-colors"
-            >
-              All Time
-            </button>
-            <button
-              type="button"
-              onClick={resetFilters}
-              className="self-end px-3 py-2 text-xs font-bold text-gray-500 hover:text-indigo-600 bg-gray-100 dark:bg-gray-800 dark:hover:bg-indigo-900/30 hover:bg-indigo-50 rounded-xl transition-colors"
-            >
-              Reset
-            </button>
           </div>
-        </div>
 
-        {/* ── Total Spend Dashboard ────────────────────────────────────────── */}
-        <div className="mb-4">
-          <div className="bg-indigo-600 rounded-2xl shadow-sm p-5 text-white">
-            <p className="text-xs font-black uppercase tracking-widest text-indigo-200 mb-1">Total Spend</p>
-            <p className="text-3xl font-black">{formatCurrency(totalSpend)}</p>
-            <p className="text-xs text-indigo-300 mt-1">Based on current filter · {filteredTransactions.length} transaction{filteredTransactions.length !== 1 ? 's' : ''}</p>
-          </div>
-        </div>
-
-        <div className="bg-white dark:bg-gray-900 dark:border-gray-800 border rounded-2xl shadow-sm overflow-hidden transition-colors">
-          <div className="px-6 py-4 border-b border-gray-100 dark:border-gray-800 flex items-center justify-between transition-colors">
-            <h2 className="text-sm font-bold uppercase text-gray-600 dark:text-gray-400 tracking-widest">All transactions</h2>
-            <div className="flex items-center gap-2">
-              <div className="text-sm text-gray-500">{filteredTransactions.length} items</div>
-              {/* Batch delete trash icon — shown only when ≥1 selected */}
-              {isSelectMode && selectedIds.size > 0 && (
+          <div className="bg-white dark:bg-gray-900 border-4 border-black rounded-2xl shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] overflow-hidden transition-colors w-full max-w-full">
+            <div className="px-6 py-4 border-b-4 border-black flex items-center justify-between transition-colors">
+              <h2 className="text-sm font-bold uppercase text-gray-600 dark:text-gray-400 tracking-widest">All transactions</h2>
+              <div className="flex items-center gap-2">
+                <div className="text-sm text-gray-500">{filteredTransactions.length} items</div>
+                {/* Batch delete trash icon — shown only when ≥1 selected */}
+                {isSelectMode && selectedIds.size > 0 && (
+                  <button
+                    onClick={() => setShowBatchConfirm(true)}
+                    title="Delete selected"
+                    aria-label="Delete selected transactions"
+                    className="flex items-center gap-1 px-3 py-1.5 bg-red-500 hover:bg-red-600 text-white text-xs font-bold rounded-lg border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] transition-all hover:shadow-none hover:translate-x-[0.5px] hover:translate-y-[0.5px]"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                    <span>{selectedIds.size}</span>
+                  </button>
+                )}
+                {/* Select toggle */}
                 <button
-                  onClick={() => setShowBatchConfirm(true)}
-                  title="Delete selected"
-                  aria-label="Delete selected transactions"
-                  className="flex items-center gap-1 px-3 py-1.5 bg-red-500 hover:bg-red-600 text-white text-xs font-bold rounded-lg transition-colors"
+                  onClick={toggleSelectMode}
+                  title={isSelectMode ? 'Cancel selection' : 'Select transactions'}
+                  aria-label={isSelectMode ? 'Cancel selection' : 'Select transactions'}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-lg border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] transition-all hover:shadow-none hover:translate-x-[0.5px] hover:translate-y-[0.5px] ${isSelectMode ? 'bg-black text-white' : getAccentClasses('bg') + ' text-white'}`}>
+                  {isSelectMode ? <CheckSquare className="w-4 h-4" /> : <Square className="w-4 h-4" />}
+                  <span>Select</span>
+                </button>
+              </div>
+            </div>
+
+            <div className="w-full overflow-x-auto">
+              <div className="p-4">
+                {isLoading || loading ? (
+                  <div className="text-center py-8 text-gray-500">Loading transactions...</div>
+                ) : (
+                  <TransactionList
+                    transactions={filteredTransactions}
+                    accounts={accounts}
+                    isSelectMode={isSelectMode}
+                    selectedIds={selectedIds}
+                    onToggleId={toggleId}
+                    onSelectAll={toggleAllVisible}
+                    allVisibleSelected={allVisibleSelected}
+                    onViewDetails={setSelectedTx}
+                    onEdit={openEditForm}
+                    onDelete={removeTx}
+                  />
+                )}
+                {filteredTransactions.length === 0 && !isLoading && (
+                     <div className="text-center py-16 px-6 bg-gray-50 dark:bg-gray-800/50 rounded-2xl border-2 border-dashed border-gray-300 dark:border-gray-700">
+                        <FileText className="w-12 h-12 mx-auto text-gray-300 dark:text-gray-600" />
+                        <p className="font-bold mt-4 text-gray-800 dark:text-gray-200">No transactions found</p>
+                        <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">There are no transactions for the selected date range and payment methods.</p>
+                    </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    <Portal>
+      {/* QA: Consistent Transaction Form - with receipt upload, exclude credit accounts */}
+      {showForm && (
+        <div className="fixed inset-0 z-[999] flex items-center justify-center p-2 sm:p-4 bg-black/60 backdrop-blur-md">
+          <div className="w-full max-w-md bg-white dark:bg-gray-900 border-4 border-black rounded-2xl shadow-2xl sm:shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] transition-all max-h-[95vh] flex flex-col">
+            {/* --- MODAL HEADER --- */}
+            <div className="flex-shrink-0 p-6 md:p-8 pb-4 md:pb-6 relative">
+              {formSource === 'top' && !editingTxId && (
+                <button 
+                  onClick={() => { setShowForm(false); setShowTypeModal(true); setFormSource(null); }} 
+                  className="absolute left-4 top-4 md:left-6 md:top-6 p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full transition-colors"
+                  aria-label="Back to type selection"
                 >
-                  <Trash2 className="w-4 h-4" />
-                  <span>{selectedIds.size}</span>
+                  <ArrowLeft className="w-5 h-5 text-gray-400" />
                 </button>
               )}
-              {/* Select toggle */}
-              <button
-                onClick={toggleSelectMode}
-                title={isSelectMode ? 'Cancel selection' : 'Select transactions'}
-                aria-label={isSelectMode ? 'Cancel selection' : 'Select transactions'}
-                className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-lg transition-colors border ${
-                  isSelectMode
-                    ? 'bg-indigo-600 text-white border-indigo-600'
-                    : 'border-gray-300 text-gray-600 hover:border-indigo-400 hover:text-indigo-600'
-                }`}
-              >
-                {isSelectMode ? <CheckSquare className="w-4 h-4" /> : <Square className="w-4 h-4" />}
-                <span>Select</span>
-              </button>
+              {(formSource === 'fab' || editingTxId) && (
+                <button 
+                  onClick={closeForm} 
+                  className="absolute right-4 top-4 md:right-6 md:top-6 p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full transition-colors"
+                  aria-label="Close"
+                >
+                  <X className="w-5 h-5 text-gray-400" />
+                </button>
+              )}
+              <h2 className={`text-xl md:text-2xl font-black text-gray-900 dark:text-gray-100 mb-1 ${formSource === 'top' && !editingTxId ? 'mt-8 md:mt-6' : ''}`}>
+                {editingTxId ? 'Edit Transaction' : 
+                  form.transactionType === 'withdraw' ? 'Withdraw Funds' :
+                  form.transactionType === 'cash_in' ? 'Cash In' :
+                  form.transactionType === 'transfer' ? 'Transfer Funds' :
+                  form.transactionType === 'loan' ? 'Record Loan' :
+                  `Add New ${TRANSACTION_TYPES.find(t => t.id === form.transactionType)?.label || 'Transaction'}`
+                }
+              </h2>
+              <p className="text-gray-500 text-xs md:text-sm">
+                {editingTxId ? 'Update the transaction details below' : 
+                  form.transactionType === 'withdraw' ? 'Record an ATM withdrawal or cash out' :
+                  form.transactionType === 'cash_in' ? 'Record incoming funds' :
+                  form.transactionType === 'transfer' ? 'Move money between accounts' :
+                  form.transactionType === 'loan' ? 'Record money lent out' :
+                  'Record a payment transaction'
+                }
+              </p>
             </div>
-          </div>
 
-          <div className="p-4">
-            {isLoading || loading ? (
-              <div className="text-center py-8 text-gray-500">Loading transactions...</div>
-            ) : (
-              <div className="w-full overflow-x-auto">
-                <table className="min-w-full text-left">
-                  <thead>
-                    <tr>
-                      {isSelectMode && (
-                        <th className="px-4 py-3 w-10">
-                          <input
-                            type="checkbox"
-                            checked={allVisibleSelected}
-                            onChange={toggleAllVisible}
-                            title="Select all"
-                            aria-label="Select all visible transactions"
-                            className="rounded"
-                          />
-                        </th>
-                      )}
-                      <th className="px-4 py-3 text-xs text-gray-500 uppercase tracking-wider">Name</th>
-                      <th className="px-4 py-3 text-xs text-gray-500 uppercase tracking-wider">Date</th>
-                      <th className="px-4 py-3 text-xs text-gray-500 uppercase tracking-wider">Amount</th>
-                      <th className="px-4 py-3 text-xs text-gray-500 uppercase tracking-wider">Payment Method</th>
-                      <th className="px-4 py-3 text-xs text-gray-500 uppercase tracking-wider text-center">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {filteredTransactions.map(tx => {
-                      const pm = accounts.find(a => a.id === tx.paymentMethodId);
-                      return (
-                        <tr
-                          key={tx.id}
-                      className={`border-t border-gray-100 dark:border-gray-800 group transition-colors ${isSelectMode && selectedIds.has(tx.id) ? 'bg-indigo-50 dark:bg-indigo-900/30' : 'hover:bg-gray-50 dark:hover:bg-gray-800/50'}`}
-                        >
-                          {isSelectMode && (
-                            <td className="px-4 py-3">
-                              <input
-                                type="checkbox"
-                                checked={selectedIds.has(tx.id)}
-                                onChange={() => toggleId(tx.id)}
-                                aria-label={`Select transaction ${tx.name}`}
-                                className="rounded"
-                              />
-                            </td>
-                          )}
-                      <td className="px-4 py-3"><div className="text-sm font-medium text-gray-900 dark:text-gray-100">{tx.name}</div></td>
-                          <td className="px-4 py-3">
-                        <div className="text-sm text-gray-900 dark:text-gray-100">{new Date(tx.date).toLocaleDateString()}</div>
-                            <div className="text-xs text-gray-400">{new Date(tx.date).toLocaleTimeString()}</div>
-                          </td>
-                      <td className="px-4 py-3"><div className={`text-sm font-semibold ${tx.amount > 0 ? 'text-red-600 dark:text-red-400' : 'text-green-600 dark:text-green-400'}`}>{formatCurrency(-tx.amount)}</div></td>
-                      <td className="px-4 py-3"><div className="text-sm text-gray-700 dark:text-gray-300">{pm ? pm.bank : tx.paymentMethodId}</div></td>
-                          <td className="px-4 py-3 text-center">
-                            <div className="flex items-center justify-center gap-1">
-                              <button
-                                onClick={() => setSelectedTx(tx)}
-                                title="View details"
-                                aria-label="View transaction details"
-                                className="text-gray-300 hover:text-indigo-500 hover:bg-indigo-50 rounded-full p-1.5 transition-all"
-                              >
-                                <Info className="w-4 h-4" />
-                              </button>
-                              <button
-                                onClick={() => openEditForm(tx)}
-                                title="Edit transaction"
-                                aria-label="Edit transaction"
-                                className="text-gray-300 hover:text-indigo-500 hover:bg-indigo-50 rounded-full p-1.5 transition-all"
-                              >
-                                <Pencil className="w-4 h-4" />
-                              </button>
-                            <PinProtectedAction
-                              featureId="transaction_deletions"
-                              onVerified={() => removeTx(tx.id, tx.name)}
-                              actionLabel="Delete Transaction"
-                            >
-                              <button
-                                onClick={(e) => e.preventDefault()}
-                                title="Delete transaction"
-                                aria-label="Delete transaction"
-                                className="text-gray-300 hover:text-red-500 hover:bg-red-50 rounded-full p-1.5 transition-all"
-                              >
-                                <Trash2 className="w-4 h-4" />
-                              </button>
-                            </PinProtectedAction>
-                            </div>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                    {filteredTransactions.length === 0 && (
-                      <tr><td colSpan={isSelectMode ? 6 : 5} className="px-4 py-6 text-center text-gray-400">
-                        {transactions.length === 0 ? 'No transactions yet.' : 'No transactions match the current filter.'}
-                      </td></tr>
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* QA: Consistent Transaction Form - with receipt upload, exclude credit accounts */}
-        {showForm && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-black/60 backdrop-blur-md">
-          <div className="w-full max-w-md bg-white dark:bg-gray-900 rounded-3xl p-6 md:p-8 shadow-2xl relative transition-colors max-h-[95vh] overflow-y-auto">
-            {formSource === 'top' && !editingTxId && (
-              <button 
-                onClick={() => { setShowForm(false); setShowTypeModal(true); setFormSource(null); }} 
-                className="absolute left-4 top-4 md:left-6 md:top-6 p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full transition-colors"
-                aria-label="Back to type selection"
-              >
-                <ArrowLeft className="w-5 h-5 text-gray-400" />
-              </button>
-            )}
-            {(formSource === 'fab' || editingTxId) && (
-              <button 
-                onClick={closeForm} 
-                className="absolute right-4 top-4 md:right-6 md:top-6 p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full transition-colors"
-                aria-label="Close"
-              >
-                <X className="w-5 h-5 text-gray-400" />
-              </button>
-            )}
-            <h2 className={`text-xl md:text-2xl font-black text-gray-900 dark:text-gray-100 mb-1 ${formSource === 'top' && !editingTxId ? 'mt-8 md:mt-6' : ''}`}>
-            {editingTxId ? 'Edit Transaction' : 
-              form.transactionType === 'withdraw' ? 'Withdraw Funds' :
-              form.transactionType === 'cash_in' ? 'Cash In' :
-              form.transactionType === 'transfer' ? 'Transfer Funds' :
-              form.transactionType === 'loan' ? 'Record Loan' :
-              `Add New ${TRANSACTION_TYPES.find(t => t.id === form.transactionType)?.label || 'Transaction'}`
-            }
-            </h2>
-          <p className="text-gray-500 text-xs md:text-sm mb-6">
-            {editingTxId ? 'Update the transaction details below' : 
-              form.transactionType === 'withdraw' ? 'Record an ATM withdrawal or cash out' :
-              form.transactionType === 'cash_in' ? 'Record incoming funds' :
-              form.transactionType === 'transfer' ? 'Move money between accounts' :
-              form.transactionType === 'loan' ? 'Record money lent out' :
-              'Record a payment transaction'
-            }
-          </p>
-              <form onSubmit={onSubmit} className="space-y-4 md:space-y-5">
+            {/* --- SCROLLABLE FORM CONTENT --- */}
+            <div className="flex-1 overflow-y-auto overflow-x-hidden px-6 md:px-8">
+              <form id="transaction-form" onSubmit={onSubmit} className="space-y-4 md:space-y-5">
                 {/* Conditional Name Field — Hide for Transfers since they auto-generate names */}
                 {(form.transactionType !== 'transfer' || editingTxId) && (
                   <div>
-                <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">
-                  {['withdraw', 'cash_in', 'loan', 'transfer'].includes(form.transactionType) ? 'Label' : 'Name'}
-                </label>
+                    <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">
+                      {['withdraw', 'cash_in', 'loan', 'transfer'].includes(form.transactionType) ? 'Label' : 'Name'}
+                    </label>
                     <input 
                       value={form.name} 
                       onChange={e => setForm(f => ({ ...f, name: e.target.value }))} 
                       required 
-                  placeholder={
-                    form.transactionType === 'withdraw' ? 'e.g. ATM Withdrawal' :
-                    form.transactionType === 'cash_in' ? 'e.g. Salary, Deposit' :
-                    form.transactionType === 'loan' ? 'e.g. Loan to John' :
-                    'e.g. Groceries, Gas, etc.'
-                  }
-                      className="w-full bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-transparent rounded-xl p-3.5 outline-none font-bold focus:ring-2 focus:ring-indigo-500 transition-all text-sm" 
+                      placeholder={
+                        form.transactionType === 'withdraw' ? 'e.g. ATM Withdrawal' :
+                        form.transactionType === 'cash_in' ? 'e.g. Salary, Deposit' :
+                        form.transactionType === 'loan' ? 'e.g. Loan to John' :
+                        'e.g. Groceries, Gas, etc.'
+                      }
+                      className={`w-full bg-white dark:bg-gray-800 border-2 border-black dark:border-gray-700 rounded-xl p-3.5 font-bold outline-none focus:ring-offset-2 ${getAccentClasses('ring')} transition-all text-sm`}
                     />
                   </div>
                 )}
@@ -988,7 +984,7 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ transactions, loadi
                       value={form.amount} 
                       onChange={e => setForm(f => ({ ...f, amount: e.target.value }))} 
                       required 
-                    className="w-full bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-transparent rounded-xl p-3.5 pl-8 outline-none text-lg font-black focus:ring-2 focus:ring-indigo-500 transition-all" 
+                      className={`w-full bg-white dark:bg-gray-800 border-2 border-black dark:border-gray-700 rounded-xl p-3.5 pl-8 text-lg font-black outline-none focus:ring-offset-2 ${getAccentClasses('ring')} transition-all`}
                     />
                   </div>
                 </div>
@@ -996,20 +992,18 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ transactions, loadi
                 {form.transactionType === 'transfer' && !editingTxId ? (
                   <>
                     {/* Tab Selector */}
-                    <div className="flex p-1 bg-gray-100 dark:bg-gray-800 rounded-xl mb-4 mt-2">
+                    <div className={`flex p-1 bg-gray-200 dark:bg-gray-800 rounded-xl mb-4 mt-2 border-2 border-black`}>
                       <button
                         type="button"
                         onClick={() => setTransferTab('accounts')}
-                        className={`flex-1 flex items-center justify-center gap-2 py-2.5 px-3 rounded-lg text-xs md:text-sm font-bold transition-all ${transferTab === 'accounts' ? 'bg-white dark:bg-gray-900 text-blue-600 dark:text-blue-400 shadow-sm' : 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'}`}
-                      >
+                        className={`flex-1 flex items-center justify-center gap-2 py-2.5 px-3 rounded-lg text-xs md:text-sm font-bold transition-all ${transferTab === 'accounts' ? `bg-white dark:bg-gray-900 border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] ${getAccentClasses('text')}` : 'text-gray-500'}`}>
                         <ArrowLeftRight className="w-4 h-4" />
                         <span>My Accounts</span>
                       </button>
                       <button
                         type="button"
                         onClick={() => setTransferTab('friends')}
-                        className={`flex-1 flex items-center justify-center gap-2 py-2.5 px-3 rounded-lg text-xs md:text-sm font-bold transition-all ${transferTab === 'friends' ? 'bg-white dark:bg-gray-900 text-blue-600 dark:text-blue-400 shadow-sm' : 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'}`}
-                      >
+                        className={`flex-1 flex items-center justify-center gap-2 py-2.5 px-3 rounded-lg text-xs md:text-sm font-bold transition-all ${transferTab === 'friends' ? `bg-white dark:bg-gray-900 border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] ${getAccentClasses('text')}` : 'text-gray-500'}`}>
                         <User className="w-4 h-4" />
                         <span>Friends</span>
                       </button>
@@ -1033,7 +1027,7 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ transactions, loadi
                                   };
                                 });
                               }}
-                              className="pointer-events-auto w-10 h-10 rounded-full bg-gray-100 dark:bg-gray-800 border-4 border-white dark:border-gray-900 flex items-center justify-center text-gray-500 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/50 transition-all shadow-sm"
+                              className={`pointer-events-auto w-10 h-10 rounded-full bg-white dark:bg-gray-700 border-4 border-white dark:border-gray-900 flex items-center justify-center text-gray-500 transition-all shadow-sm ${getAccentClasses('hoverLight')}`}
                               title="Swap accounts"
                             >
                               <ArrowLeftRight className="w-4 h-4 rotate-90 sm:rotate-0" />
@@ -1047,20 +1041,18 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ transactions, loadi
                               <select 
                                 value={form.paymentMethodId} 
                                 onChange={e => setForm(f => ({ ...f, paymentMethodId: e.target.value }))} 
-                                className="w-full min-w-0 bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-transparent rounded-xl px-3 py-3 outline-none font-bold text-sm appearance-none transition-colors"
-                              >
+                                className={`w-full min-w-0 bg-white dark:bg-gray-800 border-2 border-black dark:border-gray-700 rounded-xl p-3.5 font-bold text-sm appearance-none outline-none focus:ring-offset-2 ${getAccentClasses('ring')}`}>
                                 {accounts.filter(a => a.type !== 'Credit').map(a => <option key={a.id} value={a.id}>{a.bank}</option>)}
                               </select>
                             )}
                           </div>
                           <div>
-                            <label className="block text-[10px] font-black text-indigo-500 uppercase tracking-widest mb-2">Transfer To</label>
+                            <label className={`block text-[10px] font-black ${getAccentClasses('text')} uppercase tracking-widest mb-2`}>Transfer To</label>
                             <select 
                               value={form.transferToAccountId} 
                               onChange={e => setForm(f => ({ ...f, transferToAccountId: e.target.value }))} 
-                              className="w-full min-w-0 bg-indigo-50 dark:bg-indigo-900/20 text-indigo-700 dark:text-indigo-300 border-transparent rounded-xl px-3 py-3 outline-none font-bold text-sm appearance-none transition-colors"
-                            >
-                              <option value="">Select Destination Account</option>
+                              className={`w-full min-w-0 bg-white dark:bg-gray-800 border-2 ${getAccentClasses('border')} rounded-xl p-3.5 font-bold text-sm appearance-none outline-none focus:ring-offset-2 ${getAccentClasses('ring')}`}>
+                              <option value="">Select Destination</option>
                               {accounts.filter(a => a.id !== form.paymentMethodId && a.type !== 'Credit').map(a => (
                                 <option key={a.id} value={a.id}>{a.bank}</option>
                               ))}
@@ -1078,7 +1070,7 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ transactions, loadi
                               value={form.feeAmount}
                               onChange={e => setForm(f => ({ ...f, feeAmount: e.target.value }))}
                               placeholder="0.00"
-                              className="w-full bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-transparent rounded-xl p-3.5 pl-8 outline-none font-bold text-sm transition-colors"
+                              className={`w-full bg-white dark:bg-gray-800 border-2 border-black dark:border-gray-700 rounded-xl p-3.5 pl-8 font-bold outline-none focus:ring-offset-2 ${getAccentClasses('ring')} transition-all text-sm`}
                             />
                           </div>
                           <p className="text-[10px] text-gray-500 mt-[-10px] mb-4 font-medium">Logged as separate expense.</p>
@@ -1089,7 +1081,7 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ transactions, loadi
                             value={form.date} 
                             onChange={e => setForm(f => ({ ...f, date: e.target.value }))} 
                             required 
-                            className="w-full min-w-0 bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-transparent rounded-xl px-3 py-3 outline-none font-bold text-sm transition-colors" 
+                            className={`w-full min-w-0 bg-white dark:bg-gray-800 border-2 border-black dark:border-gray-700 rounded-xl p-3.5 font-bold outline-none focus:ring-offset-2 ${getAccentClasses('ring')} transition-all text-sm`}
                           />
                         </div>
                       </div>
@@ -1106,8 +1098,7 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ transactions, loadi
                             <select 
                               value={form.paymentMethodId} 
                               onChange={e => setForm(f => ({ ...f, paymentMethodId: e.target.value }))} 
-                              className="w-full min-w-0 bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-transparent rounded-xl px-3 py-3 outline-none font-bold text-sm appearance-none transition-colors"
-                            >
+                              className={`w-full min-w-0 bg-white dark:bg-gray-800 border-2 border-black dark:border-gray-700 rounded-xl p-3.5 font-bold text-sm appearance-none outline-none focus:ring-offset-2 ${getAccentClasses('ring')}`}>
                               {accounts.filter(a => a.type !== 'Credit').map(a => <option key={a.id} value={a.id}>{a.bank}</option>)}
                             </select>
                           )}
@@ -1130,7 +1121,7 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ transactions, loadi
                               value={form.name} 
                               onChange={e => setForm(f => ({ ...f, name: e.target.value }))} 
                               placeholder="e.g. Dinner" 
-                              className="w-full bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-transparent rounded-xl p-3.5 outline-none font-bold text-sm transition-colors" 
+                              className={`w-full bg-white dark:bg-gray-800 border-2 border-black dark:border-gray-700 rounded-xl p-3.5 font-bold outline-none focus:ring-offset-2 ${getAccentClasses('ring')} transition-all text-sm`}
                             />
                           </div>
                           <div>
@@ -1140,7 +1131,7 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ transactions, loadi
                               value={form.date} 
                               onChange={e => setForm(f => ({ ...f, date: e.target.value }))} 
                               required 
-                              className="w-full bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-transparent rounded-xl p-3.5 outline-none font-bold text-sm transition-colors" 
+                              className={`w-full bg-white dark:bg-gray-800 border-2 border-black dark:border-gray-700 rounded-xl p-3.5 font-bold outline-none focus:ring-offset-2 ${getAccentClasses('ring')} transition-all text-sm`}
                             />
                           </div>
                         </div>
@@ -1158,7 +1149,7 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ transactions, loadi
                         value={form.date} 
                         onChange={e => setForm(f => ({ ...f, date: e.target.value }))} 
                         required 
-                        className="w-full min-w-0 bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-transparent rounded-xl px-3 py-3 outline-none font-bold text-sm transition-colors" 
+                        className={`w-full min-w-0 bg-white dark:bg-gray-800 border-2 border-black dark:border-gray-700 rounded-xl p-3.5 font-bold outline-none focus:ring-offset-2 ${getAccentClasses('ring')} transition-all text-sm`}
                       />
                     </div>
                     <div>
@@ -1171,8 +1162,7 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ transactions, loadi
                         <select 
                           value={form.paymentMethodId} 
                           onChange={e => setForm(f => ({ ...f, paymentMethodId: e.target.value }))} 
-                          className="w-full min-w-0 bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-transparent rounded-xl px-3 py-3 outline-none font-bold text-sm appearance-none transition-colors"
-                        >
+                          className={`w-full min-w-0 bg-white dark:bg-gray-800 border-2 border-black dark:border-gray-700 rounded-xl p-3.5 font-bold text-sm appearance-none outline-none focus:ring-offset-2 ${getAccentClasses('ring')}`}>
                           {accounts.filter(a => form.transactionType === 'payment' ? a.classification !== 'Credit Card' : a.type !== 'Credit').map(a => <option key={a.id} value={a.id}>{a.bank}</option>)}
                         </select>
                       )}
@@ -1196,66 +1186,75 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ transactions, loadi
                   </div>
                 )}
 
-            {form.transactionType === 'payment' && (
-                <div>
-                  <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Upload Receipt (Optional)</label>
-                  <div className="relative">
-                    <input
-                      type="file"
-                      accept="image/*,application/pdf"
-                      className="absolute inset-0 opacity-0 cursor-pointer"
-                      onChange={e => setReceiptFile(e.target.files?.[0] ?? null)}
-                    />
-                  <div className="w-full bg-gray-50 dark:bg-gray-800 border-2 border-dashed border-gray-200 dark:border-gray-700 rounded-xl p-5 md:p-6 text-center text-sm text-gray-500 hover:border-indigo-300 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 transition-all flex flex-col items-center">
-                      <span className="font-bold">{receiptFile ? receiptFile.name : 'Click or drag to upload receipt'}</span>
+                {form.transactionType === 'payment' && (
+                  <div>
+                    <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Upload Receipt (Optional)</label>
+                    <div className="relative">
+                      <input
+                        type="file"
+                        accept="image/*,application/pdf"
+                        className="absolute inset-0 opacity-0 cursor-pointer"
+                        onChange={e => setReceiptFile(e.target.files?.[0] ?? null)}
+                      />
+                      <div className={`w-full bg-white dark:bg-gray-800 border-2 border-black border-dashed rounded-xl p-5 md:p-6 text-center text-sm transition-all ${getAccentClasses('hoverLight')}`}>
+                        <span className="font-bold">{receiptFile ? receiptFile.name : 'Click or drag to upload receipt'}</span>
+                      </div>
                     </div>
                   </div>
-                </div>
-            )}
-
-                <div className="flex space-x-3 pt-2 md:pt-4">
-                  <button type="button" onClick={closeForm} className="flex-1 bg-gray-100 dark:bg-gray-800 py-3.5 rounded-xl font-bold text-gray-500 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors">Cancel</button>
-                  <button type="submit" disabled={accounts.length === 0 || (form.transactionType === 'transfer' && !editingTxId && transferTab === 'accounts' && !form.transferToAccountId) || (form.transactionType === 'transfer' && !editingTxId && transferTab === 'friends' && !form.personName)} className="flex-1 bg-green-600 text-white py-3.5 rounded-xl font-bold hover:bg-green-700 shadow-xl shadow-green-100 dark:shadow-none transition-all disabled:opacity-50">
-                    {editingTxId ? 'Update' : form.transactionType === 'transfer' ? (transferTab === 'friends' ? 'Send to Friend' : 'Complete Transfer') : 'Submit'}
-                  </button>
-                </div>
+                )}
               </form>
             </div>
+
+            {/* --- MODAL FOOTER --- */}
+            <div className="flex-shrink-0 p-6 md:p-8 pt-4 md:pt-6">
+              <div className="flex space-x-3">
+                <button type="button" onClick={closeForm} className="flex-1 bg-gray-200 dark:bg-gray-700 py-3.5 rounded-xl font-bold text-gray-800 dark:text-gray-200 border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[1px] hover:translate-y-[1px] transition-all">Cancel</button>
+                <button type="submit" form="transaction-form" disabled={accounts.length === 0 || (form.transactionType === 'transfer' && !editingTxId && transferTab === 'accounts' && !form.transferToAccountId) || (form.transactionType === 'transfer' && !editingTxId && transferTab === 'friends' && !form.personName)} className={`flex-1 bg-green-400 text-black py-3.5 rounded-xl font-bold border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[1px] hover:translate-y-[1px] transition-all disabled:opacity-50 disabled:bg-gray-300`}>
+                  {editingTxId ? 'Update' : form.transactionType === 'transfer' ? (transferTab === 'friends' ? 'Send to Friend' : 'Complete Transfer') : 'Submit'}
+                </button>
+              </div>
+            </div>
           </div>
-        )}
-      </div>
+        </div>
+      )}
 
       {/* ── Batch Delete Confirmation Modal ─────────────────────────────────── */}
       {showBatchConfirm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-md">
-          <div className="w-full max-w-sm bg-white rounded-3xl p-8 shadow-2xl">
-            <h2 className="text-xl font-black text-gray-900 mb-3">Confirm Deletion</h2>
-            <p className="text-sm text-gray-600 mb-6">
-              You are deleting <span className="font-black text-red-600">{selectedIds.size}</span> transaction{selectedIds.size !== 1 ? 's' : ''}, and this will be irreversible. Do you want to proceed?
-            </p>
-            <div className="flex gap-4">
-              <button
-                type="button"
-                onClick={() => setShowBatchConfirm(false)}
-                disabled={isBatchDeleting}
-                className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 py-3 rounded-2xl font-bold transition-colors"
-              >
-                Cancel
-              </button>
-            <PinProtectedAction
-              featureId="transaction_deletions"
-              onVerified={handleBatchDelete}
-              actionLabel="Delete Multiple Transactions"
-            >
-              <button
-                type="button"
-                onClick={(e) => e.preventDefault()}
-                disabled={isBatchDeleting}
-                className="flex-1 bg-red-500 hover:bg-red-600 text-white py-3 rounded-2xl font-bold transition-colors disabled:opacity-50"
-              >
-                {isBatchDeleting ? 'Deleting…' : 'Yes, Delete'}
-              </button>
-            </PinProtectedAction>
+        <div className="fixed inset-0 z-[1000] flex items-center justify-center p-2 sm:p-4 bg-black/60 backdrop-blur-md">
+          <div className="w-full max-w-sm bg-white dark:bg-gray-900 border-4 border-black rounded-2xl shadow-2xl sm:shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] p-6 md:p-8 transition-all flex flex-col max-h-[95vh]">
+            <div className="flex-shrink-0">
+                <h2 className="text-xl font-black text-gray-900 dark:text-gray-200 mb-3">Confirm Deletion</h2>
+            </div>
+            <div className="flex-1 overflow-y-auto overflow-x-hidden">
+                <p className="text-sm text-gray-600 dark:text-gray-400 mb-6">
+                You are deleting <span className="font-black text-red-600">{selectedIds.size}</span> transaction{selectedIds.size !== 1 ? 's' : ''}, and this will be irreversible. Do you want to proceed?
+                </p>
+            </div>
+            <div className="flex-shrink-0 pt-6">
+                <div className="flex gap-4">
+                <button
+                    type="button"
+                    onClick={() => setShowBatchConfirm(false)}
+                    disabled={isBatchDeleting}
+                    className="flex-1 bg-gray-200 dark:bg-gray-700 py-3 rounded-xl font-bold text-gray-800 dark:text-gray-200 border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[1px] hover:translate-y-[1px] transition-all"
+                >
+                    Cancel
+                </button>
+                <PinProtectedAction
+                    featureId="transaction_deletions"
+                    onVerified={handleBatchDelete}
+                    actionLabel="Delete Multiple Transactions"
+                >
+                    <button
+                    type="button"
+                    onClick={(e) => e.preventDefault()}
+                    disabled={isBatchDeleting}
+                    className="flex-1 bg-red-500 text-white py-3 rounded-xl font-bold border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[1px] hover:translate-y-[1px] transition-all disabled:opacity-50"
+                    >
+                    {isBatchDeleting ? 'Deleting…' : 'Yes, Delete'}
+                    </button>
+                </PinProtectedAction>
+                </div>
             </div>
           </div>
         </div>
@@ -1265,74 +1264,77 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ transactions, loadi
       {selectedTx && (() => {
         const pm = accounts.find(a => a.id === selectedTx.paymentMethodId);
         return (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-md" onClick={() => setSelectedTx(null)}>
-            <div className="w-full max-w-md bg-white rounded-3xl p-8 shadow-2xl relative" onClick={e => e.stopPropagation()}>
-              <button
-                onClick={() => setSelectedTx(null)}
-                className="absolute top-4 right-4 text-gray-400 hover:text-gray-700 p-2 rounded-full hover:bg-gray-100 transition-colors"
-                aria-label="Close"
-              >
-                <X className="w-5 h-5" />
-              </button>
-              <h2 className="text-2xl font-black text-gray-900 mb-6">Transaction Details</h2>
-              <dl className="space-y-4 mb-6">
-                <div className="flex justify-between">
-                  <dt className="text-[10px] font-black text-gray-400 uppercase tracking-widest self-center">Name</dt>
-                  <dd className="text-sm font-bold text-gray-900">{selectedTx.name}</dd>
-                </div>
-                <div className="flex justify-between">
-                  <dt className="text-[10px] font-black text-gray-400 uppercase tracking-widest self-center">Date</dt>
-                  <dd className="text-sm text-gray-900">
-                    {new Date(selectedTx.date).toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' })}
-                    <span className="ml-2 text-xs text-gray-400">{new Date(selectedTx.date).toLocaleTimeString()}</span>
-                  </dd>
-                </div>
-                <div className="flex justify-between">
-                  <dt className="text-[10px] font-black text-gray-400 uppercase tracking-widest self-center">Amount</dt>
-                  <dd className={`text-sm font-bold ${selectedTx.amount > 0 ? 'text-red-600' : 'text-green-600'}`}>
-                    {formatCurrency(-selectedTx.amount)}
-                  </dd>
-                </div>
-                <div className="flex justify-between">
-                  <dt className="text-[10px] font-black text-gray-400 uppercase tracking-widest self-center">Payment Method</dt>
-                  <dd className="text-sm text-gray-700">{pm ? pm.bank : selectedTx.paymentMethodId}</dd>
-                </div>
-                <div className="flex justify-between">
-                  <dt className="text-[10px] font-black text-gray-400 uppercase tracking-widest self-center">
-                    {selectedTx.transaction_type === 'loan' ? 'Borrower' : 'Recipient'}
-                  </dt>
-                  <dd className="text-sm text-gray-700">{selectedTx.borrower_name || (selectedTx as any).person_name || (selectedTx as any).personName || 'N/A'}</dd>
-                </div>
-              </dl>
-
-              <div>
-                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-3">Receipt</p>
-                {selectedTx.receiptUrl ? (
-                  receiptSignedUrl === undefined ? (
-                    <div className="text-sm text-gray-400">Loading receipt…</div>
-                  ) : receiptSignedUrl ? (
-                    <div className="flex items-center space-x-3">
-                      <img
-                        src={receiptSignedUrl}
-                        alt="Receipt thumbnail"
-                        className="w-16 h-16 rounded-xl object-cover border border-gray-200"
-                        onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
-                      />
-                      <button
-                        onClick={() => { setZoom(0.5); setPreviewReceiptUrl(receiptSignedUrl); }}
-                        title="Preview receipt"
-                        className="flex items-center space-x-1 px-3 py-2 rounded-xl bg-indigo-50 text-indigo-600 hover:bg-indigo-100 transition-colors text-sm font-bold"
-                      >
-                        <Eye className="w-4 h-4" />
-                        <span>Preview</span>
-                      </button>
+          <div className="fixed inset-0 z-[1000] flex items-center justify-center p-2 sm:p-4 bg-black/60 backdrop-blur-md" onClick={() => setSelectedTx(null)}>
+            <div className="w-full max-w-md bg-white dark:bg-gray-900 border-4 border-black rounded-2xl shadow-2xl sm:shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] p-6 md:p-8 relative transition-all flex flex-col max-h-[95vh]" onClick={e => e.stopPropagation()}>
+              <div className='flex-shrink-0'>
+                <button
+                    onClick={() => setSelectedTx(null)}
+                    className="absolute top-4 right-4 text-gray-400 hover:text-gray-700 p-2 rounded-full hover:bg-gray-100 transition-colors"
+                    aria-label="Close"
+                >
+                    <X className="w-5 h-5" />
+                </button>
+                <h2 className="text-2xl font-black text-gray-900 dark:text-gray-200 mb-6">Transaction Details</h2>
+              </div>
+              <div className="flex-1 overflow-y-auto overflow-x-hidden pr-2 -mr-2">
+                <dl className="space-y-4 mb-6">
+                    <div className="flex justify-between">
+                    <dt className="text-[10px] font-black text-gray-400 uppercase tracking-widest self-center">Name</dt>
+                    <dd className="text-sm font-bold text-gray-900 dark:text-gray-100">{selectedTx.name}</dd>
                     </div>
-                  ) : (
-                    <p className="text-sm text-gray-400 italic">Could not load receipt preview.</p>
-                  )
-                ) : (
-                  <p className="text-sm text-gray-400 italic">No receipt attached</p>
-                )}
+                    <div className="flex justify-between">
+                    <dt className="text-[10px] font-black text-gray-400 uppercase tracking-widest self-center">Date</dt>
+                    <dd className="text-sm text-gray-900 dark:text-gray-100">
+                        {new Date(selectedTx.date).toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' })}
+                        <span className="ml-2 text-xs text-gray-400">{new Date(selectedTx.date).toLocaleTimeString()}</span>
+                    </dd>
+                    </div>
+                    <div className="flex justify-between">
+                    <dt className="text-[10px] font-black text-gray-400 uppercase tracking-widest self-center">Amount</dt>
+                    <dd className={`text-sm font-bold ${selectedTx.amount > 0 ? 'text-red-600' : 'text-green-600'}`}>
+                        {formatCurrency(-selectedTx.amount)}
+                    </dd>
+                    </div>
+                    <div className="flex justify-between">
+                    <dt className="text-[10px] font-black text-gray-400 uppercase tracking-widest self-center">Payment Method</dt>
+                    <dd className="text-sm text-gray-700 dark:text-gray-300">{pm ? pm.bank : selectedTx.paymentMethodId}</dd>
+                    </div>
+                    <div className="flex justify-between">
+                    <dt className="text-[10px] font-black text-gray-400 uppercase tracking-widest self-center">
+                        {selectedTx.transaction_type === 'loan' ? 'Borrower' : 'Recipient'}
+                    </dt>
+                    <dd className="text-sm text-gray-700 dark:text-gray-300">{selectedTx.borrower_name || (selectedTx as any).person_name || (selectedTx as any).personName || 'N/A'}</dd>
+                    </div>
+                </dl>
+
+                <div>
+                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-3">Receipt</p>
+                    {selectedTx.receiptUrl ? (
+                    receiptSignedUrl === undefined ? (
+                        <div className="text-sm text-gray-400">Loading receipt…</div>
+                    ) : receiptSignedUrl ? (
+                        <div className="flex items-center space-x-3">
+                        <img
+                            src={receiptSignedUrl}
+                            alt="Receipt thumbnail"
+                            className="w-16 h-16 rounded-xl object-cover border-2 border-black"
+                            onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
+                        />
+                        <button
+                            onClick={() => { setZoom(0.5); setPreviewReceiptUrl(receiptSignedUrl); }}
+                            title="Preview receipt"
+                            className={`flex items-center space-x-1 px-3 py-2 rounded-xl text-sm font-bold border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[1px] hover:translate-y-[1px] transition-all ${getAccentClasses('lightBg')}`}>
+                            <Eye className="w-4 h-4" />
+                            <span>Preview</span>
+                        </button>
+                        </div>
+                    ) : (
+                        <p className="text-sm text-gray-400 italic">Could not load receipt preview.</p>
+                    )
+                    ) : (
+                    <p className="text-sm text-gray-400 italic">No receipt attached</p>
+                    )}
+                </div>
               </div>
             </div>
           </div>
@@ -1341,7 +1343,7 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ transactions, loadi
 
       {/* Receipt Preview Modal — overlays the details modal without dimming the background */}
       {previewReceiptUrl && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4" onClick={() => setPreviewReceiptUrl(null)}>
+        <div className="fixed inset-0 z-[2000] flex items-center justify-center p-4" onClick={() => setPreviewReceiptUrl(null)}>
           <div className="w-full max-w-2xl bg-white rounded-3xl shadow-2xl flex flex-col overflow-hidden" style={{ maxHeight: '90vh' }} onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between p-4 border-b border-gray-100">
               <h3 className="text-base font-black text-gray-900 uppercase tracking-widest">Receipt Preview</h3>
@@ -1397,8 +1399,8 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ transactions, loadi
 
       {/* Type Selection Modal for Top Button */}
       {showTypeModal && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md animate-in fade-in">
-          <div className="w-full max-w-lg bg-white dark:bg-gray-900 rounded-[2.5rem] p-10 shadow-2xl relative transition-colors animate-in zoom-in-95">
+        <div className="fixed inset-0 z-[999] flex items-center justify-center p-2 sm:p-4 bg-black/60 backdrop-blur-md animate-in fade-in">
+          <div className="w-full max-w-lg bg-white dark:bg-gray-900 border-4 border-black rounded-2xl shadow-2xl sm:shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] p-6 sm:p-10 relative transition-all animate-in zoom-in-95">
             <button onClick={() => setShowTypeModal(false)} className="absolute top-6 right-6 text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors" aria-label="Close">
               <X className="w-5 h-5" />
             </button>
@@ -1410,9 +1412,8 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ transactions, loadi
                 <button 
                   key={type.id} 
                   onClick={() => openAddForm(type.id, 'top')} 
-                  className="flex flex-col items-center justify-center p-6 bg-gray-50 dark:bg-gray-800/50 rounded-3xl hover:bg-indigo-50 dark:hover:bg-indigo-900/30 hover:shadow-md text-gray-700 dark:text-gray-300 hover:text-indigo-600 dark:hover:text-indigo-400 transition-all border border-transparent hover:border-indigo-100 dark:hover:border-indigo-800 group"
-                >
-                  <div className="mb-4 p-4 bg-white dark:bg-gray-900 rounded-full shadow-sm group-hover:scale-110 transition-transform duration-300">
+                  className={`flex flex-col items-center justify-center p-6 bg-white dark:bg-gray-800/50 rounded-2xl border-2 border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] transition-all group ${getAccentClasses('hoverLight')}`}>
+                  <div className={`mb-4 p-4 rounded-full shadow-sm transition-transform duration-300 border-2 border-black ${getAccentClasses('lightBg')}`}>
                     {type.icon}
                   </div>
                   <span className="font-bold text-sm">{type.label}</span>
@@ -1424,7 +1425,7 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ transactions, loadi
       )}
 
       {/* Floating Action Button (FAB) with Fan Layout */}
-      {showFloatingAdd && (
+      {(isMobile || showFloatingAdd) && (
         <div className="fixed bottom-8 right-8 z-40 animate-in fade-in zoom-in duration-300">
           {/* Backdrop when fan is open */}
           {showFabMenu && <div className="fixed inset-0 z-30" onClick={() => setShowFabMenu(false)} />}
@@ -1443,8 +1444,7 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ transactions, loadi
                 >
                   <button 
                     onClick={() => openAddForm(item.id, 'fab')}
-                    className="w-12 h-12 bg-white dark:bg-gray-800 text-indigo-600 dark:text-indigo-400 rounded-full shadow-lg border border-gray-100 dark:border-gray-700 flex items-center justify-center hover:scale-110 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 transition-all pointer-events-auto group relative"
-                  >
+                    className={`w-12 h-12 bg-white dark:bg-gray-800 rounded-full border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] flex items-center justify-center hover:scale-110 transition-all pointer-events-auto group ${getAccentClasses('hover:bg')} text-gray-700 dark:text-gray-300 hover:text-white`}>
                     {item.icon}
                     <span className="absolute right-full mr-3 px-3 py-1.5 bg-gray-900 dark:bg-gray-100 text-white dark:text-gray-900 text-[10px] font-black uppercase tracking-widest rounded-xl opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap shadow-sm pointer-events-none">
                       {item.label}
@@ -1457,7 +1457,7 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ transactions, loadi
             {/* Main FAB */}
             <button
               onClick={() => setShowFabMenu(!showFabMenu)}
-              className={`relative z-10 w-14 h-14 text-white rounded-2xl shadow-xl flex items-center justify-center transition-all duration-300 ${getAccentClasses('bg')} ${showFabMenu ? 'rotate-[135deg] scale-110 shadow-2xl' : 'hover:-translate-y-1'}`}
+              className={`relative z-10 w-14 h-14 text-white rounded-2xl border-[3px] border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] flex items-center justify-center transition-all duration-300 ${getAccentClasses('bg')} ${showFabMenu ? 'rotate-[135deg] scale-110' : 'hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none'}`}
               aria-label="Add Transaction"
             >
               <Plus className="w-6 h-6" />
@@ -1468,9 +1468,9 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ transactions, loadi
 
       {/* Intercept Modal for Unlinked Budies */}
       {pendingProfileModal && (
-        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in">
-          <div className="bg-white dark:bg-gray-900 rounded-[2.5rem] w-full max-w-sm p-8 shadow-2xl relative transition-colors animate-in zoom-in-95 flex flex-col items-center text-center">
-            <div className="w-16 h-16 bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400 rounded-3xl flex items-center justify-center mb-6 transition-colors">
+        <div className="fixed inset-0 z-[1000] flex items-center justify-center p-2 sm:p-4 bg-black/60 backdrop-blur-sm animate-in fade-in">
+          <div className="bg-white dark:bg-gray-900 rounded-2xl w-full max-w-sm p-6 md:p-8 border-4 border-black shadow-2xl sm:shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] relative transition-all animate-in zoom-in-95 flex flex-col items-center text-center">
+            <div className={`w-16 h-16 rounded-3xl flex items-center justify-center mb-6 transition-colors border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] ${getAccentClasses('lightBg')}`}>
               <UserPlus className="w-8 h-8" />
             </div>
             <h3 className="text-xl font-black text-gray-900 dark:text-gray-100 mb-2 uppercase tracking-tight transition-colors">Profile Required</h3>
@@ -1504,11 +1504,11 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ transactions, loadi
                     alert('Failed to create local profile.');
                   } finally { setIsSubmitting(false); }
                 }}
-                className="w-full bg-indigo-600 text-white py-4 rounded-2xl font-black uppercase tracking-widest text-[10px] hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-100 dark:shadow-none disabled:opacity-50"
+                className={`w-full py-4 rounded-xl font-black uppercase tracking-widest text-[10px] transition-all border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[1px] hover:translate-y-[1px] disabled:opacity-50 disabled:bg-gray-300 ${getAccentClasses('bg')}`}
               >
                 {isSubmitting ? 'Processing...' : 'Create Profile & Continue'}
               </button>
-              <button disabled={isSubmitting} onClick={() => setPendingProfileModal(null)} className="w-full bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-300 py-4 rounded-2xl font-black uppercase tracking-widest text-[10px] hover:bg-gray-200 dark:hover:bg-gray-700 transition-all disabled:opacity-50">
+              <button disabled={isSubmitting} onClick={() => setPendingProfileModal(null)} className="w-full bg-gray-200 dark:bg-gray-700 py-4 rounded-xl font-black uppercase tracking-widest text-[10px] text-gray-800 dark:text-gray-200 border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[1px] hover:translate-y-[1px] transition-all disabled:opacity-50">
                 Cancel
               </button>
             </div>
@@ -1517,24 +1517,33 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ transactions, loadi
       )}
 
       {confirmModal.show && <ConfirmDialog {...confirmModal} onClose={() => setConfirmModal(p => ({ ...p, show: false }))} />}
-    </div>
+      </Portal>
+    </>
   );
 };
 
 const ConfirmDialog: React.FC<{ show: boolean; title: string; message: string; onConfirm: () => void; onClose: () => void }> = ({ title, message, onConfirm, onClose }) => (
-  <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-in fade-in">
-    <div className="bg-white dark:bg-gray-900 rounded-[2.5rem] w-full max-w-sm p-10 shadow-2xl animate-in zoom-in-95 flex flex-col items-center text-center transition-colors">
-      <div className="w-16 h-16 bg-red-50 dark:bg-red-900/20 text-red-600 rounded-3xl flex items-center justify-center mb-6">
-        <AlertTriangle className="w-8 h-8" />
-      </div>
-      <h3 className="text-xl font-black text-gray-900 dark:text-gray-100 mb-2 uppercase tracking-tight">{title}</h3>
-      <p className="text-sm text-gray-500 dark:text-gray-400 mb-8 font-medium leading-relaxed">{message}</p>
-      <div className="flex flex-col w-full space-y-3">
-        <button onClick={onConfirm} className="w-full bg-red-600 text-white py-4 rounded-2xl font-black uppercase tracking-widest text-[10px] hover:bg-red-700 transition-all">Proceed</button>
-        <button onClick={onClose} className="w-full bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-300 py-4 rounded-2xl font-black uppercase tracking-widest text-[10px] hover:bg-gray-200 dark:hover:bg-gray-700 transition-all">Cancel</button>
-      </div>
-    </div>
-  </div>
+    <Portal>
+        <div className="fixed inset-0 z-[2000] flex items-center justify-center p-2 sm:p-4 bg-black/70 backdrop-blur-sm animate-in fade-in">
+            <div className="bg-white dark:bg-gray-900 rounded-2xl w-full max-w-sm p-6 sm:p-10 border-4 border-black shadow-2xl sm:shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] animate-in zoom-in-95 flex flex-col items-center text-center transition-all max-h-[95vh]">
+                <div className="flex-shrink-0">
+                    <div className="w-16 h-16 bg-red-50 dark:bg-red-900/20 text-red-600 rounded-3xl flex items-center justify-center mb-6 border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]">
+                        <AlertTriangle className="w-8 h-8" />
+                    </div>
+                    <h3 className="text-xl font-black text-gray-900 dark:text-gray-100 mb-2 uppercase tracking-tight">{title}</h3>
+                </div>
+                <div className="flex-1 overflow-y-auto overflow-x-hidden mb-8">
+                    <p className="text-sm text-gray-500 dark:text-gray-400 font-medium leading-relaxed">{message}</p>
+                </div>
+                <div className="flex-shrink-0 w-full">
+                    <div className="flex flex-col w-full space-y-3">
+                        <button onClick={onConfirm} className="w-full bg-red-500 text-white py-4 rounded-xl font-black uppercase tracking-widest text-[10px] border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[1px] hover:translate-y-[1px] transition-all">Proceed</button>
+                        <button onClick={onClose} className="w-full bg-gray-200 dark:bg-gray-700 py-4 rounded-xl font-black uppercase tracking-widest text-[10px] text-gray-800 dark:text-gray-200 border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[1px] hover:translate-y-[1px] transition-all">Cancel</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </Portal>
 );
 
 export default TransactionsPage;

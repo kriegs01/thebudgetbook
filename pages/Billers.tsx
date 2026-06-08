@@ -1,23 +1,17 @@
-import React, { useState, useEffect, useCallback } from 'react';
+
+import React, { useState, useEffect, useCallback, useRef } from 'react';
+import useMediaQuery from '../src/hooks/useMediaQuery';
 import { Biller, BillerAmountIncrease, Account, PaymentSchedule, BudgetCategory, Installment } from '../types';
 import { Plus, Calendar, Receipt, ChevronDown, ChevronRight, Upload, CheckCircle2, X, ArrowLeft, Power, PowerOff, MoreVertical, Edit2, Eye, Trash2, AlertTriangle, Info, ZoomIn, ZoomOut, Download } from 'lucide-react';
 import { PinProtectedAction } from '../src/components/PinProtectedAction';
 import { getAllTransactions, getTransactionsByPaymentSchedule, getReceiptSignedUrl, updateTransaction, updateTransactionAndSyncSchedule, deleteTransactionAndRevertSchedule } from '../src/services/transactionsService';
 import { getPaymentSchedulesBySource } from '../src/services/paymentSchedulesService';
-import { combineDateWithCurrentTime } from '../src/utils/dateUtils';
+import { combineDateWithCurrentTime, getTodayIso } from '../src/utils/dateUtils';
 import type { SupabaseTransaction, SupabaseMonthlyPaymentSchedule } from '../src/types/supabase';
-// ENHANCEMENT: Import linked account utilities for billing cycle-based amount calculation
-import { 
-  getScheduleExpectedAmount, 
-  getScheduleDisplayLabel, 
-  shouldUseLinkedAccount, 
-  getLinkedAccount 
-} from '../src/utils/linkedAccountUtils';
+import { getScheduleExpectedAmount, getScheduleDisplayLabel, shouldUseLinkedAccount, getLinkedAccount } from '../src/utils/linkedAccountUtils';
 import { getDueDayForMonth, ordinalSuffix } from '../src/utils/billingCycles';
-// Import schedule ID generator for consistent ID creation
 import { generateScheduleId } from '../src/utils/billersAdapter';
 import { useTheme } from '../src/contexts/ThemeContext';
-
 
 interface BillersProps {
   billers: Biller[];
@@ -33,36 +27,27 @@ interface BillersProps {
     accountId: string;
     receipt?: string;
     receiptFile?: File;
-    scheduleId?: string; // target schedule ID so the correct month is always updated
-    expectedAmount?: number; // true expected amount when DB expected_amount is 0 (e.g. Loans billers)
+    scheduleId?: string;
+    expectedAmount?: number;
   }) => Promise<void>;
   loading?: boolean;
   error?: string | null;
 }
 
 const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+const TRANSACTION_AMOUNT_TOLERANCE = 1;
+const TRANSACTION_MIN_NAME_LENGTH = 3;
 
-// Transaction matching configuration
-const TRANSACTION_AMOUNT_TOLERANCE = 1; // ±1 peso tolerance for amount matching
-const TRANSACTION_MIN_NAME_LENGTH = 3; // Minimum length for partial name matching
-
-// Utility function to calculate timing based on day of month
 const calculateTiming = (dayString: string): '1/2' | '2/2' => {
   const day = parseInt(dayString);
   if (isNaN(day) || day < 1 || day > 31) return '1/2';
   return (day >= 1 && day <= 21) ? '1/2' : '2/2';
 };
 
-// Categories that support scheduled amount increases (Loans excluded)
 const SCHEDULED_INCREASE_CATEGORY_PREFIXES = ['Fixed', 'Utilities', 'Subscriptions'];
 const categorySupportsScheduledIncreases = (category: string): boolean =>
   SCHEDULED_INCREASE_CATEGORY_PREFIXES.some(prefix => category.startsWith(prefix));
 
-/**
- * Returns true when the effective month of a scheduled increase has already
- * been reached or elapsed (i.e., month/year ≤ today's month/year).
- * Used to lock the remove button so historical increases can't be deleted.
- */
 const isIncreaseElapsed = (effectiveMonth: string, effectiveYear: string): boolean => {
   const today = new Date();
   const incYear = parseInt(effectiveYear, 10);
@@ -74,84 +59,73 @@ const isIncreaseElapsed = (effectiveMonth: string, effectiveYear: string): boole
   );
 };
 
-// Utility function to calculate status for a future/past activation date.
-// Returns 'active' only when the activation month has already been reached.
-// Used when reactivating an inactive biller to keep it 'inactive' until its
-// activation month arrives.
 const calculateStatusFromActivation = (activationDate: { month: string; year: string }): 'active' | 'inactive' => {
   const now = new Date();
   const currentYear = now.getFullYear();
-  const currentMonth = now.getMonth(); // 0-indexed
-
+  const currentMonth = now.getMonth();
   const actYear = parseInt(activationDate.year);
-  const actMonthIdx = MONTHS.indexOf(activationDate.month); // 0-indexed
-
+  const actMonthIdx = MONTHS.indexOf(activationDate.month);
   if (isNaN(actYear) || actMonthIdx === -1) return 'inactive';
-
-  // Active once the activation month has arrived (current >= activation)
   if (actYear < currentYear || (actYear === currentYear && actMonthIdx <= currentMonth)) {
     return 'active';
   }
-
   return 'inactive';
 };
 
-// Utility function to calculate status based on deactivationDate.
-// A biller remains 'active' until the deactivation month actually arrives;
-// only then does its status flip to 'inactive'.
 const calculateStatus = (deactivationDate?: { month: string; year: string }): 'active' | 'inactive' => {
   if (!deactivationDate) return 'active';
-
   const now = new Date();
   const currentYear = now.getFullYear();
-  const currentMonth = now.getMonth(); // 0-indexed
-
+  const currentMonth = now.getMonth();
   const deactYear = parseInt(deactivationDate.year);
-  const deactMonth = MONTHS.indexOf(deactivationDate.month); // 0-indexed
-
+  const deactMonth = MONTHS.indexOf(deactivationDate.month);
   if (isNaN(deactYear) || deactMonth === -1) return 'active';
-
-  // Biller is inactive only when the current month has reached or passed the deactivation month
   if (currentYear > deactYear || (currentYear === deactYear && currentMonth >= deactMonth)) {
     return 'inactive';
   }
-
   return 'active';
 };
 
-/** 
- * PageHeader component mirroring Dashboard style
- */
-const PageHeader: React.FC<{ 
-  title: string; 
-  subtitle: string; 
-  icon?: React.ReactNode; 
-  actions?: React.ReactNode;
-  backButton?: React.ReactNode;
-}> = ({ title, subtitle, icon, actions, backButton }) => {
+const PageHeader: React.FC<any> = ({ title, subtitle, icon, actions, backButton }) => {
   const { getAccentClasses } = useTheme();
-  
+  const isMobile = useMediaQuery('(max-width: 767px)');
+  const titleContainerRef = useRef<HTMLDivElement>(null);
+  const [highlightWidth, setHighlightWidth] = useState(0);
+
+  useEffect(() => {
+    if (titleContainerRef.current) {
+      setHighlightWidth(titleContainerRef.current.offsetWidth);
+    }
+  }, [title, isMobile]);
+
   return (
-    <header className="pt-12 mb-12 flex flex-col md:flex-row md:items-end justify-between gap-6">
-      <div className="flex-1">
-        <div className="flex items-center gap-3 mb-[-6px] ml-1">
-          {backButton}
-          <p className="text-xl font-bold italic text-black/50 dark:text-gray-400 transition-colors duration-300">
-            {subtitle}
-          </p>
-        </div>
-        <div className="relative inline-block mt-2">
-          <div className="flex items-center gap-4">
-             {icon && <div className="z-10 shrink-0">{icon}</div>}
-             <h1 className="text-4xl md:text-6xl font-[950] uppercase tracking-tighter leading-none relative z-10 text-black dark:text-white transition-colors duration-300">
-              {title}
-            </h1>
+    <header className={`${isMobile ? 'pt-16' : 'pt-12'} flex flex-row items-center justify-between gap-6 mb-4`}>
+      <div className="flex flex-1 items-center gap-6">
+        {backButton}
+        <div className="flex-1">
+          <div className="relative inline-block">
+            <div ref={titleContainerRef} className="flex items-center gap-4">
+              {icon && <div className="z-10 shrink-0">{icon}</div>}
+              <h1 className={`font-titan text-[clamp(2rem,7.5vw,3.75rem)] normal-case tracking-tighter leading-none relative z-10 [text-shadow:-1px_-1px_0_#000,1px_-1px_0_#000,-1px_1px_0_#000,1px_1px_0_#000] drop-shadow-[3px_3px_0px_#000] ${icon ? getAccentClasses('text') : 'text-black dark:text-white'}`}>
+                {title}
+              </h1>
+            </div>
+            {highlightWidth > 0 && (
+              <div
+                className={`absolute bottom-0 left-0 h-4 ${getAccentClasses('bg')} opacity-40 -z-0 -rotate-1 -translate-x-2 transition-colors duration-300`}
+                style={{ width: `${highlightWidth}px` }}
+              />
+            )}
           </div>
-          <div className={`absolute bottom-1 left-0 w-[110%] h-5 ${getAccentClasses('bg')} opacity-40 -z-0 -rotate-1 -translate-x-2 transition-colors duration-300`} />
+          <div className="flex items-center gap-3 mt-1 ml-1">
+            <p className="text-[clamp(1rem,3vw,1.25rem)] font-bold italic text-black/50 dark:text-gray-400 transition-colors duration-300">
+              {subtitle}
+            </p>
+          </div>
+          <div className={`h-2 w-32 mt-2 bg-black dark:bg-white/20 transition-colors duration-300`} />
         </div>
-        <div className={`h-2 w-32 mt-4 bg-black dark:bg-white/20 transition-colors duration-300`} />
       </div>
-      {actions && <div className="flex items-center justify-end gap-3 mt-4 md:mt-0 w-full md:w-auto">{actions}</div>}
+      {actions && <div className="flex items-center justify-end gap-3">{actions}</div>}
     </header>
   );
 };
@@ -165,139 +139,61 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
   const [activeDropdownId, setActiveDropdownId] = useState<string | null>(null);
   const [isInactiveOpen, setIsInactiveOpen] = useState(false);
   const [isActiveOpen, setIsActiveOpen] = useState(true);
-  const [timingFeedback, setTimingFeedback] = useState<string>('');
+  const [timingFeedback, setTimingFeedback] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
-
-  // Collapsible deactivation date visibility for Add/Edit forms
   const [showAddDeactSection, setShowAddDeactSection] = useState(false);
   const [showEditDeactSection, setShowEditDeactSection] = useState(false);
-
-  // Collapsible scheduled increases visibility for Add/Edit forms
   const [showAddScheduledSection, setShowAddScheduledSection] = useState(false);
   const [showEditScheduledSection, setShowEditScheduledSection] = useState(false);
-
-  // Scheduled increases for Add/Edit forms (eligible categories only)
-  // Shape uses separate month/year fields; effectiveDate is derived as YYYY-MM-01 on submit
   const [addScheduledIncreases, setAddScheduledIncreases] = useState<{ effectiveMonth: string; effectiveYear: string; amount: string }[]>([]);
   const [editScheduledIncreases, setEditScheduledIncreases] = useState<{ effectiveMonth: string; effectiveYear: string; amount: string }[]>([]);
-
-  // Transactions state for payment status matching
   const [transactions, setTransactions] = useState<SupabaseTransaction[]>([]);
-
-  // Payment schedules state for database-driven status display
   const [paymentSchedules, setPaymentSchedules] = useState<SupabaseMonthlyPaymentSchedule[]>([]);
   const [loadingSchedules, setLoadingSchedules] = useState(false);
-
-  // Schedules loaded when opening the edit modal — used for orphaning detection
   const [editBillerSchedules, setEditBillerSchedules] = useState<SupabaseMonthlyPaymentSchedule[]>([]);
-
-  const [confirmModal, setConfirmModal] = useState<{
-    show: boolean;
-    title: string;
-    message: string;
-    onConfirm: () => void;
-  }>({
-    show: false,
-    title: '',
-    message: '',
-    onConfirm: () => {},
-  });
-  
-  const [addFormData, setAddFormData] = useState({
-    name: '',
-    category: categories[0]?.name || '',
-    dueDate: '',
-    expectedAmount: '',
-    actMonth: MONTHS[(new Date().getMonth() + 1) % 12],
-    actDay: '',
-    actYear: new Date().getFullYear().toString(),
-    deactMonth: '',
-    deactYear: '',
-    linkedAccountId: '' // ENHANCEMENT: Support linking Loans-category billers to credit accounts
-  });
-
-  const [editFormData, setEditFormData] = useState({
-    name: '',
-    category: '',
-    dueDate: '',
-    expectedAmount: '',
-    actMonth: '',
-    actDay: '',
-    actYear: '',
-    deactMonth: '',
-    deactYear: '',
-    linkedAccountId: '', // ENHANCEMENT: Support linking Loans-category billers to credit accounts
-    reactMonth: '', // Reactivation date (used when editing an inactive biller)
-    reactYear: '',
-  });
-
-  const [payFormData, setPayFormData] = useState({
-    amount: '',
-    receipt: '',
-    datePaid: new Date().toISOString().split('T')[0],
-    accountId: accounts[0]?.id || ''
-  });
+  const [confirmModal, setConfirmModal] = useState<{ show: boolean; title: string; message: string; onConfirm: () => void; }>({ show: false, title: '', message: '', onConfirm: () => {}, });
+  const [addFormData, setAddFormData] = useState({ name: '', category: categories[0]?.name || '', dueDate: '', expectedAmount: '', actMonth: MONTHS[(new Date().getMonth() + 1) % 12], actDay: '', actYear: new Date().getFullYear().toString(), deactMonth: '', deactYear: '', linkedAccountId: '' });
+  const [editFormData, setEditFormData] = useState({ name: '', category: '', dueDate: '', expectedAmount: '', actMonth: '', actDay: '', actYear: '', deactMonth: '', deactYear: '', linkedAccountId: '', reactMonth: '', reactYear: '' });
+  const [payFormData, setPayFormData] = useState({ amount: '', receipt: '', datePaid: getTodayIso(), accountId: accounts[0]?.id || '' });
   const [payReceiptFile, setPayReceiptFile] = useState<File | null>(null);
-
-  // Schedule payments modal (consolidated transactions for a schedule entry)
   type BillerScheduleTx = { id: string; name: string; amount: number; date: string; paymentMethodId: string; receiptUrl?: string | null };
   const [schedulePaymentsModal, setSchedulePaymentsModal] = useState<{ label: string; scheduleId: string; transactions: BillerScheduleTx[] } | null>(null);
   const [loadingScheduleTx, setLoadingScheduleTx] = useState(false);
   const [scheduleSignedUrls, setScheduleSignedUrls] = useState<Record<string, string | null>>({});
   const [previewReceiptUrl, setPreviewReceiptUrl] = useState<string | null>(null);
   const [zoom, setZoom] = useState(0.5);
-
-  // Edit schedule transaction modal state
   const [editingScheduleTx, setEditingScheduleTx] = useState<BillerScheduleTx | null>(null);
   const [editScheduleTxForm, setEditScheduleTxForm] = useState({ name: '', amount: '', date: '' });
   const [isEditingScheduleTx, setIsEditingScheduleTx] = useState(false);
 
-  // Load transactions for payment status matching
   useEffect(() => {
     const loadTransactions = async () => {
       try {
         const { data, error } = await getAllTransactions();
-        if (error) {
-          console.error('[Billers] Failed to load transactions:', error);
-        } else if (data) {
-          // Filter to last 24 months for performance
+        if (error) console.error('[Billers] Failed to load transactions:', error);
+        else if (data) {
           const twoYearsAgo = new Date();
           twoYearsAgo.setFullYear(twoYearsAgo.getFullYear() - 2);
-          
-          const recentTransactions = data.filter(tx => {
-            const txDate = new Date(tx.date);
-            return txDate >= twoYearsAgo;
-          });
-          
+          const recentTransactions = data.filter(tx => new Date(tx.date) >= twoYearsAgo);
           setTransactions(recentTransactions);
-          console.log('[Billers] Loaded transactions:', recentTransactions.length, 'of', data.length);
         }
       } catch (error) {
         console.error('[Billers] Error loading transactions:', error);
       }
     };
-
     loadTransactions();
-  }, []); // Load once on mount
+  }, []);
 
-  // Load payment schedules when viewing biller details
-  // Load payment schedules function (extracted for reuse)
   const loadPaymentSchedules = useCallback(async () => {
     if (detailedBillerId) {
       setLoadingSchedules(true);
-      console.log('[Billers] Loading payment schedules for biller:', detailedBillerId);
-      
       try {
         const { data, error } = await getPaymentSchedulesBySource('biller', detailedBillerId);
-        
         if (error) {
           console.error('[Billers] Error loading payment schedules:', error);
           setPaymentSchedules([]);
-        } else if (data) {
-          console.log('[Billers] Loaded payment schedules:', data.length, 'schedules');
-          setPaymentSchedules(data);
         } else {
-          setPaymentSchedules([]);
+          setPaymentSchedules(data || []);
         }
       } catch (err) {
         console.error('[Billers] Exception loading payment schedules:', err);
@@ -306,12 +202,10 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
         setLoadingSchedules(false);
       }
     } else {
-      // Clear schedules when not viewing details
       setPaymentSchedules([]);
     }
   }, [detailedBillerId]);
 
-  // Also reload when billers change (e.g., after payment) to get updated status
   useEffect(() => {
     loadPaymentSchedules();
   }, [detailedBillerId, billers, loadPaymentSchedules]);
@@ -321,14 +215,10 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
     setSchedulePaymentsModal({ label, scheduleId, transactions: [] });
     try {
       const { data } = await getTransactionsByPaymentSchedule(scheduleId);
-      const txs: BillerScheduleTx[] = (data || []).map((t: SupabaseTransaction) => ({
-        id: t.id, name: t.name, amount: t.amount, date: t.date, paymentMethodId: t.payment_method_id, receiptUrl: t.receipt_url ?? null
-      }));
+      const txs: BillerScheduleTx[] = (data || []).map((t: SupabaseTransaction) => ({ id: t.id, name: t.name, amount: t.amount, date: t.date, paymentMethodId: t.payment_method_id, receiptUrl: t.receipt_url ?? null }));
       setSchedulePaymentsModal({ label, scheduleId, transactions: txs });
       const urls: Record<string, string | null> = {};
-      await Promise.all(txs.filter(tx => tx.receiptUrl).map(async tx => {
-        urls[tx.id] = await getReceiptSignedUrl(tx.receiptUrl as string).catch(() => null);
-      }));
+      await Promise.all(txs.filter(tx => tx.receiptUrl).map(async tx => { urls[tx.id] = await getReceiptSignedUrl(tx.receiptUrl as string).catch(() => null); }));
       setScheduleSignedUrls(urls);
     } finally {
       setLoadingScheduleTx(false);
@@ -338,22 +228,13 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
   const handleEditBillerScheduleTxSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingScheduleTx || !schedulePaymentsModal) return;
-
     setIsEditingScheduleTx(true);
     try {
       const sign = editingScheduleTx.amount < 0 ? -1 : 1;
-      const { error } = await updateTransactionAndSyncSchedule(editingScheduleTx.id, {
-        name: editScheduleTxForm.name,
-        date: combineDateWithCurrentTime(editScheduleTxForm.date),
-        amount: sign * Math.abs(parseFloat(editScheduleTxForm.amount))
-      });
-
+      const { error } = await updateTransactionAndSyncSchedule(editingScheduleTx.id, { name: editScheduleTxForm.name, date: combineDateWithCurrentTime(editScheduleTxForm.date), amount: sign * Math.abs(parseFloat(editScheduleTxForm.amount)) });
       if (error) throw error;
-
       setEditingScheduleTx(null);
-      // Reload transactions in the modal for this schedule
       await openSchedulePaymentsModal(schedulePaymentsModal.scheduleId, schedulePaymentsModal.label);
-      // Reload payment schedules so status (partial/paid/pending) is recalculated
       await loadPaymentSchedules();
     } catch (err) {
       console.error('[Billers] Error updating schedule transaction:', err);
@@ -363,137 +244,41 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
     }
   };
 
-  /** Delete a payment transaction from the payment records modal.
-   * Cascade-deletes any linked credit_payment counterpart automatically. */
   const handleDeleteBillerScheduleTx = async (txId: string) => {
-    setConfirmModal({
-      show: true,
-      title: 'Delete Payment Record',
-      message: 'Are you sure you want to delete this payment record? This cannot be undone.',
-      onConfirm: async () => {
-        setConfirmModal(prev => ({ ...prev, show: false }));
-        try {
-          const { error } = await deleteTransactionAndRevertSchedule(txId);
-          if (error) throw error;
-          // Reload the modal and the schedule list to reflect the deletion
-          if (schedulePaymentsModal) {
-            await openSchedulePaymentsModal(schedulePaymentsModal.scheduleId, schedulePaymentsModal.label);
-          }
-          await loadPaymentSchedules();
-        } catch (err) {
-          console.error('[Billers] Error deleting schedule transaction:', err);
-          alert('Failed to delete transaction. Please try again.');
-        }
+    setConfirmModal({ show: true, title: 'Delete Payment Record', message: 'Are you sure you want to delete this payment record? This cannot be undone.', onConfirm: async () => {
+      setConfirmModal(p => ({ ...p, show: false }));
+      try {
+        const { error } = await deleteTransactionAndRevertSchedule(txId);
+        if (error) throw error;
+        if (schedulePaymentsModal) await openSchedulePaymentsModal(schedulePaymentsModal.scheduleId, schedulePaymentsModal.label);
+        await loadPaymentSchedules();
+      } catch (err) {
+        console.error('[Billers] Error deleting schedule transaction:', err);
+        alert('Failed to delete transaction. Please try again.');
       }
-    });
+    } });
   };
 
-  /**
-   * Check if a biller schedule is paid by matching transactions
-   * Matches by name, amount (within tolerance), and date (within month/year)
-   */
-  const checkIfPaidByTransaction = useCallback((
-    billerName: string,
-    expectedAmount: number,
-    month: string,
-    year: string
-  ): boolean => {
+  const checkIfPaidByTransaction = useCallback((billerName: string, expectedAmount: number, month: string, year: string): boolean => {
     if (isNaN(expectedAmount) || expectedAmount <= 0) return false;
-
-    // Get month index (0-11) for date comparison
     const monthIndex = MONTHS.indexOf(month);
     if (monthIndex === -1) return false;
-
     const targetYear = parseInt(year);
     if (isNaN(targetYear)) return false;
-
-    // Find matching transaction
     const matchingTransaction = transactions.find(tx => {
-      // Check name match with minimum length requirement
       const billerNameLower = billerName.toLowerCase();
       const txNameLower = tx.name.toLowerCase();
-      
-      const nameMatch = (
-        (txNameLower.includes(billerNameLower) && billerNameLower.length >= TRANSACTION_MIN_NAME_LENGTH) ||
-        (billerNameLower.includes(txNameLower) && txNameLower.length >= TRANSACTION_MIN_NAME_LENGTH)
-      );
-      
-      // Check amount match (within tolerance)
+      const nameMatch = (txNameLower.includes(billerNameLower) && billerNameLower.length >= TRANSACTION_MIN_NAME_LENGTH) || (billerNameLower.includes(txNameLower) && txNameLower.length >= TRANSACTION_MIN_NAME_LENGTH);
       const amountMatch = Math.abs(tx.amount - expectedAmount) <= TRANSACTION_AMOUNT_TOLERANCE;
-      
-      // Check date match (same month and year, or previous year for year-end carryover)
-      // Note: Previous year matching is intentional - allows for payments made in December
-      // for January bills, or delayed transaction recording across year boundaries
       const txDate = new Date(tx.date);
       const txMonth = txDate.getMonth();
       const txYear = txDate.getFullYear();
-      
-      const dateMatch = (txMonth === monthIndex) && 
-                       (txYear === targetYear || txYear === targetYear - 1);
-
+      const dateMatch = (txMonth === monthIndex) && (txYear === targetYear || txYear === targetYear - 1);
       return nameMatch && amountMatch && dateMatch;
     });
-
-    // Debug logging (can be removed in production)
-    if (process.env.NODE_ENV === 'development' && matchingTransaction) {
-      console.log(`[Billers] ✓ Found matching transaction for "${billerName}" (${month} ${year}):`, {
-        txName: matchingTransaction.name,
-        txAmount: matchingTransaction.amount,
-        txDate: matchingTransaction.date
-      });
-    }
-
     return !!matchingTransaction;
   }, [transactions]);
 
-  /**
-   * Get the matching transaction for a biller schedule
-   * Returns the transaction object if found, null otherwise
-   */
-  const getMatchingTransaction = useCallback((
-    billerName: string,
-    expectedAmount: number,
-    month: string,
-    year: string
-  ): SupabaseTransaction | null => {
-    if (isNaN(expectedAmount) || expectedAmount <= 0) return null;
-
-    // Get month index (0-11) for date comparison
-    const monthIndex = MONTHS.indexOf(month);
-    if (monthIndex === -1) return null;
-
-    const targetYear = parseInt(year);
-    if (isNaN(targetYear)) return null;
-
-    // Find matching transaction
-    const matchingTransaction = transactions.find(tx => {
-      // Check name match with minimum length requirement
-      const billerNameLower = billerName.toLowerCase();
-      const txNameLower = tx.name.toLowerCase();
-      
-      const nameMatch = (
-        (txNameLower.includes(billerNameLower) && billerNameLower.length >= TRANSACTION_MIN_NAME_LENGTH) ||
-        (billerNameLower.includes(txNameLower) && txNameLower.length >= TRANSACTION_MIN_NAME_LENGTH)
-      );
-      
-      // Check amount match (within tolerance)
-      const amountMatch = Math.abs(tx.amount - expectedAmount) <= TRANSACTION_AMOUNT_TOLERANCE;
-      
-      // Check date match (same month and year, or previous year for year-end carryover)
-      const txDate = new Date(tx.date);
-      const txMonth = txDate.getMonth();
-      const txYear = txDate.getFullYear();
-      
-      const dateMatch = (txMonth === monthIndex) && 
-                       (txYear === targetYear || txYear === targetYear - 1);
-
-      return nameMatch && amountMatch && dateMatch;
-    });
-
-    return matchingTransaction || null;
-  }, [transactions]);
-
-  // Helper to show timing feedback when dates change
   const showTimingInfo = (dayString: string) => {
     if (!dayString) {
       setTimingFeedback('');
@@ -509,12 +294,9 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
   const handleAddSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (isSubmitting) return;
-    
     setIsSubmitting(true);
     try {
       const expected = parseFloat(addFormData.expectedAmount) || 0;
-      
-      // Auto-compute dueDate from linked account if applicable
       let resolvedDueDate = addFormData.dueDate;
       if (addFormData.category.startsWith('Loans') && addFormData.linkedAccountId) {
         const linkedAcc = accounts.find(a => a.id === addFormData.linkedAccountId);
@@ -524,30 +306,14 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
           if (computed) resolvedDueDate = computed.toString();
         }
       }
-
-      // Calculate timing automatically from dueDate or actDay
       const dayForTiming = resolvedDueDate || addFormData.actDay;
       const timing = calculateTiming(dayForTiming);
-      
-      // Build activationDate with optional day
-      const activationDate: { month: string; day?: string; year: string } = {
-        month: addFormData.actMonth,
-        year: addFormData.actYear
-      };
-      if (addFormData.actDay) {
-        activationDate.day = addFormData.actDay;
-      }
-      
-      // Build deactivationDate if provided
-      const deactivationDate = (addFormData.deactMonth && addFormData.deactYear) 
-        ? { month: addFormData.deactMonth, year: addFormData.deactYear }
-        : undefined;
-      
-      // Calculate status automatically
+      const activationDate: { month: string; day?: string; year: string } = { month: addFormData.actMonth, year: addFormData.actYear };
+      if (addFormData.actDay) activationDate.day = addFormData.actDay;
+      const deactivationDate = (addFormData.deactMonth && addFormData.deactYear) ? { month: addFormData.deactMonth, year: addFormData.deactYear } : undefined;
       const status = calculateStatus(deactivationDate);
-      
       const newBiller: Biller = {
-        id: '', // ID will be generated by Supabase
+        id: '',
         name: addFormData.name,
         category: addFormData.category,
         dueDate: resolvedDueDate,
@@ -556,50 +322,24 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
         activationDate: activationDate,
         deactivationDate: deactivationDate,
         status: status,
-        schedules: MONTHS.map(month => ({ 
-          id: generateScheduleId(month, '2026'), 
-          month, 
-          year: '2026', 
-          expectedAmount: expected 
-        })),
-        linkedAccountId: addFormData.linkedAccountId || undefined, // ENHANCEMENT: Support linked credit accounts
+        schedules: MONTHS.map(month => ({ id: generateScheduleId(month, '2026'), month, year: '2026', expectedAmount: expected })),
+        linkedAccountId: addFormData.linkedAccountId || undefined,
         scheduledIncreases: categorySupportsScheduledIncreases(addFormData.category)
           ? addScheduledIncreases
-              .filter(inc => {
-                const parsed = parseFloat(inc.amount);
-                return inc.effectiveMonth !== '' && inc.effectiveYear !== '' && inc.amount !== '' && !isNaN(parsed) && parsed > 0;
-              })
-              .map(inc => ({
-                effectiveDate: `${inc.effectiveYear}-${String(MONTHS.indexOf(inc.effectiveMonth) + 1).padStart(2, '0')}-01`,
-                amount: parseFloat(inc.amount),
-              }))
+              .filter(inc => parseFloat(inc.amount) > 0 && inc.effectiveMonth && inc.effectiveYear)
+              .map(inc => ({ effectiveDate: `${inc.effectiveYear}-${String(MONTHS.indexOf(inc.effectiveMonth) + 1).padStart(2, '0')}-01`, amount: parseFloat(inc.amount) }))
               .sort((a, b) => a.effectiveDate.localeCompare(b.effectiveDate))
           : [],
       };
-      
       await onAdd(newBiller);
-      
-      // Only close modal and reset form on success
       setShowAddModal(false);
-      setAddFormData({ 
-        name: '', 
-        category: categories[0]?.name || '', 
-        dueDate: '', 
-        expectedAmount: '', 
-        actMonth: MONTHS[(new Date().getMonth() + 1) % 12], 
-        actDay: '',
-        actYear: new Date().getFullYear().toString(),
-        deactMonth: '',
-        deactYear: '',
-        linkedAccountId: '' // ENHANCEMENT: Reset linked account field
-      });
+      setAddFormData({ name: '', category: categories[0]?.name || '', dueDate: '', expectedAmount: '', actMonth: MONTHS[(new Date().getMonth() + 1) % 12], actDay: '', actYear: new Date().getFullYear().toString(), deactMonth: '', deactYear: '', linkedAccountId: '' });
       setAddScheduledIncreases([]);
       setShowAddScheduledSection(false);
       setShowAddDeactSection(false);
       setTimingFeedback('');
     } catch (error) {
       console.error('Failed to add biller:', error);
-      // Keep modal open so user can retry or fix the issue
     } finally {
       setIsSubmitting(false);
     }
@@ -608,12 +348,9 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
   const handleEditSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!showEditModal || isSubmitting) return;
-    
     setIsSubmitting(true);
     try {
       const isInactiveBiller = showEditModal.status === 'inactive';
-
-      // Auto-compute dueDate from linked account if applicable
       let resolvedEditDueDate = editFormData.dueDate;
       if (editFormData.category.startsWith('Loans') && editFormData.linkedAccountId) {
         const linkedAcc = accounts.find(a => a.id === editFormData.linkedAccountId);
@@ -623,40 +360,21 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
           if (computed) resolvedEditDueDate = computed.toString();
         }
       }
-
       const dayForTiming = resolvedEditDueDate || editFormData.actDay;
       const timing = calculateTiming(dayForTiming);
-
       let activationDate: { month: string; day?: string; year: string };
       let deactivationDate: { month: string; year: string } | undefined;
       let status: 'active' | 'inactive';
-
       if (isInactiveBiller) {
-        // Reactivation: treat reactMonth/reactYear as the new activation date.
-        // Only set status to 'active' once the reactivation month has arrived;
-        // otherwise keep 'inactive' until that month is reached.
-        activationDate = {
-          month: editFormData.reactMonth || editFormData.actMonth,
-          year: editFormData.reactYear || editFormData.actYear,
-        };
+        activationDate = { month: editFormData.reactMonth || editFormData.actMonth, year: editFormData.reactYear || editFormData.actYear };
         deactivationDate = undefined;
         status = calculateStatusFromActivation(activationDate);
       } else {
-        // Regular edit for active billers
-        activationDate = {
-          month: editFormData.actMonth,
-          year: editFormData.actYear,
-        };
-        if (editFormData.actDay) {
-          activationDate.day = editFormData.actDay;
-        }
-        deactivationDate = (editFormData.deactMonth && editFormData.deactYear)
-          ? { month: editFormData.deactMonth, year: editFormData.deactYear }
-          : undefined;
+        activationDate = { month: editFormData.actMonth, year: editFormData.actYear };
+        if (editFormData.actDay) activationDate.day = editFormData.actDay;
+        deactivationDate = (editFormData.deactMonth && editFormData.deactYear) ? { month: editFormData.deactMonth, year: editFormData.deactYear } : undefined;
         status = calculateStatus(deactivationDate);
       }
-
-      // Helper that performs the actual update
       const applyUpdate = async () => {
         await onUpdate({
           ...showEditModal,
@@ -671,14 +389,8 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
           linkedAccountId: editFormData.linkedAccountId || undefined,
           scheduledIncreases: categorySupportsScheduledIncreases(editFormData.category)
             ? editScheduledIncreases
-                .filter(inc => {
-                  const parsed = parseFloat(inc.amount);
-                  return inc.effectiveMonth !== '' && inc.effectiveYear !== '' && inc.amount !== '' && !isNaN(parsed) && parsed > 0;
-                })
-                .map(inc => ({
-                  effectiveDate: `${inc.effectiveYear}-${String(MONTHS.indexOf(inc.effectiveMonth) + 1).padStart(2, '0')}-01`,
-                  amount: parseFloat(inc.amount),
-                }))
+                .filter(inc => parseFloat(inc.amount) > 0 && inc.effectiveMonth && inc.effectiveYear)
+                .map(inc => ({ effectiveDate: `${inc.effectiveYear}-${String(MONTHS.indexOf(inc.effectiveMonth) + 1).padStart(2, '0')}-01`, amount: parseFloat(inc.amount) }))
                 .sort((a, b) => a.effectiveDate.localeCompare(b.effectiveDate))
             : [],
         });
@@ -687,54 +399,31 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
         setShowEditScheduledSection(false);
         setTimingFeedback('');
       };
-
-      // Orphaning check: warn when activation date changes for an active biller
-      // and there are paid/partial schedules for months that fall before the new activation.
       if (!isInactiveBiller) {
         const oldActMonth = showEditModal.activationDate.month;
         const oldActYear = showEditModal.activationDate.year;
-
         if (oldActMonth !== activationDate.month || oldActYear !== activationDate.year) {
           const newActMonthIdx = MONTHS.indexOf(activationDate.month);
           const newActYear = parseInt(activationDate.year);
-
           const affectedSchedules = editBillerSchedules.filter(s => {
             const sYear = typeof s.year === 'number' ? s.year : parseInt(String(s.year));
             const sMonthIdx = MONTHS.indexOf(s.month);
-            return (
-              (sYear < newActYear || (sYear === newActYear && sMonthIdx < newActMonthIdx)) &&
-              (s.status === 'paid' || s.status === 'partial')
-            );
+            return (sYear < newActYear || (sYear === newActYear && sMonthIdx < newActMonthIdx)) && (s.status === 'paid' || s.status === 'partial');
           });
-
           if (affectedSchedules.length > 0) {
-            // Show orphaning warning — defer update until user confirms
             setIsSubmitting(false);
-            setConfirmModal({
-              show: true,
-              title: 'Activation Date Change',
-              message: `Changing the activation date will affect ${affectedSchedules.length} existing payment record(s) for months before ${activationDate.month} ${activationDate.year}. Payment history will be preserved but pending schedules for those months will be removed. Do you want to proceed?`,
-              onConfirm: async () => {
-                setConfirmModal(prev => ({ ...prev, show: false }));
-                setIsSubmitting(true);
-                try {
-                  await applyUpdate();
-                } catch (err) {
-                  console.error('Failed to update biller after confirmation:', err);
-                } finally {
-                  setIsSubmitting(false);
-                }
-              },
-            });
+            setConfirmModal({ show: true, title: 'Activation Date Change', message: `Changing the activation date will affect ${affectedSchedules.length} existing payment record(s) for months before ${activationDate.month} ${activationDate.year}. Payment history will be preserved but pending schedules for those months will be removed. Do you want to proceed?`, onConfirm: async () => {
+              setConfirmModal(prev => ({ ...prev, show: false }));
+              setIsSubmitting(true);
+              try { await applyUpdate(); } catch (err) { console.error('Failed to update biller after confirmation:', err); } finally { setIsSubmitting(false); }
+            } });
             return;
           }
         }
       }
-
       await applyUpdate();
     } catch (error) {
       console.error('Failed to update biller:', error);
-      // Keep modal open so user can retry
     } finally {
       setIsSubmitting(false);
     }
@@ -743,55 +432,15 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
   const handlePaySubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!showPayModal || isSubmitting) return;
-    
     setIsSubmitting(true);
     try {
       const { biller, schedule } = showPayModal;
-
-      // Use new payment handler if available
       if (onPayBiller) {
-        console.log('[Billers] Using new transaction-based payment handler');
-        await onPayBiller(biller.id, {
-          amount: parseFloat(payFormData.amount),
-          date: payFormData.datePaid,
-          accountId: payFormData.accountId,
-          receipt: payFormData.receipt || undefined,
-          receiptFile: payReceiptFile || undefined,
-          scheduleId: schedule.id, // target the exact schedule the user selected
-          expectedAmount: showPayModal.expectedAmount,
-        });
-        
-        // Close modal and clear form
+        await onPayBiller(biller.id, { amount: parseFloat(payFormData.amount), date: payFormData.datePaid, accountId: payFormData.accountId, receipt: payFormData.receipt || undefined, receiptFile: payReceiptFile || undefined, scheduleId: schedule.id, expectedAmount: showPayModal.expectedAmount });
         setShowPayModal(null);
-        setPayFormData({
-          amount: '',
-          receipt: '',
-          datePaid: new Date().toISOString().split('T')[0],
-          accountId: accounts[0]?.id || ''
-        });
+        setPayFormData({ amount: '', receipt: '', datePaid: getTodayIso(), accountId: accounts[0]?.id || '' });
         setPayReceiptFile(null);
-
-        // Explicitly reload payment schedules to reflect the new payment status
-        console.log('[Billers] Payment successful, reloading payment schedules');
         await loadPaymentSchedules();
-      } else {
-        // Fallback to old method (direct schedule update)
-        console.log('[Billers] Using fallback direct schedule update');
-        const updatedSchedules = biller.schedules.map(s => {
-          // Match by ID if available (checking for null/undefined explicitly), otherwise fallback to month/year matching
-          const isMatch = (schedule.id != null) ? 
-            (s.id === schedule.id) : 
-            (s.month === schedule.month && s.year === schedule.year);
-            
-          if (isMatch) {
-            return { ...s, amountPaid: parseFloat(payFormData.amount), receipt: payFormData.receipt || `${biller.name}_${schedule.month}`, datePaid: payFormData.datePaid, accountId: payFormData.accountId };
-          }
-          return s;
-        });
-        await onUpdate({ ...biller, schedules: updatedSchedules });
-        
-        // Only close modal on success
-        setShowPayModal(null);
       }
     } catch (error) {
       console.error('[Billers] Failed to update payment:', error);
@@ -802,96 +451,28 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
   };
 
   const handleDeleteTrigger = (id: string, name: string) => {
-    setConfirmModal({
-      show: true,
-      title: 'Delete Biller',
-      message: `Are you sure you want to permanently delete "${name}"? This action cannot be undone.`,
-      onConfirm: async () => {
-        await onDelete?.(id);
-        setDetailedBillerId(null);
-        setConfirmModal(prev => ({ ...prev, show: false }));
-        setActiveDropdownId(null);
-      }
-    });
+    setConfirmModal({ show: true, title: 'Delete Biller', message: `Are you sure you want to permanently delete "${name}"? This action cannot be undone.`, onConfirm: async () => {
+      await onDelete?.(id);
+      setDetailedBillerId(null);
+      setConfirmModal(prev => ({ ...prev, show: false }));
+      setActiveDropdownId(null);
+    } });
   };
 
-  const formatCurrency = (val: number) => {
-    return new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(val);
-  };
+  const formatCurrency = (val: number) => new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(val);
 
-  // Get payment schedule with database status
   const getScheduleWithStatus = (sched: PaymentSchedule, biller: Biller, scheduleIndex: number) => {
-    // Try to find matching payment schedule from database
-    // First try exact month/year match
-    let dbSchedule = paymentSchedules.find(ps => 
-      ps.month === sched.month && ps.year === sched.year
-    );
-
-    // If no match, try matching by payment_number as fallback
-    // This helps when month names don't match exactly
+    let dbSchedule = paymentSchedules.find(ps => ps.month === sched.month && ps.year === sched.year);
     if (!dbSchedule && scheduleIndex >= 0) {
-      dbSchedule = paymentSchedules.find(ps => 
-        ps.payment_number === scheduleIndex + 1 && ps.year === sched.year
-      );
-      if (dbSchedule) {
-        console.log('[Billers] Matched schedule by payment_number:', {
-          scheduleIndex: scheduleIndex + 1,
-          month: dbSchedule.month,
-          year: dbSchedule.year
-        });
-      }
+      dbSchedule = paymentSchedules.find(ps => ps.payment_number === scheduleIndex + 1 && ps.year === sched.year);
     }
-
     if (dbSchedule) {
-      // Use database status
-      console.log('[Billers] Using database status for schedule:', {
-        month: sched.month,
-        year: sched.year,
-        paymentNumber: dbSchedule.payment_number,
-        status: dbSchedule.status,
-        amountPaid: dbSchedule.amount_paid,
-        scheduleId: dbSchedule.id
-      });
-      return {
-        ...sched,
-        isPaid: dbSchedule.status === 'paid',
-        isPartial: dbSchedule.status === 'partial',
-        amountPaid: dbSchedule.amount_paid,
-        status: dbSchedule.status,
-        scheduleId: dbSchedule.id
-      };
+      return { ...sched, isPaid: dbSchedule.status === 'paid', isPartial: dbSchedule.status === 'partial', amountPaid: dbSchedule.amount_paid, status: dbSchedule.status, scheduleId: dbSchedule.id };
     }
-
-    // Fallback to calculated status if no DB schedule
-    console.log('[Billers] No DB schedule found for:', {
-      month: sched.month,
-      year: sched.year,
-      scheduleIndex: scheduleIndex + 1,
-      availableSchedules: paymentSchedules.map(ps => `${ps.month} ${ps.year} (payment_number: ${ps.payment_number})`).join(', '),
-      totalSchedules: paymentSchedules.length
-    });
     const isPaidViaSchedule = !!sched.amountPaid;
-    const calculatedAmount = getScheduleExpectedAmount(
-      biller,
-      sched,
-      accounts,
-      transactions
-    ).amount;
-    
-    const isPaidViaTransaction = checkIfPaidByTransaction(
-      biller.name,
-      calculatedAmount,
-      sched.month,
-      sched.year
-    );
-
-    return {
-      ...sched,
-      isPaid: isPaidViaSchedule || isPaidViaTransaction,
-      isPartial: false,
-      amountPaid: sched.amountPaid || 0,
-      status: (isPaidViaSchedule || isPaidViaTransaction) ? 'paid' : 'pending'
-    };
+    const calculatedAmount = getScheduleExpectedAmount(biller, sched, accounts, transactions).amount;
+    const isPaidViaTransaction = checkIfPaidByTransaction(biller.name, calculatedAmount, sched.month, sched.year);
+    return { ...sched, isPaid: isPaidViaSchedule || isPaidViaTransaction, isPartial: false, amountPaid: sched.amountPaid || 0, status: (isPaidViaSchedule || isPaidViaTransaction) ? 'paid' : 'pending' };
   };
 
   const activeBillers = billers.filter(b => b.status === 'active');
@@ -899,75 +480,34 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
   const detailedBiller = billers.find(b => b.id === detailedBillerId);
 
   const openEditModal = async (biller: Biller) => {
-    // Default reactivation date to next month / current year
     const nextMonthDate = new Date();
     nextMonthDate.setMonth(nextMonthDate.getMonth() + 1);
     const defaultReactMonth = MONTHS[nextMonthDate.getMonth()];
     const defaultReactYear = nextMonthDate.getFullYear().toString();
-
-    setEditFormData({ 
-      name: biller.name, 
-      category: biller.category, 
-      dueDate: biller.dueDate, 
-      expectedAmount: biller.expectedAmount.toFixed(2),
-      actMonth: biller.activationDate.month,
-      actDay: biller.activationDate.day || '',
-      actYear: biller.activationDate.year,
-      deactMonth: biller.deactivationDate?.month || '',
-      deactYear: biller.deactivationDate?.year || '',
-      linkedAccountId: biller.linkedAccountId || '', // ENHANCEMENT: Populate linked account field
-      reactMonth: defaultReactMonth,
-      reactYear: defaultReactYear,
-    });
-
-    // Pre-populate scheduled increases from the biller
-    setEditScheduledIncreases(
-      (biller.scheduledIncreases ?? []).map(inc => {
-        // Parse YYYY-MM-DD → month name + year string
-        const [yearStr, monthStr] = inc.effectiveDate.split('-');
-        const monthIdx = parseInt(monthStr, 10) - 1;
-        return {
-          effectiveMonth: MONTHS[monthIdx] ?? MONTHS[0],
-          effectiveYear: yearStr,
-          amount: inc.amount.toFixed(2),
-        };
-      })
-    );
-
-    // Always start collapsed — user can expand to see/add scheduled increases
+    setEditFormData({ name: biller.name, category: biller.category, dueDate: biller.dueDate, expectedAmount: biller.expectedAmount.toFixed(2), actMonth: biller.activationDate.month, actDay: biller.activationDate.day || '', actYear: biller.activationDate.year, deactMonth: biller.deactivationDate?.month || '', deactYear: biller.deactivationDate?.year || '', linkedAccountId: biller.linkedAccountId || '', reactMonth: defaultReactMonth, reactYear: defaultReactYear });
+    setEditScheduledIncreases((biller.scheduledIncreases ?? []).map(inc => {
+      const [yearStr, monthStr] = inc.effectiveDate.split('-');
+      const monthIdx = parseInt(monthStr, 10) - 1;
+      return { effectiveMonth: MONTHS[monthIdx] ?? MONTHS[0], effectiveYear: yearStr, amount: inc.amount.toFixed(2) };
+    }));
     setShowEditScheduledSection(false);
-
-    // Show the deactivation date section if the biller already has one
     setShowEditDeactSection(!!(biller.deactivationDate?.month && biller.deactivationDate?.year));
-
     setShowEditModal(biller);
     setActiveDropdownId(null);
     setTimingFeedback('');
-
-    // Load this biller's payment schedules for orphaning detection
     try {
       const { data } = await getPaymentSchedulesBySource('biller', biller.id);
       setEditBillerSchedules(data || []);
-    } catch {
-      setEditBillerSchedules([]);
-    }
+    } catch { setEditBillerSchedules([]); }
   };
 
   const renderCategoryOptions = () => {
-    // Filter out legacy/inactive categories for new biller creation.
-    // A category is considered inactive when active === false AND its deactivatedAt date
-    // is in the past (or present) relative to today.
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     const activeCats = categories.filter(c => {
       if (c.active === false) {
         if (!c.deactivatedAt) return false;
-        const deactivationDate = (() => {
-          const [y, m] = c.deactivatedAt.split('-').map(Number);
-          return new Date(y, m - 1, 1); // local time, same as `today`
-        })();
-        // Category is hidden from the deactivation month onwards (inclusive).
-        // Show only if today falls strictly before the deactivation date (first of that month).
+        const deactivationDate = new Date(c.deactivatedAt.split('-').map(Number)[0], c.deactivatedAt.split('-').map(Number)[1] - 1, 1);
         return today < deactivationDate;
       }
       return true;
@@ -977,1317 +517,416 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
         {activeCats.map(c => (
           <React.Fragment key={c.id}>
             <option value={c.name} className="font-bold">{c.name}</option>
-            {c.subcategories.map(sub => (
-              <option key={`${c.id}-${sub}`} value={`${c.name} - ${sub}`}>&nbsp;&nbsp;&nbsp;{sub}</option>
-            ))}
+            {c.subcategories.map(sub => <option key={`${c.id}-${sub}`} value={`${c.name} - ${sub}`}>&nbsp;&nbsp;&nbsp;{sub}</option>)}
           </React.Fragment>
         ))}
       </>
     );
   };
 
-  // Calculate expected amount from linked installments or linked credit account for Loans billers
   const getExpectedAmount = (biller: Biller): number => {
     if (biller.category.startsWith('Loans')) {
-      // Check linked credit account first — use current month's billing cycle amount
       if (shouldUseLinkedAccount(biller)) {
         const linkedAccount = getLinkedAccount(biller, accounts);
-        const hasLinkedAccountTx = linkedAccount
-          ? transactions.some(tx => tx.payment_method_id === linkedAccount.id)
-          : false;
-        if (hasLinkedAccountTx) {
+        if (linkedAccount && transactions.some(tx => tx.payment_method_id === linkedAccount.id)) {
           const today = new Date();
-          const currentMonth = today.toLocaleString('en-US', { month: 'long' });
-          const currentYear = today.getFullYear().toString();
-          const currentSchedule: PaymentSchedule = {
-            id: 'display-current',
-            month: currentMonth,
-            year: currentYear,
-            expectedAmount: 0,
-          };
-          const { amount, isFromLinkedAccount } = getScheduleExpectedAmount(
-            biller,
-            currentSchedule,
-            accounts,
-            transactions
-          );
+          const currentSchedule: PaymentSchedule = { id: 'display-current', month: today.toLocaleString('en-US', { month: 'long' }), year: today.getFullYear().toString(), expectedAmount: 0 };
+          const { amount, isFromLinkedAccount } = getScheduleExpectedAmount(biller, currentSchedule, accounts, transactions);
           if (isFromLinkedAccount && amount > 0) return amount;
         }
       }
-
-      // Find installments linked to this biller
       const linkedInstallments = installments.filter(inst => inst.billerId === biller.id);
-      if (linkedInstallments.length > 0) {
-        // Sum up monthly amounts from all linked installments
-        const totalMonthly = linkedInstallments.reduce((sum, inst) => sum + inst.monthlyAmount, 0);
-        return totalMonthly;
-      }
+      if (linkedInstallments.length > 0) return linkedInstallments.reduce((sum, inst) => sum + inst.monthlyAmount, 0);
     }
-    // Return the biller's expected amount for non-Loans or if no linked installments
     return biller.expectedAmount || 0;
   };
 
   const renderBillerCard = (biller: Biller) => {
     const displayAmount = getExpectedAmount(biller);
-    // ENHANCEMENT: Check if biller has linked account
     const hasLinkedAccount = shouldUseLinkedAccount(biller);
     const linkedAccount = hasLinkedAccount ? getLinkedAccount(biller, accounts) : null;
-    
     return (
-    <div key={biller.id} className="bg-white dark:bg-gray-900 p-6 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800 hover:shadow-md transition-all flex flex-col h-full group relative overflow-visible">
-      <div className="flex items-start justify-between mb-4">
-        <div className="flex items-center space-x-4 flex-1 min-w-0">
-          <div className={`p-3 rounded-2xl flex-shrink-0 transition-colors ${biller.status === 'active' ? 'bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400' : 'bg-gray-100 dark:bg-gray-800 text-gray-400 dark:text-gray-500'}`}>
-            <Receipt className="w-6 h-6" />
-          </div>
+      <div key={biller.id} className="relative bg-white dark:bg-gray-800 border-[3px] border-black rounded-2xl p-6 flex flex-col h-full group transition-all duration-300 shadow-[4px_4px_0px_#000] overflow-hidden">
+        <div className="flex items-start justify-between gap-4">
           <div className="flex-1 min-w-0">
-            <h3 className="text-lg font-bold text-gray-900 dark:text-gray-100 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors truncate">{biller.name}</h3>
-            <div className="flex items-center space-x-2 flex-wrap gap-y-1">
-               <span className="text-[10px] font-bold px-2 py-0.5 bg-gray-100 dark:bg-gray-800 rounded text-gray-500 dark:text-gray-400 uppercase transition-colors">{biller.category}</span>
-               <span className="text-[10px] font-bold px-2 py-0.5 bg-blue-50 dark:bg-blue-900/30 rounded text-blue-500 dark:text-blue-400 transition-colors">{biller.timing}</span>
-               <span className={`text-[10px] font-bold px-2 py-0.5 rounded uppercase transition-colors ${biller.status === 'active' ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400' : 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400'}`}>
-                 {biller.status === 'active' ? <div className="flex items-center gap-1"><Power className="w-3 h-3" />Active</div> : <div className="flex items-center gap-1"><PowerOff className="w-3 h-3" />Inactive</div>}
-               </span>
-               {/* ENHANCEMENT: Show linked account indicator */}
-               {linkedAccount && (
-                 <span className="text-[10px] font-bold px-2 py-0.5 bg-purple-100 dark:bg-purple-900/30 rounded text-purple-600 dark:text-purple-400 uppercase transition-colors">
-                   <span role="img" aria-label="Linked">🔗</span> {linkedAccount.bank}
-                 </span>
-               )}
+            <h3 onClick={() => setDetailedBillerId(biller.id)} className={`font-titan text-xl tracking-tighter truncate transition-all cursor-pointer ${getAccentClasses('text')} [text-shadow:-1px_-1px_0_#000,1px_-1px_0_#000,-1px_1px_0_#000,1px_1px_0_#000] drop-shadow-[2px_2px_0px_#000] hover:drop-shadow-none hover:translate-x-[1px] hover:translate-y-[1px] active:translate-x-[2px] active:translate-y-[2px]`}>{biller.name}</h3>
+            <div className="flex items-center flex-wrap gap-2 mt-2">
+              <span className="text-[10px] font-bold px-2 py-0.5 bg-gray-100 dark:bg-gray-700/50 rounded text-gray-600 dark:text-gray-300 uppercase">{biller.category}</span>
+              {linkedAccount && <span className="text-[10px] font-bold px-2 py-0.5 bg-gray-100 dark:bg-gray-700/50 rounded text-gray-600 dark:text-gray-300 uppercase flex items-center gap-1"><span role="img" aria-label="Linked">🔗</span> {linkedAccount.bank}</span>}
             </div>
           </div>
+          <div className="relative flex-shrink-0">
+            <button onClick={() => setActiveDropdownId(activeDropdownId === biller.id ? null : biller.id)} className="p-2 rounded-lg text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"><MoreVertical className="w-5 h-5" /></button>
+            {activeDropdownId === biller.id && (
+              <>
+                <div className="fixed inset-0 z-10" onClick={() => setActiveDropdownId(null)}></div>
+                <div className="absolute right-0 top-full mt-2 w-48 bg-white dark:bg-gray-900 rounded-xl shadow-xl border-2 border-black py-2 z-20 animate-in zoom-in-95">
+                  <button onClick={() => { setDetailedBillerId(biller.id); setActiveDropdownId(null); }} className="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 flex items-center gap-2"><Eye className="w-4 h-4" /> View Details</button>
+                  <button onClick={() => openEditModal(biller)} className="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 flex items-center gap-2"><Edit2 className="w-4 h-4" /> Edit Biller</button>
+                  <div className="border-t border-gray-200 dark:border-gray-700 my-1"></div>
+                  <button onClick={() => handleDeleteTrigger(biller.id, biller.name)} className="w-full text-left px-4 py-2 text-sm text-red-500 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 flex items-center gap-2"><Trash2 className="w-4 h-4" /> Delete</button>
+                </div>
+              </>
+            )}
+          </div>
         </div>
-        <div className="relative flex-shrink-0">
-          <button onClick={() => setActiveDropdownId(activeDropdownId === biller.id ? null : biller.id)} className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg text-gray-400 dark:text-gray-500 transition-colors">
-            <MoreVertical className="w-5 h-5" />
-          </button>
-          {activeDropdownId === biller.id && (
-            <>
-              <div className="fixed inset-0 z-[10]" onClick={() => setActiveDropdownId(null)}></div>
-              <div className="absolute right-0 top-full mt-2 w-48 bg-white dark:bg-gray-900 rounded-xl shadow-xl border border-gray-100 dark:border-gray-800 py-2 z-[20] animate-in zoom-in-95 transition-colors">
-                <button onClick={() => { setDetailedBillerId(biller.id); setActiveDropdownId(null); }} className="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 flex items-center space-x-2 transition-colors"><Eye className="w-4 h-4" /><span>View Details</span></button>
-                <button onClick={() => openEditModal(biller)} className="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 flex items-center space-x-2 transition-colors"><Edit2 className="w-4 h-4" /><span>Edit Biller</span></button>
-                <div className="border-t border-gray-100 dark:border-gray-800 my-1 transition-colors"></div>
-                <button onClick={() => handleDeleteTrigger(biller.id, biller.name)} className="w-full text-left px-4 py-2 text-sm text-red-500 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 flex items-center space-x-2 transition-colors"><Trash2 className="w-4 h-4" /><span>Delete</span></button>
-              </div>
-            </>
-          )}
+        <div className="mt-auto pt-4 flex items-end justify-between">
+          <div className="flex flex-col">
+            <span className="text-xs font-bold text-gray-500 dark:text-gray-400">Due on day {biller.dueDate}</span>
+            <span className={`font-poppins text-xl font-black ${getAccentClasses('text')}`}>{formatCurrency(displayAmount)}</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <button onClick={() => setDetailedBillerId(biller.id)} className="px-3 py-1.5 rounded-lg text-sm font-bold bg-white dark:bg-gray-700 border-2 border-black text-black dark:text-white transition-all shadow-[2px_2px_0px_#000] hover:shadow-none hover:translate-x-[1px] hover:translate-y-[1px] active:translate-x-[2px] active:translate-y-[2px]">View</button>
+            <button onClick={() => { const today = new Date(); const schedule: PaymentSchedule = { id: '', month: today.toLocaleString('default', { month: 'long' }), year: today.getFullYear().toString(), expectedAmount: displayAmount }; setShowPayModal({ biller, schedule, expectedAmount: displayAmount }); setPayFormData({ ...payFormData, amount: displayAmount.toFixed(2), receipt: '' }); }} className={`px-3 py-1.5 rounded-lg text-sm font-bold text-white border-2 border-black transition-all shadow-[2px_2px_0px_#000] hover:shadow-none hover:translate-x-[1px] hover:translate-y-[1px] active:translate-x-[2px] active:translate-y-[2px] ${getAccentClasses('bg')}`}>Pay</button>
+          </div>
         </div>
       </div>
-      <div className="space-y-2 mb-6 text-xs text-gray-500 dark:text-gray-400 transition-colors">
-        <div className="flex items-center"><Calendar className="w-3.5 h-3.5 mr-2" />Due every {biller.dueDate}</div>
-      </div>
-      <div className="mt-auto pt-4 border-t border-gray-50 dark:border-gray-800/50 flex items-center justify-between transition-colors">
-        <div className="flex flex-col"><span className="text-[10px] font-bold text-gray-400 dark:text-gray-500 uppercase transition-colors">Expected</span><span className="text-lg font-black text-gray-900 dark:text-gray-100 transition-colors">{formatCurrency(displayAmount)}</span></div>
-        <button onClick={() => setDetailedBillerId(biller.id)} className="bg-gray-50 dark:bg-gray-800 text-indigo-600 dark:text-indigo-400 px-4 py-2 rounded-xl text-xs font-bold hover:bg-indigo-50 dark:hover:bg-indigo-900/30 transition-colors">Details</button>
-      </div>
-    </div>
     );
   };
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500 pb-12">
-      {/* Loading State */}
-      {loading && (
-        <div className="flex items-center justify-center py-12">
-          <div className="text-center">
-            <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600 mb-4"></div>
-            <p className="text-gray-600 font-medium">Loading billers from database...</p>
-          </div>
-        </div>
-      )}
-
-      {/* Error State */}
-      {error && !loading && (
-        <div className="bg-red-50 border border-red-200 rounded-xl p-4 mb-6">
-          <div className="flex items-start space-x-3">
-            <AlertTriangle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
-            <div>
-              <h3 className="text-sm font-semibold text-red-800">Error Loading Billers</h3>
-              <p className="text-sm text-red-600 mt-1">{error}</p>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Main Content */}
       {!loading && (
-      <>
-      {detailedBiller ? (
-        <div className="space-y-6 animate-in slide-in-from-right-4 duration-500">
-        <PageHeader 
-          title="Biller Details"
-          subtitle={`Manage payment schedules for ${detailedBiller.name}`}
-          backButton={
-            <button onClick={() => setDetailedBillerId(null)} className={`flex items-center justify-center w-10 h-10 rounded-xl bg-gray-50 dark:bg-gray-800 text-gray-500 dark:text-gray-400 transition-all shrink-0 ${getAccentClasses('hoverLight')}`}>
-              <ArrowLeft className="w-5 h-5" />
-            </button>
-          }
-          actions={
-            <div className="flex items-center gap-3 flex-wrap justify-end">
-              <button onClick={() => openEditModal(detailedBiller)} className="flex items-center gap-2 bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 px-5 py-3 rounded-xl font-bold text-sm hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors">
-                <Edit2 className="w-4 h-4" />
-                <span className="hidden sm:inline">Edit</span>
-              </button>
-              <button onClick={() => handleDeleteTrigger(detailedBiller.id, detailedBiller.name)} className="flex items-center gap-2 bg-red-50 text-red-600 dark:bg-red-900/20 dark:text-red-400 px-5 py-3 rounded-xl font-bold text-sm hover:bg-red-100 dark:hover:bg-red-900/40 transition-colors">
-                <Trash2 className="w-4 h-4" />
-                <span className="hidden sm:inline">Delete</span>
-              </button>
-            </div>
-          }
-        />
-          <div className="bg-white dark:bg-gray-900 p-8 rounded-3xl border border-gray-100 dark:border-gray-800 shadow-sm transition-colors">
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-8">
-              <div className="flex items-center space-x-6">
-                <div className={`p-5 rounded-3xl transition-colors ${getAccentClasses('lightBg')}`}><Receipt className="w-10 h-10" /></div>
-                <div>
-                  <h2 className="text-3xl font-black text-gray-900 dark:text-gray-100 transition-colors">{detailedBiller.name}</h2>
-                  <div className="flex items-center space-x-3 mt-2">
-                    <span className="px-3 py-1 bg-gray-100 dark:bg-gray-800 rounded-full text-xs font-bold text-gray-500 dark:text-gray-400 uppercase transition-colors">{detailedBiller.category}</span>
-                    <span className="text-sm text-gray-400 dark:text-gray-500 font-medium transition-colors">Due every {detailedBiller.dueDate}</span>
-                    {/* ENHANCEMENT: Show linked account info */}
-                    {shouldUseLinkedAccount(detailedBiller) && getLinkedAccount(detailedBiller, accounts) && (
-                      <span className="px-3 py-1 bg-purple-100 dark:bg-purple-900/30 rounded-full text-xs font-bold text-purple-600 dark:text-purple-400 transition-colors">
-                        <span role="img" aria-label="Linked">🔗</span> Linked to {getLinkedAccount(detailedBiller, accounts)?.bank}
-                      </span>
-                    )}
+        <>
+          {detailedBiller ? (
+            <div className="animate-in slide-in-from-right-4 duration-500">
+              <PageHeader title={<span className={`${getAccentClasses('text')}`}>{detailedBiller.name}</span>} subtitle="Look ahead your sched" />
+              <div className="flex justify-between items-center mb-2">
+                <button onClick={() => setDetailedBillerId(null)} className="flex items-center justify-center w-10 h-10 rounded-2xl bg-white dark:bg-gray-700 border-2 border-black text-black dark:text-white transition-all shadow-[2px_2px_0px_#000] hover:shadow-none hover:translate-x-[1px] hover:translate-y-[1px] active:translate-x-[2px] active:translate-y-[2px]"><ArrowLeft className="w-5 h-5" /></button>
+                <div className="flex items-center gap-3">
+                  <button onClick={() => openEditModal(detailedBiller)} className="flex items-center justify-center w-10 h-10 rounded-2xl bg-white dark:bg-gray-700 border-2 border-black text-black dark:text-white transition-all shadow-[2px_2px_0px_#000] hover:shadow-none hover:translate-x-[1px] hover:translate-y-[1px] active:translate-x-[2px] active:translate-y-[2px]"><Edit2 className="w-5 h-5" /></button>
+                  <button onClick={() => handleDeleteTrigger(detailedBiller.id, detailedBiller.name)} className="flex items-center justify-center w-10 h-10 rounded-2xl bg-red-500 border-2 border-black text-white transition-all shadow-[2px_2px_0px_#000] hover:shadow-none hover:translate-x-[1px] hover:translate-y-[1px] active:translate-x-[2px] active:translate-y-[2px]"><Trash2 className="w-5 h-5" /></button>
+                </div>
+              </div>
+              <div className="bg-white dark:bg-gray-800 border-[3px] border-black rounded-2xl p-8 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] transition-colors">
+                <div className="grid grid-cols-3 gap-x-10 sm:gap-x-10 gap-y-5 mb-4 border-b-2 border-dashed border-black/10 dark:border-white/10 pb-2">
+                  <div className="flex flex-col items-center"><span className="text-sm font-bold text-gray-500 dark:text-gray-400">Category</span><span className="text-base font-bold text-gray-800 dark:text-gray-200 truncate">{detailedBiller.category}</span></div>
+                  <div className="flex flex-col items-center"><span className="text-sm font-bold text-gray-500 dark:text-gray-400">Due Day</span><span className="text-base font-bold text-gray-800 dark:text-gray-200">{detailedBiller.dueDate}{ordinalSuffix(detailedBiller.dueDate)}</span></div>
+                  <div className="flex flex-col items-center"><span className="text-sm font-bold text-gray-500 dark:text-gray-400">Amount</span><span className={`font-poppins text-base font-black ${getAccentClasses('text')}`}>{formatCurrency(getExpectedAmount(detailedBiller))}</span></div>
+                </div>
+                {shouldUseLinkedAccount(detailedBiller) && getLinkedAccount(detailedBiller, accounts) && (
+                  <div className="mb-4 p-1 bg-purple-50 dark:bg-purple-900/30 rounded-xl flex items-center gap-3 text-sm border-2 border-purple-200 dark:border-purple-800/30"><span role="img" aria-label="Linked">🔗</span> <span className="font-bold text-purple-700 dark:text-purple-300">Linked to {getLinkedAccount(detailedBiller, accounts)?.bank}</span><span className="text-purple-600 dark:text-purple-400 text-xs">(Amount is auto-calculated)</span></div>
+                )}
+                <div className="overflow-hidden rounded-2xl border-[3px] border-black bg-white dark:bg-gray-800">
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left">
+                      <thead><tr className={`border-b-[3px] border-black text-white ${getAccentClasses('bg')}`}><th className="p-4 text-xs font-bold uppercase tracking-widest">Month</th><th className="p-4 text-xs font-bold uppercase tracking-widest">Amount</th><th className="p-4 text-xs font-bold uppercase tracking-widest text-center">Action</th></tr></thead>
+                      <tbody className="divide-y-2 divide-black/10 dark:divide-white/10">
+                        {paymentSchedules.length > 0 ? (
+                          (() => {
+                            const getMonthOrder = (month: string): number => ({ 'January': 1, 'February': 2, 'March': 3, 'April': 4, 'May': 5, 'June': 6, 'July': 7, 'August': 8, 'September': 9, 'October': 10, 'November': 11, 'December': 12 }[month] || 999);
+                            return [...paymentSchedules].sort((a, b) => a.year !== b.year ? a.year - b.year : getMonthOrder(a.month) - getMonthOrder(b.month)).map((schedule) => {
+                              const legacySched: PaymentSchedule = { id: schedule.id, month: schedule.month, year: schedule.year.toString(), expectedAmount: schedule.expected_amount, amountPaid: schedule.amount_paid, receipt: schedule.receipt || undefined, datePaid: schedule.date_paid || undefined, accountId: schedule.account_id || undefined };
+                              const { amount: calculatedAmount, isFromLinkedAccount } = getScheduleExpectedAmount(detailedBiller, legacySched, accounts, transactions);
+                              const isPaid = schedule.status === 'paid';
+                              const isPartial = schedule.status === 'partial';
+                              let displayAmount = calculatedAmount;
+                              if (isPaid && schedule.amount_paid > 0) displayAmount = schedule.amount_paid;
+                              else if (!isPaid && !isPartial) displayAmount = calculatedAmount;
+                              const displayLabel = getScheduleDisplayLabel(legacySched, shouldUseLinkedAccount(detailedBiller) ? getLinkedAccount(detailedBiller, accounts) : null);
+                              return (
+                                <tr key={schedule.id} className={`${isPaid ? 'bg-green-500/10' : isPartial ? 'bg-yellow-500/10' : 'hover:bg-black/5 dark:hover:bg-white/5'} transition-colors`}>
+                                  <td className="p-4"><div className="flex flex-col"><span className="font-bold text-gray-900 dark:text-gray-100 text-sm sm:text-base">{displayLabel}</span>{isFromLinkedAccount && <span className="text-[10px] text-purple-600 dark:text-purple-400 font-medium mt-1 flex items-center gap-1"><span className="inline-block w-1.5 h-1.5 rounded-full bg-purple-600 dark:bg-purple-400" aria-hidden="true"></span>From linked account</span>}{isPartial && schedule.amount_paid > 0 && <span className="text-xs text-gray-500 dark:text-gray-400 mt-1">Paid: {formatCurrency(schedule.amount_paid)} of {formatCurrency(calculatedAmount)}</span>}</div></td>
+                                  <td className="p-4 font-mono font-medium text-gray-600 dark:text-gray-400 text-sm sm:text-base">{formatCurrency(displayAmount)}</td>
+                                  <td className="p-4 text-center">{isPaid ? <span role="status" className="flex items-center justify-center space-x-2 text-green-600"><CheckCircle2 className="w-5 h-5" aria-label="Payment completed" title="Paid" /><button onClick={() => openSchedulePaymentsModal(schedule.id, `${schedule.month} ${schedule.year}`)} title="View payment records" className="text-gray-400 dark:text-gray-500 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors rounded-full p-1 hover:bg-indigo-50 dark:hover:bg-indigo-900/30"><Info className="w-4 h-4" /></button></span> : isPartial ? <div className="flex flex-col items-center space-y-1"><div className="flex items-center space-x-2"><span className="px-3 py-1 bg-yellow-500 text-white rounded-lg font-bold text-xs">Partial</span><button onClick={() => openSchedulePaymentsModal(schedule.id, `${schedule.month} ${schedule.year}`)} title="View payment records" className="text-gray-400 dark:text-gray-500 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors rounded-full p-1 hover:bg-indigo-50 dark:hover:bg-indigo-900/30"><Info className="w-4 h-4" /></button></div><button onClick={() => { setShowPayModal({ biller: detailedBiller, schedule: legacySched, expectedAmount: calculatedAmount }); setPayFormData({ ...payFormData, amount: (calculatedAmount - schedule.amount_paid).toFixed(2), receipt: '' }); }} className="bg-indigo-600 text-white px-3 py-1 sm:px-4 rounded-lg font-bold text-[10px] sm:text-xs transition-all border-2 border-black shadow-[2px_2px_0px_#000] hover:shadow-none hover:translate-x-[1px] hover:translate-y-[1px] active:translate-x-[2px] active:translate-y-[2px]">Pay Remaining</button></div> : <button onClick={() => { setShowPayModal({ biller: detailedBiller, schedule: legacySched, expectedAmount: calculatedAmount }); setPayFormData({ ...payFormData, amount: displayAmount.toFixed(2), receipt: '' }); }} className="bg-indigo-600 text-white px-4 py-2 sm:px-6 rounded-xl font-bold text-[11px] sm:text-xs transition-all border-2 border-black shadow-[2px_2px_0px_#000] hover:shadow-none hover:translate-x-[1px] hover:translate-y-[1px] active:translate-x-[2px] active:translate-y-[2px]">Pay</button>}</td>
+                                </tr>
+                              );
+                            });
+                          })()
+                        ) : (detailedBiller.schedules.map((sched, idx) => {
+                            const schedWithStatus = getScheduleWithStatus(sched, detailedBiller, idx);
+                            const { amount: calculatedAmount, isFromLinkedAccount } = getScheduleExpectedAmount(detailedBiller, sched, accounts, transactions);
+                            const isPaid = schedWithStatus.isPaid, isPartial = schedWithStatus.isPartial;
+                            let displayAmount = calculatedAmount;
+                            if (isPaid && schedWithStatus.amountPaid > 0) displayAmount = schedWithStatus.amountPaid;
+                            else if (!isPaid && !isPartial) displayAmount = calculatedAmount;
+                            const displayLabel = getScheduleDisplayLabel(sched, shouldUseLinkedAccount(detailedBiller) ? getLinkedAccount(detailedBiller, accounts) : null);
+                            return (
+                              <tr key={idx} className={`${isPaid ? 'bg-green-500/10' : isPartial ? 'bg-yellow-500/10' : 'hover:bg-black/5 dark:hover:bg-white/5'} transition-colors`}>
+                                <td className="p-4"><div className="flex flex-col"><span className="font-bold text-gray-900 dark:text-gray-100 text-sm sm:text-base">{displayLabel}</span>{isFromLinkedAccount && <span className="text-[10px] text-purple-600 dark:text-purple-400 font-medium mt-1 flex items-center gap-1"><span className="inline-block w-1.5 h-1.5 rounded-full bg-purple-600 dark:bg-purple-400" aria-hidden="true"></span>From linked account</span>}{isPartial && schedWithStatus.amountPaid > 0 && <span className="text-xs text-gray-500 dark:text-gray-400 mt-1">Paid: {formatCurrency(schedWithStatus.amountPaid)} of {formatCurrency(calculatedAmount)}</span>}</div></td>
+                                <td className="p-4 font-mono font-medium text-gray-600 dark:text-gray-400 text-sm sm:text-base">{formatCurrency(displayAmount)}</td>
+                                <td className="p-4 text-center">{isPaid ? <span role="status" className="flex items-center justify-center space-x-2 text-green-600"><CheckCircle2 className="w-5 h-5" aria-label="Payment completed" title="Paid" />{sched.id && <button onClick={() => openSchedulePaymentsModal(sched.id!, `${sched.month} ${sched.year}`)} title="View payment records" className="text-gray-400 dark:text-gray-500 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors rounded-full p-1 hover:bg-indigo-50 dark:hover:bg-indigo-900/30"><Info className="w-4 h-4" /></button>}</span> : isPartial ? <div className="flex flex-col items-center space-y-1"><div className="flex items-center space-x-2"><span className="px-3 py-1 bg-yellow-500 text-white rounded-lg font-bold text-xs">Partial</span>{sched.id && <button onClick={() => openSchedulePaymentsModal(sched.id!, `${sched.month} ${sched.year}`)} title="View payment records" className="text-gray-400 dark:text-gray-500 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors rounded-full p-1 hover:bg-indigo-50 dark:hover:bg-indigo-900/30"><Info className="w-4 h-4" /></button>}</div><button onClick={() => { setShowPayModal({ biller: detailedBiller, schedule: sched, expectedAmount: calculatedAmount }); setPayFormData({ ...payFormData, amount: (calculatedAmount - schedWithStatus.amountPaid).toFixed(2), receipt: '' }); }} className="bg-indigo-600 text-white px-3 py-1 sm:px-4 rounded-lg font-bold text-[10px] sm:text-xs transition-all border-2 border-black shadow-[2px_2px_0px_#000] hover:shadow-none hover:translate-x-[1px] hover:translate-y-[1px] active:translate-x-[2px] active:translate-y-[2px]">Pay Remaining</button></div> : <button onClick={() => { setShowPayModal({ biller: detailedBiller, schedule: sched, expectedAmount: calculatedAmount }); setPayFormData({ ...payFormData, amount: displayAmount.toFixed(2), receipt: '' }); }} className="bg-indigo-600 text-white px-4 py-2 sm:px-6 rounded-xl font-bold text-[11px] sm:text-xs transition-all border-2 border-black shadow-[2px_2px_0px_#000] hover:shadow-none hover:translate-x-[1px] hover:translate-y-[1px] active:translate-x-[2px] active:translate-y-[2px]">Pay</button>}</td>
+                              </tr>
+                            );
+                          }))}
+                      </tbody>
+                    </table>
                   </div>
                 </div>
               </div>
-              <div className="text-right"><p className="text-xs font-bold text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-1 transition-colors">Expected Amount</p><p className={`text-3xl font-black transition-colors ${getAccentClasses('text')}`}>{formatCurrency(getExpectedAmount(detailedBiller))}</p></div>
             </div>
-            <div className="overflow-hidden rounded-2xl border border-gray-100 dark:border-gray-800 transition-colors">
-              <div className="overflow-x-auto">
-                <table className="w-full text-left">
-                  <thead><tr className="bg-gray-50 dark:bg-gray-800/50 border-b border-gray-100 dark:border-gray-800 transition-colors"><th className="p-4 text-xs font-bold text-gray-400 dark:text-gray-500 uppercase transition-colors">Month</th><th className="p-4 text-xs font-bold text-gray-400 dark:text-gray-500 uppercase transition-colors">Amount</th><th className="p-4 text-xs font-bold text-gray-400 dark:text-gray-500 uppercase text-center transition-colors">Action</th></tr></thead>
-                  <tbody className="divide-y divide-gray-50 dark:divide-gray-800/50 transition-colors">{paymentSchedules.length > 0 ? (
-                    // PRIMARY: Display database payment schedules directly (source of truth)
-                    (() => {
-                      console.log('[Billers] Displaying database payment schedules (sorted chronologically)');
-                      
-                      // Helper function to get month order for sorting
-                      const getMonthOrder = (month: string): number => {
-                        const monthOrder: { [key: string]: number } = {
-                          'January': 1, 'February': 2, 'March': 3, 'April': 4,
-                          'May': 5, 'June': 6, 'July': 7, 'August': 8,
-                          'September': 9, 'October': 10, 'November': 11, 'December': 12
-                        };
-                        return monthOrder[month] || 999;
-                      };
-                      
-                      // Sort schedules chronologically
-                      const sortedSchedules = [...paymentSchedules].sort((a, b) => {
-                        // First sort by year
-                        if (a.year !== b.year) {
-                          return a.year - b.year;
-                        }
-                        // Then sort by month
-                        return getMonthOrder(a.month) - getMonthOrder(b.month);
-                      });
-                      
-                      return sortedSchedules.map((schedule, idx) => {
-                        // Convert database schedule to legacy format for compatibility with existing functions
-                        const legacySched: PaymentSchedule = {
-                          id: schedule.id,
-                          month: schedule.month,
-                          year: schedule.year.toString(),
-                          expectedAmount: schedule.expected_amount,
-                          amountPaid: schedule.amount_paid,
-                          receipt: schedule.receipt || undefined,
-                          datePaid: schedule.date_paid || undefined,
-                          accountId: schedule.account_id || undefined,
-                        };
-                        
-                        // ENHANCEMENT: Calculate amount from linked account if applicable
-                        const { amount: calculatedAmount, isFromLinkedAccount } = getScheduleExpectedAmount(
-                          detailedBiller,
-                          legacySched,
-                          accounts,
-                          transactions
-                        );
-                        
-                        const isPaid = schedule.status === 'paid';
-                        const isPartial = schedule.status === 'partial';
-                        
-                        // Get actual paid amount
-                        let displayAmount = calculatedAmount; // Use calculated amount as base
-                        if (isPaid && schedule.amount_paid > 0) {
-                          displayAmount = schedule.amount_paid;
-                        } else if (!isPaid && !isPartial) {
-                          // For unpaid, keep calculated amount
-                          displayAmount = calculatedAmount;
-                        }
-                        
-                        // ENHANCEMENT: Get display label with cycle date range if linked account
-                        const linkedAccount = shouldUseLinkedAccount(detailedBiller) 
-                          ? getLinkedAccount(detailedBiller, accounts) 
-                          : null;
-                        const displayLabel = getScheduleDisplayLabel(legacySched, linkedAccount);
-                        
-                        return (
-                          <tr key={schedule.id} className={`${
-                            isPaid ? 'bg-green-50 dark:bg-green-900/20' : 
-                            isPartial ? 'bg-yellow-50 dark:bg-yellow-900/20' : 
-                            'hover:bg-gray-50/50 dark:hover:bg-gray-800/50'
-                          } transition-colors`}>
-                            <td className="p-4">
-                              <div className="flex flex-col">
-                                <span className="font-bold text-gray-900 dark:text-gray-100 transition-colors">{displayLabel}</span>
-                                {isFromLinkedAccount && (
-                                  <span className="text-[10px] text-purple-600 dark:text-purple-400 font-medium mt-1 flex items-center gap-1 transition-colors">
-                                    <span className="inline-block w-1.5 h-1.5 rounded-full bg-purple-600 dark:bg-purple-400 transition-colors" aria-hidden="true"></span>
-                                    From linked account
-                                  </span>
-                                )}
-                                {isPartial && schedule.amount_paid > 0 && (
-                                  <span className="text-xs text-gray-500 dark:text-gray-400 mt-1 transition-colors">
-                                    Paid: {formatCurrency(schedule.amount_paid)} of {formatCurrency(calculatedAmount)}
-                                  </span>
-                                )}
-                              </div>
-                            </td>
-                            <td className="p-4 font-medium text-gray-600 dark:text-gray-400 transition-colors">{formatCurrency(displayAmount)}</td>
-                            <td className="p-4 text-center">
-                              {isPaid ? (
-                                <span role="status" className="flex items-center justify-center space-x-2 text-green-600">
-                                  <CheckCircle2 className="w-5 h-5" aria-label="Payment completed" title="Paid" />
-                                  <button onClick={() => openSchedulePaymentsModal(schedule.id, `${schedule.month} ${schedule.year}`)} title="View payment records" className="text-gray-400 dark:text-gray-500 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors rounded-full p-1 hover:bg-indigo-50 dark:hover:bg-indigo-900/30"><Info className="w-4 h-4" /></button>
-                                </span>
-                              ) : isPartial ? (
-                                <div className="flex flex-col items-center space-y-1">
-                                  <div className="flex items-center space-x-2">
-                                    <span className="px-3 py-1 bg-yellow-500 text-white rounded-lg font-bold text-xs">
-                                      Partial
-                                    </span>
-                                    <button onClick={() => openSchedulePaymentsModal(schedule.id, `${schedule.month} ${schedule.year}`)} title="View payment records" className="text-gray-400 dark:text-gray-500 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors rounded-full p-1 hover:bg-indigo-50 dark:hover:bg-indigo-900/30"><Info className="w-4 h-4" /></button>
-                                  </div>
-                                  <button 
-                                    onClick={() => { 
-                                      setShowPayModal({ biller: detailedBiller, schedule: legacySched, expectedAmount: calculatedAmount }); 
-                                      setPayFormData({ ...payFormData, amount: (calculatedAmount - schedule.amount_paid).toFixed(2), receipt: '' }); 
-                                    }} 
-                                    className="bg-indigo-600 text-white px-4 py-1 rounded-lg font-bold hover:bg-indigo-700 text-xs transition-all"
-                                  >
-                                    Pay Remaining
-                                  </button>
-                                </div>
-                              ) : (
-                                <button 
-                                  onClick={() => { 
-                                    setShowPayModal({ biller: detailedBiller, schedule: legacySched, expectedAmount: calculatedAmount }); 
-                                setPayFormData({ ...payFormData, amount: displayAmount.toFixed(2), receipt: '' }); 
-                                  }} 
-                                  className="bg-indigo-600 text-white px-6 py-2 rounded-xl font-bold hover:bg-indigo-700 text-xs transition-all"
-                                >
-                                  Pay
-                                </button>
-                              )}
-                            </td>
-                          </tr>
-                        );
-                      });
-                    })()
-                  ) : (
-                    // FALLBACK: Use legacy schedules array for backward compatibility
-                    (() => {
-                      console.log('[Billers] No payment schedules in database, using legacy schedules array (fallback)');
-                      return detailedBiller.schedules.map((sched, idx) => {
-                        // Get schedule with database status
-                        const schedWithStatus = getScheduleWithStatus(sched, detailedBiller, idx);
-                        
-                        // ENHANCEMENT: Calculate amount from linked account if applicable
-                        const { amount: calculatedAmount, isFromLinkedAccount } = getScheduleExpectedAmount(
-                          detailedBiller,
-                          sched,
-                          accounts,
-                          transactions
-                        );
-                        
-                        const isPaid = schedWithStatus.isPaid;
-                        const isPartial = schedWithStatus.isPartial;
-                        
-                        // Get actual paid amount
-                        let displayAmount = calculatedAmount; // Use calculated amount as base
-                        if (isPaid && schedWithStatus.amountPaid > 0) {
-                          displayAmount = schedWithStatus.amountPaid;
-                        } else if (!isPaid && !isPartial) {
-                          // For unpaid, keep calculated amount
-                          displayAmount = calculatedAmount;
-                        }
-                        
-                        // ENHANCEMENT: Get display label with cycle date range if linked account
-                        const linkedAccount = shouldUseLinkedAccount(detailedBiller) 
-                          ? getLinkedAccount(detailedBiller, accounts) 
-                          : null;
-                        const displayLabel = getScheduleDisplayLabel(sched, linkedAccount);
-                        
-                        return (
-                          <tr key={idx} className={`${
-                            isPaid ? 'bg-green-50 dark:bg-green-900/20' : 
-                            isPartial ? 'bg-yellow-50 dark:bg-yellow-900/20' : 
-                            'hover:bg-gray-50/50 dark:hover:bg-gray-800/50'
-                          } transition-colors`}>
-                            <td className="p-4">
-                              <div className="flex flex-col">
-                                <span className="font-bold text-gray-900 dark:text-gray-100 transition-colors">{displayLabel}</span>
-                                {isFromLinkedAccount && (
-                                  <span className="text-[10px] text-purple-600 dark:text-purple-400 font-medium mt-1 flex items-center gap-1 transition-colors">
-                                    <span className="inline-block w-1.5 h-1.5 rounded-full bg-purple-600 dark:bg-purple-400 transition-colors" aria-hidden="true"></span>
-                                    From linked account
-                                  </span>
-                                )}
-                                {isPartial && schedWithStatus.amountPaid > 0 && (
-                                  <span className="text-xs text-gray-500 dark:text-gray-400 mt-1 transition-colors">
-                                    Paid: {formatCurrency(schedWithStatus.amountPaid)} of {formatCurrency(calculatedAmount)}
-                                  </span>
-                                )}
-                              </div>
-                            </td>
-                            <td className="p-4 font-medium text-gray-600 dark:text-gray-400 transition-colors">{formatCurrency(displayAmount)}</td>
-                            <td className="p-4 text-center">
-                              {isPaid ? (
-                                <span role="status" className="flex items-center justify-center space-x-2 text-green-600">
-                                  <CheckCircle2 className="w-5 h-5" aria-label="Payment completed" title="Paid" />
-                                  {sched.id && <button onClick={() => openSchedulePaymentsModal(sched.id!, `${sched.month} ${sched.year}`)} title="View payment records" className="text-gray-400 dark:text-gray-500 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors rounded-full p-1 hover:bg-indigo-50 dark:hover:bg-indigo-900/30"><Info className="w-4 h-4" /></button>}
-                                </span>
-                              ) : isPartial ? (
-                                <div className="flex flex-col items-center space-y-1">
-                                  <div className="flex items-center space-x-2">
-                                    <span className="px-3 py-1 bg-yellow-500 text-white rounded-lg font-bold text-xs">
-                                      Partial
-                                    </span>
-                                    {sched.id && <button onClick={() => openSchedulePaymentsModal(sched.id!, `${sched.month} ${sched.year}`)} title="View payment records" className="text-gray-400 dark:text-gray-500 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors rounded-full p-1 hover:bg-indigo-50 dark:hover:bg-indigo-900/30"><Info className="w-4 h-4" /></button>}
-                                  </div>
-                                  <button 
-                                    onClick={() => { 
-                                      setShowPayModal({ biller: detailedBiller, schedule: sched, expectedAmount: calculatedAmount }); 
-                                      setPayFormData({ ...payFormData, amount: (calculatedAmount - schedWithStatus.amountPaid).toFixed(2), receipt: '' }); 
-                                    }} 
-                                    className="bg-indigo-600 text-white px-4 py-1 rounded-lg font-bold hover:bg-indigo-700 text-xs transition-all"
-                                  >
-                                    Pay Remaining
-                                  </button>
-                                </div>
-                              ) : (
-                                <button 
-                                  onClick={() => { 
-                                    setShowPayModal({ biller: detailedBiller, schedule: sched, expectedAmount: calculatedAmount }); 
-                                setPayFormData({ ...payFormData, amount: displayAmount.toFixed(2), receipt: '' }); 
-                                  }} 
-                                  className="bg-indigo-600 text-white px-6 py-2 rounded-xl font-bold hover:bg-indigo-700 text-xs transition-all"
-                                >
-                                  Pay
-                                </button>
-                              )}
-                            </td>
-                          </tr>
-                        );
-                      });
-                    })()
-                  )}</tbody>
-                </table>
-              </div>
-            </div>
-          </div>
-        </div>
-      ) : (
-        <>
-          <PageHeader 
-            title="Billers"
-            subtitle="Your forever-bills, on autopilot"
-            icon={
-              <div className={`w-14 h-14 rounded-2xl flex items-center justify-center text-white border-[3px] border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] -rotate-3 transition-all hover:rotate-0 hover:scale-110 z-10 relative ${getAccentClasses('bg')}`}>
-                <Receipt className="w-7 h-7" />
-              </div>
-            }
-            actions={
-              <button onClick={() => { setShowAddModal(true); setTimingFeedback(''); }} className={`flex items-center gap-2 text-white px-5 py-3 rounded-xl font-bold transition-all shadow-md dark:shadow-none text-sm ${getAccentClasses('bg')} ${getAccentClasses('shadow')}`}>
-                <Plus className="w-4 h-4" />
-                <span className="hidden sm:inline">Add Biller</span>
-              </button>
-            }
-          />
-
-          {/* Active Billers Section */}
-          {activeBillers.length > 0 && (
-            <div className="mb-8">
-              <button 
-                onClick={() => setIsActiveOpen(!isActiveOpen)}
-                className="flex items-center space-x-2 mb-4 text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100 font-bold text-lg transition-colors"
-              >
-                {isActiveOpen ? <ChevronDown className="w-5 h-5" /> : <ChevronRight className="w-5 h-5" />}
-                <span>Active Billers ({activeBillers.length})</span>
-              </button>
-              {isActiveOpen && (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                  {activeBillers.map(renderBillerCard)}
+          ) : (
+            <>
+              <PageHeader title="Billers" subtitle="Your forever-bills, on autopilot" icon={<div className={`w-14 h-14 rounded-2xl flex items-center justify-center text-white border-[3px] border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] -rotate-3 transition-all hover:rotate-0 hover:scale-110 z-10 relative ${getAccentClasses('bg')}`}><Receipt className="w-7 h-7" /></div>} actions={<button onClick={() => { setShowAddModal(true); setTimingFeedback(''); }} className={`flex items-center gap-2 text-white px-5 py-3 rounded-xl font-bold text-sm transition-all border-2 border-black shadow-[2px_2px_0px_#000] hover:shadow-none hover:translate-x-[1px] hover:translate-y-[1px] active:translate-x-[2px] active:translate-y-[2px] ${getAccentClasses('bg')}`}><Plus className="w-4 h-4" /><span className="hidden sm:inline">Add Biller</span></button>} />
+              {activeBillers.length > 0 && (
+                <div className="mb-8">
+                  <button onClick={() => setIsActiveOpen(!isActiveOpen)} className="flex items-center space-x-2 mb-4 text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100 font-bold text-lg transition-colors">{isActiveOpen ? <ChevronDown className="w-5 h-5" /> : <ChevronRight className="w-5 h-5" />}<span>Active Billers ({activeBillers.length})</span></button>
+                  {isActiveOpen && <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">{activeBillers.map(renderBillerCard)}</div>}
                 </div>
               )}
-            </div>
-          )}
-
-          {/* Inactive Billers Section */}
-          {inactiveBillers.length > 0 && (
-            <div>
-              <button 
-                onClick={() => setIsInactiveOpen(!isInactiveOpen)}
-                className="flex items-center space-x-2 mb-4 text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100 font-bold text-lg transition-colors"
-              >
-                {isInactiveOpen ? <ChevronDown className="w-5 h-5" /> : <ChevronRight className="w-5 h-5" />}
-                <span>Inactive Billers ({inactiveBillers.length})</span>
-              </button>
-              {isInactiveOpen && (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                  {inactiveBillers.map(renderBillerCard)}
+              {inactiveBillers.length > 0 && (
+                <div>
+                  <button onClick={() => setIsInactiveOpen(!isInactiveOpen)} className="flex items-center space-x-2 mb-4 text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100 font-bold text-lg transition-colors">{isInactiveOpen ? <ChevronDown className="w-5 h-5" /> : <ChevronRight className="w-5 h-5" />}<span>Inactive Billers ({inactiveBillers.length})</span></button>
+                  {isInactiveOpen && <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">{inactiveBillers.map(renderBillerCard)}</div>}
                 </div>
               )}
+              {activeBillers.length === 0 && inactiveBillers.length === 0 && (
+                <div className="text-center py-12">
+                  <div className="inline-flex items-center justify-center w-20 h-20 rounded-full bg-gray-100 mb-4"><Receipt className="w-10 h-10 text-gray-400" /></div>
+                  <h3 className="text-xl font-bold text-gray-900 dark:text-gray-100 mb-2 transition-colors">No Billers Yet</h3>
+                  <p className="text-gray-500 mb-6">Get started by adding your first recurring bill</p>
+                  <button onClick={() => { setShowAddModal(true); setTimingFeedback(''); }} className="inline-flex items-center space-x-2 bg-indigo-600 text-white px-6 py-3 rounded-2xl font-bold hover:bg-indigo-700 shadow-lg"><Plus className="w-5 h-5" /><span>Add Your First Biller</span></button>
+                </div>
+              )}
+            </>
+          )}
+
+          {showAddModal && (
+            <div className="fixed inset-0 bg-black bg-opacity-60 z-50 flex items-center justify-center p-4 animate-in fade-in">
+              <div className="bg-white dark:bg-gray-900 rounded-3xl shadow-2xl w-full max-w-lg max-h-[90vh] flex flex-col animate-in zoom-in-95">
+                <div className="p-8 border-b border-gray-100 dark:border-gray-800">
+                  <h2 className="text-2xl font-black text-gray-900 dark:text-gray-100">New Biller</h2>
+                  <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Add a new recurring bill to your list</p>
+                </div>
+                <form onSubmit={handleAddSubmit} className="p-8 overflow-y-auto space-y-6">
+                  <div>
+                    <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 mb-2">Biller Name</label>
+                    <input value={addFormData.name} onChange={e => setAddFormData(f => ({ ...f, name: e.target.value }))} required className="w-full bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-2 border-gray-200 dark:border-gray-700 rounded-xl p-4 font-bold focus:ring-2 focus:ring-indigo-500 transition-all" />
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                      <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 mb-2">Category</label>
+                      <select value={addFormData.category} onChange={e => setAddFormData(f => ({ ...f, category: e.target.value }))} className="w-full bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-2 border-gray-200 dark:border-gray-700 rounded-xl p-4 font-bold appearance-none focus:ring-2 focus:ring-indigo-500 transition-all">{renderCategoryOptions()}</select>
+                    </div>
+                    <div>
+                      <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 mb-2">Due Day of Month</label>
+                      <input type="text" value={addFormData.dueDate} onChange={e => setAddFormData(f => ({ ...f, dueDate: e.target.value.replace(/[^0-9]/g, '') }))} className="w-full bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-2 border-gray-200 dark:border-gray-700 rounded-xl p-4 font-bold focus:ring-2 focus:ring-indigo-500 transition-all" />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 mb-2">Expected Amount (per month)</label>
+                    <input type="number" step="0.01" value={addFormData.expectedAmount} onChange={e => setAddFormData(f => ({ ...f, expectedAmount: e.target.value }))} required className="w-full bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-2 border-gray-200 dark:border-gray-700 rounded-xl p-4 font-bold focus:ring-2 focus:ring-indigo-500 transition-all" />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 mb-2">Activation Date</label>
+                    <div className="grid grid-cols-3 gap-3">
+                      <select value={addFormData.actMonth} onChange={e => setAddFormData(f => ({ ...f, actMonth: e.target.value }))} className="bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-2 border-gray-200 dark:border-gray-700 rounded-xl p-4 font-bold appearance-none">{MONTHS.map(m => <option key={m}>{m}</option>)}</select>
+                      <input value={addFormData.actDay} onChange={e => { const v = e.target.value.replace(/[^0-9]/g, ''); setAddFormData(f => ({ ...f, actDay: v })); showTimingInfo(v); }} placeholder="Day" className="bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-2 border-gray-200 dark:border-gray-700 rounded-xl p-4 font-bold" />
+                      <input value={addFormData.actYear} onChange={e => setAddFormData(f => ({ ...f, actYear: e.target.value.replace(/[^0-9]/g, '') }))} required className="bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-2 border-gray-200 dark:border-gray-700 rounded-xl p-4 font-bold" />
+                    </div>
+                    {timingFeedback && <p className="text-xs text-indigo-500 mt-2">{timingFeedback}</p>}
+                  </div>
+                  {addFormData.category.startsWith('Loans') && (
+                     <div>
+                      <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 mb-2">Linked Account (Optional)</label>
+                      <select value={addFormData.linkedAccountId} onChange={e => setAddFormData(f => ({ ...f, linkedAccountId: e.target.value }))} className="w-full bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-2 border-gray-200 dark:border-gray-700 rounded-xl p-4 font-bold appearance-none focus:ring-2 focus:ring-indigo-500 transition-all">
+                        <option value="">None</option>
+                        {accounts.filter(a => a.type === 'Credit').map(acc => <option key={acc.id} value={acc.id}>{acc.bank} ({acc.classification})</option>)}
+                      </select>
+                      <p className="text-xs text-gray-500 mt-2">If linked, due day and amount can be calculated automatically.</p>
+                    </div>
+                  )}
+                  {categorySupportsScheduledIncreases(addFormData.category) && (
+                    <div className="space-y-3 pt-2">
+                      <button type="button" onClick={() => setShowAddScheduledSection(!showAddScheduledSection)} className="text-sm font-bold text-indigo-600 dark:text-indigo-400 flex items-center gap-2">{showAddScheduledSection ? <ChevronDown size={16}/> : <ChevronRight size={16}/>} Scheduled Rate Increases</button>
+                      {showAddScheduledSection && (
+                        <div className="space-y-4 p-4 border border-gray-200 dark:border-gray-700 rounded-xl animate-in fade-in">
+                          {addScheduledIncreases.map((inc, index) => (
+                            <div key={index} className="grid grid-cols-3 gap-2 items-center">
+                              <select value={inc.effectiveMonth} onChange={e => { const newIncreases = [...addScheduledIncreases]; newIncreases[index].effectiveMonth = e.target.value; setAddScheduledIncreases(newIncreases); }} className="bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-600 rounded-lg p-2 text-sm"><option value="">Month</option>{MONTHS.map(m => <option key={m} value={m}>{m}</option>)}</select>
+                              <input value={inc.effectiveYear} onChange={e => { const newIncreases = [...addScheduledIncreases]; newIncreases[index].effectiveYear = e.target.value; setAddScheduledIncreases(newIncreases); }} placeholder="Year" className="bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-600 rounded-lg p-2 text-sm" />
+                              <div className="relative">
+                                <input type="number" value={inc.amount} onChange={e => { const newIncreases = [...addScheduledIncreases]; newIncreases[index].amount = e.target.value; setAddScheduledIncreases(newIncreases); }} placeholder="Amount" className="bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-600 rounded-lg p-2 text-sm w-full pl-6" />
+                                <span className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-400">₱</span>
+                              </div>
+                            </div>
+                          ))}
+                          <button type="button" onClick={() => setAddScheduledIncreases([...addScheduledIncreases, { effectiveMonth: '', effectiveYear: '', amount: '' }])} className="text-xs font-bold text-indigo-500">+ Add Increase</button>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                  <div className="pt-2">
+                    <button type="button" onClick={() => setShowAddDeactSection(!showAddDeactSection)} className="text-sm font-bold text-red-600 dark:text-red-400 flex items-center gap-2">{showAddDeactSection ? <ChevronDown size={16}/> : <ChevronRight size={16}/>} Set Deactivation Date</button>
+                    {showAddDeactSection && (
+                      <div className="grid grid-cols-2 gap-3 mt-3 animate-in fade-in">
+                        <select value={addFormData.deactMonth} onChange={e => setAddFormData(f => ({...f, deactMonth: e.target.value}))} className="bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-2 border-gray-200 dark:border-gray-700 rounded-xl p-4 font-bold appearance-none"><option value="">Select Month</option>{MONTHS.map(m=><option key={m} value={m}>{m}</option>)}</select>
+                        <input value={addFormData.deactYear} onChange={e => setAddFormData(f => ({ ...f, deactYear: e.target.value.replace(/[^0-9]/g, '') }))} placeholder="Year" className="bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-2 border-gray-200 dark:border-gray-700 rounded-xl p-4 font-bold" />
+                      </div>
+                    )}
+                  </div>
+                </form>
+                <div className="p-8 border-t border-gray-100 dark:border-gray-800 flex justify-end gap-4">
+                  <button type="button" onClick={() => setShowAddModal(false)} className="px-6 py-3 rounded-xl font-bold bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors">Cancel</button>
+                  <button type="submit" form="add-biller-form" onClick={handleAddSubmit} disabled={isSubmitting} className="px-6 py-3 rounded-xl font-bold bg-indigo-600 text-white hover:bg-indigo-700 transition-colors disabled:opacity-50">{isSubmitting ? 'Saving...' : 'Save Biller'}</button>
+                </div>
+              </div>
             </div>
           )}
 
-          {/* Empty State */}
-          {activeBillers.length === 0 && inactiveBillers.length === 0 && (
-            <div className="text-center py-12">
-              <div className="inline-flex items-center justify-center w-20 h-20 rounded-full bg-gray-100 mb-4">
-                <Receipt className="w-10 h-10 text-gray-400" />
+          {showEditModal && showEditModal.status === 'active' && (
+            <div className="fixed inset-0 bg-black bg-opacity-60 z-50 flex items-center justify-center p-4 animate-in fade-in">
+              <div className="bg-white dark:bg-gray-900 rounded-3xl shadow-2xl w-full max-w-lg max-h-[90vh] flex flex-col animate-in zoom-in-95">
+                <div className="p-8 border-b border-gray-100 dark:border-gray-800">
+                  <h2 className="text-2xl font-black text-gray-900 dark:text-gray-100">Edit Biller</h2>
+                  <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Update details for {showEditModal.name}</p>
+                </div>
+                <form onSubmit={handleEditSubmit} className="p-8 overflow-y-auto space-y-6">
+                  <div>
+                    <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 mb-2">Biller Name</label>
+                    <input value={editFormData.name} onChange={e => setEditFormData(f => ({ ...f, name: e.target.value }))} required className="w-full bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-2 border-gray-200 dark:border-gray-700 rounded-xl p-4 font-bold focus:ring-2 focus:ring-indigo-500 transition-all" />
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                      <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 mb-2">Category</label>
+                      <select value={editFormData.category} onChange={e => setEditFormData(f => ({ ...f, category: e.target.value }))} className="w-full bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-2 border-gray-200 dark:border-gray-700 rounded-xl p-4 font-bold appearance-none focus:ring-2 focus:ring-indigo-500 transition-all">{renderCategoryOptions()}</select>
+                    </div>
+                    <div>
+                      <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 mb-2">Due Day of Month</label>
+                      <input type="text" value={editFormData.dueDate} onChange={e => setEditFormData(f => ({ ...f, dueDate: e.target.value.replace(/[^0-9]/g, '') }))} className="w-full bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-2 border-gray-200 dark:border-gray-700 rounded-xl p-4 font-bold focus:ring-2 focus:ring-indigo-500 transition-all" />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 mb-2">Expected Amount (per month)</label>
+                    <input type="number" step="0.01" value={editFormData.expectedAmount} onChange={e => setEditFormData(f => ({ ...f, expectedAmount: e.target.value }))} required className="w-full bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-2 border-gray-200 dark:border-gray-700 rounded-xl p-4 font-bold focus:ring-2 focus:ring-indigo-500 transition-all" />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 mb-2">Activation Date</label>
+                    <div className="grid grid-cols-3 gap-3">
+                      <select value={editFormData.actMonth} onChange={e => setEditFormData(f => ({ ...f, actMonth: e.target.value }))} className="bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-2 border-gray-200 dark:border-gray-700 rounded-xl p-4 font-bold appearance-none">{MONTHS.map(m => <option key={m}>{m}</option>)}</select>
+                      <input value={editFormData.actDay} onChange={e => { const v = e.target.value.replace(/[^0-9]/g, ''); setEditFormData(f => ({ ...f, actDay: v })); showTimingInfo(v); }} placeholder="Day" className="bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-2 border-gray-200 dark:border-gray-700 rounded-xl p-4 font-bold" />
+                      <input value={editFormData.actYear} onChange={e => setEditFormData(f => ({ ...f, actYear: e.target.value.replace(/[^0-9]/g, '') }))} required className="bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-2 border-gray-200 dark:border-gray-700 rounded-xl p-4 font-bold" />
+                    </div>
+                    {timingFeedback && <p className="text-xs text-indigo-500 mt-2">{timingFeedback}</p>}
+                  </div>
+                  {editFormData.category.startsWith('Loans') && (
+                     <div>
+                      <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 mb-2">Linked Account (Optional)</label>
+                      <select value={editFormData.linkedAccountId} onChange={e => setEditFormData(f => ({ ...f, linkedAccountId: e.target.value }))} className="w-full bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-2 border-gray-200 dark:border-gray-700 rounded-xl p-4 font-bold appearance-none focus:ring-2 focus:ring-indigo-500 transition-all">
+                        <option value="">None</option>
+                        {accounts.filter(a => a.type === 'Credit').map(acc => <option key={acc.id} value={acc.id}>{acc.bank} ({acc.classification})</option>)}
+                      </select>
+                      <p className="text-xs text-gray-500 mt-2">If linked, due day and amount can be calculated automatically.</p>
+                    </div>
+                  )}
+                  {categorySupportsScheduledIncreases(editFormData.category) && (
+                    <div className="space-y-3 pt-2">
+                      <button type="button" onClick={() => setShowEditScheduledSection(!showEditScheduledSection)} className="text-sm font-bold text-indigo-600 dark:text-indigo-400 flex items-center gap-2">{showEditScheduledSection ? <ChevronDown size={16}/> : <ChevronRight size={16}/>} Scheduled Rate Increases</button>
+                      {showEditScheduledSection && (
+                        <div className="space-y-4 p-4 border border-gray-200 dark:border-gray-700 rounded-xl animate-in fade-in">
+                          {editScheduledIncreases.map((inc, index) => (
+                            <div key={index} className="grid grid-cols-4 gap-2 items-center">
+                              <select value={inc.effectiveMonth} onChange={e => { const newIncreases = [...editScheduledIncreases]; newIncreases[index].effectiveMonth = e.target.value; setEditScheduledIncreases(newIncreases); }} className="bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-600 rounded-lg p-2 text-sm"><option value="">Month</option>{MONTHS.map(m => <option key={m} value={m}>{m}</option>)}</select>
+                              <input value={inc.effectiveYear} onChange={e => { const newIncreases = [...editScheduledIncreases]; newIncreases[index].effectiveYear = e.target.value; setEditScheduledIncreases(newIncreases); }} placeholder="Year" className="bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-600 rounded-lg p-2 text-sm" />
+                              <div className="relative col-span-2 flex items-center">
+                                <input type="number" value={inc.amount} onChange={e => { const newIncreases = [...editScheduledIncreases]; newIncreases[index].amount = e.target.value; setEditScheduledIncreases(newIncreases); }} placeholder="Amount" className="bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-600 rounded-lg p-2 text-sm w-full pl-6" />
+                                <span className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-400">₱</span>
+                                {isIncreaseElapsed(inc.effectiveMonth, inc.effectiveYear) && <span className="text-xs ml-2 text-green-600 font-bold">✓</span>}
+                              </div>
+                            </div>
+                          ))}
+                          <button type="button" onClick={() => setEditScheduledIncreases([...editScheduledIncreases, { effectiveMonth: '', effectiveYear: '', amount: '' }])} className="text-xs font-bold text-indigo-500">+ Add Increase</button>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                  <div className="pt-2">
+                    <button type="button" onClick={() => setShowEditDeactSection(!showEditDeactSection)} className="text-sm font-bold text-red-600 dark:text-red-400 flex items-center gap-2">{showEditDeactSection ? <ChevronDown size={16}/> : <ChevronRight size={16}/>} Set Deactivation Date</button>
+                    {showEditDeactSection && (
+                      <div className="grid grid-cols-2 gap-3 mt-3 animate-in fade-in">
+                        <select value={editFormData.deactMonth} onChange={e => setEditFormData(f => ({...f, deactMonth: e.target.value}))} className="bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-2 border-gray-200 dark:border-gray-700 rounded-xl p-4 font-bold appearance-none"><option value="">Select Month</option>{MONTHS.map(m=><option key={m} value={m}>{m}</option>)}</select>
+                        <input value={editFormData.deactYear} onChange={e => setEditFormData(f => ({ ...f, deactYear: e.target.value.replace(/[^0-9]/g, '') }))} placeholder="Year" className="bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-2 border-gray-200 dark:border-gray-700 rounded-xl p-4 font-bold" />
+                      </div>
+                    )}
+                  </div>
+                </form>
+                <div className="p-8 border-t border-gray-100 dark:border-gray-800 flex justify-end gap-4">
+                  <button type="button" onClick={() => setShowEditModal(null)} className="px-6 py-3 rounded-xl font-bold bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors">Cancel</button>
+                  <button type="submit" form="edit-biller-form" onClick={handleEditSubmit} disabled={isSubmitting} className="px-6 py-3 rounded-xl font-bold bg-indigo-600 text-white hover:bg-indigo-700 transition-colors disabled:opacity-50">{isSubmitting ? 'Saving...' : 'Save Changes'}</button>
+                </div>
               </div>
-              <h3 className="text-xl font-bold text-gray-900 dark:text-gray-100 mb-2 transition-colors">No Billers Yet</h3>
-              <p className="text-gray-500 mb-6">Get started by adding your first recurring bill</p>
-              <button 
-                onClick={() => { setShowAddModal(true); setTimingFeedback(''); }} 
-                className="inline-flex items-center space-x-2 bg-indigo-600 text-white px-6 py-3 rounded-2xl font-bold hover:bg-indigo-700 shadow-lg"
-              >
-                <Plus className="w-5 h-5" />
-                <span>Add Your First Biller</span>
-              </button>
             </div>
           )}
+
+          {showEditModal && showEditModal.status === 'inactive' && (
+            <div className="fixed inset-0 bg-black bg-opacity-60 z-50 flex items-center justify-center p-4 animate-in fade-in">
+              <div className="bg-white dark:bg-gray-900 rounded-3xl shadow-2xl w-full max-w-lg animate-in zoom-in-95">
+                <div className="p-8 border-b border-gray-100 dark:border-gray-800">
+                  <h2 className="text-2xl font-black text-gray-900 dark:text-gray-100">Reactivate Biller</h2>
+                  <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Re-activate {showEditModal.name} with a new activation date</p>
+                </div>
+                <form onSubmit={handleEditSubmit} className="p-8 space-y-6">
+                  <p className="text-sm rounded-xl bg-blue-50 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300 p-4">This biller is inactive. To make changes, please set a new activation date for it.</p>
+                  <div>
+                    <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 mb-2">New Activation Date</label>
+                    <div className="grid grid-cols-2 gap-3">
+                      <select value={editFormData.reactMonth} onChange={e => setEditFormData(f => ({ ...f, reactMonth: e.target.value }))} className="bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-2 border-gray-200 dark:border-gray-700 rounded-xl p-4 font-bold appearance-none">{MONTHS.map(m => <option key={m}>{m}</option>)}</select>
+                      <input value={editFormData.reactYear} onChange={e => setEditFormData(f => ({ ...f, reactYear: e.target.value.replace(/[^0-9]/g, '') }))} required className="bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-2 border-gray-200 dark:border-gray-700 rounded-xl p-4 font-bold" />
+                    </div>
+                  </div>
+                </form>
+                <div className="p-8 border-t border-gray-100 dark:border-gray-800 flex justify-end gap-4">
+                  <button type="button" onClick={() => setShowEditModal(null)} className="px-6 py-3 rounded-xl font-bold bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors">Cancel</button>
+                  <button type="submit" form="edit-biller-form" onClick={handleEditSubmit} disabled={isSubmitting} className="px-6 py-3 rounded-xl font-bold bg-green-600 text-white hover:bg-green-700 transition-colors disabled:opacity-50">{isSubmitting ? 'Reactivating...' : 'Reactivate Biller'}</button>
+                </div>
+              </div>
+            </div>
+          )}
+          
+          {showPayModal && (
+            <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center animate-in fade-in" onClick={() => setShowPayModal(null)}>
+              <div className="bg-white dark:bg-gray-900 rounded-t-3xl sm:rounded-3xl shadow-2xl w-full max-w-md animate-in slide-in-from-bottom-full sm:slide-in-from-bottom-0 sm:zoom-in-95" onClick={e => e.stopPropagation()}>
+                <form id="pay-biller-form" onSubmit={handlePaySubmit} className="p-8">
+                  <div className="text-center sm:text-left">
+                    <h2 className="text-2xl font-black text-gray-900 dark:text-gray-100">Pay {showPayModal.biller.name}</h2>
+                    <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">For {showPayModal.schedule.month} {showPayModal.schedule.year}</p>
+                  </div>
+                  <div className="space-y-4 mt-6">
+                    <div>
+                      <label className="block text-[10px] font-black text-gray-500 dark:text-gray-400 uppercase tracking-widest mb-2">Amount</label>
+                      <div className="relative">
+                        <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 font-bold text-lg">₱</span>
+                        <input required type="number" value={payFormData.amount} onChange={e => setPayFormData(prev => ({ ...prev, amount: e.target.value }))} className="w-full bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-2 border-transparent dark:border-gray-700 rounded-2xl p-4 pl-9 font-bold text-xl focus:ring-2 focus:ring-green-500 outline-none" />
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-[10px] font-black text-gray-500 dark:text-gray-400 uppercase tracking-widest mb-2">Date Paid</label>
+                        <input required type="date" value={payFormData.datePaid} onChange={e => setPayFormData(prev => ({ ...prev, datePaid: e.target.value }))} className="w-full bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-2 border-transparent dark:border-gray-700 rounded-2xl p-4 font-bold text-sm outline-none focus:ring-2 focus:ring-green-500" />
+                      </div>
+                      <div>
+                        <label className="block text-[10px] font-black text-gray-500 dark:text-gray-400 uppercase tracking-widest mb-2">Payment Method</label>
+                        <select value={payFormData.accountId} onChange={e => setPayFormData(prev => ({ ...prev, accountId: e.target.value }))} className="w-full bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-2 border-transparent dark:border-gray-700 rounded-2xl p-4 font-bold text-sm appearance-none outline-none focus:ring-2 focus:ring-green-500">{accounts.map(acc => <option key={acc.id} value={acc.id}>{acc.bank} ({acc.classification})</option>)}</select>
+                      </div>
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-black text-gray-500 dark:text-gray-400 uppercase tracking-widest mb-2">Receipt (Optional)</label>
+                      <div className="relative">
+                        <input type="file" className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" onChange={e => { const f = e.target.files?.[0] || null; setPayReceiptFile(f); setPayFormData(prev => ({ ...prev, receipt: f?.name || '' })); }} />
+                        <div className="w-full bg-gray-50 dark:bg-gray-800 border-2 border-dashed border-gray-300 dark:border-gray-700 rounded-2xl p-3 text-center text-sm text-gray-500 hover:border-green-400 dark:hover:border-green-600 hover:bg-green-50 dark:hover:bg-green-900/20 transition-all flex items-center justify-center gap-2">
+                          <Upload className="w-5 h-5 text-green-500" />
+                          <span className="font-bold text-xs truncate">{payFormData.receipt || 'Upload Receipt'}</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex space-x-4 mt-6">
+                    <button type="button" onClick={() => setShowPayModal(null)} className="flex-1 py-4 rounded-2xl font-bold bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors">Cancel</button>
+                    <button type="submit" form="pay-biller-form" disabled={isSubmitting} className="flex-1 py-4 rounded-2xl font-bold bg-green-600 text-white hover:bg-green-700 transition-colors disabled:opacity-50">{isSubmitting ? 'Submitting...' : 'Submit Payment'}</button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          )}
+
+          {confirmModal.show && <ConfirmDialog {...confirmModal} onClose={() => setConfirmModal(p => ({ ...p, show: false }))} />}
+          {schedulePaymentsModal && <div className="fixed inset-0 z-[150] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md" onClick={() => setSchedulePaymentsModal(null)}><div className="w-full max-w-lg bg-white rounded-3xl p-8 shadow-2xl relative max-h-[85vh] overflow-y-auto" onClick={e => e.stopPropagation()}><button onClick={() => setSchedulePaymentsModal(null)} className="absolute top-4 right-4 text-gray-400 hover:text-gray-700 p-2 rounded-full hover:bg-gray-100 transition-colors" aria-label="Close"><X className="w-5 h-5" /></button><h2 className="text-xl font-black text-gray-900 mb-1">Payment Records</h2><p className="text-gray-500 text-sm mb-6">{schedulePaymentsModal.label}</p>{loadingScheduleTx ? <div className="text-center py-8 text-gray-400">Loading...</div> : schedulePaymentsModal.transactions.length === 0 ? <div className="text-center py-8 text-gray-400 italic">No payment records found.</div> : <div className="space-y-4">{schedulePaymentsModal.transactions.map(tx => <div key={tx.id} className="bg-gray-50 rounded-2xl p-6 space-y-2"><div className="flex justify-between items-start"><div className="space-y-2 flex-1"><div className="flex justify-between"><span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Name</span><span className="text-sm font-bold text-gray-900">{tx.name}</span></div><div className="flex justify-between"><span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Amount</span><span className="text-sm font-bold text-red-600">{formatCurrency(tx.amount)}</span></div><div className="flex justify-between"><span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Payment Method</span><span className="text-sm text-gray-700">{accounts.find(a=>a.id===tx.paymentMethodId)?.bank||tx.paymentMethodId}</span></div><div className="flex justify-between"><span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Date</span><span className="text-sm text-gray-700">{new Date(tx.date).toLocaleDateString(undefined,{year:'numeric',month:'long',day:'numeric'})}</span></div></div><button onClick={()=>{setEditingScheduleTx(tx);setEditScheduleTxForm({name:tx.name,amount:Math.abs(tx.amount).toFixed(2),date:tx.date.split('T')[0]})}} className="ml-3 mt-1 text-[9px] font-black text-indigo-600 uppercase tracking-widest border border-indigo-100 px-2 py-1 rounded-lg hover:bg-indigo-50 transition-colors flex-shrink-0"><Edit2 className="w-3 h-3"/></button><PinProtectedAction featureId="transaction_deletions" onVerified={()=>handleDeleteBillerScheduleTx(tx.id)} actionLabel="Delete Payment Record"><button onClick={(e)=>e.preventDefault()} title="Delete payment record" className="ml-1 mt-1 text-[9px] font-black text-red-500 uppercase tracking-widest border border-red-100 px-2 py-1 rounded-lg hover:bg-red-50 transition-colors flex-shrink-0"><Trash2 className="w-3 h-3"/></button></PinProtectedAction></div>{tx.receiptUrl&&<div className="flex items-center space-x-3 pt-1">{scheduleSignedUrls[tx.id]?<><img src={scheduleSignedUrls[tx.id]} alt="Receipt" className="w-12 h-12 rounded-xl object-cover border border-gray-200" onError={e=>{(e.currentTarget as HTMLImageElement).style.display='none'}}/><button onClick={()=>{setZoom(0.5);setPreviewReceiptUrl(scheduleSignedUrls[tx.id])}} title="Preview receipt" className="flex items-center space-x-1 px-3 py-1.5 rounded-xl bg-indigo-50 text-indigo-600 hover:bg-indigo-100 transition-colors text-xs font-bold"><Eye className="w-3.5 h-3.5"/><span>Preview</span></button></>:<span className="text-xs text-gray-400 italic">Loading receipt…</span>}</div>}</div>)}</div>}</div></div>}
+          {editingScheduleTx&&<div className="fixed inset-0 z-[160] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md" onClick={()=>setEditingScheduleTx(null)}><div className="w-full max-w-sm bg-white rounded-3xl p-10 shadow-2xl relative" onClick={e=>e.stopPropagation()}><button onClick={()=>setEditingScheduleTx(null)} className="absolute right-6 top-6 p-2 hover:bg-gray-100 rounded-full transition-colors" aria-label="Close"><X className="w-6 h-6 text-gray-400"/></button><h2 className="text-xl font-black text-gray-900 mb-2">Edit Transaction</h2><p className="text-gray-500 text-sm mb-8">Update the transaction details below</p><form onSubmit={handleEditBillerScheduleTxSubmit} className="space-y-6"><div><label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Name</label><input value={editScheduleTxForm.name} onChange={e=>setEditScheduleTxForm(f=>({...f,name:e.target.value}))} required className="w-full bg-gray-50 border-2 border-black rounded-2xl p-6 outline-none font-bold text-sm"/></div><div><label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Amount</label><input type="number" step="0.01" min="0" value={editScheduleTxForm.amount} onChange={e=>setEditScheduleTxForm(f=>({...f,amount:e.target.value}))} required className="w-full bg-gray-50 border-2 border-black rounded-2xl p-6 outline-none font-bold text-sm"/></div><div><label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Date</label><input type="date" value={editScheduleTxForm.date} onChange={e=>setEditScheduleTxForm(f=>({...f,date:e.target.value}))} required className="w-full bg-gray-50 border-2 border-black rounded-2xl p-6 outline-none font-bold text-sm"/></div><div className="flex gap-4 pt-4"><button type="button" onClick={()=>setEditingScheduleTx(null)} className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 py-4 rounded-2xl font-bold transition-colors" disabled={isEditingScheduleTx}>Cancel</button><button type="submit" className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white py-4 rounded-2xl font-bold transition-colors disabled:opacity-50" disabled={isEditingScheduleTx}>{isEditingScheduleTx?'Saving…':'Save Changes'}</button></div></form></div></div>}
+          {previewReceiptUrl&&<div className="fixed inset-0 z-[200] flex items-center justify-center p-4" onClick={()=>setPreviewReceiptUrl(null)}><div className="w-full max-w-2xl bg-white rounded-3xl shadow-2xl flex flex-col overflow-hidden" style={{maxHeight:'90vh'}} onClick={e=>e.stopPropagation()}><div className="flex items-center justify-between p-4 border-b border-gray-100"><h3 className="text-base font-black text-gray-900 uppercase tracking-widest">Receipt Preview</h3><div className="flex items-center space-x-2"><button onClick={()=>setZoom(z=>Math.max(0.25,parseFloat((z-.25).toFixed(2))))} title="Zoom out" className="p-2 rounded-xl hover:bg-gray-100 text-gray-600 transition-colors" aria-label="Zoom out"><ZoomOut className="w-4 h-4"/></button><span className="text-xs font-bold text-gray-500 w-10 text-center">{Math.round(zoom*100)}%</span><button onClick={()=>setZoom(z=>Math.min(4,parseFloat((z+.25).toFixed(2))))} title="Zoom in" className="p-2 rounded-xl hover:bg-gray-100 text-gray-600 transition-colors" aria-label="Zoom in"><ZoomIn className="w-4 h-4"/></button><a href={previewReceiptUrl} download target="_blank" rel="noreferrer" title="Download receipt" className="p-2 rounded-xl hover:bg-indigo-50 text-indigo-600 transition-colors" aria-label="Download receipt"><Download className="w-4 h-4"/></a><button onClick={()=>setPreviewReceiptUrl(null)} title="Close" className="p-2 rounded-xl hover:bg-gray-100 text-gray-600 transition-colors" aria-label="Close preview"><X className="w-4 h-4"/></button></div></div><div className="overflow-auto flex-1 p-4 flex justify-center"><img src={previewReceiptUrl} alt="Receipt" style={{width:`${zoom*100}%`,height:'auto',transition:'width .2s'}}/></div></div></div>}
         </>
       )}
-
-      {showAddModal && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md animate-in fade-in">
-          <div className="bg-white dark:bg-gray-900 rounded-[2.5rem] w-full max-w-lg p-10 shadow-2xl animate-in zoom-in-95 relative max-h-[90vh] overflow-y-auto transition-colors">
-            <h2 className="text-2xl font-black text-gray-900 dark:text-gray-100 mb-8 uppercase tracking-tight transition-colors">New Biller</h2>
-            <form onSubmit={handleAddSubmit} className="space-y-6">
-              <div><label className="block text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-2 transition-colors">Category</label>
-                <select value={addFormData.category} onChange={(e) => setAddFormData({ ...addFormData, category: e.target.value })} className="w-full bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-transparent rounded-2xl p-4 outline-none font-bold text-sm appearance-none transition-colors">{renderCategoryOptions()}</select>
-              </div>
-              <div><label className="block text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-2 transition-colors">Biller Name</label><input required type="text" value={addFormData.name} onChange={(e) => setAddFormData({ ...addFormData, name: e.target.value })} className="w-full bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-transparent rounded-2xl p-4 outline-none font-bold focus:ring-2 focus:ring-indigo-500 transition-colors" /></div>
-              <div className="grid grid-cols-2 gap-4">
-                 <div>
-                   <label className="block text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-2 transition-colors">
-                     Expected Amount {addFormData.category.startsWith('Loans') && <span className="text-gray-400 dark:text-gray-500 font-normal transition-colors">(Optional for Loans)</span>}
-                   </label>
-                   <input required={!addFormData.category.startsWith('Loans')} type="number" min="0" step="0.01" value={addFormData.expectedAmount} onChange={(e) => setAddFormData({ ...addFormData, expectedAmount: e.target.value })} className="w-full bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-transparent rounded-2xl p-4 outline-none font-bold transition-colors" />
-                 </div>
-                 <div>
-                   <label className="block text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-2 transition-colors">
-                     Due Date (day)
-                     {addFormData.category.startsWith('Loans') && addFormData.linkedAccountId && (
-                       <span className="ml-2 text-purple-500 dark:text-purple-400 font-bold normal-case transition-colors">🔗 Auto</span>
-                     )}
-                   </label>
-                   {addFormData.category.startsWith('Loans') && addFormData.linkedAccountId ? (
-                     (() => {
-                       const linkedAcc = accounts.find(a => a.id === addFormData.linkedAccountId);
-                       const today = new Date();
-                       const dueDay = linkedAcc ? getDueDayForMonth(linkedAcc, today.getMonth(), today.getFullYear()) : null;
-                       const statementDay = linkedAcc?.billingDate ? new Date(linkedAcc.billingDate).getDate() : null;
-                       const daysToPay = linkedAcc?.dueDate ? new Date(linkedAcc.dueDate).getDate() : null;
-                       return (
-                         <>
-                           <input
-                             type="number"
-                             readOnly
-                             value={dueDay ?? ''}
-                             className="w-full bg-purple-50 dark:bg-purple-900/10 border-2 border-purple-200 dark:border-purple-800/30 rounded-2xl p-4 outline-none font-bold text-purple-700 dark:text-purple-400 cursor-not-allowed transition-colors"
-                           />
-                           {dueDay && statementDay && daysToPay && (
-                             <p className="text-xs text-purple-600 dark:text-purple-400 mt-1 transition-colors">
-                               📅 Statement {statementDay}{ordinalSuffix(statementDay)} + {daysToPay} days → Due {dueDay}{ordinalSuffix(dueDay)}
-                             </p>
-                           )}
-                         </>
-                       );
-                     })()
-                   ) : (
-                     <input required type="number" min="1" max="31" placeholder="e.g. 15" value={addFormData.dueDate} onChange={(e) => { setAddFormData({ ...addFormData, dueDate: e.target.value }); showTimingInfo(e.target.value); }} className="w-full bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-transparent rounded-2xl p-4 outline-none font-bold transition-colors" />
-                   )}
-                 </div>
-              </div>
-              
-              {/* ENHANCEMENT: Linked Account for Loans Category */}
-              {addFormData.category.startsWith('Loans') && (
-                <div className="bg-purple-50 dark:bg-purple-900/10 rounded-2xl p-4 border-2 border-purple-200 dark:border-purple-800/30 transition-colors">
-                  <label className="block text-[10px] font-black text-purple-600 dark:text-purple-400 uppercase tracking-widest mb-2 transition-colors">
-                    Linked Credit Account (Optional)
-                  </label>
-                  <select 
-                    value={addFormData.linkedAccountId} 
-                    onChange={(e) => setAddFormData({ ...addFormData, linkedAccountId: e.target.value })} 
-                    className="w-full bg-white dark:bg-gray-900 dark:text-gray-100 border-transparent rounded-2xl p-4 outline-none font-bold text-sm appearance-none transition-colors"
-                  >
-                    <option value="">None - Use Manual Amount</option>
-                    {accounts
-                      .filter(acc => acc.type === 'Credit' && acc.billingDate)
-                      .map(acc => (
-                        <option key={acc.id} value={acc.id}>
-                          {acc.bank} (Billing Day: {new Date(acc.billingDate).getDate()})
-                        </option>
-                      ))
-                    }
-                  </select>
-                  {(() => {
-                    const creditAccounts = accounts.filter(acc => acc.type === 'Credit');
-                    const creditAccountsWithBilling = creditAccounts.filter(acc => acc.billingDate);
-                    
-                    if (creditAccounts.length === 0) {
-                      return (
-                        <p className="text-xs text-orange-600 dark:text-orange-400 mt-2 flex items-center gap-1 transition-colors">
-                          <span className="font-bold">⚠️ No credit accounts found.</span> Create a credit account first to enable linking.
-                        </p>
-                      );
-                    } else if (creditAccountsWithBilling.length === 0) {
-                      return (
-                        <p className="text-xs text-orange-600 dark:text-orange-400 mt-2 flex items-center gap-1 transition-colors">
-                          <span className="font-bold">⚠️ No credit accounts with billing dates.</span> Edit your credit accounts to add billing dates.
-                        </p>
-                      );
-                    } else {
-                      return (
-                        <p className="text-xs text-purple-600 dark:text-purple-400 mt-2 transition-colors">
-                          Link to a credit account to automatically calculate expected amounts from billing cycle transactions
-                        </p>
-                      );
-                    }
-                  })()}
-                </div>
-              )}
-              
-              <div className="border-t border-gray-200 dark:border-gray-800 pt-6 transition-colors">
-                <label className="block text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-4 transition-colors">Activation Date</label>
-                <div className="grid grid-cols-3 gap-4">
-                  <div><label className="block text-[10px] font-bold text-gray-400 dark:text-gray-500 mb-2 transition-colors">Month</label>
-                    <select value={addFormData.actMonth} onChange={(e) => setAddFormData({ ...addFormData, actMonth: e.target.value })} className="w-full bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-transparent rounded-2xl p-4 outline-none font-bold text-sm appearance-none transition-colors">{MONTHS.map(m => <option key={m} value={m}>{m}</option>)}</select>
-                  </div>
-                  <div><label className="block text-[10px] font-bold text-gray-400 dark:text-gray-500 mb-2 transition-colors">Day (optional)</label><input type="number" min="1" max="31" placeholder="e.g. 15" value={addFormData.actDay} onChange={(e) => { setAddFormData({ ...addFormData, actDay: e.target.value }); if (!addFormData.dueDate) showTimingInfo(e.target.value); }} className="w-full bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-transparent rounded-2xl p-4 outline-none font-bold transition-colors" /></div>
-                  <div><label className="block text-[10px] font-bold text-gray-400 dark:text-gray-500 mb-2 transition-colors">Year</label><input required type="number" min="2000" max="2100" value={addFormData.actYear} onChange={(e) => setAddFormData({ ...addFormData, actYear: e.target.value })} className="w-full bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-transparent rounded-2xl p-4 outline-none font-bold transition-colors" /></div>
-                </div>
-              </div>
-
-              {/* Computed fields display */}
-              <div className="bg-indigo-50 dark:bg-indigo-900/20 rounded-2xl p-4 space-y-2 transition-colors">
-                <div className="flex justify-between items-center">
-                  <span className="text-[10px] font-black text-indigo-400 dark:text-indigo-300 uppercase tracking-widest transition-colors">Auto-Computed Timing:</span>
-                  <span className="text-sm font-black text-indigo-600 dark:text-indigo-400 transition-colors">{calculateTiming(addFormData.dueDate || addFormData.actDay)}</span>
-                </div>
-                {(() => {
-                  const deactDate = (addFormData.deactMonth && addFormData.deactYear)
-                    ? { month: addFormData.deactMonth, year: addFormData.deactYear }
-                    : undefined;
-                  const computedStatus = calculateStatus(deactDate);
-                  return (
-                    <div className="flex justify-between items-center">
-                      <span className="text-[10px] font-black text-indigo-400 dark:text-indigo-300 uppercase tracking-widest transition-colors">Auto-Computed Status:</span>
-                      <div className="flex items-center gap-2">
-                        <span className={`text-sm font-black transition-colors ${computedStatus === 'inactive' ? 'text-gray-600 dark:text-gray-400' : 'text-green-600 dark:text-green-400'}`}>{computedStatus}</span>
-                        {deactDate && computedStatus === 'active' && (
-                          <span className="text-xs text-orange-500 dark:text-orange-400 font-medium transition-colors">— deactivates {deactDate.month} {deactDate.year}</span>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })()}
-              </div>
-
-              <div className="border-t border-gray-200 dark:border-gray-800 pt-6 transition-colors">
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (showAddDeactSection) {
-                      // Collapse and clear fields
-                      setAddFormData({ ...addFormData, deactMonth: '', deactYear: '' });
-                    }
-                    setShowAddDeactSection(!showAddDeactSection);
-                  }}
-                  className="flex items-center gap-2 text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-1 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
-                >
-                  {showAddDeactSection ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
-                  Deactivation Date (optional)
-                </button>
-                {showAddDeactSection && (
-                  <>
-                    <p className="text-xs text-gray-400 dark:text-gray-500 mb-4 transition-colors">Biller deactivates at the start of this month — last payment is the month before.</p>
-                    <div className="grid grid-cols-2 gap-4">
-                      <div><label className="block text-[10px] font-bold text-gray-400 dark:text-gray-500 mb-2 transition-colors">Month</label>
-                        <select value={addFormData.deactMonth} onChange={(e) => setAddFormData({ ...addFormData, deactMonth: e.target.value })} className="w-full bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-transparent rounded-2xl p-4 outline-none font-bold text-sm appearance-none transition-colors">
-                          <option value="">None</option>
-                          {MONTHS.map(m => {
-                            const deactYearNum = parseInt(addFormData.deactYear);
-                            const actYearNum = parseInt(addFormData.actYear);
-                            const sameYear = !isNaN(deactYearNum) && !isNaN(actYearNum) && deactYearNum === actYearNum;
-                            const actMonthIdx = MONTHS.indexOf(addFormData.actMonth);
-                            const mIdx = MONTHS.indexOf(m);
-                            // Disable months on or before activation month when deact year == act year
-                            const isDisabled = sameYear && mIdx <= actMonthIdx;
-                            return <option key={m} value={m} disabled={isDisabled} className={isDisabled ? 'text-gray-300 dark:text-gray-600' : ''}>{m}</option>;
-                          })}
-                        </select>
-                      </div>
-                      <div><label className="block text-[10px] font-bold text-gray-400 dark:text-gray-500 mb-2 transition-colors">Year</label><input type="number" min="2000" max="2100" placeholder="e.g. 2026" value={addFormData.deactYear} onChange={(e) => {
-                        const newDeactYear = e.target.value;
-                        const deactYearNum = parseInt(newDeactYear);
-                        const actYearNum = parseInt(addFormData.actYear);
-                        const actMonthIdx = MONTHS.indexOf(addFormData.actMonth);
-                        const deactMonthIdx = MONTHS.indexOf(addFormData.deactMonth);
-                        // Clear deactMonth if it becomes invalid (same year and deact month <= act month)
-                        const shouldClear = !isNaN(deactYearNum) && !isNaN(actYearNum) && deactYearNum === actYearNum && deactMonthIdx !== -1 && deactMonthIdx <= actMonthIdx;
-                        setAddFormData({ ...addFormData, deactYear: newDeactYear, deactMonth: shouldClear ? '' : addFormData.deactMonth });
-                      }} className="w-full bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-transparent rounded-2xl p-4 outline-none font-bold transition-colors" /></div>
-                    </div>
-                  </>
-                )}
-              </div>
-
-              {/* Scheduled Increases — eligible categories only (Fixed, Utilities, Subscriptions) */}
-              {categorySupportsScheduledIncreases(addFormData.category) && (
-                <div className="border-t border-gray-200 dark:border-gray-800 pt-6 transition-colors">
-                  <button
-                    type="button"
-                    onClick={() => setShowAddScheduledSection(!showAddScheduledSection)}
-                    className="flex items-center gap-2 text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-1 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
-                  >
-                    {showAddScheduledSection ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
-                    Scheduled Increases (optional)
-                  </button>
-                  {!showAddScheduledSection && (
-                    <span className="text-xs text-gray-400 dark:text-gray-500 transition-colors">Set future months when the amount changes.</span>
-                  )}
-                  {showAddScheduledSection && (
-                    <div className="mt-4">
-                      <div className="flex justify-end mb-3">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            const next = new Date();
-                            next.setMonth(next.getMonth() + 1);
-                            setAddScheduledIncreases([
-                              ...addScheduledIncreases,
-                              {
-                                effectiveMonth: MONTHS[next.getMonth()],
-                                effectiveYear: next.getFullYear().toString(),
-                                amount: '',
-                              },
-                            ]);
-                          }}
-                          className="flex items-center gap-1 text-xs font-bold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-900/30 px-3 py-2 rounded-xl hover:bg-indigo-100 dark:hover:bg-indigo-900/50 transition-colors"
-                        >
-                          <Plus className="w-3 h-3" /> Add
-                        </button>
-                      </div>
-                      {addScheduledIncreases.map((inc, idx) => (
-                        <div key={idx} className="flex gap-3 mb-3 items-end">
-                          <div className="flex-1">
-                            <label className="block text-[10px] font-bold text-gray-400 dark:text-gray-500 mb-1 transition-colors">Month</label>
-                            <select
-                              value={inc.effectiveMonth}
-                              onChange={(e) => {
-                                const updated = [...addScheduledIncreases];
-                                updated[idx] = { ...updated[idx], effectiveMonth: e.target.value };
-                                setAddScheduledIncreases(updated);
-                              }}
-                              className="w-full bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-transparent rounded-2xl p-3 outline-none font-bold text-sm appearance-none transition-colors"
-                            >
-                              {MONTHS.map(m => <option key={m} value={m}>{m}</option>)}
-                            </select>
-                          </div>
-                          <div className="w-24">
-                            <label className="block text-[10px] font-bold text-gray-400 dark:text-gray-500 mb-1 transition-colors">Year</label>
-                            <input
-                              type="number"
-                              min="2000"
-                              max="2100"
-                              value={inc.effectiveYear}
-                              onChange={(e) => {
-                                const updated = [...addScheduledIncreases];
-                                updated[idx] = { ...updated[idx], effectiveYear: e.target.value };
-                                setAddScheduledIncreases(updated);
-                              }}
-                              className="w-full bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-transparent rounded-2xl p-3 outline-none font-bold text-sm transition-colors"
-                            />
-                          </div>
-                          <div className="flex-1">
-                            <label className="block text-[10px] font-bold text-gray-400 dark:text-gray-500 mb-1 transition-colors">New Amount</label>
-                            <input
-                              type="number"
-                              min="0"
-                              step="0.01"
-                              placeholder="0.00"
-                              value={inc.amount}
-                              onChange={(e) => {
-                                const updated = [...addScheduledIncreases];
-                                updated[idx] = { ...updated[idx], amount: e.target.value };
-                                setAddScheduledIncreases(updated);
-                              }}
-                              className="w-full bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-transparent rounded-2xl p-3 outline-none font-bold text-sm transition-colors"
-                            />
-                          </div>
-                          <button
-                            type="button"
-                            onClick={() => setAddScheduledIncreases(addScheduledIncreases.filter((_, i) => i !== idx))}
-                            className="p-3 text-gray-400 dark:text-gray-500 hover:text-red-500 dark:hover:text-red-400 rounded-xl hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
-                            aria-label="Remove"
-                          >
-                            <X className="w-4 h-4" />
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {timingFeedback && (
-                <div className="bg-blue-50 dark:bg-blue-900/20 border-l-4 border-blue-400 dark:border-blue-500 p-4 rounded transition-colors">
-                  <p className="text-xs font-medium text-blue-700 dark:text-blue-400 transition-colors">{timingFeedback}</p>
-                </div>
-              )}
-
-              <div className="flex space-x-4 pt-4"><button type="button" onClick={() => { setShowAddModal(false); setTimingFeedback(''); }} className="flex-1 bg-gray-100 dark:bg-gray-800 py-4 rounded-2xl font-bold text-gray-500 dark:text-gray-300 transition-colors">Cancel</button><button type="submit" className="flex-1 bg-indigo-600 text-white py-4 rounded-2xl font-bold shadow-xl transition-colors">Add Biller</button></div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {showEditModal && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md animate-in fade-in">
-          <div className="bg-white dark:bg-gray-900 rounded-[2.5rem] w-full max-w-lg p-10 shadow-2xl animate-in zoom-in-95 relative max-h-[90vh] overflow-y-auto transition-colors">
-            <h2 className="text-2xl font-black text-gray-900 dark:text-gray-100 mb-8 uppercase tracking-tight transition-colors">Edit Biller</h2>
-            <form onSubmit={handleEditSubmit} className="space-y-6">
-              <div><label className="block text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-2 transition-colors">Category</label>
-                <select value={editFormData.category} onChange={(e) => setEditFormData({ ...editFormData, category: e.target.value })} className="w-full bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-transparent rounded-2xl p-4 outline-none font-bold text-sm appearance-none transition-colors">{renderCategoryOptions()}</select>
-              </div>
-              <div><label className="block text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-2 transition-colors">Biller Name</label><input required type="text" value={editFormData.name} onChange={(e) => setEditFormData({ ...editFormData, name: e.target.value })} className="w-full bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-transparent rounded-2xl p-4 outline-none font-bold transition-colors" /></div>
-              <div className="grid grid-cols-2 gap-4">
-                 <div>
-                   <label className="block text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-2 transition-colors">
-                     Expected Amount {editFormData.category.startsWith('Loans') && <span className="text-gray-400 dark:text-gray-500 font-normal transition-colors">(Optional for Loans)</span>}
-                   </label>
-                   <input required={!editFormData.category.startsWith('Loans')} type="number" min="0" step="0.01" value={editFormData.expectedAmount} onChange={(e) => setEditFormData({ ...editFormData, expectedAmount: e.target.value })} className="w-full bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-transparent rounded-2xl p-4 outline-none font-bold transition-colors" />
-                 </div>
-                 <div>
-                   <label className="block text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-2 transition-colors">
-                     Due Date (day)
-                     {editFormData.category.startsWith('Loans') && editFormData.linkedAccountId && (
-                       <span className="ml-2 text-purple-500 dark:text-purple-400 font-bold normal-case transition-colors">🔗 Auto</span>
-                     )}
-                   </label>
-                   {editFormData.category.startsWith('Loans') && editFormData.linkedAccountId ? (
-                     (() => {
-                       const linkedAcc = accounts.find(a => a.id === editFormData.linkedAccountId);
-                       const today = new Date();
-                       const dueDay = linkedAcc ? getDueDayForMonth(linkedAcc, today.getMonth(), today.getFullYear()) : null;
-                       const statementDay = linkedAcc?.billingDate ? new Date(linkedAcc.billingDate).getDate() : null;
-                       const daysToPay = linkedAcc?.dueDate ? new Date(linkedAcc.dueDate).getDate() : null;
-                       return (
-                         <>
-                           <input
-                             type="number"
-                             readOnly
-                             value={dueDay ?? ''}
-                             className="w-full bg-purple-50 dark:bg-purple-900/10 border-2 border-purple-200 dark:border-purple-800/30 rounded-2xl p-4 outline-none font-bold text-purple-700 dark:text-purple-400 cursor-not-allowed transition-colors"
-                           />
-                           {dueDay && statementDay && daysToPay && (
-                             <p className="text-xs text-purple-600 dark:text-purple-400 mt-1 transition-colors">
-                               📅 Statement {statementDay}{ordinalSuffix(statementDay)} + {daysToPay} days → Due {dueDay}{ordinalSuffix(dueDay)}
-                             </p>
-                           )}
-                         </>
-                       );
-                     })()
-                   ) : (
-                     <input required type="number" min="1" max="31" placeholder="e.g. 15" value={editFormData.dueDate} onChange={(e) => { setEditFormData({ ...editFormData, dueDate: e.target.value }); showTimingInfo(e.target.value); }} className="w-full bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-transparent rounded-2xl p-4 outline-none font-bold transition-colors" />
-                   )}
-                 </div>
-              </div>
-              
-              {/* ENHANCEMENT: Linked Account for Loans Category */}
-              {editFormData.category.startsWith('Loans') && (
-                <div className="bg-purple-50 dark:bg-purple-900/10 rounded-2xl p-4 border-2 border-purple-200 dark:border-purple-800/30 transition-colors">
-                  <label className="block text-[10px] font-black text-purple-600 dark:text-purple-400 uppercase tracking-widest mb-2 transition-colors">
-                    Linked Credit Account (Optional)
-                  </label>
-                  <select 
-                    value={editFormData.linkedAccountId} 
-                    onChange={(e) => setEditFormData({ ...editFormData, linkedAccountId: e.target.value })} 
-                    className="w-full bg-white dark:bg-gray-900 dark:text-gray-100 border-transparent rounded-2xl p-4 outline-none font-bold text-sm appearance-none transition-colors"
-                  >
-                    <option value="">None - Use Manual Amount</option>
-                    {accounts
-                      .filter(acc => acc.type === 'Credit' && acc.billingDate)
-                      .map(acc => (
-                        <option key={acc.id} value={acc.id}>
-                          {acc.bank} (Billing Day: {new Date(acc.billingDate).getDate()})
-                        </option>
-                      ))
-                    }
-                  </select>
-                  {(() => {
-                    const creditAccounts = accounts.filter(acc => acc.type === 'Credit');
-                    const creditAccountsWithBilling = creditAccounts.filter(acc => acc.billingDate);
-                    
-                    if (creditAccounts.length === 0) {
-                      return (
-                        <p className="text-xs text-orange-600 dark:text-orange-400 mt-2 flex items-center gap-1 transition-colors">
-                          <span className="font-bold">⚠️ No credit accounts found.</span> Create a credit account first to enable linking.
-                        </p>
-                      );
-                    } else if (creditAccountsWithBilling.length === 0) {
-                      return (
-                        <p className="text-xs text-orange-600 dark:text-orange-400 mt-2 flex items-center gap-1 transition-colors">
-                          <span className="font-bold">⚠️ No credit accounts with billing dates.</span> Edit your credit accounts to add billing dates.
-                        </p>
-                      );
-                    } else {
-                      return (
-                        <p className="text-xs text-purple-600 dark:text-purple-400 mt-2 transition-colors">
-                          Link to a credit account to automatically calculate expected amounts from billing cycle transactions
-                        </p>
-                      );
-                    }
-                  })()}
-                </div>
-              )}
-              
-              {/* Date fields: show Reactivation Date for inactive billers, Activation+Deactivation for active */}
-              {showEditModal?.status === 'inactive' ? (
-                <div className="border-t border-gray-200 dark:border-gray-800 pt-6 transition-colors">
-                  <label className="block text-[10px] font-black text-indigo-500 dark:text-indigo-400 uppercase tracking-widest mb-2 transition-colors">Reactivation Date</label>
-                  <p className="text-xs text-gray-500 dark:text-gray-400 mb-4 transition-colors">New payment schedules will be created from this month. Existing payment history will be preserved.</p>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-[10px] font-bold text-gray-400 dark:text-gray-500 mb-2 transition-colors">Month</label>
-                      <select required value={editFormData.reactMonth} onChange={(e) => setEditFormData({ ...editFormData, reactMonth: e.target.value })} className="w-full bg-indigo-50 dark:bg-indigo-900/20 dark:text-indigo-100 border-transparent rounded-2xl p-4 outline-none font-bold text-sm appearance-none transition-colors">
-                        {MONTHS.map(m => <option key={m} value={m}>{m}</option>)}
-                      </select>
-                    </div>
-                    <div>
-                      <label className="block text-[10px] font-bold text-gray-400 dark:text-gray-500 mb-2 transition-colors">Year</label>
-                      <input required type="number" min="2000" max="2100" value={editFormData.reactYear} onChange={(e) => setEditFormData({ ...editFormData, reactYear: e.target.value })} className="w-full bg-indigo-50 dark:bg-indigo-900/20 dark:text-indigo-100 border-transparent rounded-2xl p-4 outline-none font-bold transition-colors" />
-                    </div>
-                  </div>
-                </div>
-              ) : (
-                <>
-                  <div className="border-t border-gray-200 dark:border-gray-800 pt-6 transition-colors">
-                    <label className="block text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-4 transition-colors">Activation Date</label>
-                    <div className="grid grid-cols-3 gap-4">
-                      <div><label className="block text-[10px] font-bold text-gray-400 dark:text-gray-500 mb-2 transition-colors">Month</label>
-                        <select value={editFormData.actMonth} onChange={(e) => setEditFormData({ ...editFormData, actMonth: e.target.value })} className="w-full bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-transparent rounded-2xl p-4 outline-none font-bold text-sm appearance-none transition-colors">{MONTHS.map(m => <option key={m} value={m}>{m}</option>)}</select>
-                      </div>
-                      <div><label className="block text-[10px] font-bold text-gray-400 dark:text-gray-500 mb-2 transition-colors">Day (optional)</label><input type="number" min="1" max="31" placeholder="e.g. 15" value={editFormData.actDay} onChange={(e) => { setEditFormData({ ...editFormData, actDay: e.target.value }); if (!editFormData.dueDate) showTimingInfo(e.target.value); }} className="w-full bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-transparent rounded-2xl p-4 outline-none font-bold transition-colors" /></div>
-                      <div><label className="block text-[10px] font-bold text-gray-400 dark:text-gray-500 mb-2 transition-colors">Year</label><input required type="number" min="2000" max="2100" value={editFormData.actYear} onChange={(e) => setEditFormData({ ...editFormData, actYear: e.target.value })} className="w-full bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-transparent rounded-2xl p-4 outline-none font-bold transition-colors" /></div>
-                    </div>
-                  </div>
-
-                  {/* Computed fields display */}
-                  <div className="bg-indigo-50 dark:bg-indigo-900/20 rounded-2xl p-4 space-y-2 transition-colors">
-                    <div className="flex justify-between items-center">
-                      <span className="text-[10px] font-black text-indigo-400 dark:text-indigo-300 uppercase tracking-widest transition-colors">Auto-Computed Timing:</span>
-                      <span className="text-sm font-black text-indigo-600 dark:text-indigo-400 transition-colors">{calculateTiming(editFormData.dueDate || editFormData.actDay)}</span>
-                    </div>
-                    {(() => {
-                      const deactDate = (editFormData.deactMonth && editFormData.deactYear)
-                        ? { month: editFormData.deactMonth, year: editFormData.deactYear }
-                        : undefined;
-                      const computedStatus = calculateStatus(deactDate);
-                      return (
-                        <div className="flex justify-between items-center">
-                          <span className="text-[10px] font-black text-indigo-400 dark:text-indigo-300 uppercase tracking-widest transition-colors">Auto-Computed Status:</span>
-                          <div className="flex items-center gap-2">
-                            <span className={`text-sm font-black transition-colors ${computedStatus === 'inactive' ? 'text-gray-600 dark:text-gray-400' : 'text-green-600 dark:text-green-400'}`}>{computedStatus}</span>
-                            {deactDate && computedStatus === 'active' && (
-                              <span className="text-xs text-orange-500 font-medium">— deactivates {deactDate.month} {deactDate.year}</span>
-                            )}
-                          </div>
-                        </div>
-                      );
-                    })()}
-                  </div>
-
-                  <div className="border-t border-gray-200 dark:border-gray-800 pt-6 transition-colors">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        if (showEditDeactSection) {
-                          // Collapse and clear fields
-                          setEditFormData({ ...editFormData, deactMonth: '', deactYear: '' });
-                        }
-                        setShowEditDeactSection(!showEditDeactSection);
-                      }}
-                      className="flex items-center gap-2 text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-1 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
-                    >
-                      {showEditDeactSection ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
-                      Deactivation Date (optional)
-                    </button>
-                    {showEditDeactSection && (
-                      <>
-                        <p className="text-xs text-gray-400 dark:text-gray-500 mb-4 transition-colors">Biller deactivates at the start of this month — last payment is the month before.</p>
-                        <div className="grid grid-cols-2 gap-4">
-                          <div><label className="block text-[10px] font-bold text-gray-400 dark:text-gray-500 mb-2 transition-colors">Month</label>
-                            <select value={editFormData.deactMonth} onChange={(e) => setEditFormData({ ...editFormData, deactMonth: e.target.value })} className="w-full bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-transparent rounded-2xl p-4 outline-none font-bold text-sm appearance-none transition-colors">
-                              <option value="">None</option>
-                              {MONTHS.map(m => {
-                                const deactYearNum = parseInt(editFormData.deactYear);
-                                const actYearNum = parseInt(editFormData.actYear);
-                                const sameYear = !isNaN(deactYearNum) && !isNaN(actYearNum) && deactYearNum === actYearNum;
-                                const actMonthIdx = MONTHS.indexOf(editFormData.actMonth);
-                                const mIdx = MONTHS.indexOf(m);
-                                const isDisabled = sameYear && mIdx <= actMonthIdx;
-                                return <option key={m} value={m} disabled={isDisabled} className={isDisabled ? 'text-gray-300 dark:text-gray-600' : ''}>{m}</option>;
-                              })}
-                            </select>
-                          </div>
-                          <div><label className="block text-[10px] font-bold text-gray-400 dark:text-gray-500 mb-2 transition-colors">Year</label><input type="number" min="2000" max="2100" placeholder="e.g. 2026" value={editFormData.deactYear} onChange={(e) => {
-                            const newDeactYear = e.target.value;
-                            const deactYearNum = parseInt(newDeactYear);
-                            const actYearNum = parseInt(editFormData.actYear);
-                            const actMonthIdx = MONTHS.indexOf(editFormData.actMonth);
-                            const deactMonthIdx = MONTHS.indexOf(editFormData.deactMonth);
-                            const shouldClear = !isNaN(deactYearNum) && !isNaN(actYearNum) && deactYearNum === actYearNum && deactMonthIdx !== -1 && deactMonthIdx <= actMonthIdx;
-                            setEditFormData({ ...editFormData, deactYear: newDeactYear, deactMonth: shouldClear ? '' : editFormData.deactMonth });
-                          }} className="w-full bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-transparent rounded-2xl p-4 outline-none font-bold transition-colors" /></div>
-                        </div>
-                      </>
-                    )}
-                  </div>
-
-                  {/* Scheduled Increases — eligible categories only (Fixed, Utilities, Subscriptions) */}
-                  {categorySupportsScheduledIncreases(editFormData.category) && (
-                    <div className="border-t border-gray-200 dark:border-gray-800 pt-6 transition-colors">
-                      <button
-                        type="button"
-                        onClick={() => setShowEditScheduledSection(!showEditScheduledSection)}
-                        className="flex items-center gap-2 text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-1 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
-                      >
-                        {showEditScheduledSection ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
-                        Scheduled Increases (optional)
-                      </button>
-                      {!showEditScheduledSection && (
-                        <span className="text-xs text-gray-400 dark:text-gray-500 transition-colors">Set future months when the amount changes.</span>
-                      )}
-                      {showEditScheduledSection && (
-                        <div className="mt-4">
-                          <div className="flex justify-end mb-3">
-                            <button
-                              type="button"
-                              onClick={() => {
-                                const next = new Date();
-                                next.setMonth(next.getMonth() + 1);
-                                setEditScheduledIncreases([
-                                  ...editScheduledIncreases,
-                                  {
-                                    effectiveMonth: MONTHS[next.getMonth()],
-                                    effectiveYear: next.getFullYear().toString(),
-                                    amount: '',
-                                  },
-                                ]);
-                              }}
-                              className="flex items-center gap-1 text-xs font-bold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-900/30 px-3 py-2 rounded-xl hover:bg-indigo-100 dark:hover:bg-indigo-900/50 transition-colors"
-                            >
-                              <Plus className="w-3 h-3" /> Add
-                            </button>
-                          </div>
-                          {editScheduledIncreases.map((inc, idx) => {
-                            const elapsed = isIncreaseElapsed(inc.effectiveMonth, inc.effectiveYear);
-                            return (
-                              <div key={idx} className="flex gap-3 mb-3 items-end">
-                                <div className="flex-1">
-                                  <label className="block text-[10px] font-bold text-gray-400 dark:text-gray-500 mb-1 transition-colors">Month</label>
-                                  <select
-                                    value={inc.effectiveMonth}
-                                    onChange={(e) => {
-                                      const updated = [...editScheduledIncreases];
-                                      updated[idx] = { ...updated[idx], effectiveMonth: e.target.value };
-                                      setEditScheduledIncreases(updated);
-                                    }}
-                                    className="w-full bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-transparent rounded-2xl p-3 outline-none font-bold text-sm appearance-none transition-colors"
-                                  >
-                                    {MONTHS.map(m => <option key={m} value={m}>{m}</option>)}
-                                  </select>
-                                </div>
-                                <div className="w-24">
-                                  <label className="block text-[10px] font-bold text-gray-400 dark:text-gray-500 mb-1 transition-colors">Year</label>
-                                  <input
-                                    type="number"
-                                    min="2000"
-                                    max="2100"
-                                    value={inc.effectiveYear}
-                                    onChange={(e) => {
-                                      const updated = [...editScheduledIncreases];
-                                      updated[idx] = { ...updated[idx], effectiveYear: e.target.value };
-                                      setEditScheduledIncreases(updated);
-                                    }}
-                                    className="w-full bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-transparent rounded-2xl p-3 outline-none font-bold text-sm transition-colors"
-                                  />
-                                </div>
-                                <div className="flex-1">
-                                  <label className="block text-[10px] font-bold text-gray-400 dark:text-gray-500 mb-1 transition-colors">New Amount</label>
-                                  <input
-                                    type="number"
-                                    min="0"
-                                    step="0.01"
-                                    placeholder="0.00"
-                                    value={inc.amount}
-                                    onChange={(e) => {
-                                      const updated = [...editScheduledIncreases];
-                                      updated[idx] = { ...updated[idx], amount: e.target.value };
-                                      setEditScheduledIncreases(updated);
-                                    }}
-                                    className="w-full bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-transparent rounded-2xl p-3 outline-none font-bold text-sm transition-colors"
-                                  />
-                                </div>
-                                <button
-                                  type="button"
-                                  disabled={elapsed}
-                                  onClick={() => !elapsed && setEditScheduledIncreases(editScheduledIncreases.filter((_, i) => i !== idx))}
-                                  className={`p-3 rounded-xl transition-colors ${elapsed ? 'text-gray-200 dark:text-gray-700 cursor-not-allowed' : 'text-gray-400 dark:text-gray-500 hover:text-red-500 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20'}`}
-                                  aria-label="Remove"
-                                  title={elapsed ? 'Cannot remove a past or current month increase' : 'Remove'}
-                                >
-                                  <X className="w-4 h-4" />
-                                </button>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </>
-              )}
-
-              {/* Computed fields display — inactive biller only (reactivation preview) */}
-              {showEditModal?.status === 'inactive' && (
-                <div className="bg-indigo-50 dark:bg-indigo-900/20 rounded-2xl p-4 space-y-2 transition-colors">
-                  <div className="flex justify-between items-center">
-                    <span className="text-[10px] font-black text-indigo-400 dark:text-indigo-300 uppercase tracking-widest transition-colors">Auto-Computed Timing:</span>
-                    <span className="text-sm font-black text-indigo-600 dark:text-indigo-400 transition-colors">{calculateTiming(editFormData.dueDate || editFormData.actDay)}</span>
-                  </div>
-                  {(() => {
-                    const reactDate = {
-                      month: editFormData.reactMonth || editFormData.actMonth,
-                      year: editFormData.reactYear || editFormData.actYear,
-                    };
-                    const computedStatus = calculateStatusFromActivation(reactDate);
-                    return (
-                      <div className="flex justify-between items-center">
-                        <span className="text-[10px] font-black text-indigo-400 dark:text-indigo-300 uppercase tracking-widest transition-colors">After Reactivation:</span>
-                        <div className="flex items-center gap-2">
-                          <span className={`text-sm font-black transition-colors ${computedStatus === 'inactive' ? 'text-gray-600 dark:text-gray-400' : 'text-green-600 dark:text-green-400'}`}>{computedStatus}</span>
-                          {computedStatus === 'inactive' && (
-                            <span className="text-xs text-orange-500 font-medium">— activates {reactDate.month} {reactDate.year}</span>
-                          )}
-                        </div>
-                      </div>
-                    );
-                  })()}
-                </div>
-              )}
-
-              {timingFeedback && (
-                <div className="bg-blue-50 dark:bg-blue-900/20 border-l-4 border-blue-400 dark:border-blue-500 p-4 rounded transition-colors">
-                  <p className="text-xs font-medium text-blue-700 dark:text-blue-400 transition-colors">{timingFeedback}</p>
-                </div>
-              )}
-
-              <div className="flex space-x-4 pt-4"><button type="button" onClick={() => { setShowEditModal(null); setTimingFeedback(''); }} className="flex-1 bg-gray-100 dark:bg-gray-800 py-4 rounded-2xl font-bold text-gray-500 dark:text-gray-300 transition-colors">Cancel</button><button type="submit" disabled={isSubmitting} className="flex-1 bg-indigo-600 text-white py-4 rounded-2xl font-bold shadow-xl disabled:opacity-60 transition-colors">{showEditModal?.status === 'inactive' ? 'Reactivate Biller' : 'Update Biller'}</button></div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {showPayModal && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md animate-in fade-in">
-          <div className="bg-white dark:bg-gray-900 rounded-3xl w-full max-w-md p-10 shadow-2xl animate-in zoom-in-95 relative transition-colors">
-            <button onClick={() => setShowPayModal(null)} className="absolute right-6 top-6 p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full transition-colors"><X className="w-6 h-6 text-gray-400 dark:text-gray-500" /></button>
-            <h2 className="text-2xl font-black text-gray-900 dark:text-gray-100 mb-2 transition-colors">Pay {showPayModal.biller.name}</h2>
-            <form onSubmit={handlePaySubmit} className="space-y-6 pt-4">
-              <div><label className="block text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-2 transition-colors">Amount Paid</label><div className="relative"><span className="absolute left-4 top-1/2 -translate-y-1/2 font-bold text-gray-400 dark:text-gray-500 transition-colors">₱</span><input required type="number" value={payFormData.amount} onChange={(e) => setPayFormData(prev => ({...prev, amount: e.target.value}))} className="w-full bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-transparent rounded-2xl p-4 pl-8 outline-none text-xl font-black focus:ring-2 focus:ring-indigo-500 transition-colors" /></div></div>
-              
-              <div>
-                <label className="block text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-2 transition-colors">Receipt Upload</label>
-                <div className="relative">
-                  <input type="file" className="absolute inset-0 opacity-0 cursor-pointer" onChange={(e) => { const f = e.target.files?.[0] || null; setPayReceiptFile(f); setPayFormData(prev => ({...prev, receipt: f?.name || ''})); }} />
-                  <div className="w-full bg-gray-50 dark:bg-gray-800 border-2 border-dashed border-gray-200 dark:border-gray-700 rounded-2xl p-6 text-center text-sm text-gray-500 hover:border-indigo-300 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 transition-all flex flex-col items-center">
-                    <Upload className="w-8 h-8 mb-2 text-indigo-400" />
-                    <span className="font-bold">{payFormData.receipt || 'Click or drag to upload receipt'}</span>
-                  </div>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div><label className="block text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-2 transition-colors">Date Paid</label><input required type="date" value={payFormData.datePaid} onChange={(e) => setPayFormData(prev => ({...prev, datePaid: e.target.value}))} className="w-full min-w-0 bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-transparent rounded-2xl px-3 py-4 outline-none font-bold text-sm transition-colors" /></div>
-                <div><label className="block text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-2 transition-colors">Payment Method</label><select value={payFormData.accountId} onChange={(e) => setPayFormData(prev => ({...prev, accountId: e.target.value}))} className="w-full min-w-0 bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-transparent rounded-2xl px-3 py-4 outline-none font-bold text-sm appearance-none transition-colors">{accounts.map(acc => <option key={acc.id} value={acc.id}>{acc.bank} ({acc.classification})</option>)}</select></div>
-              </div>
-              <div className="flex space-x-4 pt-4"><button type="button" onClick={() => setShowPayModal(null)} className="flex-1 bg-gray-100 dark:bg-gray-800 py-4 rounded-2xl font-bold text-gray-500 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors">Cancel</button><button type="submit" className="flex-1 bg-green-600 text-white py-4 rounded-2xl font-bold hover:bg-green-700 shadow-xl dark:shadow-none transition-all active:scale-95">Submit Payment</button></div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {confirmModal.show && <ConfirmDialog {...confirmModal} onClose={() => setConfirmModal(p => ({ ...p, show: false }))} />}
-
-      {/* Schedule Payments Modal */}
-      {schedulePaymentsModal && (
-        <div className="fixed inset-0 z-[150] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md" onClick={() => setSchedulePaymentsModal(null)}>
-          <div className="w-full max-w-lg bg-white rounded-3xl p-8 shadow-2xl relative max-h-[85vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
-            <button onClick={() => setSchedulePaymentsModal(null)} className="absolute top-4 right-4 text-gray-400 hover:text-gray-700 p-2 rounded-full hover:bg-gray-100 transition-colors" aria-label="Close"><X className="w-5 h-5" /></button>
-            <h2 className="text-2xl font-black text-gray-900 mb-1">Payment Records</h2>
-            <p className="text-gray-500 text-sm mb-6">{schedulePaymentsModal.label}</p>
-            {loadingScheduleTx ? (
-              <div className="text-center py-8 text-gray-400">Loading...</div>
-            ) : schedulePaymentsModal.transactions.length === 0 ? (
-              <div className="text-center py-8 text-gray-400 italic">No payment records found for this schedule.</div>
-            ) : (
-              <div className="space-y-4">
-                {schedulePaymentsModal.transactions.map(tx => {
-                  const pmName = accounts.find(a => a.id === tx.paymentMethodId)?.bank || tx.paymentMethodId;
-                  const signedUrl = scheduleSignedUrls[tx.id];
-                  return (
-                    <div key={tx.id} className="bg-gray-50 rounded-2xl p-4 space-y-2">
-                      <div className="flex justify-between items-start">
-                        <div className="space-y-2 flex-1">
-                        <div className="flex justify-between">
-                          <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Name</span>
-                          <span className="text-sm font-bold text-gray-900">{tx.name}</span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Amount</span>
-                          <span className="text-sm font-bold text-red-600">{formatCurrency(tx.amount)}</span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Payment Method</span>
-                          <span className="text-sm text-gray-700">{pmName}</span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Date</span>
-                          <span className="text-sm text-gray-700">{new Date(tx.date).toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' })}</span>
-                        </div>
-                        </div>
-                        <button
-                      onClick={() => { setEditingScheduleTx(tx); setEditScheduleTxForm({ name: tx.name, amount: Math.abs(tx.amount).toFixed(2), date: tx.date.split('T')[0] }); }}
-                          className="ml-3 mt-1 text-[9px] font-black text-indigo-600 uppercase tracking-widest border border-indigo-100 px-2 py-1 rounded-lg hover:bg-indigo-50 transition-colors flex-shrink-0"
-                        >
-                          <Edit2 className="w-3 h-3" />
-                        </button>
-                        <PinProtectedAction
-                          featureId="transaction_deletions"
-                          onVerified={() => handleDeleteBillerScheduleTx(tx.id)}
-                          actionLabel="Delete Payment Record"
-                        >
-                          <button
-                            onClick={(e) => e.preventDefault()}
-                            title="Delete payment record"
-                            className="ml-1 mt-1 text-[9px] font-black text-red-500 uppercase tracking-widest border border-red-100 px-2 py-1 rounded-lg hover:bg-red-50 transition-colors flex-shrink-0"
-                          >
-                            <Trash2 className="w-3 h-3" />
-                          </button>
-                        </PinProtectedAction>
-                      </div>
-                      {tx.receiptUrl && (
-                        <div className="flex items-center space-x-3 pt-1">
-                          {signedUrl ? (
-                            <>
-                              <img src={signedUrl} alt="Receipt" className="w-12 h-12 rounded-xl object-cover border border-gray-200" onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
-                              <button onClick={() => { setZoom(0.5); setPreviewReceiptUrl(signedUrl); }} title="Preview receipt" className="flex items-center space-x-1 px-3 py-1.5 rounded-xl bg-indigo-50 text-indigo-600 hover:bg-indigo-100 transition-colors text-xs font-bold">
-                                <Eye className="w-3.5 h-3.5" /><span>Preview</span>
-                              </button>
-                            </>
-                          ) : (
-                            <span className="text-xs text-gray-400 italic">Loading receipt…</span>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* Edit Schedule Transaction Modal */}
-      {editingScheduleTx && (
-        <div className="fixed inset-0 z-[160] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md" onClick={() => setEditingScheduleTx(null)}>
-          <div className="w-full max-w-md bg-white rounded-3xl p-10 shadow-2xl relative" onClick={e => e.stopPropagation()}>
-            <button onClick={() => setEditingScheduleTx(null)} className="absolute right-6 top-6 p-2 hover:bg-gray-100 rounded-full transition-colors" aria-label="Close"><X className="w-6 h-6 text-gray-400" /></button>
-            <h2 className="text-2xl font-black text-gray-900 mb-2">Edit Transaction</h2>
-            <p className="text-gray-500 text-sm mb-8">Update the transaction details below</p>
-            <form onSubmit={handleEditBillerScheduleTxSubmit} className="space-y-6">
-              <div>
-                <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Name</label>
-                <input
-                  value={editScheduleTxForm.name}
-                  onChange={e => setEditScheduleTxForm(f => ({ ...f, name: e.target.value }))}
-                  required
-                  className="w-full bg-gray-50 border-transparent rounded-2xl p-4 outline-none font-bold text-sm"
-                />
-              </div>
-              <div>
-                <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Amount</label>
-                <input
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  value={editScheduleTxForm.amount}
-                  onChange={e => setEditScheduleTxForm(f => ({ ...f, amount: e.target.value }))}
-                  required
-                  className="w-full bg-gray-50 border-transparent rounded-2xl p-4 outline-none font-bold text-sm"
-                />
-              </div>
-              <div>
-                <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Date</label>
-                <input
-                  type="date"
-                  value={editScheduleTxForm.date}
-                  onChange={e => setEditScheduleTxForm(f => ({ ...f, date: e.target.value }))}
-                  required
-                  className="w-full bg-gray-50 border-transparent rounded-2xl p-4 outline-none font-bold text-sm"
-                />
-              </div>
-              <div className="flex gap-4 pt-4">
-                <button type="button" onClick={() => setEditingScheduleTx(null)} className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 py-4 rounded-2xl font-bold transition-colors" disabled={isEditingScheduleTx}>Cancel</button>
-                <button type="submit" className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white py-4 rounded-2xl font-bold transition-colors disabled:opacity-50" disabled={isEditingScheduleTx}>{isEditingScheduleTx ? 'Saving…' : 'Save Changes'}</button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* Receipt Preview Modal */}
-      {previewReceiptUrl && (
-        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4" onClick={() => setPreviewReceiptUrl(null)}>
-          <div className="w-full max-w-2xl bg-white rounded-3xl shadow-2xl flex flex-col overflow-hidden" style={{ maxHeight: '90vh' }} onClick={e => e.stopPropagation()}>
-            <div className="flex items-center justify-between p-4 border-b border-gray-100">
-              <h3 className="text-base font-black text-gray-900 uppercase tracking-widest">Receipt Preview</h3>
-              <div className="flex items-center space-x-2">
-                <button onClick={() => setZoom(z => Math.max(0.25, parseFloat((z - 0.25).toFixed(2))))} title="Zoom out" className="p-2 rounded-xl hover:bg-gray-100 text-gray-600 transition-colors" aria-label="Zoom out"><ZoomOut className="w-4 h-4" /></button>
-                <span className="text-xs font-bold text-gray-500 w-10 text-center">{Math.round(zoom * 100)}%</span>
-                <button onClick={() => setZoom(z => Math.min(4, parseFloat((z + 0.25).toFixed(2))))} title="Zoom in" className="p-2 rounded-xl hover:bg-gray-100 text-gray-600 transition-colors" aria-label="Zoom in"><ZoomIn className="w-4 h-4" /></button>
-                <a href={previewReceiptUrl} download target="_blank" rel="noreferrer" title="Download receipt" className="p-2 rounded-xl hover:bg-indigo-50 text-indigo-600 transition-colors" aria-label="Download receipt"><Download className="w-4 h-4" /></a>
-                <button onClick={() => setPreviewReceiptUrl(null)} title="Close" className="p-2 rounded-xl hover:bg-gray-100 text-gray-600 transition-colors" aria-label="Close preview"><X className="w-4 h-4" /></button>
-              </div>
-            </div>
-            <div className="overflow-auto flex-1 p-4 flex justify-center">
-              <img src={previewReceiptUrl} alt="Receipt" style={{ width: `${zoom * 100}%`, height: 'auto', transition: 'width 0.2s' }} />
-            </div>
-          </div>
-        </div>
-      )}
-      </>
-      )}
+      {loading && <div className="flex items-center justify-center py-12"><div className="text-center"><div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600 mb-4"></div><p className="text-gray-600 font-medium">Loading billers from database...</p></div></div>}
+      {error && !loading && <div className="bg-red-50 border border-red-200 rounded-xl p-4 mb-6"><div className="flex items-start space-x-3"><AlertTriangle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5"/><div><h3 className="text-sm font-semibold text-red-800">Error Loading Billers</h3><p className="text-sm text-red-600 mt-1">{error}</p></div></div></div>}
     </div>
   );
 };

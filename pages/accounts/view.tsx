@@ -3,7 +3,7 @@ import { ArrowLeft, Info, Eye, ZoomIn, ZoomOut, Download, X, Pencil, BanknoteArr
 import { useSearchParams, Link } from 'react-router-dom';
 import { Account } from '../../types';
 import { getTransactionsByPaymentMethod, createTransaction, updateTransaction, updateTransactionAndSyncSchedule, createTransfer, getLoanTransactionsWithPayments, getReceiptSignedUrl, deleteTransactionAndRevertSchedule, batchDeleteTransactions } from '../../src/services/transactionsService';
-import { combineDateWithCurrentTime, getFirstDayOfCurrentYearIso, getLastDayOfCurrentYearIso } from '../../src/utils/dateUtils';
+import { combineDateWithCurrentTime, getFirstDayOfCurrentYearIso, getLastDayOfCurrentYearIso, getTodayIso } from '../../src/utils/dateUtils';
 import type { SupabaseTransaction } from '../../src/types/supabase';
 import { computeCreditUtilization, type CreditUtilization } from '../../src/utils/accounts';
 import { PinProtectedAction } from '../../src/components/PinProtectedAction';
@@ -87,13 +87,13 @@ const AccountFilteredTransactions: React.FC<AccountFilteredTransactionsProps> = 
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   // Form states
-  const [withdrawForm, setWithdrawForm] = useState({ forWhat: '', amount: '', date: new Date().toISOString().split('T')[0], personName: '' });
-  const [transferForm, setTransferForm] = useState({ amount: '', feeAmount: '', receivingAccountId: '', date: new Date().toISOString().split('T')[0] }); // For My Accounts tab
-  const [sendFriendForm, setSendFriendForm] = useState({ forWhat: '', amount: '', personName: '', date: new Date().toISOString().split('T')[0] }); // For Friends tab
-  const [loanForm, setLoanForm] = useState({ what: '', amount: '', date: new Date().toISOString().split('T')[0], personName: '' });
-  const [cashInForm, setCashInForm] = useState({ amount: '', date: new Date().toISOString().split('T')[0], notes: '', personName: '' });
-  const [loanPaymentForm, setLoanPaymentForm] = useState({ amount: '', date: new Date().toISOString().split('T')[0] });
-  const [cardPaymentForm, setCardPaymentForm] = useState({ name: '', amount: '', date: new Date().toISOString().split('T')[0], notes: '' });
+  const [withdrawForm, setWithdrawForm] = useState({ forWhat: '', amount: '', date: getTodayIso(), personName: '' });
+  const [transferForm, setTransferForm] = useState({ amount: '', feeAmount: '', receivingAccountId: '', date: getTodayIso() }); // For My Accounts tab
+  const [sendFriendForm, setSendFriendForm] = useState({ forWhat: '', amount: '', personName: '', date: getTodayIso() }); // For Friends tab
+  const [loanForm, setLoanForm] = useState({ what: '', amount: '', date: getTodayIso(), personName: '' });
+  const [cashInForm, setCashInForm] = useState({ amount: '', date: getTodayIso(), notes: '', personName: '' });
+  const [loanPaymentForm, setLoanPaymentForm] = useState({ amount: '', date: getTodayIso() });
+  const [cardPaymentForm, setCardPaymentForm] = useState({ name: '', amount: '', date: getTodayIso(), notes: '' });
   const [people, setPeople] = useState<SupabasePerson[]>([]);
 
   // Raw Supabase transactions (used for credit utilization calculation)
@@ -365,7 +365,7 @@ const AccountFilteredTransactions: React.FC<AccountFilteredTransactionsProps> = 
       
       showMessage('success', 'Withdrawal recorded successfully');
       setShowWithdrawModal(false);
-      setWithdrawForm({ forWhat: '', amount: '', date: new Date().toISOString().split('T')[0], personName: '' });
+      setWithdrawForm({ forWhat: '', amount: '', date: getTodayIso(), personName: '' });
       await loadTransactions();
       onTransactionCreated?.();
     } catch (error) {
@@ -394,7 +394,7 @@ const AccountFilteredTransactions: React.FC<AccountFilteredTransactionsProps> = 
       
       showMessage('success', 'Transfer completed successfully');
       setShowSendModal(false);
-      setTransferForm({ amount: '', feeAmount: '', receivingAccountId: '', date: new Date().toISOString().split('T')[0] });
+      setTransferForm({ amount: '', feeAmount: '', receivingAccountId: '', date: getTodayIso() });
       await loadTransactions();
       onTransactionCreated?.();
     } catch (error) {
@@ -412,11 +412,11 @@ const AccountFilteredTransactions: React.FC<AccountFilteredTransactionsProps> = 
     setIsSubmitting(true);
     try {
       const { error } = await createTransaction({
-        name: sendFriendForm.forWhat || `Payment to ${sendFriendForm.personName}`,
+        name: sendFriendForm.forWhat || `Transfer to ${sendFriendForm.personName}`,
         date: combineDateWithCurrentTime(sendFriendForm.date),
         amount: Math.abs(parseFloat(sendFriendForm.amount)), // Positive - money going out
         payment_method_id: accountId,
-        transaction_type: 'payment',
+        transaction_type: 'transfer',
         notes: null,
         payment_schedule_id: null,
         related_transaction_id: null,
@@ -425,14 +425,14 @@ const AccountFilteredTransactions: React.FC<AccountFilteredTransactionsProps> = 
 
       if (error) throw error;
       
-      showMessage('success', 'Payment sent successfully');
+      showMessage('success', 'Transfer sent successfully');
       setShowSendModal(false);
-      setSendFriendForm({ forWhat: '', amount: '', personName: '', date: new Date().toISOString().split('T')[0] });
+      setSendFriendForm({ forWhat: '', amount: '', personName: '', date: getTodayIso() });
       await loadTransactions();
       onTransactionCreated?.();
     } catch (error) {
       console.error('Error sending to friend:', error);
-      showMessage('error', 'Failed to send payment');
+      showMessage('error', 'Failed to send transfer');
     } finally {
       setIsSubmitting(false);
     }
@@ -460,7 +460,7 @@ const AccountFilteredTransactions: React.FC<AccountFilteredTransactionsProps> = 
       
       showMessage('success', 'Loan recorded successfully');
       setShowLoanModal(false);
-      setLoanForm({ what: '', amount: '', date: new Date().toISOString().split('T')[0], personName: '' });
+      setLoanForm({ what: '', amount: '', date: getTodayIso(), personName: '' });
       await loadTransactions();
       onTransactionCreated?.();
     } catch (error) {
@@ -493,7 +493,7 @@ const AccountFilteredTransactions: React.FC<AccountFilteredTransactionsProps> = 
       
       showMessage('success', 'Cash in recorded successfully');
       setShowCashInModal(false);
-      setCashInForm({ amount: '', date: new Date().toISOString().split('T')[0], notes: '', personName: '' });
+      setCashInForm({ amount: '', date: getTodayIso(), notes: '', personName: '' });
       await loadTransactions();
       onTransactionCreated?.();
     } catch (error) {
@@ -526,7 +526,7 @@ const AccountFilteredTransactions: React.FC<AccountFilteredTransactionsProps> = 
       showMessage('success', 'Loan payment recorded successfully');
       setShowLoanPaymentModal(false);
       setSelectedLoan(null);
-      setLoanPaymentForm({ amount: '', date: new Date().toISOString().split('T')[0] });
+      setLoanPaymentForm({ amount: '', date: getTodayIso() });
       await loadTransactions();
       onTransactionCreated?.();
     } catch (error) {
@@ -570,7 +570,7 @@ const AccountFilteredTransactions: React.FC<AccountFilteredTransactionsProps> = 
 
       showMessage('success', 'Credit card payment recorded successfully');
       setShowCardPaymentModal(false);
-      setCardPaymentForm({ name: '', amount: '', date: new Date().toISOString().split('T')[0], notes: '' });
+      setCardPaymentForm({ name: '', amount: '', date: getTodayIso(), notes: '' });
       await loadTransactions();
       onTransactionCreated?.();
     } catch (error) {
@@ -641,9 +641,8 @@ const AccountFilteredTransactions: React.FC<AccountFilteredTransactionsProps> = 
   };
 
   const getTransactionTypeBadge = (type?: string) => {
-    if (!type || type === 'payment') return null;
-    
     const badges: Record<string, { color: string; label: string }> = {
+      payment: { color: 'bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300', label: 'Payment' },
       withdraw: { color: 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400', label: 'Withdraw' },
       transfer: { color: 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400', label: 'Transfer' },
       loan: { color: 'bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-400', label: 'Loan' },
@@ -652,7 +651,8 @@ const AccountFilteredTransactions: React.FC<AccountFilteredTransactionsProps> = 
       credit_payment: { color: 'bg-teal-100 dark:bg-teal-900/30 text-teal-700 dark:text-teal-400', label: 'Card Payment' },
     };
     
-    const badge = badges[type];
+    const key = type || 'payment';
+    const badge = badges[key];
     if (!badge) return null;
     
     return (

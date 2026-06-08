@@ -48,6 +48,7 @@ import { useAccounts } from './src/hooks/useAccounts';
 import { useIncomingRequests, useUnreadMessagesCount, socialKeys } from './src/hooks/useBudies';
 import { SetupWizard } from './src/components/SetupWizard';
 import { Logo } from './src/components/Logo';
+import useMediaQuery from './src/hooks/useMediaQuery';
 import { MessagesInbox } from './src/components/MessagesInbox';
 
 // Helper function to convert UI Account to Supabase format
@@ -101,7 +102,7 @@ const supabaseToBiller = (supabaseBiller: any): Biller => ({
   activationDate: supabaseBiller.activation_date,
   deactivationDate: supabaseBiller.deactivation_c,
   status: supabaseBiller.status,
-  schedules: supabaseBiller.schedules,
+  schedules: biller.schedules,
 });
 
 // Helper function to convert UI Installment to Supabase format
@@ -166,13 +167,19 @@ const formatTransaction = (supabaseTransaction: SupabaseTransaction): Transactio
   date: supabaseTransaction.date,
   amount: supabaseTransaction.amount,
   paymentMethodId: supabaseTransaction.payment_method_id,
+  transaction_type: supabaseTransaction.transaction_type ?? null,
+  notes: supabaseTransaction.notes ?? null,
+  related_transaction_id: supabaseTransaction.related_transaction_id ?? null,
+  borrower_name: supabaseTransaction.borrower_name ?? null,
+  receiptUrl: supabaseTransaction.receipt_url ?? null,
+  person_name: (supabaseTransaction as any).person_name ?? null,
 });
 
 const queryClient = new QueryClient();
 
 // Main App Content (Protected)
 const AppContent: React.FC = () => {
-  const { user, userProfile, loading: authLoading, signOut } = useAuth();
+  const { user, userProfile, loading: authLoading, signOut, refreshProfile } = useAuth();
   const queryClient = useQueryClient();
 
   // Show auth page if not authenticated
@@ -204,7 +211,8 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
   const isDashboard = location.pathname === '/';
   const [isScrolled, setIsScrolled] = useState(false);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
-  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  const isMobile = useMediaQuery('(max-width: 767px)');
+  const [isSidebarOpen, setIsSidebarOpen] = useState(!isMobile);
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
   const [isMessagesOpen, setIsMessagesOpen] = useState(false);
@@ -220,6 +228,10 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
   const [showSplash, setShowSplash] = useState(true);
   const [minSplashTimeElapsed, setMinSplashTimeElapsed] = useState(false);
 
+  useEffect(() => {
+    setIsSidebarOpen(!isMobile);
+  }, [isMobile]);
+
   // Scroll listener for Dashboard top bar visibility
   useEffect(() => {
     const handleScroll = () => {
@@ -232,6 +244,13 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
     container?.addEventListener('scroll', handleScroll);
     return () => container?.removeEventListener('scroll', handleScroll);
   }, [isDashboard, showSplash]);
+
+  // Global scroll-to-top on page change
+  useEffect(() => {
+    if (scrollContainerRef.current) {
+      scrollContainerRef.current.scrollTop = 0;
+    }
+  }, [location.pathname]);
 
   const loadNotifications = async () => {
     const { data: pTxs } = await getPendingTransactions();
@@ -392,6 +411,14 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
   const [categories, setCategories] = useState(INITIAL_CATEGORIES);
   const [theme, setTheme] = useState<'light' | 'dark'>('light');
   
+  // Preserve a locally chosen theme even while the user profile is still loading.
+  useEffect(() => {
+    const localTheme = localStorage.getItem('theme');
+    if (localTheme === 'dark' || localTheme === 'light') {
+      setTheme(localTheme);
+    }
+  }, []);
+
   // Wizard State
   const [showWizard, setShowWizard] = useState(false);
 
@@ -496,16 +523,14 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
 
   // Theme Initialization and Synchronization
   useEffect(() => {
-    let initialTheme: 'light' | 'dark' = 'light';
-    if (userProfile?.theme) {
-      initialTheme = userProfile.theme;
-    } else {
-      const localTheme = localStorage.getItem('theme');
-      if (localTheme === 'dark' || localTheme === 'light') {
-        initialTheme = localTheme;
-      } 
+    const localTheme = localStorage.getItem('theme');
+    if (localTheme === 'dark' || localTheme === 'light') {
+      return; // Keep the locally chosen theme if the user already selected one.
     }
-    setTheme(initialTheme);
+
+    if (userProfile?.theme === 'dark' || userProfile?.theme === 'light') {
+      setTheme(userProfile.theme);
+    }
   }, [userProfile]);
 
   useEffect(() => {
@@ -849,15 +874,29 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
         {
           name: `${installment.name} - ${targetSchedule.month} ${targetSchedule.year}`,
           date: combineDateWithCurrentTime(payment.date),
-          amount: payment.amount,
+          amount: Math.abs(payment.amount),
           paymentMethodId: payment.accountId,
+          transactionType: 'payment',
         }
       );
 
       if (transactionError || !transaction) {
-        console.error('Failed to create transaction:', transactionError);
-        // Payment schedule was updated but transaction failed - not ideal but acceptable
-        console.warn('[App] Payment schedule updated but transaction creation failed');
+        console.error('Error creating transaction:', transactionError);
+        const fallbackResult = await createTransaction({
+          name: `${installment.name} - ${targetSchedule.month} ${targetSchedule.year}`,
+          date: combineDateWithCurrentTime(payment.date),
+          amount: payment.amount,
+          payment_method_id: payment.accountId,
+          transaction_type: 'payment',
+          notes: `Installment payment (schedule: ${targetSchedule.id})`,
+          payment_schedule_id: null,
+        });
+        if (fallbackResult.error) {
+          console.error('[App] Fallback transaction creation also failed:', fallbackResult.error);
+          alert('Payment schedule was marked paid, but the transaction could not be created. Please run the latest Supabase migrations (transactions.payment_schedule_id and transaction types) and try again.');
+        } else {
+          alert('Payment saved. The transaction was created, but could not be linked to the schedule due to a database mismatch. Please run the latest Supabase migrations.');
+        }
       } else {
         console.log('[App] Transaction created successfully:', {
           transactionId: transaction.id,
@@ -880,7 +919,7 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
       // Update the installment's paidAmount
       const updatedInstallment: Installment = {
         ...installment,
-        paidAmount: installment.paidAmount + payment.amount,
+        paidAmount: installment.paidAmount + Math.abs(payment.amount),
       };
 
       await updateInstallmentFrontend(updatedInstallment);
@@ -993,17 +1032,24 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
         {
           name: `${biller.name} - ${targetSchedule.month} ${targetSchedule.year}`,
           date: combineDateWithCurrentTime(payment.date),
-          amount: payment.amount,
+          amount: ((): number => {
+            const acct = accounts.find(a => a.id === payment.accountId);
+            return acct && acct.type === 'Credit' ? -Math.abs(payment.amount) : Math.abs(payment.amount);
+          })(),
           paymentMethodId: payment.accountId,
+          transaction_type: ((): string => {
+            const acct = accounts.find(a => a.id === payment.accountId);
+            return acct?.type === 'Credit' ? 'credit_payment' : 'payment';
+          })(),
         }
       );
 
       if (transactionError || !transaction) {
-        console.error('Error creating transaction:', transactionError);
+        console.error('Error creating biller transaction:', transactionError);
         throw new Error('Failed to create transaction');
       }
 
-      console.log('[App] Transaction created successfully:', transaction.id);
+      console.log('[App] Biller transaction created successfully:', transaction.id);
 
       // Upload receipt to storage if a file was provided
       if (payment.receiptFile) {
@@ -1146,30 +1192,26 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
   const handleToggleTheme = async () => {
     const newTheme = theme === 'light' ? 'dark' : 'light';
     setTheme(newTheme);
-    
+    localStorage.setItem('theme', newTheme);
+
     if (user?.id) {
-      const { error } = await supabase
-        .from('user_profiles')
-        .update({ theme: newTheme })
-        .eq('user_id', user.id);
-      
+      const { data, error } = await updateUserProfile(user.id, { theme: newTheme });
       if (error) {
-        console.error("Failed to save theme to Supabase:", error);
-        localStorage.setItem('theme', newTheme); // Fallback
-      } else {
-        localStorage.removeItem('theme'); // Clean up if successfully cloud synced
+        console.error('Failed to save theme to Supabase:', error);
+      } else if (data) {
+        // Keep the authenticated profile state in sync with the new theme
+        await refreshProfile();
       }
-    } else {
-      localStorage.setItem('theme', newTheme);
     }
   };
 
-  if (showSplash) {
+    if (showSplash) {
     return (
-      <div className="fixed inset-0 z-[9999] flex flex-col items-center justify-center bg-gradient-to-br from-blue-100 via-gray-50 to-purple-100 dark:from-gray-950 dark:via-gray-900 dark:to-gray-950 transition-colors duration-300">
+      <div className="fixed inset-0 z-[9999] flex flex-col items-center justify-center bg-[#FCF6E8]">
         <style>
           {`@import url('https://fonts.googleapis.com/css2?family=Titan+One&display=swap');
           .font-titan { font-family: 'Titan One', cursive; font-weight: 400; letter-spacing: 1px; }
+          .font-brand { font-family: 'Titan One', cursive; }
           @keyframes squeeze-mascot {
             0% { transform: translateY(16px) rotate(15deg); }
             5% { transform: translateY(16px) rotate(15deg); }
@@ -1181,30 +1223,34 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
           }
           .animate-squeeze-mascot {
             animation: squeeze-mascot 1.8s ease-in-out forwards;
+          }
+          @keyframes flicker {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.6; }
+          }
+          .animate-flicker {
+            animation: flicker 1.5s ease-in-out infinite;
           }`}
         </style>
         <div className="text-center animate-in fade-in zoom-in duration-700">
-          <div className="w-24 h-24 bg-white dark:bg-gray-900 rounded-3xl shadow-2xl flex items-center justify-center mx-auto mb-8 relative overflow-hidden border border-gray-100 dark:border-gray-800">
-            <div className="absolute inset-0 bg-blue-50/50 dark:bg-blue-900/10 animate-pulse"></div>
-            <div className="w-10 h-10 border-4 border-blue-100 dark:border-gray-800 border-t-blue-600 dark:border-t-blue-500 rounded-full animate-spin relative z-10"></div>
-          </div>
           <div className="flex flex-row flex-nowrap justify-center items-center mb-6 active:scale-95 transition-transform">
             <img 
               src="/iconapp.png" 
               alt="Budee Mascot" 
-              className="w-24 h-24 md:w-32 md:h-32 drop-shadow-2xl z-10 -mr-10 md:-mr-12 rotate-[15deg] animate-squeeze-mascot hover:scale-105 hover:rotate-12 transition-all duration-300" 
+              className="w-24 h-24 md:w-32 md:h-32 drop-shadow-2xl z-10 -mr-10 md:-mr-12 rotate-[15deg] animate-squeeze-mascot" 
             />
             <div className="mt-2 md:mt-4">
               <Logo className="text-6xl md:text-8xl" />
             </div>
           </div>
-          <p className="text-gray-500 dark:text-gray-400 font-medium text-sm max-w-[260px] mx-auto leading-relaxed animate-pulse">
-            Loading your financial data and preparing your dashboard...
+          <p className="font-brand text-xl text-gray-600 tracking-wider animate-flicker">
+            Getting your budget ready...
           </p>
         </div>
       </div>
     );
   }
+
 
   return (
     <>
@@ -1225,8 +1271,14 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
           .animate-ring { animation: ring 2s ease-in-out infinite; }`}
         </style>
         <div className="flex h-[100dvh] bg-gray-100 dark:bg-gray-950 w-full overflow-hidden fixed inset-0 transition-colors duration-200">
+				{isSidebarOpen && isMobile && (
+        <div
+          className="fixed inset-0 bg-black/50 z-40 md:hidden"
+          onClick={() => setIsSidebarOpen(false)}
+        />
+      )}
         <aside className={`fixed inset-y-0 left-0 z-50 bg-gray-50 dark:bg-gray-900 transition-all duration-300 ease-in-out ${isSidebarOpen ? 'w-52' : 'hidden md:flex w-20'} overscroll-none ${
-          isScrolled ? 'border-r-4 border-black shadow-[2px_0px_0px_0px_rgba(0,0,0,1)]' : 'border-r border-gray-200 dark:border-gray-800'
+          isScrolled ? 'border-r border-gray-200 dark:border-gray-800' : 'border-none'
         }`}> 
           <div className="flex flex-col h-full">
             <div className={`flex items-center h-14 px-4 transition-all duration-300 ${isSidebarOpen ? 'justify-between' : 'justify-center'} ${
@@ -1267,6 +1319,11 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
                   <NavLink
                     key={item.id}
                     to={item.path}
+                    onClick={() => {
+                      if (isMobile) {
+                        setIsSidebarOpen(false);
+                      }
+                    }}
                     className={({ isActive }) =>
                       `w-full flex items-center p-2 rounded-xl transition-colors group ${
                         isActive ? 'bg-black/5 dark:bg-white/5' : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800/50'
@@ -1306,6 +1363,11 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
           <div className="p-3 border-t border-gray-100 dark:border-gray-800 transition-colors">
             <NavLink
               to="/settings"
+              onClick={() => {
+                if (isMobile) {
+                  setIsSidebarOpen(false);
+                }
+              }}
               className={({ isActive }) =>
                 `w-full flex items-center p-2 rounded-xl transition-colors group ${
                   isActive ? 'bg-black/5 dark:bg-white/5' : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800/50'
@@ -1335,17 +1397,29 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
         <TestModeBanner sidebarOpen={isSidebarOpen} />
 
         {/* Top Navigation Bar - Reactive for Dashboard, Static for others */}
-        <header className={`fixed top-0 right-0 left-0 h-14 px-4 md:px-8 flex items-center justify-end transition-all duration-300 z-30 ${
-          isSidebarOpen ? 'md:ml-52' : 'md:ml-20'
+        <header className={`fixed top-0 right-0 left-0 h-14 px-4 md:px-8 flex items-center justify-between transition-all duration-300 z-30 ${
+          isSidebarOpen && !isMobile ? 'md:ml-52' : isMobile ? '' : 'md:ml-20'
         } ${
           isScrolled ? `${getAccentClasses('bg')} shadow-lg border-b-4 border-black` : 'bg-transparent border-transparent'
         }`}>
+          <div className="flex items-center space-x-2">
+            {isMobile && (
+              <button
+                onClick={() => setIsSidebarOpen(!isSidebarOpen)}
+                className={`relative p-2 -ml-2 border-[3px] border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] transition-all duration-200 hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none ${isScrolled ? 'bg-white' : getAccentClasses('bg')}`}>
+                <Menu className={`w-5 h-5 ${isScrolled ? getAccentClasses('text') : 'text-white'}`} />
+              </button>
+            )}
+          </div>
+
+          <div className="flex-1 md:hidden" />
+
           <div className="flex items-center space-x-2 md:space-x-4">
             {/* Messages */}
             <div className="relative">
               <button 
                 onClick={() => setIsMessagesOpen(!isMessagesOpen)}
-                className={`relative p-2 border-[3px] border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] transition-all duration-200 -rotate-2 hover:rotate-0 hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none ${isScrolled ? 'bg-white' : getAccentClasses('bg')} ${unreadMessagesCount > 0 && !isMessagesOpen ? 'animate-ring' : ''}`}
+                className={`relative p-2 border-[3px] border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] transition-all duration-200 hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none ${isScrolled ? 'bg-white' : getAccentClasses('bg')} ${unreadMessagesCount > 0 && !isMessagesOpen ? 'animate-ring' : ''}`}
               >
                 <MessageCircle className={`w-5 h-5 ${isScrolled ? getAccentClasses('text') : 'text-white'}`} />
                 {unreadMessagesCount > 0 && !isMessagesOpen && ( // Only show badge if not open
@@ -1359,8 +1433,7 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
             <div className="relative">
               <button 
                 onClick={() => setIsNotificationsOpen(!isNotificationsOpen)}
-                className={`relative p-2 border-[3px] border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] transition-all duration-200 rotate-3 hover:rotate-0 hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none ${isScrolled ? 'bg-white' : getAccentClasses('bg')}`}
-              >
+                className={`relative p-2 border-[3px] border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] transition-all duration-200 hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none ${isScrolled ? 'bg-white' : getAccentClasses('bg')}`}>
                 <Bell className={`w-5 h-5 ${isScrolled ? getAccentClasses('text') : 'text-white'}`} />
                 {((pendingRequests?.length || 0) + (pendingTransactions?.length || 0)) > 0 && (
                   <span className="absolute -top-1 -right-1 w-4 h-4 bg-yellow-300 border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] z-10"></span>
@@ -1459,9 +1532,9 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
             <div className="relative ml-2 border-l border-gray-200 dark:border-gray-700 pl-4">
               <button 
                 onClick={() => setIsUserMenuOpen(!isUserMenuOpen)}
-                className="flex items-center space-x-2 p-1 pr-2 border-[3px] border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] bg-white hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none transition-all duration-200"
+                className="relative flex items-center space-x-2 p-1 pr-2 border-[3px] border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] bg-white hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none transition-all duration-200"
               >
-                <div className={`w-8 h-8 border-2 border-black ${isScrolled ? getAccentClasses('bg') : 'bg-white text-black'} flex items-center justify-center text-white font-bold text-sm transition-colors`}>
+                <div className={`w-7 h-7 border-2 border-black ${isScrolled ? getAccentClasses('bg') : 'bg-white text-black'} flex items-center justify-center text-white font-bold text-sm transition-colors`}>
                   {userProfile ? 
                     `${userProfile.first_name.charAt(0)}${userProfile.last_name.charAt(0)}`.toUpperCase() :
                     user?.email?.charAt(0).toUpperCase() || 'U'
@@ -1516,7 +1589,7 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
 
         <div 
           ref={scrollContainerRef}
-          className="w-full flex-1 overflow-auto overscroll-none touch-pan-y pt-0 px-4 pb-4 md:px-8 md:pb-6" 
+          className="w-full flex-1 overflow-auto pt-0 px-4 pb-4 md:px-8 md:pb-6" 
           style={{ WebkitOverflowScrolling: 'touch' }}
         >
             <Routes>

@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import useMediaQuery from '../src/hooks/useMediaQuery';
 import { Users, Plus, LayoutGrid, List, MoreVertical, Trash2, ArrowRight, ArrowLeft, X, AlertTriangle, User, Landmark, ArrowUpFromLine, ArrowDownToLine, ArrowLeftRight, BanknoteArrowDown, ChevronDown, ChevronUp, Edit2, Search, UserPlus, CheckSquare, Clock, RefreshCw, Check, MessageCircle } from 'lucide-react';
 import { createPerson, deletePerson } from '../src/services/peopleService';
 import { getAllTransactions, createTransaction, deleteTransaction, updateTransaction, getUnsyncedHistoricalTransactionsCount, getUnsyncedHistoricalTransactions, syncSpecificHistoricalTransactions } from '../src/services/transactionsService';
@@ -6,7 +7,7 @@ import { getAllAccountsFrontend } from '../src/services/accountsService';
 import { Account } from '../types';
 import { searchUsers, sendFriendRequest } from '../src/services/friendshipsService';
 import type { SupabasePerson, SupabaseTransaction, SupabaseUserProfile, SupabaseFriendship } from '../src/types/supabase';
-import { combineDateWithCurrentTime } from '../src/utils/dateUtils';
+import { combineDateWithCurrentTime, getTodayIso } from '../src/utils/dateUtils';
 import { useTheme } from '../src/contexts/ThemeContext';
 import { supabase } from '../src/utils/supabaseClient';
 import { useAuth } from '../src/contexts/AuthContext';
@@ -24,28 +25,32 @@ const PageHeader: React.FC<{
   backButton?: React.ReactNode;
 }> = ({ title, subtitle, icon, actions, backButton }) => {
   const { getAccentClasses } = useTheme();
+  const isMobile = useMediaQuery('(max-width: 767px)');
   
   return (
-    <header className="pt-12 mb-12 flex flex-col md:flex-row md:items-end justify-between gap-6">
-      <div className="flex-1">
-        <div className="flex items-center gap-3 mb-[-6px] ml-1">
-          {backButton}
-          <p className="text-xl font-bold italic text-black/50 dark:text-gray-400 transition-colors duration-300">
-            {subtitle}
-          </p>
-        </div>
-        <div className="relative inline-block mt-2">
-          <div className="flex items-center gap-4">
-             {icon && <div className="z-10 shrink-0">{icon}</div>}
-             <h1 className="text-4xl md:text-6xl font-[950] uppercase tracking-tighter leading-none relative z-10 text-black dark:text-white transition-colors duration-300">
-              {title}
-            </h1>
+    <header className={`${isMobile ? 'pt-16' : 'pt-12'} flex flex-row items-center justify-between gap-6 mb-4`}>
+      <div className="flex flex-1 items-center gap-6">
+        {backButton}
+        <div className="flex-1">
+          <div className="relative inline-block">
+            <div className="flex items-center gap-4">
+               {icon && <div className="z-10 shrink-0">{icon}</div>}
+               <h1 className={`text-[clamp(2rem,7.5vw,3.75rem)] font-titan normal-case tracking-tighter leading-none relative z-10 [text-shadow:-1px_-1px_0_#000,1px_-1px_0_#000,-1px_1px_0_#000,1px_1px_0_#000] drop-shadow-[3px_3px_0px_#000] ${icon ? getAccentClasses('text') : 'text-black dark:text-white'}`}>
+                {title}
+              </h1>
+            </div>
+            <div className={`absolute bottom-0 left-0 h-4 ${getAccentClasses('bg')} opacity-40 -z-0 -rotate-1 -translate-x-2 transition-colors duration-300`} style={{ width: `110%` }} />
           </div>
-          <div className={`absolute bottom-1 left-0 w-[110%] h-5 ${getAccentClasses('bg')} opacity-40 -z-0 -rotate-1 -translate-x-2 transition-colors duration-300`} />
+          <div className="flex items-center gap-3 mt-1 ml-1">
+            {backButton}
+            <p className="text-[clamp(1rem,3vw,1.25rem)] font-bold italic text-black/50 dark:text-gray-400 transition-colors duration-300">
+              {subtitle}
+            </p>
+          </div>
+          <div className={`h-2 w-32 mt-2 bg-black dark:bg-white/20 transition-colors duration-300`} />
         </div>
-        <div className={`h-2 w-32 mt-4 bg-black dark:bg-white/20 transition-colors duration-300`} />
       </div>
-      {actions && <div className="flex items-center justify-end gap-3 mt-4 md:mt-0 w-full md:w-auto">{actions}</div>}
+      {actions && <div className="flex items-center justify-end gap-3">{actions}</div>}
     </header>
   );
 };
@@ -88,7 +93,7 @@ export default function PeoplePage({ onStartChat }: PeoplePageProps) {
 
   const [showLoanPaymentModal, setShowLoanPaymentModal] = useState(false);
   const [selectedLoan, setSelectedLoan] = useState<any | null>(null);
-  const [loanPaymentForm, setLoanPaymentForm] = useState({ amount: '', date: new Date().toISOString().split('T')[0], accountId: '' });
+  const [loanPaymentForm, setLoanPaymentForm] = useState({ amount: '', date: getTodayIso(), accountId: '' });
   
   const [expandedTxIds, setExpandedTxIds] = useState<Set<string>>(new Set());
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
@@ -269,8 +274,13 @@ export default function PeoplePage({ onStartChat }: PeoplePageProps) {
 
     setIsSearching(true);
     const timer = setTimeout(async () => {
-      const { data } = await searchUsers(searchQuery.trim());
-      setSearchResults(data || []);
+      const { data, error } = await searchUsers(searchQuery.trim());
+      if (error) {
+        console.error('Search failed:', error);
+        setSearchResults([]);
+      } else {
+        setSearchResults(data || []);
+      }
       setIsSearching(false);
     }, 500); // 500ms debounce
 
@@ -363,7 +373,7 @@ export default function PeoplePage({ onStartChat }: PeoplePageProps) {
     } else {
       setShowLoanPaymentModal(false);
       setSelectedLoan(null);
-      setLoanPaymentForm({ amount: '', date: new Date().toISOString().split('T')[0], accountId: '' });
+      setLoanPaymentForm({ amount: '', date: getTodayIso(), accountId: '' });
       loadData();
     }
   };
@@ -671,7 +681,7 @@ export default function PeoplePage({ onStartChat }: PeoplePageProps) {
                                 e.stopPropagation();
                                 setSelectedLoan({ ...tx, remainingBalance, totalPaid, isBorrowed });
                                 const defaultAcc = accounts.find(a => a.type === 'Debit')?.id || '';
-                                setLoanPaymentForm({ amount: '', date: new Date().toISOString().split('T')[0], accountId: defaultAcc });
+                                setLoanPaymentForm({ amount: '', date: getTodayIso(), accountId: defaultAcc });
                                 setShowLoanPaymentModal(true);
                               }}
                               className={`flex items-center gap-1 px-3 py-1.5 ${isBorrowed ? 'bg-red-50 text-red-600 dark:bg-red-900/30 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/50' : 'bg-purple-50 text-purple-600 dark:bg-purple-900/30 dark:text-purple-400 hover:bg-purple-100 dark:hover:bg-purple-900/50'} rounded-lg text-[10px] font-black uppercase tracking-widest transition-colors`}

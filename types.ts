@@ -100,6 +100,12 @@ export interface Transaction {
   date: string;
   amount: number;
   paymentMethodId: string;
+  transaction_type?: 'payment' | 'withdraw' | 'transfer' | 'loan' | 'cash_in' | 'loan_payment' | 'credit_payment' | null;
+  notes?: string | null;
+  related_transaction_id?: string | null;
+  borrower_name?: string | null;
+  receiptUrl?: string | null;
+  person_name?: string | null;
 }
 
 export interface CategorizedSetupItem {

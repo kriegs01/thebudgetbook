@@ -672,6 +672,8 @@ export const createPaymentScheduleTransaction = async (
     date: string;
     amount: number;
     paymentMethodId: string;
+    notes?: string | null;
+    transactionType?: SupabaseTransaction['transaction_type'] | null;
   }
 ) => {
   try {
@@ -684,6 +686,8 @@ export const createPaymentScheduleTransaction = async (
       amount: transaction.amount,
       payment_method_id: transaction.paymentMethodId,
       payment_schedule_id: scheduleId,
+      notes: transaction.notes ?? null,
+      transaction_type: (transaction.transactionType ?? (transaction as any).transaction_type) ?? undefined,
     };
 
     const { data, error } = await supabase

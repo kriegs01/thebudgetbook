@@ -5,6 +5,7 @@ import { TrendingUp, TrendingDown, Landmark, ArrowUpRight, CreditCard, Wallet, C
 import type { SupabaseUserProfile } from '../src/types/supabase';
 import { useTheme } from '../src/contexts/ThemeContext';
 import { DashboardHeader } from '../DashboardHeader';
+import useMediaQuery from '../src/hooks/useMediaQuery';
 
 interface DashboardProps {
   accounts: Account[];
@@ -18,6 +19,7 @@ interface DashboardProps {
 
 interface PeriodProjection {
   period: string;
+  shortPeriod: string;
   monthYear: string;
   income: number;
   totalBudget: number;  // Total allocated budget (spending)
@@ -31,6 +33,7 @@ interface MonthlyAverage {
 
 const Dashboard: React.FC<DashboardProps> = ({ accounts, budget, installments, transactions = [], budgetSetups = [], userProfile, theme }) => {
   const { getAccentClasses } = useTheme();
+  const isMobile = useMediaQuery('(max-width: 767px)');
   const isDarkMode = theme === 'dark';
   const tickColor = isDarkMode ? '#6b7280' : '#94a3b8'; // gray-500 dark, gray-400 light
   const gridColor = isDarkMode ? '#374151' : '#f1f5f9'; // gray-700 dark, gray-100 light
@@ -125,6 +128,7 @@ const Dashboard: React.FC<DashboardProps> = ({ accounts, budget, installments, t
       const projectedDate = new Date(startYear, startMonth - 1 + i, 1);
       const month = projectedDate.toLocaleDateString('en-US', { month: 'long' });
       const monthShort = projectedDate.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+      const monthReallyShort = projectedDate.toLocaleDateString('en-US', { month: 'short' });
       
       const setup1_2 = budgetSetups.find(s => s.month === month && s.timing === '1/2');
       const setup2_2 = budgetSetups.find(s => s.month === month && s.timing === '2/2');
@@ -134,6 +138,7 @@ const Dashboard: React.FC<DashboardProps> = ({ accounts, budget, installments, t
         const totalBudget = getSetupTotalBudget(setup1_2);
         projections.push({
           period: `${monthShort} - 1/2`,
+          shortPeriod: `${monthReallyShort} - 1/2`,
           monthYear: monthShort,
           income,
           totalBudget,
@@ -146,6 +151,7 @@ const Dashboard: React.FC<DashboardProps> = ({ accounts, budget, installments, t
         const totalBudget = getSetupTotalBudget(setup2_2);
         projections.push({
           period: `${monthShort} - 2/2`,
+          shortPeriod: `${monthReallyShort} - 2/2`,
           monthYear: monthShort,
           income,
           totalBudget,
@@ -210,12 +216,12 @@ const Dashboard: React.FC<DashboardProps> = ({ accounts, budget, installments, t
   const debitAccounts = accounts.filter(a => a.type === 'Debit');
 
   return (
-    <div className="animate-in fade-in duration-500 max-w-7xl mx-auto px-8">
+    <div className={`animate-in fade-in duration-500 max-w-7xl mx-auto w-full overflow-hidden ${isMobile ? 'pt-10' : 'pt-4'}`}>
       {/* Greeting Header */}
       <DashboardHeader name={userProfile?.first_name || 'Budee User'} />
 
-      {/* Main Content Area with Right Gutter for Floating HUD */}
-      <div className="space-y-8 pb-20 pr-20">
+      {/* Main Content Area */}
+      <div className={`space-y-8 pb-24 ${isMobile ? 'px-4' : 'px-8'}`}>
         {/* Top Cards */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
           {/* Total Balance Card */}
@@ -269,26 +275,26 @@ const Dashboard: React.FC<DashboardProps> = ({ accounts, budget, installments, t
 
       {/* Budget Projections Section */}
       <div className="bg-white dark:bg-gray-900 rounded-3xl border-[3px] border-black shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] overflow-hidden">
-        <div className="p-6 bg-blue-500 border-b-[3px] border-black">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-2">
+        <div className="p-4 md:p-6 bg-blue-500 border-b-[3px] border-black">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-2 md:gap-4">
+            <div className="flex items-center space-x-2 self-center md:self-auto">
               <TrendingUp className="w-6 h-6 text-white" />
-              <h3 className="font-['Titan_One'] text-2xl text-white uppercase tracking-tight">Budget Projections</h3>
+              <h3 className="font-['Titan_One'] text-xl md:text-2xl text-white uppercase tracking-tight">Budget Projections</h3>
             </div>
             {/* Date range selector */}
-            <div className="flex gap-2">
+            <div className="flex flex-row items-center flex-wrap justify-center md:justify-end gap-1 sm:gap-2">
               <input 
                 type="month" 
                 value={startDate}
                 onChange={(e) => setStartDate(e.target.value)}
-                className="text-xs font-bold border-2 border-black rounded-lg px-2 py-1 bg-white"
+                className="text-xs font-bold border-2 border-black rounded-lg p-1 bg-white"
               />
               <span className="self-center text-white font-black text-xs">TO</span>
               <input 
                 type="month" 
                 value={endDate}
                 onChange={(e) => setEndDate(e.target.value)}
-                className="text-xs font-bold border-2 border-black rounded-lg px-2 py-1 bg-white"
+                className="text-xs font-bold border-2 border-black rounded-lg p-1 bg-white"
               />
             </div>
           </div>
@@ -365,7 +371,7 @@ const Dashboard: React.FC<DashboardProps> = ({ accounts, budget, installments, t
                 <BarChart data={periodProjections} margin={{ top: 20, right: 10, left: -20, bottom: 0 }}>
                   <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={gridColor} />
                   <XAxis 
-                    dataKey="period" 
+                    dataKey={isMobile ? "shortPeriod" : "period"}
                     axisLine={false}
                     tickLine={false}
                     tick={{fill: tickColor, fontSize: 11}}
