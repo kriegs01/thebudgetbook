@@ -11,6 +11,7 @@ interface AuthContextType {
   session: Session | null;
   userProfile: SupabaseUserProfile | null;
   loading: boolean;
+  isPasswordRecovery: boolean;
   signUp: (email: string, password: string, firstName: string, lastName: string) => Promise<{ error: any }>;
   signIn: (email: string, password: string) => Promise<{ error: any }>;
   signOut: () => Promise<void>;
@@ -58,6 +59,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [session, setSession] = useState<Session | null>(null);
   const [userProfile, setUserProfile] = useState<SupabaseUserProfile | null>(null);
   const [loading, setLoading] = useState(true);
+  const [isPasswordRecovery, setIsPasswordRecovery] = useState(false);
 
   const loadUserProfile = async (userId: string) => {
     const { data, error } = await getUserProfile(userId);
@@ -94,6 +96,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setSession(session);
         setUser(session?.user ?? null);
         setLoading(false);
+
+        if (_event === 'PASSWORD_RECOVERY') {
+            setIsPasswordRecovery(true);
+        } else if (_event === 'USER_UPDATED') {
+            setIsPasswordRecovery(false);
+        }
+
         if (session?.user) {
           loadUserProfile(session.user.id);
         } else {
@@ -191,7 +200,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const resetPassword = async (email: string) => {
     try {
       const { error } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: `${window.location.origin}/auth/confirm`,
+        redirectTo: `${window.location.origin}/update-password`,
       });
       if (error) throw error;
       return { error: null };
@@ -219,6 +228,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     session,
     userProfile,
     loading,
+    isPasswordRecovery,
     signUp,
     signIn,
     signOut,

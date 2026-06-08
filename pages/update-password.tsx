@@ -1,7 +1,9 @@
+
 import React, { useState } from 'react';
 import { Lock, AlertCircle, Loader, CheckCircle } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { updateUserPassword } from '../src/services/userProfileService';
+import { supabase } from '../src/utils/supabaseClient'; // Direct import for updateUser
+import { useAuth } from '../src/contexts/AuthContext'; // Import useAuth for signOut
 
 const MIN_PASSWORD_LENGTH = 6;
 const REDIRECT_DELAY_MS = 3000;
@@ -13,6 +15,7 @@ const UpdatePassword: React.FC = () => {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
   const navigate = useNavigate();
+  const { signOut } = useAuth(); // Get signOut from context
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -30,12 +33,22 @@ const UpdatePassword: React.FC = () => {
 
     setLoading(true);
     try {
-      const { error } = await updateUserPassword(password);
-      if (error) {
-        setError((error as any).message || 'Failed to update password. Please try again.');
+      // Directly call Supabase to update the user's password
+      const { error: updateError } = await supabase.auth.updateUser({ password });
+
+      if (updateError) {
+        setError(updateError.message || 'Failed to update password. Please try again.');
       } else {
         setSuccess(true);
-        setTimeout(() => navigate('/'), REDIRECT_DELAY_MS);
+        // After a delay, sign the user out and redirect to the login page
+        setTimeout(async () => {
+          try {
+            await signOut();
+            navigate('/auth');
+          } catch (signOutError) {
+            setError('Could not sign out. Please manually sign in again.');
+          }
+        }, REDIRECT_DELAY_MS);
       }
     } catch (err: any) {
       setError(err.message || 'An unexpected error occurred');
@@ -46,7 +59,7 @@ const UpdatePassword: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 flex items-center justify-center p-4">
-      <style>
+       <style>
         {`@import url('https://fonts.googleapis.com/css2?family=Titan+One&display=swap');
         .font-titan { font-family: 'Titan One', cursive; font-weight: 400; letter-spacing: 1px; }`}
       </style>
@@ -76,7 +89,7 @@ const UpdatePassword: React.FC = () => {
               <CheckCircle className="w-12 h-12 text-green-500 mx-auto mb-4" />
               <h2 className="text-xl font-semibold text-gray-900 mb-2">Password Updated!</h2>
               <p className="text-gray-600">
-                Your password has been updated successfully. Redirecting you to the dashboard...
+                Your password has been updated successfully. Redirecting you to the sign-in page...
               </p>
             </div>
           ) : (

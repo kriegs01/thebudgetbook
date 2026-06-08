@@ -65,7 +65,8 @@ const AuthErrorPage: React.FC<{ title: string; message: string }> = ({ title, me
 
 // This component is the guard.
 const ProtectedRoute: React.FC = () => {
-  const { user, loading: authLoading } = useAuth();
+  const { user, loading: authLoading, isPasswordRecovery } = useAuth();
+  const location = useLocation();
 
   if (authLoading) {
     return (
@@ -80,6 +81,11 @@ const ProtectedRoute: React.FC = () => {
 
   if (!user) {
     return <Navigate to="/auth" replace />;
+  }
+
+  // If the user is in password recovery mode, ONLY allow access to the update-password page.
+  if (isPasswordRecovery && location.pathname !== '/update-password') {
+      return <Navigate to="/update-password" replace />;
   }
 
   // User is authenticated, show the main app content via the Outlet.
