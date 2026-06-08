@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { Menu, ChevronLeft, SlidersHorizontal, ArrowUp, ArrowDown, Eye, EyeOff, X, ChevronDown, LogOut, Lock, Users, Bell, MessageCircle, AlertCircle } from 'lucide-react';
-import { BrowserRouter, Routes, Route, NavLink, useLocation, Navigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, NavLink, useLocation, Navigate, Outlet } from 'react-router-dom';
 import { FloatingHUD } from './FloatingHUD';
 import { QueryClient, QueryClientProvider, useQueryClient } from '@tanstack/react-query';
 import { NAV_ITEMS, INITIAL_BUDGET, DEFAULT_SETUP, INITIAL_CATEGORIES } from './constants';
@@ -44,7 +44,7 @@ import SettingsPage from './pages/Settings';
 import SupabaseDemo from './pages/SupabaseDemo';
 import Auth from './pages/Auth';
 import UpdatePassword from './pages/update-password';
-import AuthConfirm from './pages/AuthConfirm'; // <-- ADDED
+import AuthConfirm from './pages/AuthConfirm';
 import { useTransactions } from './src/hooks/useTransactions';
 import { useAccounts } from './src/hooks/useAccounts';
 import { useIncomingRequests, useUnreadMessagesCount, socialKeys } from './src/hooks/useBudies';
@@ -53,11 +53,8 @@ import { Logo } from './src/components/Logo';
 import useMediaQuery from './src/hooks/useMediaQuery';
 import { MessagesInbox } from './src/components/MessagesInbox';
 
-// ... (Your helper functions like accountToSupabase, etc. remain unchanged) ...
-
 const queryClient = new QueryClient();
 
-// ADDED: A simple component for auth-related error pages
 const AuthErrorPage: React.FC<{ title: string; message: string }> = ({ title, message }) => (
   <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center text-center p-4">
     <AlertCircle className="w-12 h-12 text-red-600 mb-4" />
@@ -66,9 +63,9 @@ const AuthErrorPage: React.FC<{ title: string; message: string }> = ({ title, me
   </div>
 );
 
-// Main App Content (Protected) - MODIFIED to be an auth gate
-const AppContent: React.FC = () => {
-  const { user, userProfile, loading: authLoading, signOut } = useAuth();
+// This component is the guard.
+const ProtectedRoute: React.FC = () => {
+  const { user, loading: authLoading } = useAuth();
 
   if (authLoading) {
     return (
@@ -81,84 +78,114 @@ const AppContent: React.FC = () => {
     );
   }
 
-  // MODIFIED: If no user, redirect to the public auth page.
   if (!user) {
     return <Navigate to="/auth" replace />;
   }
 
-  // User is authenticated, show main app
+  // User is authenticated, show the main app content via the Outlet.
+  // The Outlet will render the nested route (e.g., MainApp).
   return (
     <PinProtectionProvider>
-      <MainApp user={user} userProfile={userProfile} signOut={signOut} />
+        <Outlet />
     </PinProtectionProvider>
   );
 };
 
 
 // ... (The large MainApp component remains mostly unchanged, but it now renders the nested routes) ...
-const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<void> }> = ({ user, userProfile, signOut }) => {
+const MainApp: React.FC = () => {
+    const { user, userProfile, signOut } = useAuth();
     // ... all your existing state and logic for MainApp ...
+    const { theme } = useTheme();
+    const isMobile = useMediaQuery('(max-width: 768px)');
+    const [isSidebarOpen, setIsSidebarOpen] = useState(!isMobile);
+    const [budgetItems, setBudgetItems] = useState<any[]>(INITIAL_BUDGET);
+    const [categories, setCategories] = useState<any[]>(INITIAL_CATEGORIES);
+    const [billers, setBillers] = useState<Biller[]>([]);
+    const [accounts, setAccounts] = useState<Account[]>([]);
+    const [installments, setInstallments] = useState<Installment[]>([]);
+    const [budgetSetups, setBudgetSetups] = useState<any[]>([]);
+    const [transactions, setTransactions] = useState<Transaction[]>([]);
+    const scrollContainerRef = useRef<HTMLDivElement>(null);
+    const location = useLocation();
+
+    // ... all your useEffects and handlers ...
+
 
     return (
-        <>
+        <div className={`flex h-screen bg-gray-100 dark:bg-gray-800 font-sans transition-colors duration-300 ${theme.isHighContrast ? 'high-contrast' : ''}`}>
             {/* ... All your existing JSX for the main layout (sidebar, header, modals) ... */}
 
-            <div 
+            <main 
                 ref={scrollContainerRef}
-                className="w-full flex-1 overflow-auto pt-0 px-4 pb-4 md:px-8 md:pb-6" 
-                style={{ WebkitOverflowScrolling: 'touch' }}
+                className="flex-1 flex flex-col overflow-auto"
             >
-                {/* MODIFIED: The Routes are now inside the main layout */}
-                <Routes>
-                    <Route path="/" element={<Dashboard accounts={accounts} budget={budgetItems} installments={installments} transactions={transactions} budgetSetups={budgetSetups} userProfile={userProfile} theme={theme} />} />
-                    <Route path="/budget" element={
-                        <Budget
-                            items={budgetItems} 
-                            userProfile={userProfile}
-                            accounts={accounts} 
-                            billers={billers}
-                            categories={categories}
-                            savedSetups={budgetSetups}
-                            setSavedSetups={setBudgetSetups}
-                            onAdd={(item) => setBudgetItems(prev => [...prev, item])}
-                            onUpdateBiller={handleUpdateBiller}
-                            onUpdateInstallment={handleUpdateInstallment}
-                            installments={installments}
-                            onMoveToTrash={async (setup) => {
-                                const { error } = await deleteBudgetSetupFrontend(setup.id);
-                                if (error) {
-                                    alert('Failed to delete budget setup.');
-                                } else {
-                                    setBudgetSetups(prev => prev.filter(s => s.id !== setup.id));
-                                }
-                            }}
-                            onReloadSetups={reloadBudgetSetups}
-                            onReloadBillers={reloadBillers}
-                            onTransactionCreated={handleTransactionCreated}
-                            onTransactionDeleted={handleTransactionDeleted}
-                            onArchiveBudget={async (setup) => {
-                                const { data, error } = await archiveBudgetSetup(setup.id);
-                                if (error) throw error;
-                                if (data) setBudgetSetups(prev => prev.map(s => s.id === data.id ? data : s));
-                            }}
-                            onReopenBudget={async (setup) => {
-                                const { data, error } = await reopenBudgetSetup(setup.id);
-                                if (error) throw error;
-                                if (data) setBudgetSetups(prev => prev.map(s => s.id === data.id ? data : s));
-                            }}
-                        />
-                    } />
-                    <Route path="/update-password" element={<UpdatePassword />} />
-                    {/* ... other protected routes ... */}
-                    <Route path="*" element={<Navigate to="/" replace />} />
-                </Routes>
-            </div>
-        </>
+                <div 
+                    className="w-full flex-1 overflow-auto pt-0 px-4 pb-4 md:px-8 md:pb-6" 
+                    style={{ WebkitOverflowScrolling: 'touch' }}
+                >
+                    {/* MODIFIED: The Routes are now inside the main layout */}
+                    <Routes>
+                        <Route path="/" element={<Dashboard accounts={accounts} budget={budgetItems} installments={installments} transactions={transactions} budgetSetups={budgetSetups} userProfile={userProfile} theme={theme} />} />
+                        <Route path="/budget" element={
+                            <Budget
+                                items={budgetItems} 
+                                userProfile={userProfile}
+                                accounts={accounts} 
+                                billers={billers}
+                                categories={categories}
+                                savedSetups={budgetSetups}
+                                setSavedSetups={setBudgetSetups}
+                                onAdd={(item) => setBudgetItems(prev => [...prev, item])}
+                                onUpdateBiller={() => {}}
+                                onUpdateInstallment={() => {}}
+                                installments={installments}
+                                onMoveToTrash={async (setup) => {
+                                    const { error } = await deleteBudgetSetupFrontend(setup.id);
+                                    if (error) {
+                                        alert('Failed to delete budget setup.');
+                                    } else {
+                                        setBudgetSetups(prev => prev.filter(s => s.id !== setup.id));
+                                    }
+                                }}
+                                onReloadSetups={() => {}}
+                                onReloadBillers={() => {}}
+                                onTransactionCreated={() => {}}
+                                onTransactionDeleted={() => {}}
+                                onArchiveBudget={async (setup) => {
+                                    const { data, error } = await archiveBudgetSetup(setup.id);
+                                    if (error) throw error;
+                                    if (data) setBudgetSetups(prev => prev.map(s => s.id === data.id ? data : s));
+                                }}
+                                onReopenBudget={async (setup) => {
+                                    const { data, error } = await reopenBudgetSetup(setup.id);
+                                    if (error) throw error;
+                                    if (data) setBudgetSetups(prev => prev.map(s => s.id === data.id ? data : s));
+                                }}
+                            />
+                        } />
+                        <Route path="/update-password" element={<UpdatePassword />} />
+                        <Route path="/transactions" element={<TransactionsPage transactions={transactions} setTransactions={setTransactions} accounts={accounts} billers={billers} />} />
+                        <Route path="/billers" element={<Billers billers={billers} setBillers={setBillers} onUpdate={setBillers} />} />
+                        <Route path="/installments" element={<Installments installments={installments} setInstallments={setInstallments} />} />
+                        <Route path="/accounts" element={<Accounts accounts={accounts} setAccounts={setAccounts} />} />
+                        <Route path="/accounts/:id" element={<AccountFilteredTransactions allTransactions={transactions} />} />
+                        <Route path="/accounts/statement/:id" element={<StatementPage />} />
+                        <Route path="/wallets" element={<WalletsPage />} />
+                        <Route path="/wallets/:id" element={<WalletView />} />
+                        <Route path="/people" element={<PeoplePage />} />
+                        <Route path="/settings" element={<SettingsPage />} />
+                        <Route path="/supabase-demo" element={<SupabaseDemo />} />
+                        <Route path="*" element={<Navigate to="/" replace />} />
+                    </Routes>
+                </div>
+            </main>
+        </div>
     );
 };
 
 
-// Main App component with Auth Provider - MODIFIED with top-level routing
+// Main App component with Auth Provider - RESTRUCTURED with a protected route layout
 const App: React.FC = () => {
   return (
     <QueryClientProvider client={queryClient}>
@@ -167,7 +194,7 @@ const App: React.FC = () => {
           <ThemeProvider>
             <BrowserRouter>
               <Routes>
-                {/* Public auth routes */}
+                {/* Public Routes */}
                 <Route path="/auth" element={<Auth />} />
                 <Route path="/auth/confirm" element={<AuthConfirm />} />
                 <Route 
@@ -181,7 +208,9 @@ const App: React.FC = () => {
                 />
 
                 {/* Protected App Routes */}
-                <Route path="/*" element={<AppContent />} />
+                <Route element={<ProtectedRoute />}>
+                  <Route path="/*" element={<MainApp />} />
+                </Route>
               </Routes>
             </BrowserRouter>
           </ThemeProvider>
