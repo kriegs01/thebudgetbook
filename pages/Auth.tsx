@@ -1,8 +1,8 @@
 
 import React, { useState } from 'react';
 import { Lock, Mail, AlertCircle, Loader, ArrowLeft } from 'lucide-react';
-import { useAuth } from '../src/contexts/AuthContext.tsx';
-import { Logo } from '../src/components/Logo.tsx'; // Import the logo
+import { useAuth } from '../src/contexts/AuthContext';
+import { Logo } from '../src/components/Logo'; // Import the logo
 
 const PasswordShapes = ({ password }) => {
   const colors = ['#4ECDC4', '#FF6B6B', '#FBBF24']; // Teal, Magenta, Yellow
