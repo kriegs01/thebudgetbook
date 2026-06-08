@@ -97,7 +97,6 @@ const ProtectedRoute: React.FC = () => {
 
 const MainApp: React.FC = () => {
     const { user, userProfile, signOut } = useAuth();
-    const { theme } = useTheme();
     const isMobile = useMediaQuery('(max-width: 768px)');
     const [isSidebarOpen, setIsSidebarOpen] = useState(!isMobile);
     const [budgetItems, setBudgetItems] = useState<any[]>(INITIAL_BUDGET);
@@ -112,7 +111,7 @@ const MainApp: React.FC = () => {
 
 
     return (
-        <div className={`flex h-screen bg-gray-100 dark:bg-gray-800 font-sans transition-colors duration-300 ${theme.isHighContrast ? 'high-contrast' : ''}`}>
+        <div className="flex h-screen bg-gray-100 dark:bg-gray-800 font-sans transition-colors duration-300">
             <main 
                 ref={scrollContainerRef}
                 className="flex-1 flex flex-col overflow-auto"
@@ -122,7 +121,7 @@ const MainApp: React.FC = () => {
                     style={{ WebkitOverflowScrolling: 'touch' }}
                 >
                     <Routes>
-                        <Route path="/" element={<Dashboard accounts={accounts} budget={budgetItems} installments={installments} transactions={transactions} budgetSetups={budgetSetups} userProfile={userProfile} theme={theme} />} />
+                        <Route path="/" element={<Dashboard accounts={accounts} budget={budgetItems} installments={installments} transactions={transactions} budgetSetups={budgetSetups} userProfile={userProfile} />} />
                         <Route path="/budget" element={
                             <Budget
                                 items={budgetItems} 
