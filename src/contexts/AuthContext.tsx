@@ -77,23 +77,27 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   useEffect(() => {
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       if (_event === 'PASSWORD_RECOVERY') {
         setIsPasswordRecovery(true);
       }
       setSession(session);
       setUser(session?.user ?? null);
+      setLoading(false);
+
       if (session?.user) {
-        await loadUserProfile(session.user.id);
-        if (_event === 'SIGNED_IN') {
-          await migrateExistingData(session.user.id);
-        }
+        // Avoid awaiting extra Supabase calls directly inside the auth callback.
+        setTimeout(async () => {
+          await loadUserProfile(session.user.id);
+          if (_event === 'SIGNED_IN') {
+            await migrateExistingData(session.user.id);
+          }
+        }, 0);
       } else {
         setUserProfile(null);
         localStorage.removeItem('pin_protection');
         sessionStorage.removeItem('pin_tab_session');
       }
-      setLoading(false);
     });
 
     return () => {
