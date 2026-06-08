@@ -1,7 +1,7 @@
 
 import React, { useState } from 'react';
 import { Lock, Mail, AlertCircle, Loader, ArrowLeft } from 'lucide-react';
-import { useAuth } from '../src/contexts/AuthContext';
+import { useAuth } from '../src/contexts/AuthContext.tsx';
 import { Logo } from '../src/components/Logo.tsx'; // Import the logo
 
 const PasswordShapes = ({ password }) => {
