@@ -77,70 +77,27 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   useEffect(() => {
-    setLoading(true);
-
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (_event, session) => {
-        console.log('[Auth] State changed:', _event);
-        clearAuthCache();
-        setSession(session);
-        setUser(session?.user ?? null);
-        
-        if (_event === 'PASSWORD_RECOVERY') {
-            setIsPasswordRecovery(true);
-        } else if (_event === 'USER_UPDATED' || _event === 'SIGNED_IN') {
-            setIsPasswordRecovery(false);
-        }
-
-        if (session?.user) {
-          await loadUserProfile(session.user.id);
-           if (_event === 'SIGNED_IN') {
-             await migrateExistingData(session.user.id);
-           }
-        } else {
-          setUserProfile(null);
-          localStorage.removeItem('pin_protection');
-          sessionStorage.removeItem('pin_tab_session');
-        }
-        
-        setLoading(false);
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
+      if (_event === 'PASSWORD_RECOVERY') {
+        setIsPasswordRecovery(true);
       }
-    );
-
-    let mounted = true;
-    const handleVisibilityChange = async () => {
-      if (document.visibilityState === 'visible') {
-        const { data: { session } } = await supabase.auth.getSession();
-        if (mounted && !session) {
-          clearAuthCache();
-          setSession(null);
-          setUser(null);
-          setUserProfile(null);
-          localStorage.removeItem('pin_protection');
-          sessionStorage.removeItem('pin_tab_session');
+      setSession(session);
+      setUser(session?.user ?? null);
+      if (session?.user) {
+        await loadUserProfile(session.user.id);
+        if (_event === 'SIGNED_IN') {
+          await migrateExistingData(session.user.id);
         }
-      }
-    };
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-
-    const handleIdleLogout = async () => {
-      console.log('[Auth] Idle timeout reached. Logging out.');
-      localStorage.removeItem('pin_protection');
-      sessionStorage.removeItem('pin_tab_session');
-      const { error } = await supabase.auth.signOut();
-      if (!error) {
-        setSession(null);
-        setUser(null);
+      } else {
         setUserProfile(null);
+        localStorage.removeItem('pin_protection');
+        sessionStorage.removeItem('pin_tab_session');
       }
-    };
-    window.addEventListener('app_idle_logout', handleIdleLogout);
+      setLoading(false);
+    });
 
     return () => {
-      mounted = false;
       subscription.unsubscribe();
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
-      window.removeEventListener('app_idle_logout', handleIdleLogout);
     };
   }, []);
 
@@ -228,5 +185,5 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     refreshProfile,
   };
 
-  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+  return <AuthContext.Provider value={value}>{children}</AuthContext._Provider>;
 };

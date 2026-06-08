@@ -83,13 +83,10 @@ const ProtectedRoute: React.FC = () => {
     return <Navigate to="/auth" replace />;
   }
 
-  // If the user is in password recovery mode, ONLY allow access to the update-password page.
   if (isPasswordRecovery && location.pathname !== '/update-password') {
       return <Navigate to="/update-password" replace />;
   }
 
-  // User is authenticated, show the main app content via the Outlet.
-  // The Outlet will render the nested route (e.g., MainApp).
   return (
     <PinProtectionProvider>
         <Outlet />
@@ -98,10 +95,8 @@ const ProtectedRoute: React.FC = () => {
 };
 
 
-// ... (The large MainApp component remains mostly unchanged, but it now renders the nested routes) ...
 const MainApp: React.FC = () => {
     const { user, userProfile, signOut } = useAuth();
-    // ... all your existing state and logic for MainApp ...
     const { theme } = useTheme();
     const isMobile = useMediaQuery('(max-width: 768px)');
     const [isSidebarOpen, setIsSidebarOpen] = useState(!isMobile);
@@ -115,13 +110,9 @@ const MainApp: React.FC = () => {
     const scrollContainerRef = useRef<HTMLDivElement>(null);
     const location = useLocation();
 
-    // ... all your useEffects and handlers ...
-
 
     return (
         <div className={`flex h-screen bg-gray-100 dark:bg-gray-800 font-sans transition-colors duration-300 ${theme.isHighContrast ? 'high-contrast' : ''}`}>
-            {/* ... All your existing JSX for the main layout (sidebar, header, modals) ... */}
-
             <main 
                 ref={scrollContainerRef}
                 className="flex-1 flex flex-col overflow-auto"
@@ -130,7 +121,6 @@ const MainApp: React.FC = () => {
                     className="w-full flex-1 overflow-auto pt-0 px-4 pb-4 md:px-8 md:pb-6" 
                     style={{ WebkitOverflowScrolling: 'touch' }}
                 >
-                    {/* MODIFIED: The Routes are now inside the main layout */}
                     <Routes>
                         <Route path="/" element={<Dashboard accounts={accounts} budget={budgetItems} installments={installments} transactions={transactions} budgetSetups={budgetSetups} userProfile={userProfile} theme={theme} />} />
                         <Route path="/budget" element={
@@ -170,7 +160,6 @@ const MainApp: React.FC = () => {
                                 }}
                             />
                         } />
-                        <Route path="/update-password" element={<UpdatePassword />} />
                         <Route path="/transactions" element={<TransactionsPage transactions={transactions} setTransactions={setTransactions} accounts={accounts} billers={billers} />} />
                         <Route path="/billers" element={<Billers billers={billers} setBillers={setBillers} onUpdate={setBillers} />} />
                         <Route path="/installments" element={<Installments installments={installments} setInstallments={setInstallments} />} />
@@ -203,6 +192,7 @@ const App: React.FC = () => {
                 {/* Public Routes */}
                 <Route path="/auth" element={<Auth />} />
                 <Route path="/auth/confirm" element={<AuthConfirm />} />
+                <Route path="/update-password" element={<UpdatePassword />} />
                 <Route 
                   path="/auth/auth-code-error" 
                   element={

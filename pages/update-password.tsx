@@ -1,9 +1,9 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Lock, AlertCircle, Loader, CheckCircle } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { supabase } from '../src/utils/supabaseClient'; // Direct import for updateUser
-import { useAuth } from '../src/contexts/AuthContext'; // Import useAuth for signOut
+import { supabase } from '../src/utils/supabaseClient';
+import { useAuth } from '../src/contexts/AuthContext';
 
 const MIN_PASSWORD_LENGTH = 6;
 const REDIRECT_DELAY_MS = 3000;
@@ -15,7 +15,18 @@ const UpdatePassword: React.FC = () => {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
   const navigate = useNavigate();
-  const { signOut } = useAuth(); // Get signOut from context
+  const { session, loading: authLoading, signOut } = useAuth();
+
+  useEffect(() => {
+    // This effect runs once the initial authentication check is complete.
+    if (!authLoading) {
+      // If the check is done and there is no session, the user didn't get here
+      // via a valid recovery link. Redirect them to the login page.
+      if (!session) {
+        navigate('/auth');
+      }
+    }
+  }, [authLoading, session, navigate]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -33,14 +44,12 @@ const UpdatePassword: React.FC = () => {
 
     setLoading(true);
     try {
-      // Directly call Supabase to update the user's password
       const { error: updateError } = await supabase.auth.updateUser({ password });
 
       if (updateError) {
         setError(updateError.message || 'Failed to update password. Please try again.');
       } else {
         setSuccess(true);
-        // After a delay, sign the user out and redirect to the login page
         setTimeout(async () => {
           try {
             await signOut();
@@ -57,14 +66,23 @@ const UpdatePassword: React.FC = () => {
     }
   };
 
+  // While the AuthContext is determining the session, show a loading indicator.
+  // This prevents the form from flashing on screen for users who should be redirected.
+  if (authLoading || !session) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <Loader className="w-8 h-8 text-blue-600 animate-spin" />
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 flex items-center justify-center p-4">
-       <style>
+      <style>
         {`@import url('https://fonts.googleapis.com/css2?family=Titan+One&display=swap');
         .font-titan { font-family: 'Titan One', cursive; font-weight: 400; letter-spacing: 1px; }`}
       </style>
       <div className="max-w-md w-full">
-        {/* Logo/Header */}
         <div className="text-center mb-8">
           <div className="inline-flex items-center justify-center w-16 h-16 bg-blue-600 rounded-2xl mb-4">
             <Lock className="w-8 h-8 text-white" />
@@ -73,9 +91,7 @@ const UpdatePassword: React.FC = () => {
           <p className="text-gray-600">Set your new password</p>
         </div>
 
-        {/* Card */}
         <div className="bg-white rounded-2xl shadow-xl p-8">
-          {/* Error Message */}
           {error && (
             <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg flex items-start">
               <AlertCircle className="w-5 h-5 text-red-600 mr-2 flex-shrink-0 mt-0.5" />
@@ -83,7 +99,6 @@ const UpdatePassword: React.FC = () => {
             </div>
           )}
 
-          {/* Success Message */}
           {success ? (
             <div className="text-center">
               <CheckCircle className="w-12 h-12 text-green-500 mx-auto mb-4" />
@@ -151,7 +166,6 @@ const UpdatePassword: React.FC = () => {
           )}
         </div>
 
-        {/* Footer */}
         <div className="mt-8 text-center text-sm text-gray-500">
           <p>Your personal finance data is secure and private</p>
         </div>
