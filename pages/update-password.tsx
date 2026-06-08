@@ -22,11 +22,11 @@ const UpdatePassword: React.FC = () => {
     if (!authLoading) {
       // If the check is done and there is no session, the user didn't get here
       // via a valid recovery link. Redirect them to the login page.
-      if (!session) {
+      if (!session && !success) {
         navigate('/auth');
       }
     }
-  }, [authLoading, session, navigate]);
+  }, [authLoading, session, success, navigate]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -51,11 +51,11 @@ const UpdatePassword: React.FC = () => {
       } else {
         setSuccess(true);
         setTimeout(async () => {
+          navigate('/auth', { replace: true });
           try {
             await signOut();
-            navigate('/auth');
           } catch (signOutError) {
-            setError('Could not sign out. Please manually sign in again.');
+            console.error('[UpdatePassword] Post-reset sign out error:', signOutError);
           }
         }, REDIRECT_DELAY_MS);
       }
@@ -68,7 +68,7 @@ const UpdatePassword: React.FC = () => {
 
   // While the AuthContext is determining the session, show a loading indicator.
   // This prevents the form from flashing on screen for users who should be redirected.
-  if (authLoading || !session) {
+  if ((authLoading || !session) && !success) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
         <Loader className="w-8 h-8 text-blue-600 animate-spin" />
