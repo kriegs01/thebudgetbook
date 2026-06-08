@@ -80,6 +80,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       if (_event === 'PASSWORD_RECOVERY') {
         setIsPasswordRecovery(true);
+      } else if (!session) {
+        setIsPasswordRecovery(false);
+      } else if (_event === 'SIGNED_IN') {
+        setIsPasswordRecovery(false);
       }
       setSession(session);
       setUser(session?.user ?? null);
