@@ -77,17 +77,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      setUser(session?.user ?? null);
-      setLoading(false);
-      if (session?.user) {
-        loadUserProfile(session.user.id);
-      }
-    }).catch((error) => {
-      console.error('[Auth] Error checking session:', error);
-      setLoading(false);
-    });
+    setLoading(true);
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (_event, session) => {
@@ -95,24 +85,25 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         clearAuthCache();
         setSession(session);
         setUser(session?.user ?? null);
-        setLoading(false);
-
+        
         if (_event === 'PASSWORD_RECOVERY') {
             setIsPasswordRecovery(true);
-        } else if (_event === 'USER_UPDATED') {
+        } else if (_event === 'USER_UPDATED' || _event === 'SIGNED_IN') {
             setIsPasswordRecovery(false);
         }
 
         if (session?.user) {
-          loadUserProfile(session.user.id);
+          await loadUserProfile(session.user.id);
+           if (_event === 'SIGNED_IN') {
+             await migrateExistingData(session.user.id);
+           }
         } else {
           setUserProfile(null);
           localStorage.removeItem('pin_protection');
           sessionStorage.removeItem('pin_tab_session');
         }
-        if (_event === 'SIGNED_IN' && session?.user) {
-          await migrateExistingData(session.user.id);
-        }
+        
+        setLoading(false);
       }
     );
 
