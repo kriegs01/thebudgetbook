@@ -16,10 +16,13 @@ export const searchUsers = async (query: string) => {
   const userId = await getCurrentUserId();
   if (!userId) return { data: [], error: null };
 
+  const cleaned = query.trim().replace(/^@/, '');
+  if (!cleaned) return { data: [], error: null };
+
   const { data, error } = await supabase
     .from('user_profiles')
     .select('*')
-    .or(`username.ilike.%${query}%,email.ilike.%${query}%`)
+    .or(`username.ilike.%${cleaned}%,email.ilike.%${cleaned}%`)
     .neq('user_id', userId) // Exclude self
     .limit(10);
 
@@ -37,36 +40,16 @@ export const getFriendships = async () => {
 
   const { data, error } = await supabase
     .from('friendships')
-    .select(`
-      id,
-      user_id,
-      friend_id,
-      status,
-      created_at,
-      user_profile:user_id ( first_name, last_name ),
-      friend_profile:friend_id ( first_name, last_name )
-    `)
+    .select('id, user_id, friend_id, status, created_at')
     .or(`user_id.eq.${userId},friend_id.eq.${userId}`)
-    .eq('status', 'accepted');
+    .in('status', ['accepted', 'pending']);
 
   if (error) {
     console.error('Error fetching friendships:', error);
     return { data: null, error };
   }
 
-  // Normalize data to show the other person's profile
-  const friends = data.map(f => {
-    const isUserInitiator = f.user_id === userId;
-    return {
-      id: f.id,
-      friend_id: isUserInitiator ? f.friend_id : f.user_id,
-      status: f.status,
-      created_at: f.created_at,
-      profile: isUserInitiator ? f.friend_profile : f.user_profile,
-    };
-  });
-
-  return { data: friends, error: null };
+  return { data: data || [], error: null };
 };
 
 export const getIncomingRequests = async () => {
