@@ -823,7 +823,7 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
     sourceType: 'biller' | 'installment',
     sourceId: string
   ): boolean => {
-    const schedule = getPaymentSchedule('biller', sourceId);
+    const schedule = getPaymentSchedule(sourceType, sourceId);
     if (!schedule) return false;
     return schedule.status === 'paid';
   }, [getPaymentSchedule]);
@@ -832,7 +832,7 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
     sourceType: 'biller' | 'installment',
     sourceId: string
   ): boolean => {
-    const schedule = getPaymentSchedule('biller', sourceId);
+    const schedule = getPaymentSchedule(sourceType, sourceId);
     if (!schedule) return false;
     return schedule.status === 'partial' && schedule.amount_paid > 0;
   }, [getPaymentSchedule]);
