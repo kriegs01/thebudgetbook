@@ -13,6 +13,7 @@ import { combineDateWithCurrentTime, getTodayIso, getFirstDayOfCurrentYearIso, g
 import { useTheme } from '../src/contexts/ThemeContext';
 import useMediaQuery from '../src/hooks/useMediaQuery';
 import { TransactionList } from '../src/components/TransactionList';
+import { PageHeader } from '../src/components/PageHeader';
 import type { Transaction, AccountOption } from '../types';
 
 const FILTER_MIN_DATE = '2025-01-01';
@@ -38,72 +39,6 @@ type ContactOption = {
   isLinked: boolean;
   isBudeeOnly: boolean;
   budeeProfile?: SupabaseUserProfile;
-};
-
-/** 
- * PageHeader component mirroring Dashboard style
- */
-const PageHeader: React.FC<{
-  title: string;
-  subtitle: string;
-  icon?: React.ReactNode;
-  actions?: React.ReactNode;
-  backButton?: React.ReactNode;
-}> = ({ title, subtitle, icon, actions, backButton }) => {
-  const { getAccentClasses } = useTheme();
-  const isMobile = useMediaQuery('(max-width: 767px)');
-  const titleContainerRef = useRef<HTMLDivElement>(null);
-  const [highlightWidth, setHighlightWidth] = useState(0);
-
-  useEffect(() => {
-    const calculateWidth = () => {
-      if (titleContainerRef.current) {
-        setHighlightWidth(titleContainerRef.current.offsetWidth);
-      }
-    };
-
-    calculateWidth();
-    // Recalculate on resize
-    window.addEventListener('resize', calculateWidth);
-    return () => window.removeEventListener('resize', calculateWidth);
-  }, [title]); // Rerun if title changes
-
-  return (
-    <header className={`${isMobile ? 'pt-10' : 'pt-12'} mb-12 flex flex-row items-center justify-between gap-6`}>
-      <div className="flex-1">
-        {/* Title container for positioning the highlight */}
-        <div className="relative inline-block">
-          <div ref={titleContainerRef} className="flex items-center gap-4">
-            {icon && <div className="z-10 shrink-0">{icon}</div>}
-            <h1 className="text-[clamp(2rem,7.5vw,3.75rem)] font-[950] uppercase tracking-tighter leading-none relative z-10 text-black dark:text-white transition-colors duration-300">
-              {title}
-            </h1>
-          </div>
-          {/* Dynamic highlight */}
-          {highlightWidth > 0 && (
-            <div
-              className={`absolute bottom-1 left-0 h-5 ${getAccentClasses('bg')} opacity-40 -z-0 -rotate-1 transition-colors duration-300`}
-              style={{ width: `${highlightWidth}px` }}
-            />
-          )}
-        </div>
-
-        {/* Subtitle container */}
-        <div className="flex items-center gap-3 mt-1 ml-1">
-          {backButton ? (
-            <div className="mt-6">{backButton}</div>
-          ) : (
-            <p className="text-[clamp(1rem,3vw,1.25rem)] font-bold italic text-black/50 dark:text-gray-400 transition-colors duration-300">
-              {subtitle}
-            </p>
-          )}
-        </div>
-
-        <div className={`h-2 w-32 mt-2 bg-black dark:bg-white/20 transition-colors duration-300`} />
-      </div>
-      {actions && <div className="flex items-center justify-end gap-3">{actions}</div>}
-    </header>
-  );
 };
 
 const ContactDropdown = ({ value, onChange, contacts, placeholder }: { value: string, onChange: (val: string) => void, contacts: ContactOption[], placeholder: string }) => {
