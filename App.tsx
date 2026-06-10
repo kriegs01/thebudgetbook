@@ -172,10 +172,17 @@ const formatTransaction = (supabaseTransaction: SupabaseTransaction): Transactio
 
 const queryClient = new QueryClient();
 
-// Main App Content (Protected)
-const AppContent: React.FC = () => {
-  const { user, userProfile, loading: authLoading, signOut, refreshProfile } = useAuth();
-  const queryClient = useQueryClient();
+const AuthErrorPage: React.FC<{ title: string; message: string }> = ({ title, message }) => (
+  <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center text-center p-4">
+    <AlertCircle className="w-12 h-12 text-red-600 mb-4" />
+    <h1 className="text-2xl font-semibold text-red-800">{title}</h1>
+    <p className="text-gray-600 mt-2">{message}</p>
+  </div>
+);
+
+const ProtectedRoute: React.FC = () => {
+  const { user, loading: authLoading, isPasswordRecovery } = useAuth();
+  const location = useLocation();
 
   if (authLoading) {
     return (
