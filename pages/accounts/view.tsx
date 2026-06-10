@@ -686,7 +686,7 @@ const AccountFilteredTransactions: React.FC<AccountFilteredTransactionsProps> = 
     return Array.from(new Set(names));
   }, [people, supabaseTransactions]);
 
-  const retroActionButtonBase = "inline-flex items-center justify-center gap-2 rounded-2xl border-[3px] border-black px-4 py-3 font-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] transition-all hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none";
+  const retroActionButtonBase = "inline-flex items-center justify-center gap-2 rounded-2xl border-[3px] border-black px-3 py-2.5 text-xs font-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] transition-all hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none";
   const modalFieldClass = "w-full rounded-2xl border-[3px] border-black bg-[#fff8ea] p-4 font-bold text-gray-900 outline-none transition-colors dark:bg-gray-800 dark:text-gray-100";
   const retroModalShell = "w-full max-w-md rounded-[2rem] border-[4px] border-black bg-[#fff7e8] p-6 sm:p-8 shadow-[10px_10px_0px_0px_rgba(0,0,0,1)] transition-colors dark:bg-gray-900";
   const retroWideModalShell = "w-full max-w-2xl rounded-[2rem] border-[4px] border-black bg-[#fff7e8] shadow-[10px_10px_0px_0px_rgba(0,0,0,1)] transition-colors dark:bg-gray-900";
@@ -695,7 +695,8 @@ const AccountFilteredTransactions: React.FC<AccountFilteredTransactionsProps> = 
   const retroPanelClass = "rounded-[1.5rem] border-[3px] border-black bg-white p-4 transition-colors dark:bg-gray-950";
   const retroGhostButton = "rounded-2xl border-[3px] border-black bg-white px-4 py-3 font-black text-gray-700 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] transition-all hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none dark:bg-gray-800 dark:text-gray-100";
   const retroCloseButton = "absolute right-5 top-5 inline-flex h-11 w-11 items-center justify-center rounded-2xl border-[3px] border-black bg-white text-gray-700 shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] transition-all hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none dark:bg-gray-800 dark:text-gray-100";
-  const mobileSquircleActionButton = "inline-flex h-14 w-14 items-center justify-center rounded-[1.35rem] border-[3px] border-black text-white shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] transition-all hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none";
+  const mobileSquircleActionButton = "inline-flex h-[clamp(2.75rem,12vw,3.15rem)] w-[clamp(2.75rem,12vw,3.15rem)] shrink-0 items-center justify-center rounded-[1.15rem] border-[3px] border-black text-white shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] transition-all hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none";
+  const mobileActionIconClass = "h-[clamp(0.95rem,4vw,1.15rem)] w-[clamp(0.95rem,4vw,1.15rem)]";
   const mobileCardIconButton = "inline-flex h-11 w-11 items-center justify-center rounded-[1.1rem] border-[3px] border-black bg-white text-gray-800 shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] transition-all hover:translate-x-[1px] hover:translate-y-[1px] hover:shadow-none dark:bg-gray-900 dark:text-gray-100";
 
   return (
@@ -716,14 +717,6 @@ const AccountFilteredTransactions: React.FC<AccountFilteredTransactionsProps> = 
           ) : undefined}
         />
 
-        {isMobile && (
-          <div className="mb-5 flex justify-start">
-            <Link to="/accounts" className="inline-flex h-12 w-12 items-center justify-center rounded-2xl border-[3px] border-black bg-white text-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] transition-all hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none dark:bg-gray-900 dark:text-white">
-              <ArrowLeft className="w-5 h-5" />
-            </Link>
-          </div>
-        )}
-
         {/* Success/Error Message */}
         {message && (
           <div className={`mb-4 rounded-2xl border-[3px] border-black p-4 font-bold shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] transition-colors ${message.type === 'success' ? 'bg-green-100 dark:bg-green-900/20 text-green-800 dark:text-green-300' : 'bg-red-100 dark:bg-red-900/20 text-red-800 dark:text-red-300'}`}>
@@ -732,7 +725,13 @@ const AccountFilteredTransactions: React.FC<AccountFilteredTransactionsProps> = 
         )}
 
         {/* ── Filter Bar ──────────────────────────────────────────────────── */}
-        <div className="mb-5 rounded-[1.8rem] border-[4px] border-black bg-white p-4 shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] transition-colors dark:bg-gray-900">
+        <div className={`${isMobile ? 'mb-5 flex items-start gap-3' : 'mb-5'}`}>
+          {isMobile && (
+            <Link to="/accounts" className="inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border-[3px] border-black bg-white text-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] transition-all hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none dark:bg-gray-900 dark:text-white">
+              <ArrowLeft className="w-5 h-5" />
+            </Link>
+          )}
+        <div className="min-w-0 flex-1 rounded-[1.8rem] border-[4px] border-black bg-white p-4 shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] transition-colors dark:bg-gray-900">
           <button
             type="button"
             onClick={() => {
@@ -747,10 +746,10 @@ const AccountFilteredTransactions: React.FC<AccountFilteredTransactionsProps> = 
               <div className="inline-flex h-11 w-11 items-center justify-center rounded-[1.2rem] border-[3px] border-black bg-yellow-200 text-black shadow-[3px_3px_0px_0px_rgba(0,0,0,1)]">
                 <Filter className="h-4 w-4" />
               </div>
-              <div className={isMobile ? 'text-center' : ''}>
-                <p className="text-sm font-black uppercase tracking-[0.18em] text-gray-800 dark:text-gray-100">Filters</p>
-                <p className="text-xs font-bold text-gray-500 dark:text-gray-400">Date range and transaction types</p>
-              </div>
+              <p className={`text-sm font-black tracking-[0.08em] text-gray-800 dark:text-gray-100 ${isMobile ? 'text-center leading-tight' : 'leading-none'}`}>
+                <span className="uppercase tracking-[0.18em]">Filters:</span>{' '}
+                <span className="text-xs font-bold uppercase tracking-[0.12em] text-gray-500 dark:text-gray-400">Date Range And Transaction Types</span>
+              </p>
             </div>
             {isMobile && (
               <span className="inline-flex h-11 w-11 items-center justify-center rounded-[1.2rem] border-[3px] border-black bg-white text-black shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] dark:bg-gray-800 dark:text-white">
@@ -817,6 +816,7 @@ const AccountFilteredTransactions: React.FC<AccountFilteredTransactionsProps> = 
           </div>
           )}
         </div>
+        </div>
 
         {/* ── Dashboard ───────────────────────────────────────────────────── */}
         <div className={`mb-5 grid gap-4 ${isMobile ? 'grid-cols-2' : 'grid-cols-3'}`}>
@@ -857,14 +857,15 @@ const AccountFilteredTransactions: React.FC<AccountFilteredTransactionsProps> = 
 
         <div className="overflow-hidden rounded-[1.8rem] border-[4px] border-black bg-white shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] transition-colors dark:bg-gray-900">
           {account?.type === 'Debit' && (
-            <div className={`border-b-[4px] border-black px-4 py-4 ${isMobile ? 'flex flex-wrap justify-center gap-2' : 'flex items-center justify-end gap-2'}`}>
+            <div className={`border-b-[4px] border-black px-4 py-4 ${isMobile ? 'overflow-x-auto' : ''}`}>
+              <div className={`${isMobile ? 'flex min-w-max items-center justify-center gap-2' : 'flex items-center justify-end gap-2'}`}>
                   <button
                     onClick={() => setShowWithdrawModal(true)}
                     title="Withdraw"
                     aria-label="Record withdrawal"
                     className={isMobile ? `${mobileSquircleActionButton} bg-red-500` : `${retroActionButtonBase} bg-red-500 text-white`}
                   >
-                    <ArrowUpFromLine className="w-4 h-4" />
+                    <ArrowUpFromLine className={isMobile ? mobileActionIconClass : 'w-4 h-4'} />
                     {!isMobile && <span>Withdraw</span>}
                   </button>
                   <button
@@ -873,7 +874,7 @@ const AccountFilteredTransactions: React.FC<AccountFilteredTransactionsProps> = 
                     aria-label="Send or transfer money"
                     className={isMobile ? `${mobileSquircleActionButton} bg-blue-500` : `${retroActionButtonBase} bg-blue-500 text-white`}
                   >
-                    <Send className="w-4 h-4 ml-0.5" />
+                    <Send className={isMobile ? `${mobileActionIconClass} ml-0.5` : 'w-4 h-4 ml-0.5'} />
                     {!isMobile && <span>Transfer</span>}
                   </button>
                   <button
@@ -882,7 +883,7 @@ const AccountFilteredTransactions: React.FC<AccountFilteredTransactionsProps> = 
                     aria-label="Record loan"
                     className={isMobile ? `${mobileSquircleActionButton} bg-orange-500` : `${retroActionButtonBase} bg-orange-500 text-white`}
                   >
-                    <Banknote className="w-4 h-4" />
+                    <Banknote className={isMobile ? mobileActionIconClass : 'w-4 h-4'} />
                     {!isMobile && <span>Loan</span>}
                   </button>
                   <button
@@ -891,7 +892,7 @@ const AccountFilteredTransactions: React.FC<AccountFilteredTransactionsProps> = 
                     aria-label="Record cash in"
                     className={isMobile ? `${mobileSquircleActionButton} bg-green-500` : `${retroActionButtonBase} bg-green-500 text-white`}
                   >
-                    <ArrowDownToLine className="w-4 h-4" />
+                    <ArrowDownToLine className={isMobile ? mobileActionIconClass : 'w-4 h-4'} />
                     {!isMobile && <span>Cash-in</span>}
                   </button>
                   <button
@@ -900,7 +901,7 @@ const AccountFilteredTransactions: React.FC<AccountFilteredTransactionsProps> = 
                     aria-label={isSelectMode ? 'Cancel selection' : 'Select transactions'}
                     className={isMobile ? `${mobileSquircleActionButton} ${isSelectMode ? 'bg-black' : getAccentClasses('bg')}` : `${retroActionButtonBase} ${isSelectMode ? 'bg-black text-white' : `${getAccentClasses('bg')} text-white`}`}
                   >
-                    {isSelectMode ? <CheckSquare className="w-4 h-4" /> : <Square className="w-4 h-4" />}
+                    {isSelectMode ? <CheckSquare className={isMobile ? mobileActionIconClass : 'w-4 h-4'} /> : <Square className={isMobile ? mobileActionIconClass : 'w-4 h-4'} />}
                     {!isMobile && <span>Select</span>}
                   </button>
                   {isSelectMode && selectedIds.size > 0 && (
@@ -910,21 +911,23 @@ const AccountFilteredTransactions: React.FC<AccountFilteredTransactionsProps> = 
                       aria-label="Delete selected transactions"
                       className={isMobile ? `${mobileSquircleActionButton} bg-red-600` : `${retroActionButtonBase} bg-red-600 text-white`}
                     >
-                      <Trash2 className="w-4 h-4" />
+                      <Trash2 className={isMobile ? mobileActionIconClass : 'w-4 h-4'} />
                       {!isMobile && <span>{selectedIds.size}</span>}
                     </button>
                   )}
+              </div>
             </div>
           )}
           {account?.type === 'Credit' && (
-            <div className={`border-b-[4px] border-black px-4 py-4 ${isMobile ? 'flex flex-wrap justify-center gap-2' : 'flex items-center justify-end gap-2'}`}>
+            <div className={`border-b-[4px] border-black px-4 py-4 ${isMobile ? 'overflow-x-auto' : ''}`}>
+              <div className={`${isMobile ? 'flex min-w-max items-center justify-center gap-2' : 'flex items-center justify-end gap-2'}`}>
               <button
                 onClick={() => setShowCardPaymentModal(true)}
                 title="Make Credit Card Payment"
                 aria-label="Make credit card payment"
                 className={isMobile ? `${mobileSquircleActionButton} bg-teal-500` : `${retroActionButtonBase} bg-teal-500 text-white`}
               >
-                <CreditCard className="w-4 h-4" />
+                <CreditCard className={isMobile ? mobileActionIconClass : 'w-4 h-4'} />
                 {!isMobile && <span>Payment</span>}
               </button>
               <button
@@ -933,7 +936,7 @@ const AccountFilteredTransactions: React.FC<AccountFilteredTransactionsProps> = 
                 aria-label={isSelectMode ? 'Cancel selection' : 'Select transactions'}
                 className={isMobile ? `${mobileSquircleActionButton} ${isSelectMode ? 'bg-black' : getAccentClasses('bg')}` : `${retroActionButtonBase} ${isSelectMode ? 'bg-black text-white' : `${getAccentClasses('bg')} text-white`}`}
               >
-                {isSelectMode ? <CheckSquare className="w-4 h-4" /> : <Square className="w-4 h-4" />}
+                {isSelectMode ? <CheckSquare className={isMobile ? mobileActionIconClass : 'w-4 h-4'} /> : <Square className={isMobile ? mobileActionIconClass : 'w-4 h-4'} />}
                 {!isMobile && <span>Select</span>}
               </button>
               {isSelectMode && selectedIds.size > 0 && (
@@ -943,10 +946,11 @@ const AccountFilteredTransactions: React.FC<AccountFilteredTransactionsProps> = 
                   aria-label="Delete selected transactions"
                   className={isMobile ? `${mobileSquircleActionButton} bg-red-600` : `${retroActionButtonBase} bg-red-600 text-white`}
                 >
-                  <Trash2 className="w-4 h-4" />
+                  <Trash2 className={isMobile ? mobileActionIconClass : 'w-4 h-4'} />
                   {!isMobile && <span>{selectedIds.size}</span>}
                 </button>
               )}
+              </div>
             </div>
           )}
           <div className="border-b-[4px] border-black px-6 py-4 flex items-center justify-between transition-colors">

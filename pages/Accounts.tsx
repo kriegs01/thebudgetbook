@@ -228,12 +228,12 @@ const Accounts: React.FC<AccountsProps> = ({ accounts, onAdd, onDelete, onEdit, 
     return (
       <div
         key={acc.id}
-        className={`${cardSurface} relative flex h-full min-h-[22rem] flex-col overflow-hidden rounded-[2rem] border-[4px] border-black p-5 shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] transition-all duration-200 hover:-translate-y-1 hover:shadow-[12px_12px_0px_0px_rgba(0,0,0,1)]`}
+        className={`${cardSurface} relative mx-auto flex h-full w-full aspect-[1.92/1] max-w-[24rem] flex-col overflow-hidden rounded-[2rem] border-[4px] border-black p-4 shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] transition-all duration-200 hover:-translate-y-1 hover:shadow-[12px_12px_0px_0px_rgba(0,0,0,1)] sm:max-w-none sm:p-5`}
       >
         <div className="absolute left-6 top-6 h-10 w-14 rounded-xl border border-black/15 bg-black/[0.04]" />
         <div className="absolute inset-x-6 top-20 h-px bg-black/10" />
 
-        <div className="mb-8 flex items-start justify-end">
+        <div className="mb-6 flex items-start justify-end sm:mb-8">
           <div className="relative">
             <button
               onClick={(e) => { e.stopPropagation(); setOpenMenuId(openMenuId === acc.id ? null : acc.id); }}
@@ -273,21 +273,21 @@ const Accounts: React.FC<AccountsProps> = ({ accounts, onAdd, onDelete, onEdit, 
           </div>
         </div>
 
-        <div className="mb-5">
+        <div className="mb-4 sm:mb-5">
           <div className="flex items-start justify-between gap-4">
             <div>
-              <h3 className={`max-w-[14rem] text-xl font-black leading-tight ${getAccentClasses('text')}`}>{acc.bank}</h3>
-              <p className="mt-1 text-[11px] font-bold uppercase tracking-[0.28em] text-black/60">{acc.classification}</p>
+              <h3 className={`max-w-[15rem] text-[clamp(1.6rem,4vw,2.1rem)] font-black leading-none ${getAccentClasses('text')}`}>{acc.bank}</h3>
+              <p className="mt-1.5 text-xs font-black uppercase tracking-[0.24em] text-black/60">{acc.classification}</p>
             </div>
             <div className="text-right">
-              <p className="text-[10px] font-black uppercase tracking-[0.28em] text-black/55">Balance</p>
-              <p className="mt-1 text-xl font-black">{formatCurrency(acc.balance)}</p>
+              <p className="text-xs font-black uppercase tracking-[0.24em] text-black/55">Balance</p>
+              <p className="mt-1 text-[clamp(1.7rem,4.8vw,2.4rem)] font-black leading-none">{formatCurrency(acc.balance)}</p>
             </div>
           </div>
         </div>
 
         {isCredit && (
-          <div className="mb-4 rounded-[1.4rem] border-2 border-black/10 bg-[#f5f0e5] p-4">
+          <div className="mb-4 rounded-[1.4rem] border-2 border-black/10 bg-[#f5f0e5] p-3.5 sm:p-4">
             <div className="mb-2 flex items-center justify-between">
               <p className="text-xs font-bold uppercase tracking-[0.18em] text-black/60">Credit Limit</p>
               <p className="text-sm font-semibold text-black">{formatCurrency(creditLimit)}</p>
@@ -319,7 +319,7 @@ const Accounts: React.FC<AccountsProps> = ({ accounts, onAdd, onDelete, onEdit, 
           )}
         </div>
 
-        <div className="mt-auto flex items-center justify-end gap-2 pt-6">
+        <div className="mt-auto flex items-center justify-end gap-2 pt-4 sm:pt-6">
           {isCredit && (
             <>
               <button
@@ -344,7 +344,7 @@ const Accounts: React.FC<AccountsProps> = ({ accounts, onAdd, onDelete, onEdit, 
           <Link
             to={`/accounts/view?account=${acc.id}`}
             onClick={(e) => e.stopPropagation()}
-            className={`inline-flex items-center gap-2 rounded-2xl border-[3px] border-black px-4 py-2 text-sm font-black text-black shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] transition-all hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none ${getAccentClasses('bg')}`}
+            className={`inline-flex items-center gap-2 rounded-2xl border-[3px] border-black px-3.5 py-2 text-sm font-black text-black shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] transition-all hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none ${getAccentClasses('bg')}`}
             aria-label={`View ${acc.bank} transactions`}
           >
             <span>View</span>
@@ -359,7 +359,7 @@ const Accounts: React.FC<AccountsProps> = ({ accounts, onAdd, onDelete, onEdit, 
   const creditAccounts = accounts.filter(a => a.type === 'Credit');
 
   return (
-    <div className="space-y-12 animate-in fade-in duration-500" onClick={() => setOpenMenuId(null)}>
+    <div className="space-y-12 overflow-x-hidden animate-in fade-in duration-500" onClick={() => setOpenMenuId(null)}>
       {/* Loading State */}
       {loading && (
         <div className="flex items-center justify-center py-12">
@@ -441,7 +441,7 @@ const Accounts: React.FC<AccountsProps> = ({ accounts, onAdd, onDelete, onEdit, 
           </div>
         </button>
         {isDebitOpen && (
-          <div className="grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-3">
+          <div className="grid grid-cols-1 justify-items-center gap-6 md:grid-cols-2 xl:grid-cols-3">
             {debitAccounts.map(renderAccount)}
           </div>
         )}
@@ -460,7 +460,7 @@ const Accounts: React.FC<AccountsProps> = ({ accounts, onAdd, onDelete, onEdit, 
           </div>
         </button>
         {isCreditOpen && (
-          <div className="grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-3">
+          <div className="grid grid-cols-1 justify-items-center gap-6 md:grid-cols-2 xl:grid-cols-3">
             {creditAccounts.map(renderAccount)}
           </div>
         )}

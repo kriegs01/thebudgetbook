@@ -1,10 +1,13 @@
 import React, { useEffect, useState } from 'react';
-import { ArrowLeft, Calendar, CreditCard } from 'lucide-react';
+import { ArrowLeft, Calendar, CreditCard, ChevronDown } from 'lucide-react';
 import { useSearchParams, Link } from 'react-router-dom';
 import { Account } from '../../types';
 import { getTransactionsByPaymentMethod } from '../../src/services/transactionsService';
 import type { SupabaseTransaction } from '../../src/types/supabase';
 import { calculateBillingCycles, formatDateRange } from '../../src/utils/billingCycles';
+import useMediaQuery from '../../src/hooks/useMediaQuery';
+import { useTheme } from '../../src/contexts/ThemeContext';
+import { PageHeader } from '../../src/components/PageHeader';
 
 type Transaction = {
   id: string;
@@ -41,6 +44,8 @@ interface StatementPageProps {
 }
 
 const StatementPage: React.FC<StatementPageProps> = ({ accounts }) => {
+  const { getAccentClasses } = useTheme();
+  const isMobile = useMediaQuery('(max-width: 767px)');
   const [searchParams] = useSearchParams();
   const accountId = searchParams.get('account');
   const [account, setAccount] = useState<Account | null>(null);
@@ -116,6 +121,9 @@ const StatementPage: React.FC<StatementPageProps> = ({ accounts }) => {
         });
         
         setCycles(billingCycles);
+        const today = new Date();
+        const currentCycleIndex = billingCycles.findIndex(cycle => today >= cycle.startDate && today <= cycle.endDate);
+        setSelectedCycleIndex(currentCycleIndex >= 0 ? currentCycleIndex : 0);
       } catch (error) {
         console.error('Error loading transactions:', error);
       } finally {
@@ -156,15 +164,30 @@ const StatementPage: React.FC<StatementPageProps> = ({ accounts }) => {
 
   if (!account.billingDate) {
     return (
-      <div className="min-h-screen bg-gray-50 dark:bg-gray-950 p-8 transition-colors">
-        <div className="max-w-4xl mx-auto">
-          <div className="mb-6 flex items-center space-x-4">
-            <Link to="/accounts" className="p-2 rounded-lg bg-white dark:bg-gray-900 shadow-sm border border-gray-100 dark:border-gray-800 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
-              <ArrowLeft className="w-5 h-5 text-gray-700 dark:text-gray-300" />
-            </Link>
-            <h1 className="text-2xl font-black text-gray-900 dark:text-gray-100 transition-colors">{account.bank} Statement</h1>
+      <div className={`min-h-screen bg-gray-50 dark:bg-gray-950 transition-colors ${isMobile ? 'overflow-x-hidden px-4 pb-8 pt-6' : 'p-8'}`}>
+        <div className="mx-auto max-w-5xl">
+          <PageHeader
+            title={account.bank}
+            subtitle="Credit Card Statement"
+            icon={
+              <div className={`w-14 h-14 rounded-2xl flex items-center justify-center text-white border-[3px] border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] -rotate-3 transition-all hover:rotate-0 hover:scale-110 z-10 relative ${getAccentClasses('bg')}`}>
+                <CreditCard className="w-7 h-7" />
+              </div>
+            }
+            backButton={!isMobile ? (
+              <Link to="/accounts" className="inline-flex h-12 w-12 items-center justify-center rounded-2xl border-[3px] border-black bg-white text-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] transition-all hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none dark:bg-gray-900 dark:text-white">
+                <ArrowLeft className="w-5 h-5" />
+              </Link>
+            ) : undefined}
+          />
+          <div className={`${isMobile ? 'mb-5 flex items-start gap-3' : 'mb-6 flex justify-start'}`}>
+            {isMobile && (
+              <Link to="/accounts" className="inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border-[3px] border-black bg-white text-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] transition-all hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none dark:bg-gray-900 dark:text-white">
+                <ArrowLeft className="w-5 h-5" />
+              </Link>
+            )}
           </div>
-          <div className="bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-800 rounded-2xl shadow-sm p-8 text-center transition-colors">
+          <div className="rounded-[1.8rem] border-[4px] border-black bg-white p-8 text-center shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] transition-colors dark:bg-gray-900">
             <p className="text-gray-500 dark:text-gray-400">No billing date set for this credit account.</p>
             <p className="text-sm text-gray-400 dark:text-gray-500 mt-2">Please edit the account and set a billing date to view statements.</p>
           </div>
@@ -181,120 +204,174 @@ const StatementPage: React.FC<StatementPageProps> = ({ accounts }) => {
     .reduce((sum, tx) => sum + tx.amount, 0) ?? 0;
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-950 p-8 transition-colors">
-      <div className="max-w-6xl mx-auto">
-        {/* Header */}
-        <div className="mb-6 flex items-center justify-between">
-          <div className="flex items-center space-x-4">
-            <Link to="/accounts" className="p-2 rounded-lg bg-white dark:bg-gray-900 shadow-sm border border-gray-100 dark:border-gray-800 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
-              <ArrowLeft className="w-5 h-5 text-gray-700 dark:text-gray-300" />
+    <div className={`min-h-screen bg-gray-50 dark:bg-gray-950 transition-colors ${isMobile ? 'overflow-x-hidden px-4 pb-8 pt-6' : 'p-8'}`}>
+      <div className="mx-auto max-w-6xl">
+        <PageHeader
+          title={account.bank}
+          subtitle="Credit Card Statement"
+          icon={
+            <div className={`w-14 h-14 rounded-2xl flex items-center justify-center text-white border-[3px] border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] -rotate-3 transition-all hover:rotate-0 hover:scale-110 z-10 relative ${getAccentClasses('bg')}`}>
+              <CreditCard className="w-7 h-7" />
+            </div>
+          }
+          backButton={!isMobile ? (
+            <Link to="/accounts" className="inline-flex h-12 w-12 items-center justify-center rounded-2xl border-[3px] border-black bg-white text-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] transition-all hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none dark:bg-gray-900 dark:text-white">
+              <ArrowLeft className="w-5 h-5" />
             </Link>
-            <div>
-              <h1 className="text-2xl font-black text-gray-900 dark:text-gray-100 transition-colors">{account.bank}</h1>
-              <p className="text-sm text-gray-500 dark:text-gray-400 transition-colors">Credit Card Statement</p>
-            </div>
-          </div>
-          <div className="bg-purple-50 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 p-3 rounded-xl transition-colors">
-            <CreditCard className="w-6 h-6" />
-          </div>
-        </div>
+          ) : undefined}
+        />
 
-        {/* Cycle Selector */}
-        <div className="bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-800 rounded-2xl shadow-sm p-6 mb-6 transition-colors">
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center space-x-2">
-              <Calendar className="w-5 h-5 text-gray-400 dark:text-gray-500" />
-              <h2 className="text-sm font-bold uppercase text-gray-600 dark:text-gray-400 tracking-widest transition-colors">Billing Cycle</h2>
+        <div className={`${isMobile ? 'mb-5 flex items-start gap-3' : 'mb-6'}`}>
+          {isMobile && (
+            <Link to="/accounts" className="inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border-[3px] border-black bg-white text-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] transition-all hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none dark:bg-gray-900 dark:text-white">
+              <ArrowLeft className="w-5 h-5" />
+            </Link>
+          )}
+          <div className="min-w-0 flex-1 rounded-[1.8rem] border-[4px] border-black bg-white p-4 shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] transition-colors dark:bg-gray-900">
+            <div className={`flex items-center gap-3 ${isMobile ? 'justify-center' : 'justify-between'}`}>
+              <div className="flex items-center gap-3">
+                <div className="inline-flex h-11 w-11 items-center justify-center rounded-[1.2rem] border-[3px] border-black bg-purple-100 text-purple-700 shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] transition-colors dark:bg-purple-900/20 dark:text-purple-300">
+                  <Calendar className="w-4 h-4" />
+                </div>
+                <p className={`text-sm font-black tracking-[0.08em] text-gray-800 dark:text-gray-100 ${isMobile ? 'text-center leading-tight' : 'leading-none'}`}>
+                  <span className="uppercase tracking-[0.18em]">Billing Cycle:</span>{' '}
+                  <span className="text-xs font-bold uppercase tracking-[0.12em] text-gray-500 dark:text-gray-400">Statement Range</span>
+                </p>
+              </div>
             </div>
-          </div>
-          
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-            {cycles.map((cycle, index) => (
-              <button
-                key={index}
-                onClick={() => setSelectedCycleIndex(index)}
-                className={`p-4 rounded-xl border-2 transition-all text-left ${
-                  selectedCycleIndex === index
-                    ? 'border-purple-600 bg-purple-50 dark:bg-purple-900/20 dark:border-purple-500'
-                    : 'border-gray-100 dark:border-gray-800 hover:border-purple-200 dark:hover:border-purple-500/50'
-                }`}
-              >
-                <div className="text-sm font-semibold text-gray-900 dark:text-gray-100 transition-colors">{cycle.label}</div>
-                <div className="text-xs text-gray-500 dark:text-gray-400 mt-1 transition-colors">{cycle.transactions.length} transactions</div>
-              </button>
-            ))}
+
+            <div className="mt-4">
+              {isMobile ? (
+                <div className="relative">
+                  <select
+                    value={selectedCycleIndex}
+                    onChange={(e) => setSelectedCycleIndex(Number(e.target.value))}
+                    className="w-full appearance-none rounded-2xl border-[3px] border-black bg-[#fff8ea] px-4 py-3 pr-12 text-sm font-black text-gray-900 outline-none transition-colors dark:bg-gray-800 dark:text-gray-100"
+                  >
+                    {cycles.map((cycle, index) => (
+                      <option key={cycle.label} value={index}>
+                        {cycle.label} ({cycle.transactions.length})
+                      </option>
+                    ))}
+                  </select>
+                  <ChevronDown className="pointer-events-none absolute right-4 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-500 dark:text-gray-400" />
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+                  {cycles.map((cycle, index) => (
+                    <button
+                      key={cycle.label}
+                      onClick={() => setSelectedCycleIndex(index)}
+                      className={`rounded-[1.3rem] border-[3px] p-4 text-left shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] transition-all ${
+                        selectedCycleIndex === index
+                          ? 'border-black bg-purple-100 dark:bg-purple-900/20'
+                          : 'border-black bg-[#fff8ea] hover:-translate-y-0.5 dark:bg-gray-800'
+                      }`}
+                    >
+                      <div className="text-sm font-black text-gray-900 dark:text-gray-100 transition-colors">{cycle.label}</div>
+                      <div className="mt-1 text-xs font-bold text-gray-500 dark:text-gray-400 transition-colors">{cycle.transactions.length} transactions</div>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
         </div>
 
         {/* Statement Summary */}
         {selectedCycle && (
           <>
-            <div className="bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-800 rounded-2xl shadow-sm p-6 mb-6 transition-colors">
-              <h3 className="text-sm font-bold uppercase text-gray-600 dark:text-gray-400 tracking-widest mb-4 transition-colors">Statement Summary</h3>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div className="mb-6 rounded-[1.8rem] border-[4px] border-black bg-white p-6 shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] transition-colors dark:bg-gray-900">
+              <h3 className="mb-4 text-sm font-black uppercase tracking-widest text-gray-600 transition-colors dark:text-gray-400">Statement Summary</h3>
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-3 md:gap-6">
                 <div>
-                  <p className="text-xs text-gray-400 dark:text-gray-500 font-medium mb-1 transition-colors">Statement Period</p>
-                  <p className="text-lg font-bold text-gray-900 dark:text-gray-100 transition-colors">{selectedCycle.label}</p>
+                  <p className="mb-1 text-xs font-medium text-gray-400 transition-colors dark:text-gray-500">Statement Period</p>
+                  <p className="text-lg font-bold text-gray-900 transition-colors dark:text-gray-100">{selectedCycle.label}</p>
                 </div>
                 <div>
-                  <p className="text-xs text-gray-400 dark:text-gray-500 font-medium mb-1 transition-colors">Total Charges</p>
-                  <p className="text-lg font-bold text-red-600 dark:text-red-400 transition-colors">{formatCurrency(totalAmount)}</p>
+                  <p className="mb-1 text-xs font-medium text-gray-400 transition-colors dark:text-gray-500">Total Charges</p>
+                  <p className="text-lg font-bold text-red-600 transition-colors dark:text-red-400">{formatCurrency(totalAmount)}</p>
                 </div>
                 <div>
-                  <p className="text-xs text-gray-400 dark:text-gray-500 font-medium mb-1 transition-colors">Credit Limit</p>
-                  <p className="text-lg font-bold text-gray-900 dark:text-gray-100 transition-colors">{formatCurrency(account.creditLimit ?? 0)}</p>
+                  <p className="mb-1 text-xs font-medium text-gray-400 transition-colors dark:text-gray-500">Credit Limit</p>
+                  <p className="text-lg font-bold text-gray-900 transition-colors dark:text-gray-100">{formatCurrency(account.creditLimit ?? 0)}</p>
                 </div>
               </div>
             </div>
 
             {/* Transactions Table */}
-            <div className="bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-800 rounded-2xl shadow-sm overflow-hidden transition-colors">
-              <div className="px-6 py-4 border-b border-gray-100 dark:border-gray-800 flex items-center justify-between transition-colors">
-                <h2 className="text-sm font-bold uppercase text-gray-600 dark:text-gray-400 tracking-widest transition-colors">Transactions</h2>
-                <div className="text-sm text-gray-500 dark:text-gray-400 transition-colors">{selectedCycle.transactions.length} items</div>
+            <div className="overflow-hidden rounded-[1.8rem] border-[4px] border-black bg-white shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] transition-colors dark:bg-gray-900">
+              <div className="flex items-center justify-between border-b-[4px] border-black px-6 py-4 transition-colors">
+                <h2 className="text-sm font-black uppercase tracking-widest text-gray-600 transition-colors dark:text-gray-400">Transactions</h2>
+                <div className="text-sm text-gray-500 transition-colors dark:text-gray-400">{selectedCycle.transactions.length} items</div>
               </div>
               <div className="p-4">
-                <div className="w-full overflow-x-auto">
-                  <table className="min-w-full text-left">
-                    <thead>
-                      <tr>
-                        <th className="px-4 py-3 text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wider transition-colors">Description</th>
-                        <th className="px-4 py-3 text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wider transition-colors">Date</th>
-                        <th className="px-4 py-3 text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wider text-right transition-colors">Amount</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {selectedCycle.transactions.map(tx => (
-                        <tr key={tx.id} className="border-t border-gray-100 dark:border-gray-800 transition-colors">
-                          <td className="px-4 py-3">
-                            <div className="text-sm font-medium text-gray-900 dark:text-gray-100 transition-colors">{tx.name}</div>
-                          </td>
-                          <td className="px-4 py-3">
-                            <div className="text-sm text-gray-500 dark:text-gray-400 transition-colors">
-                              {new Date(tx.date).toLocaleDateString('en-US', {
-                                month: 'short',
-                                day: 'numeric',
-                                year: 'numeric'
-                              })}
-                            </div>
-                          </td>
-                          <td className="px-4 py-3 text-right">
-                            <div className={`text-sm font-semibold transition-colors ${tx.amount < 0 ? 'text-red-600 dark:text-red-400' : 'text-green-600 dark:text-green-400'}`}>
-                              {formatCurrency(Math.abs(tx.amount))}
-                            </div>
-                          </td>
-                        </tr>
-                      ))}
-                      {selectedCycle.transactions.length === 0 && (
+                {isMobile ? (
+                  <div className="space-y-3">
+                    {selectedCycle.transactions.map(tx => (
+                      <div key={tx.id} className="rounded-[1.4rem] border-[3px] border-black bg-[#fff8ea] p-4 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] transition-colors dark:bg-gray-800">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <p className="text-sm font-black text-gray-900 dark:text-gray-100">{tx.name}</p>
+                            <p className="mt-1 text-xs font-bold text-gray-500 dark:text-gray-400">
+                              {new Date(tx.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                            </p>
+                          </div>
+                          <p className={`text-right text-sm font-black transition-colors ${tx.amount < 0 ? 'text-red-600 dark:text-red-400' : 'text-green-600 dark:text-green-400'}`}>
+                            {formatCurrency(Math.abs(tx.amount))}
+                          </p>
+                        </div>
+                      </div>
+                    ))}
+                    {selectedCycle.transactions.length === 0 && (
+                      <div className="rounded-[1.4rem] border-[3px] border-dashed border-black bg-white p-6 text-center dark:bg-gray-800">
+                        <p className="text-sm font-bold text-gray-500 dark:text-gray-400">No transactions in this billing cycle.</p>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div className="w-full overflow-x-auto">
+                    <table className="min-w-full text-left">
+                      <thead>
                         <tr>
-                          <td colSpan={3} className="px-4 py-6 text-center text-gray-400 dark:text-gray-500 transition-colors">
-                            No transactions in this billing cycle.
-                          </td>
+                          <th className="px-4 py-3 text-xs uppercase tracking-wider text-gray-500 transition-colors dark:text-gray-400">Description</th>
+                          <th className="px-4 py-3 text-xs uppercase tracking-wider text-gray-500 transition-colors dark:text-gray-400">Date</th>
+                          <th className="px-4 py-3 text-right text-xs uppercase tracking-wider text-gray-500 transition-colors dark:text-gray-400">Amount</th>
                         </tr>
-                      )}
-                    </tbody>
-                  </table>
-                </div>
+                      </thead>
+                      <tbody>
+                        {selectedCycle.transactions.map(tx => (
+                          <tr key={tx.id} className="border-t border-gray-100 transition-colors dark:border-gray-800">
+                            <td className="px-4 py-3">
+                              <div className="text-sm font-medium text-gray-900 transition-colors dark:text-gray-100">{tx.name}</div>
+                            </td>
+                            <td className="px-4 py-3">
+                              <div className="text-sm text-gray-500 transition-colors dark:text-gray-400">
+                                {new Date(tx.date).toLocaleDateString('en-US', {
+                                  month: 'short',
+                                  day: 'numeric',
+                                  year: 'numeric'
+                                })}
+                              </div>
+                            </td>
+                            <td className="px-4 py-3 text-right">
+                              <div className={`text-sm font-semibold transition-colors ${tx.amount < 0 ? 'text-red-600 dark:text-red-400' : 'text-green-600 dark:text-green-400'}`}>
+                                {formatCurrency(Math.abs(tx.amount))}
+                              </div>
+                            </td>
+                          </tr>
+                        ))}
+                        {selectedCycle.transactions.length === 0 && (
+                          <tr>
+                            <td colSpan={3} className="px-4 py-6 text-center text-gray-400 transition-colors dark:text-gray-500">
+                              No transactions in this billing cycle.
+                            </td>
+                          </tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
               </div>
             </div>
           </>
