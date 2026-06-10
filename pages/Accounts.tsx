@@ -223,8 +223,8 @@ const Accounts: React.FC<AccountsProps> = ({ accounts, onAdd, onDelete, onEdit, 
     const isActive = (acc as any).isActive !== false;
     const deactivationDate = (acc as any).deactivationDate;
     const cardSurface = isCredit
-      ? 'bg-[linear-gradient(140deg,#1f1b4b_0%,#3b2d7a_55%,#6d4db5_100%)] text-white'
-      : 'bg-[linear-gradient(140deg,#111827_0%,#1f2937_50%,#374151_100%)] text-white';
+      ? 'bg-[#3f2a78] text-white'
+      : 'bg-[#1f2f46] text-white';
 
     return (
       <div
@@ -232,19 +232,9 @@ const Accounts: React.FC<AccountsProps> = ({ accounts, onAdd, onDelete, onEdit, 
         className={`${cardSurface} relative overflow-hidden rounded-[2rem] border-[4px] border-black p-5 shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] transition-all duration-200 hover:-translate-y-1 hover:shadow-[12px_12px_0px_0px_rgba(0,0,0,1)]`}
       >
         <div className="absolute left-6 top-6 h-10 w-14 rounded-xl border border-white/25 bg-white/10" />
-        <div className="absolute right-4 top-4 h-16 w-16 rounded-full border border-white/20 bg-white/10" />
         <div className="absolute inset-x-6 top-20 h-px bg-white/20" />
 
-        <div className="mb-6 flex items-start justify-between">
-          <div className="flex items-center gap-2">
-            <span className={`rounded-full border-2 border-black px-3 py-1 text-[10px] font-black uppercase tracking-[0.24em] text-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] ${getAccentClasses('bg')}`}>
-              {isCredit ? 'Credit' : 'Debit'}
-            </span>
-            <span className="rounded-full bg-white/15 px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.2em] text-white/85">
-              {acc.classification}
-            </span>
-          </div>
-
+        <div className="mb-8 flex items-start justify-end">
           <div className="relative">
             <button
               onClick={(e) => { e.stopPropagation(); setOpenMenuId(openMenuId === acc.id ? null : acc.id); }}
