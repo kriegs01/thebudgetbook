@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useMemo, useRef } from 'react';
-import { ArrowLeft, Info, Eye, ZoomIn, ZoomOut, Download, X, Pencil, BanknoteArrowDown, Trash2, ArrowUpFromLine, ArrowDownToLine, Banknote, CheckSquare, Square, Filter, ChevronDown, CreditCard, AlertTriangle, Send, User, Landmark, WalletCards } from 'lucide-react';
+import { ArrowLeft, Info, Eye, ZoomIn, ZoomOut, Download, X, Pencil, BanknoteArrowDown, Trash2, ArrowUpFromLine, ArrowDownToLine, Banknote, CheckSquare, Square, Filter, ChevronDown, ChevronUp, CreditCard, AlertTriangle, Send, User, Landmark, WalletCards } from 'lucide-react';
 import { useSearchParams, Link } from 'react-router-dom';
 import { Account } from '../../types';
 import { getTransactionsByPaymentMethod, createTransaction, updateTransactionAndSyncSchedule, createTransfer, getLoanTransactionsWithPayments, getReceiptSignedUrl, deleteTransactionAndRevertSchedule, batchDeleteTransactions } from '../../src/services/transactionsService';
@@ -116,6 +116,7 @@ const AccountFilteredTransactions: React.FC<AccountFilteredTransactionsProps> = 
   const [filterEndDate, setFilterEndDate] = useState<string>(getLastDayOfCurrentYearIso());
   const [filterTypes, setFilterTypes] = useState<Set<string>>(new Set());
   const [showTypeDropdown, setShowTypeDropdown] = useState(false);
+  const [showFiltersPanel, setShowFiltersPanel] = useState(!isMobile);
   const typeDropdownRef = useRef<HTMLDivElement>(null);
 
   // ── Select / batch-delete state ───────────────────────────────────────────
@@ -255,6 +256,10 @@ const AccountFilteredTransactions: React.FC<AccountFilteredTransactionsProps> = 
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
   }, []);
+
+  useEffect(() => {
+    if (!isMobile) setShowFiltersPanel(true);
+  }, [isMobile]);
 
   // ── Derived: filtered transactions ────────────────────────────────────────
   const filteredTransactions = useMemo(() => {
@@ -690,6 +695,8 @@ const AccountFilteredTransactions: React.FC<AccountFilteredTransactionsProps> = 
   const retroPanelClass = "rounded-[1.5rem] border-[3px] border-black bg-white p-4 transition-colors dark:bg-gray-950";
   const retroGhostButton = "rounded-2xl border-[3px] border-black bg-white px-4 py-3 font-black text-gray-700 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] transition-all hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none dark:bg-gray-800 dark:text-gray-100";
   const retroCloseButton = "absolute right-5 top-5 inline-flex h-11 w-11 items-center justify-center rounded-2xl border-[3px] border-black bg-white text-gray-700 shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] transition-all hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none dark:bg-gray-800 dark:text-gray-100";
+  const mobileSquircleActionButton = "inline-flex h-14 w-14 items-center justify-center rounded-[1.35rem] border-[3px] border-black text-white shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] transition-all hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none";
+  const mobileCardIconButton = "inline-flex h-11 w-11 items-center justify-center rounded-[1.1rem] border-[3px] border-black bg-white text-gray-800 shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] transition-all hover:translate-x-[1px] hover:translate-y-[1px] hover:shadow-none dark:bg-gray-900 dark:text-gray-100";
 
   return (
     <div className={`min-h-screen bg-gray-100 dark:bg-gray-950 transition-colors ${isMobile ? 'px-4 pb-8 pt-6' : 'p-8'}`}>
@@ -702,12 +709,20 @@ const AccountFilteredTransactions: React.FC<AccountFilteredTransactionsProps> = 
               {account?.type === 'Credit' ? <CreditCard className="w-7 h-7" /> : <WalletCards className="w-7 h-7" />}
             </div>
           }
-          backButton={
+          backButton={!isMobile ? (
             <Link to="/accounts" className="inline-flex h-12 w-12 items-center justify-center rounded-2xl border-[3px] border-black bg-white text-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] transition-all hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none dark:bg-gray-900 dark:text-white">
               <ArrowLeft className="w-5 h-5" />
             </Link>
-          }
+          ) : undefined}
         />
+
+        {isMobile && (
+          <div className="mb-5 flex justify-start">
+            <Link to="/accounts" className="inline-flex h-12 w-12 items-center justify-center rounded-2xl border-[3px] border-black bg-white text-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] transition-all hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none dark:bg-gray-900 dark:text-white">
+              <ArrowLeft className="w-5 h-5" />
+            </Link>
+          </div>
+        )}
 
         {/* Success/Error Message */}
         {message && (
@@ -718,8 +733,33 @@ const AccountFilteredTransactions: React.FC<AccountFilteredTransactionsProps> = 
 
         {/* ── Filter Bar ──────────────────────────────────────────────────── */}
         <div className="mb-5 rounded-[1.8rem] border-[4px] border-black bg-white p-4 shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] transition-colors dark:bg-gray-900">
-          <div className="flex flex-wrap items-end gap-3">
-            <Filter className="mb-1 h-4 w-4 shrink-0 self-center text-gray-400 dark:text-gray-500" />
+          <button
+            type="button"
+            onClick={() => {
+              if (isMobile) {
+                setShowFiltersPanel(p => !p);
+                setShowTypeDropdown(false);
+              }
+            }}
+            className={`flex w-full items-center ${isMobile ? 'justify-center' : 'justify-between'} gap-3`}
+          >
+            <div className="flex items-center gap-3">
+              <div className="inline-flex h-11 w-11 items-center justify-center rounded-[1.2rem] border-[3px] border-black bg-yellow-200 text-black shadow-[3px_3px_0px_0px_rgba(0,0,0,1)]">
+                <Filter className="h-4 w-4" />
+              </div>
+              <div className={isMobile ? 'text-center' : ''}>
+                <p className="text-sm font-black uppercase tracking-[0.18em] text-gray-800 dark:text-gray-100">Filters</p>
+                <p className="text-xs font-bold text-gray-500 dark:text-gray-400">Date range and transaction types</p>
+              </div>
+            </div>
+            {isMobile && (
+              <span className="inline-flex h-11 w-11 items-center justify-center rounded-[1.2rem] border-[3px] border-black bg-white text-black shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] dark:bg-gray-800 dark:text-white">
+                {showFiltersPanel ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+              </span>
+            )}
+          </button>
+          {showFiltersPanel && (
+          <div className={`mt-4 flex flex-wrap items-end gap-3 ${isMobile ? 'justify-center text-center' : 'justify-center'}`}>
             <div className="flex flex-col gap-1">
               <label className="text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest">Start Date</label>
               <input
@@ -775,24 +815,25 @@ const AccountFilteredTransactions: React.FC<AccountFilteredTransactionsProps> = 
               Reset
             </button>
           </div>
+          )}
         </div>
 
         {/* ── Dashboard ───────────────────────────────────────────────────── */}
-        <div className={`mb-5 grid gap-4 ${isMobile ? 'grid-cols-1' : 'grid-cols-3'}`}>
-          <div className={`${getAccentClasses('bg')} rounded-[1.8rem] border-[4px] border-black p-4 text-white shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] transition-colors`}>
-            <p className="text-[10px] font-black uppercase tracking-widest text-indigo-200 mb-1">Current Balance</p>
+        <div className={`mb-5 grid gap-4 ${isMobile ? 'grid-cols-2' : 'grid-cols-3'}`}>
+          <div className={`${getAccentClasses('bg')} rounded-[1.8rem] border-[4px] border-black p-4 text-white shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] transition-colors ${isMobile ? 'col-span-2 text-center' : ''}`}>
+            <p className="mb-1 text-[10px] font-black uppercase tracking-widest text-indigo-200">Current Balance</p>
             <p className="text-2xl font-black">{formatCurrency(currentBalance)}</p>
-            <p className="text-[10px] text-indigo-300 mt-1">All time</p>
+            <p className="mt-1 text-[10px] text-indigo-300">All time</p>
           </div>
-          <div className="rounded-[1.8rem] border-[4px] border-black bg-white p-4 shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] transition-colors dark:bg-gray-900">
-            <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 dark:text-gray-500 mb-1">Total In</p>
+          <div className={`rounded-[1.8rem] border-[4px] border-black bg-white p-4 shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] transition-colors dark:bg-gray-900 ${isMobile ? 'aspect-square text-center flex flex-col items-center justify-center' : ''}`}>
+            <p className="mb-1 text-[10px] font-black uppercase tracking-widest text-gray-400 dark:text-gray-500">Total In</p>
             <p className="text-2xl font-black text-green-600 dark:text-green-400">{formatCurrency(totalIn)}</p>
-            <p className="text-[10px] text-gray-400 dark:text-gray-500 mt-1">Based on filter</p>
+            <p className="mt-1 text-[10px] text-gray-400 dark:text-gray-500">Based on filter</p>
           </div>
-          <div className="rounded-[1.8rem] border-[4px] border-black bg-white p-4 shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] transition-colors dark:bg-gray-900">
-            <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 dark:text-gray-500 mb-1">Total Out</p>
+          <div className={`rounded-[1.8rem] border-[4px] border-black bg-white p-4 shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] transition-colors dark:bg-gray-900 ${isMobile ? 'aspect-square text-center flex flex-col items-center justify-center' : ''}`}>
+            <p className="mb-1 text-[10px] font-black uppercase tracking-widest text-gray-400 dark:text-gray-500">Total Out</p>
             <p className="text-2xl font-black text-red-600 dark:text-red-400">{formatCurrency(totalOut)}</p>
-            <p className="text-[10px] text-gray-400 dark:text-gray-500 mt-1">Based on filter</p>
+            <p className="mt-1 text-[10px] text-gray-400 dark:text-gray-500">Based on filter</p>
           </div>
         </div>
 
@@ -821,56 +862,56 @@ const AccountFilteredTransactions: React.FC<AccountFilteredTransactionsProps> = 
                     onClick={() => setShowWithdrawModal(true)}
                     title="Withdraw"
                     aria-label="Record withdrawal"
-                    className={`${retroActionButtonBase} bg-red-500 text-white`}
+                    className={isMobile ? `${mobileSquircleActionButton} bg-red-500` : `${retroActionButtonBase} bg-red-500 text-white`}
                   >
                     <ArrowUpFromLine className="w-4 h-4" />
-                    {isMobile && <span>Withdraw</span>}
+                    {!isMobile && <span>Withdraw</span>}
                   </button>
                   <button
                     onClick={() => setShowSendModal(true)}
                     title="Send / Transfer"
                     aria-label="Send or transfer money"
-                    className={`${retroActionButtonBase} bg-blue-500 text-white`}
+                    className={isMobile ? `${mobileSquircleActionButton} bg-blue-500` : `${retroActionButtonBase} bg-blue-500 text-white`}
                   >
                     <Send className="w-4 h-4 ml-0.5" />
-                    {isMobile && <span>Transfer</span>}
+                    {!isMobile && <span>Transfer</span>}
                   </button>
                   <button
                     onClick={() => setShowLoanModal(true)}
                     title="Loan"
                     aria-label="Record loan"
-                    className={`${retroActionButtonBase} bg-orange-500 text-white`}
+                    className={isMobile ? `${mobileSquircleActionButton} bg-orange-500` : `${retroActionButtonBase} bg-orange-500 text-white`}
                   >
                     <Banknote className="w-4 h-4" />
-                    {isMobile && <span>Loan</span>}
+                    {!isMobile && <span>Loan</span>}
                   </button>
                   <button
                     onClick={() => setShowCashInModal(true)}
                     title="Cash In"
                     aria-label="Record cash in"
-                    className={`${retroActionButtonBase} bg-green-500 text-white`}
+                    className={isMobile ? `${mobileSquircleActionButton} bg-green-500` : `${retroActionButtonBase} bg-green-500 text-white`}
                   >
                     <ArrowDownToLine className="w-4 h-4" />
-                    {isMobile && <span>Cash-in</span>}
+                    {!isMobile && <span>Cash-in</span>}
                   </button>
                   <button
                     onClick={toggleSelectMode}
                     title={isSelectMode ? 'Cancel selection' : 'Select transactions'}
                     aria-label={isSelectMode ? 'Cancel selection' : 'Select transactions'}
-                    className={`${retroActionButtonBase} ${isSelectMode ? 'bg-black text-white' : `${getAccentClasses('bg')} text-white`}`}
+                    className={isMobile ? `${mobileSquircleActionButton} ${isSelectMode ? 'bg-black' : getAccentClasses('bg')}` : `${retroActionButtonBase} ${isSelectMode ? 'bg-black text-white' : `${getAccentClasses('bg')} text-white`}`}
                   >
                     {isSelectMode ? <CheckSquare className="w-4 h-4" /> : <Square className="w-4 h-4" />}
-                    {isMobile && <span>Select</span>}
+                    {!isMobile && <span>Select</span>}
                   </button>
                   {isSelectMode && selectedIds.size > 0 && (
                     <button
                       onClick={() => setShowBatchConfirm(true)}
                       title="Delete selected"
                       aria-label="Delete selected transactions"
-                      className={`${retroActionButtonBase} bg-red-600 text-white`}
+                      className={isMobile ? `${mobileSquircleActionButton} bg-red-600` : `${retroActionButtonBase} bg-red-600 text-white`}
                     >
                       <Trash2 className="w-4 h-4" />
-                      {isMobile && <span>{selectedIds.size}</span>}
+                      {!isMobile && <span>{selectedIds.size}</span>}
                     </button>
                   )}
             </div>
@@ -881,29 +922,29 @@ const AccountFilteredTransactions: React.FC<AccountFilteredTransactionsProps> = 
                 onClick={() => setShowCardPaymentModal(true)}
                 title="Make Credit Card Payment"
                 aria-label="Make credit card payment"
-                className={`${retroActionButtonBase} bg-teal-500 text-white`}
+                className={isMobile ? `${mobileSquircleActionButton} bg-teal-500` : `${retroActionButtonBase} bg-teal-500 text-white`}
               >
                 <CreditCard className="w-4 h-4" />
-                {isMobile && <span>Payment</span>}
+                {!isMobile && <span>Payment</span>}
               </button>
               <button
                 onClick={toggleSelectMode}
                 title={isSelectMode ? 'Cancel selection' : 'Select transactions'}
                 aria-label={isSelectMode ? 'Cancel selection' : 'Select transactions'}
-                className={`${retroActionButtonBase} ${isSelectMode ? 'bg-black text-white' : `${getAccentClasses('bg')} text-white`}`}
+                className={isMobile ? `${mobileSquircleActionButton} ${isSelectMode ? 'bg-black' : getAccentClasses('bg')}` : `${retroActionButtonBase} ${isSelectMode ? 'bg-black text-white' : `${getAccentClasses('bg')} text-white`}`}
               >
                 {isSelectMode ? <CheckSquare className="w-4 h-4" /> : <Square className="w-4 h-4" />}
-                {isMobile && <span>Select</span>}
+                {!isMobile && <span>Select</span>}
               </button>
               {isSelectMode && selectedIds.size > 0 && (
                 <button
                   onClick={() => setShowBatchConfirm(true)}
                   title="Delete selected"
                   aria-label="Delete selected transactions"
-                  className={`${retroActionButtonBase} bg-red-600 text-white`}
+                  className={isMobile ? `${mobileSquircleActionButton} bg-red-600` : `${retroActionButtonBase} bg-red-600 text-white`}
                 >
                   <Trash2 className="w-4 h-4" />
-                  {isMobile && <span>{selectedIds.size}</span>}
+                  {!isMobile && <span>{selectedIds.size}</span>}
                 </button>
               )}
             </div>
@@ -951,21 +992,21 @@ const AccountFilteredTransactions: React.FC<AccountFilteredTransactionsProps> = 
                           Select transaction
                         </label>
                       )}
-                      <div className="flex flex-wrap gap-2">
-                        <button onClick={() => setSelectedTx(tx)} className="rounded-xl border-2 border-black bg-white px-3 py-2 text-xs font-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] dark:bg-gray-900 dark:text-white">
-                          View
+                      <div className="flex flex-wrap justify-end gap-2">
+                        <button onClick={() => setSelectedTx(tx)} title="View details" aria-label="View transaction details" className={mobileCardIconButton}>
+                          <Info className="h-4 w-4" />
                         </button>
-                        <button onClick={() => openEditTxModal(tx)} className="rounded-xl border-2 border-black bg-white px-3 py-2 text-xs font-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] dark:bg-gray-900 dark:text-white">
-                          Edit
+                        <button onClick={() => openEditTxModal(tx)} title="Edit transaction" aria-label="Edit transaction" className={mobileCardIconButton}>
+                          <Pencil className="h-4 w-4" />
                         </button>
                         <PinProtectedAction featureId="transaction_deletions" onVerified={() => handleDeleteTx(tx)} actionLabel="Delete Transaction">
-                          <button onClick={(e) => e.preventDefault()} className="rounded-xl border-2 border-black bg-red-500 px-3 py-2 text-xs font-black text-white shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]">
-                            Delete
+                          <button onClick={(e) => e.preventDefault()} title="Delete transaction" aria-label="Delete transaction" className="inline-flex h-11 w-11 items-center justify-center rounded-[1.1rem] border-[3px] border-black bg-red-500 text-white shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] transition-all hover:translate-x-[1px] hover:translate-y-[1px] hover:shadow-none">
+                            <Trash2 className="h-4 w-4" />
                           </button>
                         </PinProtectedAction>
                         {account?.type === 'Debit' && tx.transaction_type === 'loan' && loanTx && (loanTx.remainingBalance ?? 0) > 0 && (
-                          <button onClick={() => openLoanPaymentModal(loanTx)} className="rounded-xl border-2 border-black bg-purple-500 px-3 py-2 text-xs font-black text-white shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]">
-                            Receive Payment
+                          <button onClick={() => openLoanPaymentModal(loanTx)} title="Receive loan payment" aria-label="Receive loan payment" className="inline-flex h-11 w-11 items-center justify-center rounded-[1.1rem] border-[3px] border-black bg-purple-500 text-white shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] transition-all hover:translate-x-[1px] hover:translate-y-[1px] hover:shadow-none">
+                            <BanknoteArrowDown className="h-4 w-4" />
                           </button>
                         )}
                       </div>

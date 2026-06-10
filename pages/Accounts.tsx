@@ -13,7 +13,8 @@ import {
   ChevronDown,
   ChevronRight,
   ArrowUpRight,
-  Sparkles
+  Sparkles,
+  FileText
 } from 'lucide-react';
 import { getDueDayForDisplay, ordinalSuffix } from '../src/utils/billingCycles';
 import { useTheme } from '../src/contexts/ThemeContext';
@@ -91,6 +92,7 @@ const Accounts: React.FC<AccountsProps> = ({ accounts, onAdd, onDelete, onEdit, 
     show: boolean;
     accountId: string;
   }>({ show: false, accountId: '' });
+  const [statementInfoAccount, setStatementInfoAccount] = useState<Account | null>(null);
 
   useEffect(() => {
     const now = new Date();
@@ -222,23 +224,20 @@ const Accounts: React.FC<AccountsProps> = ({ accounts, onAdd, onDelete, onEdit, 
     const usedPercentSafe = usedPercent < 0 ? 0 : usedPercent;
     const isActive = (acc as any).isActive !== false;
     const deactivationDate = (acc as any).deactivationDate;
-    const cardSurface = isCredit
-      ? 'bg-[#3f2a78] text-white'
-      : 'bg-[#1f2f46] text-white';
-
+    const cardSurface = 'bg-[#fffdf7] text-black dark:bg-[#fffdf7] dark:text-black';
     return (
       <div
         key={acc.id}
-        className={`${cardSurface} relative overflow-hidden rounded-[2rem] border-[4px] border-black p-5 shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] transition-all duration-200 hover:-translate-y-1 hover:shadow-[12px_12px_0px_0px_rgba(0,0,0,1)]`}
+        className={`${cardSurface} relative flex h-full min-h-[22rem] flex-col overflow-hidden rounded-[2rem] border-[4px] border-black p-5 shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] transition-all duration-200 hover:-translate-y-1 hover:shadow-[12px_12px_0px_0px_rgba(0,0,0,1)]`}
       >
-        <div className="absolute left-6 top-6 h-10 w-14 rounded-xl border border-white/25 bg-white/10" />
-        <div className="absolute inset-x-6 top-20 h-px bg-white/20" />
+        <div className="absolute left-6 top-6 h-10 w-14 rounded-xl border border-black/15 bg-black/[0.04]" />
+        <div className="absolute inset-x-6 top-20 h-px bg-black/10" />
 
         <div className="mb-8 flex items-start justify-end">
           <div className="relative">
             <button
               onClick={(e) => { e.stopPropagation(); setOpenMenuId(openMenuId === acc.id ? null : acc.id); }}
-              className="rounded-2xl border-2 border-black bg-white/15 p-2.5 text-white backdrop-blur transition-all hover:-rotate-6 hover:bg-white/25"
+              className="rounded-2xl border-2 border-black bg-black/[0.04] p-2.5 text-black transition-all hover:-rotate-6 hover:bg-black/[0.08]"
               aria-label="More options"
             >
               <MoreVertical className="w-4 h-4" />
@@ -277,24 +276,24 @@ const Accounts: React.FC<AccountsProps> = ({ accounts, onAdd, onDelete, onEdit, 
         <div className="mb-5">
           <div className="flex items-start justify-between gap-4">
             <div>
-              <h3 className="max-w-[14rem] text-xl font-black leading-tight">{acc.bank}</h3>
-              <p className="mt-1 text-[11px] font-bold uppercase tracking-[0.28em] text-white/70">{acc.classification}</p>
+              <h3 className={`max-w-[14rem] text-xl font-black leading-tight ${getAccentClasses('text')}`}>{acc.bank}</h3>
+              <p className="mt-1 text-[11px] font-bold uppercase tracking-[0.28em] text-black/60">{acc.classification}</p>
             </div>
             <div className="text-right">
-              <p className="text-[10px] font-black uppercase tracking-[0.28em] text-white/60">Balance</p>
+              <p className="text-[10px] font-black uppercase tracking-[0.28em] text-black/55">Balance</p>
               <p className="mt-1 text-xl font-black">{formatCurrency(acc.balance)}</p>
             </div>
           </div>
         </div>
 
         {isCredit && (
-          <div className="mb-4 rounded-[1.4rem] border-2 border-white/15 bg-black/15 p-4 backdrop-blur-sm">
+          <div className="mb-4 rounded-[1.4rem] border-2 border-black/10 bg-[#f5f0e5] p-4">
             <div className="mb-2 flex items-center justify-between">
-              <p className="text-xs font-bold uppercase tracking-[0.18em] text-white/70">Credit Limit</p>
-              <p className="text-sm font-semibold text-white">{formatCurrency(creditLimit)}</p>
+              <p className="text-xs font-bold uppercase tracking-[0.18em] text-black/60">Credit Limit</p>
+              <p className="text-sm font-semibold text-black">{formatCurrency(creditLimit)}</p>
             </div>
 
-            <div className="h-3 w-full overflow-hidden rounded-full border-2 border-black/30 bg-white/15">
+            <div className="h-3 w-full overflow-hidden rounded-full border-2 border-black/20 bg-black/10">
               <div
                 className={`h-3 rounded-full ${usedPercentSafe >= 90 ? 'bg-red-500' : 'bg-purple-300'}`}
                 style={{ width: `${usedPercentSafe}%`, transition: 'width 300ms ease' }}
@@ -305,7 +304,7 @@ const Accounts: React.FC<AccountsProps> = ({ accounts, onAdd, onDelete, onEdit, 
               />
             </div>
 
-            <div className="mt-2 flex items-center justify-between text-[11px] text-white/75">
+            <div className="mt-2 flex items-center justify-between text-[11px] text-black/65">
               <span>Used</span>
               <span className="font-medium">{usedPercentSafe}%</span>
             </div>
@@ -314,32 +313,33 @@ const Accounts: React.FC<AccountsProps> = ({ accounts, onAdd, onDelete, onEdit, 
 
         <div className="space-y-3">
           {isActive && deactivationDate && (
-            <p className="text-xs font-bold text-yellow-200">
+            <p className="text-xs font-bold text-orange-700">
               Scheduled to deactivate: {monthNames[deactivationDate.month]} {deactivationDate.year}
-            </p>
-          )}
-          {isCredit && acc.billingDate && (
-            <p className="text-xs text-white/75">
-              Statement: {new Date(acc.billingDate).getDate()}{ordinalSuffix(new Date(acc.billingDate).getDate())} each month
-            </p>
-          )}
-          {isCredit && acc.billingDate && acc.dueDate && (
-            <p className="text-xs text-white/75">
-              Due: {new Date(acc.dueDate).getDate()} days after → ~{getDueDayForDisplay(new Date(acc.billingDate).getDate(), new Date(acc.dueDate).getDate())}
             </p>
           )}
         </div>
 
-        <div className="mt-6 flex items-center justify-end gap-2">
+        <div className="mt-auto flex items-center justify-end gap-2 pt-6">
           {isCredit && (
-            <Link
-              to={`/accounts/statement?account=${acc.id}`}
-              onClick={(e) => e.stopPropagation()}
-              className="rounded-2xl border-[3px] border-black bg-white/10 px-3 py-2 text-sm font-black text-white shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] transition-all hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none"
-              aria-label={`View ${acc.bank} statement`}
-            >
-              View Statement
-            </Link>
+            <>
+              <button
+                type="button"
+                onClick={(e) => { e.stopPropagation(); setStatementInfoAccount(acc); }}
+                className="inline-flex h-11 w-11 items-center justify-center rounded-[1.1rem] border-[3px] border-black bg-[#f5f0e5] text-black shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] transition-all hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none"
+                aria-label={`View ${acc.bank} billing details`}
+                title="Billing details"
+              >
+                <FileText className="h-4 w-4" />
+              </button>
+              <Link
+                to={`/accounts/statement?account=${acc.id}`}
+                onClick={(e) => e.stopPropagation()}
+                className="rounded-2xl border-[3px] border-black bg-[#f5f0e5] px-3 py-2 text-sm font-black text-black shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] transition-all hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none"
+                aria-label={`View ${acc.bank} statement`}
+              >
+                View Statement
+              </Link>
+            </>
           )}
           <Link
             to={`/accounts/view?account=${acc.id}`}
@@ -470,8 +470,8 @@ const Accounts: React.FC<AccountsProps> = ({ accounts, onAdd, onDelete, onEdit, 
 
       {showModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-md">
-          <div className="w-full max-w-3xl overflow-hidden rounded-[2rem] border-[4px] border-black bg-[#fff7e8] shadow-[10px_10px_0px_0px_rgba(0,0,0,1)] flex flex-col md:flex-row transition-colors dark:bg-gray-900">
-            <div className={`${getAccentClasses('bg')} md:w-1/3 p-8 text-white flex flex-col justify-between transition-colors border-b-[4px] border-black md:border-b-0 md:border-r-[4px]`}>
+          <div className="flex max-h-[92vh] w-full max-w-3xl flex-col overflow-hidden rounded-[2rem] border-[4px] border-black bg-[#fff7e8] shadow-[10px_10px_0px_0px_rgba(0,0,0,1)] transition-colors md:flex-row dark:bg-gray-900">
+            <div className={`${getAccentClasses('bg')} shrink-0 p-6 text-white transition-colors border-b-[4px] border-black md:w-1/3 md:border-b-0 md:border-r-[4px] md:p-8`}>
               <div>
                 <div className="mb-5 inline-flex rounded-2xl border-[3px] border-black bg-white/20 p-3">
                   <WalletCards className="w-8 h-8" />
@@ -480,7 +480,7 @@ const Accounts: React.FC<AccountsProps> = ({ accounts, onAdd, onDelete, onEdit, 
                 <p className="text-sm text-white/85">Keep your banking setup bold, playful, and easy to scan.</p>
               </div>
             </div>
-            <form onSubmit={handleSubmit} className="p-8 flex-1 bg-[#fff7e8] dark:bg-gray-900 space-y-6 transition-colors">
+            <form onSubmit={handleSubmit} className="min-w-0 flex-1 overflow-y-auto overflow-x-hidden bg-[#fff7e8] p-5 space-y-6 transition-colors sm:p-6 md:p-8 dark:bg-gray-900">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs font-black text-gray-500 uppercase tracking-[0.2em] mb-2 transition-colors">Bank Name</label>
@@ -550,6 +550,53 @@ const Accounts: React.FC<AccountsProps> = ({ accounts, onAdd, onDelete, onEdit, 
           </div>
         </div>
       )}
+
+      {statementInfoAccount && (() => {
+        const statementDay = statementInfoAccount.billingDate ? new Date(statementInfoAccount.billingDate).getDate() : null;
+        const daysToPay = statementInfoAccount.dueDate ? new Date(statementInfoAccount.dueDate).getDate() : null;
+        const dueDisplay = statementDay && daysToPay ? getDueDayForDisplay(statementDay, daysToPay) : null;
+
+        return (
+          <div className="fixed inset-0 z-[140] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md">
+            <div className="w-full max-w-sm rounded-[2rem] border-[4px] border-black bg-[#fff7e8] p-8 shadow-[10px_10px_0px_0px_rgba(0,0,0,1)] transition-colors dark:bg-gray-900">
+              <div className="mb-5 inline-flex h-14 w-14 items-center justify-center rounded-[1.4rem] border-[3px] border-black bg-[#f5f0e5] text-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]">
+                <FileText className="w-6 h-6" />
+              </div>
+              <h3 className="text-2xl font-black uppercase tracking-tight text-gray-900 transition-colors dark:text-gray-100">Statement Details</h3>
+              <p className="mt-2 text-sm font-medium text-gray-600 transition-colors dark:text-gray-400">{statementInfoAccount.bank}</p>
+
+              <div className="mt-6 space-y-3">
+                <div className="rounded-[1.3rem] border-[3px] border-black bg-white p-4 transition-colors dark:bg-gray-950">
+                  <p className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-500">Statement Day</p>
+                  <p className="mt-2 text-lg font-black text-gray-900 transition-colors dark:text-gray-100">
+                    {statementDay ? `${statementDay}${ordinalSuffix(statementDay)} of each month` : 'Not set'}
+                  </p>
+                </div>
+                <div className="rounded-[1.3rem] border-[3px] border-black bg-white p-4 transition-colors dark:bg-gray-950">
+                  <p className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-500">Days To Pay</p>
+                  <p className="mt-2 text-lg font-black text-gray-900 transition-colors dark:text-gray-100">
+                    {daysToPay ? `${daysToPay} days after statement` : 'Not set'}
+                  </p>
+                </div>
+                <div className="rounded-[1.3rem] border-[3px] border-black bg-white p-4 transition-colors dark:bg-gray-950">
+                  <p className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-500">Approx. Due Date</p>
+                  <p className="mt-2 text-lg font-black text-gray-900 transition-colors dark:text-gray-100">
+                    {dueDisplay || 'Not set'}
+                  </p>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setStatementInfoAccount(null)}
+                className="mt-6 w-full rounded-2xl border-[3px] border-black bg-white py-4 font-black text-gray-700 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] transition-all hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none dark:bg-gray-800 dark:text-gray-100"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        );
+      })()}
 
       {deactivateState.show && (
         <DeactivateDialog
