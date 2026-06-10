@@ -276,8 +276,8 @@ const Accounts: React.FC<AccountsProps> = ({ accounts, onAdd, onDelete, onEdit, 
           </div>
         </div>
 
-        <div className="mb-3 mt-3 sm:mb-4 sm:mt-4">
-          <div className="flex items-end justify-between gap-3">
+        <div className="mb-3 mt-2.5 sm:mb-4 sm:mt-3">
+          <div className="flex items-start justify-between gap-3">
             {isCredit ? (
               <div className="min-w-0 rounded-[1rem] border-2 border-black/10 bg-[#f5f0e5] px-3 py-2">
                 <p className="text-[9px] font-black uppercase tracking-[0.16em] text-black/55">Credit Limit</p>
@@ -287,32 +287,12 @@ const Accounts: React.FC<AccountsProps> = ({ accounts, onAdd, onDelete, onEdit, 
             ) : (
               <div />
             )}
-            <div className="min-w-0 text-right">
+            <div className={`min-w-0 text-right ${isCredit ? 'pt-1' : 'pt-0.5'}`}>
               <p className="text-[10px] font-black uppercase tracking-[0.14em] text-black/55">Balance</p>
               <p className="mt-0.5 text-[clamp(1.15rem,2.9vw,1.45rem)] font-black leading-tight">{formatCurrency(acc.balance)}</p>
             </div>
           </div>
         </div>
-
-        {isCredit && (
-          <div className="mb-3 rounded-[1.1rem] border-2 border-black/10 bg-[#f5f0e5] p-2.5 sm:mb-4">
-            <div className="h-2.5 w-full overflow-hidden rounded-full border-2 border-black/20 bg-black/10">
-              <div
-                className={`h-2.5 rounded-full ${usedPercentSafe >= 90 ? 'bg-red-500' : 'bg-purple-300'}`}
-                style={{ width: `${usedPercentSafe}%`, transition: 'width 300ms ease' }}
-                aria-valuenow={usedPercentSafe}
-                aria-valuemin={0}
-                aria-valuemax={100}
-                role="progressbar"
-              />
-            </div>
-
-            <div className="mt-1.5 flex items-center justify-between text-[10px] text-black/65">
-              <span className="font-bold uppercase tracking-[0.12em]">Usage</span>
-              <span className="font-black">{usedPercentSafe}%</span>
-            </div>
-          </div>
-        )}
 
         <div className="space-y-3">
           {isActive && deactivationDate && (
@@ -322,7 +302,7 @@ const Accounts: React.FC<AccountsProps> = ({ accounts, onAdd, onDelete, onEdit, 
           )}
         </div>
 
-        <div className="mt-auto flex flex-wrap items-center justify-end gap-1.5 pt-3 sm:gap-2 sm:pt-4">
+        <div className={`${isCredit ? 'mt-auto' : 'mt-3 sm:mt-4'} flex flex-wrap items-center justify-end gap-1.5 pt-2 sm:gap-2 sm:pt-3`}>
           {isCredit && (
             <>
               <button
