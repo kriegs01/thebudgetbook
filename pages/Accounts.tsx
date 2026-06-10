@@ -230,10 +230,13 @@ const Accounts: React.FC<AccountsProps> = ({ accounts, onAdd, onDelete, onEdit, 
         key={acc.id}
         className={`${cardSurface} relative mx-auto flex h-full w-full aspect-[1.92/1] max-w-[24rem] flex-col overflow-hidden rounded-[2rem] border-[4px] border-black p-4 shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] transition-all duration-200 hover:-translate-y-1 hover:shadow-[12px_12px_0px_0px_rgba(0,0,0,1)] sm:max-w-none sm:p-5`}
       >
-        <div className="absolute left-6 top-6 h-10 w-14 rounded-xl border border-black/15 bg-black/[0.04]" />
-        <div className="absolute inset-x-6 top-20 h-px bg-black/10" />
+        <div className="absolute inset-x-5 top-[5.35rem] h-px bg-black/10 sm:inset-x-6 sm:top-[5.6rem]" />
 
-        <div className="mb-6 flex items-start justify-end sm:mb-8">
+        <div className="mb-5 flex items-start justify-between gap-4 sm:mb-6">
+          <div className="min-w-0 pr-2">
+            <h3 className={`max-w-[10.25rem] truncate text-[clamp(1.15rem,2.8vw,1.45rem)] font-black leading-tight ${getAccentClasses('text')}`}>{acc.bank}</h3>
+            <p className="mt-1 text-[10px] font-black uppercase tracking-[0.18em] text-black/60">{acc.classification}</p>
+          </div>
           <div className="relative">
             <button
               onClick={(e) => { e.stopPropagation(); setOpenMenuId(openMenuId === acc.id ? null : acc.id); }}
@@ -273,29 +276,29 @@ const Accounts: React.FC<AccountsProps> = ({ accounts, onAdd, onDelete, onEdit, 
           </div>
         </div>
 
-        <div className="mb-4 sm:mb-5">
-          <div className="flex items-start justify-between gap-4">
-            <div>
-              <h3 className={`max-w-[12rem] text-[clamp(1.25rem,3.1vw,1.7rem)] font-black leading-tight ${getAccentClasses('text')}`}>{acc.bank}</h3>
-              <p className="mt-1 text-[11px] font-black uppercase tracking-[0.2em] text-black/60">{acc.classification}</p>
-            </div>
-            <div className="text-right">
-              <p className="text-[11px] font-black uppercase tracking-[0.18em] text-black/55">Balance</p>
-              <p className="mt-1 text-[clamp(1.35rem,3.5vw,1.85rem)] font-black leading-tight">{formatCurrency(acc.balance)}</p>
+        <div className="mb-3 mt-3 sm:mb-4 sm:mt-4">
+          <div className="flex items-end justify-between gap-3">
+            {isCredit ? (
+              <div className="min-w-0 rounded-[1rem] border-2 border-black/10 bg-[#f5f0e5] px-3 py-2">
+                <p className="text-[9px] font-black uppercase tracking-[0.16em] text-black/55">Credit Limit</p>
+                <p className="mt-0.5 truncate text-[clamp(0.85rem,2vw,1rem)] font-black text-black">{formatCurrency(creditLimit)}</p>
+                <p className="mt-0.5 text-[9px] font-bold uppercase tracking-[0.12em] text-black/50">Used {usedPercentSafe}%</p>
+              </div>
+            ) : (
+              <div />
+            )}
+            <div className="min-w-0 text-right">
+              <p className="text-[10px] font-black uppercase tracking-[0.14em] text-black/55">Balance</p>
+              <p className="mt-0.5 text-[clamp(1.15rem,2.9vw,1.45rem)] font-black leading-tight">{formatCurrency(acc.balance)}</p>
             </div>
           </div>
         </div>
 
         {isCredit && (
-          <div className="mb-4 rounded-[1.4rem] border-2 border-black/10 bg-[#f5f0e5] p-3.5 sm:p-4">
-            <div className="mb-2 flex items-center justify-between">
-              <p className="text-xs font-bold uppercase tracking-[0.18em] text-black/60">Credit Limit</p>
-              <p className="text-sm font-semibold text-black">{formatCurrency(creditLimit)}</p>
-            </div>
-
-            <div className="h-3 w-full overflow-hidden rounded-full border-2 border-black/20 bg-black/10">
+          <div className="mb-3 rounded-[1.1rem] border-2 border-black/10 bg-[#f5f0e5] p-2.5 sm:mb-4">
+            <div className="h-2.5 w-full overflow-hidden rounded-full border-2 border-black/20 bg-black/10">
               <div
-                className={`h-3 rounded-full ${usedPercentSafe >= 90 ? 'bg-red-500' : 'bg-purple-300'}`}
+                className={`h-2.5 rounded-full ${usedPercentSafe >= 90 ? 'bg-red-500' : 'bg-purple-300'}`}
                 style={{ width: `${usedPercentSafe}%`, transition: 'width 300ms ease' }}
                 aria-valuenow={usedPercentSafe}
                 aria-valuemin={0}
@@ -304,9 +307,9 @@ const Accounts: React.FC<AccountsProps> = ({ accounts, onAdd, onDelete, onEdit, 
               />
             </div>
 
-            <div className="mt-2 flex items-center justify-between text-[11px] text-black/65">
-              <span>Used</span>
-              <span className="font-medium">{usedPercentSafe}%</span>
+            <div className="mt-1.5 flex items-center justify-between text-[10px] text-black/65">
+              <span className="font-bold uppercase tracking-[0.12em]">Usage</span>
+              <span className="font-black">{usedPercentSafe}%</span>
             </div>
           </div>
         )}
@@ -319,22 +322,22 @@ const Accounts: React.FC<AccountsProps> = ({ accounts, onAdd, onDelete, onEdit, 
           )}
         </div>
 
-        <div className="mt-auto flex items-center justify-end gap-2 pt-4 sm:pt-6">
+        <div className="mt-auto flex flex-wrap items-center justify-end gap-1.5 pt-3 sm:gap-2 sm:pt-4">
           {isCredit && (
             <>
               <button
                 type="button"
                 onClick={(e) => { e.stopPropagation(); setStatementInfoAccount(acc); }}
-                className="inline-flex h-11 w-11 items-center justify-center rounded-[1.1rem] border-[3px] border-black bg-[#f5f0e5] text-black shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] transition-all hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none"
+                className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-[1rem] border-[3px] border-black bg-[#f5f0e5] text-black shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] transition-all hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none sm:h-10 sm:w-10"
                 aria-label={`View ${acc.bank} billing details`}
                 title="Billing details"
               >
-                <FileText className="h-4 w-4" />
+                <FileText className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
               </button>
               <Link
                 to={`/accounts/statement?account=${acc.id}`}
                 onClick={(e) => e.stopPropagation()}
-                className="rounded-2xl border-[3px] border-black bg-[#f5f0e5] px-3 py-2 text-sm font-black text-black shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] transition-all hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none"
+                className="inline-flex min-w-0 items-center rounded-2xl border-[3px] border-black bg-[#f5f0e5] px-2.5 py-2 text-[11px] font-black text-black shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] transition-all hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none sm:px-3 sm:text-xs"
                 aria-label={`View ${acc.bank} statement`}
               >
                 View Statement
@@ -344,11 +347,11 @@ const Accounts: React.FC<AccountsProps> = ({ accounts, onAdd, onDelete, onEdit, 
           <Link
             to={`/accounts/view?account=${acc.id}`}
             onClick={(e) => e.stopPropagation()}
-            className={`inline-flex items-center gap-2 rounded-2xl border-[3px] border-black px-3.5 py-2 text-sm font-black text-black shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] transition-all hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none ${getAccentClasses('bg')}`}
+            className={`inline-flex min-w-0 items-center gap-1.5 rounded-2xl border-[3px] border-black px-2.5 py-2 text-[11px] font-black text-black shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] transition-all hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none sm:px-3 sm:text-xs ${getAccentClasses('bg')}`}
             aria-label={`View ${acc.bank} transactions`}
           >
             <span>View</span>
-            <ArrowUpRight className="h-4 w-4" />
+            <ArrowUpRight className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
           </Link>
         </div>
       </div>
