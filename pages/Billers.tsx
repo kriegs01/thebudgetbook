@@ -1,9 +1,9 @@
 
-import React, { useState, useEffect, useCallback, useRef } from 'react';
-import useMediaQuery from '../src/hooks/useMediaQuery';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Biller, BillerAmountIncrease, Account, PaymentSchedule, BudgetCategory, Installment } from '../types';
 import { Plus, Calendar, Receipt, ChevronDown, ChevronRight, Upload, CheckCircle2, X, ArrowLeft, Power, PowerOff, MoreVertical, Edit2, Eye, Trash2, AlertTriangle, Info, ZoomIn, ZoomOut, Download } from 'lucide-react';
 import { PinProtectedAction } from '../src/components/PinProtectedAction';
+import { PageHeader } from '../src/components/PageHeader';
 import { getAllTransactions, getTransactionsByPaymentSchedule, getReceiptSignedUrl, updateTransaction, updateTransactionAndSyncSchedule, deleteTransactionAndRevertSchedule } from '../src/services/transactionsService';
 import { getPaymentSchedulesBySource } from '../src/services/paymentSchedulesService';
 import { combineDateWithCurrentTime, getTodayIso } from '../src/utils/dateUtils';

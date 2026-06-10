@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Menu, ChevronLeft, SlidersHorizontal, ArrowUp, ArrowDown, Eye, EyeOff, X, ChevronDown, LogOut, Lock, Users, Bell, MessageCircle } from 'lucide-react';
-import { BrowserRouter, Routes, Route, NavLink, useLocation, Navigate } from 'react-router-dom';
+import { Menu, ChevronLeft, SlidersHorizontal, ArrowUp, ArrowDown, Eye, EyeOff, X, ChevronDown, LogOut, Lock, Users, Bell, MessageCircle, AlertCircle } from 'lucide-react';
+import { BrowserRouter, Routes, Route, NavLink, useLocation, Navigate, Outlet } from 'react-router-dom';
 import { FloatingHUD } from './FloatingHUD';
 import { QueryClient, QueryClientProvider, useQueryClient } from '@tanstack/react-query';
 import { NAV_ITEMS, INITIAL_BUDGET, DEFAULT_SETUP, INITIAL_CATEGORIES } from './constants';
@@ -17,7 +17,7 @@ import { recalculateAllAccountBalances } from './src/utils/accountBalanceCalcula
 import { updateUserProfile } from './src/services/userProfileService';
 import { acceptFriendRequest, removeFriendship } from './src/services/friendshipsService';
 import { getAllPeople, createPerson } from './src/services/peopleService';
-import type { Biller, Account, Installment, Transaction } from './types';
+import type { Biller, Account, Installment, Transaction, BudgetCategory, SavingsJar } from './types';
 import type { SupabaseTransaction } from './src/types/supabase';
 
 // Context
@@ -43,6 +43,7 @@ import SettingsPage from './pages/Settings';
 import SupabaseDemo from './pages/SupabaseDemo';
 import Auth from './pages/Auth';
 import UpdatePassword from './pages/update-password';
+import AuthConfirm from './pages/AuthConfirm';
 import { useTransactions } from './src/hooks/useTransactions';
 import { useAccounts } from './src/hooks/useAccounts';
 import { useIncomingRequests, useUnreadMessagesCount, socialKeys } from './src/hooks/useBudies';
@@ -167,12 +168,6 @@ const formatTransaction = (supabaseTransaction: SupabaseTransaction): Transactio
   date: supabaseTransaction.date,
   amount: supabaseTransaction.amount,
   paymentMethodId: supabaseTransaction.payment_method_id,
-  transaction_type: supabaseTransaction.transaction_type ?? null,
-  notes: supabaseTransaction.notes ?? null,
-  related_transaction_id: supabaseTransaction.related_transaction_id ?? null,
-  borrower_name: supabaseTransaction.borrower_name ?? null,
-  receiptUrl: supabaseTransaction.receipt_url ?? null,
-  person_name: (supabaseTransaction as any).person_name ?? null,
 });
 
 const queryClient = new QueryClient();
@@ -182,7 +177,6 @@ const AppContent: React.FC = () => {
   const { user, userProfile, loading: authLoading, signOut, refreshProfile } = useAuth();
   const queryClient = useQueryClient();
 
-  // Show auth page if not authenticated
   if (authLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-100 via-gray-50 to-purple-100 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900">
@@ -195,18 +189,23 @@ const AppContent: React.FC = () => {
   }
 
   if (!user) {
-    return <Auth />;
+    return <Navigate to="/auth" replace />;
   }
 
-  // User is authenticated, show main app
+  if (isPasswordRecovery && location.pathname !== '/update-password') {
+    return <Navigate to="/update-password" replace />;
+  }
+
   return (
     <PinProtectionProvider>
-      <MainApp user={user} userProfile={userProfile} signOut={signOut} />
+      <Outlet />
     </PinProtectionProvider>
   );
 };
 
-const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<void> }> = ({ user, userProfile, signOut }) => {
+const MainApp: React.FC = () => {
+  const { user, userProfile, signOut } = useAuth();
+  const queryClient = useQueryClient();
   const location = useLocation();
   const isDashboard = location.pathname === '/';
   const [isScrolled, setIsScrolled] = useState(false);
@@ -228,10 +227,6 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
   const [showSplash, setShowSplash] = useState(true);
   const [minSplashTimeElapsed, setMinSplashTimeElapsed] = useState(false);
 
-  useEffect(() => {
-    setIsSidebarOpen(!isMobile);
-  }, [isMobile]);
-
   // Scroll listener for Dashboard top bar visibility
   useEffect(() => {
     const handleScroll = () => {
@@ -251,6 +246,10 @@ const MainApp: React.FC<{ user: any; userProfile: any; signOut: () => Promise<vo
       scrollContainerRef.current.scrollTop = 0;
     }
   }, [location.pathname]);
+
+  useEffect(() => {
+    setIsSidebarOpen(!isMobile);
+  }, [isMobile]);
 
   const loadNotifications = async () => {
     const { data: pTxs } = await getPendingTransactions();
@@ -1809,7 +1808,24 @@ const App: React.FC = () => {
         <AuthProvider>
           <ThemeProvider>
             <BrowserRouter>
-              <AppContent />
+              <Routes>
+                <Route path="/auth" element={<Auth />} />
+                <Route path="/auth/confirm" element={<AuthConfirm />} />
+                <Route path="/update-password" element={<UpdatePassword />} />
+                <Route
+                  path="/auth/auth-code-error"
+                  element={
+                    <AuthErrorPage
+                      title="Link Invalid"
+                      message="The password reset link is invalid or has expired. Please try again."
+                    />
+                  }
+                />
+
+                <Route element={<ProtectedRoute />}>
+                  <Route path="/*" element={<MainApp />} />
+                </Route>
+              </Routes>
             </BrowserRouter>
           </ThemeProvider>
         </AuthProvider>

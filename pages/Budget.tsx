@@ -17,6 +17,7 @@ import { getWalletsForCurrentUser } from '../src/services/walletsService';
 import { useTheme } from '../src/contexts/ThemeContext';
 import useMediaQuery from '../src/hooks/useMediaQuery';
 import { BudgetSetupsList } from '../src/components/BudgetSetupsList';
+import { PageHeader } from '../src/components/PageHeader';
 
 interface BudgetProps {
   items: BudgetItem[];

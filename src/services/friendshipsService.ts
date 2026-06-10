@@ -16,6 +16,9 @@ export const searchUsers = async (query: string) => {
   const userId = await getCurrentUserId();
   if (!userId) return { data: [], error: null };
 
+  const cleaned = query.trim().replace(/^@/, '');
+  if (!cleaned) return { data: [], error: null };
+
   const { data, error } = await supabase
     .from('user_profiles')
     .select('*')
@@ -40,15 +43,7 @@ export const getFriendships = async () => {
 
   const { data, error } = await supabase
     .from('friendships')
-    .select(`
-      id,
-      user_id,
-      friend_id,
-      status,
-      created_at,
-      user_profile:user_id ( first_name, last_name ),
-      friend_profile:friend_id ( first_name, last_name )
-    `)
+    .select('id, user_id, friend_id, status, created_at')
     .or(`user_id.eq.${userId},friend_id.eq.${userId}`)
     .in('status', ['accepted', 'pending']);
 

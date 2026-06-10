@@ -1,6 +1,8 @@
-import React, { useState } from 'react';
+
+import React, { useEffect, useState } from 'react';
 import { Lock, Mail, AlertCircle, Loader, ArrowLeft } from 'lucide-react';
 import { useAuth } from '../src/contexts/AuthContext';
+import { useNavigate } from 'react-router-dom';
 import { Logo } from '../src/components/Logo'; // Import the logo
 
 const PasswordShapes = ({ password }) => {
@@ -66,7 +68,14 @@ const Auth: React.FC = () => {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
 
-  const { signIn, signUp, resetPassword } = useAuth();
+  const navigate = useNavigate();
+  const { signIn, signUp, resetPassword, user, loading: authLoading, isPasswordRecovery } = useAuth();
+
+  useEffect(() => {
+    if (!authLoading && user) {
+      navigate(isPasswordRecovery ? '/update-password' : '/', { replace: true });
+    }
+  }, [authLoading, user, isPasswordRecovery, navigate]);
 
   const validateEmail = (email: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
   const validatePassword = (password: string) => password.length >= 6;

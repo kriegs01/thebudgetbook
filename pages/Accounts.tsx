@@ -19,6 +19,7 @@ import {
 } from 'lucide-react';
 import { getDueDayForDisplay, ordinalSuffix } from '../src/utils/billingCycles';
 import { useTheme } from '../src/contexts/ThemeContext';
+import { PageHeader } from '../src/components/PageHeader';
 
 interface AccountsProps {
   accounts: Account[];

@@ -10,6 +10,7 @@ import { combineDateWithCurrentTime, getTodayIso } from '../src/utils/dateUtils'
 import type { SupabaseMonthlyPaymentSchedule, SupabaseTransaction } from '../src/types/supabase';
 import { supabase } from '../src/utils/supabaseClient';
 import { useTheme } from '../src/contexts/ThemeContext';
+import { PageHeader } from '../src/components/PageHeader';
 
 interface InstallmentsProps {
   installments: Installment[];

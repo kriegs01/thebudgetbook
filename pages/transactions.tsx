@@ -13,6 +13,7 @@ import { combineDateWithCurrentTime, getTodayIso, getFirstDayOfCurrentYearIso, g
 import { useTheme } from '../src/contexts/ThemeContext';
 import useMediaQuery from '../src/hooks/useMediaQuery';
 import { TransactionList } from '../src/components/TransactionList';
+import { PageHeader } from '../src/components/PageHeader';
 import type { Transaction, AccountOption } from '../types';
 
 const FILTER_MIN_DATE = '2025-01-01';
