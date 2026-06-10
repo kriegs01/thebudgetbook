@@ -174,6 +174,64 @@ const isCategoryLegacyForBudget = (
   return true;
 };
 
+const PageHeader: React.FC<{ 
+  title: string; 
+  subtitle: string; 
+  icon?: React.ReactNode;
+  actions?: React.ReactNode;
+  backButton?: React.ReactNode;
+}> = ({ title, subtitle, icon, actions, backButton }) => {
+  const { getAccentClasses } = useTheme();
+  const isMobile = useMediaQuery('(max-width: 767px)');
+
+  const titleContainerRef = useRef<HTMLDivElement>(null);
+  const [highlightWidth, setHighlightWidth] = useState(0);
+  useEffect(() => {
+    const calculateWidth = () => {
+      if (titleContainerRef.current) {
+        setHighlightWidth(titleContainerRef.current.offsetWidth);
+      }
+    };
+
+    calculateWidth();
+    window.addEventListener('resize', calculateWidth);
+    return () => window.removeEventListener('resize', calculateWidth);
+  }, [title]);
+  return (
+    <header className={`${isMobile ? 'pt-8' : 'pt-12'} flex flex-row items-center justify-between gap-6`}>
+        <div className="flex-1">
+            <div className="relative inline-block">
+                <div ref={titleContainerRef} className="flex items-center gap-4">
+                    {icon && <div className="z-10 shrink-0">{icon}</div>}
+                    <h1 className={`font-titan text-[clamp(2rem,7.5vw,3.75rem)] normal-case tracking-tighter leading-none relative z-10 [text-shadow:-1px_-1px_0_#000,1px_-1px_0_#000,-1px_1px_0_#000,1px_1px_0_#000] drop-shadow-[3px_3px_0px_#000] ${icon ? getAccentClasses('text') : 'text-black dark:text-white'}`}>
+                        {title}
+                    </h1>
+                </div>
+                {highlightWidth > 0 && (
+                    <div
+                        className={`absolute bottom-1 left-0 h-5 ${getAccentClasses('bg')} opacity-40 -z-0 -rotate-1 -translate-x-2 transition-colors duration-300`}
+                        style={{ width: `${highlightWidth}px` }}
+                    />
+                )}
+            </div>
+
+            <div className="flex items-center gap-3 mt-1 ml-1">
+                {!backButton && (
+                    <p className="text-[clamp(1rem,3vw,1.25rem)] font-bold italic text-black/50 dark:text-gray-400 transition-colors duration-300">
+                        {subtitle}
+                    </p>
+                )}
+            </div>
+
+            <div className="h-2 w-32 mt-2 bg-black dark:bg-white/20 transition-colors duration-300" />
+
+            {backButton && <div className="mt-6">{backButton}</div>}
+        </div>
+        {actions && <div className="flex items-center justify-end gap-3">{actions}</div>}
+    </header>
+  );
+};
+
 const calculateBudgetRemaining = (
   setup: SavedBudgetSetup,
   transactions: SupabaseTransaction[],
@@ -581,7 +639,7 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
     amount: '',
     accountId: accounts[0]?.id || '',
     paymentScheduleId: '',
-    transactionType: 'cash_out'
+    transactionType: 'payment'
   });
   const [transactionFormData, setTransactionFormData] = useState(getDefaultTransactionFormData());
 
@@ -764,21 +822,25 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
   
   const checkIfPaidBySchedule = useCallback((
     sourceType: 'biller' | 'installment',
-    sourceId: string
+    sourceId: string,
+    month: string = selectedMonth,
+    year: number = selectedYear
   ): boolean => {
-    const schedule = getPaymentSchedule(sourceType, sourceId);
+    const schedule = getPaymentSchedule(sourceType, sourceId, month, year);
     if (!schedule) return false;
     return schedule.status === 'paid';
-  }, [getPaymentSchedule]);
+  }, [getPaymentSchedule, selectedMonth, selectedYear]);
 
   const checkIfPartialBySchedule = useCallback((
     sourceType: 'biller' | 'installment',
-    sourceId: string
+    sourceId: string,
+    month: string = selectedMonth,
+    year: number = selectedYear
   ): boolean => {
-    const schedule = getPaymentSchedule(sourceType, sourceId);
+    const schedule = getPaymentSchedule(sourceType, sourceId, month, year);
     if (!schedule) return false;
     return schedule.status === 'partial' && schedule.amount_paid > 0;
-  }, [getPaymentSchedule]);
+  }, [getPaymentSchedule, selectedMonth, selectedYear]);
 
   const checkIfPaidByTransaction = useCallback((
     itemName: string, 
@@ -1153,11 +1215,15 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
       let transactionData, transactionError;
       
       let finalAmount = parseFloat(transactionFormData.amount);
-      if (transactionFormData.transactionType === 'cash_in' || transactionFormData.transactionType === 'loan_payment') {
+      if (transactionFormData.transactionType === 'cash_in') {
         finalAmount = -Math.abs(finalAmount);
       } else {
         finalAmount = Math.abs(finalAmount);
       }
+
+      const txTypeForForm = transactionFormData.transactionType === 'cash_in'
+        ? 'cash_in'
+        : 'payment';
 
       if (isEditing) {
         const transaction = {
@@ -1165,6 +1231,7 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
           date: combineDateWithCurrentTime(transactionFormData.date),
           amount: finalAmount,
           payment_method_id: transactionFormData.accountId,
+          transaction_type: txTypeForForm as any,
           notes: `Budget Timing: ${selectedTiming}`
         };
         const result = await updateTransactionAndSyncSchedule(transactionFormData.id, transaction);
@@ -1178,7 +1245,8 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
             date: combineDateWithCurrentTime(transactionFormData.date),
             amount: finalAmount,
             paymentMethodId: transactionFormData.accountId,
-            notes: `Budget Timing: ${selectedTiming}`
+            notes: `Budget Timing: ${selectedTiming}`,
+            transactionType: txTypeForForm,
           }
         );
         transactionData = result.data;
@@ -1218,14 +1286,20 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
           date: combineDateWithCurrentTime(transactionFormData.date),
           amount: finalAmount,
           payment_method_id: transactionFormData.accountId,
+          transaction_type: txTypeForForm as any,
           notes: `Budget Timing: ${selectedTiming}`
         };
-        const result = await createTransaction(transaction);
+        const result = await createTransaction(transaction as any);
         transactionData = result.data;
         transactionError = result.error;
       }
       
       if (transactionError) {
+        const code = (transactionError as any)?.code;
+        if (code === '23514') {
+          alert('Failed to save transaction: your database is rejecting the transaction type. Please run the latest Supabase migrations (including credit_payment transaction type).');
+          return;
+        }
         alert(`Failed to ${isEditing ? 'update' : 'save'} transaction. Please try again.`);
         return;
       }
@@ -1276,47 +1350,80 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
       
       let transactionData, transactionError;
       
+      const parsedAmount = parseFloat(payFormData.amount) || 0;
+      const selectedAccount = accounts.find(a => a.id === payFormData.accountId);
+      const finalAmount = selectedAccount && selectedAccount.type === 'Credit' ? -Math.abs(parsedAmount) : Math.abs(parsedAmount);
+      const payTransactionType = selectedAccount?.type === 'Credit'
+        ? 'credit_payment'
+        : 'payment';
+      
+      console.log('[Budget] handlePaySubmit starting:', {
+        billerId: biller.id,
+        billerName: biller.name,
+        isEditing,
+        paymentScheduleId,
+        accountId: payFormData.accountId,
+        selectedAccountType: selectedAccount?.type,
+        parsedAmount,
+        finalAmount,
+        payTransactionType
+      });
+
       if (isEditing) {
+        console.log('[Budget] Updating existing transaction:', payFormData.transactionId);
         const transaction = {
           name: `${biller.name} - ${schedule.month} ${schedule.year}`,
           date: combineDateWithCurrentTime(payFormData.datePaid),
-          amount: parseFloat(payFormData.amount),
+          amount: finalAmount,
           payment_method_id: payFormData.accountId,
           notes: `Budget Timing: ${selectedTiming}`
         };
         const result = await updateTransaction(payFormData.transactionId, transaction);
         transactionData = result.data;
         transactionError = result.error;
+        console.log('[Budget] Update result:', { transactionData, transactionError });
       } else if (paymentScheduleId) {
+        console.log('[Budget] Creating payment schedule transaction:', {
+          paymentScheduleId,
+          amount: finalAmount,
+          transaction_type: payTransactionType
+        });
         const result = await createPaymentScheduleTransaction(
           paymentScheduleId,
           {
             name: `${biller.name} - ${schedule.month} ${schedule.year}`,
             date: combineDateWithCurrentTime(payFormData.datePaid),
-            amount: parseFloat(payFormData.amount),
+            amount: finalAmount,
             paymentMethodId: payFormData.accountId,
-            notes: `Budget Timing: ${selectedTiming}`
-          }
+            notes: `Budget Timing: ${selectedTiming}`,
+            transaction_type: payTransactionType
+          } as any
         );
         transactionData = result.data;
         transactionError = result.error;
+        console.log('[Budget] Create payment schedule result:', { transactionData, transactionError });
       } else {
+        console.log('[Budget] Creating standalone transaction:', { amount: finalAmount, transaction_type: payTransactionType });
         const transaction = {
           name: `${biller.name} - ${schedule.month} ${schedule.year}`,
           date: combineDateWithCurrentTime(payFormData.datePaid),
-          amount: parseFloat(payFormData.amount),
+          amount: finalAmount,
           payment_method_id: payFormData.accountId,
           notes: `Budget Timing: ${selectedTiming}`
         };
-        const result = await createTransaction(transaction);
+        const result = await createTransaction({ ...transaction, transaction_type: payTransactionType } as any);
         transactionData = result.data;
         transactionError = result.error;
+        console.log('[Budget] Create standalone result:', { transactionData, transactionError });
       }
       
       if (transactionError) {
+        console.error('[Budget] Transaction error:', transactionError);
         alert(`Failed to ${isEditing ? 'update' : 'create'} transaction. Please try again.`);
         return;
       }
+      
+      console.log('[Budget] Transaction created successfully:', transactionData?.id);
       
       if (payReceiptFile && transactionData?.id) {
         const { path, error: uploadError } = await uploadTransactionReceipt(transactionData.id, payReceiptFile);
@@ -1330,7 +1437,7 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
       if (!isEditing && biller.linkedAccountId && transactionData?.id) {
         const linkedAccount = accounts.find(a => a.id === biller.linkedAccountId);
         if (linkedAccount?.type === 'Credit') {
-          await createTransaction({
+          const { error: creditPaymentError } = await createTransaction({
             name: `${biller.name} - ${schedule.month} ${schedule.year}`,
             date: combineDateWithCurrentTime(payFormData.datePaid),
             amount: -Math.abs(parseFloat(payFormData.amount)),
@@ -1341,6 +1448,10 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
             related_transaction_id: transactionData.id,
             receipt_url: null,
           });
+          const code = (creditPaymentError as any)?.code;
+          if (code === '23514') {
+            alert('Payment saved, but the credit card adjustment transaction failed because your database does not allow the credit_payment transaction type. Please run the latest Supabase migrations.');
+          }
         }
       }
       
@@ -1419,6 +1530,7 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
       });
       setPayReceiptFile(null);
     } catch (error) {
+      console.error('[Budget] handlePaySubmit error:', error);
       alert('Failed to process payment. Please try again.');
     }
   };
@@ -2265,7 +2377,7 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                                     id: '', name: `${installment.name} - ${selectedMonth} ${new Date().getFullYear()}`, date: getTodayIso(),
                                     amount: isPartial && installmentSchedule ? Math.max(0, installmentSchedule.expected_amount - installmentSchedule.amount_paid).toFixed(2) : installment.monthlyAmount.toFixed(2),
                                     accountId: installment.accountId || accounts[0]?.id || '', paymentScheduleId: installmentSchedule?.id || '',
-                                    transactionType: 'loan_payment'
+                                    transactionType: 'payment'
                                   });
                                   setShowTransactionModal(true);
                                 }}
@@ -2417,7 +2529,7 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                                             id: '', name: `${installment.name} - ${selectedMonth} ${new Date().getFullYear()}`, date: getTodayIso(),
                                             amount: isPartial && installmentSchedule ? Math.max(0, installmentSchedule.expected_amount - installmentSchedule.amount_paid).toFixed(2) : installment.monthlyAmount.toFixed(2),
                                             accountId: installment.accountId || accounts[0]?.id || '', paymentScheduleId: installmentSchedule?.id || '',
-                                            transactionType: 'loan_payment'
+                                            transactionType: 'payment'
                                           });
                                           setShowTransactionModal(true);
                                         }}

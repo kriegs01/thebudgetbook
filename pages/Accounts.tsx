@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import useMediaQuery from '../src/hooks/useMediaQuery';
 import { Link } from 'react-router-dom';
 import { PinProtectedAction } from '../src/components/PinProtectedAction';
 import { Account, ViewMode, AccountClassification } from '../types';
@@ -40,6 +41,47 @@ const monthNames = [
  *  real dates (e.g. "2026-01-12") and these fake-date strings (e.g. "2000-01-12").
  */
 const FAKE_DATE_PREFIX = '2000-01-';
+
+/** 
+ * PageHeader component mirroring Dashboard style
+ */
+const PageHeader: React.FC<{ 
+  title: string; 
+  subtitle: string; 
+  icon?: React.ReactNode; 
+  actions?: React.ReactNode;
+  backButton?: React.ReactNode;
+}> = ({ title, subtitle, icon, actions, backButton }) => {
+  const { getAccentClasses } = useTheme();
+  const isMobile = useMediaQuery('(max-width: 767px)');
+  
+  return (
+    <header className={`${isMobile ? 'pt-16' : 'pt-12'} flex flex-row items-center justify-between gap-6 mb-4`}>
+      <div className="flex flex-1 items-center gap-6">
+        {backButton}
+        <div className="flex-1">
+          <div className="relative inline-block">
+            <div className="flex items-center gap-4">
+               {icon && <div className="z-10 shrink-0">{icon}</div>}
+               <h1 className={`text-[clamp(2rem,7.5vw,3.75rem)] font-titan normal-case tracking-tighter leading-none relative z-10 [text-shadow:-1px_-1px_0_#000,1px_-1px_0_#000,-1px_1px_0_#000,1px_1px_0_#000] drop-shadow-[3px_3px_0px_#000] ${icon ? getAccentClasses('text') : 'text-black dark:text-white'}`}>
+                {title}
+              </h1>
+            </div>
+            <div className={`absolute bottom-0 left-0 h-4 ${getAccentClasses('bg')} opacity-40 -z-0 -rotate-1 -translate-x-2 transition-colors duration-300`} style={{ width: `110%` }} />
+          </div>
+          <div className="flex items-center gap-3 mt-1 ml-1">
+            {backButton}
+            <p className="text-[clamp(1rem,3vw,1.25rem)] font-bold italic text-black/50 dark:text-gray-400 transition-colors duration-300">
+              {subtitle}
+            </p>
+          </div>
+          <div className={`h-2 w-32 mt-2 bg-black dark:bg-white/20 transition-colors duration-300`} />
+        </div>
+      </div>
+      {actions && <div className="flex items-center justify-end gap-3">{actions}</div>}
+    </header>
+  );
+};
 
 const Accounts: React.FC<AccountsProps> = ({ accounts, onAdd, onDelete, onEdit, onDeactivate, loading = false, error = null }) => {
   const { getAccentClasses } = useTheme();

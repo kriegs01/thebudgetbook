@@ -22,15 +22,18 @@ export const searchUsers = async (query: string) => {
   const { data, error } = await supabase
     .from('user_profiles')
     .select('*')
-    .or(`username.ilike.%${cleaned}%,email.ilike.%${cleaned}%`)
+    .or(`username.ilike.%${query}%,email.ilike.%${query}%,first_name.ilike.%${query}%,last_name.ilike.%${query}%`)
     .neq('user_id', userId) // Exclude self
     .limit(10);
 
   if (error) {
     console.error('Error searching users:', error);
+    console.error('Search query:', query);
+    console.error('Filter applied:', `username.ilike.%${query}%,email.ilike.%${query}%,first_name.ilike.%${query}%,last_name.ilike.%${query}%`);
     return { data: null, error };
   }
 
+  console.log('Search results:', data);
   return { data, error: null };
 };
 
@@ -49,7 +52,20 @@ export const getFriendships = async () => {
     return { data: null, error };
   }
 
-  return { data: data || [], error: null };
+  // Keep both user IDs while normalizing the profile for the other person
+  const friends = data.map(f => {
+    const isUserInitiator = f.user_id === userId;
+    return {
+      id: f.id,
+      user_id: f.user_id,
+      friend_id: f.friend_id,
+      status: f.status,
+      created_at: f.created_at,
+      profile: isUserInitiator ? f.friend_profile : f.user_profile,
+    };
+  });
+
+  return { data: friends, error: null };
 };
 
 export const getIncomingRequests = async () => {

@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import useMediaQuery from '../src/hooks/useMediaQuery';
 import { Installment, Account, ViewMode, Biller } from '../types';
 import { Plus, LayoutGrid, List, Calendar, Wallet, Trash2, X, Upload, AlertTriangle, Edit2, Eye, MoreVertical, Info, ZoomIn, ZoomOut, Download, Archive, CheckCircle2, ChevronDown } from 'lucide-react';
 import { PinProtectedAction } from '../src/components/PinProtectedAction';
@@ -30,8 +31,50 @@ interface InstallmentsProps {
   error?: string | null;
 }
 
+/** 
+ * PageHeader component mirroring Dashboard style
+ */
+const PageHeader: React.FC<{ 
+  title: string; 
+  subtitle: string; 
+  icon?: React.ReactNode; 
+  actions?: React.ReactNode;
+  backButton?: React.ReactNode;
+}> = ({ title, subtitle, icon, actions, backButton }) => {
+  const { getAccentClasses } = useTheme();
+  const isMobile = useMediaQuery('(max-width: 767px)');
+  
+  return (
+    <header className={`${isMobile ? 'pt-16' : 'pt-12'} flex flex-row items-center justify-between gap-6 mb-4`}>
+      <div className="flex flex-1 items-center gap-6">
+        {backButton}
+        <div className="flex-1">
+          <div className="relative inline-block">
+            <div className="flex items-center gap-4">
+               {icon && <div className="z-10 shrink-0">{icon}</div>}
+               <h1 className={`text-[clamp(2rem,7.5vw,3.75rem)] font-titan normal-case tracking-tighter leading-none relative z-10 [text-shadow:-1px_-1px_0_#000,1px_-1px_0_#000,-1px_1px_0_#000,1px_1px_0_#000] drop-shadow-[3px_3px_0px_#000] ${icon ? getAccentClasses('text') : 'text-black dark:text-white'}`}>
+                {title}
+              </h1>
+            </div>
+            <div className={`absolute bottom-0 left-0 h-4 ${getAccentClasses('bg')} opacity-40 -z-0 -rotate-1 -translate-x-2 transition-colors duration-300`} style={{ width: `110%` }} />
+          </div>
+          <div className="flex items-center gap-3 mt-1 ml-1">
+            {backButton}
+            <p className="text-[clamp(1rem,3vw,1.25rem)] font-bold italic text-black/50 dark:text-gray-400 transition-colors duration-300">
+              {subtitle}
+            </p>
+          </div>
+          <div className={`h-2 w-32 mt-2 bg-black dark:bg-white/20 transition-colors duration-300`} />
+        </div>
+      </div>
+      {actions && <div className="flex items-center justify-end gap-3">{actions}</div>}
+    </header>
+  );
+};
+
 const Installments: React.FC<InstallmentsProps> = ({ installments, accounts, billers = [], onAdd, onUpdate, onDelete, onPayInstallment, loading = false, error = null }) => {
   const { getAccentClasses } = useTheme();
+  const isMobile = useMediaQuery('(max-width: 767px)');
   // Memoized first non-credit account ID to avoid redundant filtering
   const defaultNonCreditAccountId = useMemo(() => {
     return accounts.filter(acc => acc.classification !== 'Credit Card' && acc.type !== 'Credit')[0]?.id || '';
@@ -567,11 +610,15 @@ const Installments: React.FC<InstallmentsProps> = ({ installments, accounts, bil
     const archStatus = getItemArchiveStatus(item);
 
     return (
-      <div key={item.id} className="bg-white dark:bg-gray-900 p-6 rounded-3xl shadow-sm border border-gray-100 dark:border-gray-800 hover:shadow-md transition-all group relative overflow-hidden">
+      <div key={item.id} className={`bg-white dark:bg-gray-900 p-6 rounded-3xl border-[3px] border-black shadow-[4px_4px_0px_rgba(0,0,0,1)] transition-all group relative overflow-hidden`}>
         <div className="flex justify-between items-start mb-4">
           <div className="flex-1">
             <div className="flex items-center gap-2 mb-1">
               <h3 className={`font-black text-lg text-gray-900 dark:text-gray-100 transition-colors uppercase tracking-tight ${getAccentClasses('text').replace('text-', 'group-hover:text-')}`}>{item.name}</h3>
+              <span className="text-xs font-bold text-gray-500 dark:text-gray-400 flex items-center gap-1 ml-2">
+                <Wallet className="w-3.5 h-3.5 flex-shrink-0" />
+                <span className="truncate max-w-[10rem]">{account?.bank || 'Account'}</span>
+              </span>
               {archived && (
                 <span className={`text-[9px] font-black px-2 py-0.5 rounded uppercase tracking-wider ${
                   archStatus === 'terminated' ? 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400' :
@@ -663,14 +710,10 @@ const Installments: React.FC<InstallmentsProps> = ({ installments, accounts, bil
         </div>
 
         <div className="flex flex-col space-y-4 pt-2">
-          <div className="flex items-center space-x-2 text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest transition-colors">
-            <Wallet className="w-3.5 h-3.5 flex-shrink-0" />
-            <span className="truncate">{account?.bank || 'Account'}</span>
-          </div>
           <div className="flex items-center gap-2 w-full">
             <button 
               onClick={() => { setShowViewModal(item); }}
-              className="flex-1 bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 px-4 py-3 rounded-xl text-xs font-black uppercase tracking-widest hover:bg-gray-200 dark:hover:bg-gray-700 transition-all text-center"
+              className={`flex-1 bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 px-4 py-3 rounded-xl text-xs font-black uppercase tracking-widest hover:bg-gray-200 dark:hover:bg-gray-700 transition-all text-center border-2 border-black shadow-[2px_2px_0px_rgba(0,0,0,1)]`}
             >
               View
             </button>
@@ -678,7 +721,7 @@ const Installments: React.FC<InstallmentsProps> = ({ installments, accounts, bil
               isFullyPaid ? (
                 <button 
                   onClick={() => { setShowCloseModal(item); setCloseTagging('completed'); }}
-                  className="flex-1 bg-amber-500 text-white px-4 py-3 rounded-xl text-xs font-black uppercase tracking-widest hover:bg-amber-600 transition-all shadow-lg shadow-amber-100/50 dark:shadow-none text-center"
+                  className={`flex-1 bg-amber-500 text-white px-4 py-3 rounded-xl text-xs font-black uppercase tracking-widest hover:bg-amber-600 transition-all border-2 border-black shadow-[2px_2px_0px_rgba(0,0,0,1)] dark:shadow-none text-center`}
                 >
                   Close
                 </button>
@@ -695,7 +738,7 @@ const Installments: React.FC<InstallmentsProps> = ({ installments, accounts, bil
                       accountId: defaultNonCreditAccountId
                     });
                   }}
-                  className="flex-1 bg-indigo-600 text-white px-4 py-3 rounded-xl text-xs font-black uppercase tracking-widest hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-100 dark:shadow-none text-center"
+                  className={`flex-1 bg-indigo-600 text-white px-4 py-3 rounded-xl text-xs font-black uppercase tracking-widest hover:bg-indigo-700 transition-all border-2 border-black shadow-[2px_2px_0px_rgba(0,0,0,1)] dark:shadow-none text-center`}
                 >
                   Pay
                 </button>
@@ -759,10 +802,10 @@ const Installments: React.FC<InstallmentsProps> = ({ installments, accounts, bil
               View
             </button>
             {!archived && (
-              isFullyPaid ? (
+                isFullyPaid ? (
                 <button 
                   onClick={() => { setShowCloseModal(item); setCloseTagging('completed'); }}
-                  className="bg-amber-500 text-white px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest hover:bg-amber-600 transition-all"
+                  className="bg-amber-500 text-white px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest hover:bg-amber-600 transition-all border-2 border-black shadow-[2px_2px_0px_rgba(0,0,0,1)]"
                 >
                   Close
                 </button>
@@ -779,7 +822,7 @@ const Installments: React.FC<InstallmentsProps> = ({ installments, accounts, bil
                       accountId: defaultNonCreditAccountId
                     });
                   }}
-                  className="bg-indigo-600 text-white px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest hover:bg-indigo-700 transition-all"
+                  className="bg-indigo-600 text-white px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest hover:bg-indigo-700 transition-all border-2 border-black shadow-[2px_2px_0px_rgba(0,0,0,1)]"
                 >
                   Pay
                 </button>
@@ -867,13 +910,13 @@ const Installments: React.FC<InstallmentsProps> = ({ installments, accounts, bil
         title="Installments"
         subtitle="Big tickets—right on track"
         icon={
-          <div className={`w-14 h-14 rounded-2xl flex items-center justify-center text-white border-[3px] border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] -rotate-3 transition-all hover:rotate-0 hover:scale-110 z-10 relative ${getAccentClasses('bg')}`}>
+              <div className={`w-14 h-14 rounded-2xl flex items-center justify-center text-white border-[3px] border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] transition-all hover:scale-110 z-10 relative ${getAccentClasses('bg')}`}>
             <Calendar className="w-7 h-7" />
           </div>
         }
-        actions={
+        actions={!isMobile ? (
           <div className="flex items-center gap-3 self-end sm:self-auto">
-            <div className="flex items-center bg-gray-50 dark:bg-gray-800 rounded-xl p-1 space-x-1 transition-colors">
+            <div className="flex items-center bg-gray-50 dark:bg-gray-800 rounded-xl p-1 space-x-1 transition-colors border-2 border-black shadow-[2px_2px_0px_rgba(0,0,0,1)]">
               <button 
                 onClick={() => setViewMode('card')}
                 className={`p-2 rounded-lg transition-colors ${viewMode === 'card' ? 'bg-white dark:bg-gray-700 shadow-sm text-indigo-600 dark:text-indigo-400' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'}`}
@@ -891,14 +934,43 @@ const Installments: React.FC<InstallmentsProps> = ({ installments, accounts, bil
             </div>
             <button 
               onClick={() => setShowModal(true)}
-                className={`flex items-center gap-2 text-white px-5 py-3 rounded-xl font-bold transition-all shadow-md dark:shadow-none text-sm ${getAccentClasses('bg')} ${getAccentClasses('shadow')}`}
+                className={`flex items-center gap-2 text-white px-5 py-3 rounded-xl font-bold transition-all text-sm ${getAccentClasses('bg')} filter drop-shadow-[0_10px_30px_rgba(0,0,0,0.12)] border-[3px] border-black shadow-[4px_4px_0px_rgba(0,0,0,1)] hover:scale-105`}
             >
               <Plus className="w-4 h-4" />
               <span className="hidden sm:inline">New Installment</span>
             </button>
           </div>
-        }
+        ) : undefined}
       />
+
+      {isMobile && (
+        <div className="flex justify-end mb-1">
+          <div className="flex items-center gap-3">
+            <div className="flex items-center bg-gray-50 dark:bg-gray-800 rounded-xl p-1 space-x-1 transition-colors border-2 border-black shadow-[2px_2px_0px_rgba(0,0,0,1)]">
+              <button 
+                onClick={() => setViewMode('card')}
+                className={`p-2 rounded-lg transition-colors ${viewMode === 'card' ? 'bg-white dark:bg-gray-700 shadow-sm text-indigo-600 dark:text-indigo-400' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'}`}
+                title="Card view"
+              >
+                <LayoutGrid className="w-4 h-4" />
+              </button>
+              <button 
+                onClick={() => setViewMode('list')}
+                className={`p-2 rounded-lg transition-colors ${viewMode === 'list' ? 'bg-white dark:bg-gray-700 shadow-sm text-indigo-600 dark:text-indigo-400' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'}`}
+                title="List view"
+              >
+                <List className="w-4 h-4" />
+              </button>
+            </div>
+            <button 
+              onClick={() => setShowModal(true)}
+                className={`flex items-center gap-2 text-white px-4 py-3 rounded-xl font-bold transition-all text-sm ${getAccentClasses('bg')} filter drop-shadow-[0_10px_30px_rgba(0,0,0,0.12)] border-[3px] border-black shadow-[4px_4px_0px_rgba(0,0,0,1)] hover:scale-105`}
+            >
+              <Plus className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+      )}
 
       <div className={viewMode === 'card' ? "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6" : "space-y-4"}>
         {activeInstallmentsList.length > 0 ? (
@@ -935,37 +1007,37 @@ const Installments: React.FC<InstallmentsProps> = ({ installments, accounts, bil
       {/* Track Modal */}
       {showModal && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md">
-          <div className="bg-white dark:bg-gray-900 rounded-[2.5rem] w-full max-w-lg p-10 shadow-2xl animate-in zoom-in-95 max-h-[90vh] overflow-y-auto transition-colors">
-            <h2 className="text-2xl font-black text-gray-900 dark:text-gray-100 mb-6 uppercase tracking-tight transition-colors">Track New Installment</h2>
+          <div className="bg-white dark:bg-gray-900 rounded-[2.5rem] w-full max-w-lg p-10 shadow-2xl animate-in zoom-in-95 max-h-[90vh] overflow-y-auto transition-colors border-2 border-black shadow-[6px_6px_0px_rgba(0,0,0,0.08)]">
+            <h2 className={`text-2xl font-titan normal-case tracking-tighter leading-none ${getAccentClasses('text')} mb-6`}>Track New Installment</h2>
             <form onSubmit={handleSubmit} className="space-y-6">
               <div>
                 <label className="block text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-2 transition-colors">Item Name</label>
-                <input required type="text" value={formData.name} onChange={(e) => setFormData({...formData, name: e.target.value})} className="w-full bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-transparent dark:border-gray-700 rounded-2xl p-4 outline-none focus:ring-2 focus:ring-indigo-500 font-bold transition-colors" placeholder="e.g. MacBook Pro" />
+                <input required type="text" value={formData.name} onChange={(e) => setFormData({...formData, name: e.target.value})} className="w-full bg-gray-50 dark:bg-gray-900 dark:text-gray-100 border-2 border-black rounded-2xl p-4 outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 font-bold transition-colors shadow-[2px_2px_0px_rgba(0,0,0,0.12)]" placeholder="e.g. MacBook Pro" />
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-2 transition-colors">Total Amount</label>
                   <div className="relative">
                     <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 dark:text-gray-500 font-bold transition-colors">₱</span>
-                    <input required type="number" value={formData.totalAmount} onChange={(e) => setFormData({...formData, totalAmount: e.target.value})} className="w-full bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-transparent dark:border-gray-700 rounded-2xl p-4 pl-8 outline-none focus:ring-2 focus:ring-indigo-500 font-black transition-colors" />
+                    <input required type="number" value={formData.totalAmount} onChange={(e) => setFormData({...formData, totalAmount: e.target.value})} className="w-full bg-gray-50 dark:bg-gray-900 dark:text-gray-100 border-2 border-black rounded-2xl p-4 pl-8 outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 font-black transition-colors shadow-[2px_2px_0px_rgba(0,0,0,0.12)]" />
                   </div>
                 </div>
                 <div>
                   <label className="block text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-2 transition-colors">Monthly Payment</label>
                   <div className="relative">
                     <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 dark:text-gray-500 font-bold transition-colors">₱</span>
-                    <input required type="number" value={formData.monthlyAmount} onChange={(e) => setFormData({...formData, monthlyAmount: e.target.value})} className="w-full bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-transparent dark:border-gray-700 rounded-2xl p-4 pl-8 outline-none focus:ring-2 focus:ring-indigo-500 font-black transition-colors" />
+                    <input required type="number" value={formData.monthlyAmount} onChange={(e) => setFormData({...formData, monthlyAmount: e.target.value})} className="w-full bg-gray-50 dark:bg-gray-900 dark:text-gray-100 border-2 border-black rounded-2xl p-4 pl-8 outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 font-black transition-colors shadow-[2px_2px_0px_rgba(0,0,0,0.12)]" />
                   </div>
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-2 transition-colors">Start Date</label>
-                  <input type="month" placeholder="YYYY-MM" value={formData.startDate} onChange={(e) => setFormData({...formData, startDate: e.target.value})} className="w-full bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-transparent dark:border-gray-700 rounded-2xl p-4 outline-none focus:ring-2 focus:ring-indigo-500 font-bold transition-colors" />
+                  <input type="month" placeholder="YYYY-MM" value={formData.startDate} onChange={(e) => setFormData({...formData, startDate: e.target.value})} className="w-full bg-gray-50 dark:bg-gray-900 dark:text-gray-100 border-2 border-black rounded-2xl p-4 outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 font-bold transition-colors shadow-[2px_2px_0px_rgba(0,0,0,0.12)]" />
                 </div>
                 <div>
                   <label className="block text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-2 transition-colors">Timing (PROTOTYPE)</label>
-                  <select value={formData.timing} onChange={(e) => setFormData({...formData, timing: e.target.value as '1/2' | '2/2'})} className="w-full bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-transparent dark:border-gray-700 rounded-2xl p-4 outline-none focus:ring-2 focus:ring-indigo-500 font-bold appearance-none transition-colors">
+                  <select value={formData.timing} onChange={(e) => setFormData({...formData, timing: e.target.value as '1/2' | '2/2'})} className="w-full bg-gray-50 dark:bg-gray-900 dark:text-gray-100 border-2 border-black rounded-2xl p-4 outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 font-bold appearance-none transition-colors shadow-[2px_2px_0px_rgba(0,0,0,0.12)]">
                     <option value="1/2">1/2</option>
                     <option value="2/2">2/2</option>
                   </select>
@@ -981,24 +1053,24 @@ const Installments: React.FC<InstallmentsProps> = ({ installments, accounts, bil
                   value={formData.termDuration} 
                   onChange={(e) => setFormData({...formData, termDuration: e.target.value})} 
                   placeholder="e.g., 12, 24, 36"
-                  className="w-full bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-transparent dark:border-gray-700 rounded-2xl p-4 outline-none focus:ring-2 focus:ring-indigo-500 font-black transition-colors" 
+                  className="w-full bg-gray-50 dark:bg-gray-900 dark:text-gray-100 border-2 border-black rounded-2xl p-4 outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 font-black transition-colors shadow-[2px_2px_0px_rgba(0,0,0,0.12)]" 
                 />
               </div>
               <div>
                 <label className="block text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-2 transition-colors">Already Paid</label>
                 <div className="relative">
                   <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 dark:text-gray-500 font-bold transition-colors">₱</span>
-                  <input required type="number" value={formData.paidAmount} onChange={(e) => setFormData({...formData, paidAmount: e.target.value})} className="w-full bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-transparent dark:border-gray-700 rounded-2xl p-4 pl-8 outline-none focus:ring-2 focus:ring-indigo-500 font-black transition-colors" />
+                  <input required type="number" value={formData.paidAmount} onChange={(e) => setFormData({...formData, paidAmount: e.target.value})} className="w-full bg-gray-50 dark:bg-gray-900 dark:text-gray-100 border-2 border-black rounded-2xl p-4 pl-8 outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 font-black transition-colors shadow-[2px_2px_0px_rgba(0,0,0,0.12)]" />
                 </div>
               </div>
               <div>
                 <label className="block text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-2 transition-colors">Billing Account</label>
                 {accounts.length === 0 ? (
-                  <div className="w-full bg-red-50 dark:bg-red-900/20 border-2 border-red-200 dark:border-red-800 rounded-2xl p-4 transition-colors">
+                  <div className="w-full bg-red-50 dark:bg-red-900/20 border-2 border-black rounded-2xl p-4 shadow-[2px_2px_0px_rgba(0,0,0,0.12)] transition-colors">
                     <p className="text-red-600 dark:text-red-400 font-bold text-sm transition-colors">⚠️ No accounts available. Please create an account first.</p>
                   </div>
                 ) : (
-                  <select value={formData.accountId} onChange={(e) => setFormData({...formData, accountId: e.target.value})} className="w-full bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-transparent dark:border-gray-700 rounded-2xl p-4 outline-none focus:ring-2 focus:ring-indigo-500 font-bold appearance-none transition-colors">
+                  <select value={formData.accountId} onChange={(e) => setFormData({...formData, accountId: e.target.value})} className="w-full bg-gray-50 dark:bg-gray-900 dark:text-gray-100 border-2 border-black rounded-2xl p-4 outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 font-bold appearance-none transition-colors shadow-[2px_2px_0px_rgba(0,0,0,0.12)]">
                     {accounts.map(acc => (
                       <option key={acc.id} value={acc.id}>{acc.bank} - {acc.classification}</option>
                     ))}
@@ -1008,7 +1080,7 @@ const Installments: React.FC<InstallmentsProps> = ({ installments, accounts, bil
               {billers.filter(b => b.category.startsWith('Loans')).length > 0 && (
                 <div>
                   <label className="block text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-2 transition-colors">Link to Biller (Optional - For Loans)</label>
-                  <select value={formData.billerId} onChange={(e) => setFormData({...formData, billerId: e.target.value})} className="w-full bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-transparent dark:border-gray-700 rounded-2xl p-4 outline-none focus:ring-2 focus:ring-indigo-500 font-bold appearance-none transition-colors">
+                  <select value={formData.billerId} onChange={(e) => setFormData({...formData, billerId: e.target.value})} className="w-full bg-gray-50 dark:bg-gray-900 dark:text-gray-100 border-2 border-black rounded-2xl p-4 outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 font-bold appearance-none transition-colors shadow-[2px_2px_0px_rgba(0,0,0,0.12)]">
                     <option value="">None</option>
                     {billers.filter(b => b.category.startsWith('Loans')).map(biller => (
                       <option key={biller.id} value={biller.id}>{biller.name}</option>
@@ -1024,7 +1096,7 @@ const Installments: React.FC<InstallmentsProps> = ({ installments, accounts, bil
                 <button 
                   type="submit" 
                   disabled={accounts.length === 0 || isSubmitting}
-                  className="flex-1 bg-indigo-600 text-white py-4 rounded-2xl font-black uppercase tracking-widest text-xs hover:bg-indigo-700 transition-all shadow-xl dark:shadow-none disabled:opacity-50 disabled:cursor-not-allowed"
+                  className={`flex-1 text-white py-4 rounded-2xl font-black uppercase tracking-widest text-xs transition-all disabled:opacity-50 disabled:cursor-not-allowed ${getAccentClasses('bg')} border-2 border-black filter drop-shadow-[0_12px_24px_rgba(0,0,0,0.12)]`}
                 >
                   {isSubmitting ? 'Saving...' : 'Start Tracking'}
                 </button>
@@ -1093,11 +1165,11 @@ const Installments: React.FC<InstallmentsProps> = ({ installments, accounts, bil
       {/* Standardized Modals */}
       {showPayModal && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md animate-in fade-in">
-          <div className="bg-white dark:bg-gray-900 rounded-3xl w-full max-w-md p-10 shadow-2xl animate-in zoom-in-95 relative transition-colors">
-            <button onClick={closePayModal} className="absolute right-6 top-6 p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full transition-colors">
+          <div className="bg-white dark:bg-gray-900 rounded-3xl w-full max-w-md p-10 shadow-2xl animate-in zoom-in-95 relative transition-colors border-2 border-black shadow-[6px_6px_0px_rgba(0,0,0,1)]">
+            <button onClick={closePayModal} className="absolute right-6 top-6 p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full transition-colors border-2 border-black shadow-[2px_2px_0px_rgba(0,0,0,1)]">
               <X className="w-6 h-6 text-gray-400 dark:text-gray-500" />
             </button>
-            <h2 className="text-2xl font-black text-gray-900 dark:text-gray-100 mb-2 transition-colors">Pay {showPayModal.name}</h2>
+            <h2 className={`text-2xl font-titan normal-case tracking-tighter leading-none [text-shadow:-1px_-1px_0_#000,1px_-1px_0_#000,-1px_1px_0_#000,1px_1px_0_#000] drop-shadow-[3px_3px_0px_#000] ${getAccentClasses('text')} mb-2`}>Pay {showPayModal.name}</h2>
             <p className="text-gray-500 dark:text-gray-400 text-sm mb-8 transition-colors">Recording a monthly installment payment</p>
             <form onSubmit={handlePaySubmit} className="space-y-6">
               <div>
@@ -1133,8 +1205,8 @@ const Installments: React.FC<InstallmentsProps> = ({ installments, accounts, bil
               </div>
 
               <div className="flex space-x-4 pt-4">
-                <button type="button" onClick={closePayModal} className="flex-1 bg-gray-100 dark:bg-gray-800 py-4 rounded-2xl font-bold text-gray-500 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors">Cancel</button>
-                <button type="submit" className="flex-1 bg-green-600 text-white py-4 rounded-2xl font-bold hover:bg-green-700 shadow-xl shadow-green-100 dark:shadow-none transition-all active:scale-95">Record Payment</button>
+                <button type="button" onClick={closePayModal} className="flex-1 bg-gray-100 dark:bg-gray-800 py-4 rounded-2xl font-bold text-gray-500 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors border-2 border-black shadow-[2px_2px_0px_rgba(0,0,0,1)]">Cancel</button>
+                <button type="submit" className="flex-1 bg-green-600 text-white py-4 rounded-2xl font-bold hover:bg-green-700 shadow-xl shadow-green-100 dark:shadow-none transition-all active:scale-95 border-2 border-black shadow-[4px_4px_0px_rgba(0,0,0,1)]">Record Payment</button>
               </div>
             </form>
           </div>
@@ -1276,18 +1348,18 @@ const Installments: React.FC<InstallmentsProps> = ({ installments, accounts, bil
         
         return (
           <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md">
-            <div className="bg-white dark:bg-gray-900 rounded-[2.5rem] w-full max-w-3xl p-10 shadow-2xl animate-in zoom-in-95 max-h-[90vh] overflow-y-auto transition-colors">
+            <div className={`bg-white dark:bg-gray-900 rounded-[2.5rem] w-full max-w-3xl p-10 shadow-2xl animate-in zoom-in-95 max-h-[90vh] overflow-y-auto transition-colors border-[3px] border-black shadow-[6px_6px_0px_rgba(0,0,0,1)]`}>
               <div className="flex items-center justify-between mb-6">
                 <div>
-                  <h2 className="text-2xl font-black text-gray-900 dark:text-gray-100 uppercase tracking-tight transition-colors">{showViewModal.name}</h2>
+                  <h2 className={`text-2xl font-titan normal-case tracking-tighter leading-none [text-shadow:-1px_-1px_0_#000,1px_-1px_0_#000,-1px_1px_0_#000,1px_1px_0_#000] drop-shadow-[3px_3px_0px_#000] ${getAccentClasses('text')}`}>{showViewModal.name}</h2>
                   <p className="text-gray-500 dark:text-gray-400 text-sm mt-1 transition-colors">Monthly Payment Schedule</p>
                 </div>
-                <button onClick={() => setShowViewModal(null)} className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full transition-colors">
+                <button onClick={() => setShowViewModal(null)} className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full transition-colors border-2 border-black shadow-[2px_2px_0px_rgba(0,0,0,1)]">
                   <X className="w-6 h-6 text-gray-400 dark:text-gray-500" />
                 </button>
               </div>
               
-              <div className="bg-gray-50 dark:bg-gray-800/50 rounded-2xl p-6 mb-6 grid grid-cols-3 gap-4 transition-colors">
+              <div className="bg-gray-50 dark:bg-gray-800/50 rounded-2xl p-6 mb-6 grid grid-cols-3 gap-4 transition-colors border-2 border-black shadow-[2px_2px_0px_rgba(0,0,0,1)]">
                 <div>
                   <p className="text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-1 transition-colors">Total Amount</p>
                   <p className="text-lg font-black text-gray-900 dark:text-gray-100 transition-colors">{formatCurrency(showViewModal.totalAmount)}</p>
@@ -1310,7 +1382,7 @@ const Installments: React.FC<InstallmentsProps> = ({ installments, accounts, bil
                 <div className="space-y-2">
                   <h3 className="text-sm font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-4 transition-colors">Payment Schedule</h3>
                   {schedule.map((item, index) => (
-                    <div key={index} className={`flex items-center justify-between p-4 rounded-xl border transition-all ${
+                    <div key={index} className={`flex items-center justify-between p-4 rounded-xl border-4 border-black shadow-[6px_6px_0px_rgba(0,0,0,0.08)] filter drop-shadow-[0_6px_18px_rgba(0,0,0,0.06)] transition-all ${
                       item.isPaid 
                         ? 'bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800/30' 
                         : item.isPartial 
@@ -1339,7 +1411,7 @@ const Installments: React.FC<InstallmentsProps> = ({ installments, accounts, bil
                           <button
                             onClick={() => openSchedulePaymentsModal(item.scheduleId!, item.month)}
                             title="View payment records"
-                            className="text-gray-400 dark:text-gray-500 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors rounded-full p-1 hover:bg-indigo-50 dark:hover:bg-indigo-900/30"
+                            className="text-gray-400 dark:text-gray-500 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors rounded-full p-1 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 border-2 border-black shadow-[2px_2px_0px_rgba(0,0,0,1)]"
                           >
                             <Info className="w-4 h-4" />
                           </button>
@@ -1359,7 +1431,7 @@ const Installments: React.FC<InstallmentsProps> = ({ installments, accounts, bil
                                 accountId: defaultNonCreditAccountId
                               });
                             }}
-                            className="bg-indigo-600 text-white px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest hover:bg-indigo-700 transition-all"
+                            className="bg-indigo-600 text-white px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest hover:bg-indigo-700 transition-all border-2 border-black shadow-[2px_2px_0px_rgba(0,0,0,1)]"
                           >
                             Pay
                           </button>
@@ -1383,9 +1455,9 @@ const Installments: React.FC<InstallmentsProps> = ({ installments, accounts, bil
       {/* Schedule Payments Modal */}
       {schedulePaymentsModal && (
         <div className="fixed inset-0 z-[150] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md" onClick={() => setSchedulePaymentsModal(null)}>
-          <div className="w-full max-w-lg bg-white rounded-3xl p-8 shadow-2xl relative max-h-[85vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
-            <button onClick={() => setSchedulePaymentsModal(null)} className="absolute top-4 right-4 text-gray-400 hover:text-gray-700 p-2 rounded-full hover:bg-gray-100 transition-colors" aria-label="Close"><X className="w-5 h-5" /></button>
-            <h2 className="text-2xl font-black text-gray-900 mb-1">Payment Records</h2>
+          <div className="w-full max-w-lg bg-white rounded-3xl p-8 shadow-2xl relative max-h-[85vh] overflow-y-auto border-4 border-black shadow-[8px_8px_0px_rgba(0,0,0,0.08)] filter drop-shadow-[0_10px_30px_rgba(0,0,0,0.08)]" onClick={e => e.stopPropagation()}>
+            <button onClick={() => setSchedulePaymentsModal(null)} className="absolute top-4 right-4 text-gray-400 hover:text-gray-700 p-2 rounded-full hover:bg-gray-100 transition-colors border-2 border-black shadow-[2px_2px_0px_rgba(0,0,0,1)]" aria-label="Close"><X className="w-5 h-5" /></button>
+            <h2 className={`text-2xl font-titan normal-case tracking-tighter leading-none [text-shadow:-1px_-1px_0_#000,1px_-1px_0_#000,-1px_1px_0_#000,1px_1px_0_#000] drop-shadow-[3px_3px_0px_#000] ${getAccentClasses('text')} mb-1`}>Payment Records</h2>
             <p className="text-gray-500 text-sm mb-6">{schedulePaymentsModal.month}</p>
             {loadingScheduleTx ? (
               <div className="text-center py-8 text-gray-400">Loading...</div>
@@ -1397,7 +1469,7 @@ const Installments: React.FC<InstallmentsProps> = ({ installments, accounts, bil
                   const pmName = accounts.find(a => a.id === tx.paymentMethodId)?.bank || tx.paymentMethodId;
                   const signedUrl = scheduleSignedUrls[tx.id];
                   return (
-                    <div key={tx.id} className="bg-gray-50 rounded-2xl p-4 space-y-2">
+                    <div key={tx.id} className="bg-gray-50 rounded-2xl p-4 space-y-2 border-2 border-black shadow-[2px_2px_0px_rgba(0,0,0,1)]">
                       <div className="flex justify-between items-start">
                         <div className="space-y-2 flex-1">
                         <div className="flex justify-between">
@@ -1419,7 +1491,7 @@ const Installments: React.FC<InstallmentsProps> = ({ installments, accounts, bil
                         </div>
                         <button
                           onClick={() => { setEditingScheduleTx(tx); setEditScheduleTxForm({ name: tx.name, amount: Math.abs(tx.amount).toFixed(2), date: tx.date.split('T')[0] }); }}
-                          className="ml-3 mt-1 text-[9px] font-black text-indigo-600 uppercase tracking-widest border border-indigo-100 px-2 py-1 rounded-lg hover:bg-indigo-50 transition-colors flex-shrink-0"
+                          className="ml-3 mt-1 text-[9px] font-black text-indigo-600 uppercase tracking-widest px-2 py-1 rounded-lg hover:bg-indigo-50 transition-colors flex-shrink-0 border-2 border-black shadow-[2px_2px_0px_rgba(0,0,0,1)]"
                         >
                           <Edit2 className="w-3 h-3" />
                         </button>
@@ -1431,7 +1503,7 @@ const Installments: React.FC<InstallmentsProps> = ({ installments, accounts, bil
                           <button
                             onClick={(e) => e.preventDefault()}
                             title="Delete payment record"
-                            className="ml-1 mt-1 text-[9px] font-black text-red-500 uppercase tracking-widest border border-red-100 px-2 py-1 rounded-lg hover:bg-red-50 transition-colors flex-shrink-0"
+                            className="ml-1 mt-1 text-[9px] font-black text-red-500 uppercase tracking-widest px-2 py-1 rounded-lg hover:bg-red-50 transition-colors flex-shrink-0 border-2 border-black shadow-[2px_2px_0px_rgba(0,0,0,1)]"
                           >
                             <Trash2 className="w-3 h-3" />
                           </button>
@@ -1442,7 +1514,7 @@ const Installments: React.FC<InstallmentsProps> = ({ installments, accounts, bil
                           {signedUrl ? (
                             <>
                               <img src={signedUrl} alt="Receipt" className="w-12 h-12 rounded-xl object-cover border border-gray-200" onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
-                              <button onClick={() => { setZoom(0.5); setPreviewReceiptUrl(signedUrl); }} title="Preview receipt" className="flex items-center space-x-1 px-3 py-1.5 rounded-xl bg-indigo-50 text-indigo-600 hover:bg-indigo-100 transition-colors text-xs font-bold">
+                              <button onClick={() => { setZoom(0.5); setPreviewReceiptUrl(signedUrl); }} title="Preview receipt" className="flex items-center space-x-1 px-3 py-1.5 rounded-xl bg-indigo-50 text-indigo-600 hover:bg-indigo-100 transition-colors text-xs font-bold border-2 border-black shadow-[2px_2px_0px_rgba(0,0,0,1)]">
                                 <Eye className="w-3.5 h-3.5" /><span>Preview</span>
                               </button>
                             </>

@@ -172,17 +172,10 @@ const formatTransaction = (supabaseTransaction: SupabaseTransaction): Transactio
 
 const queryClient = new QueryClient();
 
-const AuthErrorPage: React.FC<{ title: string; message: string }> = ({ title, message }) => (
-  <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center text-center p-4">
-    <AlertCircle className="w-12 h-12 text-red-600 mb-4" />
-    <h1 className="text-2xl font-semibold text-red-800">{title}</h1>
-    <p className="text-gray-600 mt-2">{message}</p>
-  </div>
-);
-
-const ProtectedRoute: React.FC = () => {
-  const { user, loading: authLoading, isPasswordRecovery } = useAuth();
-  const location = useLocation();
+// Main App Content (Protected)
+const AppContent: React.FC = () => {
+  const { user, userProfile, loading: authLoading, signOut, refreshProfile } = useAuth();
+  const queryClient = useQueryClient();
 
   if (authLoading) {
     return (
@@ -417,6 +410,14 @@ const MainApp: React.FC = () => {
   const [categories, setCategories] = useState(INITIAL_CATEGORIES);
   const [theme, setTheme] = useState<'light' | 'dark'>('light');
   
+  // Preserve a locally chosen theme even while the user profile is still loading.
+  useEffect(() => {
+    const localTheme = localStorage.getItem('theme');
+    if (localTheme === 'dark' || localTheme === 'light') {
+      setTheme(localTheme);
+    }
+  }, []);
+
   // Wizard State
   const [showWizard, setShowWizard] = useState(false);
 
@@ -521,16 +522,14 @@ const MainApp: React.FC = () => {
 
   // Theme Initialization and Synchronization
   useEffect(() => {
-    let initialTheme: 'light' | 'dark' = 'light';
-    if (userProfile?.theme) {
-      initialTheme = userProfile.theme;
-    } else {
-      const localTheme = localStorage.getItem('theme');
-      if (localTheme === 'dark' || localTheme === 'light') {
-        initialTheme = localTheme;
-      } 
+    const localTheme = localStorage.getItem('theme');
+    if (localTheme === 'dark' || localTheme === 'light') {
+      return; // Keep the locally chosen theme if the user already selected one.
     }
-    setTheme(initialTheme);
+
+    if (userProfile?.theme === 'dark' || userProfile?.theme === 'light') {
+      setTheme(userProfile.theme);
+    }
   }, [userProfile]);
 
   useEffect(() => {
@@ -874,15 +873,29 @@ const MainApp: React.FC = () => {
         {
           name: `${installment.name} - ${targetSchedule.month} ${targetSchedule.year}`,
           date: combineDateWithCurrentTime(payment.date),
-          amount: payment.amount,
+          amount: Math.abs(payment.amount),
           paymentMethodId: payment.accountId,
+          transactionType: 'payment',
         }
       );
 
       if (transactionError || !transaction) {
         console.error('Error creating transaction:', transactionError);
-        // Payment schedule was updated but transaction failed - not ideal but acceptable
-        console.warn('[App] Payment schedule updated but transaction creation failed');
+        const fallbackResult = await createTransaction({
+          name: `${installment.name} - ${targetSchedule.month} ${targetSchedule.year}`,
+          date: combineDateWithCurrentTime(payment.date),
+          amount: payment.amount,
+          payment_method_id: payment.accountId,
+          transaction_type: 'payment',
+          notes: `Installment payment (schedule: ${targetSchedule.id})`,
+          payment_schedule_id: null,
+        });
+        if (fallbackResult.error) {
+          console.error('[App] Fallback transaction creation also failed:', fallbackResult.error);
+          alert('Payment schedule was marked paid, but the transaction could not be created. Please run the latest Supabase migrations (transactions.payment_schedule_id and transaction types) and try again.');
+        } else {
+          alert('Payment saved. The transaction was created, but could not be linked to the schedule due to a database mismatch. Please run the latest Supabase migrations.');
+        }
       } else {
         console.log('[App] Transaction created successfully:', {
           transactionId: transaction.id,
@@ -905,7 +918,7 @@ const MainApp: React.FC = () => {
       // Update the installment's paidAmount
       const updatedInstallment: Installment = {
         ...installment,
-        paidAmount: installment.paidAmount + payment.amount,
+        paidAmount: installment.paidAmount + Math.abs(payment.amount),
       };
 
       await updateInstallmentFrontend(updatedInstallment);
@@ -1018,17 +1031,24 @@ const MainApp: React.FC = () => {
         {
           name: `${biller.name} - ${targetSchedule.month} ${targetSchedule.year}`,
           date: combineDateWithCurrentTime(payment.date),
-          amount: payment.amount,
+          amount: ((): number => {
+            const acct = accounts.find(a => a.id === payment.accountId);
+            return acct && acct.type === 'Credit' ? -Math.abs(payment.amount) : Math.abs(payment.amount);
+          })(),
           paymentMethodId: payment.accountId,
+          transaction_type: ((): string => {
+            const acct = accounts.find(a => a.id === payment.accountId);
+            return acct?.type === 'Credit' ? 'credit_payment' : 'payment';
+          })(),
         }
       );
 
       if (transactionError || !transaction) {
-        console.error('Error creating transaction:', transactionError);
+        console.error('Error creating biller transaction:', transactionError);
         throw new Error('Failed to create transaction');
       }
 
-      console.log('[App] Transaction created successfully:', transaction.id);
+      console.log('[App] Biller transaction created successfully:', transaction.id);
 
       // Upload receipt to storage if a file was provided
       if (payment.receiptFile) {
@@ -1171,21 +1191,16 @@ const MainApp: React.FC = () => {
   const handleToggleTheme = async () => {
     const newTheme = theme === 'light' ? 'dark' : 'light';
     setTheme(newTheme);
-    
+    localStorage.setItem('theme', newTheme);
+
     if (user?.id) {
-      const { error } = await supabase
-        .from('user_profiles')
-        .update({ theme: newTheme })
-        .eq('user_id', user.id);
-      
+      const { data, error } = await updateUserProfile(user.id, { theme: newTheme });
       if (error) {
-        console.error("Failed to save theme to Supabase:", error);
-        localStorage.setItem('theme', newTheme); // Fallback
-      } else {
-        localStorage.removeItem('theme'); // Clean up if successfully cloud synced
+        console.error('Failed to save theme to Supabase:', error);
+      } else if (data) {
+        // Keep the authenticated profile state in sync with the new theme
+        await refreshProfile();
       }
-    } else {
-      localStorage.setItem('theme', newTheme);
     }
   };
 
