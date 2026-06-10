@@ -276,12 +276,12 @@ const Accounts: React.FC<AccountsProps> = ({ accounts, onAdd, onDelete, onEdit, 
         <div className="mb-4 sm:mb-5">
           <div className="flex items-start justify-between gap-4">
             <div>
-              <h3 className={`max-w-[15rem] text-[clamp(1.6rem,4vw,2.1rem)] font-black leading-none ${getAccentClasses('text')}`}>{acc.bank}</h3>
-              <p className="mt-1.5 text-xs font-black uppercase tracking-[0.24em] text-black/60">{acc.classification}</p>
+              <h3 className={`max-w-[12rem] text-[clamp(1.25rem,3.1vw,1.7rem)] font-black leading-tight ${getAccentClasses('text')}`}>{acc.bank}</h3>
+              <p className="mt-1 text-[11px] font-black uppercase tracking-[0.2em] text-black/60">{acc.classification}</p>
             </div>
             <div className="text-right">
-              <p className="text-xs font-black uppercase tracking-[0.24em] text-black/55">Balance</p>
-              <p className="mt-1 text-[clamp(1.7rem,4.8vw,2.4rem)] font-black leading-none">{formatCurrency(acc.balance)}</p>
+              <p className="text-[11px] font-black uppercase tracking-[0.18em] text-black/55">Balance</p>
+              <p className="mt-1 text-[clamp(1.35rem,3.5vw,1.85rem)] font-black leading-tight">{formatCurrency(acc.balance)}</p>
             </div>
           </div>
         </div>
