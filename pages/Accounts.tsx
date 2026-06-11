@@ -19,6 +19,7 @@ import {
 import { getDueDayForDisplay, ordinalSuffix } from '../src/utils/billingCycles';
 import { useTheme } from '../src/contexts/ThemeContext';
 import { PageHeader } from '../src/components/PageHeader';
+import useMediaQuery from '../src/hooks/useMediaQuery';
 
 interface AccountsProps {
   accounts: Account[];
@@ -43,6 +44,7 @@ const FAKE_DATE_PREFIX = '2000-01-';
 
 const Accounts: React.FC<AccountsProps> = ({ accounts, onAdd, onDelete, onEdit, onDeactivate, loading = false, error = null }) => {
   const { getAccentClasses } = useTheme();
+  const isMobile = useMediaQuery('(max-width: 767px)');
   const [showModal, setShowModal] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -228,7 +230,7 @@ const Accounts: React.FC<AccountsProps> = ({ accounts, onAdd, onDelete, onEdit, 
     return (
       <div
         key={acc.id}
-        className={`${cardSurface} relative mx-auto flex h-full w-full aspect-[1.92/1] max-w-[24rem] flex-col overflow-hidden rounded-[2rem] border-[4px] border-black p-4 shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] transition-all duration-200 hover:-translate-y-1 hover:shadow-[12px_12px_0px_0px_rgba(0,0,0,1)] sm:max-w-none sm:p-5`}
+        className={`${cardSurface} relative mx-auto flex h-full w-full aspect-[1.92/1] max-w-[24rem] flex-col overflow-hidden rounded-[2rem] border-[4px] border-black p-4 shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] transition-all duration-200 sm:max-w-none sm:p-5`}
       >
         <div className="absolute inset-x-5 top-[5.35rem] h-px bg-black/10 sm:inset-x-6 sm:top-[5.6rem]" />
 
@@ -302,13 +304,13 @@ const Accounts: React.FC<AccountsProps> = ({ accounts, onAdd, onDelete, onEdit, 
           )}
         </div>
 
-        <div className={`${isCredit ? 'mt-auto' : 'mt-3 sm:mt-4'} flex flex-wrap items-center justify-end gap-1.5 pt-2 sm:gap-2 sm:pt-3`}>
+        <div className={`${isCredit ? 'mt-auto' : 'mt-1.5 sm:mt-2'} flex flex-wrap items-center justify-end gap-1 pt-1 sm:gap-1.5 sm:pt-1.5`}>
           {isCredit && (
             <>
               <button
                 type="button"
                 onClick={(e) => { e.stopPropagation(); setStatementInfoAccount(acc); }}
-                className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-[1rem] border-[3px] border-black bg-[#f5f0e5] text-black shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] transition-all hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none sm:h-10 sm:w-10"
+                className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-[0.95rem] border-[3px] border-black bg-[#f5f0e5] text-black shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] transition-all hover:shadow-none sm:h-9 sm:w-9"
                 aria-label={`View ${acc.bank} billing details`}
                 title="Billing details"
               >
@@ -317,7 +319,7 @@ const Accounts: React.FC<AccountsProps> = ({ accounts, onAdd, onDelete, onEdit, 
               <Link
                 to={`/accounts/statement?account=${acc.id}`}
                 onClick={(e) => e.stopPropagation()}
-                className="inline-flex min-w-0 items-center rounded-2xl border-[3px] border-black bg-[#f5f0e5] px-2.5 py-2 text-[11px] font-black text-black shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] transition-all hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none sm:px-3 sm:text-xs"
+                className="inline-flex min-w-0 max-w-[7rem] items-center rounded-2xl border-[3px] border-black bg-[#f5f0e5] px-1.5 py-1.5 text-[9px] font-black text-black shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] transition-all hover:shadow-none sm:max-w-none sm:px-2.5 sm:py-2 sm:text-xs"
                 aria-label={`View ${acc.bank} statement`}
               >
                 View Statement
@@ -327,7 +329,7 @@ const Accounts: React.FC<AccountsProps> = ({ accounts, onAdd, onDelete, onEdit, 
           <Link
             to={`/accounts/view?account=${acc.id}`}
             onClick={(e) => e.stopPropagation()}
-            className={`inline-flex min-w-0 items-center gap-1.5 rounded-2xl border-[3px] border-black px-2.5 py-2 text-[11px] font-black text-black shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] transition-all hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none sm:px-3 sm:text-xs ${getAccentClasses('bg')}`}
+            className={`inline-flex min-w-0 max-w-[4.75rem] items-center gap-1 rounded-2xl border-[3px] border-black px-1.5 py-1.5 text-[9px] font-black text-black shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] transition-all hover:shadow-none sm:max-w-none sm:px-2.5 sm:py-2 sm:text-xs ${getAccentClasses('bg')}`}
             aria-label={`View ${acc.bank} transactions`}
           >
             <span>View</span>
@@ -378,16 +380,14 @@ const Accounts: React.FC<AccountsProps> = ({ accounts, onAdd, onDelete, onEdit, 
           </div>
         }
         actions={
-          <div className="flex items-center gap-3 flex-wrap justify-end">
-            <Link to="/transactions" className="flex items-center gap-2 rounded-2xl border-[3px] border-black bg-white px-5 py-3 text-sm font-black text-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] transition-all hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none dark:bg-gray-900 dark:text-white">
+          <div className={`flex items-center gap-3 flex-wrap ${isMobile ? 'justify-center' : 'justify-end'}`}>
+            <Link to="/transactions" className={`flex items-center justify-center gap-2 rounded-2xl border-[3px] border-black bg-white shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] transition-all hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none dark:bg-gray-900 dark:text-white ${isMobile ? 'h-12 w-12 p-0 text-black' : 'px-5 py-3 text-sm font-black text-black'}`}>
               <Sparkles className="w-4 h-4" />
-              <span className="hidden sm:inline">Transactions</span>
-              <span className="sm:hidden">Ledger</span>
+              {!isMobile && <span>Transactions</span>}
             </Link>
-            <button onClick={openAddModal} className={`flex items-center gap-2 text-white px-5 py-3 rounded-2xl border-[3px] border-black font-black transition-all text-sm shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none ${getAccentClasses('bg')}`}>
+            <button onClick={openAddModal} className={`flex items-center justify-center gap-2 text-white rounded-2xl border-[3px] border-black font-black transition-all shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none ${getAccentClasses('bg')} ${isMobile ? 'h-12 w-12 p-0 text-sm' : 'px-5 py-3 text-sm'}`}>
               <Plus className="w-4 h-4" />
-              <span className="hidden sm:inline">Add Account</span>
-              <span className="sm:hidden">Add</span>
+              {!isMobile && <span>Add Account</span>}
             </button>
           </div>
         }

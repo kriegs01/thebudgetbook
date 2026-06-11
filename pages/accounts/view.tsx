@@ -1666,26 +1666,26 @@ const AccountFilteredTransactions: React.FC<AccountFilteredTransactionsProps> = 
       {/* Credit Card Payment Modal */}
       {showCardPaymentModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-md">
-          <div className={`${retroModalShell} relative`}>
+          <div className={`${retroModalShell} relative max-h-[92vh] overflow-y-auto overflow-x-hidden ${isMobile ? 'p-5' : ''}`}>
             <button type="button" onClick={() => setShowCardPaymentModal(false)} className={retroCloseButton} aria-label="Close credit card payment modal"><X className="w-4 h-4" /></button>
-            <div className="mb-4 inline-flex h-14 w-14 items-center justify-center rounded-[1.5rem] border-[3px] border-black bg-teal-500 text-white shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]">
-              <CreditCard className="w-7 h-7" />
+            <div className={`mb-4 inline-flex items-center justify-center rounded-[1.5rem] border-[3px] border-black bg-teal-500 text-white shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] ${isMobile ? 'h-12 w-12' : 'h-14 w-14'}`}>
+              <CreditCard className={isMobile ? 'w-6 h-6' : 'w-7 h-7'} />
             </div>
             <h2 className={retroModalTitle}>Make Credit Card Payment</h2>
-            <p className={`${retroModalSubtitle} mb-8`}>Record a payment to reduce your credit card balance.</p>
-            <form onSubmit={handleCardPaymentSubmit} className="space-y-6">
+            <p className={`${retroModalSubtitle} ${isMobile ? 'mb-5' : 'mb-8'}`}>Record a payment to reduce your credit card balance.</p>
+            <form onSubmit={handleCardPaymentSubmit} className={isMobile ? 'space-y-4' : 'space-y-6'}>
               <div>
-                <label className="block text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-2">Payment Name (Optional)</label>
+                <label className={`block text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest ${isMobile ? 'mb-1.5' : 'mb-2'}`}>Payment Name (Optional)</label>
                 <input
                   value={cardPaymentForm.name}
                   onChange={e => setCardPaymentForm(f => ({ ...f, name: e.target.value }))}
                   placeholder="Credit Card Payment"
-                  className={modalFieldClass}
+                  className={`${modalFieldClass} ${isMobile ? 'p-3 text-sm' : ''}`}
                 />
               </div>
 
               <div>
-                <label className="block text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-2">Amount</label>
+                <label className={`block text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest ${isMobile ? 'mb-1.5' : 'mb-2'}`}>Amount</label>
                 <div className="relative">
                   <span className="absolute left-4 top-1/2 -translate-y-1/2 font-bold text-gray-400 dark:text-gray-500">₱</span>
                   <input
@@ -1695,34 +1695,34 @@ const AccountFilteredTransactions: React.FC<AccountFilteredTransactionsProps> = 
                     value={cardPaymentForm.amount}
                     onChange={e => setCardPaymentForm(f => ({ ...f, amount: e.target.value }))}
                     required
-                    className={`${modalFieldClass} pl-8 text-xl`}
+                    className={`${modalFieldClass} pl-8 ${isMobile ? 'p-3 text-base' : 'text-xl'}`}
                   />
                 </div>
               </div>
 
               <div>
-                <label className="block text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-2">Date</label>
+                <label className={`block text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest ${isMobile ? 'mb-1.5' : 'mb-2'}`}>Date</label>
                 <input
                   type="date"
                   value={cardPaymentForm.date}
                   onChange={e => setCardPaymentForm(f => ({ ...f, date: e.target.value }))}
                   required
-                  className={modalFieldClass}
+                  className={`${modalFieldClass} ${isMobile ? 'p-3 text-sm' : ''}`}
                 />
               </div>
 
               <div>
-                <label className="block text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-2">Notes (Optional)</label>
+                <label className={`block text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest ${isMobile ? 'mb-1.5' : 'mb-2'}`}>Notes (Optional)</label>
                 <textarea
                   value={cardPaymentForm.notes}
                   onChange={e => setCardPaymentForm(f => ({ ...f, notes: e.target.value }))}
                   placeholder="e.g. Full payment, minimum payment, etc."
                   rows={3}
-                  className={`${modalFieldClass} resize-none`}
+                  className={`${modalFieldClass} resize-none ${isMobile ? 'p-3 text-sm' : ''}`}
                 />
               </div>
 
-              <div className="flex gap-4 pt-4">
+              <div className={`pt-3 ${isMobile ? 'flex flex-col gap-3' : 'flex gap-4 pt-4'}`}>
                 <button
                   type="button"
                   onClick={() => setShowCardPaymentModal(false)}
