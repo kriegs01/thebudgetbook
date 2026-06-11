@@ -746,10 +746,7 @@ const AccountFilteredTransactions: React.FC<AccountFilteredTransactionsProps> = 
               <div className="inline-flex h-11 w-11 items-center justify-center rounded-[1.2rem] border-[3px] border-black bg-yellow-200 text-black shadow-[3px_3px_0px_0px_rgba(0,0,0,1)]">
                 <Filter className="h-4 w-4" />
               </div>
-              <p className={`text-sm font-black tracking-[0.08em] text-gray-800 dark:text-gray-100 ${isMobile ? 'text-center leading-tight' : 'leading-none'}`}>
-                <span className="uppercase tracking-[0.18em]">Filters:</span>{' '}
-                <span className="text-xs font-bold uppercase tracking-[0.12em] text-gray-500 dark:text-gray-400">Date Range And Transaction Types</span>
-              </p>
+                <p className={`text-sm font-black uppercase tracking-[0.18em] text-gray-800 dark:text-gray-100 ${isMobile ? 'text-center leading-tight' : 'leading-none'}`}>Filters</p>
             </div>
             {isMobile && (
               <span className="inline-flex h-11 w-11 items-center justify-center rounded-[1.2rem] border-[3px] border-black bg-white text-black shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] dark:bg-gray-800 dark:text-white">
@@ -1665,27 +1662,27 @@ const AccountFilteredTransactions: React.FC<AccountFilteredTransactionsProps> = 
 
       {/* Credit Card Payment Modal */}
       {showCardPaymentModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-md">
-          <div className={`${retroModalShell} relative max-h-[92vh] overflow-y-auto overflow-x-hidden ${isMobile ? 'p-5' : ''}`}>
+        <div className={`fixed inset-0 z-50 flex justify-center bg-black/60 p-4 backdrop-blur-md ${isMobile ? 'items-start pt-20 pb-6' : 'items-center'}`}>
+          <div className={`${retroModalShell} relative overflow-y-auto overflow-x-hidden ${isMobile ? 'max-h-[calc(100vh-7rem)] w-full max-w-md p-4' : 'max-h-[88vh] max-w-[28rem] p-6'}`}>
             <button type="button" onClick={() => setShowCardPaymentModal(false)} className={retroCloseButton} aria-label="Close credit card payment modal"><X className="w-4 h-4" /></button>
             <div className={`mb-4 inline-flex items-center justify-center rounded-[1.5rem] border-[3px] border-black bg-teal-500 text-white shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] ${isMobile ? 'h-12 w-12' : 'h-14 w-14'}`}>
               <CreditCard className={isMobile ? 'w-6 h-6' : 'w-7 h-7'} />
             </div>
             <h2 className={retroModalTitle}>Make Credit Card Payment</h2>
-            <p className={`${retroModalSubtitle} ${isMobile ? 'mb-5' : 'mb-8'}`}>Record a payment to reduce your credit card balance.</p>
-            <form onSubmit={handleCardPaymentSubmit} className={isMobile ? 'space-y-4' : 'space-y-6'}>
+            <p className={`${retroModalSubtitle} ${isMobile ? 'mb-4' : 'mb-5'}`}>Record a payment to reduce your credit card balance.</p>
+            <form onSubmit={handleCardPaymentSubmit} className={isMobile ? 'space-y-3' : 'space-y-4'}>
               <div>
-                <label className={`block text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest ${isMobile ? 'mb-1.5' : 'mb-2'}`}>Payment Name (Optional)</label>
+                <label className="mb-1.5 block text-[10px] font-black uppercase tracking-widest text-gray-400 dark:text-gray-500">Payment Name (Optional)</label>
                 <input
                   value={cardPaymentForm.name}
                   onChange={e => setCardPaymentForm(f => ({ ...f, name: e.target.value }))}
                   placeholder="Credit Card Payment"
-                  className={`${modalFieldClass} ${isMobile ? 'p-3 text-sm' : ''}`}
+                  className={`${modalFieldClass} ${isMobile ? 'p-3 text-sm' : 'p-3.5 text-sm'}`}
                 />
               </div>
 
               <div>
-                <label className={`block text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest ${isMobile ? 'mb-1.5' : 'mb-2'}`}>Amount</label>
+                <label className="mb-1.5 block text-[10px] font-black uppercase tracking-widest text-gray-400 dark:text-gray-500">Amount</label>
                 <div className="relative">
                   <span className="absolute left-4 top-1/2 -translate-y-1/2 font-bold text-gray-400 dark:text-gray-500">₱</span>
                   <input
@@ -1695,34 +1692,34 @@ const AccountFilteredTransactions: React.FC<AccountFilteredTransactionsProps> = 
                     value={cardPaymentForm.amount}
                     onChange={e => setCardPaymentForm(f => ({ ...f, amount: e.target.value }))}
                     required
-                    className={`${modalFieldClass} pl-8 ${isMobile ? 'p-3 text-base' : 'text-xl'}`}
+                    className={`${modalFieldClass} pl-8 ${isMobile ? 'p-3 text-base' : 'p-3.5 text-lg'}`}
                   />
                 </div>
               </div>
 
               <div>
-                <label className={`block text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest ${isMobile ? 'mb-1.5' : 'mb-2'}`}>Date</label>
+                <label className="mb-1.5 block text-[10px] font-black uppercase tracking-widest text-gray-400 dark:text-gray-500">Date</label>
                 <input
                   type="date"
                   value={cardPaymentForm.date}
                   onChange={e => setCardPaymentForm(f => ({ ...f, date: e.target.value }))}
                   required
-                  className={`${modalFieldClass} ${isMobile ? 'p-3 text-sm' : ''}`}
+                  className={`${modalFieldClass} ${isMobile ? 'p-3 text-sm' : 'p-3.5 text-sm'}`}
                 />
               </div>
 
               <div>
-                <label className={`block text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest ${isMobile ? 'mb-1.5' : 'mb-2'}`}>Notes (Optional)</label>
+                <label className="mb-1.5 block text-[10px] font-black uppercase tracking-widest text-gray-400 dark:text-gray-500">Notes (Optional)</label>
                 <textarea
                   value={cardPaymentForm.notes}
                   onChange={e => setCardPaymentForm(f => ({ ...f, notes: e.target.value }))}
                   placeholder="e.g. Full payment, minimum payment, etc."
                   rows={3}
-                  className={`${modalFieldClass} resize-none ${isMobile ? 'p-3 text-sm' : ''}`}
+                  className={`${modalFieldClass} resize-none ${isMobile ? 'p-3 text-sm' : 'p-3.5 text-sm'}`}
                 />
               </div>
 
-              <div className={`pt-3 ${isMobile ? 'flex flex-col gap-3' : 'flex gap-4 pt-4'}`}>
+              <div className={`${isMobile ? 'flex flex-col gap-3 pt-2' : 'flex gap-3 pt-2'}`}>
                 <button
                   type="button"
                   onClick={() => setShowCardPaymentModal(false)}
@@ -1733,7 +1730,7 @@ const AccountFilteredTransactions: React.FC<AccountFilteredTransactionsProps> = 
                 </button>
                 <button
                   type="submit"
-                  className="flex-1 rounded-2xl border-[3px] border-black bg-teal-500 py-4 font-black text-white shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] transition-all hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none disabled:opacity-50"
+                  className={`flex-1 rounded-2xl border-[3px] border-black bg-teal-500 font-black text-white shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] transition-all hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none disabled:opacity-50 ${isMobile ? 'py-3.5' : 'py-3.5'}`}
                   disabled={isSubmitting}
                 >
                   {isSubmitting ? 'Processing...' : 'Record Payment'}

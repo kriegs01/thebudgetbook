@@ -304,7 +304,7 @@ const Accounts: React.FC<AccountsProps> = ({ accounts, onAdd, onDelete, onEdit, 
           )}
         </div>
 
-        <div className={`${isCredit ? 'mt-auto' : 'mt-1.5 sm:mt-2'} flex flex-wrap items-center justify-end gap-1 pt-1 sm:gap-1.5 sm:pt-1.5`}>
+        <div className={`${isCredit ? 'mt-auto -translate-y-1 sm:-translate-y-1.5' : 'mt-1 -translate-y-1 sm:mt-1.5 sm:-translate-y-1'} flex flex-wrap items-center justify-end gap-1 pt-0.5 sm:gap-1.5 sm:pt-1`}>
           {isCredit && (
             <>
               <button
@@ -319,7 +319,7 @@ const Accounts: React.FC<AccountsProps> = ({ accounts, onAdd, onDelete, onEdit, 
               <Link
                 to={`/accounts/statement?account=${acc.id}`}
                 onClick={(e) => e.stopPropagation()}
-                className="inline-flex min-w-0 max-w-[7rem] items-center rounded-2xl border-[3px] border-black bg-[#f5f0e5] px-1.5 py-1.5 text-[9px] font-black text-black shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] transition-all hover:shadow-none sm:max-w-none sm:px-2.5 sm:py-2 sm:text-xs"
+                className="inline-flex min-w-0 max-w-[7.25rem] items-center rounded-2xl border-[3px] border-black bg-[#f5f0e5] px-1.5 py-1.5 text-[9px] font-black text-black shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] transition-all hover:shadow-none sm:max-w-none sm:px-2.5 sm:py-2 sm:text-xs"
                 aria-label={`View ${acc.bank} statement`}
               >
                 View Statement
@@ -329,7 +329,7 @@ const Accounts: React.FC<AccountsProps> = ({ accounts, onAdd, onDelete, onEdit, 
           <Link
             to={`/accounts/view?account=${acc.id}`}
             onClick={(e) => e.stopPropagation()}
-            className={`inline-flex min-w-0 max-w-[4.75rem] items-center gap-1 rounded-2xl border-[3px] border-black px-1.5 py-1.5 text-[9px] font-black text-black shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] transition-all hover:shadow-none sm:max-w-none sm:px-2.5 sm:py-2 sm:text-xs ${getAccentClasses('bg')}`}
+            className={`inline-flex min-w-0 max-w-[4.9rem] items-center gap-1 rounded-2xl border-[3px] border-black px-1.5 py-1.5 text-[9px] font-black text-black shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] transition-all hover:shadow-none sm:max-w-none sm:px-2.5 sm:py-2 sm:text-xs ${getAccentClasses('bg')}`}
             aria-label={`View ${acc.bank} transactions`}
           >
             <span>View</span>
@@ -414,7 +414,7 @@ const Accounts: React.FC<AccountsProps> = ({ accounts, onAdd, onDelete, onEdit, 
       <section>
         <button 
           onClick={() => setIsDebitOpen(!isDebitOpen)}
-          className="mb-6 flex w-full items-center gap-3 rounded-[1.6rem] border-[4px] border-black bg-white px-5 py-4 text-left shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] transition-all hover:-translate-y-0.5 dark:bg-gray-900"
+          className="mb-6 flex w-full items-center gap-3 rounded-[1.6rem] border-[4px] border-black bg-white px-5 py-4 text-left shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] transition-all dark:bg-gray-900"
         >
           {isDebitOpen ? <ChevronDown className="w-5 h-5" /> : <ChevronRight className="w-5 h-5" />}
           <TrendingUp className="w-5 h-5 text-green-500" />
@@ -433,7 +433,7 @@ const Accounts: React.FC<AccountsProps> = ({ accounts, onAdd, onDelete, onEdit, 
       <section>
         <button 
           onClick={() => setIsCreditOpen(!isCreditOpen)}
-          className="mb-6 flex w-full items-center gap-3 rounded-[1.6rem] border-[4px] border-black bg-white px-5 py-4 text-left shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] transition-all hover:-translate-y-0.5 dark:bg-gray-900"
+          className="mb-6 flex w-full items-center gap-3 rounded-[1.6rem] border-[4px] border-black bg-white px-5 py-4 text-left shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] transition-all dark:bg-gray-900"
         >
           {isCreditOpen ? <ChevronDown className="w-5 h-5" /> : <ChevronRight className="w-5 h-5" />}
           <CreditCard className="w-5 h-5 text-purple-500" />
