@@ -278,7 +278,7 @@ const Accounts: React.FC<AccountsProps> = ({ accounts, onAdd, onDelete, onEdit, 
           </div>
         </div>
 
-        <div className="flex min-h-0 flex-1 flex-col justify-between">
+        <div className={`relative flex min-h-0 flex-1 flex-col ${isCredit ? 'pb-11 sm:pb-12' : 'pb-10 sm:pb-11'}`}>
           <div>
             <div className="mb-2 mt-2 sm:mb-3 sm:mt-2.5">
               <div className="flex items-start justify-between gap-3">
@@ -307,7 +307,7 @@ const Accounts: React.FC<AccountsProps> = ({ accounts, onAdd, onDelete, onEdit, 
             </div>
           </div>
 
-          <div className="shrink-0 pb-1 pt-3 sm:pb-1.5 sm:pt-3.5">
+          <div className="absolute inset-x-0 bottom-1 shrink-0 pt-2 sm:bottom-1.5 sm:pt-3">
             <div className="flex flex-nowrap items-center justify-end gap-1 sm:gap-1.5">
               {isCredit && (
                 <>
