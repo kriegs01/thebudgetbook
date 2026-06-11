@@ -295,8 +295,8 @@ const Accounts: React.FC<AccountsProps> = ({ accounts, onAdd, onDelete, onEdit, 
         <div className={`relative flex min-h-0 flex-1 flex-col ${isCredit ? 'pb-11 sm:pb-12' : 'pb-10 sm:pb-11'}`}>
           <div>
             <div className="mb-2 mt-2 sm:mb-3 sm:mt-2.5">
-              <div className="flex items-start justify-end">
-                <div className="min-w-0 text-right pt-0.5">
+              <div className="flex items-start justify-start">
+                <div className="min-w-0 max-w-[10.5rem] pt-0.5 text-left sm:max-w-[12rem]">
                   <p className="text-[10px] font-black uppercase tracking-[0.14em] text-black/55">Balance</p>
                   <p className="mt-0.5 text-[clamp(1.15rem,2.9vw,1.45rem)] font-black leading-tight">{formatCurrency(acc.balance)}</p>
                 </div>
