@@ -232,12 +232,26 @@ const Accounts: React.FC<AccountsProps> = ({ accounts, onAdd, onDelete, onEdit, 
         key={acc.id}
         className={`${cardSurface} relative mx-auto flex h-full w-full aspect-[1.92/1] max-w-[24rem] flex-col overflow-hidden rounded-[2rem] border-[4px] border-black p-4 shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] transition-all duration-200 sm:max-w-none sm:p-5`}
       >
-        <div className="absolute inset-x-5 top-[5.35rem] h-px bg-black/10 sm:inset-x-6 sm:top-[5.6rem]" />
+        <div className={`absolute inset-x-5 h-px bg-black/10 sm:inset-x-6 ${isCredit ? 'top-[6.55rem] sm:top-[6.8rem]' : 'top-[5.35rem] sm:top-[5.6rem]'}`} />
 
         <div className="mb-5 flex items-start justify-between gap-4 sm:mb-6">
           <div className="min-w-0 pr-2">
             <h3 className={`max-w-[10.25rem] truncate text-[clamp(1.15rem,2.8vw,1.45rem)] font-black leading-tight ${getAccentClasses('text')}`}>{acc.bank}</h3>
             <p className="mt-1 text-[10px] font-black uppercase tracking-[0.18em] text-black/60">{acc.classification}</p>
+            {isCredit && (
+              <div className="mt-2.5 max-w-[11rem]">
+                <div className="flex items-baseline gap-1.5">
+                  <p className="text-[9px] font-black uppercase tracking-[0.16em] text-black/55">Credit Limit:</p>
+                  <p className="truncate text-[clamp(0.78rem,1.9vw,0.92rem)] font-black text-black">{formatCurrency(creditLimit)}</p>
+                </div>
+                <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-black/10">
+                  <div
+                    className={`h-full rounded-full ${getAccentClasses('bg')}`}
+                    style={{ width: `${usedPercentSafe}%` }}
+                  />
+                </div>
+              </div>
+            )}
           </div>
           <div className="relative">
             <button
@@ -281,17 +295,8 @@ const Accounts: React.FC<AccountsProps> = ({ accounts, onAdd, onDelete, onEdit, 
         <div className={`relative flex min-h-0 flex-1 flex-col ${isCredit ? 'pb-11 sm:pb-12' : 'pb-10 sm:pb-11'}`}>
           <div>
             <div className="mb-2 mt-2 sm:mb-3 sm:mt-2.5">
-              <div className="flex items-start justify-between gap-3">
-                {isCredit ? (
-                  <div className="min-w-0 rounded-[1rem] border-2 border-black/10 bg-[#f5f0e5] px-3 py-2">
-                    <p className="text-[9px] font-black uppercase tracking-[0.16em] text-black/55">Credit Limit</p>
-                    <p className="mt-0.5 truncate text-[clamp(0.85rem,2vw,1rem)] font-black text-black">{formatCurrency(creditLimit)}</p>
-                    <p className="mt-0.5 text-[9px] font-bold uppercase tracking-[0.12em] text-black/50">Used {usedPercentSafe}%</p>
-                  </div>
-                ) : (
-                  <div />
-                )}
-                <div className={`min-w-0 text-right ${isCredit ? 'pt-0.5' : 'pt-0.5'}`}>
+              <div className="flex items-start justify-end">
+                <div className="min-w-0 text-right pt-0.5">
                   <p className="text-[10px] font-black uppercase tracking-[0.14em] text-black/55">Balance</p>
                   <p className="mt-0.5 text-[clamp(1.15rem,2.9vw,1.45rem)] font-black leading-tight">{formatCurrency(acc.balance)}</p>
                 </div>
