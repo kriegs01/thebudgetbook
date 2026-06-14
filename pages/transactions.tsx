@@ -1264,6 +1264,18 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ transactions, loadi
       {/* Transaction Details Modal */}
       {selectedTx && (() => {
         const pm = accounts.find(a => a.id === selectedTx.paymentMethodId);
+        const linkedTransferTx = selectedTx.transaction_type === 'transfer' && selectedTx.related_transaction_id
+          ? transactions.find(t => t.id === selectedTx.related_transaction_id)
+          : null;
+        const linkedTransferAccount = linkedTransferTx
+          ? accounts.find(a => a.id === linkedTransferTx.paymentMethodId)
+          : null;
+        const transferAccountLabel = selectedTx.transaction_type === 'transfer'
+          ? (selectedTx.amount > 0 ? 'To Account' : 'From Account')
+          : null;
+        const transferAccountValue = linkedTransferAccount
+          ? linkedTransferAccount.bank
+          : linkedTransferTx?.paymentMethodId || 'N/A';
         return (
           <div className="fixed inset-0 z-[1000] flex items-center justify-center p-2 sm:p-4 bg-black/60 backdrop-blur-md" onClick={() => setSelectedTx(null)}>
             <div className="w-full max-w-md bg-white dark:bg-gray-900 border-4 border-black rounded-2xl shadow-2xl sm:shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] p-6 md:p-8 relative transition-all flex flex-col max-h-[95vh]" onClick={e => e.stopPropagation()}>
@@ -1300,12 +1312,19 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ transactions, loadi
                     <dt className="text-[10px] font-black text-gray-400 uppercase tracking-widest self-center">Payment Method</dt>
                     <dd className="text-sm text-gray-700 dark:text-gray-300">{pm ? pm.bank : selectedTx.paymentMethodId}</dd>
                     </div>
-                    <div className="flex justify-between">
-                    <dt className="text-[10px] font-black text-gray-400 uppercase tracking-widest self-center">
-                        {selectedTx.transaction_type === 'loan' ? 'Borrower' : 'Recipient'}
-                    </dt>
-                    <dd className="text-sm text-gray-700 dark:text-gray-300">{selectedTx.borrower_name || (selectedTx as any).person_name || (selectedTx as any).personName || 'N/A'}</dd>
-                    </div>
+                    {selectedTx.transaction_type === 'transfer' ? (
+                      <div className="flex justify-between">
+                        <dt className="text-[10px] font-black text-gray-400 uppercase tracking-widest self-center">{transferAccountLabel}</dt>
+                        <dd className="text-sm text-gray-700 dark:text-gray-300">{transferAccountValue}</dd>
+                      </div>
+                    ) : (
+                      <div className="flex justify-between">
+                        <dt className="text-[10px] font-black text-gray-400 uppercase tracking-widest self-center">
+                            {selectedTx.transaction_type === 'loan' ? 'Borrower' : 'Recipient'}
+                        </dt>
+                        <dd className="text-sm text-gray-700 dark:text-gray-300">{selectedTx.borrower_name || (selectedTx as any).person_name || (selectedTx as any).personName || 'N/A'}</dd>
+                      </div>
+                    )}
                 </dl>
 
                 <div>

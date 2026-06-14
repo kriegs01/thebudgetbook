@@ -2,7 +2,7 @@ import React, { useEffect, useState, useMemo, useRef } from 'react';
 import { ArrowLeft, Info, Eye, ZoomIn, ZoomOut, Download, X, Pencil, BanknoteArrowDown, Trash2, ArrowUpFromLine, ArrowDownToLine, Banknote, CheckSquare, Square, Filter, ChevronDown, ChevronUp, CreditCard, AlertTriangle, Send, User, Landmark, WalletCards } from 'lucide-react';
 import { useSearchParams, Link } from 'react-router-dom';
 import { Account } from '../../types';
-import { getTransactionsByPaymentMethod, createTransaction, updateTransactionAndSyncSchedule, createTransfer, getLoanTransactionsWithPayments, getReceiptSignedUrl, deleteTransactionAndRevertSchedule, batchDeleteTransactions } from '../../src/services/transactionsService';
+import { getTransactionsByPaymentMethod, createTransaction, updateTransactionAndSyncSchedule, createTransfer, getLoanTransactionsWithPayments, getReceiptSignedUrl, deleteTransactionAndRevertSchedule, batchDeleteTransactions, getTransactionById } from '../../src/services/transactionsService';
 import { combineDateWithCurrentTime, getFirstDayOfCurrentYearIso, getLastDayOfCurrentYearIso, getTodayIso } from '../../src/utils/dateUtils';
 import type { SupabaseTransaction } from '../../src/types/supabase';
 import { computeCreditUtilization, type CreditUtilization } from '../../src/utils/accounts';
@@ -85,6 +85,7 @@ const AccountFilteredTransactions: React.FC<AccountFilteredTransactionsProps> = 
   const [receiptSignedUrl, setReceiptSignedUrl] = useState<string | null | undefined>(undefined);
   const [previewReceiptUrl, setPreviewReceiptUrl] = useState<string | null>(null);
   const [zoom, setZoom] = useState(0.5);
+  const [transferCounterpartyLabel, setTransferCounterpartyLabel] = useState<string | null>(null);
   
   // Loading states
   const [isLoading, setIsLoading] = useState(true);
@@ -245,6 +246,44 @@ const AccountFilteredTransactions: React.FC<AccountFilteredTransactionsProps> = 
       setReceiptSignedUrl(null);
     }
   }, [selectedTx]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadTransferCounterparty = async () => {
+      if (!selectedTx || selectedTx.transaction_type !== 'transfer' || !selectedTx.related_transaction_id) {
+        setTransferCounterpartyLabel(null);
+        return;
+      }
+
+      const localLinkedTx = transactions.find(tx => tx.id === selectedTx.related_transaction_id);
+      if (localLinkedTx) {
+        const localAccount = allAccounts.find(a => a.id === localLinkedTx.paymentMethodId);
+        setTransferCounterpartyLabel(localAccount ? localAccount.bank : localLinkedTx.paymentMethodId);
+        return;
+      }
+
+      setTransferCounterpartyLabel('Loading...');
+      try {
+        const { data, error } = await getTransactionById(selectedTx.related_transaction_id);
+        if (error) throw error;
+        if (cancelled) return;
+
+        const linkedAccount = data?.payment_method_id
+          ? allAccounts.find(a => a.id === data.payment_method_id)
+          : null;
+        setTransferCounterpartyLabel(linkedAccount ? linkedAccount.bank : (data?.payment_method_id || 'N/A'));
+      } catch (error) {
+        console.error('Error loading transfer counterparty:', error);
+        if (!cancelled) setTransferCounterpartyLabel('N/A');
+      }
+    };
+
+    loadTransferCounterparty();
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedTx, transactions, allAccounts]);
 
   // Close type-filter dropdown when clicking outside
   useEffect(() => {
@@ -1814,6 +1853,9 @@ const AccountFilteredTransactions: React.FC<AccountFilteredTransactionsProps> = 
       {/* Transaction Details Modal */}
       {selectedTx && (() => {
         const pm = allAccounts.find(a => a.id === selectedTx.paymentMethodId);
+        const transferAccountLabel = selectedTx.transaction_type === 'transfer'
+          ? (selectedTx.amount > 0 ? 'To Account' : 'From Account')
+          : null;
         return (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-md" onClick={() => setSelectedTx(null)}>
             <div className={`${retroModalShell} relative`} onClick={e => e.stopPropagation()}>
@@ -1850,6 +1892,12 @@ const AccountFilteredTransactions: React.FC<AccountFilteredTransactionsProps> = 
                   <dt className="text-[10px] font-black text-gray-400 uppercase tracking-widest self-center">Payment Method</dt>
                   <dd className="text-right text-sm text-gray-700 dark:text-gray-300">{pm ? pm.bank : selectedTx.paymentMethodId}</dd>
                 </div>
+                {selectedTx.transaction_type === 'transfer' && (
+                  <div className="flex justify-between gap-4">
+                    <dt className="text-[10px] font-black text-gray-400 uppercase tracking-widest self-center">{transferAccountLabel}</dt>
+                    <dd className="text-right text-sm text-gray-700 dark:text-gray-300">{transferCounterpartyLabel || 'N/A'}</dd>
+                  </div>
+                )}
               </dl>
               <div className={retroPanelClass}>
                 <p className="mb-3 text-[10px] font-black uppercase tracking-widest text-gray-400 dark:text-gray-500">Receipt</p>
