@@ -343,7 +343,7 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
   const [excludedWalletIds, setExcludedWalletIds] = useState<Set<string>>(new Set());
 
   const [fundModal, setFundModal] = useState<{ wallet: Wallet } | null>(null);
-  const [fundForm, setFundForm] = useState({ amount: '', date: '', notes: '' });
+  const [fundForm, setFundForm] = useState({ amount: '', date: '', notes: '', sourceAccountId: '' });
   const [fundSubmitting, setFundSubmitting] = useState(false);
   const [stashInfoModal, setStashInfoModal] = useState<{ wallet: Wallet } | null>(null);
   const [stashStatusMsg, setStashStatusMsg] = useState<{ msg: string; type: 'success' | 'error' } | null>(null);
@@ -472,6 +472,11 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
 
   const handleOpenFundModal = useCallback((wallet: Wallet) => {
     const { remaining } = getStashAggregates(wallet);
+    const fundingAccounts = accounts.filter(a => a.type === 'Debit');
+    const defaultSourceAccountId =
+      fundingAccounts.some(a => a.id === wallet.accountId)
+        ? wallet.accountId
+        : (fundingAccounts[0]?.id || '');
     const now = new Date();
     const selectedMonthIndex = MONTHS.indexOf(selectedMonth);
     const isCurrentPeriod = now.getFullYear() === selectedYear && now.getMonth() === selectedMonthIndex;
@@ -485,9 +490,10 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
       amount: remaining > 0 ? remaining.toFixed(2) : '',
       date: defaultDate,
       notes: '',
+      sourceAccountId: defaultSourceAccountId,
     });
     setFundModal({ wallet });
-  }, [getStashAggregates, selectedMonth, selectedYear]);
+  }, [accounts, getStashAggregates, selectedMonth, selectedYear]);
 
   const handleFundSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -496,15 +502,16 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
     if (isNaN(amount) || amount <= 0) return;
     const walletId = fundModal.wallet.id;
     const walletName = fundModal.wallet.name;
-    const walletAccountId = fundModal.wallet.accountId;
+    const sourceAccountId = fundForm.sourceAccountId;
+    if (!sourceAccountId) return;
     setFundSubmitting(true);
     try {
       const stashTxBase = {
         name: `Stash top-up - ${walletName} (${selectedMonth} ${selectedYear})`,
-        amount: -amount,
+        amount,
         date: combineDateWithCurrentTime(fundForm.date),
-        payment_method_id: walletAccountId,
-        transaction_type: 'cash_in' as const,
+        payment_method_id: sourceAccountId,
+        transaction_type: 'withdraw' as const,
         notes: fundForm.notes || null,
         payment_schedule_id: null,
         related_transaction_id: null,
@@ -2706,6 +2713,21 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
               <div><h2 className="text-lg font-black text-gray-900 dark:text-gray-100 uppercase tracking-tight">Fund Stash</h2><p className="text-[11px] text-gray-500 font-medium">{fundModal.wallet.name}</p></div>
             </div>
             <form onSubmit={handleFundSubmit} className="space-y-4">
+              <div>
+                <label className="block text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">Source Account <span className="text-red-500">*</span></label>
+                <select
+                  value={fundForm.sourceAccountId}
+                  onChange={e => setFundForm(f => ({ ...f, sourceAccountId: e.target.value }))}
+                  required
+                  className="w-full bg-white dark:bg-gray-800 border-2 border-black rounded-xl px-3 py-2 text-xs font-bold text-gray-800 dark:text-gray-100 outline-none"
+                >
+                  {accounts.filter(a => a.type === 'Debit').map(account => (
+                    <option key={account.id} value={account.id}>
+                      {account.bank} ({account.classification})
+                    </option>
+                  ))}
+                </select>
+              </div>
               <div>
                 <label className="block text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">Amount <span className="text-red-500">*</span></label>
                 <div className="flex items-center border-2 border-black rounded-xl px-3 py-2.5 bg-white dark:bg-gray-800"><span className="text-gray-400 font-bold mr-2 text-xs">₱</span><input type="number" min="0.01" step="0.01" value={fundForm.amount} onChange={e => setFundForm(f => ({ ...f, amount: e.target.value }))} placeholder="0.00" required className="flex-1 bg-transparent outline-none text-sm font-black text-indigo-600" /></div>
