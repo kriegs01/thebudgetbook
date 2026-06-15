@@ -113,7 +113,7 @@ export const updateUserProfile = async (userId: string, updates: UpdateUserProfi
       .update(updates)
       .eq('user_id', userId)
       .select()
-      .single();
+      .maybeSingle();
 
     if (error) throw error;
     return { data, error: null };
