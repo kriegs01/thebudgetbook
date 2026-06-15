@@ -1721,6 +1721,7 @@ const MainApp: React.FC = () => {
                   setCurrency={setCurrency}
                   categories={categories}
                   setCategories={setCategories}
+                  accounts={accounts}
                   onResetAll={handleResetAll}
                   billers={billers}
                   installments={installments}
