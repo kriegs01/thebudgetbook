@@ -1196,9 +1196,6 @@ const Settings: React.FC<SettingsProps> = ({ currency, setCurrency, categories, 
                                     <Info className="h-3.5 w-3.5" />
                                   </button>
                                 </div>
-                                <p className="mt-2 text-xs leading-relaxed text-gray-500 transition-colors dark:text-gray-400">
-                                  {option.description}
-                                </p>
                               </div>
                               <div
                                 className={`mt-0.5 flex h-5 w-5 items-center justify-center rounded-full border-2 ${

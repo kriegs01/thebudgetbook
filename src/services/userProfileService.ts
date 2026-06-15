@@ -95,21 +95,28 @@ export const updateUserProfile = async (userId: string, updates: UpdateUserProfi
     // If update failed with an error, throw it
     if (error) throw error;
 
-    // If no rows were updated (profile doesn't exist), create it
+    // If no rows were updated (or the updated row is not visible to select),
+    // fall back to an upsert so we don't race into duplicate user_id inserts.
     if (!data || data.length === 0) {
-      console.log('[UserProfile] No profile found, creating new profile for user:', userId);
+      console.log('[UserProfile] No visible profile found, upserting profile for user:', userId);
 
       const fallbackNames = await deriveFallbackProfileNames();
 
-      // Create a new profile with the updates
-      const createResult = await createUserProfile({
+      const { data: upsertedProfile, error: upsertError } = await supabase
+        .from('user_profiles')
+        .upsert({
         user_id: userId,
-        first_name: updates.first_name || fallbackNames.first_name,
-        last_name: updates.last_name || fallbackNames.last_name,
-        ...updates
-      });
+          first_name: updates.first_name || fallbackNames.first_name,
+          last_name: updates.last_name || fallbackNames.last_name,
+          ...updates,
+        }, {
+          onConflict: 'user_id',
+        })
+        .select()
+        .single();
 
-      return createResult;
+      if (upsertError) throw upsertError;
+      return { data: upsertedProfile, error: null };
     }
 
     // Return the first (and should be only) updated record
