@@ -107,16 +107,27 @@ export const updateUserProfile = async (userId: string, updates: UpdateUserProfi
       });
     }
 
-    // Update the existing profile.
-    const { data, error } = await supabase
+    // Update the existing profile by primary key, then refetch it explicitly.
+    // This avoids relying on UPDATE ... RETURNING behavior, which has been
+    // inconsistent in this settings flow.
+    const { error } = await supabase
       .from('user_profiles')
       .update(updates)
-      .eq('user_id', userId)
-      .select()
-      .maybeSingle();
+      .eq('id', existingProfile.id);
 
     if (error) throw error;
-    return { data, error: null };
+
+    const { data: refreshedProfile, error: refreshError } = await getUserProfile(userId);
+    if (refreshError) throw refreshError;
+    if (!refreshedProfile) {
+      throw new Error('Profile save could not be confirmed.');
+    }
+
+    if (updates.settings && JSON.stringify(refreshedProfile.settings || null) !== JSON.stringify(updates.settings)) {
+      throw new Error('Profile settings did not persist. Please try again.');
+    }
+
+    return { data: refreshedProfile, error: null };
   } catch (error) {
     console.error('Error updating user profile:', error);
     return { data: null, error };
