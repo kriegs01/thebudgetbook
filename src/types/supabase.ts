@@ -23,6 +23,7 @@ export interface SupabaseUserProfile {
     setupCompleted?: boolean;
     accounts?: {
       debitOverdraftMode?: 'allow' | 'warn' | 'block';
+      debitOverdraftModes?: Record<string, 'allow' | 'warn' | 'block'>;
     };
   } | null;
 }

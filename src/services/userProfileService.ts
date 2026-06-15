@@ -49,6 +49,31 @@ export const createUserProfile = async (profile: CreateUserProfileInput) => {
   }
 };
 
+const deriveFallbackProfileNames = async () => {
+  const { data: authData } = await supabase.auth.getUser();
+  const authUser = authData.user;
+  const metadata = authUser?.user_metadata || {};
+  const emailPrefix = authUser?.email?.split('@')[0]?.trim() || '';
+
+  const firstName =
+    metadata.first_name ||
+    metadata.given_name ||
+    metadata.name?.split(' ')[0] ||
+    emailPrefix ||
+    'User';
+
+  const lastName =
+    metadata.last_name ||
+    metadata.family_name ||
+    metadata.name?.split(' ').slice(1).join(' ') ||
+    '';
+
+  return {
+    first_name: String(firstName).trim() || 'User',
+    last_name: String(lastName).trim(),
+  };
+};
+
 /**
  * Update user profile
  * If profile doesn't exist, this will create it (for existing users who signed up before profile feature)
@@ -73,18 +98,14 @@ export const updateUserProfile = async (userId: string, updates: UpdateUserProfi
     // If no rows were updated (profile doesn't exist), create it
     if (!data || data.length === 0) {
       console.log('[UserProfile] No profile found, creating new profile for user:', userId);
-      
-      // If creating a profile for the first time, a name is strictly required
-      if (!updates.first_name && !updates.last_name) {
-        throw new Error('Profile does not exist yet. Please save your profile name before updating security settings.');
-      }
+
+      const fallbackNames = await deriveFallbackProfileNames();
 
       // Create a new profile with the updates
-      // Use provided values or empty strings as fallback
       const createResult = await createUserProfile({
         user_id: userId,
-        first_name: updates.first_name || '',
-        last_name: updates.last_name || '',
+        first_name: updates.first_name || fallbackNames.first_name,
+        last_name: updates.last_name || fallbackNames.last_name,
         ...updates
       });
 

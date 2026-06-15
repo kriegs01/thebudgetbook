@@ -376,7 +376,10 @@ const AccountFilteredTransactions: React.FC<AccountFilteredTransactionsProps> = 
 
   // ── Derived: current balance (pre-calculated from App.tsx, no re-reduction needed) ─
   const currentBalance = useMemo(() => account?.balance ?? 0, [account]);
-  const debitOverdraftMode = userProfile?.settings?.accounts?.debitOverdraftMode || 'allow';
+  const debitOverdraftMode =
+    (account?.id && userProfile?.settings?.accounts?.debitOverdraftModes?.[account.id]) ||
+    userProfile?.settings?.accounts?.debitOverdraftMode ||
+    'allow';
   const availableFundingAccounts = useMemo(
     () => allAccounts.filter(a => a.type === 'Debit' && a.id !== accountId),
     [allAccounts, accountId]

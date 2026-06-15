@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { ChevronDown, ChevronRight, Hash, Globe, Bell, Lock, Trash2, AlertTriangle, RotateCcw, Plus, X, Database, Copy, Shield, User, Users, Mail, Key, MoreVertical, Check, SlidersHorizontal, Info } from 'lucide-react';
 import { BudgetCategory, Biller, Installment, SupabaseUserProfile } from '../types';
 import { useTestEnvironment } from '../src/contexts/TestEnvironmentContext';
@@ -467,10 +467,14 @@ const Settings: React.FC<SettingsProps> = ({ currency, setCurrency, categories, 
   const [isPeoplePageEnabled, setIsPeoplePageEnabled] = useState(!!userProfile?.settings?.usePeoplePage);
   const [isTogglingPeoplePage, setIsTogglingPeoplePage] = useState(false);
   const [peopleList, setPeopleList] = useState<SupabasePerson[]>([]);
-  const [debitOverdraftModeDraft, setDebitOverdraftModeDraft] = useState<DebitOverdraftMode>('allow');
+  const [accountOverdraftModeDrafts, setAccountOverdraftModeDrafts] = useState<Record<string, DebitOverdraftMode>>({});
   const [isSavingAccountPrefs, setIsSavingAccountPrefs] = useState(false);
   const [accountPrefsMessage, setAccountPrefsMessage] = useState('');
   const [accountPrefsError, setAccountPrefsError] = useState('');
+  const debitAccounts = useMemo(
+    () => accounts.filter(account => account.type === 'Debit'),
+    [accounts]
+  );
 
   useEffect(() => {
     setIsPeopleEnabled(!!userProfile?.settings?.peopleEnabled);
@@ -478,8 +482,20 @@ const Settings: React.FC<SettingsProps> = ({ currency, setCurrency, categories, 
   }, [userProfile?.settings?.peopleEnabled, userProfile?.settings?.usePeoplePage]);
 
   useEffect(() => {
-    setDebitOverdraftModeDraft(userProfile?.settings?.accounts?.debitOverdraftMode || 'allow');
-  }, [userProfile?.settings?.accounts?.debitOverdraftMode]);
+    const legacyMode = userProfile?.settings?.accounts?.debitOverdraftMode || 'allow';
+    const savedModes = userProfile?.settings?.accounts?.debitOverdraftModes || {};
+
+    const nextDrafts = debitAccounts.reduce<Record<string, DebitOverdraftMode>>((acc, account) => {
+      acc[account.id] = savedModes[account.id] || legacyMode;
+      return acc;
+    }, {});
+
+    setAccountOverdraftModeDrafts(nextDrafts);
+  }, [
+    debitAccounts,
+    userProfile?.settings?.accounts?.debitOverdraftMode,
+    userProfile?.settings?.accounts?.debitOverdraftModes,
+  ]);
 
   useEffect(() => {
     if (isPeopleEnabled && user) {
@@ -705,12 +721,13 @@ const Settings: React.FC<SettingsProps> = ({ currency, setCurrency, categories, 
     setAccountPrefsMessage('');
 
     try {
+      const { debitOverdraftMode: _legacyMode, ...existingAccountSettings } = userProfile?.settings?.accounts || {};
       const newSettings = {
         ...(userProfile?.settings || {}),
         setupCompleted: true,
         accounts: {
-          ...(userProfile?.settings?.accounts || {}),
-          debitOverdraftMode: debitOverdraftModeDraft,
+          ...existingAccountSettings,
+          debitOverdraftModes: accountOverdraftModeDrafts,
         },
       };
 
@@ -1102,7 +1119,7 @@ const Settings: React.FC<SettingsProps> = ({ currency, setCurrency, categories, 
             <div className="mb-4">
               <h4 className="text-sm font-black uppercase text-gray-900 transition-colors dark:text-gray-100">Debit Account Overdraft Behavior</h4>
               <p className="mt-1 text-xs text-gray-500 transition-colors dark:text-gray-400">
-                Choose how debit-account transactions behave when the projected balance would go below zero.
+                Set the overdraft rule for each debit account, then save all account configurations together.
               </p>
             </div>
 
@@ -1117,56 +1134,88 @@ const Settings: React.FC<SettingsProps> = ({ currency, setCurrency, categories, 
               </div>
             )}
 
-            <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
-              {OVERDRAFT_OPTIONS.map(option => {
-                const isSelected = debitOverdraftModeDraft === option.value;
-                return (
-                  <label
-                    key={option.value}
-                    className={`cursor-pointer rounded-2xl border-2 p-4 transition-all ${
-                      isSelected
-                        ? 'border-black bg-[#fff8ea] shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]'
-                        : 'border-gray-200 bg-gray-50 hover:border-black dark:border-gray-700 dark:bg-gray-800/60'
-                    }`}
+            {debitAccounts.length === 0 ? (
+              <div className="rounded-2xl border border-dashed border-gray-300 bg-gray-50 p-5 text-center transition-colors dark:border-gray-700 dark:bg-gray-800/50">
+                <p className="text-sm font-bold text-gray-600 transition-colors dark:text-gray-300">No debit accounts found.</p>
+                <p className="mt-1 text-xs text-gray-500 transition-colors dark:text-gray-400">
+                  Add a debit account first to configure its overdraft behavior.
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {debitAccounts.map(account => (
+                  <div
+                    key={account.id}
+                    className="rounded-2xl border-2 border-gray-200 bg-gray-50 p-4 transition-colors dark:border-gray-700 dark:bg-gray-800/60"
                   >
-                    <input
-                      type="radio"
-                      name="debit-overdraft-mode"
-                      value={option.value}
-                      checked={isSelected}
-                      onChange={() => setDebitOverdraftModeDraft(option.value)}
-                      className="sr-only"
-                    />
-                    <div className="flex items-start justify-between gap-3">
+                    <div className="mb-4 flex items-start justify-between gap-3">
                       <div>
-                        <div className="flex items-center gap-2">
-                          <span className="text-sm font-black uppercase text-gray-900 transition-colors dark:text-gray-100">{option.label}</span>
-                          <button
-                            type="button"
-                            title={option.tip}
-                            onClick={(e) => e.preventDefault()}
-                            className="rounded-full p-1 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-gray-700 dark:hover:text-gray-200"
-                            aria-label={`${option.label} info`}
-                          >
-                            <Info className="h-3.5 w-3.5" />
-                          </button>
-                        </div>
-                        <p className="mt-2 text-xs leading-relaxed text-gray-500 transition-colors dark:text-gray-400">
-                          {option.description}
+                        <h5 className="text-sm font-black uppercase text-gray-900 transition-colors dark:text-gray-100">{account.bank}</h5>
+                        <p className="mt-1 text-xs text-gray-500 transition-colors dark:text-gray-400">
+                          {account.classification} · Current balance: {new Intl.NumberFormat('en-PH', {
+                            style: 'currency',
+                            currency: 'PHP',
+                            minimumFractionDigits: 2,
+                            maximumFractionDigits: 2,
+                          }).format(account.balance)}
                         </p>
                       </div>
-                      <div
-                        className={`mt-0.5 flex h-5 w-5 items-center justify-center rounded-full border-2 ${
-                          isSelected ? 'border-black bg-black text-white' : 'border-gray-300 bg-white dark:border-gray-600 dark:bg-gray-900'
-                        }`}
-                      >
-                        {isSelected && <Check className="h-3 w-3" />}
-                      </div>
                     </div>
-                  </label>
-                );
-              })}
-            </div>
+
+                    <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+                      {OVERDRAFT_OPTIONS.map(option => {
+                        const isSelected = (accountOverdraftModeDrafts[account.id] || 'allow') === option.value;
+                        return (
+                          <label
+                            key={`${account.id}-${option.value}`}
+                            className={`cursor-pointer rounded-2xl border-2 p-4 transition-all ${
+                              isSelected
+                                ? 'border-black bg-[#fff8ea] shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]'
+                                : 'border-gray-200 bg-white hover:border-black dark:border-gray-700 dark:bg-gray-900/70'
+                            }`}
+                          >
+                            <input
+                              type="radio"
+                              name={`debit-overdraft-mode-${account.id}`}
+                              value={option.value}
+                              checked={isSelected}
+                              onChange={() => setAccountOverdraftModeDrafts(prev => ({ ...prev, [account.id]: option.value }))}
+                              className="sr-only"
+                            />
+                            <div className="flex items-start justify-between gap-3">
+                              <div>
+                                <div className="flex items-center gap-2">
+                                  <span className="text-sm font-black uppercase text-gray-900 transition-colors dark:text-gray-100">{option.label}</span>
+                                  <button
+                                    type="button"
+                                    title={option.tip}
+                                    onClick={(e) => e.preventDefault()}
+                                    className="rounded-full p-1 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-gray-700 dark:hover:text-gray-200"
+                                    aria-label={`${account.bank} ${option.label} info`}
+                                  >
+                                    <Info className="h-3.5 w-3.5" />
+                                  </button>
+                                </div>
+                                <p className="mt-2 text-xs leading-relaxed text-gray-500 transition-colors dark:text-gray-400">
+                                  {option.description}
+                                </p>
+                              </div>
+                              <div
+                                className={`mt-0.5 flex h-5 w-5 items-center justify-center rounded-full border-2 ${
+                                  isSelected ? 'border-black bg-black text-white' : 'border-gray-300 bg-white dark:border-gray-600 dark:bg-gray-900'
+                                }`}
+                              >
+                                {isSelected && <Check className="h-3 w-3" />}
+                              </div>
+                            </div>
+                          </label>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
 
             <div className="mt-5 flex justify-end">
               <button
