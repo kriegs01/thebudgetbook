@@ -18,6 +18,12 @@ export interface SupabaseUserProfile {
   updated_at: string; // timestamptz
   settings?: {
     peopleEnabled?: boolean; // Toggle for the People feature
+    usePeoplePage?: boolean;
+    defaultReceiveAccountId?: string;
+    setupCompleted?: boolean;
+    accounts?: {
+      debitOverdraftMode?: 'allow' | 'warn' | 'block';
+    };
   } | null;
 }
 

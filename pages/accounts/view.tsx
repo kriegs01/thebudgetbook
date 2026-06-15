@@ -13,6 +13,7 @@ import { PersonAutocomplete } from '../../src/components/PersonAutocomplete';
 import useMediaQuery from '../../src/hooks/useMediaQuery';
 import { useTheme } from '../../src/contexts/ThemeContext';
 import { PageHeader } from '../../src/components/PageHeader';
+import { useAuth } from '../../src/contexts/AuthContext';
 
 const FILTER_MIN_DATE = '2025-01-01';
 
@@ -62,6 +63,7 @@ interface AccountFilteredTransactionsProps {
 
 const AccountFilteredTransactions: React.FC<AccountFilteredTransactionsProps> = ({ accounts, onTransactionCreated }) => {
   const { getAccentClasses } = useTheme();
+  const { userProfile } = useAuth();
   const isMobile = useMediaQuery('(max-width: 767px)');
   const [searchParams] = useSearchParams();
   const accountId = searchParams.get("account") || searchParams.get("id");
@@ -91,6 +93,14 @@ const AccountFilteredTransactions: React.FC<AccountFilteredTransactionsProps> = 
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [overdraftWarning, setOverdraftWarning] = useState<{
+    currentBalance: number;
+    transactionAmount: number;
+    projectedBalance: number;
+  } | null>(null);
+  const [rescueTransferForm, setRescueTransferForm] = useState({ sourceAccountId: '', amount: '' });
+  const [showRescueTransferModal, setShowRescueTransferModal] = useState(false);
+  const pendingOverdraftActionRef = useRef<null | (() => Promise<void>)>(null);
 
   // Form states
   const [withdrawForm, setWithdrawForm] = useState({ forWhat: '', amount: '', date: getTodayIso(), personName: '' });
@@ -235,6 +245,60 @@ const AccountFilteredTransactions: React.FC<AccountFilteredTransactionsProps> = 
     setTimeout(() => setMessage(null), 3000);
   };
 
+  const closeOverdraftWarning = () => {
+    pendingOverdraftActionRef.current = null;
+    setOverdraftWarning(null);
+  };
+
+  const guardDebitOutflow = async (outflowAmount: number, action: () => Promise<void>) => {
+    if (!account || account.type !== 'Debit') {
+      await action();
+      return;
+    }
+
+    const projectedBalance = currentBalance - outflowAmount;
+    if (projectedBalance >= 0 || debitOverdraftMode === 'allow') {
+      await action();
+      return;
+    }
+
+    if (debitOverdraftMode === 'block') {
+      showMessage('error', `This transaction would overdraw ${account.bank}. Add funds first or lower the amount.`);
+      return;
+    }
+
+    const defaultFundingAccountId = availableFundingAccounts[0]?.id || '';
+    pendingOverdraftActionRef.current = action;
+    setRescueTransferForm({
+      sourceAccountId: defaultFundingAccountId,
+      amount: Math.abs(projectedBalance).toFixed(2),
+    });
+    setOverdraftWarning({
+      currentBalance,
+      transactionAmount: outflowAmount,
+      projectedBalance,
+    });
+  };
+
+  const proceedWithOverdraftAction = async () => {
+    const action = pendingOverdraftActionRef.current;
+    closeOverdraftWarning();
+    if (!action) return;
+    await action();
+  };
+
+  const openRescueTransferModal = () => {
+    pendingOverdraftActionRef.current = null;
+    setOverdraftWarning(null);
+    setShowRescueTransferModal(true);
+  };
+
+  const openTopUpFromWarning = () => {
+    pendingOverdraftActionRef.current = null;
+    setOverdraftWarning(null);
+    setShowCashInModal(true);
+  };
+
   // Generate a fresh signed URL whenever the Transaction Details modal opens
   useEffect(() => {
     if (selectedTx?.receiptUrl) {
@@ -312,6 +376,11 @@ const AccountFilteredTransactions: React.FC<AccountFilteredTransactionsProps> = 
 
   // ── Derived: current balance (pre-calculated from App.tsx, no re-reduction needed) ─
   const currentBalance = useMemo(() => account?.balance ?? 0, [account]);
+  const debitOverdraftMode = userProfile?.settings?.accounts?.debitOverdraftMode || 'allow';
+  const availableFundingAccounts = useMemo(
+    () => allAccounts.filter(a => a.type === 'Debit' && a.id !== accountId),
+    [allAccounts, accountId]
+  );
 
   // ── Derived: total in / out from filtered transactions ────────────────────
   const totalIn = useMemo(
@@ -395,129 +464,158 @@ const AccountFilteredTransactions: React.FC<AccountFilteredTransactionsProps> = 
   const handleWithdrawSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!accountId) return;
-    
-    setIsSubmitting(true);
-    try {
-      const { error } = await createTransaction({
-        name: withdrawForm.forWhat,
-        date: combineDateWithCurrentTime(withdrawForm.date),
-        amount: Math.abs(parseFloat(withdrawForm.amount)), // Positive - money going out
-        payment_method_id: accountId,
-        transaction_type: 'withdraw',
-        notes: null,
-        payment_schedule_id: null,
-        related_transaction_id: null,
-        person_name: withdrawForm.personName.trim() || null,
-      });
-
-      if (error) throw error;
-      
-      showMessage('success', 'Withdrawal recorded successfully');
-      setShowWithdrawModal(false);
-      setWithdrawForm({ forWhat: '', amount: '', date: getTodayIso(), personName: '' });
-      await loadTransactions();
-      onTransactionCreated?.();
-    } catch (error) {
-      console.error('Error creating withdrawal:', error);
-      showMessage('error', 'Failed to create withdrawal');
-    } finally {
-      setIsSubmitting(false);
+    const amountValue = Math.abs(parseFloat(withdrawForm.amount || '0'));
+    if (isNaN(amountValue) || amountValue <= 0) {
+      showMessage('error', 'Please enter a valid withdrawal amount.');
+      return;
     }
+
+    await guardDebitOutflow(amountValue, async () => {
+      setIsSubmitting(true);
+      try {
+        const { error } = await createTransaction({
+          name: withdrawForm.forWhat,
+          date: combineDateWithCurrentTime(withdrawForm.date),
+          amount: amountValue,
+          payment_method_id: accountId,
+          transaction_type: 'withdraw',
+          notes: null,
+          payment_schedule_id: null,
+          related_transaction_id: null,
+          person_name: withdrawForm.personName.trim() || null,
+        });
+
+        if (error) throw error;
+
+        showMessage('success', 'Withdrawal recorded successfully');
+        setShowWithdrawModal(false);
+        setWithdrawForm({ forWhat: '', amount: '', date: getTodayIso(), personName: '' });
+        await loadTransactions();
+        onTransactionCreated?.();
+      } catch (error) {
+        console.error('Error creating withdrawal:', error);
+        showMessage('error', 'Failed to create withdrawal');
+      } finally {
+        setIsSubmitting(false);
+      }
+    });
   };
 
   const handleTransferSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!accountId) return;
-    
-    setIsSubmitting(true);
-    try {
-      const { error } = await createTransfer(
-        accountId,
-        transferForm.receivingAccountId,
-        parseFloat(transferForm.amount),
-        combineDateWithCurrentTime(transferForm.date),
-        parseFloat(transferForm.feeAmount || '0')
-      );
-
-      if (error) throw error;
-      
-      showMessage('success', 'Transfer completed successfully');
-      setShowSendModal(false);
-      setTransferForm({ amount: '', feeAmount: '', receivingAccountId: '', date: getTodayIso() });
-      await loadTransactions();
-      onTransactionCreated?.();
-    } catch (error) {
-      console.error('Error creating transfer:', error);
-      showMessage('error', 'Failed to create transfer');
-    } finally {
-      setIsSubmitting(false);
+    const amountValue = Math.abs(parseFloat(transferForm.amount || '0'));
+    const feeAmount = Math.abs(parseFloat(transferForm.feeAmount || '0'));
+    if (isNaN(amountValue) || amountValue <= 0) {
+      showMessage('error', 'Please enter a valid transfer amount.');
+      return;
     }
+
+    await guardDebitOutflow(amountValue + feeAmount, async () => {
+      setIsSubmitting(true);
+      try {
+        const { error } = await createTransfer(
+          accountId,
+          transferForm.receivingAccountId,
+          amountValue,
+          combineDateWithCurrentTime(transferForm.date),
+          feeAmount
+        );
+
+        if (error) throw error;
+
+        showMessage('success', 'Transfer completed successfully');
+        setShowSendModal(false);
+        setTransferForm({ amount: '', feeAmount: '', receivingAccountId: '', date: getTodayIso() });
+        await loadTransactions();
+        onTransactionCreated?.();
+      } catch (error) {
+        console.error('Error creating transfer:', error);
+        showMessage('error', 'Failed to create transfer');
+      } finally {
+        setIsSubmitting(false);
+      }
+    });
   };
 
   const handleSendFriendSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!accountId) return;
-    
-    setIsSubmitting(true);
-    try {
-      const { error } = await createTransaction({
-        name: sendFriendForm.forWhat || `Transfer to ${sendFriendForm.personName}`,
-        date: combineDateWithCurrentTime(sendFriendForm.date),
-        amount: Math.abs(parseFloat(sendFriendForm.amount)), // Positive - money going out
-        payment_method_id: accountId,
-        transaction_type: 'transfer',
-        notes: null,
-        payment_schedule_id: null,
-        related_transaction_id: null,
-        person_name: sendFriendForm.personName.trim() || null,
-      });
-
-      if (error) throw error;
-      
-      showMessage('success', 'Transfer sent successfully');
-      setShowSendModal(false);
-      setSendFriendForm({ forWhat: '', amount: '', personName: '', date: getTodayIso() });
-      await loadTransactions();
-      onTransactionCreated?.();
-    } catch (error) {
-      console.error('Error sending to friend:', error);
-      showMessage('error', 'Failed to send transfer');
-    } finally {
-      setIsSubmitting(false);
+    const amountValue = Math.abs(parseFloat(sendFriendForm.amount || '0'));
+    if (isNaN(amountValue) || amountValue <= 0) {
+      showMessage('error', 'Please enter a valid transfer amount.');
+      return;
     }
+
+    await guardDebitOutflow(amountValue, async () => {
+      setIsSubmitting(true);
+      try {
+        const { error } = await createTransaction({
+          name: sendFriendForm.forWhat || `Transfer to ${sendFriendForm.personName}`,
+          date: combineDateWithCurrentTime(sendFriendForm.date),
+          amount: amountValue,
+          payment_method_id: accountId,
+          transaction_type: 'transfer',
+          notes: null,
+          payment_schedule_id: null,
+          related_transaction_id: null,
+          person_name: sendFriendForm.personName.trim() || null,
+        });
+
+        if (error) throw error;
+
+        showMessage('success', 'Transfer sent successfully');
+        setShowSendModal(false);
+        setSendFriendForm({ forWhat: '', amount: '', personName: '', date: getTodayIso() });
+        await loadTransactions();
+        onTransactionCreated?.();
+      } catch (error) {
+        console.error('Error sending to friend:', error);
+        showMessage('error', 'Failed to send transfer');
+      } finally {
+        setIsSubmitting(false);
+      }
+    });
   };
 
   const handleLoanSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!accountId) return;
-    
-    setIsSubmitting(true);
-    try {
-      const { error } = await createTransaction({
-        name: `Loan: ${loanForm.what}`,
-        date: combineDateWithCurrentTime(loanForm.date),
-        amount: Math.abs(parseFloat(loanForm.amount)), // Positive - money going out (lent)
-        payment_method_id: accountId,
-        transaction_type: 'loan',
-        notes: loanForm.what,
-        payment_schedule_id: null,
-        related_transaction_id: null,
-        person_name: loanForm.personName.trim() || null,
-      });
-
-      if (error) throw error;
-      
-      showMessage('success', 'Loan recorded successfully');
-      setShowLoanModal(false);
-      setLoanForm({ what: '', amount: '', date: getTodayIso(), personName: '' });
-      await loadTransactions();
-      onTransactionCreated?.();
-    } catch (error) {
-      console.error('Error creating loan:', error);
-      showMessage('error', 'Failed to create loan');
-    } finally {
-      setIsSubmitting(false);
+    const amountValue = Math.abs(parseFloat(loanForm.amount || '0'));
+    if (isNaN(amountValue) || amountValue <= 0) {
+      showMessage('error', 'Please enter a valid loan amount.');
+      return;
     }
+
+    await guardDebitOutflow(amountValue, async () => {
+      setIsSubmitting(true);
+      try {
+        const { error } = await createTransaction({
+          name: `Loan: ${loanForm.what}`,
+          date: combineDateWithCurrentTime(loanForm.date),
+          amount: amountValue,
+          payment_method_id: accountId,
+          transaction_type: 'loan',
+          notes: loanForm.what,
+          payment_schedule_id: null,
+          related_transaction_id: null,
+          person_name: loanForm.personName.trim() || null,
+        });
+
+        if (error) throw error;
+
+        showMessage('success', 'Loan recorded successfully');
+        setShowLoanModal(false);
+        setLoanForm({ what: '', amount: '', date: getTodayIso(), personName: '' });
+        await loadTransactions();
+        onTransactionCreated?.();
+      } catch (error) {
+        console.error('Error creating loan:', error);
+        showMessage('error', 'Failed to create loan');
+      } finally {
+        setIsSubmitting(false);
+      }
+    });
   };
 
   const handleCashInSubmit = async (e: React.FormEvent) => {
@@ -625,6 +723,45 @@ const AccountFilteredTransactions: React.FC<AccountFilteredTransactionsProps> = 
     } catch (error) {
       console.error('Error recording credit card payment:', error);
       showMessage('error', 'Failed to record credit card payment');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleRescueTransferSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!accountId) return;
+
+    const amountValue = Math.abs(parseFloat(rescueTransferForm.amount || '0'));
+    if (!rescueTransferForm.sourceAccountId) {
+      showMessage('error', 'Please choose a source account first.');
+      return;
+    }
+    if (isNaN(amountValue) || amountValue <= 0) {
+      showMessage('error', 'Please enter a valid transfer amount.');
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      const { error } = await createTransfer(
+        rescueTransferForm.sourceAccountId,
+        accountId,
+        amountValue,
+        combineDateWithCurrentTime(getTodayIso()),
+        0
+      );
+      if (error) throw error;
+
+      showMessage('success', 'Funds transferred in successfully.');
+      pendingOverdraftActionRef.current = null;
+      setShowRescueTransferModal(false);
+      setRescueTransferForm({ sourceAccountId: availableFundingAccounts[0]?.id || '', amount: '' });
+      await loadTransactions();
+      onTransactionCreated?.();
+    } catch (error) {
+      console.error('Error creating rescue transfer:', error);
+      showMessage('error', 'Failed to transfer funds into this account.');
     } finally {
       setIsSubmitting(false);
     }
@@ -1843,6 +1980,160 @@ const AccountFilteredTransactions: React.FC<AccountFilteredTransactionsProps> = 
                   disabled={isSubmitting}
                 >
                   {isSubmitting ? 'Saving...' : 'Update Transaction'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {overdraftWarning && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/60 p-4 backdrop-blur-md" onClick={closeOverdraftWarning}>
+          <div className={`${retroModalShell} relative max-w-md`} onClick={(e) => e.stopPropagation()}>
+            <button type="button" onClick={closeOverdraftWarning} className={retroCloseButton} aria-label="Close overdraft warning">
+              <X className="h-4 w-4" />
+            </button>
+            <div className="mb-4 inline-flex h-14 w-14 items-center justify-center rounded-[1.5rem] border-[3px] border-black bg-amber-400 text-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]">
+              <AlertTriangle className="h-7 w-7" />
+            </div>
+            <h2 className={retroModalTitle}>Negative Balance Warning</h2>
+            <p className={`${retroModalSubtitle} mb-5`}>
+              This transaction would push this debit account below zero. Review the projected balance or choose another action first.
+            </p>
+
+            <div className={`${retroPanelClass} mb-5 space-y-3`}>
+              <div className="flex justify-between gap-4">
+                <span className="text-[10px] font-black uppercase tracking-widest text-gray-400 dark:text-gray-500">Current Balance</span>
+                <span className="text-sm font-black text-gray-900 dark:text-gray-100">{formatCurrency(overdraftWarning.currentBalance)}</span>
+              </div>
+              <div className="flex justify-between gap-4">
+                <span className="text-[10px] font-black uppercase tracking-widest text-gray-400 dark:text-gray-500">Transaction Amount</span>
+                <span className="text-sm font-black text-orange-600 dark:text-orange-400">{formatCurrency(overdraftWarning.transactionAmount)}</span>
+              </div>
+              <div className="flex justify-between gap-4 border-t-[3px] border-black pt-3">
+                <span className="text-[10px] font-black uppercase tracking-widest text-gray-400 dark:text-gray-500">Projected Balance</span>
+                <span className="text-sm font-black text-red-600 dark:text-red-400">{formatCurrency(overdraftWarning.projectedBalance)}</span>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <button
+                type="button"
+                onClick={proceedWithOverdraftAction}
+                className={`rounded-2xl border-[3px] border-black px-4 py-3 text-xs font-black uppercase tracking-widest text-white shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] transition-all hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none ${getAccentClasses('bg')}`}
+              >
+                Proceed Anyway
+              </button>
+              <button
+                type="button"
+                onClick={openRescueTransferModal}
+                disabled={availableFundingAccounts.length === 0}
+                className="rounded-2xl border-[3px] border-black bg-blue-500 px-4 py-3 text-xs font-black uppercase tracking-widest text-white shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] transition-all hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Transfer Funds
+              </button>
+              <button
+                type="button"
+                onClick={openTopUpFromWarning}
+                className="rounded-2xl border-[3px] border-black bg-green-500 px-4 py-3 text-xs font-black uppercase tracking-widest text-white shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] transition-all hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none"
+              >
+                Top Up Instead
+              </button>
+              <button
+                type="button"
+                onClick={closeOverdraftWarning}
+                className={`rounded-2xl border-[3px] border-black px-4 py-3 text-xs font-black uppercase tracking-widest ${retroGhostButton}`}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showRescueTransferModal && (
+        <div className="fixed inset-0 z-[71] flex items-center justify-center bg-black/60 p-4 backdrop-blur-md" onClick={() => setShowRescueTransferModal(false)}>
+          <div className={`${retroModalShell} relative max-w-md`} onClick={(e) => e.stopPropagation()}>
+            <button type="button" onClick={() => setShowRescueTransferModal(false)} className={retroCloseButton} aria-label="Close transfer funds modal">
+              <X className="h-4 w-4" />
+            </button>
+            <div className="mb-4 inline-flex h-14 w-14 items-center justify-center rounded-[1.5rem] border-[3px] border-black bg-blue-500 text-white shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]">
+              <ArrowUpFromLine className="h-7 w-7" />
+            </div>
+            <h2 className={retroModalTitle}>Transfer Funds In</h2>
+            <p className={`${retroModalSubtitle} mb-5`}>
+              Move money from another debit account into this account before retrying the original transaction.
+            </p>
+
+            <form onSubmit={handleRescueTransferSubmit} className="space-y-4">
+              {availableFundingAccounts.length === 0 && (
+                <div className={`${retroPanelClass}`}>
+                  <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 dark:text-gray-500">No Source Account</p>
+                  <p className="mt-2 text-sm text-gray-700 dark:text-gray-300">
+                    There are no other debit accounts available to fund this account right now. Use Top Up Instead or add another debit account first.
+                  </p>
+                </div>
+              )}
+
+              <div>
+                <label className="mb-2 block text-[10px] font-black uppercase tracking-widest text-gray-400 dark:text-gray-500">From Account</label>
+                <select
+                  value={rescueTransferForm.sourceAccountId}
+                  onChange={(e) => setRescueTransferForm((prev) => ({ ...prev, sourceAccountId: e.target.value }))}
+                  required
+                  disabled={availableFundingAccounts.length === 0}
+                  className={modalFieldClass}
+                >
+                  <option value="">Select account</option>
+                  {availableFundingAccounts.map(acc => (
+                    <option key={acc.id} value={acc.id}>
+                      {acc.bank} ({acc.classification})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="mb-2 block text-[10px] font-black uppercase tracking-widest text-gray-400 dark:text-gray-500">Amount</label>
+                <div className="relative">
+                  <span className="absolute left-4 top-1/2 -translate-y-1/2 font-bold text-gray-400 dark:text-gray-500">₱</span>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0.01"
+                    value={rescueTransferForm.amount}
+                    onChange={(e) => setRescueTransferForm((prev) => ({ ...prev, amount: e.target.value }))}
+                    required
+                    className={`${modalFieldClass} pl-8 text-lg`}
+                  />
+                </div>
+              </div>
+
+              <div className={`${retroPanelClass}`}>
+                <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 dark:text-gray-500">Tip</p>
+                <p className="mt-2 text-sm text-gray-700 dark:text-gray-300">
+                  The suggested amount covers the projected shortfall so you can retry the original transaction right after this transfer finishes.
+                </p>
+              </div>
+
+              <div className="flex gap-4 pt-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    pendingOverdraftActionRef.current = null;
+                    setShowRescueTransferModal(false);
+                  }}
+                  className={`flex-1 ${retroGhostButton}`}
+                  disabled={isSubmitting}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="flex-1 rounded-2xl border-[3px] border-black bg-blue-500 py-4 font-black text-white shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] transition-all hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none disabled:opacity-50"
+                  disabled={isSubmitting || availableFundingAccounts.length === 0}
+                >
+                  {isSubmitting ? 'Transferring...' : 'Transfer Funds'}
                 </button>
               </div>
             </form>
