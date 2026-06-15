@@ -85,42 +85,38 @@ export const updateUserProfile = async (userId: string, updates: UpdateUserProfi
       throw new Error('No updates provided');
     }
 
-    // First, try to update the existing profile
-    const { data, error, count } = await supabase
+    // Check whether the profile already exists so we can avoid accidental
+    // insert/upsert fallbacks that can trip RLS on existing rows.
+    const { data: existingProfile, error: existingProfileError } = await supabase
+      .from('user_profiles')
+      .select('id')
+      .eq('user_id', userId)
+      .maybeSingle();
+
+    if (existingProfileError) throw existingProfileError;
+
+    if (!existingProfile) {
+      console.log('[UserProfile] No profile found, creating profile for user:', userId);
+
+      const fallbackNames = await deriveFallbackProfileNames();
+      return await createUserProfile({
+        user_id: userId,
+        first_name: updates.first_name || fallbackNames.first_name,
+        last_name: updates.last_name || fallbackNames.last_name,
+        ...updates,
+      });
+    }
+
+    // Update the existing profile.
+    const { data, error } = await supabase
       .from('user_profiles')
       .update(updates)
       .eq('user_id', userId)
-      .select();
+      .select()
+      .single();
 
-    // If update failed with an error, throw it
     if (error) throw error;
-
-    // If no rows were updated (or the updated row is not visible to select),
-    // fall back to an upsert so we don't race into duplicate user_id inserts.
-    if (!data || data.length === 0) {
-      console.log('[UserProfile] No visible profile found, upserting profile for user:', userId);
-
-      const fallbackNames = await deriveFallbackProfileNames();
-
-      const { data: upsertedProfile, error: upsertError } = await supabase
-        .from('user_profiles')
-        .upsert({
-        user_id: userId,
-          first_name: updates.first_name || fallbackNames.first_name,
-          last_name: updates.last_name || fallbackNames.last_name,
-          ...updates,
-        }, {
-          onConflict: 'user_id',
-        })
-        .select()
-        .single();
-
-      if (upsertError) throw upsertError;
-      return { data: upsertedProfile, error: null };
-    }
-
-    // Return the first (and should be only) updated record
-    return { data: data[0], error: null };
+    return { data, error: null };
   } catch (error) {
     console.error('Error updating user profile:', error);
     return { data: null, error };
