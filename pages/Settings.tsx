@@ -103,7 +103,7 @@ interface DeleteConflict {
 
 // ─── Component ───────────────────────────────────────────────────────────────
 
-const Settings: React.FC<SettingsProps> = ({ currency, setCurrency, categories, setCategories, accounts = [], onResetAll, billers = [], installments = [], onUpdateBiller, theme = 'light', onToggleTheme }) => {
+const Settings: React.FC<SettingsProps> = ({ currency, setCurrency, categories, setCategories, accounts = [], setAccounts, onResetAll, billers = [], installments = [], onUpdateBiller, theme = 'light', onToggleTheme }) => {
   const { getAccentClasses } = useTheme();
   // Auth context
   const { userProfile, updateProfile, refreshProfile, user } = useAuth();
