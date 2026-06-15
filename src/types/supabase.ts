@@ -38,6 +38,7 @@ export interface SupabaseAccount {
   credit_limit: number | null; // numeric, nullable
   billing_date: string | null; // date, nullable
   due_date: string | null; // date, nullable
+  overdraft_mode?: 'allow' | 'warn' | 'block' | null;
   created_at: string; // timestamptz, default now()
   user_id: string | null; // uuid, references auth.users(id)
 }

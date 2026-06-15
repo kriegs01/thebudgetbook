@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { ChevronDown, ChevronRight, Hash, Globe, Bell, Lock, Trash2, AlertTriangle, RotateCcw, Plus, X, Database, Copy, Shield, User, Users, Mail, Key, MoreVertical, Check, SlidersHorizontal, Info } from 'lucide-react';
-import { BudgetCategory, Biller, Installment, SupabaseUserProfile } from '../types';
+import { Account, BudgetCategory, Biller, Installment, SupabaseUserProfile } from '../types';
 import { useTestEnvironment } from '../src/contexts/TestEnvironmentContext';
 import { getAllPeople, createPerson, deletePerson } from '../src/services/peopleService';
 import type { SupabasePerson } from '../src/types/supabase';
@@ -11,6 +11,7 @@ import { PinProtectedAction } from '../src/components/PinProtectedAction';
 import { updateUserEmail, updateUserPassword, updateUserProfile } from '../src/services/userProfileService';
 import { useTheme } from '../src/contexts/ThemeContext';
 import { PageHeader } from '../src/components/PageHeader';
+import { updateAccount } from '../src/services/accountsService';
 
 interface SettingsProps {
   currency: string;
@@ -18,6 +19,7 @@ interface SettingsProps {
   categories: BudgetCategory[];
   setCategories: React.Dispatch<React.SetStateAction<BudgetCategory[]>>;
   accounts?: Account[];
+  setAccounts?: React.Dispatch<React.SetStateAction<Account[]>>;
   onResetAll?: () => void;
   billers?: Biller[];
   installments?: Installment[];
@@ -482,20 +484,13 @@ const Settings: React.FC<SettingsProps> = ({ currency, setCurrency, categories, 
   }, [userProfile?.settings?.peopleEnabled, userProfile?.settings?.usePeoplePage]);
 
   useEffect(() => {
-    const legacyMode = userProfile?.settings?.accounts?.debitOverdraftMode || 'allow';
-    const savedModes = userProfile?.settings?.accounts?.debitOverdraftModes || {};
-
     const nextDrafts = debitAccounts.reduce<Record<string, DebitOverdraftMode>>((acc, account) => {
-      acc[account.id] = savedModes[account.id] || legacyMode;
+      acc[account.id] = account.overdraftMode || 'allow';
       return acc;
     }, {});
 
     setAccountOverdraftModeDrafts(nextDrafts);
-  }, [
-    debitAccounts,
-    userProfile?.settings?.accounts?.debitOverdraftMode,
-    userProfile?.settings?.accounts?.debitOverdraftModes,
-  ]);
+  }, [debitAccounts]);
 
   useEffect(() => {
     if (isPeopleEnabled && user) {
@@ -721,19 +716,23 @@ const Settings: React.FC<SettingsProps> = ({ currency, setCurrency, categories, 
     setAccountPrefsMessage('');
 
     try {
-      const { debitOverdraftMode: _legacyMode, ...existingAccountSettings } = userProfile?.settings?.accounts || {};
-      const newSettings = {
-        ...(userProfile?.settings || {}),
-        setupCompleted: true,
-        accounts: {
-          ...existingAccountSettings,
-          debitOverdraftModes: accountOverdraftModeDrafts,
-        },
-      };
+      await Promise.all(
+        debitAccounts.map(account =>
+          updateAccount(account.id, {
+            overdraft_mode: (accountOverdraftModeDrafts[account.id] || 'allow') as any,
+          })
+        )
+      );
 
-      const { error } = await updateUserProfile(user.id, { settings: newSettings });
-      if (error) throw error;
-      await refreshProfile();
+      setAccounts?.(prev =>
+        prev.map(account => {
+          if (account.type !== 'Debit') return account;
+          return {
+            ...account,
+            overdraftMode: accountOverdraftModeDrafts[account.id] || 'allow',
+          };
+        })
+      );
       setAccountPrefsMessage('Account settings saved successfully!');
       setTimeout(() => setAccountPrefsMessage(''), 3000);
     } catch (error: any) {

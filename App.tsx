@@ -1722,6 +1722,7 @@ const MainApp: React.FC = () => {
                   categories={categories}
                   setCategories={setCategories}
                   accounts={accounts}
+                  setAccounts={setAccounts}
                   onResetAll={handleResetAll}
                   billers={billers}
                   installments={installments}

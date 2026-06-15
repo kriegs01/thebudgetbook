@@ -13,7 +13,6 @@ import { PersonAutocomplete } from '../../src/components/PersonAutocomplete';
 import useMediaQuery from '../../src/hooks/useMediaQuery';
 import { useTheme } from '../../src/contexts/ThemeContext';
 import { PageHeader } from '../../src/components/PageHeader';
-import { useAuth } from '../../src/contexts/AuthContext';
 
 const FILTER_MIN_DATE = '2025-01-01';
 
@@ -63,7 +62,6 @@ interface AccountFilteredTransactionsProps {
 
 const AccountFilteredTransactions: React.FC<AccountFilteredTransactionsProps> = ({ accounts, onTransactionCreated }) => {
   const { getAccentClasses } = useTheme();
-  const { userProfile } = useAuth();
   const isMobile = useMediaQuery('(max-width: 767px)');
   const [searchParams] = useSearchParams();
   const accountId = searchParams.get("account") || searchParams.get("id");
@@ -376,10 +374,7 @@ const AccountFilteredTransactions: React.FC<AccountFilteredTransactionsProps> = 
 
   // ── Derived: current balance (pre-calculated from App.tsx, no re-reduction needed) ─
   const currentBalance = useMemo(() => account?.balance ?? 0, [account]);
-  const debitOverdraftMode =
-    (account?.id && userProfile?.settings?.accounts?.debitOverdraftModes?.[account.id]) ||
-    userProfile?.settings?.accounts?.debitOverdraftMode ||
-    'allow';
+  const debitOverdraftMode = account?.overdraftMode || 'allow';
   const availableFundingAccounts = useMemo(
     () => allAccounts.filter(a => a.type === 'Debit' && a.id !== accountId),
     [allAccounts, accountId]

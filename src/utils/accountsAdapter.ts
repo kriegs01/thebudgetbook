@@ -24,6 +24,7 @@ export const supabaseAccountToFrontend = (supabaseAccount: SupabaseAccount): Acc
     creditLimit: supabaseAccount.credit_limit ?? undefined,
     billingDate: supabaseAccount.billing_date ?? undefined,
     dueDate: supabaseAccount.due_date ?? undefined,
+    overdraftMode: (supabaseAccount.overdraft_mode ?? undefined) as any,
   };
 };
 
@@ -40,6 +41,7 @@ export const frontendAccountToSupabase = (account: Account): Omit<SupabaseAccoun
     credit_limit: account.creditLimit ?? null,
     billing_date: account.billingDate ?? null,
     due_date: account.dueDate ?? null,
+    overdraft_mode: account.overdraftMode ?? null,
   };
 };
 
