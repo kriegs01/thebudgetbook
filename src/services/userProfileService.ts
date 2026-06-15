@@ -74,6 +74,23 @@ const deriveFallbackProfileNames = async () => {
   };
 };
 
+const stableStringify = (value: unknown): string => {
+  const normalize = (input: any): any => {
+    if (input === null || input === undefined) return input;
+    if (Array.isArray(input)) return input.map(normalize);
+    if (typeof input !== 'object') return input;
+
+    const keys = Object.keys(input).sort();
+    const result: Record<string, any> = {};
+    for (const key of keys) {
+      result[key] = normalize(input[key]);
+    }
+    return result;
+  };
+
+  return JSON.stringify(normalize(value));
+};
+
 /**
  * Update user profile
  * If profile doesn't exist, this will create it (for existing users who signed up before profile feature)
@@ -123,7 +140,7 @@ export const updateUserProfile = async (userId: string, updates: UpdateUserProfi
       throw new Error('Profile save could not be confirmed.');
     }
 
-    if (updates.settings && JSON.stringify(refreshedProfile.settings || null) !== JSON.stringify(updates.settings)) {
+    if (updates.settings && stableStringify(refreshedProfile.settings || null) !== stableStringify(updates.settings)) {
       throw new Error('Profile settings did not persist. Please try again.');
     }
 
