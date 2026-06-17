@@ -233,7 +233,11 @@ export const getTransactionById = async (id: string) => {
 export const createTransaction = async (transaction: CreateTransactionInput) => {
   try {
     const user = await getCachedUser();
-
+    await enforceDebitOverdraftBlock(
+      user.id,
+      transaction.payment_method_id as any,
+      toOutflowAmount(transaction.amount)
+    );
     const { data, error } = await supabase
       .from(getTableName('transactions'))
       .insert([{ ...transaction, user_id: user.id }])
