@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { Plus, Info, Eye, ZoomIn, ZoomOut, Download, X, ArrowLeft, Pencil, Trash2, CheckSquare, Square, ChevronDown, Filter, AlertTriangle, ArrowUpFromLine, ArrowDownToLine, ArrowLeftRight, Landmark, CreditCard, FileText, User, UserPlus } from 'lucide-react';
+import { Plus, Info, Eye, ZoomIn, ZoomOut, Download, X, ArrowLeft, Pencil, Trash2, CheckSquare, Square, ChevronDown, Filter, AlertTriangle, ArrowUpFromLine, ArrowDownToLine, ArrowLeftRight, Landmark, CreditCard, FileText, User, UserPlus, Hand } from 'lucide-react';
 import { PinProtectedAction } from '../src/components/PinProtectedAction';
 import { useAuth } from '../src/contexts/AuthContext';
 import { createTransaction, updateTransaction, deleteTransactionAndRevertSchedule, uploadTransactionReceipt, getReceiptSignedUrl, batchDeleteTransactions, createTransfer } from '../src/services/transactionsService';
@@ -14,7 +14,7 @@ import { useTheme } from '../src/contexts/ThemeContext';
 import useMediaQuery from '../src/hooks/useMediaQuery';
 import { TransactionList } from '../src/components/TransactionList';
 import { PageHeader } from '../src/components/PageHeader';
-import type { Transaction, AccountOption } from '../types';
+import type { Transaction, Account } from '../types';
 
 const FILTER_MIN_DATE = '2025-01-01';
 
@@ -183,7 +183,21 @@ interface TransactionsPageProps {
 
 const Portal: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [mounted, setMounted] = useState(false);
+type OverdraftPromptState = {
+  mode: 'block' | 'warn';
+  accountId: string;
+  accountName: string;
+  currentBalance: number;
+  transactionAmount: number;
+  projectedBalance: number;
+};
 
+const retroModalShell = 'w-full rounded-[2rem] border-[4px] border-black bg-[#fff8ee] p-6 shadow-[10px_10px_0px_0px_rgba(0,0,0,1)] dark:bg-gray-900 sm:p-8';
+const retroModalTitle = 'text-center font-black uppercase tracking-[0.2em] text-gray-900 dark:text-gray-100';
+const retroModalSubtitle = 'text-center text-sm font-bold leading-relaxed text-gray-600 dark:text-gray-300';
+const retroPanelClass = 'rounded-[1.5rem] border-[3px] border-black bg-white/80 p-4 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] dark:bg-gray-800';
+const retroGhostButton = 'bg-gray-200 py-4 rounded-xl font-black uppercase tracking-widest text-[10px] text-gray-800 dark:bg-gray-700 dark:text-gray-200 border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[1px] hover:translate-y-[1px] transition-all';
+const retroCloseButton = 'absolute right-4 top-4 flex h-10 w-10 items-center justify-center rounded-full border-[3px] border-black bg-white text-gray-700 shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] transition-all hover:translate-x-[1px] hover:translate-y-[1px] hover:shadow-none dark:bg-gray-800 dark:text-gray-100';
   useEffect(() => {
     setMounted(true);
     return () => setMounted(false);
@@ -197,7 +211,7 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ transactions, loadi
   const { userProfile } = useAuth();
   const isMobile = useMediaQuery('(max-width: 767px)');
 
-  const [accounts, setAccounts] = useState<AccountOption[]>([]);
+  const [accounts, setAccounts] = useState<Account[]>([]);
   const [people, setPeople] = useState<SupabasePerson[]>([]);
   const [showForm, setShowForm] = useState(false);
   const [editingTxId, setEditingTxId] = useState<string | null>(null);
@@ -212,7 +226,7 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ transactions, loadi
   const [transferTab, setTransferTab] = useState<'accounts' | 'friends'>('accounts');
   const [friendProfiles, setFriendProfiles] = useState<SupabaseUserProfile[]>([]);
   const [pendingProfileModal, setPendingProfileModal] = useState<{budee: SupabaseUserProfile, formName: string} | null>(null);
-
+const [overdraftPrompt, setOverdraftPrompt] = useState<OverdraftPromptState | null>(null);
   // Transaction details modal
   const [selectedTx, setSelectedTx] = useState<Transaction | null>(null);
   // Signed URL for displaying a receipt (generated fresh each time the modal opens)
@@ -266,7 +280,163 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ transactions, loadi
     ];
     return Array.from(new Set(names));
   }, [people, transactions]);
+const selectedPaymentAccount = useMemo(
+  () => accounts.find(account => account.id === form.paymentMethodId) ?? null,
+  [accounts, form.paymentMethodId]
+);
 
+const editingTransaction = useMemo(
+  () => (editingTxId ? transactions.find(tx => tx.id === editingTxId) ?? null : null),
+  [editingTxId, transactions]
+);
+
+const getCurrentBalanceForAccount = useCallback((account: Account) => {
+  const baseline = account.openingBalance ?? account.balance ?? 0;
+  const sortedTransactions = transactions
+    .filter(tx => tx.paymentMethodId === account.id)
+    .sort((a, b) => {
+      const byDate = new Date(a.date).getTime() - new Date(b.date).getTime();
+      return byDate !== 0 ? byDate : a.id.localeCompare(b.id);
+    });
+
+  if (account.type === 'Debit') {
+    return sortedTransactions.reduce((balance, tx) => balance - tx.amount, baseline);
+  }
+
+  return sortedTransactions.reduce((balance, tx) => balance + tx.amount, baseline);
+}, [transactions]);
+
+const closeOverdraftPrompt = () => {
+  setOverdraftPrompt(null);
+};
+
+const openTopUpFromOverdraftPrompt = () => {
+  if (!overdraftPrompt) return;
+
+  const shortfall = Math.abs(Math.min(overdraftPrompt.projectedBalance, 0));
+  setOverdraftPrompt(null);
+  setEditingTxId(null);
+  setTransferTab('accounts');
+  setForm({
+    name: '',
+    date: todayIso(),
+    amount: shortfall > 0 ? shortfall.toFixed(2) : '',
+    feeAmount: '',
+    paymentMethodId: overdraftPrompt.accountId,
+    transactionType: 'cash_in',
+    transferToAccountId: '',
+    borrowerName: '',
+    personName: ''
+  });
+  setReceiptFile(null);
+  setShowForm(true);
+};
+
+const guardTransactionsOverdraft = async (outflowAmount: number, action: () => Promise<void>) => {
+  if (!selectedPaymentAccount || selectedPaymentAccount.type !== 'Debit' || outflowAmount <= 0) {
+    await action();
+    return;
+  }
+
+  const overdraftMode = selectedPaymentAccount.overdraftMode || 'allow';
+  const currentBalance = getCurrentBalanceForAccount(selectedPaymentAccount);
+  const projectedBalance =
+    editingTransaction && editingTransaction.paymentMethodId === selectedPaymentAccount.id
+      ? currentBalance + editingTransaction.amount - outflowAmount
+      : currentBalance - outflowAmount;
+
+  if (projectedBalance >= 0 || overdraftMode === 'allow') {
+    await action();
+    return;
+  }
+
+  setOverdraftPrompt({
+    mode: overdraftMode === 'block' ? 'block' : 'warn',
+    accountId: selectedPaymentAccount.id,
+    accountName: selectedPaymentAccount.bank,
+    currentBalance,
+    transactionAmount: outflowAmount,
+    projectedBalance,
+  });
+};const selectedPaymentAccount = useMemo(
+  () => accounts.find(account => account.id === form.paymentMethodId) ?? null,
+  [accounts, form.paymentMethodId]
+);
+
+const editingTransaction = useMemo(
+  () => (editingTxId ? transactions.find(tx => tx.id === editingTxId) ?? null : null),
+  [editingTxId, transactions]
+);
+
+const getCurrentBalanceForAccount = useCallback((account: Account) => {
+  const baseline = account.openingBalance ?? account.balance ?? 0;
+  const sortedTransactions = transactions
+    .filter(tx => tx.paymentMethodId === account.id)
+    .sort((a, b) => {
+      const byDate = new Date(a.date).getTime() - new Date(b.date).getTime();
+      return byDate !== 0 ? byDate : a.id.localeCompare(b.id);
+    });
+
+  if (account.type === 'Debit') {
+    return sortedTransactions.reduce((balance, tx) => balance - tx.amount, baseline);
+  }
+
+  return sortedTransactions.reduce((balance, tx) => balance + tx.amount, baseline);
+}, [transactions]);
+
+const closeOverdraftPrompt = () => {
+  setOverdraftPrompt(null);
+};
+
+const openTopUpFromOverdraftPrompt = () => {
+  if (!overdraftPrompt) return;
+
+  const shortfall = Math.abs(Math.min(overdraftPrompt.projectedBalance, 0));
+  setOverdraftPrompt(null);
+  setEditingTxId(null);
+  setTransferTab('accounts');
+  setForm({
+    name: '',
+    date: todayIso(),
+    amount: shortfall > 0 ? shortfall.toFixed(2) : '',
+    feeAmount: '',
+    paymentMethodId: overdraftPrompt.accountId,
+    transactionType: 'cash_in',
+    transferToAccountId: '',
+    borrowerName: '',
+    personName: ''
+  });
+  setReceiptFile(null);
+  setShowForm(true);
+};
+
+const guardTransactionsOverdraft = async (outflowAmount: number, action: () => Promise<void>) => {
+  if (!selectedPaymentAccount || selectedPaymentAccount.type !== 'Debit' || outflowAmount <= 0) {
+    await action();
+    return;
+  }
+
+  const overdraftMode = selectedPaymentAccount.overdraftMode || 'allow';
+  const currentBalance = getCurrentBalanceForAccount(selectedPaymentAccount);
+  const projectedBalance =
+    editingTransaction && editingTransaction.paymentMethodId === selectedPaymentAccount.id
+      ? currentBalance + editingTransaction.amount - outflowAmount
+      : currentBalance - outflowAmount;
+
+  if (projectedBalance >= 0 || overdraftMode === 'allow') {
+    await action();
+    return;
+  }
+
+  setOverdraftPrompt({
+    mode: overdraftMode === 'block' ? 'block' : 'warn',
+    accountId: selectedPaymentAccount.id,
+    accountName: selectedPaymentAccount.bank,
+    currentBalance,
+    transactionAmount: outflowAmount,
+    projectedBalance,
+  });
+};
   const [confirmModal, setConfirmModal] = useState<{
     show: boolean;
     title: string;
@@ -310,7 +480,7 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ transactions, loadi
       if (accountsResult.error) {
         console.error('Error loading accounts:', accountsResult.error);
       } else if (accountsResult.data) {
-        setAccounts(accountsResult.data.map(a => ({ id: a.id, bank: a.bank, classification: a.classification, type: a.type })));
+        setAccounts(accountsResult.data);
       }
 
       if (peopleResult.error) {
@@ -489,7 +659,10 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ transactions, loadi
     
     // Transfer creation logic (uses specialized service)
     if (form.transactionType === 'transfer' && transferTab === 'accounts' && !editingTxId) {
-      if (!form.paymentMethodId || !form.transferToAccountId || !form.amount || !form.date) return;
+  if (!form.paymentMethodId || !form.transferToAccountId || !form.amount || !form.date) return;
+  await guardTransactionsOverdraft(
+    Math.abs(parseFloat(form.amount)) + Math.abs(parseFloat(form.feeAmount || '0')),
+    async () => {
       try {
         const { error } = await createTransfer(
           form.paymentMethodId,
@@ -502,12 +675,14 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ transactions, loadi
         await loadData();
         if (onTransactionCreated) onTransactionCreated();
         closeForm();
-        return;
       } catch (error) {
         console.error('Error creating transfer:', error);
         alert(error instanceof Error ? error.message : ((error as any)?.message || 'Failed to process transfer. Please try again.'));
-        return;
       }
+    }
+  );
+  return;
+}
     }
 
     let txName = form.name;
@@ -526,83 +701,84 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ transactions, loadi
       finalAmount = Math.abs(finalAmount); // Money out
     }
     
-    try { // eslint-disable-next-line
-      if (editingTxId) {
-        // Edit mode: update existing transaction
-        const updates = {
-          name: txName,
-          date: combineDateWithCurrentTime(form.date),
-          amount: finalAmount,
-          payment_method_id: form.paymentMethodId,
-          transaction_type: form.transactionType,
-          borrower_name: form.transactionType === 'loan' ? form.borrowerName || null : null,
-          person_name: (form.transactionType === 'transfer' && transferTab === 'friends') ? form.personName || null : null
-        };
-        const { error } = await updateTransaction(editingTxId, updates);
-        if (error) {
-          console.error('Error updating transaction:', error);
-          alert(error instanceof Error ? error.message : ((error as any)?.message || 'Failed to update transaction. Please try again.'));
-          return;
-        }
-        // Upload new receipt if a file was selected during edit
-        if (receiptFile) {
-          const { path, error: uploadError } = await uploadTransactionReceipt(editingTxId, receiptFile);
-          if (uploadError) {
-            console.error('Error uploading receipt:', uploadError);
-            alert('Transaction updated, but receipt upload failed. Please try again.');
-          } else if (path) {
-            await updateTransaction(editingTxId, { receipt_url: path });
-          }
-        }
-        console.log('[Transactions Page] Transaction updated successfully');
-      } else {
-        // Create mode
-        const transaction = {
-          name: txName,
-          date: combineDateWithCurrentTime(form.date),
-          amount: finalAmount,
-          payment_method_id: form.paymentMethodId,
-          transaction_type: form.transactionType,
-          borrower_name: form.transactionType === 'loan' ? form.borrowerName || null : null,
-          person_name: (form.transactionType === 'transfer' && transferTab === 'friends') ? form.personName || null : null
-        };
-        
-        const { data, error } = await createTransaction(transaction as any);
-        
-        if (error) {
-          console.error('Error creating transaction:', error);
-          alert(error instanceof Error ? error.message : ((error as any)?.message || 'Failed to create transaction. Please try again.'));
-          return;
-        }
-        
-        console.log('Transaction created successfully:', data);
+    const outflowAmount = finalAmount > 0 ? finalAmount : 0;
 
-        // Upload receipt if a file was selected
-        if (receiptFile && data) {
-          const { path, error: uploadError } = await uploadTransactionReceipt(data.id, receiptFile);
-          if (uploadError) {
-            console.error('Error uploading receipt:', uploadError);
-            alert('Transaction saved, but receipt upload failed. Please try again.');
-          } else if (path) {
-            await updateTransaction(data.id, { receipt_url: path });
-          }
+await guardTransactionsOverdraft(outflowAmount, async () => {
+  try {
+    if (editingTxId) {
+      const updates = {
+        name: txName,
+        date: combineDateWithCurrentTime(form.date),
+        amount: finalAmount,
+        payment_method_id: form.paymentMethodId,
+        transaction_type: form.transactionType,
+        borrower_name: form.transactionType === 'loan' ? form.borrowerName || null : null,
+        person_name: (form.transactionType === 'transfer' && transferTab === 'friends') ? form.personName || null : null
+      };
+
+      const { error } = await updateTransaction(editingTxId, updates);
+      if (error) {
+        console.error('Error updating transaction:', error);
+        alert(error instanceof Error ? error.message : ((error as any)?.message || 'Failed to update transaction. Please try again.'));
+        return;
+      }
+
+      if (receiptFile) {
+        const { path, error: uploadError } = await uploadTransactionReceipt(editingTxId, receiptFile);
+        if (uploadError) {
+          console.error('Error uploading receipt:', uploadError);
+          alert('Transaction updated, but receipt upload failed. Please try again.');
+        } else if (path) {
+          await updateTransaction(editingTxId, { receipt_url: path });
         }
       }
-      
-      // Reload transactions to get fresh data
-      await loadData();
-      
-      // Notify parent if callback provided (for refreshing related data like account balances)
-      if (onTransactionCreated) {
-        console.log('[Transactions Page] Notifying parent of transaction change');
-        onTransactionCreated();
+
+      console.log('[Transactions Page] Transaction updated successfully');
+    } else {
+      const transaction = {
+        name: txName,
+        date: combineDateWithCurrentTime(form.date),
+        amount: finalAmount,
+        payment_method_id: form.paymentMethodId,
+        transaction_type: form.transactionType,
+        borrower_name: form.transactionType === 'loan' ? form.borrowerName || null : null,
+        person_name: (form.transactionType === 'transfer' && transferTab === 'friends') ? form.personName || null : null
+      };
+
+      const { data, error } = await createTransaction(transaction as any);
+
+      if (error) {
+        console.error('Error creating transaction:', error);
+        alert(error instanceof Error ? error.message : ((error as any)?.message || 'Failed to create transaction. Please try again.'));
+        return;
       }
-      
-      closeForm();
-    } catch (error) {
-      console.error('Error saving transaction:', error);
-      alert(error instanceof Error ? error.message : ((error as any)?.message || 'Failed to save transaction. Please try again.'));
+
+      console.log('Transaction created successfully:', data);
+
+      if (receiptFile && data) {
+        const { path, error: uploadError } = await uploadTransactionReceipt(data.id, receiptFile);
+        if (uploadError) {
+          console.error('Error uploading receipt:', uploadError);
+          alert('Transaction saved, but receipt upload failed. Please try again.');
+        } else if (path) {
+          await updateTransaction(data.id, { receipt_url: path });
+        }
+      }
     }
+
+    await loadData();
+
+    if (onTransactionCreated) {
+      console.log('[Transactions Page] Notifying parent of transaction change');
+      onTransactionCreated();
+    }
+
+    closeForm();
+  } catch (error) {
+    console.error('Error saving transaction:', error);
+    alert(error instanceof Error ? error.message : ((error as any)?.message || 'Failed to save transaction. Please try again.'));
+  }
+});
   };
 
   const onSubmit = async (e: React.FormEvent) => {
@@ -1536,7 +1712,79 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ transactions, loadi
         </div>
       )}
 
-      {confirmModal.show && <ConfirmDialog {...confirmModal} onClose={() => setConfirmModal(p => ({ ...p, show: false }))} />}
+{overdraftPrompt && (
+  <div className="fixed inset-0 z-[1500] flex items-center justify-center bg-black/60 p-4 backdrop-blur-md" onClick={closeOverdraftPrompt}>
+    <div className={`${retroModalShell} relative max-w-md`} onClick={(e) => e.stopPropagation()}>
+      <button type="button" onClick={closeOverdraftPrompt} className={retroCloseButton} aria-label="Close overdraft prompt">
+        <X className="h-4 w-4" />
+      </button>
+
+      <div className="absolute left-1/2 top-0 flex h-20 w-20 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border-[4px] border-black bg-[#ff7a59] text-white shadow-[6px_6px_0px_0px_rgba(0,0,0,1)]">
+        <Hand className="h-10 w-10" />
+      </div>
+
+      <div className="pt-10">
+        <div className="mb-4 text-center">
+          <span className="inline-block -rotate-2 rounded-full border-[3px] border-black bg-yellow-300 px-4 py-1 text-[10px] font-black uppercase tracking-[0.25em] text-black shadow-[3px_3px_0px_0px_rgba(0,0,0,1)]">
+            {overdraftPrompt.mode === 'block' ? 'Block Mode' : 'Warn Mode'}
+          </span>
+        </div>
+
+        <h2 className={`${retroModalTitle} text-lg`}>
+          {overdraftPrompt.mode === 'block'
+            ? 'No can do. Please top-up to complete the transaction'
+            : 'Hold on a sec-your account is a little short. This will drop you into a negative balance. Still a go?'}
+        </h2>
+
+        <p className={`${retroModalSubtitle} mt-4 mb-5`}>
+          {overdraftPrompt.accountName} goes from {formatCurrency(overdraftPrompt.currentBalance)} to {formatCurrency(overdraftPrompt.projectedBalance)} after this transaction.
+        </p>
+
+        <div className={`${retroPanelClass} mb-5 space-y-3`}>
+          <div className="flex justify-between gap-4">
+            <span className="text-[10px] font-black uppercase tracking-widest text-gray-500 dark:text-gray-400">Current Balance</span>
+            <span className="text-sm font-black text-gray-900 dark:text-gray-100">{formatCurrency(overdraftPrompt.currentBalance)}</span>
+          </div>
+          <div className="flex justify-between gap-4">
+            <span className="text-[10px] font-black uppercase tracking-widest text-gray-500 dark:text-gray-400">Transaction Amount</span>
+            <span className="text-sm font-black text-orange-600 dark:text-orange-400">{formatCurrency(overdraftPrompt.transactionAmount)}</span>
+          </div>
+          <div className="flex justify-between gap-4 border-t-[3px] border-black pt-3">
+            <span className="text-[10px] font-black uppercase tracking-widest text-gray-500 dark:text-gray-400">Projected Balance</span>
+            <span className="text-sm font-black text-red-600 dark:text-red-400">{formatCurrency(overdraftPrompt.projectedBalance)}</span>
+          </div>
+        </div>
+
+        {overdraftPrompt.mode === 'block' ? (
+          <button
+            type="button"
+            onClick={closeOverdraftPrompt}
+            className="w-full rounded-2xl border-[3px] border-black bg-[#ffd54f] px-4 py-4 text-xs font-black uppercase tracking-widest text-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] transition-all hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none"
+          >
+            Got it.
+          </button>
+        ) : (
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <button
+              type="button"
+              onClick={openTopUpFromOverdraftPrompt}
+              className="rounded-2xl border-[3px] border-black bg-green-400 px-4 py-4 text-xs font-black uppercase tracking-widest text-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] transition-all hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none"
+            >
+              Top-up
+            </button>
+            <button
+              type="button"
+              onClick={closeOverdraftPrompt}
+              className={`rounded-2xl border-[3px] border-black px-4 py-4 text-xs font-black uppercase tracking-widest ${retroGhostButton}`}
+            >
+              Nope
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  </div>
+)}      {confirmModal.show && <ConfirmDialog {...confirmModal} onClose={() => setConfirmModal(p => ({ ...p, show: false }))} />}
       </Portal>
     </>
   );
