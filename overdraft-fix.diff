@@ -1,0 +1,165 @@
+diff --git a/pages/accounts/view.tsx b/pages/accounts/view.tsx
+index 78e96291..aa0ce305 100644
+--- a/pages/accounts/view.tsx
++++ b/pages/accounts/view.tsx
+@@ -492,7 +492,7 @@ const AccountFilteredTransactions: React.FC<AccountFilteredTransactionsProps> =
+         onTransactionCreated?.();
+       } catch (error) {
+         console.error('Error creating withdrawal:', error);
+-        showMessage('error', 'Failed to create withdrawal');
++        showMessage('error', error instanceof Error ? error.message : 'Failed to create withdrawal');
+       } finally {
+         setIsSubmitting(false);
+       }
+@@ -529,7 +529,7 @@ const AccountFilteredTransactions: React.FC<AccountFilteredTransactionsProps> =
+         onTransactionCreated?.();
+       } catch (error) {
+         console.error('Error creating transfer:', error);
+-        showMessage('error', 'Failed to create transfer');
++        showMessage('error', error instanceof Error ? error.message : 'Failed to create transfer');
+       } finally {
+         setIsSubmitting(false);
+       }
+@@ -569,7 +569,7 @@ const AccountFilteredTransactions: React.FC<AccountFilteredTransactionsProps> =
+         onTransactionCreated?.();
+       } catch (error) {
+         console.error('Error sending to friend:', error);
+-        showMessage('error', 'Failed to send transfer');
++        showMessage('error', error instanceof Error ? error.message : 'Failed to send transfer');
+       } finally {
+         setIsSubmitting(false);
+       }
+@@ -609,7 +609,7 @@ const AccountFilteredTransactions: React.FC<AccountFilteredTransactionsProps> =
+         onTransactionCreated?.();
+       } catch (error) {
+         console.error('Error creating loan:', error);
+-        showMessage('error', 'Failed to create loan');
++        showMessage('error', error instanceof Error ? error.message : 'Failed to create loan');
+       } finally {
+         setIsSubmitting(false);
+       }
+diff --git a/pages/transactions.tsx b/pages/transactions.tsx
+index 04e86af8..127d2899 100644
+--- a/pages/transactions.tsx
++++ b/pages/transactions.tsx
+@@ -571,7 +571,7 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ transactions, loadi
+ 
+         if (error) {
+           console.error('Error creating transaction:', error);
+-          alert('Failed to create transaction. Please try again.');
++          alert(error instanceof Error ? error.message : ((error as any)?.message || 'Failed to create transaction. Please try again.'));
+           return;
+         }
+ 
+@@ -601,7 +601,7 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ transactions, loadi
+       closeForm();
+     } catch (error) {
+       console.error('Error saving transaction:', error);
+-      alert('Failed to save transaction. Please try again.');
++      alert(error instanceof Error ? error.message : ((error as any)?.message || 'Failed to save transaction. Please try again.'));
+     }
+   };
+ 
+diff --git a/src/services/transactionsService.ts b/src/services/transactionsService.ts
+index 7566fb17..35a8cd6c 100644
+--- a/src/services/transactionsService.ts
++++ b/src/services/transactionsService.ts
+@@ -27,6 +27,59 @@ import type {
+   UpdateTransactionInput,
+ } from '../types/supabase';
+ import { getCachedUser } from '../utils/authCache';
++import { supabaseAccountToFrontend } from '../utils/accountsAdapter';
++import { calculateAccountBalanceFromFiltered } from '../utils/accountBalanceCalculator';
++
++const toNumber = (value: unknown): number => {
++  if (typeof value === 'number') return value;
++  if (typeof value === 'string') {
++    const parsed = parseFloat(value);
++    return Number.isFinite(parsed) ? parsed : 0;
++  }
++  return 0;
++};
++
++const toOutflowAmount = (amount: unknown): number => {
++  const n = toNumber(amount);
++  return n > 0 ? n : 0;
++};
++
++const enforceDebitOverdraftBlock = async (userId: string, accountId: string, outflowAmount: number) => {
++  if (!accountId || !outflowAmount || outflowAmount <= 0) return;
++
++  const { data: accountRow, error: accountError } = await supabase
++    .from(getTableName('accounts'))
++    .select('*')
++    .eq('id', accountId)
++    .eq('user_id', userId)
++    .maybeSingle();
++
++  if (accountError) throw accountError;
++  if (!accountRow) return;
++
++  const account = supabaseAccountToFrontend(accountRow as any);
++  if (account.type !== 'Debit') return;
++
++  const overdraftMode = (accountRow as any).overdraft_mode || 'allow';
++  if (overdraftMode !== 'block') return;
++
++  const { data: accountTxRows, error: txError } = await supabase
++    .from(getTableName('transactions'))
++    .select('payment_method_id,amount,date')
++    .eq('user_id', userId)
++    .eq('payment_method_id', accountId);
++
++  if (txError) throw txError;
++
++  const currentBalance = calculateAccountBalanceFromFiltered(
++    account,
++    (accountTxRows || []) as any
++  );
++  const projectedBalance = currentBalance - outflowAmount;
++  if (projectedBalance < 0) {
++    throw new Error(`This transaction would overdraw ${account.bank}. Add funds first or lower the amount.`);
++  }
++};
+ 
+ /**
+  * Internal helper to automatically dispatch shared transactions (Loans, Transfers)
+@@ -117,6 +170,12 @@ export const createTransaction = async (transaction: CreateTransactionInput) =>
+   try {
+     const user = await getCachedUser();
+ 
++    await enforceDebitOverdraftBlock(
++      user.id,
++      transaction.payment_method_id as any,
++      toOutflowAmount(transaction.amount)
++    );
++
+     const { data, error } = await supabase
+       .from(getTableName('transactions'))
+       .insert([{ ...transaction, user_id: user.id }])
+@@ -679,6 +738,12 @@ export const createPaymentScheduleTransaction = async (
+   try {
+     const user = await getCachedUser();
+ 
++    await enforceDebitOverdraftBlock(
++      user.id,
++      transaction.paymentMethodId,
++      toOutflowAmount(transaction.amount)
++    );
++
+     // Create the transaction with payment_schedule_id
+     const transactionData: CreateTransactionInput = {
+       name: transaction.name,
+@@ -811,6 +876,12 @@ export const createTransfer = async (
+     // Fetch the current authenticated user — required for RLS compliance on insert
+     const user = await getCachedUser();
+ 
++    await enforceDebitOverdraftBlock(
++      user.id,
++      sourceAccountId,
++      Math.abs(amount) + Math.abs(feeAmount || 0)
++    );
++
+     // Create the outgoing transaction (positive - money leaving)
+     const { data: outgoingTx, error: outgoingError } = await supabase
+       .from(getTableName('transactions'))

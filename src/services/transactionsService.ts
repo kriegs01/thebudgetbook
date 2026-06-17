@@ -27,8 +27,6 @@ import type {
   UpdateTransactionInput,
 } from '../types/supabase';
 import { getCachedUser } from '../utils/authCache';
-<<<<<<< ours
-=======
 import { supabaseAccountToFrontend } from '../utils/accountsAdapter';
 import { calculateAccountBalanceFromFiltered } from '../utils/accountBalanceCalculator';
 
@@ -86,7 +84,6 @@ const enforceDebitOverdraftBlock = async (userId: string, accountId: string, out
     throw new Error(`This transaction would overdraw ${account.bank}. Add funds first or lower the amount.`);
   }
 };
->>>>>>> theirs
 
 const enforceDebitOverdraftBlockForUpdate = async (
   userId: string,
