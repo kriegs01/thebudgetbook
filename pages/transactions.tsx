@@ -579,130 +579,131 @@ const guardTransactionsOverdraft = async (outflowAmount: number, action: () => P
   };
 
   const executeTransactionSubmit = async () => {
-    
-    // Transfer creation logic (uses specialized service)
-    if (form.transactionType === 'transfer' && transferTab === 'accounts' && !editingTxId) {
-  if (!form.paymentMethodId || !form.transferToAccountId || !form.amount || !form.date) return;
-  await guardTransactionsOverdraft(
-    Math.abs(parseFloat(form.amount)) + Math.abs(parseFloat(form.feeAmount || '0')),
-    async () => {
-      try {
-        const { error } = await createTransfer(
-          form.paymentMethodId,
-          form.transferToAccountId,
-          parseFloat(form.amount),
-          combineDateWithCurrentTime(form.date),
-          parseFloat(form.feeAmount || '0')
-        );
-        if (error) throw error;
-        await loadData();
-        if (onTransactionCreated) onTransactionCreated();
-        closeForm();
-      } catch (error) {
-        console.error('Error creating transfer:', error);
-        alert(error instanceof Error ? error.message : ((error as any)?.message || 'Failed to process transfer. Please try again.'));
-      }
-    }
-  );
-  return;
-}
-    }
+  // Transfer creation logic (uses specialized service)
+  if (form.transactionType === 'transfer' && transferTab === 'accounts' && !editingTxId) {
+    if (!form.paymentMethodId || !form.transferToAccountId || !form.amount || !form.date) return;
 
-    let txName = form.name;
-    if (form.transactionType === 'transfer' && transferTab === 'friends' && !txName) {
-      txName = `Transfer to ${form.personName}`;
-    }
+    await guardTransactionsOverdraft(
+      Math.abs(parseFloat(form.amount)) + Math.abs(parseFloat(form.feeAmount || '0')),
+      async () => {
+        try {
+          const { error } = await createTransfer(
+            form.paymentMethodId,
+            form.transferToAccountId,
+            parseFloat(form.amount),
+            combineDateWithCurrentTime(form.date),
+            parseFloat(form.feeAmount || '0')
+          );
+          if (error) throw error;
 
-    // Standard transaction creation/update logic
-    if (!txName || !form.date || !form.amount || !form.paymentMethodId) return;
-
-    // Apply correct positive/negative sign based on transaction type
-    let finalAmount = parseFloat(form.amount);
-    if (form.transactionType === 'cash_in') {
-      finalAmount = -Math.abs(finalAmount); // Money in (negative reduces debt / increases asset internally)
-    } else if (['withdraw', 'payment', 'loan', 'transfer'].includes(form.transactionType)) {
-      finalAmount = Math.abs(finalAmount); // Money out
-    }
-    
-    const outflowAmount = finalAmount > 0 ? finalAmount : 0;
-
-await guardTransactionsOverdraft(outflowAmount, async () => {
-  try {
-    if (editingTxId) {
-      const updates = {
-        name: txName,
-        date: combineDateWithCurrentTime(form.date),
-        amount: finalAmount,
-        payment_method_id: form.paymentMethodId,
-        transaction_type: form.transactionType,
-        borrower_name: form.transactionType === 'loan' ? form.borrowerName || null : null,
-        person_name: (form.transactionType === 'transfer' && transferTab === 'friends') ? form.personName || null : null
-      };
-
-      const { error } = await updateTransaction(editingTxId, updates);
-      if (error) {
-        console.error('Error updating transaction:', error);
-        alert(error instanceof Error ? error.message : ((error as any)?.message || 'Failed to update transaction. Please try again.'));
-        return;
-      }
-
-      if (receiptFile) {
-        const { path, error: uploadError } = await uploadTransactionReceipt(editingTxId, receiptFile);
-        if (uploadError) {
-          console.error('Error uploading receipt:', uploadError);
-          alert('Transaction updated, but receipt upload failed. Please try again.');
-        } else if (path) {
-          await updateTransaction(editingTxId, { receipt_url: path });
+          await loadData();
+          if (onTransactionCreated) onTransactionCreated();
+          closeForm();
+        } catch (error) {
+          console.error('Error creating transfer:', error);
+          alert(error instanceof Error ? error.message : ((error as any)?.message || 'Failed to process transfer. Please try again.'));
         }
       }
+    );
 
-      console.log('[Transactions Page] Transaction updated successfully');
-    } else {
-      const transaction = {
-        name: txName,
-        date: combineDateWithCurrentTime(form.date),
-        amount: finalAmount,
-        payment_method_id: form.paymentMethodId,
-        transaction_type: form.transactionType,
-        borrower_name: form.transactionType === 'loan' ? form.borrowerName || null : null,
-        person_name: (form.transactionType === 'transfer' && transferTab === 'friends') ? form.personName || null : null
-      };
-
-      const { data, error } = await createTransaction(transaction as any);
-
-      if (error) {
-        console.error('Error creating transaction:', error);
-        alert(error instanceof Error ? error.message : ((error as any)?.message || 'Failed to create transaction. Please try again.'));
-        return;
-      }
-
-      console.log('Transaction created successfully:', data);
-
-      if (receiptFile && data) {
-        const { path, error: uploadError } = await uploadTransactionReceipt(data.id, receiptFile);
-        if (uploadError) {
-          console.error('Error uploading receipt:', uploadError);
-          alert('Transaction saved, but receipt upload failed. Please try again.');
-        } else if (path) {
-          await updateTransaction(data.id, { receipt_url: path });
-        }
-      }
-    }
-
-    await loadData();
-
-    if (onTransactionCreated) {
-      console.log('[Transactions Page] Notifying parent of transaction change');
-      onTransactionCreated();
-    }
-
-    closeForm();
-  } catch (error) {
-    console.error('Error saving transaction:', error);
-    alert(error instanceof Error ? error.message : ((error as any)?.message || 'Failed to save transaction. Please try again.'));
+    return;
   }
-});
-  };
+
+  let txName = form.name;
+  if (form.transactionType === 'transfer' && transferTab === 'friends' && !txName) {
+    txName = `Transfer to ${form.personName}`;
+  }
+
+  // Standard transaction creation/update logic
+  if (!txName || !form.date || !form.amount || !form.paymentMethodId) return;
+
+  // Apply correct positive/negative sign based on transaction type
+  let finalAmount = parseFloat(form.amount);
+  if (form.transactionType === 'cash_in') {
+    finalAmount = -Math.abs(finalAmount);
+  } else if (['withdraw', 'payment', 'loan', 'transfer'].includes(form.transactionType)) {
+    finalAmount = Math.abs(finalAmount);
+  }
+
+  const outflowAmount = finalAmount > 0 ? finalAmount : 0;
+
+  await guardTransactionsOverdraft(outflowAmount, async () => {
+    try {
+      if (editingTxId) {
+        const updates = {
+          name: txName,
+          date: combineDateWithCurrentTime(form.date),
+          amount: finalAmount,
+          payment_method_id: form.paymentMethodId,
+          transaction_type: form.transactionType,
+          borrower_name: form.transactionType === 'loan' ? form.borrowerName || null : null,
+          person_name: (form.transactionType === 'transfer' && transferTab === 'friends') ? form.personName || null : null
+        };
+
+        const { error } = await updateTransaction(editingTxId, updates);
+        if (error) {
+          console.error('Error updating transaction:', error);
+          alert(error instanceof Error ? error.message : ((error as any)?.message || 'Failed to update transaction. Please try again.'));
+          return;
+        }
+
+        if (receiptFile) {
+          const { path, error: uploadError } = await uploadTransactionReceipt(editingTxId, receiptFile);
+          if (uploadError) {
+            console.error('Error uploading receipt:', uploadError);
+            alert('Transaction updated, but receipt upload failed. Please try again.');
+          } else if (path) {
+            await updateTransaction(editingTxId, { receipt_url: path });
+          }
+        }
+
+        console.log('[Transactions Page] Transaction updated successfully');
+      } else {
+        const transaction = {
+          name: txName,
+          date: combineDateWithCurrentTime(form.date),
+          amount: finalAmount,
+          payment_method_id: form.paymentMethodId,
+          transaction_type: form.transactionType,
+          borrower_name: form.transactionType === 'loan' ? form.borrowerName || null : null,
+          person_name: (form.transactionType === 'transfer' && transferTab === 'friends') ? form.personName || null : null
+        };
+
+        const { data, error } = await createTransaction(transaction as any);
+
+        if (error) {
+          console.error('Error creating transaction:', error);
+          alert(error instanceof Error ? error.message : ((error as any)?.message || 'Failed to create transaction. Please try again.'));
+          return;
+        }
+
+        console.log('Transaction created successfully:', data);
+
+        if (receiptFile && data) {
+          const { path, error: uploadError } = await uploadTransactionReceipt(data.id, receiptFile);
+          if (uploadError) {
+            console.error('Error uploading receipt:', uploadError);
+            alert('Transaction saved, but receipt upload failed. Please try again.');
+          } else if (path) {
+            await updateTransaction(data.id, { receipt_url: path });
+          }
+        }
+      }
+
+      await loadData();
+
+      if (onTransactionCreated) {
+        console.log('[Transactions Page] Notifying parent of transaction change');
+        onTransactionCreated();
+      }
+
+      closeForm();
+    } catch (error) {
+      console.error('Error saving transaction:', error);
+      alert(error instanceof Error ? error.message : ((error as any)?.message || 'Failed to save transaction. Please try again.'));
+    }
+  });
+};
 
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
