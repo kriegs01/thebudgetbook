@@ -505,7 +505,7 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ transactions, loadi
         return;
       } catch (error) {
         console.error('Error creating transfer:', error);
-        alert('Failed to process transfer. Please try again.');
+        alert(error instanceof Error ? error.message : ((error as any)?.message || 'Failed to process transfer. Please try again.'));
         return;
       }
     }
@@ -541,7 +541,7 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ transactions, loadi
         const { error } = await updateTransaction(editingTxId, updates);
         if (error) {
           console.error('Error updating transaction:', error);
-          alert('Failed to update transaction. Please try again.');
+          alert(error instanceof Error ? error.message : ((error as any)?.message || 'Failed to update transaction. Please try again.'));
           return;
         }
         // Upload new receipt if a file was selected during edit

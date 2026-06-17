@@ -27,6 +27,126 @@ import type {
   UpdateTransactionInput,
 } from '../types/supabase';
 import { getCachedUser } from '../utils/authCache';
+<<<<<<< ours
+=======
+import { supabaseAccountToFrontend } from '../utils/accountsAdapter';
+import { calculateAccountBalanceFromFiltered } from '../utils/accountBalanceCalculator';
+
+const toNumber = (value: unknown): number => {
+  if (typeof value === 'number') return value;
+  if (typeof value === 'string') {
+    const parsed = parseFloat(value);
+    return Number.isFinite(parsed) ? parsed : 0;
+  }
+  return 0;
+};
+
+const toOutflowAmount = (amount: unknown): number => {
+  const n = toNumber(amount);
+  return n > 0 ? n : 0;
+};
+
+const normalizeAccountType = (value: unknown): string => String(value ?? '').trim().toLowerCase();
+
+const normalizeOverdraftMode = (value: unknown): string => String(value ?? 'allow').trim().toLowerCase();
+
+const enforceDebitOverdraftBlock = async (userId: string, accountId: string, outflowAmount: number) => {
+  if (!accountId || !outflowAmount || outflowAmount <= 0) return;
+
+  const { data: accountRow, error: accountError } = await supabase
+    .from(getTableName('accounts'))
+    .select('*')
+    .eq('id', accountId)
+    .eq('user_id', userId)
+    .maybeSingle();
+
+  if (accountError) throw accountError;
+  if (!accountRow) return;
+
+  const account = supabaseAccountToFrontend(accountRow as any);
+  if (normalizeAccountType(accountRow.type ?? account.type) !== 'debit') return;
+
+  const overdraftMode = normalizeOverdraftMode((accountRow as any).overdraft_mode || account.overdraftMode || 'allow');
+  if (overdraftMode !== 'block') return;
+
+  const { data: accountTxRows, error: txError } = await supabase
+    .from(getTableName('transactions'))
+    .select('payment_method_id,amount,date')
+    .eq('user_id', userId)
+    .eq('payment_method_id', accountId);
+
+  if (txError) throw txError;
+
+  const currentBalance = calculateAccountBalanceFromFiltered(
+    account,
+    (accountTxRows || []) as any
+  );
+  const projectedBalance = currentBalance - outflowAmount;
+  if (projectedBalance < 0) {
+    throw new Error(`This transaction would overdraw ${account.bank}. Add funds first or lower the amount.`);
+  }
+};
+>>>>>>> theirs
+
+const enforceDebitOverdraftBlockForUpdate = async (
+  userId: string,
+  transactionId: string,
+  updates: UpdateTransactionInput
+) => {
+  const { data: existingTx, error: existingTxError } = await supabase
+    .from(getTableName('transactions'))
+    .select('id,payment_method_id,amount')
+    .eq('id', transactionId)
+    .eq('user_id', userId)
+    .maybeSingle();
+
+  if (existingTxError) throw existingTxError;
+  if (!existingTx) return;
+
+  const nextAccountId = (updates.payment_method_id as string | undefined) ?? existingTx.payment_method_id;
+  const nextAmount = toNumber(updates.amount ?? existingTx.amount);
+  const nextOutflowAmount = toOutflowAmount(nextAmount);
+
+  if (!nextAccountId || nextOutflowAmount <= 0) return;
+
+  const { data: accountRow, error: accountError } = await supabase
+    .from(getTableName('accounts'))
+    .select('*')
+    .eq('id', nextAccountId)
+    .eq('user_id', userId)
+    .maybeSingle();
+
+  if (accountError) throw accountError;
+  if (!accountRow) return;
+
+  const account = supabaseAccountToFrontend(accountRow as any);
+  if (normalizeAccountType(accountRow.type ?? account.type) !== 'debit') return;
+
+  const overdraftMode = normalizeOverdraftMode((accountRow as any).overdraft_mode || account.overdraftMode || 'allow');
+  if (overdraftMode !== 'block') return;
+
+  const { data: accountTxRows, error: txError } = await supabase
+    .from(getTableName('transactions'))
+    .select('id,payment_method_id,amount,date')
+    .eq('user_id', userId)
+    .eq('payment_method_id', nextAccountId);
+
+  if (txError) throw txError;
+
+  const currentBalance = calculateAccountBalanceFromFiltered(
+    account,
+    (accountTxRows || []) as any
+  );
+
+  const sameAccountAsExisting = existingTx.payment_method_id === nextAccountId;
+  const projectedBalance = sameAccountAsExisting
+    ? currentBalance + toNumber(existingTx.amount) - nextAmount
+    : currentBalance - nextOutflowAmount;
+
+  if (projectedBalance < 0) {
+    throw new Error(`This transaction would overdraw ${account.bank}. Add funds first or lower the amount.`);
+  }
+};
 
 /**
  * Internal helper to automatically dispatch shared transactions (Loans, Transfers)
@@ -453,6 +573,10 @@ export const resolvePendingTransaction = async (pendingTxId: string, action: 'ac
  */
 export const updateTransaction = async (id: string, updates: UpdateTransactionInput) => {
   try {
+    const user = await getCachedUser();
+
+    await enforceDebitOverdraftBlockForUpdate(user.id, id, updates);
+
     const { data, error } = await supabase
       .from(getTableName('transactions'))
       .update(updates)
