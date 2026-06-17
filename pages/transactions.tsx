@@ -571,7 +571,7 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ transactions, loadi
         
         if (error) {
           console.error('Error creating transaction:', error);
-          alert('Failed to create transaction. Please try again.');
+          alert(error instanceof Error ? error.message : ((error as any)?.message || 'Failed to create transaction. Please try again.'));
           return;
         }
         
@@ -601,7 +601,7 @@ const TransactionsPage: React.FC<TransactionsPageProps> = ({ transactions, loadi
       closeForm();
     } catch (error) {
       console.error('Error saving transaction:', error);
-      alert('Failed to save transaction. Please try again.');
+      alert(error instanceof Error ? error.message : ((error as any)?.message || 'Failed to save transaction. Please try again.'));
     }
   };
 
