@@ -183,6 +183,15 @@ interface TransactionsPageProps {
 
 const Portal: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+    return () => setMounted(false);
+  }, []);
+
+  return mounted ? createPortal(children, document.body) : null;
+};
+
 type OverdraftPromptState = {
   mode: 'block' | 'warn';
   accountId: string;
