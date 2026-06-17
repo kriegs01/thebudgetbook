@@ -213,7 +213,7 @@ const retroCloseButton = 'absolute right-4 top-4 flex h-10 w-10 items-center jus
   }, []);
 
   return mounted ? createPortal(children, document.body) : null;
-};
+;
 
 const TransactionsPage: React.FC<TransactionsPageProps> = ({ transactions, loading = false, onTransactionDeleted, onTransactionCreated }) => {
   const { getAccentClasses } = useTheme();
