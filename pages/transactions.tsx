@@ -358,85 +358,8 @@ const guardTransactionsOverdraft = async (outflowAmount: number, action: () => P
     transactionAmount: outflowAmount,
     projectedBalance,
   });
-};const selectedPaymentAccount = useMemo(
-  () => accounts.find(account => account.id === form.paymentMethodId) ?? null,
-  [accounts, form.paymentMethodId]
-);
-
-const editingTransaction = useMemo(
-  () => (editingTxId ? transactions.find(tx => tx.id === editingTxId) ?? null : null),
-  [editingTxId, transactions]
-);
-
-const getCurrentBalanceForAccount = useCallback((account: Account) => {
-  const baseline = account.openingBalance ?? account.balance ?? 0;
-  const sortedTransactions = transactions
-    .filter(tx => tx.paymentMethodId === account.id)
-    .sort((a, b) => {
-      const byDate = new Date(a.date).getTime() - new Date(b.date).getTime();
-      return byDate !== 0 ? byDate : a.id.localeCompare(b.id);
-    });
-
-  if (account.type === 'Debit') {
-    return sortedTransactions.reduce((balance, tx) => balance - tx.amount, baseline);
-  }
-
-  return sortedTransactions.reduce((balance, tx) => balance + tx.amount, baseline);
-}, [transactions]);
-
-const closeOverdraftPrompt = () => {
-  setOverdraftPrompt(null);
 };
 
-const openTopUpFromOverdraftPrompt = () => {
-  if (!overdraftPrompt) return;
-
-  const shortfall = Math.abs(Math.min(overdraftPrompt.projectedBalance, 0));
-  setOverdraftPrompt(null);
-  setEditingTxId(null);
-  setTransferTab('accounts');
-  setForm({
-    name: '',
-    date: todayIso(),
-    amount: shortfall > 0 ? shortfall.toFixed(2) : '',
-    feeAmount: '',
-    paymentMethodId: overdraftPrompt.accountId,
-    transactionType: 'cash_in',
-    transferToAccountId: '',
-    borrowerName: '',
-    personName: ''
-  });
-  setReceiptFile(null);
-  setShowForm(true);
-};
-
-const guardTransactionsOverdraft = async (outflowAmount: number, action: () => Promise<void>) => {
-  if (!selectedPaymentAccount || selectedPaymentAccount.type !== 'Debit' || outflowAmount <= 0) {
-    await action();
-    return;
-  }
-
-  const overdraftMode = selectedPaymentAccount.overdraftMode || 'allow';
-  const currentBalance = getCurrentBalanceForAccount(selectedPaymentAccount);
-  const projectedBalance =
-    editingTransaction && editingTransaction.paymentMethodId === selectedPaymentAccount.id
-      ? currentBalance + editingTransaction.amount - outflowAmount
-      : currentBalance - outflowAmount;
-
-  if (projectedBalance >= 0 || overdraftMode === 'allow') {
-    await action();
-    return;
-  }
-
-  setOverdraftPrompt({
-    mode: overdraftMode === 'block' ? 'block' : 'warn',
-    accountId: selectedPaymentAccount.id,
-    accountName: selectedPaymentAccount.bank,
-    currentBalance,
-    transactionAmount: outflowAmount,
-    projectedBalance,
-  });
-};
   const [confirmModal, setConfirmModal] = useState<{
     show: boolean;
     title: string;
