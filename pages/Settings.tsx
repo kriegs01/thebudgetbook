@@ -745,7 +745,7 @@ const Settings: React.FC<SettingsProps> = ({ currency, setCurrency, categories, 
   const sections = [
     {
       id: 'account',
-      label: 'Account',
+      label: 'Me',
       icon: <User className="w-5 h-5" />,
       content: (
         <div className="space-y-4 pt-2">
