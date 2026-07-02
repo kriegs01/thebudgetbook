@@ -343,9 +343,12 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
   const [excludedWalletIds, setExcludedWalletIds] = useState<Set<string>>(new Set());
 
   const [fundModal, setFundModal] = useState<{ wallet: Wallet } | null>(null);
-  const [fundForm, setFundForm] = useState({ amount: '', date: '', notes: '' });
+  const [fundForm, setFundForm] = useState({ amount: '', date: '', notes: '', sourceAccountId: '' });
   const [fundSubmitting, setFundSubmitting] = useState(false);
   const [stashInfoModal, setStashInfoModal] = useState<{ wallet: Wallet } | null>(null);
+  const [stashRepairModal, setStashRepairModal] = useState<{ wallet: Wallet; tx: SupabaseTransaction } | null>(null);
+  const [stashRepairForm, setStashRepairForm] = useState({ sourceAccountId: '' });
+  const [stashRepairSubmitting, setStashRepairSubmitting] = useState(false);
   const [stashStatusMsg, setStashStatusMsg] = useState<{ msg: string; type: 'success' | 'error' } | null>(null);
 
   const [archiveStatusMsg, setArchiveStatusMsg] = useState<{ msg: string; type: 'success' | 'error' } | null>(null);
@@ -470,8 +473,21 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
     return { funded, remaining, isFunded, topUps };
   }, [getStashTopUps]);
 
+  const isLegacyStashTopUp = useCallback((tx: SupabaseTransaction) => {
+    return tx.transaction_type === 'cash_in' && tx.amount < 0;
+  }, []);
+
+  const getDefaultStashSourceAccountId = useCallback((wallet: Wallet, tx?: SupabaseTransaction) => {
+    const fundingAccounts = accounts.filter(a => a.type === 'Debit');
+    const preferredId = tx?.payment_method_id || wallet.accountId;
+    if (fundingAccounts.some(a => a.id === preferredId)) return preferredId;
+    if (fundingAccounts.some(a => a.id === wallet.accountId)) return wallet.accountId;
+    return fundingAccounts[0]?.id || '';
+  }, [accounts]);
+
   const handleOpenFundModal = useCallback((wallet: Wallet) => {
     const { remaining } = getStashAggregates(wallet);
+    const defaultSourceAccountId = getDefaultStashSourceAccountId(wallet);
     const now = new Date();
     const selectedMonthIndex = MONTHS.indexOf(selectedMonth);
     const isCurrentPeriod = now.getFullYear() === selectedYear && now.getMonth() === selectedMonthIndex;
@@ -485,9 +501,46 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
       amount: remaining > 0 ? remaining.toFixed(2) : '',
       date: defaultDate,
       notes: '',
+      sourceAccountId: defaultSourceAccountId,
     });
     setFundModal({ wallet });
-  }, [getStashAggregates, selectedMonth, selectedYear]);
+  }, [getDefaultStashSourceAccountId, getStashAggregates, selectedMonth, selectedYear]);
+
+  const handleOpenStashRepairModal = useCallback((wallet: Wallet, tx: SupabaseTransaction) => {
+    setStashRepairForm({
+      sourceAccountId: getDefaultStashSourceAccountId(wallet, tx),
+    });
+    setStashRepairModal({ wallet, tx });
+  }, [getDefaultStashSourceAccountId]);
+
+  const handleRepairStashTopUp = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!stashRepairModal) return;
+    if (!stashRepairForm.sourceAccountId) return;
+
+    setStashRepairSubmitting(true);
+    try {
+      const correctedAmount = Math.abs(stashRepairModal.tx.amount);
+      const { error } = await updateTransaction(stashRepairModal.tx.id, {
+        payment_method_id: stashRepairForm.sourceAccountId,
+        amount: correctedAmount,
+        transaction_type: 'withdraw',
+      });
+      if (error) throw error;
+
+      await Promise.all([reloadStashTopUps(), reloadTransactions()]);
+      setStashRepairModal(null);
+      setStashStatusMsg({ msg: `Repaired stash top-up '${stashRepairModal.tx.name}'`, type: 'success' });
+      setTimeout(() => setStashStatusMsg(null), 3000);
+      if (onTransactionCreated) onTransactionCreated();
+    } catch (err) {
+      console.error('[Budget] Error repairing stash top-up:', err);
+      setStashStatusMsg({ msg: 'Failed to repair stash top-up. Please try again.', type: 'error' });
+      setTimeout(() => setStashStatusMsg(null), 3000);
+    } finally {
+      setStashRepairSubmitting(false);
+    }
+  };
 
   const handleFundSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -496,15 +549,16 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
     if (isNaN(amount) || amount <= 0) return;
     const walletId = fundModal.wallet.id;
     const walletName = fundModal.wallet.name;
-    const walletAccountId = fundModal.wallet.accountId;
+    const sourceAccountId = fundForm.sourceAccountId;
+    if (!sourceAccountId) return;
     setFundSubmitting(true);
     try {
       const stashTxBase = {
         name: `Stash top-up - ${walletName} (${selectedMonth} ${selectedYear})`,
-        amount: -amount,
+        amount,
         date: combineDateWithCurrentTime(fundForm.date),
-        payment_method_id: walletAccountId,
-        transaction_type: 'cash_in' as const,
+        payment_method_id: sourceAccountId,
+        transaction_type: 'withdraw' as const,
         notes: fundForm.notes || null,
         payment_schedule_id: null,
         related_transaction_id: null,
@@ -2707,6 +2761,21 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
             </div>
             <form onSubmit={handleFundSubmit} className="space-y-4">
               <div>
+                <label className="block text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">Source Account <span className="text-red-500">*</span></label>
+                <select
+                  value={fundForm.sourceAccountId}
+                  onChange={e => setFundForm(f => ({ ...f, sourceAccountId: e.target.value }))}
+                  required
+                  className="w-full bg-white dark:bg-gray-800 border-2 border-black rounded-xl px-3 py-2 text-xs font-bold text-gray-800 dark:text-gray-100 outline-none"
+                >
+                  {accounts.filter(a => a.type === 'Debit').map(account => (
+                    <option key={account.id} value={account.id}>
+                      {account.bank} ({account.classification})
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
                 <label className="block text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">Amount <span className="text-red-500">*</span></label>
                 <div className="flex items-center border-2 border-black rounded-xl px-3 py-2.5 bg-white dark:bg-gray-800"><span className="text-gray-400 font-bold mr-2 text-xs">₱</span><input type="number" min="0.01" step="0.01" value={fundForm.amount} onChange={e => setFundForm(f => ({ ...f, amount: e.target.value }))} placeholder="0.00" required className="flex-1 bg-transparent outline-none text-sm font-black text-indigo-600" /></div>
               </div>
@@ -2730,6 +2799,7 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
       {stashInfoModal && (() => {
         const { funded, remaining, topUps } = getStashAggregates(stashInfoModal.wallet);
         const linkedAccount = accounts.find(a => a.id === stashInfoModal.wallet.accountId);
+        const legacyTopUps = topUps.filter(isLegacyStashTopUp);
         return (
           <div className="fixed inset-0 z-[150] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md" onClick={() => setStashInfoModal(null)}>
             <div className="w-full max-w-md bg-white dark:bg-gray-900 border-4 border-black shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] rounded-2xl p-6 relative max-h-[85vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
@@ -2753,14 +2823,39 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                 </div>
               </div>
               {linkedAccount && (<p className="text-xs text-gray-500 mb-4 font-medium">Account: <span className="text-gray-700 font-bold">{linkedAccount.bank} ({linkedAccount.classification})</span></p>)}
+              {legacyTopUps.length > 0 && (
+                <div className="mb-4 rounded-xl border-2 border-black bg-amber-50 p-3">
+                  <p className="text-[10px] font-black uppercase tracking-widest text-amber-700">Historical Repair Needed</p>
+                  <p className="mt-1 text-xs font-medium text-amber-800">
+                    {legacyTopUps.length} older stash top-up{legacyTopUps.length === 1 ? '' : 's'} still use the old math format. Repair them below to fix account balance history.
+                  </p>
+                </div>
+              )}
               <h3 className="text-[9px] font-black text-gray-400 tracking-widest uppercase mb-2">Top-ups this month</h3>
               {topUps.length === 0 ? <p className="text-xs text-gray-400 italic py-2 text-center">No top-ups found.</p> : (
                 <div className="space-y-2">
                   {topUps.map(tx => (
                     <div key={tx.id} className="bg-gray-50 border-2 border-black rounded-xl p-3 flex items-center justify-between">
-                      <div><p className="text-xs font-bold text-gray-900">{tx.name}</p><p className="text-[10px] text-gray-500">{new Date(tx.date).toLocaleDateString()}</p></div>
+                      <div>
+                        <p className="text-xs font-bold text-gray-900">{tx.name}</p>
+                        <p className="text-[10px] text-gray-500">{new Date(tx.date).toLocaleDateString()}</p>
+                        {isLegacyStashTopUp(tx) && (
+                          <span className="mt-1 inline-flex rounded-lg border border-amber-300 bg-amber-100 px-2 py-0.5 text-[9px] font-black uppercase tracking-widest text-amber-700">
+                            Legacy Format
+                          </span>
+                        )}
+                      </div>
                       <div className="flex items-center space-x-2">
                         <span className="text-xs font-black text-indigo-600">{formatCurrency(Math.abs(tx.amount))}</span>
+                        {isLegacyStashTopUp(tx) && (
+                          <button
+                            type="button"
+                            onClick={() => handleOpenStashRepairModal(stashInfoModal.wallet, tx)}
+                            className="rounded-lg border-2 border-black bg-amber-100 px-2 py-1 text-[9px] font-black uppercase tracking-widest text-amber-700 shadow-[1.5px_1.5px_0px_0px_rgba(0,0,0,1)] transition-all hover:shadow-none hover:translate-x-[0.5px] hover:translate-y-[0.5px]"
+                          >
+                            Repair
+                          </button>
+                        )}
                         <PinProtectedAction featureId="transaction_deletions" onVerified={() => handleDeleteStashTopUp(tx.id, tx.amount)} actionLabel="Delete Top-up">
                           <button onClick={(e) => e.preventDefault()} className="text-red-400 hover:text-red-600 p-1 rounded-lg hover:bg-red-50"><Trash2 className="w-3.5 h-3.5" /></button>
                         </PinProtectedAction>
@@ -2773,6 +2868,58 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
           </div>
         );
       })()}
+
+      {stashRepairModal && (
+        <div className="fixed inset-0 z-[160] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md" onClick={() => setStashRepairModal(null)}>
+          <div className="w-full max-w-sm bg-white dark:bg-gray-900 border-4 border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] rounded-2xl p-6 relative" onClick={e => e.stopPropagation()}>
+            <button onClick={() => setStashRepairModal(null)} className="absolute top-4 right-4 text-gray-400 p-1.5 rounded-full hover:bg-gray-100">
+              <X className="w-5 h-5" />
+            </button>
+            <div className="mb-4">
+              <h2 className="text-lg font-black text-gray-900 dark:text-gray-100 uppercase tracking-tight">Repair Stash Top-up</h2>
+              <p className="mt-1 text-xs font-medium text-gray-500">
+                Convert this older stash record into the new source-account outflow format.
+              </p>
+            </div>
+            <div className="mb-4 rounded-xl border-2 border-black bg-gray-50 p-3">
+              <p className="text-[9px] font-black uppercase tracking-widest text-gray-400">Transaction</p>
+              <p className="mt-1 text-sm font-black text-gray-900 dark:text-gray-100">{stashRepairModal.tx.name}</p>
+              <p className="mt-1 text-xs font-bold text-indigo-600">{formatCurrency(Math.abs(stashRepairModal.tx.amount))}</p>
+            </div>
+            <form onSubmit={handleRepairStashTopUp} className="space-y-4">
+              <div>
+                <label className="block text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">Correct Source Account <span className="text-red-500">*</span></label>
+                <select
+                  value={stashRepairForm.sourceAccountId}
+                  onChange={e => setStashRepairForm({ sourceAccountId: e.target.value })}
+                  required
+                  className="w-full bg-white dark:bg-gray-800 border-2 border-black rounded-xl px-3 py-2 text-xs font-bold text-gray-800 dark:text-gray-100 outline-none"
+                >
+                  {accounts.filter(a => a.type === 'Debit').map(account => (
+                    <option key={account.id} value={account.id}>
+                      {account.bank} ({account.classification})
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="rounded-xl border-2 border-black bg-amber-50 p-3">
+                <p className="text-[10px] font-black uppercase tracking-widest text-amber-700">What This Does</p>
+                <p className="mt-1 text-xs font-medium text-amber-800">
+                  This changes the old negative cash-in record into a normal stash funding outflow so account balances recalculate correctly.
+                </p>
+              </div>
+              <div className="flex flex-col space-y-2 pt-1">
+                <button type="submit" disabled={stashRepairSubmitting} className="w-full bg-amber-500 text-white border-2 border-black py-2.5 rounded-xl font-black uppercase tracking-widest text-[10px] shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[1px] hover:translate-y-[1px] transition-all">
+                  {stashRepairSubmitting ? 'Repairing…' : 'Repair Top-up'}
+                </button>
+                <button type="button" onClick={() => setStashRepairModal(null)} className="w-full bg-gray-100 dark:bg-gray-800 text-gray-500 border-2 border-black py-2.5 rounded-xl font-black uppercase tracking-widest text-[10px] shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[1px] hover:translate-y-[1px] transition-all">
+                  Cancel
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       {schedulePaymentsModal && (
         <div className="fixed inset-0 z-[150] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md" onClick={() => setSchedulePaymentsModal(null)}>

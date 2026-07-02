@@ -10,6 +10,7 @@ export interface Account {
   creditLimit?: number;
   billingDate?: string;
   dueDate?: string;
+  overdraftMode?: 'allow' | 'warn' | 'block';
 }
 
 export interface BudgetItem {

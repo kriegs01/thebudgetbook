@@ -18,6 +18,13 @@ export interface SupabaseUserProfile {
   updated_at: string; // timestamptz
   settings?: {
     peopleEnabled?: boolean; // Toggle for the People feature
+    usePeoplePage?: boolean;
+    defaultReceiveAccountId?: string;
+    setupCompleted?: boolean;
+    accounts?: {
+      debitOverdraftMode?: 'allow' | 'warn' | 'block';
+      debitOverdraftModes?: Record<string, 'allow' | 'warn' | 'block'>;
+    };
   } | null;
 }
 
@@ -31,6 +38,7 @@ export interface SupabaseAccount {
   credit_limit: number | null; // numeric, nullable
   billing_date: string | null; // date, nullable
   due_date: string | null; // date, nullable
+  overdraft_mode?: 'allow' | 'warn' | 'block' | null;
   created_at: string; // timestamptz, default now()
   user_id: string | null; // uuid, references auth.users(id)
 }

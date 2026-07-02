@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
-import { ChevronDown, ChevronRight, Hash, Globe, Bell, Lock, Trash2, AlertTriangle, RotateCcw, Plus, X, Database, Copy, Shield, User, Users, Mail, Key, MoreVertical, Check, SlidersHorizontal } from 'lucide-react';
-import { BudgetCategory, Biller, Installment, SupabaseUserProfile } from '../types';
+import React, { useState, useEffect, useMemo } from 'react';
+import { ChevronDown, ChevronRight, Hash, Globe, Bell, Lock, Trash2, AlertTriangle, RotateCcw, Plus, X, Database, Copy, Shield, User, Users, Mail, Key, MoreVertical, Check, SlidersHorizontal, Info } from 'lucide-react';
+import { Account, BudgetCategory, Biller, Installment, SupabaseUserProfile } from '../types';
 import { useTestEnvironment } from '../src/contexts/TestEnvironmentContext';
 import { getAllPeople, createPerson, deletePerson } from '../src/services/peopleService';
 import type { SupabasePerson } from '../src/types/supabase';
@@ -11,6 +11,7 @@ import { PinProtectedAction } from '../src/components/PinProtectedAction';
 import { updateUserEmail, updateUserPassword, updateUserProfile } from '../src/services/userProfileService';
 import { useTheme } from '../src/contexts/ThemeContext';
 import { PageHeader } from '../src/components/PageHeader';
+import { updateAccount } from '../src/services/accountsService';
 
 interface SettingsProps {
   currency: string;
@@ -18,6 +19,7 @@ interface SettingsProps {
   categories: BudgetCategory[];
   setCategories: React.Dispatch<React.SetStateAction<BudgetCategory[]>>;
   accounts?: Account[];
+  setAccounts?: React.Dispatch<React.SetStateAction<Account[]>>;
   onResetAll?: () => void;
   billers?: Biller[];
   installments?: Installment[];
@@ -27,6 +29,32 @@ interface SettingsProps {
 }
 
 const SETTING_MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+type DebitOverdraftMode = 'allow' | 'warn' | 'block';
+const OVERDRAFT_OPTIONS: Array<{
+  value: DebitOverdraftMode;
+  label: string;
+  description: string;
+  tip: string;
+}> = [
+  {
+    value: 'allow',
+    label: 'Allow',
+    description: 'Saves the transaction even if the debit account goes negative.',
+    tip: 'Use this when you prefer flexible logging and do not want balance checks to interrupt data entry.',
+  },
+  {
+    value: 'warn',
+    label: 'Warn',
+    description: 'Shows a warning before the transaction would push a debit account below zero.',
+    tip: 'Users can proceed anyway, transfer funds in, or top up the account before saving the transaction.',
+  },
+  {
+    value: 'block',
+    label: 'Block',
+    description: 'Prevents saving the transaction if it would make a debit account negative.',
+    tip: 'Best for strict cash accounts or users who never want overdraft-style balances recorded by mistake.',
+  },
+];
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -75,7 +103,7 @@ interface DeleteConflict {
 
 // ─── Component ───────────────────────────────────────────────────────────────
 
-const Settings: React.FC<SettingsProps> = ({ currency, setCurrency, categories, setCategories, accounts = [], onResetAll, billers = [], installments = [], onUpdateBiller, theme = 'light', onToggleTheme }) => {
+const Settings: React.FC<SettingsProps> = ({ currency, setCurrency, categories, setCategories, accounts = [], setAccounts, onResetAll, billers = [], installments = [], onUpdateBiller, theme = 'light', onToggleTheme }) => {
   const { getAccentClasses } = useTheme();
   // Auth context
   const { userProfile, updateProfile, refreshProfile, user } = useAuth();
@@ -441,11 +469,28 @@ const Settings: React.FC<SettingsProps> = ({ currency, setCurrency, categories, 
   const [isPeoplePageEnabled, setIsPeoplePageEnabled] = useState(!!userProfile?.settings?.usePeoplePage);
   const [isTogglingPeoplePage, setIsTogglingPeoplePage] = useState(false);
   const [peopleList, setPeopleList] = useState<SupabasePerson[]>([]);
+  const [accountOverdraftModeDrafts, setAccountOverdraftModeDrafts] = useState<Record<string, DebitOverdraftMode>>({});
+  const [isSavingAccountPrefs, setIsSavingAccountPrefs] = useState(false);
+  const [accountPrefsMessage, setAccountPrefsMessage] = useState('');
+  const [accountPrefsError, setAccountPrefsError] = useState('');
+  const debitAccounts = useMemo(
+    () => accounts.filter(account => account.type === 'Debit'),
+    [accounts]
+  );
 
   useEffect(() => {
     setIsPeopleEnabled(!!userProfile?.settings?.peopleEnabled);
     setIsPeoplePageEnabled(!!userProfile?.settings?.usePeoplePage);
   }, [userProfile?.settings?.peopleEnabled, userProfile?.settings?.usePeoplePage]);
+
+  useEffect(() => {
+    const nextDrafts = debitAccounts.reduce<Record<string, DebitOverdraftMode>>((acc, account) => {
+      acc[account.id] = account.overdraftMode || 'allow';
+      return acc;
+    }, {});
+
+    setAccountOverdraftModeDrafts(nextDrafts);
+  }, [debitAccounts]);
 
   useEffect(() => {
     if (isPeopleEnabled && user) {
@@ -664,10 +709,43 @@ const Settings: React.FC<SettingsProps> = ({ currency, setCurrency, categories, 
     }
   };
 
+  const handleSaveAccountPreferences = async () => {
+    if (!user) return;
+    setIsSavingAccountPrefs(true);
+    setAccountPrefsError('');
+    setAccountPrefsMessage('');
+
+    try {
+      await Promise.all(
+        debitAccounts.map(account =>
+          updateAccount(account.id, {
+            overdraft_mode: (accountOverdraftModeDrafts[account.id] || 'allow') as any,
+          })
+        )
+      );
+
+      setAccounts?.(prev =>
+        prev.map(account => {
+          if (account.type !== 'Debit') return account;
+          return {
+            ...account,
+            overdraftMode: accountOverdraftModeDrafts[account.id] || 'allow',
+          };
+        })
+      );
+      setAccountPrefsMessage('Account settings saved successfully!');
+      setTimeout(() => setAccountPrefsMessage(''), 3000);
+    } catch (error: any) {
+      setAccountPrefsError(error.message || 'Failed to save account settings');
+    } finally {
+      setIsSavingAccountPrefs(false);
+    }
+  };
+
   const sections = [
     {
       id: 'account',
-      label: 'Account',
+      label: 'Me',
       icon: <User className="w-5 h-5" />,
       content: (
         <div className="space-y-4 pt-2">
@@ -1031,6 +1109,125 @@ const Settings: React.FC<SettingsProps> = ({ currency, setCurrency, categories, 
       )
     },
     { 
+      id: 'accounts',
+      label: 'Accounts',
+      icon: <SlidersHorizontal className="w-5 h-5" />,
+      content: (
+        <div className="space-y-4 pt-2">
+          <div className="rounded-2xl border border-gray-200 bg-white p-4 transition-colors dark:border-gray-800 dark:bg-gray-900">
+            <div className="mb-4">
+              <h4 className="text-sm font-black uppercase text-gray-900 transition-colors dark:text-gray-100">Debit Account Overdraft Behavior</h4>
+              <p className="mt-1 text-xs text-gray-500 transition-colors dark:text-gray-400">
+                Set the overdraft rule for each debit account, then save all account configurations together.
+              </p>
+            </div>
+
+            {accountPrefsMessage && (
+              <div className="mb-4 rounded-xl border border-green-200 bg-green-50 p-3 transition-colors dark:border-green-800/30 dark:bg-green-900/20">
+                <p className="text-sm text-green-800 dark:text-green-400">{accountPrefsMessage}</p>
+              </div>
+            )}
+            {accountPrefsError && (
+              <div className="mb-4 rounded-xl border border-red-200 bg-red-50 p-3 transition-colors dark:border-red-800/30 dark:bg-red-900/20">
+                <p className="text-sm text-red-800 dark:text-red-400">{accountPrefsError}</p>
+              </div>
+            )}
+
+            {debitAccounts.length === 0 ? (
+              <div className="rounded-2xl border border-dashed border-gray-300 bg-gray-50 p-5 text-center transition-colors dark:border-gray-700 dark:bg-gray-800/50">
+                <p className="text-sm font-bold text-gray-600 transition-colors dark:text-gray-300">No debit accounts found.</p>
+                <p className="mt-1 text-xs text-gray-500 transition-colors dark:text-gray-400">
+                  Add a debit account first to configure its overdraft behavior.
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {debitAccounts.map(account => (
+                  <div
+                    key={account.id}
+                    className="rounded-2xl border-2 border-gray-200 bg-gray-50 p-4 transition-colors dark:border-gray-700 dark:bg-gray-800/60"
+                  >
+                    <div className="mb-4 flex items-start justify-between gap-3">
+                      <div>
+                        <h5 className="text-sm font-black uppercase text-gray-900 transition-colors dark:text-gray-100">{account.bank}</h5>
+                        <p className="mt-1 text-xs text-gray-500 transition-colors dark:text-gray-400">
+                          {account.classification} · Current balance: {new Intl.NumberFormat('en-PH', {
+                            style: 'currency',
+                            currency: 'PHP',
+                            minimumFractionDigits: 2,
+                            maximumFractionDigits: 2,
+                          }).format(account.balance)}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+                      {OVERDRAFT_OPTIONS.map(option => {
+                        const isSelected = (accountOverdraftModeDrafts[account.id] || 'allow') === option.value;
+                        return (
+                          <label
+                            key={`${account.id}-${option.value}`}
+                            className={`cursor-pointer rounded-2xl border-2 p-4 transition-all ${
+                              isSelected
+                                ? 'border-black bg-[#fff8ea] shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]'
+                                : 'border-gray-200 bg-white hover:border-black dark:border-gray-700 dark:bg-gray-900/70'
+                            }`}
+                          >
+                            <input
+                              type="radio"
+                              name={`debit-overdraft-mode-${account.id}`}
+                              value={option.value}
+                              checked={isSelected}
+                              onChange={() => setAccountOverdraftModeDrafts(prev => ({ ...prev, [account.id]: option.value }))}
+                              className="sr-only"
+                            />
+                            <div className="flex items-start justify-between gap-3">
+                              <div>
+                                <div className="flex items-center gap-2">
+                                  <span className="text-sm font-black uppercase text-gray-900 transition-colors dark:text-gray-100">{option.label}</span>
+                                  <button
+                                    type="button"
+                                    title={option.tip}
+                                    onClick={(e) => e.preventDefault()}
+                                    className="rounded-full p-1 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-gray-700 dark:hover:text-gray-200"
+                                    aria-label={`${account.bank} ${option.label} info`}
+                                  >
+                                    <Info className="h-3.5 w-3.5" />
+                                  </button>
+                                </div>
+                              </div>
+                              <div
+                                className={`mt-0.5 flex h-5 w-5 items-center justify-center rounded-full border-2 ${
+                                  isSelected ? 'border-black bg-black text-white' : 'border-gray-300 bg-white dark:border-gray-600 dark:bg-gray-900'
+                                }`}
+                              >
+                                {isSelected && <Check className="h-3 w-3" />}
+                              </div>
+                            </div>
+                          </label>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <div className="mt-5 flex justify-end">
+              <button
+                type="button"
+                onClick={handleSaveAccountPreferences}
+                disabled={isSavingAccountPrefs}
+                className={`rounded-2xl border-[3px] border-black px-5 py-3 text-xs font-black uppercase tracking-widest text-white shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] transition-all hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none disabled:cursor-not-allowed disabled:opacity-60 ${getAccentClasses('bg')}`}
+              >
+                {isSavingAccountPrefs ? 'Saving...' : 'Save'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )
+    },
+    {
       id: 'categories', 
       label: 'Budget Categories', 
       icon: <Hash className="w-5 h-5" />,

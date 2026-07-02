@@ -49,6 +49,48 @@ export const createUserProfile = async (profile: CreateUserProfileInput) => {
   }
 };
 
+const deriveFallbackProfileNames = async () => {
+  const { data: authData } = await supabase.auth.getUser();
+  const authUser = authData.user;
+  const metadata = authUser?.user_metadata || {};
+  const emailPrefix = authUser?.email?.split('@')[0]?.trim() || '';
+
+  const firstName =
+    metadata.first_name ||
+    metadata.given_name ||
+    metadata.name?.split(' ')[0] ||
+    emailPrefix ||
+    'User';
+
+  const lastName =
+    metadata.last_name ||
+    metadata.family_name ||
+    metadata.name?.split(' ').slice(1).join(' ') ||
+    '';
+
+  return {
+    first_name: String(firstName).trim() || 'User',
+    last_name: String(lastName).trim(),
+  };
+};
+
+const stableStringify = (value: unknown): string => {
+  const normalize = (input: any): any => {
+    if (input === null || input === undefined) return input;
+    if (Array.isArray(input)) return input.map(normalize);
+    if (typeof input !== 'object') return input;
+
+    const keys = Object.keys(input).sort();
+    const result: Record<string, any> = {};
+    for (const key of keys) {
+      result[key] = normalize(input[key]);
+    }
+    return result;
+  };
+
+  return JSON.stringify(normalize(value));
+};
+
 /**
  * Update user profile
  * If profile doesn't exist, this will create it (for existing users who signed up before profile feature)
@@ -60,39 +102,49 @@ export const updateUserProfile = async (userId: string, updates: UpdateUserProfi
       throw new Error('No updates provided');
     }
 
-    // First, try to update the existing profile
-    const { data, error, count } = await supabase
+    // Check whether the profile already exists so we can avoid accidental
+    // insert/upsert fallbacks that can trip RLS on existing rows.
+    const { data: existingProfile, error: existingProfileError } = await supabase
       .from('user_profiles')
-      .update(updates)
+      .select('id')
       .eq('user_id', userId)
-      .select();
+      .maybeSingle();
 
-    // If update failed with an error, throw it
-    if (error) throw error;
+    if (existingProfileError) throw existingProfileError;
 
-    // If no rows were updated (profile doesn't exist), create it
-    if (!data || data.length === 0) {
-      console.log('[UserProfile] No profile found, creating new profile for user:', userId);
-      
-      // If creating a profile for the first time, a name is strictly required
-      if (!updates.first_name && !updates.last_name) {
-        throw new Error('Profile does not exist yet. Please save your profile name before updating security settings.');
-      }
+    if (!existingProfile) {
+      console.log('[UserProfile] No profile found, creating profile for user:', userId);
 
-      // Create a new profile with the updates
-      // Use provided values or empty strings as fallback
-      const createResult = await createUserProfile({
+      const fallbackNames = await deriveFallbackProfileNames();
+      return await createUserProfile({
         user_id: userId,
-        first_name: updates.first_name || '',
-        last_name: updates.last_name || '',
-        ...updates
+        first_name: updates.first_name || fallbackNames.first_name,
+        last_name: updates.last_name || fallbackNames.last_name,
+        ...updates,
       });
-
-      return createResult;
     }
 
-    // Return the first (and should be only) updated record
-    return { data: data[0], error: null };
+    // Update the existing profile by primary key, then refetch it explicitly.
+    // This avoids relying on UPDATE ... RETURNING behavior, which has been
+    // inconsistent in this settings flow.
+    const { error } = await supabase
+      .from('user_profiles')
+      .update(updates)
+      .eq('id', existingProfile.id);
+
+    if (error) throw error;
+
+    const { data: refreshedProfile, error: refreshError } = await getUserProfile(userId);
+    if (refreshError) throw refreshError;
+    if (!refreshedProfile) {
+      throw new Error('Profile save could not be confirmed.');
+    }
+
+    if (updates.settings && stableStringify(refreshedProfile.settings || null) !== stableStringify(updates.settings)) {
+      throw new Error('Profile settings did not persist. Please try again.');
+    }
+
+    return { data: refreshedProfile, error: null };
   } catch (error) {
     console.error('Error updating user profile:', error);
     return { data: null, error };

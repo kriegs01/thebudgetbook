@@ -161,7 +161,7 @@ const Auth: React.FC = () => {
                 <Logo className="text-6xl" />
             </div>
           <p className="text-gray-600 mt-4">
-            {mode === 'login' ? 'Welcome back, bud!' : mode === 'signup' ? "Let's get you started!" : "No worries, we'll fix it!"}
+            {mode === 'login' ? 'Welcome back, bud!' : mode === 'signup' ? "Let's get you started!" : "Let’s get you back in!"}
           </p>
         </div>
 
