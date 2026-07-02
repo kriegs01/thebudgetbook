@@ -930,7 +930,8 @@ export const createTransfer = async (
   destinationAccountId: string,
   amount: number,
   date: string,
-  feeAmount: number = 0
+  feeAmount: number = 0,
+  walletId?: string | null
 ) => {
   try {
     // Fetch the current authenticated user — required for RLS compliance on insert
@@ -940,12 +941,13 @@ export const createTransfer = async (
     const { data: outgoingTx, error: outgoingError } = await supabase
       .from(getTableName('transactions'))
       .insert([{
-        name: 'Transfer Out',
+        name: walletId ? 'Stash Top-up' : 'Transfer Out',
         date,
         amount: Math.abs(amount), // Positive for source account (money out)
         payment_method_id: sourceAccountId,
         transaction_type: 'transfer',
-        notes: `Transfer to another account`,
+        notes: walletId ? 'Top-up to Stash wallet' : 'Transfer to another account',
+        wallet_id: walletId,
         user_id: user.id // Required by RLS policy
       }])
       .select()
@@ -957,12 +959,13 @@ export const createTransfer = async (
     const { data: incomingTx, error: incomingError } = await supabase
       .from(getTableName('transactions'))
       .insert([{
-        name: 'Transfer In',
+        name: walletId ? 'Stash Top-up' : 'Transfer In',
         date,
         amount: -Math.abs(amount), // Negative for receiving account (money in)
         payment_method_id: destinationAccountId,
         transaction_type: 'transfer',
-        notes: `Transfer from another account`,
+        notes: walletId ? 'Top-up from source account' : 'Transfer from another account',
+        wallet_id: walletId,
         related_transaction_id: outgoingTx.id,
         user_id: user.id // Required by RLS policy
       }])
