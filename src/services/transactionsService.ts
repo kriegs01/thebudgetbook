@@ -942,7 +942,7 @@ export const createTransfer = async (
       .from(getTableName('transactions'))
       .insert([{
         name: walletId ? 'Stash Top-up' : 'Transfer Out',
-        date,
+        date: new Date(date).toISOString(),
         amount: Math.abs(amount), // Positive for source account (money out)
         payment_method_id: sourceAccountId,
         transaction_type: 'transfer',
@@ -960,7 +960,7 @@ export const createTransfer = async (
       .from(getTableName('transactions'))
       .insert([{
         name: walletId ? 'Stash Top-up' : 'Transfer In',
-        date,
+        date: new Date(date).toISOString(),
         amount: -Math.abs(amount), // Negative for receiving account (money in)
         payment_method_id: destinationAccountId,
         transaction_type: 'transfer',
@@ -987,7 +987,7 @@ export const createTransfer = async (
         .from(getTableName('transactions'))
         .insert([{
           name: 'Transfer Fee',
-          date,
+          date: new Date(date).toISOString(),
           amount: Math.abs(feeAmount), // Positive because money is leaving (expense)
           payment_method_id: sourceAccountId,
           transaction_type: 'payment', // Logged as a standard expense
