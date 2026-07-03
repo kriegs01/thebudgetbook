@@ -1280,7 +1280,7 @@ const Installments: React.FC<InstallmentsProps> = ({ installments, accounts, bil
       {/* Overdraft Alert Modal */}
       {overdraftPrompt && (
         <div className="fixed inset-0 z-[1500] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md">
-          <div className="bg-white dark:bg-gray-900 rounded-[2.5rem] w-full max-w-md p-10 shadow-2xl animate-in zoom-in-95 relative">
+          <div className="bg-gray-50 dark:bg-gray-900 rounded-[2.5rem] w-full max-w-md p-10 shadow-2xl animate-in zoom-in-95 relative border-4 border-black">
             {/* Close Button */}
             <button
               onClick={closeOverdraftPrompt}
@@ -1327,7 +1327,7 @@ const Installments: React.FC<InstallmentsProps> = ({ installments, accounts, bil
             </p>
 
             {/* Balance Display */}
-            <div className="bg-gray-50 dark:bg-gray-800/50 rounded-2xl p-4 mb-6 space-y-2 border-2 border-black">
+            <div className="bg-white dark:bg-gray-800/50 rounded-2xl p-4 mb-6 space-y-2 border-2 border-black">
               <div className="flex justify-between items-center">
                 <span className="text-[10px] font-black text-gray-600 dark:text-gray-400 uppercase tracking-widest">Current Balance</span>
                 <span className="font-black text-gray-900 dark:text-gray-100">{formatCurrency(overdraftPrompt.currentBalance)}</span>
