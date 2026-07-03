@@ -1290,9 +1290,9 @@ const Installments: React.FC<InstallmentsProps> = ({ installments, accounts, bil
             </button>
 
             {/* Icon */}
-            <div className="flex justify-center mb-4">
+            <div className="absolute left-1/2 top-0 flex h-20 w-20 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border-[4px] border-black bg-[#ff7a59] text-white shadow-[6px_6px_0px_0px_rgba(0,0,0,1)]">
               <div className="bg-orange-100 dark:bg-orange-900/30 rounded-full p-5 border-4 border-orange-500">
-                <Hand className="w-8 h-8 text-orange-500" />
+                <Hand className="w-10 h-10" />
               </div>
             </div>
 
