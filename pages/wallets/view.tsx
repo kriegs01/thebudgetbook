@@ -136,7 +136,7 @@ const WalletView: React.FC<WalletViewProps> = ({ accounts }) => {
   }
 
   return (
-    <div className="space-y-8 animate-in fade-in duration-500 py-8">
+    <div className="space-y-8 animate-in fade-in duration-500 py-10">
       {/* Wallet info card */}
       <div className="bg-white dark:bg-gray-800 rounded-2xl p-8 border-[3px] border-black shadow-[8px_8px_0px_0px_rgba(0,0,0,1)]">
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
