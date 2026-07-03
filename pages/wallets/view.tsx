@@ -165,9 +165,9 @@ const WalletView: React.FC<WalletViewProps> = ({ accounts }) => {
         <div className="flex justify-between items-center">
             <Link
                 to="/wallets"
-                className="p-2 rounded-xl bg-white dark:bg-gray-900 shadow-sm border border-gray-100 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+                className="p-3 rounded-2xl border-[3px] border-black bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-100 shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] transition-all hover:translate-x-[1px] hover:translate-y-[1px] hover:shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]"
             >
-                <ArrowLeft className="w-5 h-5 text-gray-700 dark:text-gray-300 transition-colors" />
+                <ArrowLeft className="w-5 h-5" />
             </Link>
             <button
                 className={`flex items-center gap-2 text-white px-4 py-2 rounded-lg font-bold border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] active:shadow-[1px_1px_0px_0px_rgba(0,0,0,1)] transition-all text-sm ${getAccentClasses('bg')}`}
@@ -180,7 +180,7 @@ const WalletView: React.FC<WalletViewProps> = ({ accounts }) => {
         <h2 className="text-2xl font-black text-gray-900 dark:text-gray-100 mt-4">Transactions</h2>
       </div>
 
-      <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800 overflow-hidden transition-colors">
+      <div className="bg-white dark:bg-gray-900 rounded-2xl border-[3px] border-black shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] overflow-hidden transition-colors">
         {transactions.length === 0 ? (
           <div className="px-8 py-12 text-center">
             <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-gray-100 dark:bg-gray-800 mb-4 transition-colors">
