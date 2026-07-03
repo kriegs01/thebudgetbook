@@ -150,7 +150,7 @@ export default function PeoplePage({ onStartChat }: PeoplePageProps) {
       linkedPeople.forEach(p => {
         const prof = friendProfiles.find(lp => lp.user_id === p.friend_user_id);
         if (prof) {
-          const correctName = `${prof.first_name} ${prof.last_name}${prof.username ? ` (@${prof.username})` : ''}`;
+          const correctName = `${prof.first_name} ${prof.last_name}`;
           if (p.name !== correctName) {
             needsUpdate = true;
             const isTestMode = localStorage.getItem('test_environment_enabled') === 'true';
@@ -178,7 +178,7 @@ export default function PeoplePage({ onStartChat }: PeoplePageProps) {
   const handleCreateProfileForBudee = async (prof: SupabaseUserProfile) => {
     setIsSubmitting(true);
     try {
-      const newName = `${prof.first_name} ${prof.last_name}${prof.username ? ` (@${prof.username})` : ''}`;
+      const newName = `${prof.first_name} ${prof.last_name}`;
       const { data: newPerson, error: createErr } = await createPerson({ name: newName } as any);
       
       if (createErr) {
@@ -197,7 +197,9 @@ export default function PeoplePage({ onStartChat }: PeoplePageProps) {
 
         if (updateErr) {
           console.error("Linking failed:", updateErr);
-          alert(`Profile created, but failed to link Budee: ${updateErr.message}\n\nPlease check if 'friend_user_id' exists in the database.`);
+          alert(`Profile created, but failed to link Budee: ${updateErr.message}
+
+Please check if 'friend_user_id' exists in the database.`);
         }
         queryClient.invalidateQueries({ queryKey: socialKeys.localPeople() });
       }
@@ -218,7 +220,7 @@ export default function PeoplePage({ onStartChat }: PeoplePageProps) {
     try {
       const personRecord = people.find(p => p.id === selectedLocalPersonToLink);
       if (!personRecord) return;
-      const newName = `${linkBudeeModal.first_name} ${linkBudeeModal.last_name}${linkBudeeModal.username ? ` (@${linkBudeeModal.username})` : ''}`;
+      const newName = `${linkBudeeModal.first_name} ${linkBudeeModal.last_name}`;
       const isTestMode = localStorage.getItem('test_environment_enabled') === 'true';
       const peopleTable = isTestMode ? 'people_test' : 'people';
       
@@ -229,7 +231,9 @@ export default function PeoplePage({ onStartChat }: PeoplePageProps) {
 
       if (updateErr) {
         console.error("Linking failed at database level:", updateErr);
-        alert(`Failed to link profile: ${updateErr.message}\n\nPlease ensure 'friend_user_id' is added to the database.`);
+        alert(`Failed to link profile: ${updateErr.message}
+
+Please ensure 'friend_user_id' is added to the database.`);
         return;
       }
 
@@ -1003,8 +1007,8 @@ export default function PeoplePage({ onStartChat }: PeoplePageProps) {
 
         {/* ── Header & Controllers ───────────────────────────────────────── */}
         <PageHeader 
-          title="People"
-          subtitle="Manage shared tracking and active loans"
+          title="Budees"
+          subtitle="For the big goals and the little IOUs."
           icon={
             <div className={`w-14 h-14 rounded-2xl flex items-center justify-center text-white border-[3px] border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] -rotate-3 transition-all hover:rotate-0 hover:scale-110 z-10 relative ${getAccentClasses('bg')}`}>
               <Users className="w-7 h-7" />
@@ -1033,14 +1037,14 @@ export default function PeoplePage({ onStartChat }: PeoplePageProps) {
                 className={`flex items-center gap-2 bg-white dark:bg-gray-800 border px-5 py-3 rounded-xl font-bold transition-all shadow-sm ${getAccentClasses('text')} ${getAccentClasses('borderLight')} ${getAccentClasses('hoverLight')}`}
               >
                 <Search className="w-4 h-4" />
-                <span className="hidden sm:inline">Find Friends</span>
+                <span className="hidden sm:inline">Find Budees</span>
               </button>
               <button 
                 onClick={() => setShowAddModal(true)} 
                 className={`flex items-center gap-2 text-white px-5 py-3 rounded-xl font-bold transition-all shadow-md dark:shadow-none ${getAccentClasses('bg')} ${getAccentClasses('shadow')}`}
               >
                 <Plus className="w-4 h-4" />
-                <span className="hidden sm:inline">New Person</span>
+                <span className="hidden sm:inline">New Budee</span>
               </button>
             </div>
           }
@@ -1051,14 +1055,14 @@ export default function PeoplePage({ onStartChat }: PeoplePageProps) {
             onClick={() => setMainTab('profiles')}
             className={`pb-4 text-sm font-black uppercase tracking-widest transition-colors relative ${mainTab === 'profiles' ? getAccentClasses('text') : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-300'}`}
           >
-            Local Profiles
+            Tabs
             {mainTab === 'profiles' && <span className={`absolute bottom-0 left-0 w-full h-0.5 rounded-t-full ${getAccentClasses('indicator')}`}></span>}
           </button>
           <button
             onClick={() => setMainTab('budies')}
             className={`pb-4 text-sm font-black uppercase tracking-widest transition-colors relative ${mainTab === 'budies' ? getAccentClasses('text') : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-300'}`}
           >
-            My Budies
+            My Budees
             {mainTab === 'budies' && <span className={`absolute bottom-0 left-0 w-full h-0.5 rounded-t-full ${getAccentClasses('indicator')}`}></span>}
           </button>
         </div>
@@ -1073,7 +1077,7 @@ export default function PeoplePage({ onStartChat }: PeoplePageProps) {
             <h3 className="text-lg font-black text-gray-900 dark:text-gray-100 uppercase tracking-widest mb-1">No people found</h3>
             <p className="text-sm text-gray-500 dark:text-gray-400 mb-6">Add someone to start tracking shared expenses and loans.</p>
             <button onClick={() => setShowAddModal(true)} className={`px-6 py-3 rounded-xl font-bold transition-colors ${getAccentClasses('lightBg')}`}>
-              Add your first person
+              Add your first budee
             </button>
           </div>
         ) : viewMode === 'grid' ? (
@@ -1097,10 +1101,8 @@ export default function PeoplePage({ onStartChat }: PeoplePageProps) {
                     </div>
                     <div className="flex flex-col min-w-0 pr-8">
                       <h3 className="text-lg font-black text-gray-900 dark:text-gray-100 truncate">{person.name}</h3>
-                      {budeeProf && (
-                        <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mt-0.5">
-                          {budeeProf.username ? `@${budeeProf.username}` : budeeProf.email}
-                        </p>
+                      {budeeProf?.email && (
+                        <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mt-0.5">{budeeProf.email}</p>
                       )}
                       {person.friend_user_id && fStatus === 'accepted' && (
                         <span className="inline-flex items-center gap-1 w-fit mt-0.5 text-[9px] font-bold px-2 py-0.5 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 rounded uppercase tracking-widest transition-colors">
@@ -1162,10 +1164,10 @@ export default function PeoplePage({ onStartChat }: PeoplePageProps) {
                           </span>
                         )}
                       </div>
-                      {budeeProf ? (
-                        <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">{budeeProf.username ? `@${budeeProf.username}` : budeeProf.email}</p>
-                      ) : (
+                      {!budeeProf ? (
                         <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">{stats.txCount} transactions</p>
+                      ) : (
+                        <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">{budeeProf.email}</p>
                       )}
                     </div>
                   </div>
@@ -1209,7 +1211,7 @@ export default function PeoplePage({ onStartChat }: PeoplePageProps) {
               <h3 className="text-lg font-black text-gray-900 dark:text-gray-100 uppercase tracking-widest mb-1">No Budies Yet</h3>
               <p className="text-sm text-gray-500 dark:text-gray-400 mb-6">Search and connect with friends to see them here.</p>
               <button onClick={() => setShowFindFriendsModal(true)} className="bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 px-6 py-3 rounded-xl font-bold hover:bg-indigo-100 dark:hover:bg-indigo-900/50 transition-colors">
-                Find Friends
+                Find Budees
               </button>
             </div>
           ) : (
@@ -1233,7 +1235,7 @@ export default function PeoplePage({ onStartChat }: PeoplePageProps) {
                           </span>
                         )}
                       </div>
-                      <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">{prof.username ? `@${prof.username}` : prof.email}</p>
+                      <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">{prof.email}</p>
                     </div>
                   </div>
                   <div className="flex items-center gap-3">
@@ -1315,7 +1317,7 @@ export default function PeoplePage({ onStartChat }: PeoplePageProps) {
               <X className="w-5 h-5" />
             </button>
             <h2 className="text-xl font-black text-gray-900 dark:text-gray-100 mb-1 uppercase tracking-tight">Find Friends</h2>
-            <p className="text-sm text-gray-500 dark:text-gray-400 mb-6 font-medium">Search by email or @handle to connect.</p>
+            <p className="text-sm text-gray-500 dark:text-gray-400 mb-6 font-medium">Search by name, email, or @handle to connect.</p>
 
             <div className="relative mb-6">
               <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
@@ -1362,7 +1364,7 @@ export default function PeoplePage({ onStartChat }: PeoplePageProps) {
                       </div>
                       {sentRequests.has(user.user_id) ? (
                         <p className="text-[10px] font-bold text-yellow-600 dark:text-yellow-400 uppercase tracking-widest text-right">
-                          Waiting confirmation from<br />{user.first_name} {user.last_name}{user.username ? ` (@${user.username})` : ''}
+                          Waiting confirmation from<br />{user.first_name} {user.last_name}
                         </p>
                       ) : (
                         <button 
