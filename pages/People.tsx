@@ -197,9 +197,7 @@ export default function PeoplePage({ onStartChat }: PeoplePageProps) {
 
         if (updateErr) {
           console.error("Linking failed:", updateErr);
-          alert(`Profile created, but failed to link Budee: ${updateErr.message}
-
-Please check if 'friend_user_id' exists in the database.`);
+          alert(`Profile created, but failed to link Budee: ${updateErr.message}\n\nPlease check if 'friend_user_id' exists in the database.`);
         }
         queryClient.invalidateQueries({ queryKey: socialKeys.localPeople() });
       }
@@ -231,9 +229,7 @@ Please check if 'friend_user_id' exists in the database.`);
 
       if (updateErr) {
         console.error("Linking failed at database level:", updateErr);
-        alert(`Failed to link profile: ${updateErr.message}
-
-Please ensure 'friend_user_id' is added to the database.`);
+        alert(`Failed to link profile: ${updateErr.message}\n\nPlease ensure 'friend_user_id' is added to the database.`);
         return;
       }
 
@@ -1101,8 +1097,10 @@ Please ensure 'friend_user_id' is added to the database.`);
                     </div>
                     <div className="flex flex-col min-w-0 pr-8">
                       <h3 className="text-lg font-black text-gray-900 dark:text-gray-100 truncate">{person.name}</h3>
-                      {budeeProf?.email && (
-                        <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mt-0.5">{budeeProf.email}</p>
+                      {budeeProf && (
+                        <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mt-0.5">
+                          {budeeProf.username ? `@${budeeProf.username}` : budeeProf.email}
+                        </p>
                       )}
                       {person.friend_user_id && fStatus === 'accepted' && (
                         <span className="inline-flex items-center gap-1 w-fit mt-0.5 text-[9px] font-bold px-2 py-0.5 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 rounded uppercase tracking-widest transition-colors">
@@ -1164,10 +1162,10 @@ Please ensure 'friend_user_id' is added to the database.`);
                           </span>
                         )}
                       </div>
-                      {!budeeProf ? (
-                        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">{stats.txCount} transactions</p>
+                      {budeeProf ? (
+                        <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">{budeeProf.username ? `@${budeeProf.username}` : budeeProf.email}</p>
                       ) : (
-                        <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">{budeeProf.email}</p>
+                        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">{stats.txCount} transactions</p>
                       )}
                     </div>
                   </div>
@@ -1235,7 +1233,7 @@ Please ensure 'friend_user_id' is added to the database.`);
                           </span>
                         )}
                       </div>
-                      <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">{prof.email}</p>
+                      <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">{prof.username ? `@${prof.username}` : prof.email}</p>
                     </div>
                   </div>
                   <div className="flex items-center gap-3">
@@ -1364,7 +1362,7 @@ Please ensure 'friend_user_id' is added to the database.`);
                       </div>
                       {sentRequests.has(user.user_id) ? (
                         <p className="text-[10px] font-bold text-yellow-600 dark:text-yellow-400 uppercase tracking-widest text-right">
-                          Waiting confirmation from<br />{user.first_name} {user.last_name}
+                          Waiting confirmation from<br />{user.first_name} {user.last_name}{user.username ? ` (@${user.username})` : ''}
                         </p>
                       ) : (
                         <button 
