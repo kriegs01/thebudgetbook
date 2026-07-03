@@ -860,10 +860,8 @@ export const getTransactionsByPaymentSchedule = async (scheduleId: string) => {
 
 /**
  * Delete a transaction and revert payment schedule status if linked.
- * Deletes the transaction first, then recalculates the schedule by re-summing all
- * remaining linked transactions. This is more reliable than delta subtraction because
- * it is immune to stale amount_paid values caused by edits, double-counting, or any
- * other prior inconsistency.
+ * Deletes any paired transfer counterpart and related transfer fee rows first,
+ * then deletes the transaction and recalculates schedules from all affected transactions.
  * Note: Account balances are calculated dynamically from transactions, so no balance reversion needed.
  */
 export const deleteTransactionAndRevertSchedule = async (transactionId: string) => {
@@ -875,26 +873,100 @@ export const deleteTransactionAndRevertSchedule = async (transactionId: string) 
       throw new Error('Transaction not found');
     }
 
-    const scheduleId = transaction.payment_schedule_id;
     const user = await getCachedUser();
+    const scheduleIds = new Set<string>();
+    if (transaction.payment_schedule_id) scheduleIds.add(transaction.payment_schedule_id);
 
     // If this transaction has a linked credit_payment counterpart, delete it first.
     // The credit_payment row stores `related_transaction_id = transactionId` so we can
     // find it with a simple query and remove it before the primary transaction is gone.
-    const { data: counterparts } = await supabase
+    const { data: creditCounterparts } = await supabase
       .from(getTableName('transactions'))
       .select('id')
       .eq('related_transaction_id', transactionId)
       .eq('transaction_type', 'credit_payment')
       .eq('user_id', user.id);
 
-    if (counterparts && counterparts.length > 0) {
-      for (const cp of counterparts) {
+    if (creditCounterparts && creditCounterparts.length > 0) {
+      for (const cp of creditCounterparts) {
         const { error: cpDeleteError } = await deleteTransaction(cp.id);
         if (cpDeleteError) {
           console.error('[Transactions] Failed to delete credit_payment counterpart:', cp.id, cpDeleteError);
         } else {
           console.log('[Transactions] Deleted credit_payment counterpart:', cp.id);
+        }
+      }
+    }
+
+    // If this is a transfer, delete the paired transfer counterpart and any transfer fees.
+    const deletedTransactionIds = [transactionId];
+    if (transaction.transaction_type === 'transfer') {
+      const transferCounterpartIds = new Set<string>();
+      if (transaction.related_transaction_id) {
+        transferCounterpartIds.add(transaction.related_transaction_id);
+      }
+
+      const { data: reverseLinks, error: reverseLinksError } = await supabase
+        .from(getTableName('transactions'))
+        .select('id')
+        .eq('related_transaction_id', transactionId)
+        .eq('transaction_type', 'transfer')
+        .eq('user_id', user.id);
+
+      if (reverseLinksError) {
+        throw reverseLinksError;
+      }
+      if (reverseLinks) {
+        for (const row of reverseLinks) {
+          transferCounterpartIds.add(row.id);
+        }
+      }
+
+      if (transferCounterpartIds.size > 0) {
+        const counterpartIdsArray = [...transferCounterpartIds];
+        const { data: counterpartRows, error: counterpartFetchError } = await supabase
+          .from(getTableName('transactions'))
+          .select('*')
+          .in('id', counterpartIdsArray)
+          .eq('user_id', user.id);
+
+        if (counterpartFetchError) {
+          throw counterpartFetchError;
+        }
+
+        if (counterpartRows && counterpartRows.length > 0) {
+          for (const counterpart of counterpartRows) {
+            if (counterpart.payment_schedule_id) scheduleIds.add(counterpart.payment_schedule_id);
+            const { error: counterpartDeleteError } = await deleteTransaction(counterpart.id);
+            if (counterpartDeleteError) {
+              throw counterpartDeleteError;
+            }
+            deletedTransactionIds.push(counterpart.id);
+          }
+        }
+
+        // Delete any transfer fee transactions associated with the transfer.
+        const feeRelatedIds = [transactionId, ...counterpartIdsArray];
+        const { data: feeTxs, error: feeTxsError } = await supabase
+          .from(getTableName('transactions'))
+          .select('id')
+          .eq('user_id', user.id)
+          .in('related_transaction_id', feeRelatedIds)
+          .eq('transaction_type', 'payment')
+          .like('notes', '%Bank fee for transfer%');
+
+        if (feeTxsError) {
+          throw feeTxsError;
+        }
+
+        if (feeTxs && feeTxs.length > 0) {
+          for (const feeTx of feeTxs) {
+            const { error: feeDeleteError } = await deleteTransaction(feeTx.id);
+            if (feeDeleteError) {
+              throw feeDeleteError;
+            }
+            deletedTransactionIds.push(feeTx.id);
+          }
         }
       }
     }
@@ -905,14 +977,14 @@ export const deleteTransactionAndRevertSchedule = async (transactionId: string) 
 
     console.log('[Transactions] Transaction deleted successfully:', transactionId);
 
-    // Recalculate the linked payment schedule from all remaining transactions.
+    // Recalculate any linked payment schedules from remaining transactions.
     // By re-summing after deletion we always get a correct amount_paid / status,
     // regardless of any prior drift between the stored amount_paid and actual transactions.
-    if (scheduleId) {
+    for (const scheduleId of scheduleIds) {
       await recalculateScheduleFromTransactions(scheduleId);
     }
 
-    return { error: null };
+    return { error: null, deletedTransactionIds };
   } catch (error) {
     console.error('Error deleting transaction and reverting schedule:', error);
     return { error };
@@ -1074,9 +1146,20 @@ export const batchDeleteTransactions = async (
   ids: string[]
 ): Promise<{ errors: { id: string; error: unknown }[] }> => {
   const errors: { id: string; error: unknown }[] = [];
+  const deletedIds = new Set<string>();
+
   for (const id of ids) {
-    const { error } = await deleteTransactionAndRevertSchedule(id);
-    if (error) errors.push({ id, error });
+    if (deletedIds.has(id)) continue;
+
+    const result = await deleteTransactionAndRevertSchedule(id);
+    if (result.deletedTransactionIds) {
+      for (const deletedId of result.deletedTransactionIds) {
+        deletedIds.add(deletedId);
+      }
+    }
+    if (result.error) {
+      errors.push({ id, error: result.error });
+    }
   }
   return { errors };
 };
