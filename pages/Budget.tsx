@@ -6,7 +6,7 @@ import { BudgetItem, Account, Biller, PaymentSchedule, CategorizedSetupItem, Sav
 import { Plus, Check, ChevronDown, Trash2, Save, Wallet as WalletIcon, ArrowLeft, Upload, CheckCircle2, X, AlertTriangle, Info, Archive, RotateCcw, List } from 'lucide-react';
 import { PinProtectedAction } from '../src/components/PinProtectedAction';
 import { createBudgetSetupFrontend, updateBudgetSetupFrontend } from '../src/services/budgetSetupsService';
-import { createTransaction, getAllTransactions, updateTransaction, updateTransactionAndSyncSchedule, createPaymentScheduleTransaction, uploadTransactionReceipt, getTransactionsByPaymentSchedule, getReceiptSignedUrl, deleteTransactionAndRevertSchedule, getAllStashTransactions } from '../src/services/transactionsService';
+import { createTransaction, getAllTransactions, updateTransaction, updateTransactionAndSyncSchedule, createPaymentScheduleTransaction, uploadTransactionReceipt, getTransactionsByPaymentSchedule, getReceiptSignedUrl, deleteTransactionAndRevertSchedule, getAllStashTransactions, createTransfer } from '../src/services/transactionsService';
 import type { SupabaseTransaction, SupabaseMonthlyPaymentSchedule } from '../src/types/supabase';
 import { aggregateCreditCardPurchases } from '../src/utils/paymentStatus';
 import { getScheduleExpectedAmount } from '../src/utils/linkedAccountUtils';
@@ -553,27 +553,46 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
     if (!sourceAccountId) return;
     setFundSubmitting(true);
     try {
-      const stashTxBase = {
-        name: `Stash top-up - ${walletName} (${selectedMonth} ${selectedYear})`,
-        amount,
-        date: combineDateWithCurrentTime(fundForm.date),
-        payment_method_id: sourceAccountId,
-        transaction_type: 'withdraw' as const,
-        notes: fundForm.notes || null,
-        payment_schedule_id: null,
-        related_transaction_id: null,
-        receipt_url: null,
-      };
-      let creationResult = await createTransaction({ ...stashTxBase, wallet_id: walletId });
-      if (creationResult.error) {
-        const errMsg = JSON.stringify(creationResult.error).toLowerCase();
-        if (errMsg.includes('wallet_id') || errMsg.includes('42703') || errMsg.includes('column')) {
-          creationResult = await createTransaction(stashTxBase);
+      const destAccountId = fundModal.wallet.accountId;
+      const walletTxDate = combineDateWithCurrentTime(fundForm.date);
+      let incomingTx: SupabaseTransaction | null = null;
+
+      if (destAccountId && destAccountId !== sourceAccountId) {
+        const transferResult = await createTransfer(
+          sourceAccountId,
+          destAccountId,
+          amount,
+          walletTxDate,
+          0,
+          walletId
+        );
+        if (transferResult.error) throw transferResult.error;
+        incomingTx = transferResult.data?.incoming || null;
+      } else {
+        const stashTxBase = {
+          name: `Stash top-up - ${walletName} (${selectedMonth} ${selectedYear})`,
+          amount,
+          date: walletTxDate,
+          payment_method_id: sourceAccountId,
+          transaction_type: 'withdraw' as const,
+          notes: fundForm.notes || null,
+          payment_schedule_id: null,
+          related_transaction_id: null,
+          receipt_url: null,
+        };
+        let creationResult = await createTransaction({ ...stashTxBase, wallet_id: walletId });
+        if (creationResult.error) {
+          const errMsg = JSON.stringify(creationResult.error).toLowerCase();
+          if (errMsg.includes('wallet_id') || errMsg.includes('42703') || errMsg.includes('column')) {
+            creationResult = await createTransaction(stashTxBase);
+          }
         }
+        const { data: newTx, error } = creationResult;
+        if (error) throw error;
+        incomingTx = newTx ? { ...(newTx as SupabaseTransaction), wallet_id: walletId } : null;
       }
-      const { data: newTx, error } = creationResult;
-      if (error) throw error;
-      const safeNewTx: SupabaseTransaction | null = newTx ? { ...(newTx as SupabaseTransaction), wallet_id: walletId } : null;
+
+      const safeNewTx: SupabaseTransaction | null = incomingTx;
       if (safeNewTx) {
         setStashTopUps(prev => [safeNewTx, ...prev.filter(t => t.id !== safeNewTx.id)]);
       }

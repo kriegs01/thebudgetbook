@@ -947,7 +947,6 @@ export const createTransfer = async (
         payment_method_id: sourceAccountId,
         transaction_type: 'transfer',
         notes: walletId ? 'Top-up to Stash wallet' : 'Transfer to another account',
-        wallet_id: walletId,
         user_id: user.id // Required by RLS policy
       }])
       .select()
