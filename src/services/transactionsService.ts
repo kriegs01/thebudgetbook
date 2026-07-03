@@ -804,6 +804,12 @@ export const createPaymentScheduleTransaction = async (
   try {
     const user = await getCachedUser();
 
+    await enforceDebitOverdraftBlock(
+      user.id,
+      transaction.paymentMethodId,
+      toOutflowAmount(transaction.amount)
+    );
+
     // Create the transaction with payment_schedule_id
     const transactionData: CreateTransactionInput = {
       name: transaction.name,
@@ -1008,6 +1014,12 @@ export const createTransfer = async (
   try {
     // Fetch the current authenticated user — required for RLS compliance on insert
     const user = await getCachedUser();
+
+    await enforceDebitOverdraftBlock(
+      user.id,
+      sourceAccountId,
+      toOutflowAmount(amount) + toOutflowAmount(feeAmount)
+    );
 
     // Create the outgoing transaction (positive - money leaving)
     const { data: outgoingTx, error: outgoingError } = await supabase
