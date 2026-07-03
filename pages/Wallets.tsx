@@ -21,7 +21,7 @@ const PageHeader: React.FC<{
 
   return (
     <header className={`${isMobile ? 'pt-16' : 'pt-12'} flex flex-row items-center justify-between gap-6 mb-4`}>
-      <div className="flex flex-1 items-center gap-6">
+      <div className="flex-1 flex items-center gap-6">
         {backButton}
         <div className="flex-1">
           <div className="relative inline-block">
@@ -290,7 +290,7 @@ const WalletsPage: React.FC<WalletsPageProps> = ({ accounts }) => {
                     </button>
                     <button
                       onClick={() => openEditModal(wallet)}
-                      className="flex-1 flex items-center justify-center space-x-1 py-2 rounded-lg bg-amber-100 dark:bg-amber-800/20 border-2 border-black font-bold text-sm text-black dark:text-white shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] transition-all"
+                      className="flex-1 flex items-center justify-center space-x-1 py-2 rounded-lg bg-amber-100 dark:bg-yellow-400 dark:hover:bg-yellow-500 border-2 border-black font-bold text-sm text-black dark:text-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] transition-all"
                     >
                       <Pencil className="w-4 h-4" />
                       <span>Edit</span>

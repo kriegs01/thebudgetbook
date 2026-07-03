@@ -62,15 +62,15 @@ export const ThemeProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         indicator: 'bg-teal-600 dark:bg-teal-400'
       },
       amber: {
-        text: 'text-amber-600 dark:text-yellow-300',
-        bg: 'bg-amber-500 hover:bg-amber-600 text-black dark:bg-yellow-400 dark:hover:bg-yellow-500',
-        lightBg: 'bg-amber-50 dark:bg-yellow-400/20 text-amber-600 dark:text-yellow-300',
-        border: 'border-amber-500 dark:border-yellow-400',
-        borderLight: 'border-amber-200 dark:border-yellow-800/30',
-        ring: 'focus:ring-amber-500 dark:focus:ring-yellow-400',
+        text: 'text-amber-600 dark:text-amber-400',
+        bg: 'bg-amber-500 hover:bg-amber-600 text-white', // Adjusted specifically for Amber to keep it bright!
+        lightBg: 'bg-amber-50 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400',
+        border: 'border-amber-500',
+        borderLight: 'border-amber-200 dark:border-amber-800/30',
+        ring: 'focus:ring-amber-500',
         shadow: 'shadow-amber-200 dark:shadow-none',
-        hoverLight: 'hover:bg-amber-50 dark:hover:bg-yellow-400/30 hover:text-amber-600 dark:hover:text-yellow-300',
-        indicator: 'bg-amber-500 dark:bg-yellow-400'
+        hoverLight: 'hover:bg-amber-50 dark:hover:bg-amber-900/30 hover:text-amber-600 dark:hover:text-amber-400',
+        indicator: 'bg-amber-500 dark:bg-amber-400'
       }
     };
     return map[accentColor][type];
