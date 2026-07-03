@@ -6,19 +6,19 @@ import { Wallet, Account } from '../types';
 import { getWalletsForCurrentUser, createWallet, updateWallet, deleteWallet } from '../src/services/walletsService';
 import { useTheme } from '../src/contexts/ThemeContext';
 
-/** 
+/**
  * PageHeader component mirroring Dashboard style
  */
-const PageHeader: React.FC<{ 
-  title: string; 
-  subtitle: string; 
-  icon?: React.ReactNode; 
+const PageHeader: React.FC<{
+  title: string;
+  subtitle: string;
+  icon?: React.ReactNode;
   actions?: React.ReactNode;
   backButton?: React.ReactNode;
 }> = ({ title, subtitle, icon, actions, backButton }) => {
   const { getAccentClasses } = useTheme();
   const isMobile = useMediaQuery('(max-width: 767px)');
-  
+
   return (
     <header className={`${isMobile ? 'pt-16' : 'pt-12'} flex flex-row items-center justify-between gap-6 mb-4`}>
       <div className="flex flex-1 items-center gap-6">
@@ -203,7 +203,7 @@ const WalletsPage: React.FC<WalletsPageProps> = ({ accounts }) => {
 
       {!loading && (
         <>
-          <PageHeader 
+          <PageHeader
             title="Wallets"
             subtitle="For the essentials and the plot-twists"
             icon={
@@ -264,7 +264,7 @@ const WalletsPage: React.FC<WalletsPageProps> = ({ accounts }) => {
               {wallets.map((wallet) => (
                 <div
                   key={wallet.id}
-                  className="bg-white dark:bg-gray-900 p-6 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800 hover:shadow-md transition-all flex flex-col space-y-4"
+                  className="bg-white dark:bg-gray-800 p-6 rounded-2xl border-[3px] border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] transition-all flex flex-col space-y-4"
                 >
                   <div className="flex items-start justify-between">
                     <div className="flex items-center space-x-3">
@@ -284,14 +284,14 @@ const WalletsPage: React.FC<WalletsPageProps> = ({ accounts }) => {
                   <div className="flex items-center space-x-2 pt-2 border-t border-gray-50 dark:border-gray-800/50 transition-colors">
                     <button
                       onClick={() => navigate(`/wallets/view?id=${wallet.id}`)}
-                      className="flex-1 flex items-center justify-center space-x-1 py-2 rounded-xl bg-gray-50 dark:bg-gray-800 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 text-gray-600 dark:text-gray-300 hover:text-indigo-600 dark:hover:text-indigo-400 font-bold text-sm transition-colors"
+                      className="flex-1 flex items-center justify-center space-x-1 py-2 rounded-lg bg-gray-100 dark:bg-gray-700 border-2 border-black font-bold text-sm text-black dark:text-white shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] transition-all"
                     >
                       <Eye className="w-4 h-4" />
                       <span>View</span>
                     </button>
                     <button
                       onClick={() => openEditModal(wallet)}
-                      className="flex-1 flex items-center justify-center space-x-1 py-2 rounded-xl bg-gray-50 dark:bg-gray-800 hover:bg-amber-50 dark:hover:bg-amber-900/20 text-gray-600 dark:text-gray-300 hover:text-amber-600 dark:hover:text-amber-400 font-bold text-sm transition-colors"
+                      className="flex-1 flex items-center justify-center space-x-1 py-2 rounded-lg bg-amber-100 dark:bg-amber-800/20 border-2 border-black font-bold text-sm text-black dark:text-white shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] transition-all"
                     >
                       <Pencil className="w-4 h-4" />
                       <span>Edit</span>
@@ -363,10 +363,14 @@ const WalletsPage: React.FC<WalletsPageProps> = ({ accounts }) => {
       {/* Add / Edit Wallet Modal */}
       {showModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-md">
-          <div className="bg-white dark:bg-gray-900 rounded-3xl w-full max-w-md p-8 shadow-2xl transition-colors">
-            <h2 className="text-2xl font-black text-gray-900 dark:text-gray-100 mb-6 uppercase transition-colors">
-              {editingWallet ? 'Edit Wallet' : 'Add Wallet'}
-            </h2>
+          <div className="bg-white dark:bg-gray-800 rounded-2xl w-full max-w-md p-8 border-[3px] border-black shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] transition-colors">
+            <div className="relative mb-8">
+              <h2 className={`font-titan normal-case tracking-tighter text-[2.5rem] leading-none relative z-10 [text-shadow:-1px_-1px_0_#000,1px_-1px_0_#000,-1px_1px_0_#000,1px_1px_0_#000] ${getAccentClasses('text')}`}>
+                {editingWallet ? 'Edit Wallet' : 'Add Wallet'}
+              </h2>
+              <div className={`absolute bottom-0 left-0 h-4 ${getAccentClasses('bg')} opacity-40 -z-0 -rotate-2 -translate-x-2 transition-colors duration-300`} style={{ width: `calc(100% + 1rem)` }} />
+            </div>
+
             <form onSubmit={handleSubmit} className="space-y-4">
               <div>
                 <label className="block text-xs font-bold text-gray-400 dark:text-gray-500 uppercase mb-1 transition-colors">Name</label>
@@ -376,7 +380,7 @@ const WalletsPage: React.FC<WalletsPageProps> = ({ accounts }) => {
                   value={formData.name}
                   onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                   placeholder="e.g. Savings, House Share, Allowance"
-                  className="w-full bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-transparent dark:border-gray-700 rounded-xl p-4 outline-none focus:ring-2 focus:ring-indigo-500 font-bold transition-colors"
+                  className="w-full bg-gray-100 dark:bg-black/20 text-black dark:text-white border-2 border-black rounded-lg p-3 font-bold placeholder:text-black/30 dark:placeholder:text-white/30 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors"
                 />
               </div>
               <div>
@@ -389,7 +393,7 @@ const WalletsPage: React.FC<WalletsPageProps> = ({ accounts }) => {
                   value={formData.amount}
                   onChange={(e) => setFormData({ ...formData, amount: e.target.value })}
                   placeholder="0.00"
-                  className="w-full bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-transparent dark:border-gray-700 rounded-xl p-4 outline-none focus:ring-2 focus:ring-indigo-500 font-bold transition-colors"
+                  className="w-full bg-gray-100 dark:bg-black/20 text-black dark:text-white border-2 border-black rounded-lg p-3 font-bold placeholder:text-black/30 dark:placeholder:text-white/30 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors"
                 />
               </div>
               <div>
@@ -398,7 +402,7 @@ const WalletsPage: React.FC<WalletsPageProps> = ({ accounts }) => {
                   required
                   value={formData.accountId}
                   onChange={(e) => setFormData({ ...formData, accountId: e.target.value })}
-                  className="w-full bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-transparent dark:border-gray-700 rounded-xl p-4 outline-none focus:ring-2 focus:ring-indigo-500 font-bold transition-colors"
+                  className="w-full bg-gray-100 dark:bg-black/20 text-black dark:text-white border-2 border-black rounded-lg p-3 font-bold focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors appearance-none"
                 >
                   <option value="">Select account</option>
                   {accounts.filter((acc) => acc.type !== 'Credit').map((acc) => (
@@ -422,7 +426,7 @@ const WalletsPage: React.FC<WalletsPageProps> = ({ accounts }) => {
                     <button
                       type="button"
                       onClick={() => setShowDeleteConfirm(false)}
-                      className="flex-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 py-2 rounded-xl font-bold text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 text-sm transition-colors"
+                      className="flex-1 py-2 rounded-lg font-bold border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] transition-all bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-black dark:text-white text-sm"
                     >
                       Cancel
                     </button>
@@ -430,7 +434,7 @@ const WalletsPage: React.FC<WalletsPageProps> = ({ accounts }) => {
                       type="button"
                       onClick={handleDelete}
                       disabled={isDeleting}
-                      className="flex-1 bg-red-600 text-white py-2 rounded-xl font-bold hover:bg-red-700 disabled:opacity-60 text-sm"
+                      className="flex-1 py-2 rounded-lg font-bold border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] transition-all bg-red-500 text-white hover:bg-red-600 disabled:opacity-50 text-sm"
                     >
                       {isDeleting ? 'Deleting...' : 'Yes, Delete'}
                     </button>
@@ -442,7 +446,7 @@ const WalletsPage: React.FC<WalletsPageProps> = ({ accounts }) => {
                 <button
                   type="button"
                   onClick={closeModal}
-                  className="flex-1 bg-gray-100 dark:bg-gray-800 py-3 rounded-xl font-bold text-gray-500 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
+                  className="flex-1 py-3 rounded-lg font-bold border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] transition-all bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-black dark:text-white"
                 >
                   Cancel
                 </button>
@@ -450,16 +454,15 @@ const WalletsPage: React.FC<WalletsPageProps> = ({ accounts }) => {
                   <button
                     type="button"
                     onClick={() => setShowDeleteConfirm(true)}
-                    className="flex items-center justify-center space-x-1 px-4 py-3 rounded-xl font-bold text-red-500 dark:text-red-400 bg-red-50 dark:bg-red-900/20 hover:bg-red-100 dark:hover:bg-red-900/40 transition-colors"
+                    className="px-4 py-3 rounded-lg font-bold border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] transition-all bg-red-100 text-red-600 hover:bg-red-200"
                   >
                     <Trash2 className="w-4 h-4" />
-                    <span>Delete</span>
                   </button>
                 )}
                 <button
                   type="submit"
                   disabled={isSubmitting}
-                  className="flex-1 bg-indigo-600 text-white py-3 rounded-xl font-bold hover:bg-indigo-700 disabled:opacity-60"
+                  className={`flex-1 py-3 rounded-lg font-bold border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] transition-all disabled:opacity-50 text-white ${getAccentClasses('bg')}`}
                 >
                   {isSubmitting ? 'Saving...' : editingWallet ? 'Save Changes' : 'Add Wallet'}
                 </button>
