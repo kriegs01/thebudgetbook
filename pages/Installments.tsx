@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import useMediaQuery from '../src/hooks/useMediaQuery';
 import { Installment, Account, ViewMode, Biller } from '../types';
-import { Plus, LayoutGrid, List, Calendar, Wallet, Trash2, X, Upload, AlertTriangle, Edit2, Eye, MoreVertical, Info, ZoomIn, ZoomOut, Download, Archive, CheckCircle2, ChevronDown } from 'lucide-react';
+import { Plus, LayoutGrid, List, Calendar, Wallet, Trash2, X, Upload, AlertTriangle, Edit2, Eye, MoreVertical, Info, ZoomIn, ZoomOut, Download, Archive, CheckCircle2, ChevronDown, Hand } from 'lucide-react';
 import { PinProtectedAction } from '../src/components/PinProtectedAction';
 import { getPaymentSchedulesBySource } from '../src/services/paymentSchedulesService';
 import { hasInstallmentPayments, deleteAllInstallmentPaymentsAndResetSchedules } from '../src/services/installmentsService';
@@ -129,6 +129,7 @@ const Installments: React.FC<InstallmentsProps> = ({ installments, accounts, bil
   const closePayModal = () => {
     setShowPayModal(null);
     setPayModalScheduleId(undefined);
+    closeOverdraftPrompt();
   };
   
   const [formData, setFormData] = useState({ 
@@ -147,6 +148,17 @@ const Installments: React.FC<InstallmentsProps> = ({ installments, accounts, bil
   });
   const [payReceiptFile, setPayReceiptFile] = useState<File | null>(null);
 
+  // Overdraft prompt state for installment payments
+  const [overdraftPrompt, setOverdraftPrompt] = useState<{
+    mode: 'block' | 'warn';
+    accountId: string;
+    accountName: string;
+    currentBalance: number;
+    transactionAmount: number;
+    projectedBalance: number;
+  } | null>(null);
+  const [pendingPaymentAction, setPendingPaymentAction] = useState<(() => Promise<void>) | null>(null);
+
   const formatCurrency = (val: number) => {
     return new Intl.NumberFormat('en-PH', { 
       style: 'currency', 
@@ -154,6 +166,53 @@ const Installments: React.FC<InstallmentsProps> = ({ installments, accounts, bil
       minimumFractionDigits: 2,
       maximumFractionDigits: 2 
     }).format(val);
+  };
+
+  // Helper: Calculate current balance for an account
+  const calculateCurrentBalance = (account: Account): number => {
+    // This is a simplified calculation - in reality, transactions would be filtered from database
+    // For now, we assume balance is what was last set
+    return account.balance;
+  };
+
+  // Guard function: Check for overdraft before paying installment
+  const guardPayInstallmentOverdraft = (accountId: string, paymentAmount: number, action: () => Promise<void>) => {
+    const account = accounts.find(a => a.id === accountId);
+    if (!account || account.type !== 'Debit' || paymentAmount <= 0) {
+      action();
+      return;
+    }
+
+    const overdraftMode = account.overdraftMode || 'allow';
+    const currentBalance = calculateCurrentBalance(account);
+    const projectedBalance = currentBalance - paymentAmount;
+
+    if (projectedBalance >= 0 || overdraftMode === 'allow') {
+      action();
+      return;
+    }
+
+    setOverdraftPrompt({
+      mode: overdraftMode === 'block' ? 'block' : 'warn',
+      accountId,
+      accountName: account.bank,
+      currentBalance,
+      transactionAmount: paymentAmount,
+      projectedBalance,
+    });
+    setPendingPaymentAction(() => action);
+  };
+
+  const closeOverdraftPrompt = () => {
+    setOverdraftPrompt(null);
+    setPendingPaymentAction(null);
+  };
+
+  const confirmPayDespiteOverdraft = async () => {
+    if (pendingPaymentAction) {
+      await pendingPaymentAction();
+    }
+    closeOverdraftPrompt();
   };
 
   const openSchedulePaymentsModal = async (scheduleId: string, month: string) => {
@@ -350,59 +409,64 @@ const Installments: React.FC<InstallmentsProps> = ({ installments, accounts, bil
     e.preventDefault();
     if (!showPayModal || isSubmitting) return;
 
-    setIsSubmitting(true);
-    try {
-      const paymentAmount = parseFloat(payFormData.amount) || 0;
+    const paymentAmount = parseFloat(payFormData.amount) || 0;
 
-      console.log('[Installments] Processing payment:', {
-        installmentId: showPayModal.id,
-        installmentName: showPayModal.name,
-        previousPaidAmount: showPayModal.paidAmount,
-        paymentAmount: paymentAmount,
-        newPaidAmount: showPayModal.paidAmount + paymentAmount
-      });
+    console.log('[Installments] Processing payment:', {
+      installmentId: showPayModal.id,
+      installmentName: showPayModal.name,
+      previousPaidAmount: showPayModal.paidAmount,
+      paymentAmount: paymentAmount,
+      newPaidAmount: showPayModal.paidAmount + paymentAmount
+    });
 
-      // Use the new payment handler if provided, otherwise fall back to direct update
-      if (onPayInstallment) {
-        await onPayInstallment(showPayModal.id, {
-          amount: paymentAmount,
-          date: payFormData.datePaid,
-          accountId: payFormData.accountId,
-          receipt: payFormData.receipt || undefined,
-          receiptFile: payReceiptFile || undefined,
-          scheduleId: payModalScheduleId,
+    // Guard against overdraft
+    const performPayment = async () => {
+      setIsSubmitting(true);
+      try {
+        // Use the new payment handler if provided, otherwise fall back to direct update
+        if (onPayInstallment) {
+          await onPayInstallment(showPayModal.id, {
+            amount: paymentAmount,
+            date: payFormData.datePaid,
+            accountId: payFormData.accountId,
+            receipt: payFormData.receipt || undefined,
+            receiptFile: payReceiptFile || undefined,
+            scheduleId: payModalScheduleId,
+          });
+        } else {
+          // Fallback to old method
+          const updatedInstallment: Installment = {
+            ...showPayModal,
+            paidAmount: showPayModal.paidAmount + paymentAmount
+          };
+          await onUpdate?.(updatedInstallment);
+        }
+        
+        console.log('[Installments] Payment recorded successfully');
+        
+        // Close pay modal after successful payment
+        closePayModal();
+        setPayFormData({
+          amount: '',
+          receipt: '',
+          datePaid: getTodayIso(),
+          accountId: accounts[0]?.id || ''
         });
-      } else {
-        // Fallback to old method
-        const updatedInstallment: Installment = {
-          ...showPayModal,
-          paidAmount: showPayModal.paidAmount + paymentAmount
-        };
-        await onUpdate?.(updatedInstallment);
+        setPayReceiptFile(null);
+        
+        // If view modal is open, we'll need to refresh - let parent handle this
+        if (showViewModal && showViewModal.id === showPayModal.id) {
+          setShowViewModal(null);
+        }
+      } catch (error) {
+        console.error('[Installments] Failed to process payment:', error);
+        alert('Failed to process payment. Please try again.');
+      } finally {
+        setIsSubmitting(false);
       }
-      
-      console.log('[Installments] Payment recorded successfully');
-      
-      // Close pay modal after successful payment
-      closePayModal();
-      setPayFormData({
-        amount: '',
-        receipt: '',
-        datePaid: getTodayIso(),
-        accountId: accounts[0]?.id || ''
-      });
-      setPayReceiptFile(null);
-      
-      // If view modal is open, we'll need to refresh - let parent handle this
-      if (showViewModal && showViewModal.id === showPayModal.id) {
-        setShowViewModal(null);
-      }
-    } catch (error) {
-      console.error('[Installments] Failed to process payment:', error);
-      alert('Failed to process payment. Please try again.');
-    } finally {
-      setIsSubmitting(false);
-    }
+    };
+
+    guardPayInstallmentOverdraft(payFormData.accountId, paymentAmount, performPayment);
   };
 
   const handleDeleteTrigger = (id: string, name: string) => {
@@ -1209,6 +1273,92 @@ const Installments: React.FC<InstallmentsProps> = ({ installments, accounts, bil
                 <button type="submit" className="flex-1 bg-green-600 text-white py-4 rounded-2xl font-bold hover:bg-green-700 shadow-xl shadow-green-100 dark:shadow-none transition-all active:scale-95 border-2 border-black shadow-[4px_4px_0px_rgba(0,0,0,1)]">Record Payment</button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Overdraft Alert Modal */}
+      {overdraftPrompt && (
+        <div className="fixed inset-0 z-[1500] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md">
+          <div className="bg-white dark:bg-gray-900 rounded-[2.5rem] w-full max-w-md p-8 shadow-2xl animate-in zoom-in-95">
+            {/* Icon */}
+            <div className="flex justify-center mb-6">
+              <div className="bg-amber-50 dark:bg-amber-900/30 rounded-full p-4 border-2 border-amber-200 dark:border-amber-800">
+                <Hand className="w-10 h-10 text-amber-600 dark:text-amber-400" />
+              </div>
+            </div>
+
+            {/* Title with Mode Badge */}
+            <div className="flex items-center justify-center gap-3 mb-2">
+              <h3 className="text-2xl font-black text-gray-900 dark:text-gray-100 uppercase tracking-tight">
+                {overdraftPrompt.mode === 'block' ? 'Payment Blocked' : 'Low Balance Warning'}
+              </h3>
+              <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest ${
+                overdraftPrompt.mode === 'block' 
+                  ? 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400' 
+                  : 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400'
+              }`}>
+                {overdraftPrompt.mode === 'block' ? 'Block Mode' : 'Warn Mode'}
+              </span>
+            </div>
+
+            {/* Message */}
+            <p className="text-center text-gray-600 dark:text-gray-300 mb-6 text-sm">
+              {overdraftPrompt.mode === 'block' 
+                ? 'Your account balance is insufficient to process this payment.' 
+                : 'Your account balance may be insufficient to process this payment.'}
+            </p>
+
+            {/* Balance Display */}
+            <div className="bg-gray-50 dark:bg-gray-800/50 rounded-2xl p-4 mb-6 space-y-3">
+              <div className="flex justify-between items-center">
+                <span className="text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest">Current Balance</span>
+                <span className="font-black text-gray-900 dark:text-gray-100">{formatCurrency(overdraftPrompt.currentBalance)}</span>
+              </div>
+              <div className="h-px bg-gray-200 dark:bg-gray-700"></div>
+              <div className="flex justify-between items-center">
+                <span className="text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest">Transaction Amount</span>
+                <span className="font-black text-gray-900 dark:text-gray-100">- {formatCurrency(overdraftPrompt.transactionAmount)}</span>
+              </div>
+              <div className="h-px bg-gray-200 dark:bg-gray-700"></div>
+              <div className="flex justify-between items-center">
+                <span className="text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest">Projected Balance</span>
+                <span className={`font-black ${
+                  overdraftPrompt.projectedBalance >= 0 
+                    ? 'text-green-600 dark:text-green-400' 
+                    : 'text-red-600 dark:text-red-400'
+                }`}>
+                  {formatCurrency(overdraftPrompt.projectedBalance)}
+                </span>
+              </div>
+            </div>
+
+            {/* Actions */}
+            <div className="flex flex-col gap-3">
+              {overdraftPrompt.mode === 'block' ? (
+                <button
+                  onClick={closeOverdraftPrompt}
+                  className="w-full bg-gray-100 dark:bg-gray-800 py-4 rounded-2xl font-bold text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors border-2 border-black shadow-[2px_2px_0px_rgba(0,0,0,1)]"
+                >
+                  Got It
+                </button>
+              ) : (
+                <>
+                  <button
+                    onClick={confirmPayDespiteOverdraft}
+                    className="w-full bg-indigo-600 text-white py-4 rounded-2xl font-bold hover:bg-indigo-700 transition-colors border-2 border-black shadow-[2px_2px_0px_rgba(0,0,0,1)]"
+                  >
+                    Proceed
+                  </button>
+                  <button
+                    onClick={closeOverdraftPrompt}
+                    className="w-full bg-gray-100 dark:bg-gray-800 py-4 rounded-2xl font-bold text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors border-2 border-black shadow-[2px_2px_0px_rgba(0,0,0,1)]"
+                  >
+                    Cancel
+                  </button>
+                </>
+              )}
+            </div>
           </div>
         </div>
       )}
