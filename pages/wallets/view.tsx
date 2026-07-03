@@ -137,20 +137,6 @@ const WalletView: React.FC<WalletViewProps> = ({ accounts }) => {
 
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
-      {/* Back + Header */}
-      <div className="flex items-center space-x-4">
-        <Link
-          to="/wallets"
-          className="p-2 rounded-xl bg-white dark:bg-gray-900 shadow-sm border border-gray-100 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
-        >
-          <ArrowLeft className="w-5 h-5 text-gray-700 dark:text-gray-300 transition-colors" />
-        </Link>
-        <div>
-          <h1 className="text-3xl font-black text-gray-900 dark:text-gray-100 uppercase transition-colors">{wallet.name}</h1>
-          <p className="text-gray-500 dark:text-gray-400 text-sm transition-colors">Wallet detail</p>
-        </div>
-      </div>
-
       {/* Wallet info card */}
       <div className="bg-white dark:bg-gray-800 rounded-2xl p-8 border-[3px] border-black shadow-[8px_8px_0px_0px_rgba(0,0,0,1)]">
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
@@ -176,7 +162,15 @@ const WalletView: React.FC<WalletViewProps> = ({ accounts }) => {
 
       {/* Transactions list */}
       <div className="flex justify-between items-center">
-        <h2 className="text-2xl font-black text-gray-900 dark:text-gray-100">Transactions</h2>
+        <div className="flex items-center gap-4">
+          <Link
+            to="/wallets"
+            className="p-2 rounded-xl bg-white dark:bg-gray-900 shadow-sm border border-gray-100 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+          >
+            <ArrowLeft className="w-5 h-5 text-gray-700 dark:text-gray-300 transition-colors" />
+          </Link>
+          <h2 className="text-2xl font-black text-gray-900 dark:text-gray-100">Transactions</h2>
+        </div>
         <button
           className={`flex items-center gap-2 text-white px-4 py-2 rounded-lg font-bold border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] active:shadow-[1px_1px_0px_0px_rgba(0,0,0,1)] transition-all text-sm ${getAccentClasses('bg')}`}
           onClick={openTransactionModal}
@@ -199,7 +193,7 @@ const WalletView: React.FC<WalletViewProps> = ({ accounts }) => {
           <div className="overflow-x-auto">
             <table className="w-full text-left">
               <thead>
-                <tr className={`text-xs font-black text-black dark:text-white uppercase border-b-2 border-black ${getAccentClasses('bg')} opacity-80`}>
+                <tr className="text-xs font-black text-gray-600 dark:text-gray-300 uppercase border-b-2 border-black bg-gray-100 dark:bg-gray-800">
                   <th className="px-6 py-3">Date</th>
                   <th className="px-6 py-3">Description</th>
                   <th className="px-6 py-3 text-right">Amount</th>
@@ -209,7 +203,7 @@ const WalletView: React.FC<WalletViewProps> = ({ accounts }) => {
                 {transactions.map((tx) => (
                   <tr key={tx.id} className="hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
                     <td className="px-6 py-4 whitespace-nowrap">
-                        {new Date(tx.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric'})}
+                        {new Date(tx.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
                     </td>
                     <td className="px-6 py-4">
                       <span className="font-bold text-gray-900 dark:text-gray-100 transition-colors">{tx.name}</span>
