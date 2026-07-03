@@ -31,47 +31,6 @@ interface InstallmentsProps {
   error?: string | null;
 }
 
-/** 
- * PageHeader component mirroring Dashboard style
- */
-const PageHeader: React.FC<{ 
-  title: string; 
-  subtitle: string; 
-  icon?: React.ReactNode; 
-  actions?: React.ReactNode;
-  backButton?: React.ReactNode;
-}> = ({ title, subtitle, icon, actions, backButton }) => {
-  const { getAccentClasses } = useTheme();
-  const isMobile = useMediaQuery('(max-width: 767px)');
-  
-  return (
-    <header className={`${isMobile ? 'pt-16' : 'pt-12'} flex flex-row items-center justify-between gap-6 mb-4`}>
-      <div className="flex flex-1 items-center gap-6">
-        {backButton}
-        <div className="flex-1">
-          <div className="relative inline-block">
-            <div className="flex items-center gap-4">
-               {icon && <div className="z-10 shrink-0">{icon}</div>}
-               <h1 className={`text-[clamp(2rem,7.5vw,3.75rem)] font-titan normal-case tracking-tighter leading-none relative z-10 [text-shadow:-1px_-1px_0_#000,1px_-1px_0_#000,-1px_1px_0_#000,1px_1px_0_#000] drop-shadow-[3px_3px_0px_#000] ${icon ? getAccentClasses('text') : 'text-black dark:text-white'}`}>
-                {title}
-              </h1>
-            </div>
-            <div className={`absolute bottom-0 left-0 h-4 ${getAccentClasses('bg')} opacity-40 -z-0 -rotate-1 -translate-x-2 transition-colors duration-300`} style={{ width: `110%` }} />
-          </div>
-          <div className="flex items-center gap-3 mt-1 ml-1">
-            {backButton}
-            <p className="text-[clamp(1rem,3vw,1.25rem)] font-bold italic text-black/50 dark:text-gray-400 transition-colors duration-300">
-              {subtitle}
-            </p>
-          </div>
-          <div className={`h-2 w-32 mt-2 bg-black dark:bg-white/20 transition-colors duration-300`} />
-        </div>
-      </div>
-      {actions && <div className="flex items-center justify-end gap-3">{actions}</div>}
-    </header>
-  );
-};
-
 const Installments: React.FC<InstallmentsProps> = ({ installments, accounts, billers = [], onAdd, onUpdate, onDelete, onPayInstallment, loading = false, error = null }) => {
   const { getAccentClasses } = useTheme();
   const isMobile = useMediaQuery('(max-width: 767px)');
@@ -1279,97 +1238,73 @@ const Installments: React.FC<InstallmentsProps> = ({ installments, accounts, bil
 
       {/* Overdraft Alert Modal */}
       {overdraftPrompt && (
-        <div className="fixed inset-0 z-[1500] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md">
-          <div className="bg-gray-50 dark:bg-gray-900 rounded-[2.5rem] w-full max-w-md p-10 shadow-2xl animate-in zoom-in-95 relative border-4 border-black">
-            {/* Close Button */}
-            <button
-              onClick={closeOverdraftPrompt}
-              className="absolute top-4 right-4 bg-white dark:bg-gray-800 rounded-full w-8 h-8 flex items-center justify-center border-2 border-black hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-            >
-              <X className="w-4 h-4 text-gray-900 dark:text-gray-100" />
+        <div className="fixed inset-0 z-[1500] flex items-center justify-center bg-black/60 p-4 backdrop-blur-md" onClick={closeOverdraftPrompt}>
+          <div className="bg-white dark:bg-gray-900 border-4 border-black rounded-2xl w-full max-w-md p-6 relative shadow-[6px_6px_0px_0px_rgba(0,0,0,1)]" onClick={(e) => e.stopPropagation()}>
+            <button type="button" onClick={closeOverdraftPrompt} className="absolute top-4 right-4 text-gray-400 p-1.5 rounded-full hover:bg-gray-100" aria-label="Close overdraft prompt">
+              <X className="h-4 w-4" />
             </button>
 
-            {/* Icon */}
             <div className="absolute left-1/2 top-0 flex h-20 w-20 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border-[4px] border-black bg-[#ff7a59] text-white shadow-[6px_6px_0px_0px_rgba(0,0,0,1)]">
-              <div className="bg-orange-100 dark:bg-orange-900/30 rounded-full p-5 border-4 border-orange-500">
-                <Hand className="w-10 h-10" />
-              </div>
+              <Hand className="h-10 w-10" />
             </div>
 
-            {/* Mode Badge */}
-            <div className="flex justify-center mb-4">
-              <span className={`px-4 py-2 rounded-full text-[10px] font-black uppercase tracking-widest border-2 border-black ${
-                overdraftPrompt.mode === 'block' 
-                  ? 'bg-red-400 dark:bg-red-500 text-white' 
-                  : 'bg-yellow-400 dark:bg-yellow-500 text-gray-900'
-              }`}>
-                {overdraftPrompt.mode === 'block' ? 'Block Mode' : 'Warn Mode'}
-              </span>
-            </div>
-
-            {/* Title */}
-            <h3 className="text-center text-2xl font-black text-gray-900 dark:text-gray-100 uppercase tracking-tight mb-2 leading-tight">
-              {overdraftPrompt.mode === 'block' 
-                ? 'Hold On—Your Account\nCannot Process This.'
-                : 'Hold On a Sec—Your\nAccount Is a Little Short.'}
-            </h3>
-
-            {/* Subtitle Message */}
-            <p className="text-center text-gray-900 dark:text-gray-100 text-sm font-bold mb-2">
-              {overdraftPrompt.mode === 'block'
-                ? 'Your balance is insufficient.'
-                : 'This will drop you into a negative balance. Still a go?'}
-            </p>
-
-            {/* Balance Change Summary */}
-            <p className="text-center text-gray-600 dark:text-gray-400 text-xs mb-6 italic">
-              Balance goes from {formatCurrency(overdraftPrompt.currentBalance)} to {formatCurrency(overdraftPrompt.projectedBalance)} after this transaction.
-            </p>
-
-            {/* Balance Display */}
-            <div className="bg-white dark:bg-gray-800/50 rounded-2xl p-4 mb-6 space-y-2 border-2 border-black">
-              <div className="flex justify-between items-center">
-                <span className="text-[10px] font-black text-gray-600 dark:text-gray-400 uppercase tracking-widest">Current Balance</span>
-                <span className="font-black text-gray-900 dark:text-gray-100">{formatCurrency(overdraftPrompt.currentBalance)}</span>
-              </div>
-              <div className="h-px bg-gray-300 dark:bg-gray-600"></div>
-              <div className="flex justify-between items-center">
-                <span className="text-[10px] font-black text-gray-600 dark:text-gray-400 uppercase tracking-widest">Transaction Amount</span>
-                <span className="font-black text-orange-500">{formatCurrency(overdraftPrompt.transactionAmount)}</span>
-              </div>
-              <div className="h-px bg-gray-300 dark:bg-gray-600"></div>
-              <div className="flex justify-between items-center">
-                <span className="text-[10px] font-black text-gray-600 dark:text-gray-400 uppercase tracking-widest">Projected Balance</span>
-                <span className="font-black text-red-600 dark:text-red-400">
-                  {formatCurrency(overdraftPrompt.projectedBalance)}
+            <div className="pt-10">
+              <div className="mb-4 text-center">
+                <span className="inline-block -rotate-2 rounded-full border-[3px] border-black bg-yellow-300 px-4 py-1 text-[10px] font-black uppercase tracking-[0.25em] text-black shadow-[3px_3px_0px_0px_rgba(0,0,0,1)]">
+                  {overdraftPrompt.mode === 'block' ? 'Block Mode' : 'Warn Mode'}
                 </span>
               </div>
-            </div>
 
-            {/* Actions */}
-            <div className="grid grid-cols-2 gap-3">
+              <h2 className="text-lg font-black text-gray-900 dark:text-gray-100 text-center">
+                {overdraftPrompt.mode === 'block'
+                  ? 'No can do. Please top-up to complete the transaction'
+                  : 'Hold on a sec-your account is a little short. This will drop you into a negative balance. Still a go?'}
+              </h2>
+
+              <p className="mt-4 mb-5 text-center text-xs font-medium text-gray-600 dark:text-gray-400">
+                {overdraftPrompt.accountName} goes from {formatCurrency(overdraftPrompt.currentBalance)} to {formatCurrency(overdraftPrompt.projectedBalance)} after this transaction.
+              </p>
+
+              <div className="mb-5 space-y-3 rounded-xl border-2 border-black bg-gray-50 dark:bg-gray-800 p-4">
+                <div className="flex justify-between gap-4">
+                  <span className="text-[10px] font-black uppercase tracking-widest text-gray-500 dark:text-gray-400">Current Balance</span>
+                  <span className="text-sm font-black text-gray-900 dark:text-gray-100">{formatCurrency(overdraftPrompt.currentBalance)}</span>
+                </div>
+                <div className="flex justify-between gap-4">
+                  <span className="text-[10px] font-black uppercase tracking-widest text-gray-500 dark:text-gray-400">Transaction Amount</span>
+                  <span className="text-sm font-black text-orange-600 dark:text-orange-400">{formatCurrency(overdraftPrompt.transactionAmount)}</span>
+                </div>
+                <div className="border-t-2 border-black pt-3 flex justify-between gap-4">
+                  <span className="text-[10px] font-black uppercase tracking-widest text-gray-500 dark:text-gray-400">Projected Balance</span>
+                  <span className="text-sm font-black text-red-600 dark:text-red-400">{formatCurrency(overdraftPrompt.projectedBalance)}</span>
+                </div>
+              </div>
+
               {overdraftPrompt.mode === 'block' ? (
                 <button
+                  type="button"
                   onClick={closeOverdraftPrompt}
-                  className="col-span-2 bg-gray-200 dark:bg-gray-700 text-gray-900 dark:text-gray-100 py-4 rounded-2xl font-bold hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors border-2 border-black shadow-[2px_2px_0px_rgba(0,0,0,1)]"
+                  className="w-full rounded-2xl border-[3px] border-black bg-[#ffd54f] px-4 py-4 text-xs font-black uppercase tracking-widest text-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] transition-all hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none"
                 >
-                  Got It
+                  Got it.
                 </button>
               ) : (
-                <>
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                   <button
+                    type="button"
                     onClick={confirmPayDespiteOverdraft}
-                    className="bg-green-500 dark:bg-green-600 text-white py-4 rounded-2xl font-bold hover:bg-green-600 dark:hover:bg-green-700 transition-colors border-2 border-black shadow-[2px_2px_0px_rgba(0,0,0,1)]"
+                    className="rounded-2xl border-[3px] border-black bg-green-400 px-4 py-4 text-xs font-black uppercase tracking-widest text-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] transition-all hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none"
                   >
-                    Top-Up
+                    Proceed
                   </button>
                   <button
+                    type="button"
                     onClick={closeOverdraftPrompt}
-                    className="bg-gray-200 dark:bg-gray-700 text-gray-900 dark:text-gray-100 py-4 rounded-2xl font-bold hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors border-2 border-black shadow-[2px_2px_0px_rgba(0,0,0,1)]"
+                    className="rounded-2xl border-[3px] border-black bg-gray-100 dark:bg-gray-800 px-4 py-4 text-xs font-black uppercase tracking-widest text-gray-700 dark:text-gray-300 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] transition-all hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none"
                   >
-                    Nope
+                    Cancel
                   </button>
-                </>
+                </div>
               )}
             </div>
           </div>
@@ -1605,7 +1540,7 @@ const Installments: React.FC<InstallmentsProps> = ({ installments, accounts, bil
                 </div>
               ) : (
                 <div className="text-center py-12">
-                  <p className="text-gray-400 dark:text-gray-500 font-bold transition-colors">No start date set. Please edit the installment to add a start date.</p>
+                  <p className="text-gray-500 dark:text-gray-400 font-bold transition-colors">No start date set. Please edit the installment to add a start date.</p>
                 </div>
               )}
             </div>
