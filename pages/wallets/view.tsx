@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { useSearchParams, Link } from 'react-router-dom';
-import { ArrowLeft, WalletCards, Plus } from 'lucide-react';
+import { ArrowLeft, Plus, WalletCards } from 'lucide-react';
 import { Wallet, Account } from '../../types';
 import { getWalletById } from '../../src/services/walletsService';
 import { supabase, getTableName } from '../../src/utils/supabaseClient';
@@ -142,12 +142,7 @@ const WalletView: React.FC<WalletViewProps> = ({ accounts }) => {
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
           <div>
             <p className="text-xs font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-1 transition-colors">Wallet Name</p>
-            <div className="flex items-center space-x-2">
-              <div className="w-8 h-8 bg-indigo-50 dark:bg-indigo-900/30 rounded-lg flex items-center justify-center transition-colors">
-                <WalletCards className="w-4 h-4 text-indigo-600 dark:text-indigo-400 transition-colors" />
-              </div>
-              <p className="text-lg font-black text-gray-900 dark:text-gray-100 transition-colors">{wallet.name}</p>
-            </div>
+            <h2 className="text-2xl font-black text-gray-900 dark:text-gray-100 transition-colors">{wallet.name}</h2>
           </div>
           <div>
             <p className="text-xs font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-1 transition-colors">Monthly Target</p>

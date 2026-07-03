@@ -266,14 +266,9 @@ const WalletsPage: React.FC<WalletsPageProps> = ({ accounts }) => {
                   className="bg-white dark:bg-gray-800 p-6 rounded-2xl border-[3px] border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] transition-all flex flex-col space-y-4"
                 >
                   <div className="flex items-start justify-between">
-                    <div className="flex items-center space-x-3">
-                      <div className="w-10 h-10 flex-shrink-0 bg-indigo-50 dark:bg-indigo-900/30 rounded-xl flex items-center justify-center transition-colors">
-                        <WalletCards className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
-                      </div>
-                      <div>
-                        <h3 className="font-bold text-gray-900 dark:text-gray-100 transition-colors">{wallet.name}</h3>
-                        <p className="text-[10px] text-gray-500 dark:text-gray-400 uppercase font-black transition-colors">{getAccountName(wallet.accountId)}</p>
-                      </div>
+                    <div>
+                      <h3 className="font-bold text-xl text-gray-900 dark:text-gray-100 transition-colors">{wallet.name}</h3>
+                      <p className="text-xs text-gray-500 dark:text-gray-400 uppercase font-black transition-colors">{getAccountName(wallet.accountId)}</p>
                     </div>
                   </div>
                   <div>
@@ -318,12 +313,7 @@ const WalletsPage: React.FC<WalletsPageProps> = ({ accounts }) => {
                     {wallets.map((wallet) => (
                       <tr key={wallet.id} className="hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
                         <td className="px-6 py-4">
-                          <div className="flex items-center space-x-3">
-                            <div className="w-8 h-8 bg-indigo-50 dark:bg-indigo-900/30 rounded-lg flex items-center justify-center transition-colors">
-                              <WalletCards className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
-                            </div>
-                            <span className="font-bold text-gray-900 dark:text-gray-100 transition-colors">{wallet.name}</span>
-                          </div>
+                          <span className="font-bold text-lg text-gray-900 dark:text-gray-100 transition-colors">{wallet.name}</span>
                         </td>
                         <td className="px-6 py-4">
                           <span className="font-black text-gray-900 dark:text-gray-100 transition-colors">{formatCurrency(wallet.amount)}</span>
