@@ -862,7 +862,59 @@ const MainApp: React.FC = () => {
         currentStatus: targetSchedule.status,
       });
 
-      // Record the payment on the schedule
+      // Create the transaction FIRST (before marking schedule as paid)
+      let transaction: any = null;
+      let transactionError: any = null;
+      
+      try {
+        const result = await createPaymentScheduleTransaction(
+          targetSchedule.id,
+          {
+            name: `${installment.name} - ${targetSchedule.month} ${targetSchedule.year}`,
+            date: combineDateWithCurrentTime(payment.date),
+            amount: Math.abs(payment.amount),
+            paymentMethodId: payment.accountId,
+            transactionType: 'payment',
+          }
+        );
+        transaction = result.data;
+        transactionError = result.error;
+      } catch (err) {
+        transactionError = err;
+      }
+
+      // If primary transaction creation fails, try fallback without payment_schedule_id
+      if (transactionError || !transaction) {
+        console.error('Error creating transaction with payment_schedule_id:', transactionError);
+        try {
+          const fallbackResult = await createTransaction({
+            name: `${installment.name} - ${targetSchedule.month} ${targetSchedule.year}`,
+            date: combineDateWithCurrentTime(payment.date),
+            amount: payment.amount,
+            payment_method_id: payment.accountId,
+            transaction_type: 'payment',
+            notes: `Installment payment (schedule: ${targetSchedule.id})`,
+            payment_schedule_id: null,
+          });
+          transaction = fallbackResult.data;
+          transactionError = fallbackResult.error;
+        } catch (err) {
+          transactionError = err;
+        }
+      }
+
+      // Only proceed with recording payment if transaction was created successfully
+      if (transactionError || !transaction) {
+        console.error('[App] Transaction creation failed:', transactionError);
+        throw new Error(`Failed to create transaction: ${transactionError?.message || transactionError}`);
+      }
+
+      console.log('[App] Transaction created successfully:', {
+        transactionId: transaction.id,
+        linkedScheduleId: targetSchedule.id,
+      });
+
+      // NOW record the payment on the schedule (after successful transaction creation)
       const { data: updatedSchedule, error: paymentError } = await recordPayment(targetSchedule.id, {
         amountPaid: payment.amount,
         datePaid: payment.date,
@@ -874,51 +926,15 @@ const MainApp: React.FC = () => {
         throw new Error('Failed to record payment on schedule');
       }
 
-      // Create the transaction linked to the payment schedule
-      const { data: transaction, error: transactionError } = await createPaymentScheduleTransaction(
-        targetSchedule.id,
-        {
-          name: `${installment.name} - ${targetSchedule.month} ${targetSchedule.year}`,
-          date: combineDateWithCurrentTime(payment.date),
-          amount: Math.abs(payment.amount),
-          paymentMethodId: payment.accountId,
-          transactionType: 'payment',
-        }
-      );
-
-      if (transactionError || !transaction) {
-        console.error('Error creating transaction:', transactionError);
-        const fallbackResult = await createTransaction({
-          name: `${installment.name} - ${targetSchedule.month} ${targetSchedule.year}`,
-          date: combineDateWithCurrentTime(payment.date),
-          amount: payment.amount,
-          payment_method_id: payment.accountId,
-          transaction_type: 'payment',
-          notes: `Installment payment (schedule: ${targetSchedule.id})`,
-          payment_schedule_id: null,
-        });
-        if (fallbackResult.error) {
-          console.error('[App] Fallback transaction creation also failed:', fallbackResult.error);
-          alert('Payment schedule was marked paid, but the transaction could not be created. Please run the latest Supabase migrations (transactions.payment_schedule_id and transaction types) and try again.');
+      // Upload receipt to storage if a file was provided
+      if (payment.receiptFile) {
+        const { path, error: uploadError } = await uploadTransactionReceipt(transaction.id, payment.receiptFile);
+        if (uploadError || !path) {
+          console.error('[App] Receipt upload failed for installment payment:', uploadError);
+          alert('Payment saved, but receipt upload failed. You can re-attach it from the transaction details.');
         } else {
-          alert('Payment saved. The transaction was created, but could not be linked to the schedule due to a database mismatch. Please run the latest Supabase migrations.');
-        }
-      } else {
-        console.log('[App] Transaction created successfully:', {
-          transactionId: transaction.id,
-          linkedScheduleId: targetSchedule.id,
-        });
-
-        // Upload receipt to storage if a file was provided
-        if (payment.receiptFile) {
-          const { path, error: uploadError } = await uploadTransactionReceipt(transaction.id, payment.receiptFile);
-          if (uploadError || !path) {
-            console.error('[App] Receipt upload failed for installment payment:', uploadError);
-            alert('Payment saved, but receipt upload failed. You can re-attach it from the transaction details.');
-          } else {
-            await updateTransaction(transaction.id, { receipt_url: path });
-            console.log('[App] Receipt uploaded and linked to installment transaction:', path);
-          }
+          await updateTransaction(transaction.id, { receipt_url: path });
+          console.log('[App] Receipt uploaded and linked to installment transaction:', path);
         }
       }
 

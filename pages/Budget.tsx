@@ -3,7 +3,7 @@ import { useSearchParams } from 'react-router-dom';
 import { useNavigate } from 'react-router-dom';
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { BudgetItem, Account, Biller, PaymentSchedule, CategorizedSetupItem, SavedBudgetSetup, BudgetCategory, Installment, Wallet } from '../types';
-import { Plus, Check, ChevronDown, Trash2, Save, Wallet as WalletIcon, ArrowLeft, Upload, CheckCircle2, X, AlertTriangle, Info, Archive, RotateCcw, List } from 'lucide-react';
+import { Plus, Check, ChevronDown, Trash2, Save, Wallet as WalletIcon, ArrowLeft, Upload, CheckCircle2, X, AlertTriangle, Info, Archive, RotateCcw, List, Hand } from 'lucide-react';
 import { PinProtectedAction } from '../src/components/PinProtectedAction';
 import { createBudgetSetupFrontend, updateBudgetSetupFrontend } from '../src/services/budgetSetupsService';
 import { createTransaction, getAllTransactions, updateTransaction, updateTransactionAndSyncSchedule, createPaymentScheduleTransaction, uploadTransactionReceipt, getTransactionsByPaymentSchedule, getReceiptSignedUrl, deleteTransactionAndRevertSchedule, getAllStashTransactions, createTransfer } from '../src/services/transactionsService';
@@ -351,6 +351,17 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
   const [stashRepairSubmitting, setStashRepairSubmitting] = useState(false);
   const [stashStatusMsg, setStashStatusMsg] = useState<{ msg: string; type: 'success' | 'error' } | null>(null);
 
+  // Overdraft prompt state for Fund Stash operations
+  const [overdraftPrompt, setOverdraftPrompt] = useState<{
+    mode: 'block' | 'warn';
+    accountId: string;
+    accountName: string;
+    currentBalance: number;
+    transactionAmount: number;
+    projectedBalance: number;
+  } | null>(null);
+  const [pendingFundAction, setPendingFundAction] = useState<(() => Promise<void>) | null>(null);
+
   const [archiveStatusMsg, setArchiveStatusMsg] = useState<{ msg: string; type: 'success' | 'error' } | null>(null);
   const [archiveSubmitting, setArchiveSubmitting] = useState(false);
 
@@ -542,96 +553,162 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
     }
   };
 
+  // Helper: Calculate current balance for an account
+  const calculateCurrentBalance = (account: Account): number => {
+    const accountTxs = transactions.filter(tx => tx.payment_method_id === account.id);
+    return account.openingBalance + accountTxs.reduce((sum, tx) => {
+      if (tx.transaction_type === 'cash_in' || tx.transaction_type === 'loan') {
+        return sum + tx.amount;
+      } else {
+        return sum - Math.abs(tx.amount);
+      }
+    }, 0);
+  };
+
+  // Guard function: Check for overdraft before funding stash
+  const guardFundStashOverdraft = (sourceAccountId: string, fundAmount: number, action: () => Promise<void>) => {
+    const sourceAccount = accounts.find(a => a.id === sourceAccountId);
+    if (!sourceAccount || sourceAccount.type !== 'Debit' || fundAmount <= 0) {
+      action();
+      return;
+    }
+
+    const overdraftMode = sourceAccount.overdraftMode || 'allow';
+    const currentBalance = calculateCurrentBalance(sourceAccount);
+    const projectedBalance = currentBalance - fundAmount;
+
+    if (projectedBalance >= 0 || overdraftMode === 'allow') {
+      action();
+      return;
+    }
+
+    setOverdraftPrompt({
+      mode: overdraftMode === 'block' ? 'block' : 'warn',
+      accountId: sourceAccountId,
+      accountName: sourceAccount.bank,
+      currentBalance,
+      transactionAmount: fundAmount,
+      projectedBalance,
+    });
+    setPendingFundAction(() => action);
+  };
+
+  const closeOverdraftPrompt = () => {
+    setOverdraftPrompt(null);
+    setPendingFundAction(null);
+  };
+
+  const confirmFundDespiteOverdraft = async () => {
+    if (pendingFundAction) {
+      await pendingFundAction();
+    }
+    closeOverdraftPrompt();
+  };
+
   const handleFundSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!fundModal) return;
     const amount = parseFloat(fundForm.amount);
     if (isNaN(amount) || amount <= 0) return;
-    const walletId = fundModal.wallet.id;
-    const walletName = fundModal.wallet.name;
     const sourceAccountId = fundForm.sourceAccountId;
     if (!sourceAccountId) return;
-    setFundSubmitting(true);
-    try {
-      const destAccountId = fundModal.wallet.accountId;
-      const walletTxDate = combineDateWithCurrentTime(fundForm.date);
-      let incomingTx: SupabaseTransaction | null = null;
 
-      if (destAccountId && destAccountId !== sourceAccountId) {
-        const transferResult = await createTransfer(
-          sourceAccountId,
-          destAccountId,
-          amount,
-          walletTxDate,
-          0,
-          walletId
-        );
-        if (transferResult.error) throw transferResult.error;
-        incomingTx = transferResult.data?.incoming || null;
-      } else {
-        const stashTxBase = {
-          name: `Stash top-up - ${walletName} (${selectedMonth} ${selectedYear})`,
-          amount,
-          date: walletTxDate,
-          payment_method_id: sourceAccountId,
-          transaction_type: 'withdraw' as const,
-          notes: fundForm.notes || null,
-          payment_schedule_id: null,
-          related_transaction_id: null,
-          receipt_url: null,
-        };
-        let creationResult = await createTransaction({ ...stashTxBase, wallet_id: walletId });
-        if (creationResult.error) {
-          const errMsg = JSON.stringify(creationResult.error).toLowerCase();
-          if (errMsg.includes('wallet_id') || errMsg.includes('42703') || errMsg.includes('column')) {
-            creationResult = await createTransaction(stashTxBase);
-          }
-        }
-        const { data: newTx, error } = creationResult;
-        if (error) throw error;
-        incomingTx = newTx ? { ...(newTx as SupabaseTransaction), wallet_id: walletId } : null;
+    // Guard against overdraft
+    const performFund = async () => {
+      setFundSubmitting(true);
+      try {
+        await executeFundStash(amount, sourceAccountId);
+      } catch (err) {
+        console.error('[Budget] Error funding stash:', err);
+        setStashStatusMsg({ msg: 'Failed to fund stash. Please try again.', type: 'error' });
+        setTimeout(() => setStashStatusMsg(null), 3000);
+      } finally {
+        setFundSubmitting(false);
       }
+    };
 
-      const safeNewTx: SupabaseTransaction | null = incomingTx;
-      if (safeNewTx) {
-        setStashTopUps(prev => [safeNewTx, ...prev.filter(t => t.id !== safeNewTx.id)]);
-      }
-      setFundModal(null);
-      setStashStatusMsg({ msg: `Funded stash '${walletName}' by ${formatCurrency(amount)}`, type: 'success' });
-      setTimeout(() => setStashStatusMsg(null), 3000);
-      const existingSetup = savedSetups.find(s => s.month === selectedMonth && s.timing === selectedTiming);
-      if (existingSetup && existingSetup.status !== BUDGET_SETUP_STATUS.ACTIVE) {
-        const { error: statusError } = await updateBudgetSetupFrontend({
-          ...existingSetup,
-          status: BUDGET_SETUP_STATUS.ACTIVE,
-        });
-        if (statusError) {
-          console.error('[Budget] Failed to update budget status after stash fund:', statusError);
-        } else if (onReloadSetups) {
-          await onReloadSetups();
+    guardFundStashOverdraft(sourceAccountId, amount, performFund);
+  };
+
+  const executeFundStash = async (amount: number, sourceAccountId: string) => {
+    if (!fundModal) return;
+    const walletId = fundModal.wallet.id;
+    const walletName = fundModal.wallet.name;
+    
+    const destAccountId = fundModal.wallet.accountId;
+    const walletTxDate = combineDateWithCurrentTime(fundForm.date);
+    let incomingTx: SupabaseTransaction | null = null;
+
+    if (destAccountId && destAccountId !== sourceAccountId) {
+      const transferResult = await createTransfer(
+        sourceAccountId,
+        destAccountId,
+        amount,
+        walletTxDate,
+        0,
+        walletId
+      );
+      if (transferResult.error) throw transferResult.error;
+      incomingTx = transferResult.data?.incoming || null;
+    } else {
+      const stashTxBase = {
+        name: `Stash top-up - ${walletName} (${selectedMonth} ${selectedYear})`,
+        amount,
+        date: walletTxDate,
+        payment_method_id: sourceAccountId,
+        transaction_type: 'withdraw' as const,
+        notes: fundForm.notes || null,
+        payment_schedule_id: null,
+        related_transaction_id: null,
+        receipt_url: null,
+      };
+      let creationResult = await createTransaction({ ...stashTxBase, wallet_id: walletId });
+      if (creationResult.error) {
+        const errMsg = JSON.stringify(creationResult.error).toLowerCase();
+        if (errMsg.includes('wallet_id') || errMsg.includes('42703') || errMsg.includes('column')) {
+          creationResult = await createTransaction(stashTxBase);
         }
       }
-      const [stashResult] = await Promise.all([
-        getAllStashTransactions(),
-        reloadTransactions(),
-      ]);
-      const { data: freshData, error: reloadError } = stashResult;
-      if (!reloadError && freshData !== null) {
-        const freshTopUps = freshData as SupabaseTransaction[];
-        if (safeNewTx && !freshTopUps.some(t => t.id === safeNewTx.id)) {
-          setStashTopUps([safeNewTx, ...freshTopUps]);
-        } else {
-          setStashTopUps(freshTopUps);
-        }
-      }
-      if (onTransactionCreated) onTransactionCreated();
-    } catch (err) {
-      console.error('[Budget] Error funding stash:', err);
-      setStashStatusMsg({ msg: 'Failed to fund stash. Please try again.', type: 'error' });
-      setTimeout(() => setStashStatusMsg(null), 3000);
-    } finally {
-      setFundSubmitting(false);
+      const { data: newTx, error } = creationResult;
+      if (error) throw error;
+      incomingTx = newTx ? { ...(newTx as SupabaseTransaction), wallet_id: walletId } : null;
     }
+
+    const safeNewTx: SupabaseTransaction | null = incomingTx;
+    if (safeNewTx) {
+      setStashTopUps(prev => [safeNewTx, ...prev.filter(t => t.id !== safeNewTx.id)]);
+    }
+    setFundModal(null);
+    setStashStatusMsg({ msg: `Funded stash '${walletName}' by ${formatCurrency(amount)}`, type: 'success' });
+    setTimeout(() => setStashStatusMsg(null), 3000);
+    
+    const existingSetup = savedSetups.find(s => s.month === selectedMonth && s.timing === selectedTiming);
+    if (existingSetup && existingSetup.status !== BUDGET_SETUP_STATUS.ACTIVE) {
+      const { error: statusError } = await updateBudgetSetupFrontend({
+        ...existingSetup,
+        status: BUDGET_SETUP_STATUS.ACTIVE,
+      });
+      if (statusError) {
+        console.error('[Budget] Failed to update budget status after stash fund:', statusError);
+      } else if (onReloadSetups) {
+        await onReloadSetups();
+      }
+    }
+    
+    const [stashResult] = await Promise.all([
+      getAllStashTransactions(),
+      reloadTransactions(),
+    ]);
+    const { data: freshData, error: reloadError } = stashResult;
+    if (!reloadError && freshData !== null) {
+      const freshTopUps = freshData as SupabaseTransaction[];
+      if (safeNewTx && !freshTopUps.some(t => t.id === safeNewTx.id)) {
+        setStashTopUps([safeNewTx, ...freshTopUps]);
+      } else {
+        setStashTopUps(freshTopUps);
+      }
+    }
+    if (onTransactionCreated) onTransactionCreated();
   };
 
   const handleWalletIncludeToggle = useCallback((walletId: string) => {
@@ -3029,6 +3106,80 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                 })}
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {overdraftPrompt && (
+        <div className="fixed inset-0 z-[1500] flex items-center justify-center bg-black/60 p-4 backdrop-blur-md" onClick={closeOverdraftPrompt}>
+          <div className="bg-white dark:bg-gray-900 border-4 border-black rounded-2xl w-full max-w-md p-6 relative shadow-[6px_6px_0px_0px_rgba(0,0,0,1)]" onClick={(e) => e.stopPropagation()}>
+            <button type="button" onClick={closeOverdraftPrompt} className="absolute top-4 right-4 text-gray-400 p-1.5 rounded-full hover:bg-gray-100" aria-label="Close overdraft prompt">
+              <X className="h-4 w-4" />
+            </button>
+
+            <div className="absolute left-1/2 top-0 flex h-20 w-20 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border-[4px] border-black bg-[#ff7a59] text-white shadow-[6px_6px_0px_0px_rgba(0,0,0,1)]">
+              <Hand className="h-10 w-10" />
+            </div>
+
+            <div className="pt-10">
+              <div className="mb-4 text-center">
+                <span className="inline-block -rotate-2 rounded-full border-[3px] border-black bg-yellow-300 px-4 py-1 text-[10px] font-black uppercase tracking-[0.25em] text-black shadow-[3px_3px_0px_0px_rgba(0,0,0,1)]">
+                  {overdraftPrompt.mode === 'block' ? 'Block Mode' : 'Warn Mode'}
+                </span>
+              </div>
+
+              <h2 className="text-lg font-black text-gray-900 dark:text-gray-100 text-center">
+                {overdraftPrompt.mode === 'block'
+                  ? 'No can do. Please top-up to complete the transaction'
+                  : 'Hold on a sec-your account is a little short. This will drop you into a negative balance. Still a go?'}
+              </h2>
+
+              <p className="mt-4 mb-5 text-center text-xs font-medium text-gray-600 dark:text-gray-400">
+                {overdraftPrompt.accountName} goes from {formatCurrency(overdraftPrompt.currentBalance)} to {formatCurrency(overdraftPrompt.projectedBalance)} after this transaction.
+              </p>
+
+              <div className="mb-5 space-y-3 rounded-xl border-2 border-black bg-gray-50 dark:bg-gray-800 p-4">
+                <div className="flex justify-between gap-4">
+                  <span className="text-[10px] font-black uppercase tracking-widest text-gray-500 dark:text-gray-400">Current Balance</span>
+                  <span className="text-sm font-black text-gray-900 dark:text-gray-100">{formatCurrency(overdraftPrompt.currentBalance)}</span>
+                </div>
+                <div className="flex justify-between gap-4">
+                  <span className="text-[10px] font-black uppercase tracking-widest text-gray-500 dark:text-gray-400">Transaction Amount</span>
+                  <span className="text-sm font-black text-orange-600 dark:text-orange-400">{formatCurrency(overdraftPrompt.transactionAmount)}</span>
+                </div>
+                <div className="border-t-2 border-black pt-3 flex justify-between gap-4">
+                  <span className="text-[10px] font-black uppercase tracking-widest text-gray-500 dark:text-gray-400">Projected Balance</span>
+                  <span className="text-sm font-black text-red-600 dark:text-red-400">{formatCurrency(overdraftPrompt.projectedBalance)}</span>
+                </div>
+              </div>
+
+              {overdraftPrompt.mode === 'block' ? (
+                <button
+                  type="button"
+                  onClick={closeOverdraftPrompt}
+                  className="w-full rounded-2xl border-[3px] border-black bg-[#ffd54f] px-4 py-4 text-xs font-black uppercase tracking-widest text-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] transition-all hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none"
+                >
+                  Got it.
+                </button>
+              ) : (
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  <button
+                    type="button"
+                    onClick={confirmFundDespiteOverdraft}
+                    className="rounded-2xl border-[3px] border-black bg-green-400 px-4 py-4 text-xs font-black uppercase tracking-widest text-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] transition-all hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none"
+                  >
+                    Proceed
+                  </button>
+                  <button
+                    type="button"
+                    onClick={closeOverdraftPrompt}
+                    className="rounded-2xl border-[3px] border-black bg-gray-100 dark:bg-gray-800 px-4 py-4 text-xs font-black uppercase tracking-widest text-gray-700 dark:text-gray-300 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] transition-all hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
         </div>
       )}
