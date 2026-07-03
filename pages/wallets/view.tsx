@@ -136,7 +136,7 @@ const WalletView: React.FC<WalletViewProps> = ({ accounts }) => {
   }
 
   return (
-    <div className="space-y-8 animate-in fade-in duration-500">
+    <div className="space-y-8 animate-in fade-in duration-500 py-8">
       {/* Wallet info card */}
       <div className="bg-white dark:bg-gray-800 rounded-2xl p-8 border-[3px] border-black shadow-[8px_8px_0px_0px_rgba(0,0,0,1)]">
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
@@ -161,23 +161,23 @@ const WalletView: React.FC<WalletViewProps> = ({ accounts }) => {
       </div>
 
       {/* Transactions list */}
-      <div className="flex justify-between items-center">
-        <div className="flex items-center gap-4">
-          <Link
-            to="/wallets"
-            className="p-2 rounded-xl bg-white dark:bg-gray-900 shadow-sm border border-gray-100 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
-          >
-            <ArrowLeft className="w-5 h-5 text-gray-700 dark:text-gray-300 transition-colors" />
-          </Link>
-          <h2 className="text-2xl font-black text-gray-900 dark:text-gray-100">Transactions</h2>
+      <div>
+        <div className="flex justify-between items-center">
+            <Link
+                to="/wallets"
+                className="p-2 rounded-xl bg-white dark:bg-gray-900 shadow-sm border border-gray-100 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+            >
+                <ArrowLeft className="w-5 h-5 text-gray-700 dark:text-gray-300 transition-colors" />
+            </Link>
+            <button
+                className={`flex items-center gap-2 text-white px-4 py-2 rounded-lg font-bold border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] active:shadow-[1px_1px_0px_0px_rgba(0,0,0,1)] transition-all text-sm ${getAccentClasses('bg')}`}
+                onClick={openTransactionModal}
+            >
+                <Plus size={16} />
+                Add Transaction
+            </button>
         </div>
-        <button
-          className={`flex items-center gap-2 text-white px-4 py-2 rounded-lg font-bold border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] active:shadow-[1px_1px_0px_0px_rgba(0,0,0,1)] transition-all text-sm ${getAccentClasses('bg')}`}
-          onClick={openTransactionModal}
-        >
-          <Plus size={16} />
-          Add Transaction
-        </button>
+        <h2 className="text-2xl font-black text-gray-900 dark:text-gray-100 mt-4">Transactions</h2>
       </div>
 
       <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800 overflow-hidden transition-colors">
