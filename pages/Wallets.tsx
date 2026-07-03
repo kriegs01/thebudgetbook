@@ -213,17 +213,17 @@ const WalletsPage: React.FC<WalletsPageProps> = ({ accounts }) => {
             }
             actions={
               <div className="flex items-center gap-3 self-end sm:self-auto">
-                <div className="flex items-center bg-gray-50 dark:bg-gray-800 rounded-xl p-1 space-x-1 transition-colors">
+                 <div className="flex items-center bg-gray-100 dark:bg-gray-800 rounded-lg border-2 border-black p-1 space-x-1 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]">
                   <button
                     onClick={() => setViewMode('card')}
-                    className={`p-2 rounded-lg transition-colors ${viewMode === 'card' ? 'bg-white dark:bg-gray-700 shadow-sm text-indigo-600 dark:text-indigo-400' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'}`}
+                    className={`p-2 rounded-md transition-colors ${viewMode === 'card' ? 'bg-white dark:bg-gray-600 shadow-inner text-indigo-600' : 'bg-transparent text-black dark:text-white hover:bg-white/50 dark:hover:bg-black/20'}`}
                     title="Card view"
                   >
                     <LayoutGrid className="w-4 h-4" />
                   </button>
                   <button
                     onClick={() => setViewMode('list')}
-                    className={`p-2 rounded-lg transition-all ${viewMode === 'list' ? 'bg-white dark:bg-gray-700 text-indigo-600 dark:text-indigo-400 shadow-sm' : 'text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'}`}
+                    className={`p-2 rounded-md transition-all ${viewMode === 'list' ? 'bg-white dark:bg-gray-600 shadow-inner text-indigo-600' : 'bg-transparent text-black dark:text-white hover:bg-white/50 dark:hover:bg-black/20'}`}
                     title="List view"
                   >
                     <List className="w-4 h-4" />
@@ -231,8 +231,7 @@ const WalletsPage: React.FC<WalletsPageProps> = ({ accounts }) => {
                 </div>
                 <button
                   onClick={openAddModal}
-                  className={`flex items-center gap-2 text-white px-5 py-3 rounded-xl font-bold transition-all shadow-md dark:shadow-none text-sm ${getAccentClasses('bg')} ${getAccentClasses('shadow')}`}
-                >
+                  className={`flex items-center gap-2 text-white px-4 py-2 rounded-lg font-bold border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] active:shadow-[1px_1px_0px_0px_rgba(0,0,0,1)] transition-all text-sm ${getAccentClasses('bg')}`}>
                   <Plus className="w-4 h-4" />
                   <span className="hidden sm:inline">Add Wallet</span>
                 </button>
