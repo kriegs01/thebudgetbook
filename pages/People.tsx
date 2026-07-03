@@ -1030,14 +1030,14 @@ export default function PeoplePage({ onStartChat }: PeoplePageProps) {
               )}
               <button
                 onClick={() => setShowFindFriendsModal(true)}
-                className={`flex items-center gap-2 bg-white dark:bg-gray-800 border px-5 py-3 rounded-xl font-bold transition-all shadow-sm ${getAccentClasses('text')} ${getAccentClasses('borderLight')} ${getAccentClasses('hoverLight')}`}
+                className={`flex items-center gap-2 bg-white dark:bg-gray-800 border px-5 py-3 rounded-xl font-bold transition-all shadow-sm ${getAccentClasses('text')} ${getAccentClasses('borderLight')} ${getAccentClasses('hoverLight')} retro-sticker-button`}
               >
                 <Search className="w-4 h-4" />
                 <span className="hidden sm:inline">Find Budees</span>
               </button>
               <button 
                 onClick={() => setShowAddModal(true)} 
-                className={`flex items-center gap-2 text-white px-5 py-3 rounded-xl font-bold transition-all shadow-md dark:shadow-none ${getAccentClasses('bg')} ${getAccentClasses('shadow')}`}
+                className={`flex items-center gap-2 text-white px-5 py-3 rounded-xl font-bold transition-all shadow-md dark:shadow-none ${getAccentClasses('bg')} ${getAccentClasses('shadow')} retro-sticker-button`}
               >
                 <Plus className="w-4 h-4" />
                 <span className="hidden sm:inline">New Budee</span>
@@ -1083,7 +1083,7 @@ export default function PeoplePage({ onStartChat }: PeoplePageProps) {
               const fStatus = getFriendshipStatus(person.friend_user_id);
               const budeeProf = friendProfiles.find(fp => fp.user_id === person.friend_user_id);
               return (
-                <div key={person.id} className="bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-800 rounded-[2rem] p-6 hover:shadow-lg transition-all group relative overflow-hidden">
+                <div key={person.id} className="bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-800 rounded-[2rem] p-6 hover:shadow-lg transition-all group relative overflow-hidden retro-sticker-card">
                   <button 
                     onClick={() => handleDeleteTrigger(person.id, person.name)}
                     className="absolute top-4 right-4 p-2 text-gray-300 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-full opacity-0 group-hover:opacity-100 transition-all"
@@ -1143,7 +1143,7 @@ export default function PeoplePage({ onStartChat }: PeoplePageProps) {
               const fStatus = getFriendshipStatus(person.friend_user_id);
               const budeeProf = friendProfiles.find(fp => fp.user_id === person.friend_user_id);
               return (
-                <div key={person.id} className={`flex items-center justify-between p-5 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors ${i !== people.length - 1 ? 'border-b border-gray-50 dark:border-gray-800' : ''}`}>
+                <div key={person.id} className={`flex items-center justify-between p-5 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors ${i !== people.length - 1 ? 'border-b border-gray-50 dark:border-gray-800' : ''} retro-sticker-card`}>
                   <div className="flex items-center gap-4">
                     <div className="w-10 h-10 rounded-full bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 font-black text-sm flex items-center justify-center border border-indigo-100 dark:border-indigo-800 transition-colors">
                       {person.name.substring(0, 2).toUpperCase()}
@@ -1219,7 +1219,7 @@ export default function PeoplePage({ onStartChat }: PeoplePageProps) {
               const displayName = `${prof.first_name} ${prof.last_name}`;
               
               return (
-                <div key={prof.user_id} className={`flex items-center justify-between p-5 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors ${i !== friendProfiles.length - 1 ? 'border-b border-gray-50 dark:border-gray-800' : ''}`}>
+                <div key={prof.user_id} className={`flex items-center justify-between p-5 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors ${i !== friendProfiles.length - 1 ? 'border-b border-gray-50 dark:border-gray-800' : ''} retro-sticker-card`}>
                   <div className="flex items-center gap-4">
                     <div className="w-10 h-10 rounded-full bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 font-black text-sm flex items-center justify-center border border-indigo-100 dark:border-indigo-800 uppercase">
                       {(prof.first_name?.charAt(0) || '')}{(prof.last_name?.charAt(0) || '')}
