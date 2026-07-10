@@ -937,7 +937,7 @@ export default function PeoplePage({ onStartChat }: PeoplePageProps) {
                         
                         for (const tx of txsToUpdate) {
                           const updates: any = {};
-                          if ((tx as any).person_name === selectedPerson) updates.person_name = editPersonForm.name;
+                          if ((t as any).person_name === selectedPerson) updates.person_name = editPersonForm.name;
                           if (tx.borrower_name === selectedPerson) updates.borrower_name = editPersonForm.name;
                           
                           if (Object.keys(updates).length > 0) {
@@ -1092,7 +1092,7 @@ export default function PeoplePage({ onStartChat }: PeoplePageProps) {
                   </button>
                   
                   <div className="flex items-center gap-4 mb-6">
-                    <div className="w-14 h-14 rounded-full bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 font-black text-xl flex items-center justify-center border border-indigo-100 dark:border-indigo-800 transition-colors">
+                    <div className={`w-14 h-14 rounded-2xl flex items-center justify-center font-black text-xl text-white border-[3px] border-black shadow-[2px_2px_0px_#000] transition-colors ${getAccentClasses('bg')}`}>
                       {person.name.substring(0, 2).toUpperCase()}
                     </div>
                     <div className="flex flex-col min-w-0 pr-8">
@@ -1115,7 +1115,7 @@ export default function PeoplePage({ onStartChat }: PeoplePageProps) {
                     </div>
                   </div>
                   
-                  <div className="space-y-3 bg-gray-50 dark:bg-gray-800/50 p-4 rounded-2xl transition-colors">
+                  <div className="space-y-3 bg-gray-50 dark:bg-black/20 p-4 rounded-2xl transition-colors border-2 border-black/10 dark:border-white/10">
                     <div className="flex justify-between items-center">
                       <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Recorded Loans</span>
                       <span className="text-sm font-bold text-gray-900 dark:text-gray-100">{formatCurrency(stats.totalLoanAmount)}</span>
@@ -1128,7 +1128,7 @@ export default function PeoplePage({ onStartChat }: PeoplePageProps) {
                   
                   <button 
                     onClick={() => setSelectedPerson(person.name)}
-                    className="w-full mt-4 bg-gray-50 dark:bg-gray-800/80 text-gray-700 dark:text-gray-300 py-3 rounded-xl text-xs font-black uppercase tracking-widest hover:bg-indigo-50 dark:hover:bg-indigo-900/30 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors"
+                    className={`w-full mt-4 py-3 rounded-xl text-xs font-black uppercase tracking-widest transition-all duration-200 bg-white dark:bg-gray-800 border-black dark:border-gray-600 border-[2px] shadow-[3px_3px_0px_#000] hover:shadow-[1px_1px_0px_#000] dark:shadow-[3px_3px_0px_#666] dark:hover:shadow-[1px_1px_0px_#666] hover:-translate-y-px hover:-translate-x-px ${getAccentClasses('hover:text')} ${getAccentClasses('hover:bg')}`}
                   >
                     View Profile
                   </button>
@@ -1145,7 +1145,7 @@ export default function PeoplePage({ onStartChat }: PeoplePageProps) {
               return (
                 <div key={person.id} className={`flex items-center justify-between p-5 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors ${i !== people.length - 1 ? 'border-b border-gray-50 dark:border-gray-800' : ''} retro-sticker-card`}>
                   <div className="flex items-center gap-4">
-                    <div className="w-10 h-10 rounded-full bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 font-black text-sm flex items-center justify-center border border-indigo-100 dark:border-indigo-800 transition-colors">
+                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-black text-sm text-white border-[2px] border-black shadow-[2px_2px_0px_#000] transition-colors ${getAccentClasses('bg')}`}>
                       {person.name.substring(0, 2).toUpperCase()}
                     </div>
                     <div className="flex flex-col min-w-0">
@@ -1185,7 +1185,7 @@ export default function PeoplePage({ onStartChat }: PeoplePageProps) {
                     )}
                     <button 
                       onClick={() => setSelectedPerson(person.name)}
-                      className="text-xs font-bold text-indigo-600 bg-indigo-50 dark:bg-indigo-900/30 dark:text-indigo-400 px-4 py-2 rounded-xl hover:bg-indigo-100 dark:hover:bg-indigo-900/50 transition-colors uppercase tracking-widest"
+                      className={`text-xs font-bold px-4 py-2 rounded-xl transition-all duration-200 bg-white dark:bg-gray-800 border-black dark:border-gray-600 border-[2px] shadow-[2px_2px_0px_#000] hover:shadow-[1px_1px_0px_#000] dark:shadow-[2px_2px_0px_#666] dark:hover:shadow-[1px_1px_0px_#666] hover:-translate-y-px hover:-translate-x-px ${getAccentClasses('hover:text')} ${getAccentClasses('hover:bg')} uppercase tracking-widest`}
                     >
                       View
                     </button>
@@ -1221,7 +1221,7 @@ export default function PeoplePage({ onStartChat }: PeoplePageProps) {
               return (
                 <div key={prof.user_id} className={`flex items-center justify-between p-5 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors ${i !== friendProfiles.length - 1 ? 'border-b border-gray-50 dark:border-gray-800' : ''} retro-sticker-card`}>
                   <div className="flex items-center gap-4">
-                    <div className="w-10 h-10 rounded-full bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 font-black text-sm flex items-center justify-center border border-indigo-100 dark:border-indigo-800 uppercase">
+                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-black text-sm text-white border-[2px] border-black shadow-[2px_2px_0px_#000] transition-colors ${getAccentClasses('bg')} uppercase`}>
                       {(prof.first_name?.charAt(0) || '')}{(prof.last_name?.charAt(0) || '')}
                     </div>
                     <div className="flex flex-col min-w-0">
@@ -1246,13 +1246,13 @@ export default function PeoplePage({ onStartChat }: PeoplePageProps) {
                         <button 
                           onClick={() => handleCreateProfileForBudee(prof)}
                           disabled={isSubmitting}
-                          className="text-xs font-bold text-white bg-indigo-600 px-4 py-2 rounded-xl hover:bg-indigo-700 transition-colors uppercase tracking-widest disabled:opacity-50"
+                          className={`text-xs font-bold text-white px-4 py-2 rounded-xl transition-all duration-200 border-black border-[2px] shadow-[3px_3px_0px_#000] hover:shadow-[1px_1px_0px_#000] hover:-translate-y-px hover:-translate-x-px uppercase tracking-widest disabled:opacity-50 ${getAccentClasses('bg')} ${getAccentClasses('shadow')}`}
                         >
                           Create Profile
                         </button>
                         <button 
                           onClick={() => { setLinkBudeeModal(prof); setSelectedLocalPersonToLink(''); }}
-                          className="text-xs font-bold text-indigo-600 bg-indigo-50 dark:bg-indigo-900/30 dark:text-indigo-400 px-4 py-2 rounded-xl hover:bg-indigo-100 dark:hover:bg-indigo-900/50 transition-colors uppercase tracking-widest"
+                          className={`text-xs font-bold px-4 py-2 rounded-xl transition-all duration-200 bg-white dark:bg-gray-800 border-black dark:border-gray-600 border-[2px] shadow-[2px_2px_0px_#000] hover:shadow-[1px_1px_0px_#000] dark:shadow-[2px_2px_0px_#666] dark:hover:shadow-[1px_1px_0px_#666] hover:-translate-y-px hover:-translate-x-px ${getAccentClasses('hover:text')} ${getAccentClasses('hover:bg')} uppercase tracking-widest`}
                         >
                           Link Existing
                         </button>
