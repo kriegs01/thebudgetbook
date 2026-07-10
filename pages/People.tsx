@@ -160,7 +160,7 @@ export default function PeoplePage({ onStartChat }: PeoplePageProps) {
             const txsToUpdate = transactions.filter(t => (t as any).person_name === p.name || t.borrower_name === p.name);
             txsToUpdate.forEach(tx => {
               const updates: any = {};
-              if ((tx as any).person_name === p.name) updates.person_name = correctName;
+              if ((t as any).person_name === p.name) updates.person_name = correctName;
               if (tx.borrower_name === p.name) updates.borrower_name = correctName;
               updateTransaction(tx.id, updates).then();
             });
@@ -237,7 +237,7 @@ export default function PeoplePage({ onStartChat }: PeoplePageProps) {
       const txsToUpdate = transactions.filter(t => (t as any).person_name === personRecord.name || t.borrower_name === personRecord.name);
       for (const tx of txsToUpdate) {
         const updates: any = {};
-        if ((tx as any).person_name === personRecord.name) updates.person_name = newName;
+        if ((t as any).person_name === personRecord.name) updates.person_name = newName;
         if (tx.borrower_name === personRecord.name) updates.borrower_name = newName;
         if (Object.keys(updates).length > 0) {
           await updateTransaction(tx.id, updates);
@@ -1030,14 +1030,14 @@ export default function PeoplePage({ onStartChat }: PeoplePageProps) {
               )}
               <button
                 onClick={() => setShowFindFriendsModal(true)}
-                className={`flex items-center gap-2 bg-white dark:bg-gray-800 border px-5 py-3 rounded-xl font-bold transition-all shadow-sm ${getAccentClasses('text')} ${getAccentClasses('borderLight')} ${getAccentClasses('hoverLight')} retro-sticker-button`}
+                className={`flex items-center gap-2 px-5 py-3 rounded-xl font-bold transition-all duration-200 bg-white dark:bg-gray-800 border-black dark:border-gray-600 border-[2px] shadow-[3px_3px_0px_#000] hover:shadow-[1px_1px_0px_#000] dark:shadow-[3px_3px_0px_#666] dark:hover:shadow-[1px_1px_0px_#666] hover:-translate-y-px hover:-translate-x-px ${getAccentClasses('hover:text')} ${getAccentClasses('hover:bg')}`}
               >
                 <Search className="w-4 h-4" />
                 <span className="hidden sm:inline">Find Budees</span>
               </button>
               <button 
                 onClick={() => setShowAddModal(true)} 
-                className={`flex items-center gap-2 text-white px-5 py-3 rounded-xl font-bold transition-all shadow-md dark:shadow-none ${getAccentClasses('bg')} ${getAccentClasses('shadow')} retro-sticker-button`}
+                className={`flex items-center gap-2 text-white px-5 py-3 rounded-xl font-bold transition-all duration-200 border-black border-[2px] shadow-[3px_3px_0px_#000] hover:shadow-[1px_1px_0px_#000] hover:-translate-y-px hover:-translate-x-px ${getAccentClasses('bg')} ${getAccentClasses('shadow')}`}
               >
                 <Plus className="w-4 h-4" />
                 <span className="hidden sm:inline">New Budee</span>
@@ -1086,7 +1086,7 @@ export default function PeoplePage({ onStartChat }: PeoplePageProps) {
                 <div key={person.id} className="bg-white dark:bg-gray-900 rounded-[2rem] p-6 group relative overflow-hidden border-black dark:border-gray-600 border-[3px] shadow-[4px_4px_0px_#000] hover:shadow-[2px_2px_0px_#000] dark:shadow-[4px_4px_0px_#666] dark:hover:shadow-[2px_2px_0px_#666] transition-all duration-200 retro-sticker-card">
                   <button 
                     onClick={() => handleDeleteTrigger(person.id, person.name)}
-                    className="absolute top-4 right-4 p-2 text-gray-300 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-full opacity-0 group-hover:opacity-100 transition-all"
+                    className="absolute top-4 right-4 p-2 text-red-500 bg-red-100 dark:bg-red-900/50 rounded-lg border-2 border-black opacity-0 group-hover:opacity-100 transition-all shadow-[2px_2px_0px_#000] hover:shadow-[1px_1px_0px_#000] hover:-translate-y-px hover:-translate-x-px dark:shadow-[2px_2px_0px_#666] dark:hover:shadow-[1px_1px_0px_#666]"
                   >
                     <Trash2 className="w-4 h-4" />
                   </button>
@@ -1163,7 +1163,7 @@ export default function PeoplePage({ onStartChat }: PeoplePageProps) {
                         )}
                       </div>
                       {budeeProf ? (
-                        <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">{budeeProf.username ? `@${budeeProf.username}` : budeeProf.email}</p>
+                        <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">{budeeProf.username ? `@${budeeProf.username}` : prof.email}</p>
                       ) : (
                         <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">{stats.txCount} transactions</p>
                       )}
@@ -1191,7 +1191,7 @@ export default function PeoplePage({ onStartChat }: PeoplePageProps) {
                     </button>
                     <button 
                       onClick={() => handleDeleteTrigger(person.id, person.name)}
-                      className="text-gray-300 hover:text-red-500 p-2 rounded-full hover:bg-red-50 dark:hover:bg-red-900/20 transition-all"
+                      className="p-2 text-red-500 bg-red-100/50 dark:bg-red-900/30 rounded-lg border border-black/20 dark:border-white/20 shadow-[2px_2px_0px_rgba(0,0,0,0.1)] hover:shadow-[1px_1px_0px_rgba(0,0,0,0.1)] hover:-translate-y-px hover:-translate-x-px transition-all"
                     >
                       <Trash2 className="w-4 h-4" />
                     </button>
