@@ -1083,7 +1083,7 @@ export default function PeoplePage({ onStartChat }: PeoplePageProps) {
               const fStatus = getFriendshipStatus(person.friend_user_id);
               const budeeProf = friendProfiles.find(fp => fp.user_id === person.friend_user_id);
               return (
-                <div key={person.id} className="bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-800 rounded-[2rem] p-6 hover:shadow-lg transition-all group relative overflow-hidden retro-sticker-card">
+                <div key={person.id} className="bg-white dark:bg-gray-900 rounded-[2rem] p-6 group relative overflow-hidden border-black dark:border-gray-600 border-[3px] shadow-[4px_4px_0px_#000] hover:shadow-[2px_2px_0px_#000] dark:shadow-[4px_4px_0px_#666] dark:hover:shadow-[2px_2px_0px_#666] transition-all duration-200 retro-sticker-card">
                   <button 
                     onClick={() => handleDeleteTrigger(person.id, person.name)}
                     className="absolute top-4 right-4 p-2 text-gray-300 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-full opacity-0 group-hover:opacity-100 transition-all"
@@ -1137,7 +1137,7 @@ export default function PeoplePage({ onStartChat }: PeoplePageProps) {
             })}
           </div>
         ) : (
-          <div className="bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-800 rounded-[2rem] overflow-hidden transition-colors">
+          <div className="bg-white dark:bg-gray-900 rounded-[2rem] overflow-hidden transition-colors border-black dark:border-gray-600 border-[3px] shadow-[4px_4px_0px_#000] dark:shadow-[4px_4px_0px_#666]">
             {people.map((person, i) => {
               const stats = getPersonStats(person.name);
               const fStatus = getFriendshipStatus(person.friend_user_id);
@@ -1202,7 +1202,7 @@ export default function PeoplePage({ onStartChat }: PeoplePageProps) {
           </div>
         )
       ) : (
-        <div className="bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-800 rounded-[2.5rem] overflow-hidden transition-colors">
+        <div className="bg-white dark:bg-gray-900 rounded-[2.5rem] overflow-hidden transition-colors border-black dark:border-gray-600 border-[3px] shadow-[4px_4px_0px_#000] dark:shadow-[4px_4px_0px_#666]">
           {friendProfiles.length === 0 ? (
             <div className="text-center py-20">
               <Users className="w-16 h-16 text-gray-300 dark:text-gray-600 mx-auto mb-4" />
