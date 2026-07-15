@@ -18,7 +18,7 @@ import { useTheme } from '../src/contexts/ThemeContext';
 import useMediaQuery from '../src/hooks/useMediaQuery';
 import { BudgetSetupsList } from '../src/components/BudgetSetupsList';
 import { PageHeader } from '../src/components/PageHeader';
-
+import { guardFundStashOverdraft } from '../pages/transactions';
 interface BudgetProps {
   items: BudgetItem[];
   accounts: Account[];
@@ -617,7 +617,9 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
     const performFund = async () => {
       setFundSubmitting(true);
       try {
-        await executeFundStash(amount, sourceAccountId);
+        await guardFundStashOverdraft(sourceAccountId, amount, async () => {
+          await executeFundStash(amount, sourceAccountId);
+        });
       } catch (err) {
         console.error('[Budget] Error funding stash:', err);
         setStashStatusMsg({ msg: 'Failed to fund stash. Please try again.', type: 'error' });
@@ -627,7 +629,7 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
       }
     };
 
-    guardFundStashOverdraft(sourceAccountId, amount, performFund);
+    performFund();
   };
 
   const executeFundStash = async (amount: number, sourceAccountId: string) => {
