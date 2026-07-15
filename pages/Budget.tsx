@@ -558,7 +558,7 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
     const accountTxs = transactions.filter(tx => tx.payment_method_id === account.id);
     return account.openingBalance + accountTxs.reduce((sum, tx) => {
       if (tx.transaction_type === 'cash_in' || tx.transaction_type === 'loan') {
-        return sum + tx.amount;
+        return sum + Math.abs(tx.amount);
       } else {
         return sum - Math.abs(tx.amount);
       }
