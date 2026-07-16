@@ -768,8 +768,14 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
   
   // Safely grab your current period's budget items
   const flattenedBudgetItems = React.useMemo(() => {
-    return Object.values(setupData || {}).flat();
+    return Object.values(setupData || {})
+      .flat()
+      // 🟢 Filter out any items that don't have an ID or a valid Name
+      .filter((item): item is BudgetItem => 
+        !!(item && typeof item === 'object' && 'id' in item && item.id)
+      );
   }, [setupData]);
+  
 
     // Call the hook and destructure everything cleanly in one go
     const { 
