@@ -29,23 +29,29 @@ export const useIncomeSlicer = ({
   
   // State to track the allocations per budget item
   const [allocations, setAllocations] = useState<SliceAllocation[]>([]);
-  // Preload the remaining target amount needed for each item
-  useEffect(() => {
-    if (budgetItems && budgetItems.length > 0) {
-      const initialAllocations = budgetItems.map((item) => {
-        const target = item.targetAmount || 0;
-        const collected = item.actualCollected || 0;
-        const remainingNeeded = target - collected;
-
-        return {
-          budgetItemId: item.id,
-          amount: remainingNeeded > 0 ? remainingNeeded : 0,
-        };
-      });
-
-      setAllocations(initialAllocations);
-    }
-  }, [budgetItems]);
+    // Preload the remaining target amount safely using properties that exist on your budget items
+    useEffect(() => {
+      if (budgetItems && budgetItems.length > 0) {
+        const initialAllocations = budgetItems.map((item) => {
+          // Fallback to item.amount (parsed as a number) since targetAmount doesn't exist here
+          const target = typeof item.amount === 'number' 
+            ? item.amount 
+            : parseFloat(item.amount) || 0;
+  
+          // Fallback to 0 if actualCollected is not defined on these items
+          const collected = item.actualCollected || 0;
+          const remainingNeeded = target - collected;
+  
+          return {
+            budgetItemId: item.id,
+            amount: remainingNeeded > 0 ? remainingNeeded : 0,
+          };
+        });
+  
+        setAllocations(initialAllocations);
+      }
+    }, [budgetItems]);
+  
 
   // Filter: Get "fresh" income transactions matching current Month + Year + Timing
   const availableIncomes = useMemo(() => {
