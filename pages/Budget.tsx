@@ -2274,7 +2274,7 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                                   <input
                                     type="number"
                                     value={currentAlloc.amount || ''}
-                                    onChange={(e) => updateAllocation(item.id, item.label, { amount: Number(e.target.value) })}
+                                    onChange={(e) => updateAllocation(item.id, { amount: Number(e.target.value) })}
                                     placeholder="0"
                                     className="w-full pl-6 pr-2 py-1.5 border-2 border-black rounded-lg text-sm font-black focus:outline-none focus:ring-2 focus:ring-emerald-400 bg-white dark:bg-gray-900"
                                   />
