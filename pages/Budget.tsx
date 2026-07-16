@@ -819,23 +819,32 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
   const [schedulePaymentsModal, setSchedulePaymentsModal] = useState<{ label: string; scheduleId: string | null; transactions: BudgetScheduleTx[] } | null>(null);
   const [loadingScheduleTx, setLoadingScheduleTx] = useState(false);
   const [, setScheduleSignedUrls] = useState<Record<string, string | null>>({});
-  // Inside your BudgetComponent function:
-const {
-  availableIncomes,
-  trayTxIds,
-  totalTrayPool,
-  remainingToAllocate,
-  allocations,
-  toggleTrayTransaction,
-  updateAllocation,
-  executeSlice
-} = useIncomeSlicer({
-  transactions: globalTransactions, // Replace with your actual state/prop name for transactions
-  currentBudgetPeriod: activePeriod, // Replace with your active month state (e.g., "2026-07")
-  currentBudgetTiming: activeTiming, // Replace with your active timing state (e.g., "1/2")
-  budgetItems: currentBudgetSetup,   // Replace with your current setup items array
-  accounts: userAccounts             // Replace with your accounts array from context/props
-});
+    // =========================================================
+  // ⚡ STEP 2: THE INCOME SLICER HOOK (Wired with real state)
+  // =========================================================
+  const currentBudgetPeriodIso = `${selectedYear}-${String(MONTHS.indexOf(selectedMonth) + 1).padStart(2, '0')}`;
+  
+  // Safely grab your current period's budget items
+  const flattenedBudgetItems = React.useMemo(() => {
+    return Object.values(setupData || {}).flat();
+  }, [setupData]);
+
+  const {
+    availableIncomes,
+    trayTxIds,
+    totalTrayPool,
+    remainingToAllocate,
+    allocations,
+    toggleTrayTransaction,
+    updateAllocation,
+    executeSlice
+  } = useIncomeSlicer({
+    transactions: transactions,                   // Uses your actual transactions array
+    currentBudgetPeriod: currentBudgetPeriodIso,  // Uses your derived year-month string
+    currentBudgetTiming: selectedTiming,          // Uses your selectedTiming state
+    budgetItems: flattenedBudgetItems,            // Uses the derived budget setup array
+    accounts: accounts                            // Uses the accounts prop array
+  });
 
   // =========================================================
   // ⚡ STEP 3: THE EXECUTION HANDLER FOR THE SLICER
@@ -2208,7 +2217,7 @@ const {
                 {/* ========================================================= */}
           {/* ⚡ INCOME SLICER WORKSPACE PANEL                          */}
           {/* ========================================================= */}
-          {availableIncomes.length > 0 && (
+          {(availableIncomes || []).length > 0 && (
             <div className="mt-8 bg-[#F4F3EF] dark:bg-gray-900 border-4 border-black p-6 rounded-2xl shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] transition-colors">
               
               {/* Header Section */}
