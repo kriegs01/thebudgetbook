@@ -2290,20 +2290,21 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
 
                               {/* Destination Account Selection */}
                               <td className="p-3">
-  <select 
-    value={currentAlloc.targetAccountId || accounts.filter(a => a.type !== 'Credit')[0]?.id || ""} 
-    onChange={(e) => updateAllocation(item.id, { targetAccountId: e.target.value })}
-    className="w-full bg-white dark:bg-gray-900 border-2 border-black rounded-lg text-sm font-black px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-emerald-400"
-  >
-    <option value="" disabled>Select Account</option>
-    {accounts
-      .filter(a => a.type !== 'Credit')
-      .map(acc => (
-        <option key={acc.id} value={acc.id}>
-          {acc.bank} ({acc.classification})
-        </option>
-    ))}
-  </select>
+                              <select 
+  // Bind directly to the state property being updated
+  value={currentAlloc.targetAccountId || ""} 
+  onChange={(e) => updateAllocation(item.id, { targetAccountId: e.target.value })}
+  className="..."
+>
+  <option value="" disabled>Select Account</option>
+  {accounts
+    .filter(a => a.type !== 'Credit') // Ensure you are not selecting Credit accounts
+    .map(acc => (
+      <option key={acc.id} value={acc.id}>
+        {acc.bank} ({acc.classification})
+      </option>
+  ))}
+</select>
 </td>
 
                               {/* Local vs Transfer Indicator */}
