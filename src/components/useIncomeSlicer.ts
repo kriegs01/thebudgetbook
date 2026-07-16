@@ -1,5 +1,5 @@
 // src/hooks/useIncomeSlicer.ts
-import { useState, useMemo } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 
 // 1. Define the shape of our allocation state
 export interface SliceAllocation {
