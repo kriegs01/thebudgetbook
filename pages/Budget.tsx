@@ -2291,14 +2291,13 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                               {/* Destination Account Selection */}
                               <td className="p-3">
                               <select 
-  // Bind directly to the state property being updated
   value={currentAlloc.targetAccountId || ""} 
   onChange={(e) => updateAllocation(item.id, { targetAccountId: e.target.value })}
-  className="..."
+  className="w-full bg-white border-2 border-black rounded-lg text-sm font-black px-2 py-1.5"
 >
   <option value="" disabled>Select Account</option>
   {accounts
-    .filter(a => a.type !== 'Credit') // Ensure you are not selecting Credit accounts
+    .filter(a => a.type !== 'Credit')
     .map(acc => (
       <option key={acc.id} value={acc.id}>
         {acc.bank} ({acc.classification})
