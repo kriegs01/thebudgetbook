@@ -19,6 +19,8 @@ import useMediaQuery from '../src/hooks/useMediaQuery';
 import { BudgetSetupsList } from '../src/components/BudgetSetupsList';
 import { PageHeader } from '../src/components/PageHeader';
 import { guardFundStashOverdraft } from '../pages/transactions';
+import { useIncomeSlicer } from './components/useIncomeSlicer'; 
+
 interface BudgetProps {
   items: BudgetItem[];
   accounts: Account[];
@@ -817,6 +819,62 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
   const [schedulePaymentsModal, setSchedulePaymentsModal] = useState<{ label: string; scheduleId: string | null; transactions: BudgetScheduleTx[] } | null>(null);
   const [loadingScheduleTx, setLoadingScheduleTx] = useState(false);
   const [, setScheduleSignedUrls] = useState<Record<string, string | null>>({});
+  // Inside your BudgetComponent function:
+const {
+  availableIncomes,
+  trayTxIds,
+  totalTrayPool,
+  remainingToAllocate,
+  allocations,
+  toggleTrayTransaction,
+  updateAllocation,
+  executeSlice
+} = useIncomeSlicer({
+  transactions: globalTransactions, // Replace with your actual state/prop name for transactions
+  currentBudgetPeriod: activePeriod, // Replace with your active month state (e.g., "2026-07")
+  currentBudgetTiming: activeTiming, // Replace with your active timing state (e.g., "1/2")
+  budgetItems: currentBudgetSetup,   // Replace with your current setup items array
+  accounts: userAccounts             // Replace with your accounts array from context/props
+});
+
+  // =========================================================
+  // ⚡ STEP 3: THE EXECUTION HANDLER FOR THE SLICER
+  // =========================================================
+  const handleSliceSubmit = async () => {
+    if (trayTxIds.length === 0) {
+      alert("Your distribution tray is empty! Add some income transactions first.");
+      return;
+    }
+
+    await executeSlice(
+      createTransfer, 
+      async (ids: string[], status: boolean) => {
+        const updatePromises = ids.map(id => 
+          updateTransaction(id, { is_sliced: status })
+        );
+        
+        const results = await Promise.all(updatePromises);
+        
+        const failedUpdate = results.find(res => res && res.error);
+        if (failedUpdate) {
+          throw new Error(`Failed to update transaction status: ${failedUpdate.error.message}`);
+        }
+      }
+    );
+
+    // Automatically refresh transactions so your screen updates with new balances
+    const { data, error } = await getAllTransactions();
+    if (!error && data) {
+      const twoYearsAgo = new Date();
+      twoYearsAgo.setFullYear(twoYearsAgo.getFullYear() - 2);
+      const recentTransactions = data.filter(tx => {
+        const txDate = new Date(tx.date);
+        return txDate >= twoYearsAgo;
+      });
+      setTransactions(recentTransactions);
+    }
+  };
+  // =========================================================
 
   const getLinkedInstallmentsAmount = useCallback((biller: Biller): number | null => {
     if (!biller.category.startsWith('Loans')) return null;
@@ -2146,6 +2204,187 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
           </table>
         </div>
       </div>
+      
+                {/* ========================================================= */}
+          {/* ⚡ INCOME SLICER WORKSPACE PANEL                          */}
+          {/* ========================================================= */}
+          {availableIncomes.length > 0 && (
+            <div className="mt-8 bg-[#F4F3EF] dark:bg-gray-900 border-4 border-black p-6 rounded-2xl shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] transition-colors">
+              
+              {/* Header Section */}
+              <div className="flex flex-col md:flex-row md:items-center justify-between border-b-4 border-black pb-4 mb-6">
+                <div>
+                  <span className="bg-amber-300 text-black border-2 border-black px-2.5 py-1 rounded-md text-[10px] font-black uppercase tracking-wider shadow-[1px_1px_0px_0px_rgba(0,0,0,1)]">
+                    Slicer Active
+                  </span>
+                  <h2 className="text-xl font-black text-gray-900 dark:text-gray-100 mt-2 uppercase tracking-tight">
+                    Distribute Income
+                  </h2>
+                  <p className="text-xs text-gray-500 dark:text-gray-400 font-medium mt-0.5">
+                    Select which recorded income transactions to slice and allocate to your budgets.
+                  </p>
+                </div>
+
+                {/* Quick Stats */}
+                <div className="flex items-center space-x-4 mt-4 md:mt-0">
+                  <div className="bg-white dark:bg-gray-800 border-2 border-black p-3 rounded-xl shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]">
+                    <p className="text-[10px] uppercase font-black tracking-wider text-gray-400">Selected Pool</p>
+                    <p className="text-lg font-black text-emerald-600">₱{totalTrayPool.toLocaleString()}</p>
+                  </div>
+                  <div className="bg-white dark:bg-gray-800 border-2 border-black p-3 rounded-xl shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]">
+                    <p className="text-[10px] uppercase font-black tracking-wider text-gray-400">Remaining</p>
+                    <p className={`text-lg font-black ${remainingToAllocate === 0 ? 'text-blue-500' : 'text-red-500'}`}>
+                      ₱{remainingToAllocate.toLocaleString()}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* STEP 1: Select Income Transactions to Load Into Tray */}
+              <div className="mb-6">
+                <h3 className="text-xs font-black uppercase tracking-wider text-gray-400 mb-3">
+                  1. Select Income to Slice
+                </h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  {availableIncomes.map((tx) => {
+                    const isSelected = trayTxIds.includes(tx.id);
+                    const accountName = accounts.find(a => a.id === tx.payment_method_id)?.name || 'Unknown Account';
+                    
+                    return (
+                      <button
+                        key={tx.id}
+                        type="button"
+                        onClick={() => toggleTrayTransaction(tx.id)}
+                        className={`w-full text-left p-4 border-2 border-black rounded-xl flex items-center justify-between transition-all transform active:scale-[0.98] ${
+                          isSelected
+                            ? 'bg-emerald-100 dark:bg-emerald-950/40 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]'
+                            : 'bg-white dark:bg-gray-800 hover:bg-gray-50 shadow-[1px_1px_0px_0px_rgba(0,0,0,1)] hover:shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]'
+                        }`}
+                      >
+                        <div>
+                          <p className="font-black text-sm text-gray-900 dark:text-gray-100">{tx.notes || 'Income Record'}</p>
+                          <p className="text-[10px] font-bold uppercase text-gray-400 mt-0.5">Origin: {accountName}</p>
+                        </div>
+                        <div className="flex items-center space-x-3">
+                          <span className="font-black text-emerald-600">₱{Math.abs(tx.amount).toLocaleString()}</span>
+                          <div className={`w-6 h-6 border-2 border-black rounded-md flex items-center justify-center ${isSelected ? 'bg-emerald-500' : 'bg-white'}`}>
+                            {isSelected && <Check className="w-4 h-4 text-white stroke-[4]" />}
+                          </div>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* STEP 2: Allocate to Setup Items */}
+              {trayTxIds.length > 0 && (
+                <div className="space-y-4 border-t-2 border-dashed border-gray-400 pt-6">
+                  <h3 className="text-xs font-black uppercase tracking-wider text-gray-400">
+                    2. Distribute to Budget Items
+                  </h3>
+                  
+                  <div className="overflow-x-auto border-2 border-black rounded-xl bg-white dark:bg-gray-800 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]">
+                    <table className="w-full text-left border-collapse">
+                      <thead>
+                        <tr className="bg-gray-100 dark:bg-gray-700 border-b-2 border-black text-xs font-black uppercase text-gray-600 dark:text-gray-300">
+                          <th className="p-3">Budget Line Item</th>
+                          <th className="p-3">Target Amount</th>
+                          <th className="p-3">Allocate Amount</th>
+                          <th className="p-3">Destination Account</th>
+                          <th className="p-3">Transfer Type</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-200 dark:divide-gray-700 text-sm font-medium">
+                        {flattenedBudgetItems.map((item) => {
+                          const currentAlloc = allocations.find(a => a.budgetItemId === item.id) || { amount: 0, targetAccountId: accounts[0]?.id || '' };
+                          
+                          // Determine if we need an actual bank transfer
+                          const activeIncomesInTray = transactions.filter(t => trayTxIds.includes(t.id));
+                          const matchesAllSources = activeIncomesInTray.every(t => t.payment_method_id === currentAlloc.targetAccountId);
+                          const isLocal = activeIncomesInTray.length > 0 && matchesAllSources;
+
+                          return (
+                            <tr key={item.id} className="hover:bg-gray-50 dark:hover:bg-gray-750 transition-colors">
+                              {/* Item Name */}
+                              <td className="p-3 font-black text-gray-900 dark:text-gray-100">
+                                {item.label}
+                              </td>
+
+                              {/* Target/Goal */}
+                              <td className="p-3 text-gray-500">
+                                ₱{(item.amount || 0).toLocaleString()}
+                              </td>
+
+                              {/* Allocation Input */}
+                              <td className="p-3">
+                                <div className="relative max-w-[140px]">
+                                  <span className="absolute left-3 top-1/2 -translate-y-1/2 font-black text-gray-400 text-xs">₱</span>
+                                  <input
+                                    type="number"
+                                    value={currentAlloc.amount || ''}
+                                    onChange={(e) => updateAllocation(item.id, item.label, { amount: Number(e.target.value) })}
+                                    placeholder="0"
+                                    className="w-full pl-6 pr-2 py-1.5 border-2 border-black rounded-lg text-sm font-black focus:outline-none focus:ring-2 focus:ring-emerald-400 bg-white dark:bg-gray-900"
+                                  />
+                                </div>
+                              </td>
+
+                              {/* Destination Account Selection */}
+                              <td className="p-3">
+                                <select
+                                  value={currentAlloc.targetAccountId}
+                                  onChange={(e) => updateAllocation(item.id, item.label, { targetAccountId: e.target.value })}
+                                  className="p-1.5 border-2 border-black rounded-lg text-xs font-black focus:outline-none bg-white dark:bg-gray-900"
+                                >
+                                  {accounts.map(acc => (
+                                    <option key={acc.id} value={acc.id}>{acc.name}</option>
+                                  ))}
+                                </select>
+                              </td>
+
+                              {/* Local vs Transfer Indicator */}
+                              <td className="p-3">
+                                {currentAlloc.amount > 0 ? (
+                                  isLocal ? (
+                                    <span className="bg-blue-100 text-blue-800 border border-blue-300 text-[10px] px-2 py-0.5 rounded font-black uppercase">
+                                      ⚡ Local (No Swap)
+                                    </span>
+                                  ) : (
+                                    <span className="bg-amber-100 text-amber-800 border border-amber-300 text-[10px] px-2 py-0.5 rounded font-black uppercase">
+                                      💸 Auto Transfer
+                                    </span>
+                                  )
+                                ) : (
+                                  <span className="text-gray-300 text-xs">—</span>
+                                )}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  {/* Action Button */}
+                  <div className="flex justify-end pt-4">
+                    <button
+                      type="button"
+                      onClick={handleSliceSubmit}
+                      disabled={remainingToAllocate !== 0 || totalTrayPool === 0}
+                      className={`px-6 py-3 rounded-xl font-black uppercase tracking-wider text-xs border-2 border-black shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] transition-all ${
+                        remainingToAllocate === 0 && totalTrayPool > 0
+                          ? 'bg-emerald-400 text-black hover:bg-emerald-500 active:translate-x-[2px] active:translate-y-[2px] active:shadow-[1px_1px_0px_0px_rgba(0,0,0,1)]'
+                          : 'bg-gray-200 dark:bg-gray-700 text-gray-400 cursor-not-allowed border-gray-300 dark:border-gray-600 shadow-none'
+                      }`}
+                    >
+                      Execute Slice & Fund
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
 
       <div className="space-y-6">
         {wallets.length > 0 && (
