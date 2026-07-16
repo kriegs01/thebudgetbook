@@ -2317,7 +2317,7 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                             <tr key={item.id} className="hover:bg-gray-50 dark:hover:bg-gray-750 transition-colors">
                               {/* Item Name */}
                               <td className="p-3 font-black text-gray-900 dark:text-gray-100">
-                                {item.label}
+                                {item.name}
                               </td>
 
                               {/* Target/Goal */}
