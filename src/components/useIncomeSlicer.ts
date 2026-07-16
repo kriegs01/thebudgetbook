@@ -103,26 +103,23 @@ export const useIncomeSlicer = ({
   const updateAllocation = (budgetItemId: string, itemName: string, fields: Partial<SliceAllocation>) => {
     setAllocations(prev => {
       const existingIdx = prev.findIndex(a => a.budgetItemId === budgetItemId);
-      const defaultAccountId = accounts[0]?.id || '';
-
+      
       if (existingIdx > -1) {
-        const updated = [...prev];
-        updated[existingIdx] = { ...updated[existingIdx], ...fields };
-        return updated;
+        // 1. Copy the existing item
+        const updatedAllocations = [...prev];
+        // 2. Spread the existing values, then overwrite ONLY with the new 'fields'
+        updatedAllocations[existingIdx] = { 
+          ...updatedAllocations[existingIdx], 
+          ...fields 
+        };
+        return updatedAllocations;
       } else {
-        return [
-          ...prev,
-          {
-            budgetItemId,
-            budgetItemName: itemName,
-            targetAccountId: defaultAccountId,
-            amount: 0,
-            ...fields
-          }
-        ];
+        // 3. If it's a new entry, combine item info with the new fields
+        return [...prev, { budgetItemId, itemName, ...fields } as SliceAllocation];
       }
     });
   };
+  
 
   // The process handler that runs physical transfers and updates database flags
   const executeSlice = async (createTransferFn: Function, updateTxSlicedStatusFn: Function) => {
