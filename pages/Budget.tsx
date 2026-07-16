@@ -2290,20 +2290,24 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
 
                               {/* Destination Account Selection */}
                               <td className="p-3">
-                              <select
-  value={currentAlloc.targetAccountId || ''}
-  onChange={(e) => updateAllocation(item.id, { targetAccountId: e.target.value })}
-  className="p-1.5 border-2 border-black rounded-lg text-xs font-black focus:outline-none bg-white dark:bg-gray-800"
+                              // 1. Place this inside your component, near your other state declarations
+const [selectedAccountId, setSelectedAccountId] = useState("");
+
+// ... somewhere in your return statement:
+<select 
+  value={selectedAccountId} 
+  onChange={(e) => setSelectedAccountId(e.target.value)}
 >
   <option value="" disabled>Select Account</option>
-  {(accounts || []).map((acc) => (
-  <option key={acc.id} value={acc.id}>
-    {/* Use .bank and .classification to match your established UI pattern */}
-    {acc.bank} ({acc.classification})
-  </option>
-))}
+  {/* 2. Replace your existing map with this filtered version */}
+  {accounts
+    .filter(a => a.type !== 'Credit')
+    .map(acc => (
+      <option key={acc.id} value={acc.id}>
+        {acc.bank} ({acc.classification})
+      </option>
+  ))}
 </select>
-
                               </td>
 
                               {/* Local vs Transfer Indicator */}
