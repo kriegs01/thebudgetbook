@@ -19,7 +19,7 @@ import useMediaQuery from '../src/hooks/useMediaQuery';
 import { BudgetSetupsList } from '../src/components/BudgetSetupsList';
 import { PageHeader } from '../src/components/PageHeader';
 import { guardFundStashOverdraft } from '../pages/transactions';
-import { useIncomeSlicer } from '.src/components/useIncomeSlicer'; 
+import { useIncomeSlicer } from '../src/components/useIncomeSlicer'; 
 
 interface BudgetProps {
   items: BudgetItem[];
