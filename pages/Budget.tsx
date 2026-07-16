@@ -2255,7 +2255,7 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                       </thead>
                       <tbody className="divide-y divide-gray-200 dark:divide-gray-700 text-sm font-medium">
                         {flattenedBudgetItems.map((item) => {
-                          const currentAlloc = allocations.find(a => a.budgetItemId === item.id) || { amount: 0, targetAccountId: accounts[0]?.id || '' };
+                          const currentAlloc = allocations.find(a => a.budgetItemId === item.id) || { amount: 0, targetAccountId: '' };
                           
                           // Determine if we need an actual bank transfer
                           const activeIncomesInTray = transactions.filter(t => trayTxIds.includes(t.id));
@@ -2293,7 +2293,7 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                               <select 
   value={currentAlloc.targetAccountId || ""} 
   onChange={(e) => updateAllocation(item.id, { targetAccountId: e.target.value })}
-  className="w-full bg-white border-2 border-black rounded-lg text-sm font-black px-2 py-1.5"
+  className="w-full bg-white dark:bg-gray-900 border-2 border-black rounded-lg text-sm font-black px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-emerald-400"
 >
   <option value="" disabled>Select Account</option>
   {accounts
