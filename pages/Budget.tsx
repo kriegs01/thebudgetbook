@@ -2301,10 +2301,11 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
   <option disabled>--- Debug: {accounts?.length || 0} accounts found ---</option>
 
   {(accounts || []).map((acc) => (
-    <option key={acc.id} value={acc.id}>
-      {acc.name || "Unnamed"}
-    </option>
-  ))}
+  <option key={acc.id} value={acc.id}>
+    {/* Use .bank and .classification to match your established UI pattern */}
+    {acc.bank} ({acc.classification})
+  </option>
+))}
 </select>
 
                               </td>
