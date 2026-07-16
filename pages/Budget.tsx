@@ -2291,17 +2291,22 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                               {/* Destination Account Selection */}
                               <td className="p-3">
                               <select
-                               value={currentAlloc.targetAccountId || ''}
-                               onChange={(e) => updateAllocation(item.id, { targetAccountId: e.target.value })}
-                               className="p-1.5 border-2 border-black rounded-lg text-xs font-black focus:outline-none bg-white dark:bg-gray-800"
-                               >
-                               <option value="" disabled>Select Account</option>
-                              {(accounts || []).map((acc) => (
-                               <option key={acc.id} value={acc.id}>
-                              {acc.name}
-                               </option>
-                               ))}
-                              </select>
+  value={currentAlloc.targetAccountId || ''}
+  onChange={(e) => updateAllocation(item.id, { targetAccountId: e.target.value })}
+  className="p-1.5 border-2 border-black rounded-lg text-xs font-black focus:outline-none bg-white dark:bg-gray-800"
+>
+  <option value="" disabled>Select Account</option>
+  
+  {/* 🟢 DEBUG: Add this temporary option to see how many accounts the code thinks it has */}
+  <option disabled>--- Debug: {accounts?.length || 0} accounts found ---</option>
+
+  {(accounts || []).map((acc) => (
+    <option key={acc.id} value={acc.id}>
+      {acc.name || "Unnamed"}
+    </option>
+  ))}
+</select>
+
                               </td>
 
                               {/* Local vs Transfer Indicator */}
