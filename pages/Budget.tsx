@@ -2296,10 +2296,6 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
   className="p-1.5 border-2 border-black rounded-lg text-xs font-black focus:outline-none bg-white dark:bg-gray-800"
 >
   <option value="" disabled>Select Account</option>
-  
-  {/* 🟢 DEBUG: Add this temporary option to see how many accounts the code thinks it has */}
-  <option disabled>--- Debug: {accounts?.length || 0} accounts found ---</option>
-
   {(accounts || []).map((acc) => (
   <option key={acc.id} value={acc.id}>
     {/* Use .bank and .classification to match your established UI pattern */}
