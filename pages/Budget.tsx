@@ -2290,15 +2290,18 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
 
                               {/* Destination Account Selection */}
                               <td className="p-3">
-                                <select
-                                  value={currentAlloc.targetAccountId}
-                                  onChange={(e) => updateAllocation(item.id, item.label, { targetAccountId: e.target.value })}
-                                  className="p-1.5 border-2 border-black rounded-lg text-xs font-black focus:outline-none bg-white dark:bg-gray-900"
-                                >
-                                  {accounts.map(acc => (
-                                    <option key={acc.id} value={acc.id}>{acc.name}</option>
-                                  ))}
-                                </select>
+                              <select
+                               value={currentAlloc.targetAccountId || ''}
+                               onChange={(e) => updateAllocation(item.id, { targetAccountId: e.target.value })}
+                               className="p-1.5 border-2 border-black rounded-lg text-xs font-black focus:outline-none bg-white dark:bg-gray-800"
+                               >
+                               <option value="" disabled>Select Account</option>
+                              {(accounts || []).map((acc) => (
+                               <option key={acc.id} value={acc.id}>
+                              {acc.name}
+                               </option>
+                               ))}
+                              </select>
                               </td>
 
                               {/* Local vs Transfer Indicator */}
