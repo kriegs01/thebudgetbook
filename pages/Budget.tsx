@@ -771,23 +771,24 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
     return Object.values(setupData || {}).flat();
   }, [setupData]);
 
-  const {
-    availableIncomes,
-    trayTxIds,
-    totalTrayPool,
-    remainingToAllocate,
-    allocations,
-    toggleTrayTransaction,
-    updateAllocation,
-    executeSlice
-  } = useIncomeSlicer({
-    transactions: transactions,                   // Uses your actual transactions array
-    currentBudgetPeriod: currentBudgetPeriodIso,  // Uses your derived year-month string
-    currentBudgetTiming: selectedTiming,          // Uses your selectedTiming state
-    budgetItems: flattenedBudgetItems,            // Uses the derived budget setup array
-    accounts: accounts                            // Uses the accounts prop array
-  });
-
+    // Call the hook and destructure everything cleanly in one go
+    const { 
+      availableIncomes, 
+      trayTxIds, 
+      totalTrayPool, 
+      remainingToAllocate, 
+      allocations, 
+      toggleTrayTransaction, 
+      updateAllocation, 
+      executeSlice 
+    } = useIncomeSlicer({
+      transactions: transactions,
+      currentBudgetPeriod: currentBudgetPeriodIso,
+      currentBudgetTiming: selectedTiming,
+      budgetItems: flattenedBudgetItems || [], // 👈 Pass the array variable directly (no parentheses!)
+      accounts: accounts
+    });
+  
   // =========================================================
   // ⚡ STEP 3: THE EXECUTION HANDLER FOR THE SLICER
   // =========================================================
