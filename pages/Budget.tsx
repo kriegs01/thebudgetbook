@@ -2279,12 +2279,14 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                                 <div className="relative max-w-[140px]">
                                   <span className="absolute left-3 top-1/2 -translate-y-1/2 font-black text-gray-400 text-xs">₱</span>
                                   <input
-                                    type="number"
-                                    value={currentAlloc.amount || ''}
-                                    onChange={(e) => updateAllocation(item.id, { amount: Number(e.target.value) })}
-                                    placeholder="0"
-                                    className="w-full pl-6 pr-2 py-1.5 border-2 border-black rounded-lg text-sm font-black focus:outline-none focus:ring-2 focus:ring-emerald-400 bg-white dark:bg-gray-900"
-                                  />
+  type="number"
+  value={currentAlloc.amount || ''}
+  // Add item.name as the 2nd argument!
+  onChange={(e) => updateAllocation(item.id, item.name, { amount: Number(e.target.value) })}
+  placeholder="0"
+  className="w-full pl-6 pr-2 py-1.5 border-2 border-black rounded-lg text-sm font-black focus:outline-none focus:ring-2 focus:ring-emerald-400 bg-white dark:bg-gray-900"
+/>
+
                                 </div>
                               </td>
 
@@ -2292,7 +2294,8 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                               <td className="p-3">
                               <select 
   value={currentAlloc.targetAccountId || ""} 
-  onChange={(e) => updateAllocation(item.id, { targetAccountId: e.target.value })}
+  // Add item.name as the 2nd argument!
+  onChange={(e) => updateAllocation(item.id, item.name, { targetAccountId: e.target.value })}
   className="w-full bg-white dark:bg-gray-900 border-2 border-black rounded-lg text-sm font-black px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-emerald-400"
 >
   <option value="" disabled>Select Account</option>
