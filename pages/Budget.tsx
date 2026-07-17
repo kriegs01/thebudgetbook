@@ -326,6 +326,22 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
         setSetupData(incomingData as any);
       }
 
+      const sortedSetups = React.useMemo(() => {
+        return [...savedSetups].sort((a, b) => {
+          // 1. First, compare years
+          const yearA = parseInt(a.data?._year || new Date().getFullYear().toString());
+          const yearB = parseInt(b.data?._year || new Date().getFullYear().toString());
+          
+          if (yearA !== yearB) return yearA - yearB;
+      
+          // 2. If years are same, compare month indices
+          const monthA = MONTHS.indexOf(a.month);
+          const monthB = MONTHS.indexOf(b.month);
+          
+          return monthA - monthB;
+        });
+      }, [savedSetups]);
+      
       const newProjected = incomingData._projectedSalary ?? '11000';
       const newActual = incomingData._actualSalary ?? '';
       if (newProjected !== projectedSalary) setProjectedSalary(newProjected);
@@ -1152,7 +1168,8 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
     if (view !== 'setup') return;
     
     const dataToSave = {
-      ...structuredClone(setupData),
+      ...JSON.parse(JSON.stringify(setupData)),
+      _year: selectedYear, // 🟢 Add this line
       _projectedSalary: projectedSalary,
       _actualSalary: actualSalary,
       _excludedInstallmentIds: [...excludedInstallmentIds],
@@ -1342,11 +1359,13 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
     const existingSetup = savedSetups.find(s => s.month === selectedMonth && s.timing === selectedTiming);
     const dataToSave = {
       ...JSON.parse(JSON.stringify(setupData)),
+      _year: selectedYear, // 🟢 Add this line
       _projectedSalary: projectedSalary,
       _actualSalary: actualSalary,
       _excludedInstallmentIds: [...excludedInstallmentIds],
       _excludedWalletIds: [...excludedWalletIds]
     };
+    
     try {
       if (existingSetup) {
         const updatedSetup: SavedBudgetSetup = {
@@ -1790,9 +1809,11 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
     });
   };
 
+  // ... then, update these lines in the 'summary' view block
   if (view === 'summary') {
-    const activeSetups = savedSetups.filter(s => !s.isArchived);
-    const archivedSetups = savedSetups.filter(s => s.isArchived);
+    // Use sortedSetups instead of savedSetups
+    const activeSetups = sortedSetups.filter(s => !s.isArchived);
+    const archivedSetups = sortedSetups.filter(s => s.isArchived);
 
     return (
         <div className={`space-y-8 animate-in fade-in duration-500 w-full max-w-7xl mx-auto ${isMobile ? 'pt-10' : ''}`}>
