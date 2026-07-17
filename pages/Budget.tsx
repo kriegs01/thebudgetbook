@@ -798,63 +798,51 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
   // =========================================================
   // ⚡ STEP 3: THE EXECUTION HANDLER FOR THE SLICER
   // =========================================================
-  const handleSliceSubmit = async () => {
-    if (trayTxIds.length === 0) {
-      alert("Your distribution tray is empty! Add some income transactions first.");
-      return;
-    }
-
-    await executeSlice(
-      // 1. Adapter function mapping the hook's object to your service's positional arguments
-      async (params: { sourceAccountId: string, destinationAccountId: string, amount: number, description: string, date: string }) => {
-        return createTransfer(
-          params.sourceAccountId,
-          params.destinationAccountId,
-          params.amount,
-          params.date,
-          0 // Assuming 0 fee for these internal slicing transfers
-        );
-      }, 
-      // 2. The status update function (this remains unchanged)
-      async (ids: string[], status: boolean) => {
-        const updatePromises = ids.map(id => 
-          updateTransaction(id, { is_sliced: status })
-        );
-        
-        const results = await Promise.all(updatePromises);
-        
-        const failedUpdate = results.find(res => res && res.error);
-        if (failedUpdate) {
-          throw new Error(`Failed to update transaction status: ${failedUpdate.error.message}`);
-        }
+    // 🟢 Make sure the "async" keyword is right here!
+    const handleSliceSubmit = async () => {
+      if (trayTxIds.length === 0) {
+        alert("Your distribution tray is empty! Add some income transactions first.");
+        return;
       }
-    );
-
-    // Automatically refresh transactions so your screen updates with new balances
-    const { data, error } = await getAllTransactions();
-    if (!error && data) {
-      const twoYearsAgo = new Date();
-      twoYearsAgo.setFullYear(twoYearsAgo.getFullYear() - 2);
-      const recentTransactions = data.filter(tx => {
-        const txDate = new Date(tx.date);
-        return txDate >= twoYearsAgo;
-      });
-      setTransactions(recentTransactions);
-    }
-  };
-
-    // Automatically refresh transactions so your screen updates with new balances
-    const { data, error } = await getAllTransactions();
-    if (!error && data) {
-      const twoYearsAgo = new Date();
-      twoYearsAgo.setFullYear(twoYearsAgo.getFullYear() - 2);
-      const recentTransactions = data.filter(tx => {
-        const txDate = new Date(tx.date);
-        return txDate >= twoYearsAgo;
-      });
-      setTransactions(recentTransactions);
-    }
-  };
+  
+      await executeSlice(
+        // Adapter function
+        async (params: { sourceAccountId: string, destinationAccountId: string, amount: number, description: string, date: string }) => {
+          return createTransfer(
+            params.sourceAccountId,
+            params.destinationAccountId,
+            params.amount,
+            params.date,
+            0 
+          );
+        }, 
+        // Status update function
+        async (ids: string[], status: boolean) => {
+          const updatePromises = ids.map(id => 
+            updateTransaction(id, { is_sliced: status })
+          );
+          
+          const results = await Promise.all(updatePromises);
+          
+          const failedUpdate = results.find(res => res && res.error);
+          if (failedUpdate) {
+            throw new Error(`Failed to update transaction status: ${failedUpdate.error.message}`);
+          }
+        }
+      );
+  
+      // Automatically refresh transactions so your screen updates with new balances
+      const { data, error } = await getAllTransactions();
+      if (!error && data) {
+        const twoYearsAgo = new Date();
+        twoYearsAgo.setFullYear(twoYearsAgo.getFullYear() - 2);
+        const recentTransactions = data.filter(tx => {
+          const txDate = new Date(tx.date);
+          return txDate >= twoYearsAgo;
+        });
+        setTransactions(recentTransactions);
+      }
+    };  
   // =========================================================
 
   const getLinkedInstallmentsAmount = useCallback((biller: Biller): number | null => {
