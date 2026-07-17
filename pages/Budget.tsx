@@ -1169,7 +1169,7 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
     
     const dataToSave = {
       ...JSON.parse(JSON.stringify(setupData)),
-      _year: selectedYear, // 🟢 Add this line
+      //_year: selectedYear, // 🟢 Add this line
       _projectedSalary: projectedSalary,
       _actualSalary: actualSalary,
       _excludedInstallmentIds: [...excludedInstallmentIds],
@@ -1359,7 +1359,7 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
     const existingSetup = savedSetups.find(s => s.month === selectedMonth && s.timing === selectedTiming);
     const dataToSave = {
       ...JSON.parse(JSON.stringify(setupData)),
-      _year: selectedYear, // 🟢 Add this line
+      //_year: selectedYear, // 🟢 Add this line
       _projectedSalary: projectedSalary,
       _actualSalary: actualSalary,
       _excludedInstallmentIds: [...excludedInstallmentIds],
