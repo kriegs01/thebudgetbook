@@ -124,12 +124,22 @@ export const useIncomeSlicer = ({
   // The process handler that runs physical transfers and updates database flags
   const executeSlice = async (createTransferFn: Function, updateTxSlicedStatusFn: Function) => {
     if (trayTxIds.length === 0) return alert("Your tray is empty!");
-    if (remainingToAllocate !== 0) {
-      return alert(`Please allocate the entire pool. Remaining: ₱${remainingToAllocate}`);
+    
+    // Check if at least one row has an amount and an assigned account
+    const hasValidAllocation = allocations.some(a => a.amount > 0 && a.targetAccountId);
+    if (!hasValidAllocation) {
+      return alert("Please enter an amount and select a destination account for at least one item.");
+    }
+
+    // Safeguard: Prevent allocating MORE than what is in the pool, 
+    // but perfectly fine to leave money unallocated!
+    if (remainingToAllocate < 0) {
+      return alert(`You've allocated more than what's in the pool! Please reduce your allocations by ₱${Math.abs(remainingToAllocate).toFixed(2)}.`);
     }
 
     try {
       const sourceBalances: Record<string, number> = {};
+      // ... (keep the rest of the existing try block exactly the same)
       transactions
         .filter(tx => trayTxIds.includes(tx.id))
         .forEach(tx => {

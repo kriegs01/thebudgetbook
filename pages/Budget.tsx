@@ -2349,13 +2349,13 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                   <button
   type="button"
   onClick={handleSliceSubmit}
-  // ✅ Only disable if the tray is empty OR no row has both an amount and an account assigned
+  // Disable ONLY if tray is empty OR no valid allocation exists
   disabled={
     trayTxIds.length === 0 || 
     !allocations.some(a => a.amount > 0 && a.targetAccountId)
   }
   className={`px-6 py-3 rounded-xl font-black uppercase tracking-wider text-xs border-2 border-black shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] transition-all ${
-    // ✅ Apply active styling if the above condition is met
+    // Apply active styling if there is a valid allocation
     trayTxIds.length > 0 && allocations.some(a => a.amount > 0 && a.targetAccountId)
       ? 'bg-emerald-400 text-black hover:bg-emerald-500 active:translate-x-[2px] active:translate-y-[2px] active:shadow-[1px_1px_0px_0px_rgba(0,0,0,1)]'
       : 'bg-gray-200 dark:bg-gray-700 text-gray-400 cursor-not-allowed border-gray-300 dark:border-gray-600 shadow-none'
