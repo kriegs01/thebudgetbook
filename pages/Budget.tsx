@@ -238,9 +238,25 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
   const [selectedTiming, setSelectedTiming] = useState<'1/2' | '2/2'>('1/2');
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
 
+  const sortedSetups = React.useMemo(() => {
+    return [...savedSetups].sort((a, b) => {
+      // 1. First, compare years
+      const yearA = parseInt(a.data?._year || new Date().getFullYear().toString());
+      const yearB = parseInt(b.data?._year || new Date().getFullYear().toString());
+      
+      if (yearA !== yearB) return yearA - yearB;
+  
+      // 2. If years are same, compare month indices
+      const monthA = MONTHS.indexOf(a.month);
+      const monthB = MONTHS.indexOf(b.month);
+      
+      return monthA - monthB;
+    });
+  }, [savedSetups]);
+
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
-
+  
   useEffect(() => {
     const viewParam = searchParams.get('view');
     const monthParam = searchParams.get('month');
@@ -325,22 +341,6 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
       if (currentDataStr !== incomingDataStr) {
         setSetupData(incomingData as any);
       }
-
-      const sortedSetups = React.useMemo(() => {
-        return [...savedSetups].sort((a, b) => {
-          // 1. First, compare years
-          const yearA = parseInt(a.data?._year || new Date().getFullYear().toString());
-          const yearB = parseInt(b.data?._year || new Date().getFullYear().toString());
-          
-          if (yearA !== yearB) return yearA - yearB;
-      
-          // 2. If years are same, compare month indices
-          const monthA = MONTHS.indexOf(a.month);
-          const monthB = MONTHS.indexOf(b.month);
-          
-          return monthA - monthB;
-        });
-      }, [savedSetups]);
       
       const newProjected = incomingData._projectedSalary ?? '11000';
       const newActual = incomingData._actualSalary ?? '';
@@ -1169,7 +1169,7 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
     
     const dataToSave = {
       ...JSON.parse(JSON.stringify(setupData)),
-      //_year: selectedYear, // 🟢 Add this line
+      _year: selectedYear, // 🟢 Add this line
       _projectedSalary: projectedSalary,
       _actualSalary: actualSalary,
       _excludedInstallmentIds: [...excludedInstallmentIds],
@@ -1359,7 +1359,7 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
     const existingSetup = savedSetups.find(s => s.month === selectedMonth && s.timing === selectedTiming);
     const dataToSave = {
       ...JSON.parse(JSON.stringify(setupData)),
-      //_year: selectedYear, // 🟢 Add this line
+      _year: selectedYear, // 🟢 Add this line
       _projectedSalary: projectedSalary,
       _actualSalary: actualSalary,
       _excludedInstallmentIds: [...excludedInstallmentIds],
