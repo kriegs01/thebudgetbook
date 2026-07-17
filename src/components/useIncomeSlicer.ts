@@ -125,34 +125,34 @@ export const useIncomeSlicer = ({
   const executeSlice = async (createTransferFn: Function, updateTxSlicedStatusFn: Function) => {
     if (trayTxIds.length === 0) return alert("Your tray is empty!");
     
-    // Check if at least one row has an amount and an assigned account
+    // Check if they actually filled out at least one row correctly
     const hasValidAllocation = allocations.some(a => a.amount > 0 && a.targetAccountId);
     if (!hasValidAllocation) {
       return alert("Please enter an amount and select a destination account for at least one item.");
     }
 
-    // Safeguard: Prevent allocating MORE than what is in the pool, 
-    // but perfectly fine to leave money unallocated!
+    // Optional safeguard: Stop them from allocating MORE than they have
     if (remainingToAllocate < 0) {
       return alert(`You've allocated more than what's in the pool! Please reduce your allocations by ₱${Math.abs(remainingToAllocate).toFixed(2)}.`);
     }
 
     try {
+      // 🛠 FIX 1: Find the exact date of the latest income transaction in the tray to avoid "Time-Travel" bugs
+      const selectedIncomes = transactions.filter(tx => trayTxIds.includes(tx.id));
+      const latestIncomeDate = selectedIncomes.reduce((latest, tx) => {
+        const txDate = new Date(tx.date).getTime();
+        return txDate > latest ? txDate : latest;
+      }, 0);
+      const transferDate = latestIncomeDate ? new Date(latestIncomeDate).toISOString() : new Date().toISOString();
+
       const sourceBalances: Record<string, number> = {};
-      // ... (keep the rest of the existing try block exactly the same)
-      transactions
-        .filter(tx => trayTxIds.includes(tx.id))
-        .forEach(tx => {
+      selectedIncomes.forEach(tx => {
           const accId = tx.payment_method_id;
           sourceBalances[accId] = (sourceBalances[accId] || 0) + Math.abs(tx.amount);
-        });
-
-      const transferPromises = [];
+      });
 
       for (const alloc of allocations) {
         let amountNeeded = alloc.amount;
-        
-        // ✅ CRITICAL FIX: Skip if amount is 0 OR if no account was selected
         if (amountNeeded <= 0 || !alloc.targetAccountId) continue;
 
         for (const sourceAccountId of Object.keys(sourceBalances)) {
@@ -165,22 +165,20 @@ export const useIncomeSlicer = ({
           amountNeeded -= amountToTake;
 
           if (sourceAccountId !== alloc.targetAccountId) {
-            transferPromises.push(
-              createTransferFn({
-                sourceAccountId,
-                destinationAccountId: alloc.targetAccountId,
-                amount: amountToTake,
-                description: `Slice Allocation: ${alloc.budgetItemName}`,
-                date: new Date().toISOString()
-              })
-            );
+            // 🛠 FIX 2: Use 'await' to process transfers one-by-one to prevent DB race conditions
+            await createTransferFn({
+              sourceAccountId,
+              destinationAccountId: alloc.targetAccountId,
+              amount: amountToTake,
+              description: `Slice Allocation: ${alloc.budgetItemName}`,
+              date: transferDate // Use the synchronized date!
+            });
           }
 
           if (amountNeeded === 0) break;
         }
       }
 
-      await Promise.all(transferPromises);
       await updateTxSlicedStatusFn(trayTxIds, true);
 
       setTrayTxIds([]);
@@ -189,7 +187,6 @@ export const useIncomeSlicer = ({
 
     } catch (err: any) {
       console.error("Failed to execute slice:", err);
-      // ✅ Now it will tell us EXACTLY what broke!
       alert(`Something went wrong: ${err.message || JSON.stringify(err)}`);
     }
   };
