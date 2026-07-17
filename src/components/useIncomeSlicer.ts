@@ -138,12 +138,17 @@ export const useIncomeSlicer = ({
 
     try {
       // 🛠 FIX 1: Find the exact date of the latest income transaction in the tray to avoid "Time-Travel" bugs
-      const selectedIncomes = transactions.filter(tx => trayTxIds.includes(tx.id));
-      const latestIncomeDate = selectedIncomes.reduce((latest, tx) => {
-        const txDate = new Date(tx.date).getTime();
-        return txDate > latest ? txDate : latest;
-      }, 0);
-      const transferDate = latestIncomeDate ? new Date(latestIncomeDate).toISOString() : new Date().toISOString();
+            // Find the exact date of the latest income transaction
+            const selectedIncomes = transactions.filter(tx => trayTxIds.includes(tx.id));
+            const latestIncomeDate = selectedIncomes.reduce((latest, tx) => {
+              const txDate = new Date(tx.date).getTime();
+              return txDate > latest ? txDate : latest;
+            }, 0);
+            
+            // ✅ FIX: Add 1 minute (60000 ms) to force the transfer to occur AFTER the deposit
+            const transferDate = latestIncomeDate 
+              ? new Date(latestIncomeDate + 60000).toISOString() 
+              : new Date().toISOString();      
 
       const sourceBalances: Record<string, number> = {};
       selectedIncomes.forEach(tx => {
