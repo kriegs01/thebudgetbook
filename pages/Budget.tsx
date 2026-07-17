@@ -806,17 +806,24 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
       }
   
       await executeSlice(
-        // Adapter function
+        // 1. Adapter function 
         async (params: { sourceAccountId: string, destinationAccountId: string, amount: number, description: string, date: string }) => {
-          return createTransfer(
+          const result = await createTransfer(
             params.sourceAccountId,
             params.destinationAccountId,
             params.amount,
             params.date,
             0 
           );
+          
+          // ✅ THROW the error back to the hook if the database rejects it
+          if (result && result.error) {
+            throw new Error(`Transfer failed: ${result.error.message || 'Unknown database error'}`);
+          }
+          
+          return result;
         }, 
-        // Status update function
+        // 2. The status update function (Leave this exactly as is!)
         async (ids: string[], status: boolean) => {
           const updatePromises = ids.map(id => 
             updateTransaction(id, { is_sliced: status })

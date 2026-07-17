@@ -151,7 +151,9 @@ export const useIncomeSlicer = ({
 
       for (const alloc of allocations) {
         let amountNeeded = alloc.amount;
-        if (amountNeeded <= 0) continue;
+        
+        // ✅ CRITICAL FIX: Skip if amount is 0 OR if no account was selected
+        if (amountNeeded <= 0 || !alloc.targetAccountId) continue;
 
         for (const sourceAccountId of Object.keys(sourceBalances)) {
           const availableInSource = sourceBalances[sourceAccountId];
@@ -185,9 +187,10 @@ export const useIncomeSlicer = ({
       setAllocations([]);
       alert("Success! Income sliced and physical transfers processed.");
 
-    } catch (err) {
+    } catch (err: any) {
       console.error("Failed to execute slice:", err);
-      alert("Something went wrong executing the slice.");
+      // ✅ Now it will tell us EXACTLY what broke!
+      alert(`Something went wrong: ${err.message || JSON.stringify(err)}`);
     }
   };
 
