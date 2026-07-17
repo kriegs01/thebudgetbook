@@ -2206,7 +2206,8 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                   {availableIncomes.map((tx) => {
                     const isSelected = trayTxIds.includes(tx.id);
-                    const accountName = accounts.find(a => a.id === tx.payment_method_id)?.name || 'Unknown Account';
+                    const account = accounts.find(a => a.id === tx.payment_method_id);
+                    const accountName = account ? `${account.bank} (${account.classification})` : 'Unknown Account';
                     
                     return (
                       <button
