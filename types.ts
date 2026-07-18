@@ -120,7 +120,7 @@ export interface CategorizedSetupItem {
   isBiller?: boolean;
   accountId?: string;
   settled?: boolean;
-  dueDate?: string;⁠
+  dueDate?: string;
 }
 
 export interface SavedBudgetSetup {
