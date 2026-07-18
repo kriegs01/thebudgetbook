@@ -1842,10 +1842,17 @@ const MainApp: React.FC = () => {
       {/* Global Migration Modal */}
       {showMigrationModal && (
   <MigrationModal 
-  // Pass a static snapshot that doesn't change when you update one item
-  installments={React.useMemo(() => installments.filter(i => !i.dueDate), [showMigrationModal])} 
+  installments={React.useMemo(() => installments.filter(i => !i.dueDate), [installments, showMigrationModal])} 
   onClose={() => setShowMigrationModal(false)}
-  onUpdate={...}
+  onUpdate={async (id, newDueDate) => {
+    const targetInstallment = installments.find(i => i.id === id);
+    if (targetInstallment) {
+      await handleUpdateInstallment({ ...targetInstallment, dueDate: newDueDate });
+      setInstallments(prev => prev.map(inst => 
+        inst.id === id ? { ...inst, dueDate: newDueDate } : inst
+      ));
+    }
+  }}
 />
 )}
     </>
