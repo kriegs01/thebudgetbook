@@ -249,9 +249,20 @@ const MainApp: React.FC = () => {
   const [minSplashTimeElapsed, setMinSplashTimeElapsed] = useState(false);
 
   // Inside your MainApp component, before the return statement:
-const filteredInstallments = React.useMemo(() => {
-  return installments.filter(i => !i.dueDate);
-}, [installments, showMigrationModal]);
+  const filteredInstallments = React.useMemo(() => {
+    return installments.filter(i => {
+      // Explicitly check that we only want items that:
+      // 1. Are NOT already migrated
+      // 2. Are NOT archived
+      // 3. Are missing a due date
+      const isNotMigrated = i.isMigrated !== true;
+      const isNotArchived = i.isArchived !== true;
+      const needsDueDate = !i.dueDate;
+      
+      return isNotMigrated && isNotArchived && needsDueDate;
+    });
+  }, [installments]); // Removed showMigrationModal as it is not needed here[span_2](start_span)[span_2](end_span)
+  
 
   // Scroll listener for Dashboard top bar visibility
   useEffect(() => {

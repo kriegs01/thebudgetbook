@@ -20,7 +20,6 @@ import { BudgetSetupsList } from '../src/components/BudgetSetupsList';
 import { PageHeader } from '../src/components/PageHeader';
 import { guardFundStashOverdraft } from '../pages/transactions';
 import { useIncomeSlicer } from '../src/components/useIncomeSlicer'; 
-import MigrationModal from '../src/components/MigrationModal';
 
 interface BudgetProps {
   items: BudgetItem[];
@@ -329,8 +328,6 @@ const calculateBudgetRemaining = (
   const [showArchived, setShowArchived] = useState(false);
 
   const [paymentSchedules, setPaymentSchedules] = useState<SupabaseMonthlyPaymentSchedule[]>([]);
-
-  const [showMigrationModal, setShowMigrationModal] = useState(false);
 
   useEffect(() => {
     const existingSetup = savedSetups.find(s => s.month === selectedMonth && s.timing === selectedTiming);
@@ -710,18 +707,6 @@ const calculateBudgetRemaining = (
     });
   };
   
-  // Add this dedicated block
-  useEffect(() => {
-    const needsMigration = installments.some(i => !i.dueDate);
-    const featureLaunchDate = new Date('2026-07-18'); 
-    
-    // Use userProfile from props, with a fallback just in case it's missing
-    const userJoinedDate = new Date(userProfile?.created_at || '2026-01-01');
-  
-    if (needsMigration && userJoinedDate < featureLaunchDate) {
-      setShowMigrationModal(true);
-    }
-  }, [installments, userProfile]); // Also update the dependency array  
 
   useEffect(() => {
     const loadPaymentSchedules = async () => {
@@ -3494,22 +3479,6 @@ const calculateBudgetRemaining = (
       )}
 
       {confirmModal.show && <ConfirmDialog {...confirmModal} onClose={() => setConfirmModal(p => ({ ...p, show: false }))} />}
-    
-      {showMigrationModal && (
-        <MigrationModal 
-          installments={installments.filter(i => !i.dueDate)} 
-          onClose={() => setShowMigrationModal(false)}
-          onUpdate={async (id, newDueDate) => {
-            // Find the full installment object
-            const targetInstallment = installments.find(i => i.id === id);
-            
-            if (targetInstallment && onUpdateInstallment) {
-              // Use the prop that already exists to update the database AND the parent state
-              await onUpdateInstallment({ ...targetInstallment, dueDate: newDueDate });
-            }
-          }}
-        />
-      )}
     </div>
   );
 };

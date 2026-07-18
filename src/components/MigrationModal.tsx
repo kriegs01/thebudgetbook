@@ -47,7 +47,7 @@ const MigrationModal = ({ installments, onClose, onUpdate }) => {
             Update Due Dates
           </h2>
           <p className="text-gray-600 dark:text-gray-400 text-sm font-medium mt-2">
-            Assign due dates to your active installments below to keep your tracking accurate.
+            We are making improvements with due date tracking! Assign due dates to your active installments below to keep your tracking accurate.
           </p>
         </div>
         
