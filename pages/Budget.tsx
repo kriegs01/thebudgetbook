@@ -231,7 +231,7 @@ const calculateBudgetRemaining = (
   return netIncome - setup.totalAmount;
 };
 
-const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSetups, setSavedSetups, onUpdateBiller, onMoveToTrash, onReloadSetups, onReloadBillers, onUpdateInstallment, installments = [], onTransactionCreated, onTransactionDeleted, onArchiveBudget, onReopenBudget }) => {
+  const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSetups, setSavedSetups, onUpdateBiller, onMoveToTrash, onReloadSetups, onReloadBillers, onUpdateInstallment, installments = [], onTransactionCreated, onTransactionDeleted, onArchiveBudget, onReopenBudget, userProfile }) => {
   const { getAccentClasses } = useTheme();
   const isMobile = useMediaQuery('(max-width: 767px)');
   const [view, setView] = useState<'summary' | 'setup'>('summary');
@@ -3496,20 +3496,20 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
       {confirmModal.show && <ConfirmDialog {...confirmModal} onClose={() => setConfirmModal(p => ({ ...p, show: false }))} />}
     
       {showMigrationModal && (
-  <MigrationModal 
-  installments={installments.filter(i => !i.dueDate)} 
-  onClose={() => setShowMigrationModal(false)}
-  onUpdate={async (id, newDueDate) => {
-    // 1. Perform your Supabase update using the ID provided by the modal
-    await updateInstallment(id, { dueDate: newDueDate });
-  
-    // 2. Update local state
-    setInstallments(prev => prev.map(inst => 
-      inst.id === id ? { ...inst, dueDate: newDueDate } : inst
-    ));
-  }}
-/>
-)}
+        <MigrationModal 
+          installments={installments.filter(i => !i.dueDate)} 
+          onClose={() => setShowMigrationModal(false)}
+          onUpdate={async (id, newDueDate) => {
+            // Find the full installment object
+            const targetInstallment = installments.find(i => i.id === id);
+            
+            if (targetInstallment && onUpdateInstallment) {
+              // Use the prop that already exists to update the database AND the parent state
+              await onUpdateInstallment({ ...targetInstallment, dueDate: newDueDate });
+            }
+          }}
+        />
+      )}
     </div>
   );
 };
