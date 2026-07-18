@@ -2828,9 +2828,9 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                               </td>
 
                               <td className="p-4 text-center">
-                            {isBillerItem && linkedBiller?.due_date ? (
+                            {isBillerItem && linkedBiller?.dueDate ? (
                               <span className="text-[10px] font-black bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 px-2 py-1 rounded border border-gray-200 dark:border-gray-700">
-                                Day {linkedBiller.due_date}
+                                Day {linkedBiller.dueDate}
                               </span>
                             ) : (
                               <span className="text-gray-300 dark:text-gray-600 text-xs">—</span>
@@ -2932,9 +2932,9 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                               </td>
                               <td className="p-4 text-sm font-black">{formatCurrency(installment.monthlyAmount)}</td>
                               <td className="p-4 text-center">
-                            {installment.due_date ? (
+                            {installment.dueDate ? (
                               <span className="text-[10px] font-black bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 px-2 py-1 rounded border border-gray-200 dark:border-gray-700">
-                                Day {installment.due_date}
+                                Day {installment.dueDate}
                               </span>
                             ) : (
                               <span className="text-gray-300 dark:text-gray-600 text-xs">—</span>
