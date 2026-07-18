@@ -799,8 +799,7 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
     // =========================================================
   // ⚡ STEP 2: THE INCOME SLICER HOOK (Wired with real state)
   // =========================================================
-  const currentBudgetPeriodIso = `${selectedYear}-${String(MONTHS.indexOf(selectedMonth) + 1).padStart(2, '0')}`;
-  
+    
   // Safely grab your current period's budget items
   const flattenedBudgetItems = React.useMemo(() => {
     return Object.values(setupData || {})
@@ -2855,7 +2854,7 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                                   <span className="text-gray-300 dark:text-gray-600 text-xs">—</span>
                                   )}
                               </td>
-                              
+
                               <td className="p-4 text-center">
                                 <div className="flex items-center justify-center space-x-2">
                                   {isBillerItem && (isPaid ? (
