@@ -52,6 +52,8 @@ import { Logo } from './src/components/Logo';
 import useMediaQuery from './src/hooks/useMediaQuery';
 import { MessagesInbox } from './src/components/MessagesInbox';
 
+import MigrationModal from './src/components/MigrationModal';
+
 // Helper function to convert UI Account to Supabase format
 const accountToSupabase = (account: Account) => ({
   bank: account.bank,
@@ -221,6 +223,7 @@ const MainApp: React.FC = () => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(!isMobile);
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
+  const [showMigrationModal, setShowMigrationModal] = useState(false);//<=== MigrationModal declaration
   const [isMessagesOpen, setIsMessagesOpen] = useState(false);
   const [activeChatFriendId, setActiveChatFriendId] = useState<string | undefined>();
   const { data: pendingRequests = [], refetch: refetchRequests } = useIncomingRequests();
@@ -253,6 +256,21 @@ const MainApp: React.FC = () => {
       scrollContainerRef.current.scrollTop = 0;
     }
   }, [location.pathname]);
+
+  //Installment Due Date Migration
+  useEffect(() => {
+    // Only check once data is loaded and user profile exists
+    if (!installmentsLoading && userProfile) {
+      const needsMigration = installments.some(i => !i.dueDate);
+      const featureLaunchDate = new Date('2026-07-18'); 
+      const userJoinedDate = new Date(userProfile.created_at || '2026-01-01');
+    
+      if (needsMigration && userJoinedDate < featureLaunchDate) {
+        setShowMigrationModal(true);
+      }
+    }
+  }, [installments, userProfile, installmentsLoading]);
+
 
   useEffect(() => {
     setIsSidebarOpen(!isMobile);
@@ -1821,6 +1839,19 @@ const MainApp: React.FC = () => {
         activeFriendId={activeChatFriendId}
         onClearActiveChat={() => setActiveChatFriendId(undefined)}
       />
+      {/* Global Migration Modal */}
+      {showMigrationModal && (
+        <MigrationModal 
+          installments={installments.filter(i => !i.dueDate)} 
+          onClose={() => setShowMigrationModal(false)}
+          onUpdate={async (id, newDueDate) => {
+            const targetInstallment = installments.find(i => i.id === id);
+            if (targetInstallment) {
+              await handleUpdateInstallment({ ...targetInstallment, dueDate: newDueDate });
+            }
+          }}
+        />
+      )}
     </>
   );
 };
