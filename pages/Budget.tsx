@@ -20,6 +20,7 @@ import { BudgetSetupsList } from '../src/components/BudgetSetupsList';
 import { PageHeader } from '../src/components/PageHeader';
 import { guardFundStashOverdraft } from '../pages/transactions';
 import { useIncomeSlicer } from '../src/components/useIncomeSlicer'; 
+import MigrationModal from '../src/components/MigrationModal';
 
 interface BudgetProps {
   items: BudgetItem[];
@@ -707,6 +708,17 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
     });
   };
   
+  // Add this dedicated block
+useEffect(() => {
+  const needsMigration = installments.some(i => !i.dueDate);
+  const featureLaunchDate = new Date('2026-07-18'); 
+  const userJoinedDate = new Date(user.created_at);
+
+  if (needsMigration && userJoinedDate < featureLaunchDate) {
+    setShowMigrationModal(true);
+  }
+}, [installments, user.created_at]);
+
   useEffect(() => {
     const loadPaymentSchedules = async () => {
       try {
@@ -3495,5 +3507,22 @@ const ConfirmDialog: React.FC<{ show: boolean; title: string; message: string; o
 </div>
 </div>
 );
+
+{showMigrationModal && (
+  <MigrationModal 
+  installments={installments.filter(i => !i.dueDate)} 
+  onClose={() => setShowMigrationModal(false)}
+  onUpdate={async (id, newDueDate) => {
+    // 1. Perform your Supabase update using the ID provided by the modal
+    await updateInstallment(id, { dueDate: newDueDate });
+  
+    // 2. Update local state
+    setInstallments(prev => prev.map(inst => 
+      inst.id === id ? { ...inst, dueDate: newDueDate } : inst
+    ));
+  }}
+/>
+
+)}
 
 export default Budget;
