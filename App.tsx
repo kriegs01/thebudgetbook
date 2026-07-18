@@ -233,6 +233,15 @@ const MainApp: React.FC = () => {
   const [resolvingIds, setResolvingIds] = useState<Set<string>>(new Set());
   const { getAccentClasses } = useTheme();
 
+  const [accounts, setAccounts] = useState<Account[]>([]);
+  const [budgetItems, setBudgetItems] = useState(INITIAL_BUDGET);
+  const [billers, setBillers] = useState<Biller[]>([]);
+  const [billersLoading, setBillersLoading] = useState(true);
+  const [billersError, setBillersError] = useState<string | null>(null);
+  const [installments, setInstallments] = useState<Installment[]>([]);
+  const [installmentsLoading, setInstallmentsLoading] = useState(true);
+  const [installmentsError, setInstallmentsError] = useState<string | null>(null);
+
   // Splash Screen State
   const [showSplash, setShowSplash] = useState(true);
   const [minSplashTimeElapsed, setMinSplashTimeElapsed] = useState(false);
@@ -404,15 +413,6 @@ const MainApp: React.FC = () => {
     await removeFriendship(id);
     await refetchRequests();
   };
-
-  const [accounts, setAccounts] = useState<Account[]>([]);
-  const [budgetItems, setBudgetItems] = useState(INITIAL_BUDGET);
-  const [billers, setBillers] = useState<Biller[]>([]);
-  const [billersLoading, setBillersLoading] = useState(true);
-  const [billersError, setBillersError] = useState<string | null>(null);
-  const [installments, setInstallments] = useState<Installment[]>([]);
-  const [installmentsLoading, setInstallmentsLoading] = useState(true);
-  const [installmentsError, setInstallmentsError] = useState<string | null>(null);
 
   const { data: txData, isLoading: transactionsLoading } = useTransactions();
   const rawTransactions = txData?.raw || [];
