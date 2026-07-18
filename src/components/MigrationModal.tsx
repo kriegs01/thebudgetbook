@@ -12,16 +12,18 @@ const MigrationModal = ({ installments, onClose, onUpdate }) => {
   const handleSubmit = async () => {
     setIsSubmitting(true);
     
-    // Only update the ones the user actually filled out
-    const updates = Object.entries(dueDates).filter(([id, date]) => date.trim() !== '');
+    // Convert to array of entries
+    const entries = Object.entries(dueDates);
     
-    // Process all updates
-    for (const [id, date] of updates) {
-      await onUpdate(id, date);
+    // Process all updates sequentially and wait for them to finish
+    for (const [id, date] of entries) {
+      if (date.trim() !== '') {
+        await onUpdate(id, date); // This now awaits the DB update
+      }
     }
     
     setIsSubmitting(false);
-    onClose(); 
+    onClose(); // Only close AFTER all DB operations succeed
   };
 
   const handleDismiss = () => {

@@ -1841,17 +1841,24 @@ const MainApp: React.FC = () => {
       />
       {/* Global Migration Modal */}
       {showMigrationModal && (
-        <MigrationModal 
-          installments={installments.filter(i => !i.dueDate)} 
-          onClose={() => setShowMigrationModal(false)}
-          onUpdate={async (id, newDueDate) => {
-            const targetInstallment = installments.find(i => i.id === id);
-            if (targetInstallment) {
-              await handleUpdateInstallment({ ...targetInstallment, dueDate: newDueDate });
-            }
-          }}
-        />
-      )}
+    <MigrationModal 
+    installments={installments.filter(i => !i.dueDate)} 
+    onClose={() => setShowMigrationModal(false)}
+    onUpdate={async (id, newDueDate) => {
+      const targetInstallment = installments.find(i => i.id === id);
+      if (targetInstallment) {
+        // 1. Update DB
+        await handleUpdateInstallment({ ...targetInstallment, dueDate: newDueDate });
+        
+        // 2. IMPORTANT: Manually update local state immediately so UI refreshes
+        setInstallments(prev => prev.map(inst => 
+          inst.id === id ? { ...inst, dueDate: newDueDate } : inst
+        ));
+      }
+    }}
+  />
+)}
+
     </>
   );
 };
