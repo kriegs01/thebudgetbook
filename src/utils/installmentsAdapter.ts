@@ -31,7 +31,7 @@ export const supabaseInstallmentToFrontend = (supabaseInstallment: SupabaseInsta
     timing: (supabaseInstallment.timing === '1/2' || supabaseInstallment.timing === '2/2') 
       ? supabaseInstallment.timing 
       : undefined,
-    due_date: supabaseInstallment.due_date
+    due_date: supabaseInstallment.due_date,
     
     isMigrated: !!supabaseInstallment.is_migrated, 
     isArchived: !!supabaseInstallment.is_archived
