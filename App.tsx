@@ -248,6 +248,11 @@ const MainApp: React.FC = () => {
   const [showSplash, setShowSplash] = useState(true);
   const [minSplashTimeElapsed, setMinSplashTimeElapsed] = useState(false);
 
+  // Inside your MainApp component, before the return statement:
+const filteredInstallments = React.useMemo(() => {
+  return installments.filter(i => !i.dueDate);
+}, [installments, showMigrationModal]);
+
   // Scroll listener for Dashboard top bar visibility
   useEffect(() => {
     const handleScroll = () => {
@@ -1839,21 +1844,21 @@ const MainApp: React.FC = () => {
         activeFriendId={activeChatFriendId}
         onClearActiveChat={() => setActiveChatFriendId(undefined)}
       />
-      {/* Global Migration Modal */}
-      {showMigrationModal && (
+      /* Global Migration Modal */
+{showMigrationModal && (
   <MigrationModal 
-  installments={React.useMemo(() => installments.filter(i => !i.dueDate), [installments, showMigrationModal])} 
-  onClose={() => setShowMigrationModal(false)}
-  onUpdate={async (id, newDueDate) => {
-    const targetInstallment = installments.find(i => i.id === id);
-    if (targetInstallment) {
-      await handleUpdateInstallment({ ...targetInstallment, dueDate: newDueDate });
-      setInstallments(prev => prev.map(inst => 
-        inst.id === id ? { ...inst, dueDate: newDueDate } : inst
-      ));
-    }
-  }}
-/>
+    installments={filteredInstallments} // Use the variable directly!
+    onClose={() => setShowMigrationModal(false)}
+    onUpdate={async (id, newDueDate) => {
+      const targetInstallment = installments.find(i => i.id === id);
+      if (targetInstallment) {
+        await handleUpdateInstallment({ ...targetInstallment, dueDate: newDueDate });
+        setInstallments(prev => prev.map(inst => 
+          inst.id === id ? { ...inst, dueDate: newDueDate } : inst
+        ));
+      }
+    }}
+  />
 )}
     </>
   );
