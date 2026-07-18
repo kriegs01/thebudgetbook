@@ -1852,12 +1852,19 @@ const filteredInstallments = React.useMemo(() => {
     onUpdate={async (id, newDueDate) => {
       const targetInstallment = installments.find(i => i.id === id);
       if (targetInstallment) {
-        await handleUpdateInstallment({ ...targetInstallment, dueDate: newDueDate });
+        // Add isMigrated: true here so the database marks it as finished
+        await handleUpdateInstallment({ 
+          ...targetInstallment, 
+          dueDate: newDueDate, 
+          isMigrated: true 
+        });
+        
         setInstallments(prev => prev.map(inst => 
-          inst.id === id ? { ...inst, dueDate: newDueDate } : inst
+          inst.id === id ? { ...inst, dueDate: newDueDate, isMigrated: true } : inst
         ));
       }
     }}
+    
   />
 )}
     </>

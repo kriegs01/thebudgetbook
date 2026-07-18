@@ -32,7 +32,10 @@ export const supabaseInstallmentToFrontend = (supabaseInstallment: SupabaseInsta
       ? supabaseInstallment.timing 
       : undefined,
     due_date: supabaseInstallment.due_date
-    };
+    
+    isMigrated: !!supabaseInstallment.is_migrated, 
+    isArchived: !!supabaseInstallment.is_archived
+  };
 };
 
 /**
@@ -65,6 +68,9 @@ export const frontendInstallmentToSupabase = (installment: Installment): Omit<Su
     // PROTOTYPE: Include timing field if set
     timing: installment.timing || null,
     due_date: (installment as any).dueDate || null,
+  
+    is_migrated: (installment as any).isMigrated || false,
+    is_archived: (installment as any).isArchived || false,
   };
 };
 
