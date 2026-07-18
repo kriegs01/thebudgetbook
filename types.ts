@@ -86,6 +86,7 @@ export interface Installment {
   startDate?: string; // Format: YYYY-MM
   billerId?: string; // Link to Biller for Loans category
   timing?: '1/2' | '2/2'; // PROTOTYPE: Payment timing within the month
+  due_date?: string
 }
 
 export interface SavingsJar {
@@ -119,6 +120,7 @@ export interface CategorizedSetupItem {
   isBiller?: boolean;
   accountId?: string;
   settled?: boolean;
+  dueDate?: string;⁠
 }
 
 export interface SavedBudgetSetup {

@@ -2798,7 +2798,7 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                   <div className="overflow-x-auto">
                     <table className="w-full text-left">
                       <thead>
-                        <tr className="text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase border-b border-gray-50 dark:border-gray-800/50"><th className="p-4 pl-10">Name</th><th className="p-4">Amount</th><th className="p-4 text-center">Actions</th><th className="p-4 pr-10 text-right"></th></tr>
+                        <tr className="text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase border-b border-gray-50 dark:border-gray-800/50"><th className="p-4 pl-10">Name</th><th className="p-4">Amount</th><th className="p-4 text-center">Due</th><th className="p-4 text-center">Actions</th><th className="p-4 pr-10 text-right"></th></tr>
                       </thead>
                       <tbody className="divide-y divide-gray-50 dark:divide-gray-800/50">
                         {items.length > 0 ? items.map((item) => {
@@ -2826,6 +2826,17 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                                   <input type="number" value={item.amount} onChange={(e) => handleSetupUpdate(cat.name, item.id, 'amount', e.target.value)} onFocus={() => { isFocusedRef.current = true; }} onBlur={() => { isFocusedRef.current = false; }} disabled={isReadOnly} className="bg-transparent border-none text-sm font-black w-24 outline-none dark:text-gray-100" />
                                 </div>
                               </td>
+
+                              <td className="p-4 text-center">
+                            {isBillerItem && linkedBiller?.due_date ? (
+                              <span className="text-[10px] font-black bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 px-2 py-1 rounded border border-gray-200 dark:border-gray-700">
+                                Day {linkedBiller.due_date}
+                              </span>
+                            ) : (
+                              <span className="text-gray-300 dark:text-gray-600 text-xs">—</span>
+                            )}
+                          </td>
+
                               <td className="p-4 text-center">
                                 <div className="flex items-center justify-center space-x-2">
                                   {isBillerItem && (isPaid ? (
@@ -2920,6 +2931,16 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                                 </div>
                               </td>
                               <td className="p-4 text-sm font-black">{formatCurrency(installment.monthlyAmount)}</td>
+                              <td className="p-4 text-center">
+                            {installment.due_date ? (
+                              <span className="text-[10px] font-black bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 px-2 py-1 rounded border border-gray-200 dark:border-gray-700">
+                                Day {installment.due_date}
+                              </span>
+                            ) : (
+                              <span className="text-gray-300 dark:text-gray-600 text-xs">—</span>
+                            )}
+                          </td>
+                          
                               <td className="p-4 text-center">
                                 <div className="flex items-center justify-center space-x-2">
                                   {isPaid ? (
