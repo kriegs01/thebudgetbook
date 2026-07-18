@@ -11,7 +11,22 @@ const MigrationModal = ({ installments, onClose, onUpdate }) => {
 
   const handleSubmit = async () => {
     setIsSubmitting(true);
-    localStorage.setItem('hasCompletedMigration', 'true'); // Add this!
+    
+    // Get all keys (IDs) currently in the state
+    const entries = Object.entries(dueDates);
+    
+    // Process all updates in one go
+    for (const [id, date] of entries) {
+      if (date.trim() !== '') {
+        await onUpdate(id, date);
+      }
+    }
+    
+    setIsSubmitting(false);
+    // Important: Explicitly tell App.tsx we are done
+    localStorage.setItem('hasCompletedMigration', 'true');
+    onClose(); 
+  };   // Add this!
     
     // Convert to array of entries
     const entries = Object.entries(dueDates);
