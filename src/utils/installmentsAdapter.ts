@@ -64,7 +64,7 @@ export const frontendInstallmentToSupabase = (installment: Installment): Omit<Su
     start_date: startDateFormatted,
     // PROTOTYPE: Include timing field if set
     timing: installment.timing || null,
-    due_date: (installment as any).due_date, || null,
+    due_date: (installment as any).dueDate || null,
   };
 };
 
