@@ -330,6 +330,8 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
 
   const [paymentSchedules, setPaymentSchedules] = useState<SupabaseMonthlyPaymentSchedule[]>([]);
 
+  const [showMigrationModal, setShowMigrationModal] = useState(false);
+
   useEffect(() => {
     const existingSetup = savedSetups.find(s => s.month === selectedMonth && s.timing === selectedTiming);
     if (existingSetup && existingSetup.data) {
