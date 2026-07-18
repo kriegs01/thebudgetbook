@@ -284,18 +284,19 @@ const MainApp: React.FC = () => {
     }
   }, [location.pathname]);
 
-  //Installment Due Date Migration
-  useEffect(() => {
-  // Only trigger if not already attempted and not loading
+  // In App.tsx
+useEffect(() => {
   if (!installmentsLoading && userProfile && !migrationAttempted.current) {
-    const needsMigration = installments.some(i => !i.dueDate);
+    // FIX: Check for due_date (snake_case) to match your types.ts
+    const needsMigration = installments.some(i => !i.due_date);
     
     if (needsMigration) {
-      migrationAttempted.current = true; // Block further triggers
+      migrationAttempted.current = true; 
       setShowMigrationModal(true);
     }
   }
 }, [installments, userProfile, installmentsLoading]);
+
 
   useEffect(() => {
     setIsSidebarOpen(!isMobile);
@@ -1857,26 +1858,26 @@ const MainApp: React.FC = () => {
       />
       /* Global Migration Modal */
 {showMigrationModal && (
-  <MigrationModal 
-    installments={filteredInstallments} // Use the variable directly!
-    onClose={() => setShowMigrationModal(false)}
-    onUpdate={async (id, newDueDate) => {
-      const targetInstallment = installments.find(i => i.id === id);
-      if (targetInstallment) {
-        // Add isMigrated: true here so the database marks it as finished
-        await handleUpdateInstallment({ 
-          ...targetInstallment, 
-          dueDate: newDueDate, 
-          isMigrated: true 
-        });
-        
-        setInstallments(prev => prev.map(inst => 
-          inst.id === id ? { ...inst, dueDate: newDueDate, isMigrated: true } : inst
-        ));
-      }
-    }}
+<MigrationModal 
+  installments={installments} 
+  onClose={() => setShowMigrationModal(false)}
+  onUpdate={async (id, updateFields) => {
+    // 1. Find the full existing installment object
+    const currentInstallment = installments.find(i => i.id === id);
     
-  />
+    if (currentInstallment) {
+      // 2. Create the full object by merging current data with new update fields
+      const updatedFullInstallment = {
+        ...currentInstallment,
+        ...updateFields
+      };
+      
+      // 3. Now pass the full object to your existing handleUpdateInstallment
+      await handleUpdateInstallment(updatedFullInstallment);
+    }
+  }}
+/>
+
 )}
     </>
   );

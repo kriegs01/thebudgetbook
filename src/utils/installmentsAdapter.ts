@@ -42,19 +42,15 @@ export const supabaseInstallmentToFrontend = (supabaseInstallment: SupabaseInsta
  * Convert frontend Installment to Supabase installment type
  */
 export const frontendInstallmentToSupabase = (installment: Installment): Omit<SupabaseInstallment, 'id'> => {
-  // Extract the numeric value from termDuration (e.g., "12 months" -> 12)
   const termDurationNum = parseInt(installment.termDuration.replace(/\D/g, ''), 10) || 0;
   
-  // Convert YYYY-MM format to YYYY-MM-01 for PostgreSQL DATE type
   let startDateFormatted: string | null = null;
   if (installment.startDate) {
-    // Add first day of the month to make it a valid date
     startDateFormatted = `${installment.startDate}-01`;
   }
   
-  // Validate account_id - must be a valid UUID or empty string will cause 400 error
   if (!installment.accountId || installment.accountId.trim() === '') {
-    throw new Error('Account ID is required. Please select an account for this installment.');
+    throw new Error('Account ID is required.');
   }
   
   return {
@@ -65,12 +61,12 @@ export const frontendInstallmentToSupabase = (installment: Installment): Omit<Su
     paid_amount: installment.paidAmount,
     account_id: installment.accountId,
     start_date: startDateFormatted,
-    // PROTOTYPE: Include timing field if set
     timing: installment.timing || null,
-    due_date: (installment as any).dueDate || null,
-  
-    is_migrated: (installment as any).isMigrated || false,
-    is_archived: (installment as any).isArchived || false,
+    
+    // Correct mapping to match your types.ts and formData
+    due_date: installment.due_date || null,
+    is_migrated: !!installment.is_migrated, 
+    is_archived: !!installment.isArchived,
   };
 };
 

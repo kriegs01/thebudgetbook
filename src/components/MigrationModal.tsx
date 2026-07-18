@@ -9,24 +9,26 @@ const MigrationModal = ({ installments, onClose, onUpdate }) => {
     setDueDates(prev => ({ ...prev, [id]: value }));
   };
 
-  const handleSubmit = async () => {
-    setIsSubmitting(true);
-  
-    // Convert to array of entries
-    const entries = Object.entries(dueDates);
-  
-    // Process all updates sequentially and wait for them to finish
-    for (const [id, date] of entries) {
-      if (date.trim() !== '') {
-        await onUpdate(id, date); // Now this is inside the async function!
-      }
+  // Inside MigrationModal.tsx
+
+const handleSubmit = async () => {
+  setIsSubmitting(true);
+  const entries = Object.entries(dueDates);
+
+  for (const [id, date] of entries) {
+    if (date.trim() !== '') {
+      // FIX: Send an object with the correct field names
+      await onUpdate(id, { 
+        due_date: date, 
+        is_migrated: true 
+      }); 
     }
-  
-    setIsSubmitting(false);
-    // Important: Explicitly tell App.tsx we are done
-    localStorage.setItem('hasCompletedMigration', 'true');
-    onClose();
-  }; 
+  }
+
+  setIsSubmitting(false);
+  localStorage.setItem('hasCompletedMigration', 'true');
+  onClose();
+}; 
   
   const handleDismiss = () => {
     localStorage.setItem('hasDismissedMigration', 'true');

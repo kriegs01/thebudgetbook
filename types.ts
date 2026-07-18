@@ -86,7 +86,8 @@ export interface Installment {
   startDate?: string; // Format: YYYY-MM
   billerId?: string; // Link to Biller for Loans category
   timing?: '1/2' | '2/2'; // PROTOTYPE: Payment timing within the month
-  due_date?: string;
+  due_date?: string | null;
+  is_migrated?: boolean;
 }
 
 export interface SavingsJar {
