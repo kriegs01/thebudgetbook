@@ -11,6 +11,7 @@ const MigrationModal = ({ installments, onClose, onUpdate }) => {
 
   const handleSubmit = async () => {
     setIsSubmitting(true);
+    localStorage.setItem('hasCompletedMigration', 'true'); // Add this!
     
     // Convert to array of entries
     const entries = Object.entries(dueDates);

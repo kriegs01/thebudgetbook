@@ -224,6 +224,7 @@ const MainApp: React.FC = () => {
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
   const [showMigrationModal, setShowMigrationModal] = useState(false);//<=== MigrationModal declaration
+  const [isMigrating, setIsMigrating] = useState(false); // Add this flag
   const [isMessagesOpen, setIsMessagesOpen] = useState(false);
   const [activeChatFriendId, setActiveChatFriendId] = useState<string | undefined>();
   const { data: pendingRequests = [], refetch: refetchRequests } = useIncomingRequests();
@@ -268,8 +269,7 @@ const MainApp: React.FC = () => {
 
   //Installment Due Date Migration
   useEffect(() => {
-    // Only check once data is loaded and user profile exists
-    if (!installmentsLoading && userProfile) {
+    if (!installmentsLoading && userProfile && !isMigrating) { // Check !isMigrating
       const needsMigration = installments.some(i => !i.dueDate);
       const featureLaunchDate = new Date('2026-07-18'); 
       const userJoinedDate = new Date(userProfile.created_at || '2026-01-01');
@@ -278,8 +278,7 @@ const MainApp: React.FC = () => {
         setShowMigrationModal(true);
       }
     }
-  }, [installments, userProfile, installmentsLoading]);
-
+  }, [installments, userProfile, installmentsLoading, isMigrating]);
 
   useEffect(() => {
     setIsSidebarOpen(!isMobile);
@@ -1841,16 +1840,17 @@ const MainApp: React.FC = () => {
       />
       {/* Global Migration Modal */}
       {showMigrationModal && (
-    <MigrationModal 
+  <MigrationModal 
     installments={installments.filter(i => !i.dueDate)} 
-    onClose={() => setShowMigrationModal(false)}
+    onClose={() => {
+      setShowMigrationModal(false);
+      setIsMigrating(false); // Reset the flag
+    }}
     onUpdate={async (id, newDueDate) => {
+      setIsMigrating(true); // Lock the migration process
       const targetInstallment = installments.find(i => i.id === id);
       if (targetInstallment) {
-        // 1. Update DB
         await handleUpdateInstallment({ ...targetInstallment, dueDate: newDueDate });
-        
-        // 2. IMPORTANT: Manually update local state immediately so UI refreshes
         setInstallments(prev => prev.map(inst => 
           inst.id === id ? { ...inst, dueDate: newDueDate } : inst
         ));
@@ -1858,7 +1858,6 @@ const MainApp: React.FC = () => {
     }}
   />
 )}
-
     </>
   );
 };
