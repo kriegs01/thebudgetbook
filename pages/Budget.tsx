@@ -711,15 +711,17 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
   };
   
   // Add this dedicated block
-useEffect(() => {
-  const needsMigration = installments.some(i => !i.dueDate);
-  const featureLaunchDate = new Date('2026-07-18'); 
-  const userJoinedDate = new Date(user.created_at);
-
-  if (needsMigration && userJoinedDate < featureLaunchDate) {
-    setShowMigrationModal(true);
-  }
-}, [installments, user.created_at]);
+  useEffect(() => {
+    const needsMigration = installments.some(i => !i.dueDate);
+    const featureLaunchDate = new Date('2026-07-18'); 
+    
+    // Use userProfile from props, with a fallback just in case it's missing
+    const userJoinedDate = new Date(userProfile?.created_at || '2026-01-01');
+  
+    if (needsMigration && userJoinedDate < featureLaunchDate) {
+      setShowMigrationModal(true);
+    }
+  }, [installments, userProfile]); // Also update the dependency array  
 
   useEffect(() => {
     const loadPaymentSchedules = async () => {
