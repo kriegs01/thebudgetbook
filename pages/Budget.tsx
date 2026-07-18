@@ -3494,6 +3494,22 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
       )}
 
       {confirmModal.show && <ConfirmDialog {...confirmModal} onClose={() => setConfirmModal(p => ({ ...p, show: false }))} />}
+    
+      {showMigrationModal && (
+  <MigrationModal 
+  installments={installments.filter(i => !i.dueDate)} 
+  onClose={() => setShowMigrationModal(false)}
+  onUpdate={async (id, newDueDate) => {
+    // 1. Perform your Supabase update using the ID provided by the modal
+    await updateInstallment(id, { dueDate: newDueDate });
+  
+    // 2. Update local state
+    setInstallments(prev => prev.map(inst => 
+      inst.id === id ? { ...inst, dueDate: newDueDate } : inst
+    ));
+  }}
+/>
+)}
     </div>
   );
 };
@@ -3512,21 +3528,5 @@ const ConfirmDialog: React.FC<{ show: boolean; title: string; message: string; o
 </div>
 );
 
-{showMigrationModal && (
-  <MigrationModal 
-  installments={installments.filter(i => !i.dueDate)} 
-  onClose={() => setShowMigrationModal(false)}
-  onUpdate={async (id, newDueDate) => {
-    // 1. Perform your Supabase update using the ID provided by the modal
-    await updateInstallment(id, { dueDate: newDueDate });
-  
-    // 2. Update local state
-    setInstallments(prev => prev.map(inst => 
-      inst.id === id ? { ...inst, dueDate: newDueDate } : inst
-    ));
-  }}
-/>
-
-)}
 
 export default Budget;
