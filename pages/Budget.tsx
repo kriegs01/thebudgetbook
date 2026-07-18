@@ -777,6 +777,25 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
   const [schedulePaymentsModal, setSchedulePaymentsModal] = useState<{ label: string; scheduleId: string | null; transactions: BudgetScheduleTx[] } | null>(null);
   const [loadingScheduleTx, setLoadingScheduleTx] = useState(false);
   const [, setScheduleSignedUrls] = useState<Record<string, string | null>>({});
+
+  const formatDueDate = (due: string) => {
+    const isNextMonth = due.toLowerCase().includes('n') || due.toLowerCase().includes('next');
+    const day = due.replace(/[^0-9]/g, ''); 
+    
+    if (!day) return due;
+  
+    const d = parseInt(day);
+    const suffix = (d % 10 === 1 && d !== 11) ? 'st' : 
+                   (d % 10 === 2 && d !== 12) ? 'nd' : 
+                   (d % 10 === 3 && d !== 13) ? 'rd' : 'th';
+                   
+    const dateStr = `${d}${suffix}`;
+    return isNextMonth ? `${dateStr} Next Month` : dateStr;
+  };
+  
+  const currentBudgetPeriodIso = `${selectedYear}-${(MONTHS.indexOf(selectedMonth) + 1).toString().padStart(2, '0')}`;
+  
+
     // =========================================================
   // ⚡ STEP 2: THE INCOME SLICER HOOK (Wired with real state)
   // =========================================================
@@ -2828,15 +2847,15 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                               </td>
 
                               <td className="p-4 text-center">
-                            {isBillerItem && linkedBiller?.dueDate ? (
-                              <span className="text-[10px] font-black bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 px-2 py-1 rounded border border-gray-200 dark:border-gray-700">
-                                Day {linkedBiller.dueDate}
-                              </span>
-                            ) : (
-                              <span className="text-gray-300 dark:text-gray-600 text-xs">—</span>
-                            )}
-                          </td>
-
+                                  {isBillerItem && linkedBiller?.dueDate ? (
+                                  <span className="text-[10px] font-black bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 px-2 py-1 rounded border border-gray-200 dark:border-gray-700">
+                                  {formatDueDate(linkedBiller.dueDate)}
+                                  </span>
+                                  ) : (
+                                  <span className="text-gray-300 dark:text-gray-600 text-xs">—</span>
+                                  )}
+                              </td>
+                              
                               <td className="p-4 text-center">
                                 <div className="flex items-center justify-center space-x-2">
                                   {isBillerItem && (isPaid ? (
@@ -2932,14 +2951,15 @@ const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSet
                               </td>
                               <td className="p-4 text-sm font-black">{formatCurrency(installment.monthlyAmount)}</td>
                               <td className="p-4 text-center">
-                            {installment.dueDate ? (
-                              <span className="text-[10px] font-black bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 px-2 py-1 rounded border border-gray-200 dark:border-gray-700">
-                                Day {installment.dueDate}
-                              </span>
-                            ) : (
-                              <span className="text-gray-300 dark:text-gray-600 text-xs">—</span>
-                            )}
-                          </td>
+                                {installment.dueDate ? (
+                                <span className="text-[10px] font-black bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 px-2 py-1 rounded border border-gray-200 dark:border-gray-700">
+                                {formatDueDate(installment.dueDate)}
+                                </span>
+                                ) : (
+                                <span className="text-gray-300 dark:text-gray-600 text-xs">—</span>
+                                )}
+                              </td>
+
                           
                               <td className="p-4 text-center">
                                 <div className="flex items-center justify-center space-x-2">
