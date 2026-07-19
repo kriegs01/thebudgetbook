@@ -1276,12 +1276,20 @@ export const recordCreditPayment = async (
   description: string,
   date: string
 ) => {
-  return await createTransaction({
+  const response = await createTransaction({
     name: description,
     amount: -Math.abs(amount), // Negative for balance reduction
     date: date,
     payment_method_id: accountId,
-    transaction_type: 'credit_payment', // Correct type for your DB schema
+    transaction_type: 'credit_payment', 
     notes: 'Credit Card Payment'
   });
+  
+  // Force the error to surface so the button catches it
+  if (response.error) {
+    console.error("Credit Payment DB Error:", response.error);
+    throw response.error; 
+  }
+  
+  return response.data;
 };

@@ -311,6 +311,12 @@ const calculateBudgetRemaining = (
   const [setupData, setSetupData] = useState<{ [key: string]: CategorizedSetupItem[] }>({});
   const [removedIds, setRemovedIds] = useState<Set<string>>(new Set());
   
+  const [showCreditPayModal, setShowCreditPayModal] = useState<{ 
+    accountId: string; 
+    amount: number; 
+    bank: string; 
+  } | null>(null);
+  
   const isFocusedRef = useRef(false);
   const [excludedInstallmentIds, setExcludedInstallmentIds] = useState<Set<string>>(new Set());
 
@@ -2603,105 +2609,404 @@ const calculateBudgetRemaining = (
         )}
 
 
-      {effectiveCategories.filter(cat => cat.name === 'Fixed').map((cat) => {
+{effectiveCategories.filter(cat => cat.name !== 'Fixed').map((cat) => {
           const items = setupData[cat.name] || [];
-          const shouldRenderCategory = shouldRenderCategorySection(cat, items.length > 0, selectedYear, selectedMonth);
+          
+          let relevantInstallments: Installment[] = [];
+          if (cat.name === 'Loans') {
+            relevantInstallments = installments.filter(inst => {
+              if (inst.isArchived) return false;
+              const timingMatch = !inst.timing || inst.timing === selectedTiming;
+              const scheduleForMonth = getPaymentSchedule('installment', inst.id, selectedMonth, selectedYear);
+              const isActiveForPeriod = scheduleForMonth !== undefined || shouldShowInstallment(inst, selectedMonth, selectedYear);
+              const isFinished = !scheduleForMonth && inst.totalAmount > 0 && inst.paidAmount >= inst.totalAmount;
+              return timingMatch && isActiveForPeriod && !isFinished;
+            });
+          }
+
+          const hasData = items.length > 0 || 
+            (cat.name === 'Loans' && relevantInstallments.length > 0) || 
+            (cat.name === 'Credit' && creditBudgetAccounts.length > 0);
+          const shouldRenderCategory = shouldRenderCategorySection(cat, hasData, selectedYear, selectedMonth);
           if (!shouldRenderCategory) return null;
+
           const canAddItems = !isReadOnly && (cat.flexiMode ?? true) && isCategoryActiveForBudget(cat, selectedYear, selectedMonth);
           const isLegacyCategory = isCategoryLegacyForBudget(cat, selectedYear, selectedMonth);
+          
+          const itemsTotal = items.filter(i => i.included).reduce((s, i) => s + (parseFloat(i.amount) || 0), 0);
+          const installmentsTotal = relevantInstallments
+            .filter(inst => !excludedInstallmentIds.has(inst.id))
+            .reduce((s, inst) => s + inst.monthlyAmount, 0);
+          
+          let creditTotal = 0;
+          if (cat.name === 'Credit') {
+            creditTotal = creditBudgetAccounts.reduce((sum, acc) => sum + (acc.balance || 0), 0);
+          }
+          
+          const categoryTotal = itemsTotal + installmentsTotal + creditTotal;
+          
           return (
             <div key={cat.id} className="bg-white dark:bg-gray-900 rounded-2xl border-4 border-black shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] overflow-hidden w-full transition-colors">
               <div className="px-8 py-5 border-b-4 border-black bg-gray-50/30 dark:bg-gray-800/30 flex justify-between items-center transition-colors">
                 <div className="flex items-center space-x-2">
-                  <h3 className="text-xs font-black text-gray-900 dark:text-gray-100 uppercase tracking-[0.25em]"> {cat.name}</h3>
+                  <h3 className="text-xs font-black text-gray-900 dark:text-gray-100 uppercase tracking-[0.25em]">{cat.name}</h3>
                   {(cat.flexiMode ?? true) && <span className="text-[9px] font-black text-green-600 bg-green-50 border-2 border-black px-2 py-0.5 rounded-md uppercase tracking-wider">Flexi</span>}
                   {isLegacyCategory && <span className="text-[9px] font-black text-amber-600 bg-amber-50 border-2 border-black px-2 py-0.5 rounded-md uppercase tracking-wider">Legacy</span>}
                 </div>
-                <span className="text-lg font-black text-indigo-600 dark:text-indigo-400">{formatCurrency(items.filter(i => i.included).reduce((s, i) => s + (parseFloat(i.amount) || 0), 0))}</span>
+                <span className="text-lg font-black text-indigo-600 dark:text-indigo-400">{formatCurrency(categoryTotal)}</span>
               </div>
-              <div className="w-full">
-                {isMobile ? (
-                  <div className="p-4 space-y-4 bg-gray-50/30 dark:bg-gray-955/10">
-                    {items.length > 0 ? items.map((item) => (
-                      <div key={item.id} className={`p-4 rounded-xl border-2 border-black bg-white dark:bg-gray-800 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] flex flex-col gap-3 transition-all ${item.included ? 'opacity-100' : 'opacity-60 bg-gray-50'}`}>
-                        <div className="flex justify-between items-center gap-2">
-                          <input type="text" value={item.name} onChange={(e) => handleSetupUpdate(cat.name, item.id, 'name', e.target.value)} disabled={isReadOnly} className="bg-transparent border-none text-sm font-black w-full outline-none focus:bg-indigo-50/55 dark:focus:bg-indigo-900/30 rounded px-1 dark:text-gray-100" />
-                          {!isReadOnly && (
-                            <button onClick={() => handleSetupToggle(cat.name, item.id)} className={`w-8 h-8 rounded-xl border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[0.5px] hover:translate-y-[0.5px] flex items-center justify-center transition-all ${item.included ? 'bg-indigo-600 text-white' : 'bg-white dark:bg-gray-700 text-transparent'}`}><Check className="w-4 h-4" /></button>
-                          )}
-                        </div>
-                        <div className="flex flex-wrap items-center justify-between gap-3 bg-gray-50 dark:bg-gray-900/50 p-2.5 rounded-lg border-2 border-black">
-                          <div className="flex items-center space-x-1">
-                            <span className="text-gray-400 dark:text-gray-500 font-bold text-sm">₱</span>
-                            <input type="number" value={item.amount} onChange={(e) => handleSetupUpdate(cat.name, item.id, 'amount', e.target.value)} disabled={isReadOnly} className="bg-transparent border-none text-sm font-black w-24 outline-none dark:text-gray-100" />
-                          </div>
-                          <select value={item.accountId || ''} onChange={(e) => handleSetupUpdate(cat.name, item.id, 'accountId', e.target.value)} disabled={isReadOnly} className="bg-white dark:bg-gray-800 border-2 border-black rounded-lg px-2 py-1 text-xs font-black text-gray-700 dark:text-gray-300 outline-none">
-                            <option value="">Select Account</option>
-                            {accounts.filter(acc => acc.type === 'Debit').map(acc => (<option key={acc.id} value={acc.id}>{acc.bank}</option>))}
-                          </select>
-                        </div>
-                        <div className="flex items-center justify-end space-x-2 pt-2 border-t border-gray-100 dark:border-gray-700">
-                          {item.settled ? (
-                            <span className="text-xs font-black text-green-600 flex items-center gap-1"><CheckCircle2 className="w-4 h-4" /> Settled</span>
-                          ) : !isReadOnly ? (
-                            <button onClick={() => handleSetupUpdate(cat.name, item.id, 'settled', true)} className="px-3 py-1 bg-green-600 text-white text-[9px] font-black uppercase rounded-lg border-2 border-black shadow-[1px_1px_0px_0px_rgba(0,0,0,1)] hover:shadow-none transition-all">Settle</button>
-                          ) : null}
-                          {!isReadOnly && (
-                            <button onClick={() => removeItemFromCategory(cat.name, item.id, item.name)} className="text-[10px] font-black text-red-500 uppercase tracking-widest border-2 border-black bg-white dark:bg-gray-800 px-3 py-1.5 rounded-xl shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[1px] hover:translate-y-[1px] transition-all">Exclude</button>
-                          )}
-                        </div>
+
+              {cat.name === 'Credit' && creditBudgetAccounts.length > 0 && (
+                <div className="p-4 space-y-4 bg-gray-50/30 dark:bg-gray-955/10">
+                  {creditBudgetAccounts.map(account => (
+                    <div key={account.id} className="p-4 border-2 border-black rounded-xl bg-purple-50 dark:bg-purple-900/20 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] flex justify-between items-center">
+                      <div>
+                        <p className="text-sm font-black text-gray-900 dark:text-gray-100">{account.bank}</p>
+                        <p className="text-sm font-black text-purple-600">{formatCurrency(account.balance || 0)}</p>
                       </div>
-                    )) : <p className="text-center py-6 text-gray-400 text-xs font-bold italic">No items added yet.</p>}
-                  </div>
-                ) : (
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-left">
-                      <thead>
-                        <tr className="text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase border-b border-gray-50 dark:border-gray-800/50"><th className="p-4 pl-10">Name</th><th className="p-4">Amount</th><th className="p-4">Account</th><th className="p-4 text-center">Actions</th><th className="p-4 pr-10 text-right"></th></tr>
-                      </thead>
-                      <tbody className="divide-y divide-gray-50 dark:divide-gray-800/50">
-                        {items.length > 0 ? items.map((item) => (
-                            <tr key={item.id} className={`${item.included ? 'bg-white dark:bg-gray-900' : 'bg-gray-50 dark:bg-gray-800/50 opacity-60'}`}>
-                              <td className="p-4 pl-10"><input type="text" value={item.name} onChange={(e) => handleSetupUpdate(cat.name, item.id, 'name', e.target.value)} disabled={isReadOnly} className="bg-transparent border-none text-sm font-bold w-full outline-none focus:bg-gray-100 dark:focus:bg-gray-800 rounded p-1 dark:text-gray-100" /></td>
-                              <td className="p-4">
-                                <div className="flex items-center space-x-1"><span className="text-gray-400 dark:text-gray-500 font-bold">₱</span><input type="number" value={item.amount} onChange={(e) => handleSetupUpdate(cat.name, item.id, 'amount', e.target.value)} onFocus={() => { isFocusedRef.current = true; }} onBlur={() => { isFocusedRef.current = false; }} disabled={isReadOnly} className="bg-transparent border-none text-sm font-black w-24 outline-none dark:text-gray-100" /></div>
-                              </td>
-                              <td className="p-4">
-                                <select value={item.accountId || ''} onChange={(e) => handleSetupUpdate(cat.name, item.id, 'accountId', e.target.value)} disabled={isReadOnly} className="bg-gray-50 dark:bg-gray-800 border-2 border-black rounded-lg px-3 py-1.5 text-xs font-black text-gray-700 dark:text-gray-300 outline-none">
-                                  <option value="">Select Account</option>
-                                  {accounts.filter(acc => acc.type === 'Debit').map(acc => (<option key={acc.id} value={acc.id}>{acc.bank} ({acc.classification})</option>))}
-                                </select>
-                              </td>
-                              <td className="p-4 text-center">
-                                <div className="flex items-center justify-center space-x-2">
-                                  {item.settled ? (
-                                    <CheckCircle2 className="w-4 h-4 text-green-500" aria-label="Item settled" title="Settled" />
-                                  ) : !isReadOnly ? (
-                                    <button onClick={() => handleSetupUpdate(cat.name, item.id, 'settled', true)} className="px-3 py-1 bg-green-600 text-white text-[9px] font-black uppercase rounded-lg border-2 border-black shadow-[1px_1px_0px_0px_rgba(0,0,0,1)] hover:shadow-none transition-all">Settle</button>
-                                  ) : null}
-                                  {!isReadOnly && (
-                                    <button onClick={() => handleSetupToggle(cat.name, item.id)} className={`w-8 h-8 rounded-xl border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[0.5px] hover:translate-y-[0.5px] transition-all flex items-center justify-center ${item.included ? 'bg-indigo-600 text-white' : 'border-gray-200'}`}><Check className="w-4 h-4" /></button>
+                      {!isReadOnly && (
+                      <button 
+                        onClick={() => setShowCreditPayModal({
+                          accountId: account.id,
+                          amount: account.balance || 0,
+                          bank: account.bank
+                        })}
+                        className="px-4 py-2 bg-indigo-600 text-white text-xs font-black uppercase rounded-xl border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[1px] hover:translate-y-[1px] transition-all"
+                      >
+                        Pay
+                      </button>
+                    )}
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {!(cat.name === 'Credit' && items.length === 0) && (
+                <div className="w-full">
+                  {isMobile ? (
+                    <div className="p-4 space-y-4 bg-gray-50/30 dark:bg-gray-955/10">
+                      {items.length > 0 && items.map((item) => {
+                        let isPaid = false, isPartial = false, linkedBiller, paymentSchedule;
+                        const isBillerItem = item.isBiller || billers.some(b => b.id === item.id);
+                        const effectiveTiming = (item.timing as any) || selectedTiming;
+                        if (isBillerItem) {
+                          linkedBiller = billers.find(b => b.id === item.id);
+                          paymentSchedule = getPaymentSchedule('biller', item.id, selectedMonth, selectedYear);
+                          if (paymentSchedule) {
+                            isPaid = checkIfPaidBySchedule('biller', item.id);
+                            isPartial = checkIfPartialBySchedule('biller', item.id);
+                          } else {
+                            isPaid = checkIfPaidByTransaction(item.name, item.amount, selectedMonth, selectedYear, effectiveTiming);
+                          }
+                        } else {
+                          isPaid = checkIfPaidByTransaction(item.name, item.amount, selectedMonth, selectedYear, effectiveTiming);
+                        }
+                        return (
+                          <div key={item.id} className={`p-4 rounded-xl border-2 border-black bg-white dark:bg-gray-800 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] flex flex-col gap-3 transition-all ${item.included ? 'opacity-100' : 'opacity-60 bg-gray-50'}`}>
+                            <div className="flex justify-between items-center gap-2">
+                              <input type="text" value={item.name} onChange={(e) => handleSetupUpdate(cat.name, item.id, 'name', e.target.value)} disabled={isReadOnly} className="bg-transparent border-none text-sm font-black w-full outline-none focus:bg-gray-100 dark:focus:bg-gray-800 rounded p-1 dark:text-gray-100" />
+                              {!isReadOnly && (
+                                <button onClick={() => handleSetupToggle(cat.name, item.id)} className={`w-8 h-8 rounded-xl border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[0.5px] hover:translate-y-[0.5px] flex items-center justify-center transition-all ${item.included ? 'bg-indigo-600 text-white' : 'bg-white dark:bg-gray-700 text-transparent'}`}><Check className="w-4 h-4" /></button>
+                              )}
+                            </div>
+                            <div className="flex justify-between items-center bg-gray-50 dark:bg-gray-900/50 p-2.5 rounded-lg border-2 border-black">
+                              <div className="flex items-center space-x-1">
+                                <span className="text-gray-400 dark:text-gray-500 font-bold text-sm">₱</span>
+                                <input type="number" value={item.amount} onChange={(e) => handleSetupUpdate(cat.name, item.id, 'amount', e.target.value)} disabled={isReadOnly} className="bg-transparent border-none text-sm font-black w-24 outline-none dark:text-gray-100" />
+                              </div>
+                              <div className="flex items-center space-x-2">
+                                {isBillerItem && isPaid && <CheckCircle2 className="w-4 h-4 text-green-500" />}
+                                {isBillerItem && isPartial && <span className="text-[9px] font-black bg-yellow-100 text-yellow-700 px-1.5 py-0.5 rounded border border-black">Partial</span>}
+                                {!isBillerItem && isPaid && <CheckCircle2 className="w-4 h-4 text-green-500" />}
+                              </div>
+                            </div>
+                            <div className="flex items-center justify-end space-x-2 pt-2 border-t border-gray-100 dark:border-gray-700">
+                              {isBillerItem && !isPaid && !isReadOnly && (
+                                <button 
+                                  onClick={() => {
+                                    if(linkedBiller && paymentSchedule) {
+                                      const scheduleForModal: PaymentSchedule = {
+                                        id: paymentSchedule.id, month: paymentSchedule.month, year: paymentSchedule.year.toString(),
+                                        expectedAmount: paymentSchedule.expected_amount, amountPaid: paymentSchedule.amount_paid,
+                                        datePaid: paymentSchedule.date_paid || undefined, receipt: paymentSchedule.receipt || undefined, accountId: paymentSchedule.account_id || undefined
+                                      };
+                                      const linkedTransactions = transactions.filter(tx => tx.payment_schedule_id === paymentSchedule.id).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+                                      const existingTx = linkedTransactions[0];
+                                      setShowPayModal({ biller: linkedBiller, schedule: scheduleForModal, expectedAmount: parseFloat(item.amount) });
+                                      setPayFormData({
+                                        transactionId: isPartial ? '' : (existingTx?.id || ''),
+                                        amount: isPartial ? Math.max(0, parseFloat(item.amount) - paymentSchedule.amount_paid).toFixed(2) : existingTx?.amount.toFixed(2) || item.amount,
+                                        receipt: (!isPartial && existingTx) ? 'Receipt on file' : '',
+                                        datePaid: (!isPartial && existingTx) ? toLocalDateInputValue(existingTx.date) : getTodayIso(),
+                                        accountId: existingTx?.payment_method_id || payFormData.accountId
+                                      });
+                                    }
+                                  }}
+                                  className="px-3 py-1.5 bg-indigo-600 text-white text-[10px] font-black uppercase rounded-xl border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[1px] hover:translate-y-[1px] transition-all"
+                                >
+                                  {isPartial ? 'Pay Remaining' : 'Pay'}
+                                </button>
+                              )}
+                              {!isBillerItem && !isPaid && !isReadOnly && (cat.flexiMode ?? true) && item.name !== 'New Item' && parseFloat(item.amount) > 0 && (
+                                <button
+                                  onClick={() => {
+                                    setTransactionFormData({
+                                      id: '',
+                                      name: item.name,
+                                      date: getTodayIso(),
+                                      amount: item.amount,
+                                      accountId: accounts[0]?.id || '',
+                                      paymentScheduleId: '',
+                                      transactionType: 'cash_out'
+                                    });
+                                    setShowTransactionModal(true);
+                                  }}
+                                  className="px-3 py-1.5 bg-indigo-600 text-white text-[10px] font-black uppercase rounded-xl border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[1px] hover:translate-y-[1px] transition-all"
+                                >
+                                  Pay
+                                </button>
+                              )}
+                              {!isReadOnly && (
+                                <button onClick={() => removeItemFromCategory(cat.name, item.id, item.name)} className="text-[10px] font-black text-red-500 uppercase tracking-widest border-2 border-black bg-white dark:bg-gray-800 px-3 py-1.5 rounded-xl shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[1px] hover:translate-y-[1px] transition-all">Exclude</button>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+
+                      {cat.name === 'Loans' && relevantInstallments.length > 0 && relevantInstallments.map((installment) => {
+                        const isIncluded = !excludedInstallmentIds.has(installment.id);
+                        let isPaid = false, isPartial = false;
+                        const installmentSchedule = getPaymentSchedule('installment', installment.id, selectedMonth, selectedYear);
+                        if (installmentSchedule) {
+                          isPaid = checkIfPaidBySchedule('installment', installment.id);
+                          isPartial = checkIfPartialBySchedule('installment', installment.id);
+                        }
+                        return (
+                          <div key={`installment-${installment.id}`} className={`p-4 rounded-xl border-2 border-black bg-blue-50/20 dark:bg-blue-900/10 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] flex flex-col gap-3 transition-all ${isIncluded ? 'opacity-100' : 'opacity-60 bg-gray-50'}`}>
+                            <div className="flex justify-between items-start gap-2">
+                              <div>
+                                <span className="text-sm font-black text-gray-900 dark:text-gray-100 block">{installment.name}</span>
+                                <span className="text-[9px] font-black px-2 py-0.5 bg-blue-100 border border-black text-blue-600 rounded inline-block mt-1">INSTALLMENT</span>
+                              </div>
+                              {!isReadOnly && (
+                                <button onClick={() => setExcludedInstallmentIds(prev => { const next = new Set(prev); if(next.has(installment.id)) next.delete(installment.id); else next.add(installment.id); return next; })} className={`w-8 h-8 rounded-xl border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[0.5px] hover:translate-y-[0.5px] transition-all flex items-center justify-center ${isIncluded ? 'bg-indigo-600 text-white' : 'bg-white dark:bg-gray-700 text-transparent'}`}><Check className="w-4 h-4" /></button>
+                              )}
+                            </div>
+                            <div className="flex justify-between items-center bg-gray-50 dark:bg-gray-900/50 p-2.5 rounded-lg border-2 border-black">
+                              <span className="text-sm font-black">{formatCurrency(installment.monthlyAmount)}</span>
+                              {isPaid && <CheckCircle2 className="w-4 h-4 text-green-500" />}
+                            </div>
+                            <div className="flex items-center justify-end space-x-2 pt-2 border-t border-gray-100 dark:border-gray-700">
+                              {!isPaid && !isReadOnly && (
+                                <button 
+                                  onClick={() => {
+                                    setTransactionFormData({
+                                      id: '', name: `${installment.name} - ${selectedMonth} ${new Date().getFullYear()}`, date: getTodayIso(),
+                                      amount: isPartial && installmentSchedule ? Math.max(0, installmentSchedule.expected_amount - installmentSchedule.amount_paid).toFixed(2) : installment.monthlyAmount.toFixed(2),
+                                      accountId: installment.accountId || accounts[0]?.id || '', paymentScheduleId: installmentSchedule?.id || '',
+                                      transactionType: 'payment'
+                                    });
+                                    setShowTransactionModal(true);
+                                  }}
+                                  className="px-3 py-1.5 bg-indigo-600 text-white text-[10px] font-black uppercase rounded-xl border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[1px] hover:translate-y-[1px] transition-all"
+                                >
+                                  Pay
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-left">
+                        <thead>
+                          <tr className="text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase border-b border-gray-50 dark:border-gray-800/50"><th className="p-4 pl-10">Name</th><th className="p-4">Amount</th><th className="p-4 text-center">Due</th><th className="p-4 text-center">Actions</th><th className="p-4 pr-10 text-right"></th></tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-50 dark:divide-gray-800/50">
+                          {items.length > 0 ? items.map((item) => {
+                            let isPaid = false, isPartial = false, linkedBiller, paymentSchedule;
+                            const isBillerItem = item.isBiller || billers.some(b => b.id === item.id);
+                            const effectiveTiming = (item.timing as any) || selectedTiming;
+                            if (isBillerItem) {
+                              linkedBiller = billers.find(b => b.id === item.id);
+                              paymentSchedule = getPaymentSchedule('biller', item.id, selectedMonth, selectedYear);
+                              if (paymentSchedule) {
+                                isPaid = checkIfPaidBySchedule('biller', item.id);
+                                isPartial = checkIfPartialBySchedule('biller', item.id);
+                              } else {
+                                isPaid = checkIfPaidByTransaction(item.name, item.amount, selectedMonth, selectedYear, effectiveTiming);
+                              }
+                            } else {
+                              isPaid = checkIfPaidByTransaction(item.name, item.amount, selectedMonth, selectedYear, effectiveTiming);
+                            }
+                            return (
+                              <tr key={item.id} className={`${item.included ? 'bg-white dark:bg-gray-900' : 'bg-gray-50 dark:bg-gray-800/50 opacity-60'}`}>
+                                <td className="p-4 pl-10"><input type="text" value={item.name} onChange={(e) => handleSetupUpdate(cat.name, item.id, 'name', e.target.value)} disabled={isReadOnly} className="bg-transparent border-none text-sm font-bold w-full outline-none focus:bg-gray-100 dark:focus:bg-gray-800 rounded p-1 dark:text-gray-100" /></td>
+                                <td className="p-4">
+                                  <div className="flex items-center space-x-1">
+                                    <span className="text-gray-400 dark:text-gray-500 font-bold">₱</span>
+                                    <input type="number" value={item.amount} onChange={(e) => handleSetupUpdate(cat.name, item.id, 'amount', e.target.value)} onFocus={() => { isFocusedRef.current = true; }} onBlur={() => { isFocusedRef.current = false; }} disabled={isReadOnly} className="bg-transparent border-none text-sm font-black w-24 outline-none dark:text-gray-100" />
+                                  </div>
+                                </td>
+
+                                <td className="p-4 text-center">
+                                    {isBillerItem && linkedBiller?.dueDate ? (
+                                    <span className="text-[10px] font-black bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 px-2 py-1 rounded border border-gray-200 dark:border-gray-700">
+                                    {formatDueDate(linkedBiller.dueDate)}
+                                    </span>
+                                    ) : (
+                                    <span className="text-gray-300 dark:text-gray-600 text-xs">—</span>
+                                    )}
+                                </td>
+
+                                <td className="p-4 text-center">
+                                  <div className="flex items-center justify-center space-x-2">
+                                    {isBillerItem && (isPaid ? (
+                                        <>
+                                          <CheckCircle2 className="w-4 h-4 text-green-500" aria-label="Payment completed" title="Paid" />
+                                          {paymentSchedule && (
+                                            <button onClick={() => openSchedulePaymentsModal(paymentSchedule.id, `${item.name} - ${selectedMonth}`)} title="View payment records" className="text-gray-400 hover:text-indigo-600 transition-colors rounded-full p-1 hover:bg-indigo-50"><Info className="w-3.5 h-3.5" /></button>
+                                          )}
+                                        </>
+                                      ) : (
+                                        <>
+                                          {isPartial && paymentSchedule && (
+                                            <>
+                                              <span className="text-[9px] font-bold px-2 py-0.5 bg-yellow-100 text-yellow-700 rounded uppercase" title={`Paid ₱${paymentSchedule.amount_paid} of ₱${parseFloat(item.amount)}`}>Partial</span>
+                                              <button onClick={() => openSchedulePaymentsModal(paymentSchedule.id, `${item.name} - ${selectedMonth}`)} title="View payment records" className="text-gray-400 hover:text-indigo-600 transition-colors rounded-full p-1 hover:bg-indigo-50"><Info className="w-3.5 h-3.5" /></button>
+                                            </>
+                                          )}
+                                        {!isReadOnly && (
+                                          <button 
+                                            onClick={() => { 
+                                              if(linkedBiller && paymentSchedule) {
+                                                const scheduleForModal: PaymentSchedule = {
+                                                  id: paymentSchedule.id, month: paymentSchedule.month, year: paymentSchedule.year.toString(),
+                                                  expectedAmount: paymentSchedule.expected_amount, amountPaid: paymentSchedule.amount_paid,
+                                                  datePaid: paymentSchedule.date_paid || undefined, receipt: paymentSchedule.receipt || undefined, accountId: paymentSchedule.account_id || undefined
+                                                };
+                                                const linkedTransactions = transactions.filter(tx => tx.payment_schedule_id === paymentSchedule.id).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+                                                const existingTx = linkedTransactions[0];
+                                                setShowPayModal({ biller: linkedBiller, schedule: scheduleForModal, expectedAmount: parseFloat(item.amount) });
+                                                setPayFormData({
+                                                  transactionId: isPartial ? '' : (existingTx?.id || ''),
+                                                  amount: isPartial ? Math.max(0, parseFloat(item.amount) - paymentSchedule.amount_paid).toFixed(2) : existingTx?.amount.toFixed(2) || item.amount,
+                                                  receipt: (!isPartial && existingTx) ? 'Receipt on file' : '',
+                                                  datePaid: (!isPartial && existingTx) ? toLocalDateInputValue(existingTx.date) : getTodayIso(),
+                                                  accountId: existingTx?.payment_method_id || payFormData.accountId
+                                                });
+                                              } 
+                                            }} 
+                                            className="px-3 py-1.5 bg-indigo-600 text-white text-[10px] font-black uppercase rounded-xl border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[1px] hover:translate-y-[1px] transition-all"
+                                          >
+                                            {isPartial ? 'Pay Remaining' : 'Pay'}
+                                          </button>
+                                        )}
+                                        </>
+                                      )
+                                    )}
+                                    {!isBillerItem && (cat.flexiMode ?? true) && item.name !== 'New Item' && parseFloat(item.amount) > 0 && (
+                                      isPaid ? (
+                                        <CheckCircle2 className="w-4 h-4 text-green-500" aria-label="Payment completed" title="Paid" />
+                                      ) : !isReadOnly ? (
+                                        <button
+                                          onClick={() => {
+                                            setTransactionFormData({
+                                              id: '',
+                                              name: item.name,
+                                              date: getTodayIso(),
+                                              amount: item.amount,
+                                              accountId: accounts[0]?.id || '',
+                                              paymentScheduleId: '',
+                                              transactionType: 'cash_out'
+                                            });
+                                            setShowTransactionModal(true);
+                                          }}
+                                          className="px-3 py-1.5 bg-indigo-600 text-white text-[10px] font-black uppercase rounded-xl border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[1px] hover:translate-y-[1px] transition-all"
+                                        >
+                                          Pay
+                                        </button>
+                                      ) : null
+                                    )}
+                                    {!isReadOnly && <button onClick={() => handleSetupToggle(cat.name, item.id)} className={`w-8 h-8 rounded-xl border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[0.5px] hover:translate-y-[0.5px] transition-all flex items-center justify-center ${item.included ? 'bg-indigo-600 border-indigo-600 text-white' : 'text-transparent border-gray-200'}`}><Check className="w-4 h-4" /></button>}
+                                  </div>
+                                </td>
+                                <td className="p-4 pr-10 text-right">{!isReadOnly && <button onClick={() => removeItemFromCategory(cat.name, item.id, item.name)} className="text-[10px] font-black text-red-500 uppercase tracking-widest border-2 border-black bg-white dark:bg-gray-800 px-3 py-1.5 rounded-xl shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[1px] hover:translate-y-[1px] transition-all">Exclude</button>}</td>
+                              </tr>
+                            );
+                          }) : (cat.name === 'Loans' && relevantInstallments.length > 0) ? null : <tr><td colSpan={4} className="p-8 text-center text-gray-400 text-sm font-medium">No items yet. Click "Add Item" below to get started.</td></tr>}
+                          
+                          {cat.name === 'Loans' && relevantInstallments.length > 0 && relevantInstallments.map((installment) => {
+                            const isIncluded = !excludedInstallmentIds.has(installment.id);
+                            let isPaid = false, isPartial = false;
+                            const installmentSchedule = getPaymentSchedule('installment', installment.id, selectedMonth, selectedYear);
+                            if (installmentSchedule) {
+                              isPaid = checkIfPaidBySchedule('installment', installment.id);
+                              isPartial = checkIfPartialBySchedule('installment', installment.id);
+                            }
+                            return (
+                              <tr key={`installment-${installment.id}`} className={`${isIncluded ? 'bg-blue-50/30 dark:bg-blue-900/10' : 'bg-gray-50 dark:bg-gray-800/50 opacity-60'}`}>
+                                <td className="p-4 pl-10">
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-sm font-bold text-gray-900 dark:text-gray-100">{installment.name}</span>
+                                    <span className="text-[9px] font-bold px-2 py-0.5 bg-blue-100 rounded text-blue-600">INSTALLMENT</span>
+                                  </div>
+                                </td>
+                                <td className="p-4 text-sm font-black">{formatCurrency(installment.monthlyAmount)}</td>
+                                <td className="p-4 text-center">
+                                  {installment.dueDate ? (
+                                  <span className="text-[10px] font-black bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 px-2 py-1 rounded border border-gray-200 dark:border-gray-700">
+                                  {formatDueDate(installment.dueDate)}
+                                  </span>
+                                  ) : (
+                                  <span className="text-gray-300 dark:text-gray-600 text-xs">—</span>
                                   )}
-                                </div>
-                              </td>
-                              <td className="p-4 pr-10 text-right">
-                                {!isReadOnly && (
-                                  <button onClick={() => removeItemFromCategory(cat.name, item.id, item.name)} className="text-[10px] font-black text-red-500 uppercase tracking-widest border-2 border-black bg-white dark:bg-gray-800 px-3 py-1.5 rounded-xl shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[1px] hover:translate-y-[1px] transition-all">Exclude</button>
-                                )}
-                              </td>
-                            </tr>
-                        )) : <tr><td colSpan={5} className="p-8 text-center text-gray-400 text-sm font-medium">No items yet. Click "Add Item" below to get started.</td></tr>}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
-                {canAddItems && <button onClick={() => addItemToCategory(cat.name)} className="w-full p-4 text-[11px] font-black text-gray-600 dark:text-gray-400 uppercase tracking-widest hover:text-indigo-600 dark:hover:text-indigo-400 border-t-4 border-black bg-gray-50/50 dark:bg-gray-800/20 transition-colors text-center">+ Add Item</button>}
-              </div>
+                                </td>
+                                <td className="p-4 text-center">
+                                  <div className="flex items-center justify-center space-x-2">
+                                    {isPaid ? (
+                                      <CheckCircle2 className="w-4 h-4 text-green-500" />
+                                    ) : (
+                                      !isReadOnly && (
+                                        <button 
+                                          onClick={() => {
+                                            setTransactionFormData({
+                                              id: '', name: `${installment.name} - ${selectedMonth} ${new Date().getFullYear()}`, date: getTodayIso(),
+                                              amount: isPartial && installmentSchedule ? Math.max(0, installmentSchedule.expected_amount - installmentSchedule.amount_paid).toFixed(2) : installment.monthlyAmount.toFixed(2),
+                                              accountId: installment.accountId || accounts[0]?.id || '', paymentScheduleId: installmentSchedule?.id || '',
+                                              transactionType: 'payment'
+                                            });
+                                            setShowTransactionModal(true);
+                                          }}
+                                          className="px-3 py-1.5 bg-indigo-600 text-white text-[10px] font-black uppercase rounded-xl border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[1px] hover:translate-y-[1px] transition-all"
+                                        >
+                                          Pay
+                                        </button>
+                                      )
+                                    )}
+                                    {!isReadOnly && <button onClick={() => setExcludedInstallmentIds(prev => { const next = new Set(prev); if(next.has(installment.id)) next.delete(installment.id); else next.add(installment.id); return next; })} className={`w-8 h-8 rounded-xl border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[0.5px] hover:translate-y-[0.5px] transition-all flex items-center justify-center ${isIncluded ? 'bg-indigo-600 text-white' : 'text-transparent border-gray-200'}`}><Check className="w-4 h-4" /></button>}
+                                  </div>
+                                </td>
+                                <td className="p-4 pr-10 text-right">
+                                  {!isReadOnly && <button onClick={() => setConfirmModal({ show: true, title: 'Exclude Installment', message: `Exclude "${installment.name}"?`, onConfirm: () => { setExcludedInstallmentIds(prev => new Set([...prev, installment.id])); setConfirmModal(p => ({...p, show: false})); } })} className="text-[10px] font-black text-red-500 uppercase tracking-widest border-2 border-black bg-white dark:bg-gray-800 px-3 py-1.5 rounded-xl shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[1px] hover:translate-y-[1px] transition-all">Exclude</button>}
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                  {canAddItems && <button onClick={() => addItemToCategory(cat.name)} className="w-full p-4 text-[11px] font-black text-gray-600 dark:text-gray-400 uppercase tracking-widest hover:text-indigo-600 dark:hover:text-indigo-400 border-t-4 border-black bg-gray-50/50 dark:bg-gray-800/20 transition-colors text-center">+ Add Item</button>}
+                </div>
+              )}
             </div>
           );
         })}
 
-    {effectiveCategories.filter(cat => cat.name !== 'Fixed').map((cat) => {
         {(() => {
           const creditCardAccounts = accounts.filter(acc => acc.classification === 'Credit Card' && acc.billingDate);
           if (creditCardAccounts.length === 0) return null;
@@ -2715,7 +3020,6 @@ const calculateBudgetRemaining = (
               const cycleYear = cycle.cycleStart.getFullYear();
               return (cycleMonth === monthIndex && cycleYear === currentYear) || (cycle.cycleEnd.getMonth() === monthIndex && cycle.cycleEnd.getFullYear() === currentYear);
             });
-
 
             if (!relevantCycle || relevantCycle.transactionCount === 0) return null;
             return (
@@ -3180,7 +3484,49 @@ const calculateBudgetRemaining = (
       )}
 
       {confirmModal.show && <ConfirmDialog {...confirmModal} onClose={() => setConfirmModal(p => ({ ...p, show: false }))} />}
+
+{showCreditPayModal && (
+  <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md animate-in fade-in">
+    <div className="bg-white dark:bg-gray-900 rounded-2xl w-full max-w-sm p-6 border-4 border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] relative animate-in zoom-in-95">
+      <button onClick={() => setShowCreditPayModal(null)} className="absolute right-4 top-4 p-1.5 hover:bg-gray-100 rounded-full transition-colors"><X className="w-5 h-5 text-gray-400" /></button>
+      <h2 className="text-xl font-black text-gray-900 dark:text-gray-100 mb-1">Pay {showCreditPayModal.bank}</h2>
+      <p className="text-gray-500 dark:text-gray-400 text-xs mb-4">Recording credit payment for {selectedMonth}</p>
+      
+      <form onSubmit={async (e) => {
+        e.preventDefault();
+        const formData = new FormData(e.currentTarget);
+        try {
+          await recordCreditPayment(
+            showCreditPayModal.accountId,
+            parseFloat(formData.get('amount') as string),
+            `${showCreditPayModal.bank} Payment - ${selectedMonth}`,
+            formData.get('date') as string
+          );
+          await reloadTransactions();
+          setShowCreditPayModal(null);
+          alert('Payment recorded successfully!');
+        } catch (err) {
+          console.error(err);
+          alert('Failed to record payment.');
+        }
+      }} className="space-y-4">
+        <div>
+          <label className="block text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">Amount</label>
+          <input required name="amount" type="number" step="0.01" defaultValue={showCreditPayModal.amount.toFixed(2)} className="w-full bg-gray-50 dark:bg-gray-800 border-2 border-black rounded-xl p-2.5 outline-none text-base font-black dark:text-gray-100" />
+        </div>
+        <div>
+          <label className="block text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">Date</label>
+          <input required name="date" type="date" defaultValue={getTodayIso()} className="w-full bg-gray-50 dark:bg-gray-800 border-2 border-black rounded-xl px-2.5 py-2 outline-none font-bold text-xs dark:text-gray-100" />
+        </div>
+        <div className="flex space-x-3 pt-2">
+          <button type="button" onClick={() => setShowCreditPayModal(null)} className="flex-1 bg-gray-100 dark:bg-gray-800 border-2 border-black py-2.5 rounded-xl font-black text-xs text-gray-500 uppercase tracking-wider">Cancel</button>
+          <button type="submit" className="flex-1 bg-green-600 text-white border-2 border-black py-2.5 rounded-xl font-black text-xs uppercase tracking-wider">Pay</button>
+        </div>
+      </form>
     </div>
+  </div>
+)}
+</div>
   );
 };
 
@@ -3197,6 +3543,5 @@ const ConfirmDialog: React.FC<{ show: boolean; title: string; message: string; o
 </div>
 </div>
 );
-
 
 export default Budget;
