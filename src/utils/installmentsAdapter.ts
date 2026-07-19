@@ -65,7 +65,7 @@ export const frontendInstallmentToSupabase = (installment: Installment): Omit<Su
     
     // Correct mapping to match your types.ts and formData
     due_date: installment.due_date || null,
-    is_migrated: !!installment.is_migrated, 
+    is_migrated: !!(installment.is_migrated || installment.isMigrated), 
     is_archived: !!installment.isArchived,
   };
 };

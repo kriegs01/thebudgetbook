@@ -98,9 +98,19 @@ const Installments: React.FC<InstallmentsProps> = ({ installments, accounts, bil
     due_date: '' // Add this line[span_5](start_span)[span_5](end_span)
 });
 
-  const [editFormData, setEditFormData] = useState({ 
-    name: '', totalAmount: '', monthlyAmount: '', termDuration: '', paidAmount: '', accountId: '', startDate: '', billerId: '', timing: '1/2' as '1/2' | '2/2'
-  });
+const [editFormData, setEditFormData] = useState({ 
+  name: '', 
+  totalAmount: '', 
+  monthlyAmount: '', 
+  termDuration: '', 
+  paidAmount: '', 
+  accountId: '', 
+  startDate: '', 
+  billerId: '', 
+  timing: '1/2' as '1/2' | '2/2',
+  due_date: '', // Add this field here
+  is_migrated: false
+});
 
   const [payFormData, setPayFormData] = useState({
     amount: '',
@@ -291,6 +301,8 @@ const Installments: React.FC<InstallmentsProps> = ({ installments, accounts, bil
   };
 
   const handleEditSubmit = async (e: React.FormEvent) => {
+    console.log("DEBUG: showEditModal current item:", showEditModal);
+    console.log("DEBUG: editFormData state:", editFormData);
     e.preventDefault();
     if (!showEditModal || isSubmitting) return;
 
@@ -308,7 +320,9 @@ const Installments: React.FC<InstallmentsProps> = ({ installments, accounts, bil
       accountId: editFormData.accountId,
       startDate: editFormData.startDate || undefined,
       billerId: editFormData.billerId || undefined,
-      timing: editFormData.timing // PROTOTYPE: Include timing field
+      timing: editFormData.timing, // PROTOTYPE: Include timing field
+      due_date: editFormData.due_date,
+      isMigrated: true
     };
 
     const executeUpdate = async () => {
@@ -459,7 +473,9 @@ const Installments: React.FC<InstallmentsProps> = ({ installments, accounts, bil
       accountId: item.accountId,
       startDate: item.startDate || '',
       billerId: item.billerId || '',
-      timing: item.timing || '1/2' // PROTOTYPE: Default to 1/2 if not set
+      timing: item.timing || '1/2', // PROTOTYPE: Default to 1/2 if not set
+      due_date: item.due_date || '',
+      is_migrated: !!item.isMigrated 
     });
     setShowEditModal(item);
     setOpenMenuId(null);
@@ -681,7 +697,11 @@ const Installments: React.FC<InstallmentsProps> = ({ installments, accounts, bil
                   {!archived && (
                     <>
                       <button 
-                        onClick={() => openEditModal(item)}
+                        onClick={() => {
+                          console.log("DEBUG: Item being passed to modal:", item);
+                          openEditModal(item);
+                        }}
+                        
                         className="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors flex items-center space-x-2"
                       >
                         <Edit2 className="w-4 h-4" />
@@ -1379,6 +1399,20 @@ const Installments: React.FC<InstallmentsProps> = ({ installments, accounts, bil
                   </select>
                 </div>
               </div>
+              <div>
+  <label className="block text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-2 transition-colors">
+    Due Date
+  </label>
+  <input 
+    type="number" 
+    min="1" 
+    max="31"
+    value={editFormData.due_date} 
+    onChange={(e) => setEditFormData({...editFormData, due_date: e.target.value})} 
+    placeholder="e.g., 15"
+    className="w-full bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-transparent dark:border-gray-700 rounded-2xl p-4 outline-none focus:ring-2 focus:ring-indigo-500 font-black transition-colors" 
+  />
+</div>            
               {/* QA: Fix for term duration issue - add term duration input field */}
               <div>
                 <label className="block text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-2 transition-colors">Term Duration (months)</label>
