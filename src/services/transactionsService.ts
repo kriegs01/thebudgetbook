@@ -1265,3 +1265,23 @@ export const getAllStashTransactions = async () => {
     return { data: null, error };
   }
 };
+
+/**
+ * Unified helper to record a credit card payment.
+ * Handles the special 'credit_payment' type required by your DB.
+ */
+export const recordCreditPayment = async (
+  accountId: string,
+  amount: number,
+  description: string,
+  date: string
+) => {
+  return await createTransaction({
+    name: description,
+    amount: -Math.abs(amount), // Negative for balance reduction
+    date: date,
+    payment_method_id: accountId,
+    transaction_type: 'credit_payment', // Correct type for your DB schema
+    notes: 'Credit Card Payment'
+  });
+};
