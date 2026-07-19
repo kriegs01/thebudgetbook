@@ -230,7 +230,10 @@ const calculateBudgetRemaining = (
   return netIncome - setup.totalAmount;
 };
 
+
+
   const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSetups, setSavedSetups, onUpdateBiller, onMoveToTrash, onReloadSetups, onReloadBillers, onUpdateInstallment, installments = [], onTransactionCreated, onTransactionDeleted, onArchiveBudget, onReopenBudget, userProfile }) => {
+  console.log("Budget Setup Categories:", categories.map(c => c.name));
   const { getAccentClasses } = useTheme();
   const isMobile = useMediaQuery('(max-width: 767px)');
   const [view, setView] = useState<'summary' | 'setup'>('summary');
@@ -254,6 +257,10 @@ const calculateBudgetRemaining = (
     });
   }, [savedSetups]);
 
+  const creditBudgetAccounts = React.useMemo(() => {
+    return accounts.filter(acc => acc.classification === 'Credit Card');
+  }, [accounts]);
+  
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   
@@ -1927,8 +1934,15 @@ const calculateBudgetRemaining = (
         const isFinished = !scheduleForMonth && inst.totalAmount > 0 && inst.paidAmount >= inst.totalAmount;
         return timingMatch && isActiveForPeriod && !isFinished && !excludedInstallmentIds.has(inst.id);
       });
-      return shouldRenderCategorySection(cat, catItems.length > 0 || hasLoansData, selectedYear, selectedMonth);
-    })
+      const hasCreditData = cat.name === 'Credit' && creditBudgetAccounts.length > 0;
+
+      return shouldRenderCategorySection(
+    cat, 
+    catItems.length > 0 || hasLoansData || hasCreditData, // Added hasCreditData here
+    selectedYear, 
+    selectedMonth
+  );
+})
     .map((cat) => {
       const items = setupData[cat.name] || [];
       const itemsTotal = items.filter(i => i.included).reduce((sum, item) => sum + (parseFloat(item.amount) || 0), 0);
@@ -1948,7 +1962,12 @@ const calculateBudgetRemaining = (
           .reduce((s, inst) => s + inst.monthlyAmount, 0);
       }
 
-      return { category: cat.name, total: itemsTotal + installmentsTotal };
+      let creditTotal = 0;
+      if (cat.name === 'Credit') {
+        creditTotal = creditBudgetAccounts.reduce((sum, acc) => sum + (acc.balance || 0), 0);
+      }
+
+      return { category: cat.name, total: itemsTotal + installmentsTotal + creditTotal };
     });
 
   const stashTotal = wallets.filter(w => !excludedWalletIds.has(w.id)).reduce((s, w) => s + Math.max(w.amount, getStashAggregates(w).funded), 0);
@@ -2540,6 +2559,7 @@ const calculateBudgetRemaining = (
         </div>
         )}
 
+
         {categories.filter(cat => cat.name === 'Fixed').map((cat) => {
           const items = setupData[cat.name] || [];
           const shouldRenderCategory = shouldRenderCategorySection(cat, items.length > 0, selectedYear, selectedMonth);
@@ -2653,7 +2673,9 @@ const calculateBudgetRemaining = (
             });
           }
 
-          const hasData = items.length > 0 || (cat.name === 'Loans' && relevantInstallments.length > 0);
+          const hasData = items.length > 0 || 
+            (cat.name === 'Loans' && relevantInstallments.length > 0) || 
+            (cat.name === 'Credit' && creditBudgetAccounts.length > 0);
           const shouldRenderCategory = shouldRenderCategorySection(cat, hasData, selectedYear, selectedMonth);
           if (!shouldRenderCategory) return null;
 
@@ -2676,6 +2698,20 @@ const calculateBudgetRemaining = (
                 </div>
                 <span className="text-lg font-black text-indigo-600 dark:text-indigo-400">{formatCurrency(categoryTotal)}</span>
               </div>
+
+              {cat.name === 'Credit' && creditBudgetAccounts.length > 0 && (
+    <div className="p-4 space-y-4 border-t-2 border-black">
+      {creditBudgetAccounts.map(account => (
+        <div key={account.id} className="p-4 border-2 border-black rounded-xl bg-purple-50 dark:bg-purple-900/10 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]">
+          <div className="flex justify-between items-center">
+            <p className="text-sm font-black text-gray-900 dark:text-gray-100">{account.bank}</p>
+            <p className="text-sm font-black text-purple-600">{formatCurrency(account.balance)}</p>
+          </div>
+        </div>
+      ))}
+    </div>
+  )}
+
               <div className="w-full">
                 {isMobile ? (
                   <div className="p-4 space-y-4 bg-gray-50/30 dark:bg-gray-955/10">
