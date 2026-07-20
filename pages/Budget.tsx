@@ -259,8 +259,15 @@ const calculateBudgetRemaining = (
   }, [savedSetups]);
 
   const creditBudgetAccounts = React.useMemo(() => {
-    return accounts.filter(acc => acc.type === 'Credit' || acc.classification === 'Credit Card');
-  }, [accounts]);  
+    return accounts
+      .filter(acc => acc.type === 'Credit' || acc.classification === 'Credit Card')
+      .sort((a, b) => {
+        // Extract the day, default to 999 if no due date so they fall to the bottom
+        const dayA = a.dueDate ? new Date(a.dueDate).getDate() : 999;
+        const dayB = b.dueDate ? new Date(b.dueDate).getDate() : 999;
+        return dayA - dayB;
+      });
+  }, [accounts]); 
 
     // 1. Create an effective categories array that guarantees "Credit" exists
     const effectiveCategories = React.useMemo(() => {
@@ -392,12 +399,24 @@ const calculateBudgetRemaining = (
       } else {
         setExcludedWalletIds(new Set());
       }
+
+      // 1. THIS IS THE CORRECT SPOT FOR THE LOAD LOGIC
+      if (Array.isArray(existingSetup.data._excludedCreditIds)) {
+        setExcludedCreditIds(new Set(existingSetup.data._excludedCreditIds));
+      } else {
+        setExcludedCreditIds(new Set());
+      }
+
     } else {
       setProjectedSalary('11000');
       setActualSalary('');
       setExcludedInstallmentIds(new Set());
       setExcludedWalletIds(new Set());
+      
+      // 2. THIS IS THE CORRECT SPOT FOR THE RESET LOGIC
+      setExcludedCreditIds(new Set()); 
     }
+    
   }, [selectedMonth, selectedTiming, savedSetups]);
 
   useEffect(() => {
@@ -1281,7 +1300,8 @@ const calculateBudgetRemaining = (
       _projectedSalary: projectedSalary,
       _actualSalary: actualSalary,
       _excludedInstallmentIds: [...excludedInstallmentIds],
-      _excludedWalletIds: [...excludedWalletIds]
+      _excludedWalletIds: [...excludedWalletIds],
+      _excludedCreditIds: [...excludedCreditIds]
     };
     
     const currentDataString = JSON.stringify(dataToSave);
@@ -1363,7 +1383,7 @@ const calculateBudgetRemaining = (
       setAutoSaveStatus('error');
       setTimeout(() => setAutoSaveStatus('idle'), AUTO_SAVE_STATUS_TIMEOUT_MS);
     }
-  }, [view, setupData, projectedSalary, actualSalary, selectedMonth, selectedTiming, savedSetups, excludedInstallmentIds, excludedWalletIds, wallets, getStashAggregates, onReloadSetups, installments, getPaymentSchedule, shouldShowInstallment]);
+  }, [view, setupData, projectedSalary, actualSalary, selectedMonth, selectedTiming, savedSetups, excludedInstallmentIds, excludedWalletIds, excludedCreditIds,wallets, getStashAggregates, onReloadSetups, installments, getPaymentSchedule, shouldShowInstallment]);
 
   const triggerAutoSave = useCallback(() => {
     if (autoSaveTimeoutRef.current) {
@@ -1379,7 +1399,7 @@ const calculateBudgetRemaining = (
     if (view === 'setup') {
       triggerAutoSave();
     }
-  }, [setupData, projectedSalary, actualSalary, excludedInstallmentIds, excludedWalletIds, view, triggerAutoSave]);
+  }, [setupData, projectedSalary, actualSalary, excludedInstallmentIds, excludedWalletIds, excludedCreditIds,view, triggerAutoSave]);
 
   useEffect(() => {
     return () => {
@@ -1471,9 +1491,10 @@ const calculateBudgetRemaining = (
       _projectedSalary: projectedSalary,
       _actualSalary: actualSalary,
       _excludedInstallmentIds: [...excludedInstallmentIds],
-      _excludedWalletIds: [...excludedWalletIds]
+      _excludedWalletIds: [...excludedWalletIds],
+      _excludedCreditIds: [...excludedCreditIds]
     };
-    
+
     try {
       if (existingSetup) {
         const updatedSetup: SavedBudgetSetup = {
@@ -2007,67 +2028,58 @@ const calculateBudgetRemaining = (
 
   const categorySummary = effectiveCategories
   .filter(cat => {
-      const catItems = setupData[cat.name] || [];
-      const hasLoansData = cat.name === 'Loans' && installments.some(inst => {
-        if (inst.isArchived) return false;
-        const timingMatch = !inst.timing || inst.timing === selectedTiming;
-        const scheduleForMonth = getPaymentSchedule('installment', inst.id, selectedMonth, selectedYear);
-        const isActiveForPeriod = scheduleForMonth !== undefined || shouldShowInstallment(inst, selectedMonth, selectedYear);
-        const isFinished = !scheduleForMonth && inst.totalAmount > 0 && inst.paidAmount >= inst.totalAmount;
-        return timingMatch && isActiveForPeriod && !isFinished && !excludedInstallmentIds.has(inst.id);
-      });
-      const hasCreditData = cat.name === 'Credit' && creditBudgetAccounts.length > 0;
-
-      return shouldRenderCategorySection(
-    cat, 
-    catItems.length > 0 || hasLoansData || hasCreditData, // Added hasCreditData here
-    selectedYear, 
-    selectedMonth
-  );
-})
-    .map((cat) => {
-      const items = setupData[cat.name] || [];
-      const itemsTotal = items.filter(i => i.included).reduce((sum, item) => sum + (parseFloat(item.amount) || 0), 0);
-
-      let installmentsTotal = 0;
-      if (cat.name === 'Loans') {
-        installmentsTotal = installments
-          .filter(inst => {
-            if (inst.isArchived) return false;
-            const timingMatch = !inst.timing || inst.timing === selectedTiming;
-            const scheduleForMonth = getPaymentSchedule('installment', inst.id, selectedMonth, selectedYear);
-            const isActiveForPeriod = scheduleForMonth !== undefined || shouldShowInstallment(inst, selectedMonth, selectedYear);
-            const isFinished = !scheduleForMonth && inst.totalAmount > 0 && inst.paidAmount >= inst.totalAmount;
-            const notExcluded = !excludedInstallmentIds.has(inst.id);
-            return timingMatch && isActiveForPeriod && !isFinished && notExcluded;
-          })
-          .reduce((s, inst) => s + inst.monthlyAmount, 0);
-      }
-
-      let creditTotal = 0;
-      if (cat.name === 'Credit') {
-        creditTotal = creditBudgetAccounts.reduce((sum, account) => {
-          const cycleSummaries = aggregateCreditCardPurchases(account, transactions, installments);
-          const monthIndex = MONTHS.indexOf(selectedMonth);
-          const relevantCycle = cycleSummaries.find(cycle => {
-            const cycleMonth = cycle.cycleStart.getMonth();
-            const cycleYear = cycle.cycleStart.getFullYear();
-            return (cycleMonth === monthIndex && cycleYear === selectedYear) || 
-                   (cycle.cycleEnd.getMonth() === monthIndex && cycle.cycleEnd.getFullYear() === selectedYear);
-          });
-          
-          let currentBalance = relevantCycle ? relevantCycle.totalAmount : (account.balance || 0);
-          if (Math.abs(currentBalance) < 0.01) currentBalance = 0; // Fixes the -0 glitch
-          
-          return sum + currentBalance;
-        }, 0);
-      }
-
-      return { category: cat.name, total: itemsTotal + installmentsTotal + creditTotal };
+    const catItems = setupData[cat.name] || [];
+    const hasLoansData = cat.name === 'Loans' && installments.some(inst => {
+      if (inst.isArchived) return false;
+      const timingMatch = !inst.timing || inst.timing === selectedTiming;
+      const scheduleForMonth = getPaymentSchedule('installment', inst.id, selectedMonth, selectedYear);
+      const isActiveForPeriod = scheduleForMonth !== undefined || shouldShowInstallment(inst, selectedMonth, selectedYear);
+      const isFinished = !scheduleForMonth && inst.totalAmount > 0 && inst.paidAmount >= inst.totalAmount;
+      return timingMatch && isActiveForPeriod && !isFinished && !excludedInstallmentIds.has(inst.id);
     });
+    const hasCreditData = cat.name === 'Credit' && creditBudgetAccounts.length > 0;
 
-  const stashTotal = wallets.filter(w => !excludedWalletIds.has(w.id)).reduce((s, w) => s + Math.max(w.amount, getStashAggregates(w).funded), 0);
-  const grandTotal = categorySummary.reduce((sum, cat) => sum + cat.total, 0) + stashTotal;
+    return shouldRenderCategorySection(
+      cat, 
+      catItems.length > 0 || hasLoansData || hasCreditData,
+      selectedYear, 
+      selectedMonth
+    );
+  })
+  .map((cat) => {
+    const items = setupData[cat.name] || [];
+    const itemsTotal = items.filter(i => i.included).reduce((sum, item) => sum + (parseFloat(item.amount) || 0), 0);
+
+    let installmentsTotal = 0;
+    if (cat.name === 'Loans') {
+      installmentsTotal = installments
+        .filter(inst => {
+          if (inst.isArchived) return false;
+          const timingMatch = !inst.timing || inst.timing === selectedTiming;
+          const scheduleForMonth = getPaymentSchedule('installment', inst.id, selectedMonth, selectedYear);
+          const isActiveForPeriod = scheduleForMonth !== undefined || shouldShowInstallment(inst, selectedMonth, selectedYear);
+          const isFinished = !scheduleForMonth && inst.totalAmount > 0 && inst.paidAmount >= inst.totalAmount;
+          const notExcluded = !excludedInstallmentIds.has(inst.id);
+          return timingMatch && isActiveForPeriod && !isFinished && notExcluded;
+        })
+        .reduce((s, inst) => s + inst.monthlyAmount, 0);
+    }
+
+    let creditTotal = 0;
+    if (cat.name === 'Credit') {
+      creditTotal = creditBudgetAccounts
+        .filter(acc => !excludedCreditIds.has(acc.id))
+        .reduce((sum, account) => {
+          const budgetAmount = (account as any).budgetAmount || 0; // Using fixed budgetAmount
+          return sum + budgetAmount;
+        }, 0);
+    }
+
+    return { category: cat.name, total: itemsTotal + installmentsTotal + creditTotal };
+  });
+
+const stashTotal = wallets.filter(w => !excludedWalletIds.has(w.id)).reduce((s, w) => s + Math.max(w.amount, getStashAggregates(w).funded), 0);
+const grandTotal = categorySummary.reduce((sum, cat) => sum + cat.total, 0) + stashTotal;
   const totalSpend = grandTotal;
   
   const currentMonthIndex = MONTHS.indexOf(selectedMonth);
@@ -2687,24 +2699,22 @@ const calculateBudgetRemaining = (
           
             let creditTotal = 0;
             if (cat.name === 'Credit') {
-              creditTotal = creditBudgetAccounts
-                .filter(acc => !excludedCreditIds.has(acc.id)) // <--- ADD THIS FILTER
+              creditTotal = accounts
+                .filter(acc => (acc.type === 'Credit' || acc.type === 'credit') && !excludedCreditIds.has(acc.id))
                 .reduce((sum, account) => {
-                const cycleSummaries = aggregateCreditCardPurchases(account, transactions, installments);
-                const monthIndex = MONTHS.indexOf(selectedMonth);
-                const relevantCycle = cycleSummaries.find(cycle => {
-                  const cycleMonth = cycle.cycleStart.getMonth();
-                  const cycleYear = cycle.cycleStart.getFullYear();
-                  return (cycleMonth === monthIndex && cycleYear === selectedYear) || 
-                         (cycle.cycleEnd.getMonth() === monthIndex && cycle.cycleEnd.getFullYear() === selectedYear);
-                });
-                
-                let currentBalance = relevantCycle ? relevantCycle.totalAmount : (account.balance || 0);
-                if (Math.abs(currentBalance) < 0.01) currentBalance = 0; // Fixes the -0 glitch
-                
-                return sum + currentBalance;
-              }, 0);
-            }  
+                  const cycleSummaries = aggregateCreditCardPurchases(account, transactions, selectedMonth, selectedYear);
+                  const monthIndex = MONTHS.indexOf(selectedMonth);
+                  const relevantCycle = cycleSummaries.find(cycle => {
+                    const cycleMonth = cycle.cycleStart.getMonth();
+                    const cycleYear = cycle.cycleStart.getFullYear();
+                    return (cycleMonth === monthIndex && cycleYear === selectedYear) ||
+                           (cycle.cycleEnd.getMonth() === monthIndex && cycle.cycleEnd.getFullYear() === selectedYear);
+                  });
+                  const currentBalance = relevantCycle ? relevantCycle.totalAmount : (account.initialBalance || 0);
+                  
+                  return sum + Math.abs(currentBalance);
+                }, 0);
+            }                          
             
             const categoryTotal = itemsTotal + installmentsTotal + creditTotal;
             
@@ -2723,7 +2733,11 @@ const calculateBudgetRemaining = (
   <div className="p-4 space-y-4 bg-gray-50/30 dark:bg-gray-955/10">
     {creditBudgetAccounts.map(account => {
       const currentBalance = calculateCurrentBalance(account);
-      const isIncluded = !excludedCreditIds.has(account.id); // Check if included
+      
+      // Filter out accounts with a zero balance (accounting for floating point math)
+      if (currentBalance < 0.01) return null; 
+      
+      const isIncluded = !excludedCreditIds.has(account.id);
       
       return (
         <div key={account.id} className={`p-4 border-2 border-black rounded-xl bg-purple-50 dark:bg-purple-900/20 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] flex items-center justify-between transition-all ${isIncluded ? 'opacity-100' : 'opacity-60'}`}>
@@ -2742,9 +2756,11 @@ const calculateBudgetRemaining = (
             </button>
             
             <div>
-              <p className="text-sm font-black text-gray-900 dark:text-gray-100">{account.bank}</p>
-              {/* 3. Due Date */}
-              <p className="text-[10px] font-black text-purple-600">Due: {account.billingDate || 'N/A'}</p>
+            <p className="text-sm font-black text-gray-900 dark:text-gray-100">{account.bank}</p>
+{/* 3. Due Date (Formatted to just the day) */}
+<p className="text-[10px] font-black text-purple-600">
+  Due: {account.dueDate ? formatDueDate(String(new Date(account.dueDate).getDate())) : 'N/A'}
+</p>
             </div>
           </div>
 
@@ -3640,71 +3656,59 @@ const calculateBudgetRemaining = (
 )}
 
 {creditInfoModal && (
-  <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md animate-in fade-in" onClick={() => setCreditInfoModal(null)}>
-    <div className="bg-white dark:bg-gray-900 rounded-2xl w-full max-w-sm p-6 border-4 border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] relative animate-in zoom-in-95 max-h-[80vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
-      <button onClick={() => setCreditInfoModal(null)} className="absolute right-4 top-4 p-1.5 hover:bg-gray-100 rounded-full transition-colors"><X className="w-5 h-5 text-gray-400" /></button>
-      <h2 className="text-xl font-black text-gray-900 dark:text-gray-100 mb-1">{creditInfoModal.account.bank}</h2>
-      <p className="text-gray-500 dark:text-gray-400 text-xs mb-4">Payment History — {selectedMonth} {selectedYear}</p>
-      
-      <div className="space-y-2">
-        <div className="p-4 bg-purple-50 dark:bg-purple-900/20 rounded-xl border-2 border-black mb-4">
-            <p className="text-[10px] font-black text-purple-700 uppercase">Current Balance</p>
-            <p className="text-lg font-black text-purple-600">{formatCurrency(calculateCurrentBalance(creditInfoModal.account))}</p>
-        </div>
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md animate-in fade-in" onClick={() => setCreditInfoModal(null)}>
+          <div className="bg-white dark:bg-gray-900 rounded-2xl w-full max-w-sm p-6 border-4 border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] relative animate-in zoom-in-95 max-h-[80vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+            <button onClick={() => setCreditInfoModal(null)} className="absolute right-4 top-4 p-1.5 hover:bg-gray-100 rounded-full transition-colors"><X className="w-5 h-5 text-gray-400" /></button>
+            <h2 className="text-xl font-black text-gray-900 dark:text-gray-100 mb-1">{creditInfoModal.account.bank}</h2>
+            <p className="text-gray-500 dark:text-gray-400 text-xs mb-4">Payment History — {selectedMonth} {selectedYear}</p>
+            
+            <div className="space-y-2">
+              <div className="p-4 bg-purple-50 dark:bg-purple-900/20 rounded-xl border-2 border-black mb-4">
+                  <p className="text-[10px] font-black text-purple-700 uppercase">Current Balance</p>
+                  <p className="text-lg font-black text-purple-600">{formatCurrency(calculateCurrentBalance(creditInfoModal.account))}</p>
+              </div>
 
-        <div className="space-y-2">
-          <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Recent Payments</p>
-          {transactions
-        .filter(tx => {
-          const txDate = new Date(tx.date);
-          const matchesAccount = tx.payment_method_id === creditInfoModal.account.id;
-          // Updated filter: Only include 'credit_payment' types
-          const matchesType = tx.transaction_type === 'credit_payment'; 
-          const matchesMonth = txDate.getMonth() === MONTHS.indexOf(selectedMonth);
-          const matchesYear = txDate.getFullYear() === selectedYear;
-          
-          return matchesAccount && matchesType && matchesMonth && matchesYear;
-        })
-        .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
-        .map(tx => (
-          <div key={tx.id} className="flex justify-between items-center bg-gray-50 dark:bg-gray-800 p-3 rounded-lg border border-black/10">
-            <div>
-              <p className="text-xs font-bold text-gray-900 dark:text-gray-100">{tx.name}</p>
-              <p className="text-[10px] text-gray-500">{new Date(tx.date).toLocaleDateString()}</p>
+              <div className="space-y-2">
+                <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Recent Payments</p>
+                {transactions
+              .filter(tx => tx.payment_method_id === creditInfoModal.account.id && tx.transaction_type === 'credit_payment' && new Date(tx.date).getMonth() === MONTHS.indexOf(selectedMonth) && new Date(tx.date).getFullYear() === selectedYear)
+              .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+              .map(tx => (
+                <div key={tx.id} className="flex justify-between items-center bg-gray-50 dark:bg-gray-800 p-3 rounded-lg border border-black/10">
+                  <div>
+                    <p className="text-xs font-bold text-gray-900 dark:text-gray-100">{tx.name}</p>
+                    <p className="text-[10px] text-gray-500">{new Date(tx.date).toLocaleDateString()}</p>
+                  </div>
+                  <div className="flex items-center space-x-3">
+                    <span className="text-xs font-black text-red-600">{formatCurrency(Math.abs(tx.amount))}</span>
+                    <PinProtectedAction featureId="transaction_deletions" onVerified={async () => { try { await deleteTransactionAndRevertSchedule(tx.id); await reloadTransactions(); if (onTransactionDeleted) onTransactionDeleted(); } catch { alert('Error.'); } }} actionLabel="Delete Record">
+                      <button onClick={(e) => e.preventDefault()} className="text-gray-400 hover:text-red-600 p-1 rounded-lg hover:bg-red-50"><Trash2 className="w-4 h-4" /></button>
+                    </PinProtectedAction>
+                  </div>
+                </div>
+              ))}
+              </div>
             </div>
-            <span className="text-xs font-black text-red-600">{formatCurrency(Math.abs(tx.amount))}</span>
           </div>
-        ))}
-          {transactions.filter(tx => {
-            const txDate = new Date(tx.date);
-            return tx.payment_method_id === creditInfoModal.account.id && 
-                   (tx.transaction_type === 'payment' || tx.transaction_type === 'credit_payment') &&
-                   txDate.getMonth() === MONTHS.indexOf(selectedMonth) &&
-                   txDate.getFullYear() === selectedYear;
-          }).length === 0 && (
-            <p className="text-xs text-gray-400 italic text-center py-4">No payments found for {selectedMonth}.</p>
-          )}
         </div>
+      )}
+    </div> // This closes the main div for the Budget component
+  );
+}; // This closes the Budget component
+
+// Separate component definition
+const ConfirmDialog: React.FC<{ show: boolean; title: string; message: string; onConfirm: () => void; onClose: () => void }> = ({ title, message, onConfirm, onClose }) => (
+  <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-in fade-in">
+    <div className="bg-white dark:bg-gray-900 rounded-2xl border-4 border-black w-full max-w-xs p-6 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] flex flex-col items-center text-center transition-colors">
+      <div className="w-12 h-12 bg-red-50 dark:bg-red-900/20 border-2 border-black text-red-600 rounded-xl flex items-center justify-center mb-4 shadow-[1.5px_1.5px_0px_0px_rgba(0,0,0,1)]"><AlertTriangle className="w-6 h-6" /></div>
+      <h3 className="text-base font-black text-gray-900 dark:text-gray-100 mb-1 uppercase tracking-tight">{title}</h3>
+      <p className="text-xs text-gray-500 dark:text-gray-400 mb-5 font-medium leading-relaxed">{message}</p>
+      <div className="flex flex-col w-full space-y-2">
+        <button onClick={onConfirm} className="w-full bg-red-600 text-white border-2 border-black py-2.5 rounded-xl font-black uppercase tracking-widest text-[10px] shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[1px] hover:translate-y-[1px] transition-all">Proceed</button>
+        <button onClick={onClose} className="w-full bg-gray-100 dark:bg-gray-800 text-gray-500 border-2 border-black py-2.5 rounded-xl font-black uppercase tracking-widest text-[10px] shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[1px] hover:translate-y-[1px] transition-all">Cancel</button>
       </div>
     </div>
   </div>
-)}
-</div>
-  );
-};
-
-const ConfirmDialog: React.FC<{ show: boolean; title: string; message: string; onConfirm: () => void; onClose: () => void }> = ({ title, message, onConfirm, onClose }) => (
-<div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-in fade-in">
-<div className="bg-white dark:bg-gray-900 rounded-2xl border-4 border-black w-full max-w-xs p-6 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] flex flex-col items-center text-center transition-colors">
-  <div className="w-12 h-12 bg-red-50 dark:bg-red-900/20 border-2 border-black text-red-600 rounded-xl flex items-center justify-center mb-4 shadow-[1.5px_1.5px_0px_0px_rgba(0,0,0,1)]"><AlertTriangle className="w-6 h-6" /></div>
-  <h3 className="text-base font-black text-gray-900 dark:text-gray-100 mb-1 uppercase tracking-tight">{title}</h3>
-  <p className="text-xs text-gray-500 dark:text-gray-400 mb-5 font-medium leading-relaxed">{message}</p>
-  <div className="flex flex-col w-full space-y-2">
-    <button onClick={onConfirm} className="w-full bg-red-600 text-white border-2 border-black py-2.5 rounded-xl font-black uppercase tracking-widest text-[10px] shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[1px] hover:translate-y-[1px] transition-all">Proceed</button>
-    <button onClick={onClose} className="w-full bg-gray-100 dark:bg-gray-800 text-gray-500 border-2 border-black py-2.5 rounded-xl font-black uppercase tracking-widest text-[10px] shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[1px] hover:translate-y-[1px] transition-all">Cancel</button>
-  </div>
-</div>
-</div>
 );
 
 export default Budget;
