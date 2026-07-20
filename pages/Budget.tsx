@@ -21,6 +21,7 @@ import { PageHeader } from '../src/components/PageHeader';
 import { guardFundStashOverdraft } from '../pages/transactions';
 import { useIncomeSlicer } from '../src/components/useIncomeSlicer'; 
 import { recordCreditPayment } from '../src/services/transactionsService';
+import { calculateBillingCycles } from '../src/utils/billingCycles';
 
 interface BudgetProps {
   items: BudgetItem[];
@@ -2699,23 +2700,36 @@ const grandTotal = categorySummary.reduce((sum, cat) => sum + cat.total, 0) + st
           
             let creditTotal = 0;
             if (cat.name === 'Credit') {
-              creditTotal = accounts
-                .filter(acc => (acc.type === 'Credit' || acc.type === 'credit') && !excludedCreditIds.has(acc.id))
+              creditTotal = creditBudgetAccounts
+                .filter(acc => !excludedCreditIds.has(acc.id))
                 .reduce((sum, account) => {
-                  const cycleSummaries = aggregateCreditCardPurchases(account, transactions, selectedMonth, selectedYear);
-                  const monthIndex = MONTHS.indexOf(selectedMonth);
-                  const relevantCycle = cycleSummaries.find(cycle => {
-                    const cycleMonth = cycle.cycleStart.getMonth();
-                    const cycleYear = cycle.cycleStart.getFullYear();
-                    return (cycleMonth === monthIndex && cycleYear === selectedYear) ||
-                           (cycle.cycleEnd.getMonth() === monthIndex && cycle.cycleEnd.getFullYear() === selectedYear);
-                  });
-                  const currentBalance = relevantCycle ? relevantCycle.totalAmount : (account.initialBalance || 0);
+                  let cycleTotal = 0;
                   
-                  return sum + Math.abs(currentBalance);
+                  if (typeof aggregateCreditCardPurchases === 'function') {
+                    const cycleSummaries = aggregateCreditCardPurchases(account, transactions, installments);
+                    const monthIndex = MONTHS.indexOf(selectedMonth);
+                    
+                    const relevantCycle = cycleSummaries.find(cycle => {
+                      if (!cycle?.cycleStart || !cycle?.cycleEnd) return false;
+                      const start = new Date(cycle.cycleStart);
+                      const end = new Date(cycle.cycleEnd);
+                      return (start.getMonth() === monthIndex && start.getFullYear() === selectedYear) ||
+                             (end.getMonth() === monthIndex && end.getFullYear() === selectedYear);
+                    });
+        
+                    if (relevantCycle) {
+                      cycleTotal = relevantCycle.totalAmount;
+                    }
+                  }
+        
+                  // Fallback to live balance or opening balance if the cycle aggregator is empty
+                  const fallbackBalance = calculateCurrentBalance(account);
+                  const targetAmount = cycleTotal > 0 ? cycleTotal : (fallbackBalance > 0 ? fallbackBalance : Math.abs(account.openingBalance || 0));
+                  
+                  return sum + targetAmount;
                 }, 0);
-            }                          
-            
+            }                        
+             
             const categoryTotal = itemsTotal + installmentsTotal + creditTotal;
             
             return (
@@ -2731,9 +2745,64 @@ const grandTotal = categorySummary.reduce((sum, cat) => sum + cat.total, 0) + st
   
                 {cat.name === 'Credit' && creditBudgetAccounts.length > 0 && (
   <div className="p-4 space-y-4 bg-gray-50/30 dark:bg-gray-955/10">
-    {creditBudgetAccounts.map(account => {
-      const currentBalance = calculateCurrentBalance(account);
-      
+                                          let creditTotal = 0;
+    if (cat.name === 'Credit') {
+      creditTotal = creditBudgetAccounts
+        .filter(acc => !excludedCreditIds.has(acc.id))
+        .reduce((sum, account) => {
+          let cardTotal = 0;
+          const monthIndex = MONTHS.indexOf(selectedMonth);
+          
+          if (account.billingDate && typeof calculateBillingCycles === 'function') {
+            const cycles = calculateBillingCycles(account.billingDate, 12, false);
+            const targetCycle = cycles.find(cycle => {
+              if (!cycle?.startDate || !cycle?.endDate) return false;
+              const start = new Date(cycle.startDate);
+              const end = new Date(cycle.endDate);
+              return (start.getMonth() === monthIndex && start.getFullYear() === selectedYear) ||
+                     (end.getMonth() === monthIndex && end.getFullYear() === selectedYear);
+            });
+
+            if (targetCycle) {
+              const accountTxs = transactions.filter(tx => tx?.payment_method_id === account.id);
+              cardTotal = accountTxs
+                .filter(tx => {
+                  if (!tx?.date) return false;
+                  const txDate = new Date(tx.date);
+                  return txDate >= targetCycle.startDate && 
+                         txDate <= targetCycle.endDate && 
+                         tx.transaction_type !== 'credit_payment' &&
+                         tx.amount > 0;
+                })
+                .reduce((cSum, tx) => cSum + Math.abs(tx?.amount || 0), 0);
+            }
+          }
+
+          if (cardTotal <= 0) {
+            const fallbackCharges = transactions.filter(tx => {
+              if (!tx?.date || tx.payment_method_id !== account.id) return false;
+              const txDate = new Date(tx.date);
+              return txDate.getMonth() === monthIndex && 
+                     txDate.getFullYear() === selectedYear &&
+                     tx.transaction_type !== 'credit_payment' &&
+                     tx.amount > 0;
+            });
+            cardTotal = fallbackCharges.reduce((cSum, tx) => cSum + Math.abs(tx.amount), 0);
+          }
+
+          if (cardTotal <= 0) {
+            const liveBal = calculateCurrentBalance(account);
+            cardTotal = liveBal > 0 ? liveBal : Math.abs(account.openingBalance || 0);
+          }
+
+          return sum + cardTotal;
+        }, 0);
+        }
+
+        const currentBalance = liveBal;
+
+
+
       // Filter out accounts with a zero balance (accounting for floating point math)
       if (currentBalance < 0.01) return null; 
       
@@ -2765,7 +2834,7 @@ const grandTotal = categorySummary.reduce((sum, cat) => sum + cat.total, 0) + st
           </div>
 
           <div className="flex items-center gap-3">
-             <p className="text-sm font-black text-purple-600">{formatCurrency(currentBalance)}</p>
+             <p className="text-sm font-black text-purple-600">{formatCurrency(displayAmount)}</p>
              
                        {/* 2. Info Modal Icon (Updated to prevent crash) */}
                        <button 
