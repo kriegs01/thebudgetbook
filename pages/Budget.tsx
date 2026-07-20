@@ -317,6 +317,9 @@ const calculateBudgetRemaining = (
     bank: string; 
   } | null>(null);
   
+  // Around line 316
+  const [excludedCreditIds, setExcludedCreditIds] = useState<Set<string>>(new Set());
+
   const isFocusedRef = useRef(false);
   const [excludedInstallmentIds, setExcludedInstallmentIds] = useState<Set<string>>(new Set());
 
@@ -339,6 +342,8 @@ const calculateBudgetRemaining = (
   const [stashRepairForm, setStashRepairForm] = useState({ sourceAccountId: '' });
   const [stashRepairSubmitting, setStashRepairSubmitting] = useState(false);
   const [stashStatusMsg, setStashStatusMsg] = useState<{ msg: string; type: 'success' | 'error' } | null>(null);
+
+  const [creditInfoModal, setCreditInfoModal] = useState<{ account: Account } | null>(null);
 
   // Overdraft prompt state for Fund Stash operations
   const [overdraftPrompt, setOverdraftPrompt] = useState<{
@@ -543,17 +548,23 @@ const calculateBudgetRemaining = (
     }
   };
 
-  // Helper: Calculate current balance for an account
-  const calculateCurrentBalance = (account: Account): number => {
-    const accountTxs = transactions.filter(tx => tx.payment_method_id === account.id);
-    return account.openingBalance + accountTxs.reduce((sum, tx) => {
-      if (tx.amount < 0) {
-        return sum + Math.abs(tx.amount);
-      } else {
-        return sum - tx.amount;
-      }
-    }, 0);
-  };
+    // Helper: Calculate current balance for an account
+    const calculateCurrentBalance = (account: Account): number => {
+      const accountTxs = transactions.filter(tx => tx.payment_method_id === account.id);
+      const startingBalance = account.openingBalance || 0;
+      
+      const balance = accountTxs.reduce((sum, tx) => {
+        const isCredit = account.type === 'Credit' || account.classification === 'Credit Card';
+        if (isCredit) {
+          return sum + tx.amount; 
+        } else {
+          return tx.amount < 0 ? sum + Math.abs(tx.amount) : sum - tx.amount;
+        }
+      }, startingBalance);
+      
+      // Return the absolute value so it displays as a positive amount owed
+      return Math.abs(balance);
+    };
 
   // Guard function: Check for overdraft before funding stash
   const guardFundStashOverdraft = (sourceAccountId: string, fundAmount: number, action: () => Promise<void>) => {
@@ -740,6 +751,22 @@ const calculateBudgetRemaining = (
       return next;
     });
   }, []);
+
+  const getDynamicDate = (fakeDateStr: string | undefined, monthStr: string, yearNum: number) => {
+    if (!fakeDateStr) return 'Not set';
+    
+    // Extract the day number from the "2000-01-DD" string
+    const day = new Date(fakeDateStr).getDate();
+    const paddedDay = day.toString().padStart(2, '0');
+    
+    // Get the numerical month based on your selectedMonth string
+    const monthIndex = MONTHS.indexOf(monthStr) + 1; 
+    const paddedMonth = monthIndex.toString().padStart(2, '0');
+    
+    // Return it in YYYY-MM-DD format (or you can adjust this to 'MMM DD, YYYY')
+    return `${yearNum}-${paddedMonth}-${paddedDay}`;
+  };
+
 
   const handleDeleteStashTopUp = (txId: string, amount: number) => {
     const absAmount = Math.abs(amount);
@@ -1193,18 +1220,24 @@ const calculateBudgetRemaining = (
     return !!matchingTransaction;
   }, [transactions]);
 
-  const reloadTransactions = useCallback(async () => {
+    // Removed the useCallback to ensure we are not hitting a stale cached version 
+  // if something in the outer scope changed, though usually keeping it is fine 
+  // if you have the correct dependencies.
+  const reloadTransactions = async () => {
     try {
+      console.log("[Budget] Manually reloading transactions...");
       const { data, error } = await getAllTransactions();
       if (error) {
         console.error('[Budget] Failed to reload transactions:', error);
       } else if (data) {
+        // Explicitly update the state with the new data
         setTransactions(data);
       }
     } catch (error) {
       console.error('[Budget] Error reloading transactions:', error);
     }
-  }, []);
+  };
+
 
   const reloadPaymentSchedules = useCallback(async () => {
     try {
@@ -2013,7 +2046,21 @@ const calculateBudgetRemaining = (
 
       let creditTotal = 0;
       if (cat.name === 'Credit') {
-        creditTotal = creditBudgetAccounts.reduce((sum, acc) => sum + (acc.balance || 0), 0);
+        creditTotal = creditBudgetAccounts.reduce((sum, account) => {
+          const cycleSummaries = aggregateCreditCardPurchases(account, transactions, installments);
+          const monthIndex = MONTHS.indexOf(selectedMonth);
+          const relevantCycle = cycleSummaries.find(cycle => {
+            const cycleMonth = cycle.cycleStart.getMonth();
+            const cycleYear = cycle.cycleStart.getFullYear();
+            return (cycleMonth === monthIndex && cycleYear === selectedYear) || 
+                   (cycle.cycleEnd.getMonth() === monthIndex && cycle.cycleEnd.getFullYear() === selectedYear);
+          });
+          
+          let currentBalance = relevantCycle ? relevantCycle.totalAmount : (account.balance || 0);
+          if (Math.abs(currentBalance) < 0.01) currentBalance = 0; // Fixes the -0 glitch
+          
+          return sum + currentBalance;
+        }, 0);
       }
 
       return { category: cat.name, total: itemsTotal + installmentsTotal + creditTotal };
@@ -2638,49 +2685,106 @@ const calculateBudgetRemaining = (
             .filter(inst => !excludedInstallmentIds.has(inst.id))
             .reduce((s, inst) => s + inst.monthlyAmount, 0);
           
-          let creditTotal = 0;
-          if (cat.name === 'Credit') {
-            creditTotal = creditBudgetAccounts.reduce((sum, acc) => sum + (acc.balance || 0), 0);
-          }
-          
-          const categoryTotal = itemsTotal + installmentsTotal + creditTotal;
-          
-          return (
-            <div key={cat.id} className="bg-white dark:bg-gray-900 rounded-2xl border-4 border-black shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] overflow-hidden w-full transition-colors">
-              <div className="px-8 py-5 border-b-4 border-black bg-gray-50/30 dark:bg-gray-800/30 flex justify-between items-center transition-colors">
-                <div className="flex items-center space-x-2">
-                  <h3 className="text-xs font-black text-gray-900 dark:text-gray-100 uppercase tracking-[0.25em]">{cat.name}</h3>
-                  {(cat.flexiMode ?? true) && <span className="text-[9px] font-black text-green-600 bg-green-50 border-2 border-black px-2 py-0.5 rounded-md uppercase tracking-wider">Flexi</span>}
-                  {isLegacyCategory && <span className="text-[9px] font-black text-amber-600 bg-amber-50 border-2 border-black px-2 py-0.5 rounded-md uppercase tracking-wider">Legacy</span>}
+            let creditTotal = 0;
+            if (cat.name === 'Credit') {
+              creditTotal = creditBudgetAccounts
+                .filter(acc => !excludedCreditIds.has(acc.id)) // <--- ADD THIS FILTER
+                .reduce((sum, account) => {
+                const cycleSummaries = aggregateCreditCardPurchases(account, transactions, installments);
+                const monthIndex = MONTHS.indexOf(selectedMonth);
+                const relevantCycle = cycleSummaries.find(cycle => {
+                  const cycleMonth = cycle.cycleStart.getMonth();
+                  const cycleYear = cycle.cycleStart.getFullYear();
+                  return (cycleMonth === monthIndex && cycleYear === selectedYear) || 
+                         (cycle.cycleEnd.getMonth() === monthIndex && cycle.cycleEnd.getFullYear() === selectedYear);
+                });
+                
+                let currentBalance = relevantCycle ? relevantCycle.totalAmount : (account.balance || 0);
+                if (Math.abs(currentBalance) < 0.01) currentBalance = 0; // Fixes the -0 glitch
+                
+                return sum + currentBalance;
+              }, 0);
+            }  
+            
+            const categoryTotal = itemsTotal + installmentsTotal + creditTotal;
+            
+            return (
+              <div key={cat.id} className="bg-white dark:bg-gray-900 rounded-2xl border-4 border-black shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] overflow-hidden w-full transition-colors">
+                <div className="px-8 py-5 border-b-4 border-black bg-gray-50/30 dark:bg-gray-800/30 flex justify-between items-center transition-colors">
+                  <div className="flex items-center space-x-2">
+                    <h3 className="text-xs font-black text-gray-900 dark:text-gray-100 uppercase tracking-[0.25em]">{cat.name}</h3>
+                    {(cat.flexiMode ?? true) && <span className="text-[9px] font-black text-green-600 bg-green-50 border-2 border-black px-2 py-0.5 rounded-md uppercase tracking-wider">Flexi</span>}
+                    {isLegacyCategory && <span className="text-[9px] font-black text-amber-600 bg-amber-50 border-2 border-black px-2 py-0.5 rounded-md uppercase tracking-wider">Legacy</span>}
+                  </div>
+                  <span className="text-lg font-black text-indigo-600 dark:text-indigo-400">{formatCurrency(categoryTotal)}</span>
                 </div>
-                <span className="text-lg font-black text-indigo-600 dark:text-indigo-400">{formatCurrency(categoryTotal)}</span>
-              </div>
+  
+                {cat.name === 'Credit' && creditBudgetAccounts.length > 0 && (
+  <div className="p-4 space-y-4 bg-gray-50/30 dark:bg-gray-955/10">
+    {creditBudgetAccounts.map(account => {
+      const currentBalance = calculateCurrentBalance(account);
+      const isIncluded = !excludedCreditIds.has(account.id); // Check if included
+      
+      return (
+        <div key={account.id} className={`p-4 border-2 border-black rounded-xl bg-purple-50 dark:bg-purple-900/20 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] flex items-center justify-between transition-all ${isIncluded ? 'opacity-100' : 'opacity-60'}`}>
+          <div className="flex items-center gap-4">
+            {/* 1. Include Checkbox */}
+            <button 
+              onClick={() => setExcludedCreditIds(prev => {
+                const next = new Set(prev);
+                if (next.has(account.id)) next.delete(account.id);
+                else next.add(account.id);
+                return next;
+              })}
+              className={`w-8 h-8 rounded-xl border-2 border-black flex items-center justify-center transition-all ${isIncluded ? 'bg-indigo-600 text-white' : 'bg-white'}`}
+            >
+              <Check className="w-4 h-4" />
+            </button>
+            
+            <div>
+              <p className="text-sm font-black text-gray-900 dark:text-gray-100">{account.bank}</p>
+              {/* 3. Due Date */}
+              <p className="text-[10px] font-black text-purple-600">Due: {account.billingDate || 'N/A'}</p>
+            </div>
+          </div>
 
-              {cat.name === 'Credit' && creditBudgetAccounts.length > 0 && (
-                <div className="p-4 space-y-4 bg-gray-50/30 dark:bg-gray-955/10">
-                  {creditBudgetAccounts.map(account => (
-                    <div key={account.id} className="p-4 border-2 border-black rounded-xl bg-purple-50 dark:bg-purple-900/20 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] flex justify-between items-center">
-                      <div>
-                        <p className="text-sm font-black text-gray-900 dark:text-gray-100">{account.bank}</p>
-                        <p className="text-sm font-black text-purple-600">{formatCurrency(account.balance || 0)}</p>
-                      </div>
-                      {!isReadOnly && (
-                      <button 
-                        onClick={() => setShowCreditPayModal({
-                          accountId: account.id,
-                          amount: account.balance || 0,
-                          bank: account.bank
-                        })}
-                        className="px-4 py-2 bg-indigo-600 text-white text-xs font-black uppercase rounded-xl border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[1px] hover:translate-y-[1px] transition-all"
-                      >
-                        Pay
-                      </button>
-                    )}
-                    </div>
-                  ))}
-                </div>
-              )}
+          <div className="flex items-center gap-3">
+             <p className="text-sm font-black text-purple-600">{formatCurrency(currentBalance)}</p>
+             
+                       {/* 2. Info Modal Icon (Updated to prevent crash) */}
+                       <button 
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setCreditInfoModal({ account: account }); // Opens the new modal
+                          }} 
+                          className="text-gray-400 hover:text-indigo-600 transition-colors p-1"
+                            >
+                            <Info className="w-4 h-4" />
+                        </button>
 
+
+          {!isReadOnly && (
+            <button 
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                setShowCreditPayModal({ 
+                  accountId: account.id, 
+                  amount: currentBalance, 
+                  bank: account.bank 
+                });
+              }} 
+              className="px-4 py-2 bg-indigo-600 text-white text-xs font-black uppercase rounded-xl border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[1px] hover:translate-y-[1px] transition-all"
+            >
+              Pay
+            </button>
+          )}
+          </div>
+        </div>
+      );
+    })}
+  </div>
+)}
               {!(cat.name === 'Credit' && items.length === 0) && (
                 <div className="w-full">
                   {isMobile ? (
@@ -3486,30 +3590,38 @@ const calculateBudgetRemaining = (
       {confirmModal.show && <ConfirmDialog {...confirmModal} onClose={() => setConfirmModal(p => ({ ...p, show: false }))} />}
 
 {showCreditPayModal && (
-  <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md animate-in fade-in">
+  <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md animate-in fade-in">
     <div className="bg-white dark:bg-gray-900 rounded-2xl w-full max-w-sm p-6 border-4 border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] relative animate-in zoom-in-95">
       <button onClick={() => setShowCreditPayModal(null)} className="absolute right-4 top-4 p-1.5 hover:bg-gray-100 rounded-full transition-colors"><X className="w-5 h-5 text-gray-400" /></button>
       <h2 className="text-xl font-black text-gray-900 dark:text-gray-100 mb-1">Pay {showCreditPayModal.bank}</h2>
       <p className="text-gray-500 dark:text-gray-400 text-xs mb-4">Recording credit payment for {selectedMonth}</p>
       
       <form onSubmit={async (e) => {
-        e.preventDefault();
-        const formData = new FormData(e.currentTarget);
-        try {
-          await recordCreditPayment(
-            showCreditPayModal.accountId,
-            parseFloat(formData.get('amount') as string),
-            `${showCreditPayModal.bank} Payment - ${selectedMonth}`,
-            formData.get('date') as string
-          );
-          await reloadTransactions();
-          setShowCreditPayModal(null);
-          alert('Payment recorded successfully!');
-        } catch (err) {
-          console.error(err);
-          alert('Failed to record payment.');
-        }
-      }} className="space-y-4">
+  e.preventDefault();
+  const formData = new FormData(e.currentTarget);
+  const amount = parseFloat(formData.get('amount') as string);
+  const date = formData.get('date') as string;
+
+  try {
+    // 1. Call your dedicated credit payment service
+    await recordCreditPayment(
+      showCreditPayModal.accountId,
+      amount,
+      `${showCreditPayModal.bank} Payment - ${selectedMonth}`,
+      date
+    );
+    
+    // 2. Refresh everything
+    await reloadTransactions();
+    
+    // 3. Close and Notify
+    setShowCreditPayModal(null);
+    alert('Payment recorded successfully!');
+  } catch (err) {
+    console.error("Credit Payment Error:", err);
+    alert('Failed to record payment. Check console for details.');
+  }
+}} className="space-y-4">
         <div>
           <label className="block text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">Amount</label>
           <input required name="amount" type="number" step="0.01" defaultValue={showCreditPayModal.amount.toFixed(2)} className="w-full bg-gray-50 dark:bg-gray-800 border-2 border-black rounded-xl p-2.5 outline-none text-base font-black dark:text-gray-100" />
@@ -3523,6 +3635,57 @@ const calculateBudgetRemaining = (
           <button type="submit" className="flex-1 bg-green-600 text-white border-2 border-black py-2.5 rounded-xl font-black text-xs uppercase tracking-wider">Pay</button>
         </div>
       </form>
+    </div>
+  </div>
+)}
+
+{creditInfoModal && (
+  <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md animate-in fade-in" onClick={() => setCreditInfoModal(null)}>
+    <div className="bg-white dark:bg-gray-900 rounded-2xl w-full max-w-sm p-6 border-4 border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] relative animate-in zoom-in-95 max-h-[80vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+      <button onClick={() => setCreditInfoModal(null)} className="absolute right-4 top-4 p-1.5 hover:bg-gray-100 rounded-full transition-colors"><X className="w-5 h-5 text-gray-400" /></button>
+      <h2 className="text-xl font-black text-gray-900 dark:text-gray-100 mb-1">{creditInfoModal.account.bank}</h2>
+      <p className="text-gray-500 dark:text-gray-400 text-xs mb-4">Payment History — {selectedMonth} {selectedYear}</p>
+      
+      <div className="space-y-2">
+        <div className="p-4 bg-purple-50 dark:bg-purple-900/20 rounded-xl border-2 border-black mb-4">
+            <p className="text-[10px] font-black text-purple-700 uppercase">Current Balance</p>
+            <p className="text-lg font-black text-purple-600">{formatCurrency(calculateCurrentBalance(creditInfoModal.account))}</p>
+        </div>
+
+        <div className="space-y-2">
+          <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Recent Payments</p>
+          {transactions
+        .filter(tx => {
+          const txDate = new Date(tx.date);
+          const matchesAccount = tx.payment_method_id === creditInfoModal.account.id;
+          // Updated filter: Only include 'credit_payment' types
+          const matchesType = tx.transaction_type === 'credit_payment'; 
+          const matchesMonth = txDate.getMonth() === MONTHS.indexOf(selectedMonth);
+          const matchesYear = txDate.getFullYear() === selectedYear;
+          
+          return matchesAccount && matchesType && matchesMonth && matchesYear;
+        })
+        .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+        .map(tx => (
+          <div key={tx.id} className="flex justify-between items-center bg-gray-50 dark:bg-gray-800 p-3 rounded-lg border border-black/10">
+            <div>
+              <p className="text-xs font-bold text-gray-900 dark:text-gray-100">{tx.name}</p>
+              <p className="text-[10px] text-gray-500">{new Date(tx.date).toLocaleDateString()}</p>
+            </div>
+            <span className="text-xs font-black text-red-600">{formatCurrency(Math.abs(tx.amount))}</span>
+          </div>
+        ))}
+          {transactions.filter(tx => {
+            const txDate = new Date(tx.date);
+            return tx.payment_method_id === creditInfoModal.account.id && 
+                   (tx.transaction_type === 'payment' || tx.transaction_type === 'credit_payment') &&
+                   txDate.getMonth() === MONTHS.indexOf(selectedMonth) &&
+                   txDate.getFullYear() === selectedYear;
+          }).length === 0 && (
+            <p className="text-xs text-gray-400 italic text-center py-4">No payments found for {selectedMonth}.</p>
+          )}
+        </div>
+      </div>
     </div>
   </div>
 )}
