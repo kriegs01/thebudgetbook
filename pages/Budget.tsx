@@ -2694,58 +2694,95 @@ const grandTotal = categorySummary.reduce((sum, cat) => sum + cat.total, 0) + st
                   );
                 })}
               </div>
-            ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-left">
-                  <thead>
-                    <tr className="text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase border-b border-gray-50 dark:border-gray-800/50"><th className="p-4 pl-10">Name</th><th className="p-4">Target</th><th className="p-4">Account</th><th className="p-4 text-center">Info</th><th className="p-4 text-center">Actions</th><th className="p-4 pr-10 text-right"></th></tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-50 dark:divide-gray-800/50">
-                    {wallets.map((wallet) => {
-                      const linkedAccount = accounts.find(a => a.id === wallet.accountId);
-                      const { funded, isFunded } = getStashAggregates(wallet);
-                      const isIncluded = !excludedWalletIds.has(wallet.id);
-                      const isOverFunded = funded > wallet.amount && wallet.amount > 0;
-                      const isExactlyFunded = funded === wallet.amount && wallet.amount > 0;
-                      return (
-                        <tr key={wallet.id} className={`${isIncluded ? 'bg-white dark:bg-gray-900' : 'bg-gray-50 dark:bg-gray-800/50 opacity-60'}`}>
-                          <td className="p-4 pl-10"><span className="text-sm font-bold text-gray-900 dark:text-gray-100">{wallet.name}</span></td>
-                          <td className="p-4"><span className="text-sm font-black text-indigo-600 dark:text-indigo-400">{formatCurrency(wallet.amount)}</span></td>
-                          <td className="p-4"><span className="text-sm text-gray-600 dark:text-gray-400">{linkedAccount ? `${linkedAccount.bank} (${linkedAccount.classification})` : wallet.accountId}</span></td>
-                          <td className="p-4 text-center">
-                            <div className="flex items-center justify-center space-x-2">
-                              {isOverFunded ? (
-                                <span className="text-xs font-black text-blue-600 px-2 py-1 bg-blue-50 border border-blue-200 rounded-lg">Overfunded +{formatCurrency(funded - wallet.amount)}</span>
-                              ) : isExactlyFunded ? (
-                                <span className="text-xs font-black text-green-600 px-2 py-1 bg-green-50 border border-green-200 rounded-lg">Funded</span>
-                              ) : (
-                                <span className="text-xs text-gray-400">—</span>
-                              )}
-                              <button onClick={() => setStashInfoModal({ wallet })} title="View stash details" className="text-gray-400 hover:text-indigo-600 transition-colors rounded-full p-1 hover:bg-indigo-50"><Info className="w-3.5 h-3.5" /></button>
-                            </div>
-                          </td>
-                          <td className="p-4 text-center">
-                            {!isReadOnly && (
-                              <button 
-                                onClick={() => handleOpenFundModal(wallet)} 
-                                className="inline-flex items-center space-x-1 px-3 py-1.5 rounded-xl bg-indigo-50 border-2 border-black text-indigo-600 hover:bg-indigo-100 text-xs font-black uppercase tracking-wider shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[1px] hover:translate-y-[1px] transition-all"
-                              >
-                                <Plus className="w-3 h-3" /> <span>{isFunded ? 'More' : 'Fund'}</span>
-                              </button>
-                            )}
-                          </td>
-                          <td className="p-4 pr-10 text-right">
-                            {!isReadOnly && (
-                              <button onClick={() => handleWalletIncludeToggle(wallet.id)} className={`w-8 h-8 rounded-xl border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[0.5px] hover:translate-y-[0.5px] transition-all flex items-center justify-center ${isIncluded ? 'bg-indigo-600 text-white' : 'bg-white dark:bg-gray-800 text-transparent'}`}><Check className="w-4 h-4" /></button>
-                            )}
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            )}
+                            ) : (
+                              <div className="overflow-x-auto">
+                                <table className="w-full text-left">
+                                  <thead>
+                                    <tr className="text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase border-b border-gray-50 dark:border-gray-800/50">
+                                      <th className="p-4 pl-10">Name</th>
+                                      <th className="p-4">Target</th>
+                                      <th className="p-4">Account</th>
+                                      <th className="p-4 text-center">Status</th>
+                                      <th className="p-4 pr-10 text-center w-48">Actions</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody className="divide-y divide-gray-50 dark:divide-gray-800/50">
+                                    {wallets.map((wallet) => {
+                                      const linkedAccount = accounts.find(a => a.id === wallet.accountId);
+                                      const { funded, isFunded } = getStashAggregates(wallet);
+                                      const isIncluded = !excludedWalletIds.has(wallet.id);
+                                      const isOverFunded = funded > wallet.amount && wallet.amount > 0;
+                                      const isExactlyFunded = funded === wallet.amount && wallet.amount > 0;
+                                      
+                                      return (
+                                        <tr key={wallet.id} className={`${isIncluded ? 'bg-white dark:bg-gray-900' : 'bg-gray-50 dark:bg-gray-800/50 opacity-60'}`}>
+                                          <td className="p-4 pl-10">
+                                            <div className="flex items-center gap-3">
+                                              {!isReadOnly && (
+                                                <button 
+                                                  onClick={() => handleWalletIncludeToggle(wallet.id)} 
+                                                  className={`w-8 h-8 rounded-xl border-2 border-black flex items-center justify-center transition-all flex-shrink-0 ${isIncluded ? 'bg-indigo-600 text-white' : 'bg-white dark:bg-gray-800 text-transparent'}`}
+                                                >
+                                                  <Check className="w-4 h-4" />
+                                                </button>
+                                              )}
+                                              <span className="text-sm font-bold text-gray-900 dark:text-gray-100">{wallet.name}</span>
+                                            </div>
+                                          </td>
+                                          
+                                          <td className="p-4">
+                                            <span className="text-sm font-black text-indigo-600 dark:text-indigo-400">
+                                              {formatCurrency(wallet.amount)}
+                                            </span>
+                                          </td>
+                                          
+                                          <td className="p-4">
+                                            <span className="text-sm text-gray-600 dark:text-gray-400">
+                                              {linkedAccount ? `${linkedAccount.bank} (${linkedAccount.classification})` : wallet.accountId}
+                                            </span>
+                                          </td>
+                                          
+                                          <td className="p-4 text-center">
+                                            {isOverFunded ? (
+                                              <span className="inline-block px-2 py-1 text-[9px] font-black bg-blue-100 text-blue-700 border border-black rounded-lg uppercase tracking-wider text-center">
+                                                Over +{formatCurrency(funded - wallet.amount)}
+                                              </span>
+                                            ) : isExactlyFunded ? (
+                                              <span className="inline-block w-16 px-2 py-1 text-[9px] font-black bg-green-100 text-green-700 border border-black rounded-lg uppercase tracking-wider text-center">
+                                                Funded
+                                              </span>
+                                            ) : (
+                                              <span className="text-gray-300 dark:text-gray-600 text-xs">—</span>
+                                            )}
+                                          </td>
+                                          
+                                          <td className="p-4 pr-10">
+                                            <div className="flex items-center justify-center space-x-2">
+                                              <button 
+                                                onClick={() => setStashInfoModal({ wallet })} 
+                                                title="View stash details" 
+                                                className="p-1.5 bg-white dark:bg-gray-800 border-2 border-black rounded-lg text-gray-400 hover:text-indigo-600 shadow-[1px_1px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[0.5px] hover:translate-y-[0.5px] transition-all"
+                                              >
+                                                <Info className="w-4 h-4" />
+                                              </button>
+                                              
+                                              {!isReadOnly && (
+                                                <button 
+                                                  onClick={() => handleOpenFundModal(wallet)} 
+                                                  className="px-4 py-2 text-xs font-black uppercase rounded-xl border-2 border-black bg-indigo-600 text-white shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[1px] hover:translate-y-[1px] transition-all"
+                                                >
+                                                  {isFunded ? 'More' : 'Fund'}
+                                                </button>
+                                              )}
+                                            </div>
+                                          </td>
+                                        </tr>
+                                      );
+                                    })}
+                                  </tbody>
+                                </table>
+                              </div>
+                            )}            
           </div>
         </div>
         )}
@@ -2864,12 +2901,12 @@ const grandTotal = categorySummary.reduce((sum, cat) => sum + cat.total, 0) + st
                            {(() => {
                              const status = getCreditPaymentStatus(account);
                              if (status === 'paid') {
-                               return <span className="text-[9px] font-black bg-green-100 text-green-700 px-2 py-0.5 rounded border border-black uppercase mt-0.5">Paid</span>;
+                               return <span className="text-[9px] font-black px-2 py-1 bg-green-400 text-black border-2 border-black rounded-lg shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] uppercase mt-0.5">Paid</span>;
                              }
                              if (status === 'partial') {
-                               return <span className="text-[9px] font-black bg-yellow-100 text-yellow-700 px-2 py-0.5 rounded border border-black uppercase mt-0.5">Partial</span>;
+                               return <span className="text-[9px] font-black px-2 py-1 bg-yellow-300 text-black border-2 border-black rounded-lg shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] uppercase mt-0.5">Partial</span>;
                              }
-                             return null;
+                             return <span className="text-[9px] font-black px-2 py-1 bg-red-400 text-black border-2 border-black rounded-lg shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] uppercase mt-0.5">Unpaid</span>;
                            })()}
                          </div>
                          
@@ -3060,7 +3097,14 @@ const grandTotal = categorySummary.reduce((sum, cat) => sum + cat.total, 0) + st
                   <div className="overflow-x-auto">
                     <table className="w-full text-left">
                       <thead>
-                        <tr className="text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase border-b border-gray-50 dark:border-gray-800/50"><th className="p-4 pl-10">Name</th><th className="p-4">Amount</th><th className="p-4 text-center">Due</th><th className="p-4 text-center">Actions</th><th className="p-4 pr-10 text-right"></th></tr>
+                        <tr className="text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase border-b border-gray-50 dark:border-gray-800/50">
+                          <th className="p-4 pl-10 text-center w-16">Include</th>
+                          <th className="p-4">Name</th>
+                          <th className="p-4">Amount</th>
+                          <th className="p-4 text-center">Due</th>
+                          <th className="p-4 text-center">Status</th>
+                          <th className="p-4 pr-10 text-center">Actions</th>
+                        </tr>
                       </thead>
                       <tbody className="divide-y divide-gray-50 dark:divide-gray-800/50">
                         {items.length > 0 ? items.map((item) => {
@@ -3081,14 +3125,43 @@ const grandTotal = categorySummary.reduce((sum, cat) => sum + cat.total, 0) + st
                           }
                           return (
                             <tr key={item.id} className={`${item.included ? 'bg-white dark:bg-gray-900' : 'bg-gray-50 dark:bg-gray-800/50 opacity-60'}`}>
-                              <td className="p-4 pl-10"><input type="text" value={item.name} onChange={(e) => handleSetupUpdate(cat.name, item.id, 'name', e.target.value)} disabled={isReadOnly} className="bg-transparent border-none text-sm font-bold w-full outline-none focus:bg-gray-100 dark:focus:bg-gray-800 rounded p-1 dark:text-gray-100" /></td>
+                              
+                              {/* 1. INCLUDE */}
+                              <td className="p-4 pl-10 text-center">
+                                <button 
+                                  disabled={isReadOnly}
+                                  onClick={() => !isReadOnly && handleSetupToggle(cat.name, item.id)} 
+                                  className={`w-8 h-8 rounded-xl border-2 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] transition-all flex items-center justify-center mx-auto shrink-0 
+                                    ${item.included ? 'bg-indigo-600 border-indigo-600 text-white' : 'bg-white dark:bg-gray-800 text-transparent border-gray-200'}
+                                    ${isReadOnly ? 'cursor-not-allowed opacity-50 shadow-none hover:translate-x-0 hover:translate-y-0' : 'hover:shadow-none hover:translate-x-[1px] hover:translate-y-[1px]'}`}
+                                >
+                                  <Check className="w-4 h-4" />
+                                </button>
+                              </td>
+                
+                              {/* 2. NAME (Badges stacked underneath) */}
+                              <td className="p-4">
+                                <div className="flex flex-col items-start gap-1 w-full">
+                                  <input 
+                                    type="text" 
+                                    value={item.name} 
+                                    onChange={(e) => handleSetupUpdate(cat.name, item.id, 'name', e.target.value)} 
+                                    disabled={isReadOnly} 
+                                    className="bg-transparent border-none text-sm font-bold w-full outline-none focus:bg-gray-100 dark:focus:bg-gray-800 rounded p-1 dark:text-gray-100" 
+                                  />
+                                  {isBillerItem && <span className="text-[9px] font-bold px-2 py-0.5 bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 rounded uppercase ml-1">Biller</span>}
+                                </div>
+                              </td>
+                
+                              {/* 3. AMOUNT */}
                               <td className="p-4">
                                 <div className="flex items-center space-x-1">
                                   <span className="text-gray-400 dark:text-gray-500 font-bold">₱</span>
                                   <input type="number" value={item.amount} onChange={(e) => handleSetupUpdate(cat.name, item.id, 'amount', e.target.value)} onFocus={() => { isFocusedRef.current = true; }} onBlur={() => { isFocusedRef.current = false; }} disabled={isReadOnly} className="bg-transparent border-none text-sm font-black w-24 outline-none dark:text-gray-100" />
                                 </div>
                               </td>
-
+                
+                              {/* 4. DUE */}
                               <td className="p-4 text-center">
                                   {isBillerItem && linkedBiller?.dueDate ? (
                                   <span className="text-[10px] font-black bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 px-2 py-1 rounded border border-gray-200 dark:border-gray-700">
@@ -3098,84 +3171,109 @@ const grandTotal = categorySummary.reduce((sum, cat) => sum + cat.total, 0) + st
                                   <span className="text-gray-300 dark:text-gray-600 text-xs">—</span>
                                   )}
                               </td>
-
+                
+                              {/* 5. STATUS */}
                               <td className="p-4 text-center">
-                                <div className="flex items-center justify-center space-x-2">
-                                  {isBillerItem && (isPaid ? (
-                                      <>
-                                        <CheckCircle2 className="w-4 h-4 text-green-500" aria-label="Payment completed" title="Paid" />
-                                        {paymentSchedule && (
-                                          <button onClick={() => openSchedulePaymentsModal(paymentSchedule.id, `${item.name} - ${selectedMonth}`)} title="View payment records" className="text-gray-400 hover:text-indigo-600 transition-colors rounded-full p-1 hover:bg-indigo-50"><Info className="w-3.5 h-3.5" /></button>
-                                        )}
-                                      </>
-                                    ) : (
-                                      <>
-                                        {isPartial && paymentSchedule && (
-                                          <>
-                                            <span className="text-[9px] font-bold px-2 py-0.5 bg-yellow-100 text-yellow-700 rounded uppercase" title={`Paid ₱${paymentSchedule.amount_paid} of ₱${parseFloat(item.amount)}`}>Partial</span>
-                                            <button onClick={() => openSchedulePaymentsModal(paymentSchedule.id, `${item.name} - ${selectedMonth}`)} title="View payment records" className="text-gray-400 hover:text-indigo-600 transition-colors rounded-full p-1 hover:bg-indigo-50"><Info className="w-3.5 h-3.5" /></button>
-                                          </>
-                                        )}
-                                      {!isReadOnly && (
-                                        <button 
-                                          onClick={() => { 
-                                            if(linkedBiller && paymentSchedule) {
-                                              const scheduleForModal: PaymentSchedule = {
-                                                id: paymentSchedule.id, month: paymentSchedule.month, year: paymentSchedule.year.toString(),
-                                                expectedAmount: paymentSchedule.expected_amount, amountPaid: paymentSchedule.amount_paid,
-                                                datePaid: paymentSchedule.date_paid || undefined, receipt: paymentSchedule.receipt || undefined, accountId: paymentSchedule.account_id || undefined
-                                              };
-                                              const linkedTransactions = transactions.filter(tx => tx.payment_schedule_id === paymentSchedule.id).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-                                              const existingTx = linkedTransactions[0];
-                                              setShowPayModal({ biller: linkedBiller, schedule: scheduleForModal, expectedAmount: parseFloat(item.amount) });
-                                              setPayFormData({
-                                                transactionId: isPartial ? '' : (existingTx?.id || ''),
-                                                amount: isPartial ? Math.max(0, parseFloat(item.amount) - paymentSchedule.amount_paid).toFixed(2) : existingTx?.amount.toFixed(2) || item.amount,
-                                                receipt: (!isPartial && existingTx) ? 'Receipt on file' : '',
-                                                datePaid: (!isPartial && existingTx) ? toLocalDateInputValue(existingTx.date) : getTodayIso(),
-                                                accountId: existingTx?.payment_method_id || payFormData.accountId
-                                              });
-                                            } 
-                                          }} 
-                                          className="px-3 py-1.5 bg-indigo-600 text-white text-[10px] font-black uppercase rounded-xl border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[1px] hover:translate-y-[1px] transition-all"
-                                        >
-                                          {isPartial ? 'Pay Remaining' : 'Pay'}
-                                        </button>
-                                      )}
-                                      </>
-                                    )
-                                  )}
-                                  {!isBillerItem && (cat.flexiMode ?? true) && item.name !== 'New Item' && parseFloat(item.amount) > 0 && (
-                                    isPaid ? (
-                                      <CheckCircle2 className="w-4 h-4 text-green-500" aria-label="Payment completed" title="Paid" />
-                                    ) : !isReadOnly ? (
-                                      <button
-                                        onClick={() => {
-                                          setTransactionFormData({
-                                            id: '',
-                                            name: item.name,
-                                            date: getTodayIso(),
-                                            amount: item.amount,
-                                            accountId: accounts[0]?.id || '',
-                                            paymentScheduleId: '',
-                                            transactionType: 'cash_out'
+                                {isPaid ? (
+                                  <span className="text-[9px] font-black px-2 py-1 bg-green-400 text-black border-2 border-black rounded-lg shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] uppercase">Paid</span>
+                                ) : isPartial ? (
+                                  <span className="text-[9px] font-black px-2 py-1 bg-yellow-300 text-black border-2 border-black rounded-lg shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] uppercase" title={paymentSchedule ? `Paid ₱${paymentSchedule.amount_paid} of ₱${parseFloat(item.amount)}` : 'Partial Payment'}>Partial</span>
+                                ) : (
+                                  <span className="text-[9px] font-black px-2 py-1 bg-red-400 text-black border-2 border-black rounded-lg shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] uppercase">Unpaid</span>
+                                )}
+                              </td>
+                
+                              {/* 6. ACTIONS */}
+                              <td className="p-4 pr-10">
+                                <div className="flex items-center justify-end space-x-2 min-w-[120px]">
+                                  
+                                  {/* Info Icon (Sticker Theme) */}
+                                  <button 
+                                    disabled={!paymentSchedule}
+                                    onClick={() => paymentSchedule && openSchedulePaymentsModal(paymentSchedule.id, `${item.name} - ${selectedMonth}`)} 
+                                    title={paymentSchedule ? "View payment records" : "No payment records"} 
+                                    className={`w-8 h-8 flex items-center justify-center rounded-xl border-2 transition-all shrink-0 ${
+                                      paymentSchedule 
+                                        ? 'bg-white dark:bg-gray-800 text-indigo-600 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[1px] hover:translate-y-[1px]' 
+                                        : 'bg-gray-100 dark:bg-gray-800 text-gray-400 border-gray-200 dark:border-gray-700 cursor-not-allowed shadow-none'
+                                    }`}
+                                  >
+                                    <Info className="w-4 h-4" />
+                                  </button>
+                
+                                  {/* Pay Button - Biller */}
+                                  {isBillerItem ? (
+                                    <button 
+                                      disabled={isPaid || isReadOnly}
+                                      onClick={() => { 
+                                        if(!isPaid && !isReadOnly && linkedBiller && paymentSchedule) {
+                                          const scheduleForModal = {
+                                            id: paymentSchedule.id, month: paymentSchedule.month, year: paymentSchedule.year.toString(),
+                                            expectedAmount: paymentSchedule.expected_amount, amountPaid: paymentSchedule.amount_paid,
+                                            datePaid: paymentSchedule.date_paid || undefined, receipt: paymentSchedule.receipt || undefined, accountId: paymentSchedule.account_id || undefined
+                                          };
+                                          const linkedTransactions = transactions.filter(tx => tx.payment_schedule_id === paymentSchedule.id).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+                                          const existingTx = linkedTransactions[0];
+                                          setShowPayModal({ biller: linkedBiller, schedule: scheduleForModal, expectedAmount: parseFloat(item.amount) });
+                                          setPayFormData({
+                                            transactionId: isPartial ? '' : (existingTx?.id || ''),
+                                            amount: isPartial ? Math.max(0, parseFloat(item.amount) - paymentSchedule.amount_paid).toFixed(2) : existingTx?.amount.toFixed(2) || item.amount,
+                                            receipt: (!isPartial && existingTx) ? 'Receipt on file' : '',
+                                            datePaid: (!isPartial && existingTx) ? toLocalDateInputValue(existingTx.date) : getTodayIso(),
+                                            accountId: existingTx?.payment_method_id || payFormData.accountId
                                           });
+                                        } 
+                                      }} 
+                                      className={`w-14 h-8 px-2 flex items-center justify-center text-[10px] font-black uppercase rounded-xl border-2 transition-all shrink-0 ${
+                                        isPaid 
+                                          ? 'bg-gray-100 dark:bg-gray-800 text-gray-400 border-gray-200 dark:border-gray-700 cursor-not-allowed shadow-none' 
+                                          : 'bg-indigo-600 text-white border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[1px] hover:translate-y-[1px]'
+                                      }`}
+                                    >
+                                      Pay
+                                    </button>
+                                  ) : (cat.flexiMode ?? true) ? (
+                                    /* Pay Button - Standard Flexi */
+                                    <button
+                                      disabled={isPaid || isReadOnly || item.name === 'New Item' || parseFloat(item.amount) <= 0}
+                                      onClick={() => {
+                                        if (!isPaid && !isReadOnly && item.name !== 'New Item' && parseFloat(item.amount) > 0) {
+                                          setTransactionFormData({ id: '', name: item.name, date: getTodayIso(), amount: item.amount, accountId: accounts[0]?.id || '', paymentScheduleId: '', transactionType: 'cash_out' });
                                           setShowTransactionModal(true);
-                                        }}
-                                        className="px-3 py-1.5 bg-indigo-600 text-white text-[10px] font-black uppercase rounded-xl border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[1px] hover:translate-y-[1px] transition-all"
-                                      >
-                                        Pay
-                                      </button>
-                                    ) : null
+                                        }
+                                      }}
+                                      className={`w-14 h-8 px-2 flex items-center justify-center text-[10px] font-black uppercase rounded-xl border-2 transition-all shrink-0 ${
+                                        (isPaid || item.name === 'New Item' || parseFloat(item.amount) <= 0)
+                                          ? 'bg-gray-100 dark:bg-gray-800 text-gray-400 border-gray-200 dark:border-gray-700 cursor-not-allowed shadow-none' 
+                                          : 'bg-indigo-600 text-white border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[1px] hover:translate-y-[1px]'
+                                      }`}
+                                    >
+                                      Pay
+                                    </button>
+                                  ) : (
+                                     <div className="w-14 shrink-0"></div>
                                   )}
-                                  {!isReadOnly && <button onClick={() => handleSetupToggle(cat.name, item.id)} className={`w-8 h-8 rounded-xl border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[0.5px] hover:translate-y-[0.5px] transition-all flex items-center justify-center ${item.included ? 'bg-indigo-600 border-indigo-600 text-white' : 'text-transparent border-gray-200'}`}><Check className="w-4 h-4" /></button>}
+                
+                                  {/* Trash Icon (Sticker Theme) */}
+                                  <button 
+                                    disabled={isReadOnly}
+                                    onClick={() => !isReadOnly && removeItemFromCategory(cat.name, item.id, item.name)} 
+                                    title="Exclude Item" 
+                                    className={`w-8 h-8 flex items-center justify-center rounded-xl border-2 transition-all shrink-0 ${
+                                      !isReadOnly 
+                                        ? 'bg-white dark:bg-gray-800 text-red-500 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[1px] hover:translate-y-[1px] hover:bg-red-50 dark:hover:bg-red-900/20' 
+                                        : 'bg-gray-100 dark:bg-gray-800 text-gray-400 border-gray-200 dark:border-gray-700 cursor-not-allowed shadow-none'
+                                    }`}
+                                  >
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/></svg>
+                                  </button>
                                 </div>
                               </td>
-                              <td className="p-4 pr-10 text-right">{!isReadOnly && <button onClick={() => removeItemFromCategory(cat.name, item.id, item.name)} className="text-[10px] font-black text-red-500 uppercase tracking-widest border-2 border-black bg-white dark:bg-gray-800 px-3 py-1.5 rounded-xl shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[1px] hover:translate-y-[1px] transition-all">Exclude</button>}</td>
                             </tr>
                           );
-                        }) : (cat.name === 'Loans' && relevantInstallments.length > 0) ? null : <tr><td colSpan={4} className="p-8 text-center text-gray-400 text-sm font-medium">No items yet. Click "Add Item" below to get started.</td></tr>}
+                        }) : (cat.name === 'Loans' && relevantInstallments.length > 0) ? null : <tr><td colSpan={6} className="p-8 text-center text-gray-400 text-sm font-medium">No items yet. Click "Add Item" below to get started.</td></tr>}
                         
+                        {/* --- INSTALLMENTS --- */}
                         {cat.name === 'Loans' && relevantInstallments.length > 0 && relevantInstallments.map((installment) => {
                           const isIncluded = !excludedInstallmentIds.has(installment.id);
                           let isPaid = false, isPartial = false;
@@ -3186,13 +3284,32 @@ const grandTotal = categorySummary.reduce((sum, cat) => sum + cat.total, 0) + st
                           }
                           return (
                             <tr key={`installment-${installment.id}`} className={`${isIncluded ? 'bg-blue-50/30 dark:bg-blue-900/10' : 'bg-gray-50 dark:bg-gray-800/50 opacity-60'}`}>
-                              <td className="p-4 pl-10">
-                                <div className="flex items-center gap-2">
-                                  <span className="text-sm font-bold text-gray-900 dark:text-gray-100">{installment.name}</span>
-                                  <span className="text-[9px] font-bold px-2 py-0.5 bg-blue-100 rounded text-blue-600">INSTALLMENT</span>
+                              
+                              {/* 1. INCLUDE */}
+                              <td className="p-4 pl-10 text-center">
+                                <button 
+                                  disabled={isReadOnly}
+                                  onClick={() => !isReadOnly && setExcludedInstallmentIds(prev => { const next = new Set(prev); if(next.has(installment.id)) next.delete(installment.id); else next.add(installment.id); return next; })} 
+                                  className={`w-8 h-8 rounded-xl border-2 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] transition-all flex items-center justify-center mx-auto shrink-0
+                                    ${isIncluded ? 'bg-indigo-600 border-indigo-600 text-white' : 'bg-white dark:bg-gray-800 text-transparent border-gray-200'}
+                                    ${isReadOnly ? 'cursor-not-allowed opacity-50 shadow-none hover:translate-x-0 hover:translate-y-0' : 'hover:shadow-none hover:translate-x-[1px] hover:translate-y-[1px]'}`}
+                                >
+                                  <Check className="w-4 h-4" />
+                                </button>
+                              </td>
+                
+                              {/* 2. NAME (Badge stacked underneath) */}
+                              <td className="p-4">
+                                <div className="flex flex-col items-start gap-1 w-full">
+                                  <span className="text-sm font-bold text-gray-900 dark:text-gray-100 w-full truncate p-1">{installment.name}</span>
+                                  <span className="text-[9px] font-bold px-2 py-0.5 bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 rounded uppercase ml-1">INSTALLMENT</span>
                                 </div>
                               </td>
+                
+                              {/* 3. AMOUNT */}
                               <td className="p-4 text-sm font-black">{formatCurrency(installment.monthlyAmount)}</td>
+                              
+                              {/* 4. DUE */}
                               <td className="p-4 text-center">
                                 {installment.dueDate ? (
                                 <span className="text-[10px] font-black bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 px-2 py-1 rounded border border-gray-200 dark:border-gray-700">
@@ -3202,33 +3319,68 @@ const grandTotal = categorySummary.reduce((sum, cat) => sum + cat.total, 0) + st
                                 <span className="text-gray-300 dark:text-gray-600 text-xs">—</span>
                                 )}
                               </td>
+                
+                              {/* 5. STATUS */}
                               <td className="p-4 text-center">
-                                <div className="flex items-center justify-center space-x-2">
-                                  {isPaid ? (
-                                    <CheckCircle2 className="w-4 h-4 text-green-500" />
-                                  ) : (
-                                    !isReadOnly && (
-                                      <button 
-                                        onClick={() => {
-                                          setTransactionFormData({
-                                            id: '', name: `${installment.name} - ${selectedMonth} ${new Date().getFullYear()}`, date: getTodayIso(),
-                                            amount: isPartial && installmentSchedule ? Math.max(0, installmentSchedule.expected_amount - installmentSchedule.amount_paid).toFixed(2) : installment.monthlyAmount.toFixed(2),
-                                            accountId: installment.accountId || accounts[0]?.id || '', paymentScheduleId: installmentSchedule?.id || '',
-                                            transactionType: 'payment'
-                                          });
-                                          setShowTransactionModal(true);
-                                        }}
-                                        className="px-3 py-1.5 bg-indigo-600 text-white text-[10px] font-black uppercase rounded-xl border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[1px] hover:translate-y-[1px] transition-all"
-                                      >
-                                        Pay
-                                      </button>
-                                    )
-                                  )}
-                                  {!isReadOnly && <button onClick={() => setExcludedInstallmentIds(prev => { const next = new Set(prev); if(next.has(installment.id)) next.delete(installment.id); else next.add(installment.id); return next; })} className={`w-8 h-8 rounded-xl border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[0.5px] hover:translate-y-[0.5px] transition-all flex items-center justify-center ${isIncluded ? 'bg-indigo-600 text-white' : 'text-transparent border-gray-200'}`}><Check className="w-4 h-4" /></button>}
-                                </div>
+                                {isPaid ? (
+                                  <span className="text-[9px] font-black px-2 py-1 bg-green-400 text-black border-2 border-black rounded-lg shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] uppercase">Paid</span>
+                                ) : isPartial ? (
+                                  <span className="text-[9px] font-black px-2 py-1 bg-yellow-300 text-black border-2 border-black rounded-lg shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] uppercase">Partial</span>
+                                ) : (
+                                  <span className="text-[9px] font-black px-2 py-1 bg-red-400 text-black border-2 border-black rounded-lg shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] uppercase">Unpaid</span>
+                                )}
                               </td>
-                              <td className="p-4 pr-10 text-right">
-                                {!isReadOnly && <button onClick={() => setConfirmModal({ show: true, title: 'Exclude Installment', message: `Exclude "${installment.name}"?`, onConfirm: () => { setExcludedInstallmentIds(prev => new Set([...prev, installment.id])); setConfirmModal(p => ({...p, show: false})); } })} className="text-[10px] font-black text-red-500 uppercase tracking-widest border-2 border-black bg-white dark:bg-gray-800 px-3 py-1.5 rounded-xl shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[1px] hover:translate-y-[1px] transition-all">Exclude</button>}
+                
+                              {/* 6. ACTIONS */}
+                              <td className="p-4 pr-10">
+                                <div className="flex items-center justify-end space-x-2 min-w-[120px]">
+                                  
+                                  {/* Info Icon (Sticker Theme) */}
+                                  <button 
+                                    disabled={!installmentSchedule}
+                                    onClick={() => installmentSchedule && openSchedulePaymentsModal(installmentSchedule.id, `${installment.name} - ${selectedMonth}`)} 
+                                    title={installmentSchedule ? "View payment records" : "No payment records"} 
+                                    className={`w-8 h-8 flex items-center justify-center rounded-xl border-2 transition-all shrink-0 ${
+                                      installmentSchedule 
+                                        ? 'bg-white dark:bg-gray-800 text-indigo-600 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[1px] hover:translate-y-[1px]' 
+                                        : 'bg-gray-100 dark:bg-gray-800 text-gray-400 border-gray-200 dark:border-gray-700 cursor-not-allowed shadow-none'
+                                    }`}
+                                  >
+                                    <Info className="w-4 h-4" />
+                                  </button>
+                
+                                  {/* Pay Button */}
+                                  <button 
+                                    disabled={isPaid || isReadOnly}
+                                    onClick={() => {
+                                      if (!isPaid && !isReadOnly) {
+                                        setTransactionFormData({ id: '', name: `${installment.name} - ${selectedMonth} ${new Date().getFullYear()}`, date: getTodayIso(), amount: isPartial && installmentSchedule ? Math.max(0, installmentSchedule.expected_amount - installmentSchedule.amount_paid).toFixed(2) : installment.monthlyAmount.toFixed(2), accountId: installment.accountId || accounts[0]?.id || '', paymentScheduleId: installmentSchedule?.id || '', transactionType: 'payment' });
+                                        setShowTransactionModal(true);
+                                      }
+                                    }}
+                                    className={`w-14 h-8 px-2 flex items-center justify-center text-[10px] font-black uppercase rounded-xl border-2 transition-all shrink-0 ${
+                                      isPaid 
+                                        ? 'bg-gray-100 dark:bg-gray-800 text-gray-400 border-gray-200 dark:border-gray-700 cursor-not-allowed shadow-none' 
+                                        : 'bg-indigo-600 text-white border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[1px] hover:translate-y-[1px]'
+                                    }`}
+                                  >
+                                    Pay
+                                  </button>
+                
+                                  {/* Trash Icon (Sticker Theme) */}
+                                  <button 
+                                    disabled={isReadOnly}
+                                    onClick={() => !isReadOnly && setConfirmModal({ show: true, title: 'Exclude Installment', message: `Exclude "${installment.name}"?`, onConfirm: () => { setExcludedInstallmentIds(prev => new Set([...prev, installment.id])); setConfirmModal(p => ({...p, show: false})); } })} 
+                                    title="Exclude Installment" 
+                                    className={`w-8 h-8 flex items-center justify-center rounded-xl border-2 transition-all shrink-0 ${
+                                      !isReadOnly 
+                                        ? 'bg-white dark:bg-gray-800 text-red-500 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[1px] hover:translate-y-[1px] hover:bg-red-50 dark:hover:bg-red-900/20' 
+                                        : 'bg-gray-100 dark:bg-gray-800 text-gray-400 border-gray-200 dark:border-gray-700 cursor-not-allowed shadow-none'
+                                    }`}
+                                  >
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/></svg>
+                                  </button>
+                                </div>
                               </td>
                             </tr>
                           );
@@ -3238,8 +3390,10 @@ const grandTotal = categorySummary.reduce((sum, cat) => sum + cat.total, 0) + st
                   </div>
                 )}
                 {canAddItems && <button onClick={() => addItemToCategory(cat.name)} className="w-full p-4 text-[11px] font-black text-gray-600 dark:text-gray-400 uppercase tracking-widest hover:text-indigo-600 dark:hover:text-indigo-400 border-t-4 border-black bg-gray-50/50 dark:bg-gray-800/20 transition-colors text-center">+ Add Item</button>}
-              </div>
-            )}
+                              </div>
+                            )}
+                                      
+                
           </div>
         );
       })}
