@@ -183,56 +183,27 @@ const calculateBudgetRemaining = (
   transactions: SupabaseTransaction[],
   selectedYear: number
 ): number => {
-  if (!setup.data) return -setup.totalAmount;
+  if (!setup.data) return 0;
+
+  // 1. Get total spend from the stored setup total amount
+  const totalSpend = setup.totalAmount || 0;
+
+  // 2. Resolve Income exactly like the live screen:
+  // Check if there's an actual salary saved, or fallback to the saved projected salary
   const actualStr = setup.data._actualSalary;
   const projectedStr = setup.data._projectedSalary;
-  const actualValue = actualStr && actualStr.trim() !== '' ? parseFloat(actualStr) : null;
-  const projectedValue = parseFloat(projectedStr || '0') || 0;
   
-  const currentMonthIndex = MONTHS.indexOf(setup.month);
-  const allIncomeTxs = transactions.filter(tx => {
-    if (tx.transaction_type !== 'cash_in') return false;
-    
-    const isTaggedIncome = tx.notes?.startsWith('Income Record');
-    const nameLower = tx.name.trim().toLowerCase();
-    const isLegacyIncome = nameLower === 'salary' || nameLower === 'income';
-    
-    if (!isTaggedIncome && !isLegacyIncome) return false;
+  const actualValue = actualStr && actualStr.trim() !== '' ? parseFloat(actualStr) : null;
+  const projectedValue = parseFloat(projectedStr || '0');
 
-    const txDate = new Date(tx.date);
-    if (txDate.getMonth() !== currentMonthIndex || txDate.getFullYear() !== selectedYear) return false;
+  // If projected salary string is empty/undefined, default to 0 instead of 11000 if it hasn't been set, 
+  // or use the exact projected string value converted to a number.
+  const baseSalary = projectedStr !== undefined ? parseFloat(projectedStr) || 0 : 0;
 
-    let matchesTiming = false;
-    if (tx.notes?.includes(' - 1/2') || tx.notes?.includes(' - 2/2')) {
-      matchesTiming = tx.notes.includes(` - ${setup.timing}`);
-    } else {
-      const estimatedTiming = txDate.getDate() <= 15 ? '1/2' : '2/2';
-      matchesTiming = estimatedTiming === setup.timing;
-    }
+  const incomeToUse = actualValue !== null && !isNaN(actualValue) ? actualValue : baseSalary;
 
-    return matchesTiming;
-  });
-  const otherIncomeTxs = allIncomeTxs.filter(tx => {
-    const nameLower = tx.name.trim().toLowerCase();
-    return nameLower !== 'salary' && nameLower !== 'income';
-  });
-  const totalOtherIncome = otherIncomeTxs.reduce((sum, tx) => sum + Math.abs(tx.amount), 0);
-  const hasIncomeRecords = allIncomeTxs.length > 0;
-
-  let salaryToUse = 0;
-  if (actualValue !== null && !isNaN(actualValue)) {
-    salaryToUse = actualValue;
-  } else if (hasIncomeRecords) {
-    salaryToUse = 0;
-  } else {
-    salaryToUse = projectedValue;
-  }
-
-  const netIncome = salaryToUse + totalOtherIncome;
-  return netIncome - setup.totalAmount;
+  return incomeToUse - totalSpend;
 };
-
-
 
   const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSetups, setSavedSetups, onUpdateBiller, onMoveToTrash, onReloadSetups, onReloadBillers, onUpdateInstallment, installments = [], onTransactionCreated, onTransactionDeleted, onArchiveBudget, onReopenBudget, userProfile }) => {
   console.log("Budget Setup Categories:", categories.map(c => c.name));
@@ -1418,7 +1389,14 @@ const calculateBudgetRemaining = (
       })
       .reduce((sum, inst) => sum + inst.monthlyAmount, 0);
     const stashTotal = wallets.filter(w => !excludedWalletIds.has(w.id)).reduce((s, w) => s + Math.max(w.amount, getStashAggregates(w).funded), 0);
-    const total = regularItemsTotal + installmentsTotal + stashTotal;
+    const creditTotal = creditBudgetAccounts
+    .filter(acc => !excludedCreditIds.has(acc.id))
+    .reduce((sum, account) => {
+      const amt = getFrozenCycleAmount(account);
+      return amt >= 0.01 ? sum + amt : sum;
+    }, 0);
+
+    const total = regularItemsTotal + installmentsTotal + stashTotal + creditTotal;
     
     try {
       setAutoSaveStatus('saving');
@@ -1565,7 +1543,14 @@ const calculateBudgetRemaining = (
       })
       .reduce((sum, inst) => sum + inst.monthlyAmount, 0);
     const stashTotal = wallets.filter(w => !excludedWalletIds.has(w.id)).reduce((s, w) => s + Math.max(w.amount, getStashAggregates(w).funded), 0);
-    const total = regularItemsTotal + installmentsTotal + stashTotal;
+    const creditTotal = creditBudgetAccounts
+    .filter(acc => !excludedCreditIds.has(acc.id))
+    .reduce((sum, account) => {
+      const amt = getFrozenCycleAmount(account);
+      return amt >= 0.01 ? sum + amt : sum;
+    }, 0);
+
+    const total = regularItemsTotal + installmentsTotal + stashTotal + creditTotal;
 
     const existingSetup = savedSetups.find(s => s.month === selectedMonth && s.timing === selectedTiming);
     const dataToSave = {
@@ -2023,11 +2008,82 @@ const calculateBudgetRemaining = (
 
   // ... then, update these lines in the 'summary' view block
   if (view === 'summary') {
-    // Use sortedSetups instead of savedSetups
-    const activeSetups = sortedSetups.filter(s => !s.isArchived);
-    const archivedSetups = sortedSetups.filter(s => s.isArchived);
+    // ⚡ DYNAMIC SELF-REFRESH LOGIC: Recalculate totals on the fly before rendering
+    const dynamicallyUpdatedSetups = sortedSetups.map(setup => {
+      const setupYear = parseInt(setup.data?._year || new Date().getFullYear().toString());
+      const setupMonthIndex = MONTHS.indexOf(setup.month);
+
+      // 1. Regular items
+      let regularItemsTotal = 0;
+      if (setup.data && typeof setup.data === 'object' && !Array.isArray(setup.data)) {
+        Object.entries(setup.data).forEach(([key, catItems]) => {
+          if (!key.startsWith('_') && Array.isArray(catItems)) {
+            catItems.forEach((item: any) => {
+              if (item && item.included && !isNaN(parseFloat(item.amount))) {
+                regularItemsTotal += parseFloat(item.amount);
+              }
+            });
+          }
+        });
+      }
+
+      // 2. Installments
+      const excludedInstallments = new Set(setup.data?._excludedInstallmentIds || []);
+      const installmentsTotal = installments.filter(inst => {
+        if (inst.isArchived) return false;
+        const timingMatch = !inst.timing || inst.timing === setup.timing;
+        const scheduleForMonth = getPaymentSchedule('installment', inst.id, setup.month, setupYear);
+        const isActiveForPeriod = scheduleForMonth !== undefined || shouldShowInstallment(inst, setup.month, setupYear);
+        const isFinished = !scheduleForMonth && inst.totalAmount > 0 && inst.paidAmount >= inst.totalAmount;
+        return timingMatch && isActiveForPeriod && !isFinished && !excludedInstallments.has(inst.id);
+      }).reduce((sum, inst) => sum + inst.monthlyAmount, 0);
+
+      // 3. Stash
+      const excludedWallets = new Set(setup.data?._excludedWalletIds || []);
+      const stashTotal = wallets.filter(w => !excludedWallets.has(w.id)).reduce((s, w) => {
+        const topUps = stashTopUps.filter(tx => tx.wallet_id === w.id && new Date(tx.date).getMonth() === setupMonthIndex && new Date(tx.date).getFullYear() === setupYear);
+        const funded = topUps.reduce((sum, tx) => sum + Math.abs(tx.amount), 0);
+        return s + Math.max(w.amount, funded);
+      }, 0);
+
+      // 4. Credit Cards
+      const excludedCredits = new Set(setup.data?._excludedCreditIds || []);
+      const creditTotal = accounts.filter(acc => (acc.type === 'Credit' || acc.classification === 'Credit Card') && !excludedCredits.has(acc.id)).reduce((sum, account) => {
+        const accountTxs = transactions.filter(tx => tx?.payment_method_id === account.id);
+        let cycleCharges = 0;
+        if (account.billingDate && typeof calculateBillingCycles === 'function') {
+          const cycles = calculateBillingCycles(account.billingDate, 12, false);
+          const targetCycle = cycles.find(cycle => {
+            if (!cycle?.startDate || !cycle?.endDate) return false;
+            return (new Date(cycle.startDate).getMonth() === setupMonthIndex && new Date(cycle.startDate).getFullYear() === setupYear) ||
+                   (new Date(cycle.endDate).getMonth() === setupMonthIndex && new Date(cycle.endDate).getFullYear() === setupYear);
+          });
+          if (targetCycle) {
+            cycleCharges = accountTxs.filter(tx => new Date(tx.date) >= targetCycle.startDate && new Date(tx.date) <= targetCycle.endDate && tx.transaction_type !== 'credit_payment' && tx.amount > 0).reduce((cSum, tx) => cSum + tx.amount, 0);
+          }
+        }
+        if (cycleCharges > 0) return sum + cycleCharges;
+        
+        const fallbackCharges = accountTxs.filter(tx => new Date(tx.date).getMonth() === setupMonthIndex && new Date(tx.date).getFullYear() === setupYear && tx.transaction_type !== 'credit_payment' && tx.amount > 0).reduce((cSum, tx) => cSum + tx.amount, 0);
+        if (fallbackCharges > 0) return sum + fallbackCharges;
+        
+        const liveBal = calculateCurrentBalance(account);
+        const amt = liveBal > 0 ? liveBal : Math.abs(account.openingBalance || 0);
+        return amt >= 0.01 ? sum + amt : sum;
+      }, 0);
+
+      // Return the setup with the perfectly synced, real-time dynamic total
+      return {
+        ...setup,
+        totalAmount: regularItemsTotal + installmentsTotal + stashTotal + creditTotal
+      };
+    });
+
+    const activeSetups = dynamicallyUpdatedSetups.filter(s => !s.isArchived);
+    const archivedSetups = dynamicallyUpdatedSetups.filter(s => s.isArchived);
 
     return (
+// ... keep everything else underneath the exact same (the <div className="space-y-8... block)
         <div className={`space-y-8 animate-in fade-in duration-500 w-full max-w-7xl mx-auto ${isMobile ? 'pt-10' : ''}`}>
             <PageHeader 
               title="Budget"
@@ -2161,9 +2217,10 @@ const calculateBudgetRemaining = (
     return { category: cat.name, total: itemsTotal + installmentsTotal + creditTotal };
   });
 
-const stashTotal = wallets.filter(w => !excludedWalletIds.has(w.id)).reduce((s, w) => s + Math.max(w.amount, getStashAggregates(w).funded), 0);
-const grandTotal = categorySummary.reduce((sum, cat) => sum + cat.total, 0) + stashTotal;
+  const stashTotal = wallets.filter(w => !excludedWalletIds.has(w.id)).reduce((s, w) => s + Math.max(w.amount, getStashAggregates(w).funded), 0);
+  const grandTotal = categorySummary.reduce((sum, cat) => sum + cat.total, 0) + stashTotal;
   const totalSpend = grandTotal;
+  
   
   const currentMonthIndex = MONTHS.indexOf(selectedMonth);
   const allIncomeTxs = transactions.filter(tx => {
@@ -2244,48 +2301,56 @@ const grandTotal = categorySummary.reduce((sum, cat) => sum + cat.total, 0) + st
               )}
             </div>
           )}
-        />
+          />
 
-        <div className="flex items-center justify-between w-full md:justify-center mb-6 md:relative">
-            <div className="flex-none md:absolute md:left-0 md:top-1/2 md:-translate-y-1/2">
-                <button onClick={() => setView('summary')} className="flex items-center justify-center w-10 h-10 rounded-xl bg-gray-50 dark:bg-gray-800 text-gray-500 dark:text-gray-400 border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[0.5px] hover:translate-y-[0.5px] transition-all shrink-0">
-                    <ArrowLeft className="w-5 h-5" />
-                </button>
-            </div>
-
-            <div className="flex-grow flex justify-center items-center space-x-2 md:flex-grow-0">
-                <select value={selectedMonth} onChange={(e) => setSelectedMonth(e.target.value)} disabled={isReadOnly} className={`bg-white dark:bg-gray-900 border-2 border-black rounded-xl md:rounded-[1.5rem] h-10 md:h-auto px-3 md:px-8 md:py-4 font-black text-xs md:text-base shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] outline-none disabled:opacity-60 disabled:cursor-not-allowed transition-colors text-center appearance-none ${getAccentClasses('text')}`}>
-                    {MONTHS.map(m => <option key={m} value={m}>{m}</option>)}
-                </select>
-                <select value={selectedTiming} onChange={(e) => setSelectedTiming(e.target.value as '1/2' | '2/2')} disabled={isReadOnly} className={`bg-white dark:bg-gray-900 border-2 border-black rounded-xl md:rounded-[1.5rem] h-10 md:h-auto px-3 md:px-8 md:py-4 font-black text-xs md:text-base shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] outline-none disabled:opacity-60 disabled:cursor-not-allowed transition-colors ${getAccentClasses('text')}`}>
-                    <option value="1/2">1/2</option>
-                    <option value="2/2">2/2</option>
-                </select>
-                {legacyMode && (
-                  <span className="hidden md:block text-[10px] font-black text-gray-400 dark:text-gray-500 bg-gray-100 dark:bg-gray-800 border-2 border-black px-4 py-2 rounded-full uppercase tracking-widest">Legacy Budget</span>
+          <div className="flex items-center justify-between w-full md:justify-center mb-6 md:relative">
+              <div className="flex-none md:absolute md:left-0 md:top-1/2 md:-translate-y-1/2">
+                  <button 
+                    onClick={async () => {
+                      if (!isReadOnly) {
+                        await autoSave();
+                      }
+                      setView('summary');
+                    }} 
+                    className="flex items-center justify-center w-10 h-10 rounded-xl bg-gray-50 dark:bg-gray-800 text-gray-500 dark:text-gray-400 border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[0.5px] hover:translate-y-[0.5px] transition-all shrink-0"
+                  >
+                      <ArrowLeft className="w-5 h-5" />
+                  </button>
+              </div>
+  
+              <div className="flex-grow flex justify-center items-center space-x-2 md:flex-grow-0">
+                  <select value={selectedMonth} onChange={(e) => setSelectedMonth(e.target.value)} disabled={isReadOnly} className={`bg-white dark:bg-gray-900 border-2 border-black rounded-xl md:rounded-[1.5rem] h-10 md:h-auto px-3 md:px-8 md:py-4 font-black text-xs md:text-base shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] outline-none disabled:opacity-60 disabled:cursor-not-allowed transition-colors text-center appearance-none ${getAccentClasses('text')}`}>
+                      {MONTHS.map(m => <option key={m} value={m}>{m}</option>)}
+                  </select>
+                  <select value={selectedTiming} onChange={(e) => setSelectedTiming(e.target.value as '1/2' | '2/2')} disabled={isReadOnly} className={`bg-white dark:bg-gray-900 border-2 border-black rounded-xl md:rounded-[1.5rem] h-10 md:h-auto px-3 md:px-8 md:py-4 font-black text-xs md:text-base shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] outline-none disabled:opacity-60 disabled:cursor-not-allowed transition-colors ${getAccentClasses('text')}`}>
+                      <option value="1/2">1/2</option>
+                      <option value="2/2">2/2</option>
+                  </select>
+                  {legacyMode && (
+                    <span className="hidden md:block text-[10px] font-black text-gray-400 dark:text-gray-500 bg-gray-100 dark:bg-gray-800 border-2 border-black px-4 py-2 rounded-full uppercase tracking-widest">Legacy Budget</span>
+                  )}
+              </div>
+  
+              <div className="flex-none flex items-center gap-2 md:hidden">
+                {currentSetup && !isReadOnly && (
+                  <PinProtectedAction featureId="budget_modifications" onVerified={() => handleArchiveSetup(currentSetup)} actionLabel="Close Budget">
+                    <button onClick={(e) => e.preventDefault()} disabled={archiveSubmitting} className="flex items-center justify-center w-10 h-10 rounded-xl bg-amber-50 text-amber-700 border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[0.5px] hover:translate-y-[0.5px] transition-all disabled:opacity-50" aria-label="Close">
+                      <Archive className="w-4 h-4" />
+                    </button>
+                  </PinProtectedAction>
                 )}
-            </div>
-
-            <div className="flex-none flex items-center gap-2 md:hidden">
-              {currentSetup && !isReadOnly && (
-                <PinProtectedAction featureId="budget_modifications" onVerified={() => handleArchiveSetup(currentSetup)} actionLabel="Close Budget">
-                  <button onClick={(e) => e.preventDefault()} disabled={archiveSubmitting} className="flex items-center justify-center w-10 h-10 rounded-xl bg-amber-50 text-amber-700 border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[0.5px] hover:translate-y-[0.5px] transition-all disabled:opacity-50" aria-label="Close">
-                    <Archive className="w-4 h-4" />
-                  </button>
-                </PinProtectedAction>
-              )}
-              {!isReadOnly && (
-                <PinProtectedAction featureId="budget_modifications" onVerified={handleSaveSetup} actionLabel="Save Budget">
-                  <button onClick={(e) => e.preventDefault()} className={`flex items-center justify-center w-10 h-10 rounded-xl text-white border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[0.5px] hover:translate-y-[0.5px] ${getAccentClasses('bg')}`} aria-label="Save">
-                    <Save className="w-4 h-4" />
-                  </button>
-                </PinProtectedAction>
-              )}
-            </div>
+                {!isReadOnly && (
+                  <PinProtectedAction featureId="budget_modifications" onVerified={handleSaveSetup} actionLabel="Save Budget">
+                    <button onClick={(e) => e.preventDefault()} className={`flex items-center justify-center w-10 h-10 rounded-xl text-white border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[0.5px] hover:translate-y-[0.5px] ${getAccentClasses('bg')}`} aria-label="Save">
+                      <Save className="w-4 h-4" />
+                    </button>
+                  </PinProtectedAction>
+                )}
+              </div>
+          </div>
         </div>
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+  
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">  
         <div className="bg-white dark:bg-gray-900 rounded-2xl border-4 border-black shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] overflow-hidden w-full transition-colors">
           <div className="p-4 border-b-4 border-black bg-gray-50/30 dark:bg-gray-800/30"><h3 className="text-xs font-black text-gray-900 dark:text-gray-100 uppercase tracking-[0.25em] text-center">BUDGET SUMMARY</h3></div>
           <table className="w-full text-left">
@@ -3310,17 +3375,15 @@ const grandTotal = categorySummary.reduce((sum, cat) => sum + cat.total, 0) + st
                               <td className="p-4 text-sm font-black">{formatCurrency(installment.monthlyAmount)}</td>
                               
                               {/* 4. DUE DATE */}
-<td className="p-4 text-center">
-  {installment.dueDate || installment.due_date ? (
-    <span className="text-[10px] font-black bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 px-2 py-1 rounded border border-gray-200 dark:border-gray-700">
-      {formatDueDate(installment.dueDate || installment.due_date)}
-    </span>
-  ) : (
-    <span className="text-gray-300 dark:text-gray-600 text-xs">—</span>
-  )}
-</td>
-
-                
+                              <td className="p-4 text-center">
+                                  {installment.dueDate || installment.due_date ? (
+                              <span className="text-[10px] font-black bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 px-2 py-1 rounded border border-gray-200 dark:border-gray-700">
+                              {formatDueDate(installment.dueDate || installment.due_date)}
+                              </span>
+                          ) : (
+                              <span className="text-gray-300 dark:text-gray-600 text-xs">—</span>
+                                )}
+                            </td>
                               {/* 5. STATUS */}
                               <td className="p-4 text-center">
                                 {isPaid ? (
