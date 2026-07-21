@@ -285,17 +285,29 @@ const MainApp: React.FC = () => {
   }, [location.pathname]);
 
   // In App.tsx
-useEffect(() => {
-  if (!installmentsLoading && userProfile && !migrationAttempted.current) {
-    // FIX: Check for due_date (snake_case) to match your types.ts
-    const needsMigration = installments.some(i => !i.due_date);
-    
-    if (needsMigration) {
-      migrationAttempted.current = true; 
-      setShowMigrationModal(true);
+  useEffect(() => {
+    if (!installmentsLoading && userProfile && !migrationAttempted.current) {
+      const hasCompleted = localStorage.getItem('hasCompletedMigration') === 'true';
+      const hasDismissed = localStorage.getItem('hasDismissedMigration') === 'true';
+  
+      if (!hasCompleted && !hasDismissed) {
+        // Only target items that are NOT archived, NOT migrated, and missing a due date
+        const needsMigration = installments.some(i => 
+          i.isArchived !== true && 
+          i.is_archived !== true && 
+          i.isMigrated !== true && 
+          i.is_migrated !== true && 
+          !i.due_date && 
+          !i.dueDate
+        );
+        
+        if (needsMigration) {
+          migrationAttempted.current = true; 
+          setShowMigrationModal(true);
+        }
+      }
     }
-  }
-}, [installments, userProfile, installmentsLoading]);
+  }, [installments, userProfile, installmentsLoading]);  
 
 
   useEffect(() => {
@@ -1856,10 +1868,10 @@ useEffect(() => {
         activeFriendId={activeChatFriendId}
         onClearActiveChat={() => setActiveChatFriendId(undefined)}
       />
-      /* Global Migration Modal */
+      {/* Global Migration Modal */}
 {showMigrationModal && (
 <MigrationModal 
-  installments={installments} 
+  installments={filteredInstallments} 
   onClose={() => setShowMigrationModal(false)}
   onUpdate={async (id, updateFields) => {
     // 1. Find the full existing installment object
@@ -1877,7 +1889,6 @@ useEffect(() => {
     }
   }}
 />
-
 )}
     </>
   );

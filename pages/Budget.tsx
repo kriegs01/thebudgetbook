@@ -3309,16 +3309,17 @@ const grandTotal = categorySummary.reduce((sum, cat) => sum + cat.total, 0) + st
                               {/* 3. AMOUNT */}
                               <td className="p-4 text-sm font-black">{formatCurrency(installment.monthlyAmount)}</td>
                               
-                              {/* 4. DUE */}
-                              <td className="p-4 text-center">
-                                {installment.dueDate ? (
-                                <span className="text-[10px] font-black bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 px-2 py-1 rounded border border-gray-200 dark:border-gray-700">
-                                {formatDueDate(installment.dueDate)}
-                                </span>
-                                ) : (
-                                <span className="text-gray-300 dark:text-gray-600 text-xs">—</span>
-                                )}
-                              </td>
+                              {/* 4. DUE DATE */}
+<td className="p-4 text-center">
+  {installment.dueDate || installment.due_date ? (
+    <span className="text-[10px] font-black bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 px-2 py-1 rounded border border-gray-200 dark:border-gray-700">
+      {formatDueDate(installment.dueDate || installment.due_date)}
+    </span>
+  ) : (
+    <span className="text-gray-300 dark:text-gray-600 text-xs">—</span>
+  )}
+</td>
+
                 
                               {/* 5. STATUS */}
                               <td className="p-4 text-center">
