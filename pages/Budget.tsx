@@ -557,54 +557,59 @@ const calculateBudgetRemaining = (
       return Math.abs(balance);
     };
 
-        // Helper: Unified Frozen Cycle Target Amount (Single Source of Truth)
-        const getFrozenCycleAmount = (account: Account): number => {
-          const liveBal = calculateCurrentBalance(account);
-          const monthIndex = MONTHS.indexOf(selectedMonth);
-          const accountTxs = transactions.filter(tx => tx?.payment_method_id === account.id);
-          
-          let cycleCharges = 0;
-          if (account.billingDate && typeof calculateBillingCycles === 'function') {
-            const cycles = calculateBillingCycles(account.billingDate, 12, false);
-            const targetCycle = cycles.find(cycle => {
-              if (!cycle?.startDate || !cycle?.endDate) return false;
-              const start = new Date(cycle.startDate);
-              const end = new Date(cycle.endDate);
-              return (start.getMonth() === monthIndex && start.getFullYear() === selectedYear) ||
-                     (end.getMonth() === monthIndex && end.getFullYear() === selectedYear);
-            });
-    
-            if (targetCycle) {
-              cycleCharges = accountTxs
-                .filter(tx => {
-                  if (!tx?.date) return false;
-                  const txDate = new Date(tx.date);
-                  return txDate >= targetCycle.startDate && 
-                         txDate <= targetCycle.endDate && 
-                         tx.transaction_type !== 'credit_payment' &&
-                         tx.amount > 0;
-                })
-                .reduce((cSum, tx) => cSum + tx.amount, 0);
-            }
-          }
-    
-          if (cycleCharges > 0) return cycleCharges;
-    
-          const fallbackCharges = accountTxs
-            .filter(tx => {
-              if (!tx?.date) return false;
-              const txDate = new Date(tx.date);
-              return txDate.getMonth() === monthIndex && 
-                     txDate.getFullYear() === selectedYear &&
-                     tx.transaction_type !== 'credit_payment' &&
-                     tx.amount > 0;
-            })
-            .reduce((cSum, tx) => cSum + tx.amount, 0);
-    
-          if (fallbackCharges > 0) return fallbackCharges;
-          
-          return liveBal > 0 ? liveBal : Math.abs(account.openingBalance || 0);
-        };    
+            // Reverse-engineered cycle aggregator for budget setups
+    const getFrozenCycleAmount = (account: Account): number => {
+      if (!account.billingDate) {
+        const liveBal = calculateCurrentBalance(account);
+        return liveBal > 0 ? liveBal : Math.abs(account.openingBalance || 0);
+      }
+
+      // 1. Generate historical and forward cycles using billingCycles.ts logic
+      const cycles = calculateBillingCycles(account.billingDate, 24, false);
+      const monthIndex = MONTHS.indexOf(selectedMonth);
+
+      // 2. Find the exact cycle whose END DATE (statement cutoff) falls in the selected month/year
+      const targetCycle = cycles.find(cycle => {
+        const endMonth = cycle.endDate.getMonth();
+        const endYear = cycle.endDate.getFullYear();
+        return endMonth === monthIndex && endYear === selectedYear;
+      });
+
+      if (targetCycle) {
+        // 3. Filter transactions that fall within this cycle's start and end dates
+        const cycleCharges = transactions
+          .filter(tx => tx?.payment_method_id === account.id)
+          .filter(tx => {
+            if (!tx?.date) return false;
+            const txDate = new Date(tx.date);
+            return txDate >= targetCycle.startDate && 
+                   txDate <= targetCycle.endDate && 
+                   tx.transaction_type !== 'credit_payment' &&
+                   tx.amount > 0;
+          })
+          .reduce((sum, tx) => sum + tx.amount, 0);
+
+        return cycleCharges;
+      }
+
+      // 4. Fallback if no matching cycle window is found
+      const fallbackCharges = transactions
+        .filter(tx => tx?.payment_method_id === account.id)
+        .filter(tx => {
+          if (!tx?.date) return false;
+          const txDate = new Date(tx.date);
+          return txDate.getMonth() === monthIndex && 
+                 txDate.getFullYear() === selectedYear &&
+                 tx.transaction_type !== 'credit_payment' &&
+                 tx.amount > 0;
+        })
+        .reduce((sum, tx) => sum + tx.amount, 0);
+
+      if (fallbackCharges > 0) return fallbackCharges;
+      
+      const liveBal = calculateCurrentBalance(account);
+      return liveBal > 0 ? liveBal : Math.abs(account.openingBalance || 0);
+    };
 
             // Helper: Get payments made towards the card this month
     const getPaymentsThisMonth = (account: Account): number => {
