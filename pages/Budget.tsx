@@ -2341,32 +2341,66 @@ const [activePeriodIndex, setActivePeriodIndex] = useState<number>(1);
   })
   .map((cat) => {
     const items = setupData[cat.name] || [];
-    const itemsTotal = items.filter(i => i.included).reduce((sum, item) => sum + (parseFloat(item.amount) || 0), 0);
+    
+    // 🛡️ STRICT PERIOD-ISOLATED ITEMS TOTAL
+    const itemsTotal = items.filter(item => {
+      if (!item || !item.included) return false;
+      const isBillerItem = item.isBiller || billers?.some(b => b.id === item.id);
+      const isInstallmentItem = item.isInstallment || installments?.some(i => i.id === item.id);
 
+      if (isBillerItem || isInstallmentItem || item.isCredit) {
+        const linkedBiller = billers?.find(b => b.id === item.id);
+        const linkedInstallment = installments?.find(i => i.id === item.id);
+        const actualTiming = item.timing || linkedBiller?.timing || linkedInstallment?.timing;
+
+        if (actualTiming === '1/2') return activePeriodIndex === 1;
+        if (actualTiming === '2/2') return activePeriodIndex === 2;
+
+        const dueDay = item.dueDay || item.dueDate || linkedBiller?.dueDate || linkedInstallment?.due_date || 1;
+        return getPeriodIndexForDate(dueDay) === activePeriodIndex;
+      }
+
+      const periodVal = item.amountsByPeriod?.[activePeriodIndex];
+      return periodVal !== undefined && periodVal !== '' && periodVal !== '0';
+    }).reduce((sum, item) => {
+      const val = item.amountsByPeriod?.[activePeriodIndex] !== undefined 
+        ? item.amountsByPeriod[activePeriodIndex] 
+        : item.amount;
+      return sum + (parseFloat(val) || 0);
+    }, 0);
+
+    // 🛡️ STRICT PERIOD-ISOLATED INSTALLMENTS TOTAL
     let installmentsTotal = 0;
     if (cat.name === 'Loans') {
-      installmentsTotal = installments
+      installmentsTotal = (installments || [])
         .filter(inst => {
           if (inst.isArchived) return false;
+          const dueDay = inst.dueDate || inst.due_date || 1;
+          if (getPeriodIndexForDate(dueDay) !== activePeriodIndex) return false;
+
           const timingMatch = !inst.timing || inst.timing === selectedTiming;
           const scheduleForMonth = getPaymentSchedule('installment', inst.id, selectedMonth, selectedYear);
           const isActiveForPeriod = scheduleForMonth !== undefined || shouldShowInstallment(inst, selectedMonth, selectedYear);
           const isFinished = !scheduleForMonth && inst.totalAmount > 0 && inst.paidAmount >= inst.totalAmount;
-          const notExcluded = !excludedInstallmentIds.has(inst.id);
-          return timingMatch && isActiveForPeriod && !isFinished && notExcluded;
+          return timingMatch && isActiveForPeriod && !isFinished && !excludedInstallmentIds.has(inst.id);
         })
         .reduce((s, inst) => s + inst.monthlyAmount, 0);
     }
 
+    // 🛡️ STRICT PERIOD-ISOLATED CREDIT TOTAL
     let creditTotal = 0;
-    if (cat.name === 'Credit') {
-      creditTotal = creditBudgetAccounts
-        .filter(acc => !excludedCreditIds.has(acc.id))
-        .reduce((sum, account) => {
-          const amt = getFrozenCycleAmount(account);
-          return amt >= 0.01 ? sum + amt : sum;
-        }, 0);
-    }
+if (cat.name === 'Credit') {
+  creditTotal = creditBudgetAccounts
+    .filter(acc => {
+      if (excludedCreditIds.has(acc.id)) return false;
+      const dueDay = acc.dueDate || acc.billingDate || acc.statementDate || 1;
+      return getPeriodIndexForDate(dueDay) === activePeriodIndex;
+    })
+    .reduce((sum, account) => {
+      const amt = getFrozenCycleAmount(account);
+      return amt >= 0.01 ? sum + amt : sum;
+    }, 0);
+}
 
     return { category: cat.name, total: itemsTotal + installmentsTotal + creditTotal };
   });
@@ -2377,7 +2411,7 @@ const [activePeriodIndex, setActivePeriodIndex] = useState<number>(1);
   
   
   const currentMonthIndex = MONTHS.indexOf(selectedMonth);
-  const allIncomeTxs = transactions.filter(tx => {
+  const allIncomeTxs = (transactions || []).filter(tx => {
     if (tx.transaction_type !== 'cash_in') return false;
     
     const isTaggedIncome = tx.notes?.startsWith('Income Record');
@@ -3049,19 +3083,20 @@ const [activePeriodIndex, setActivePeriodIndex] = useState<number>(1);
 
 
 {effectiveCategories.filter(cat => cat.name !== 'Fixed').map((cat) => {
-        const items = setupData[cat.name] || [];
-        
-        let relevantInstallments: Installment[] = [];
-        if (cat.name === 'Loans') {
-          relevantInstallments = installments.filter(inst => {
-            if (inst.isArchived) return false;
-            const timingMatch = !inst.timing || inst.timing === selectedTiming;
-            const scheduleForMonth = getPaymentSchedule('installment', inst.id, selectedMonth, selectedYear);
-            const isActiveForPeriod = scheduleForMonth !== undefined || shouldShowInstallment(inst, selectedMonth, selectedYear);
-            const isFinished = !scheduleForMonth && inst.totalAmount > 0 && inst.paidAmount >= inst.totalAmount;
-            return timingMatch && isActiveForPeriod && !isFinished;
-          });
-        }
+  const items = Array.isArray(setupData[cat.name]) ? setupData[cat.name] : [];
+  
+  let relevantInstallments: Installment[] = [];
+  if (cat.name === 'Loans') {
+    relevantInstallments = (installments || []).filter(inst => {
+      if (inst.isArchived) return false;
+      const timingMatch = !inst.timing || inst.timing === selectedTiming;
+      const scheduleForMonth = getPaymentSchedule('installment', inst.id, selectedMonth, selectedYear);
+      const isActiveForPeriod = scheduleForMonth !== undefined || shouldShowInstallment(inst, selectedMonth, selectedYear);
+      const isFinished = !scheduleForMonth && inst.totalAmount > 0 && inst.paidAmount >= inst.totalAmount;
+      return timingMatch && isActiveForPeriod && !isFinished;
+    });
+  }
+
 
         const hasData = items.length > 0 || 
           (cat.name === 'Loans' && relevantInstallments.length > 0) || 
@@ -3071,8 +3106,39 @@ const [activePeriodIndex, setActivePeriodIndex] = useState<number>(1);
 
         const canAddItems = !isReadOnly && (cat.flexiMode ?? true) && isCategoryActiveForBudget(cat, selectedYear, selectedMonth);
         const isLegacyCategory = isCategoryLegacyForBudget(cat, selectedYear, selectedMonth);
+        console.log(`[Tab Debug] Active Period: ${activePeriodIndex} | Category: ${cat.name}`, {
+          items: items.map(i => ({ name: i.name, due: i.dueDay || i.dueDate, periodVal: i.amountsByPeriod?.[activePeriodIndex] })),
+          installments: relevantInstallments.map(inst => ({ name: inst.name, due: inst.dueDate || inst.due_date }))
+        });
         
-        const itemsTotal = items.filter(i => i.included).reduce((s, i) => s + (parseFloat(i.amount) || 0), 0);
+        const itemsTotal = items
+  .filter(item => {
+    if (!item || !item.included) return false;
+    const isBillerItem = item.isBiller || billers?.some(b => b.id === item.id);
+    const isInstallmentItem = item.isInstallment || installments?.some(i => i.id === item.id);
+
+    if (isBillerItem || isInstallmentItem || item.isCredit) {
+      const linkedBiller = billers?.find(b => b.id === item.id);
+      const linkedInstallment = installments?.find(i => i.id === item.id);
+      const actualTiming = item.timing || linkedBiller?.timing || linkedInstallment?.timing;
+
+      if (actualTiming === '1/2') return activePeriodIndex === 1;
+      if (actualTiming === '2/2') return activePeriodIndex === 2;
+
+      const dueDay = item.dueDay || item.dueDate || linkedBiller?.dueDate || linkedInstallment?.due_date || 1;
+      return getPeriodIndexForDate(dueDay) === activePeriodIndex;
+    }
+
+    const periodVal = item.amountsByPeriod?.[activePeriodIndex];
+    return periodVal !== undefined && periodVal !== '' && periodVal !== '0';
+  })
+  .reduce((s, i) => {
+    const val = i.amountsByPeriod?.[activePeriodIndex] !== undefined 
+      ? i.amountsByPeriod[activePeriodIndex] 
+      : i.amount;
+    return s + (parseFloat(val) || 0);
+  }, 0);
+
         const installmentsTotal = relevantInstallments
           .filter(inst => !excludedInstallmentIds.has(inst.id))
           .reduce((s, inst) => s + inst.monthlyAmount, 0);
@@ -3088,7 +3154,10 @@ const [activePeriodIndex, setActivePeriodIndex] = useState<number>(1);
             }, 0);
         }
 
-        const categoryTotal = itemsTotal + installmentsTotal + creditTotal;
+        const categoryTotal = itemsTotal + 
+  (cat.name === 'Loans' ? installmentsTotal : 0) + 
+  (cat.name === 'Credit' ? creditTotal : 0);
+
               
         return (
           <div key={cat.id} className="bg-white dark:bg-gray-900 rounded-2xl border-4 border-black shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] overflow-hidden w-full transition-colors">
@@ -3103,12 +3172,12 @@ const [activePeriodIndex, setActivePeriodIndex] = useState<number>(1);
   
             {cat.name === 'Credit' && creditBudgetAccounts.length > 0 && (
               <div className="p-4 space-y-4 bg-gray-50/30 dark:bg-gray-955/10">
-             {creditBudgetAccounts.length > 0 && creditBudgetAccounts.filter((account) => {
+             {creditBudgetAccounts.length > 0 && creditBudgetAccounts.filter(account => {
+  if (excludedCreditIds.has(account.id)) return false;
   const dueDay = account.dueDate || account.billingDate || account.statementDate || 1;
   return getPeriodIndexForDate(dueDay) === activePeriodIndex;
 }).map(account => {
-
-                  
+                 
                                     // 2. PERFECTLY SYNCED INDIVIDUAL CARD MATH
                                     const displayAmount = getFrozenCycleAmount(account);
                                     const cycleRemaining = getRemainingCycleAmount(account);
@@ -3345,9 +3414,18 @@ const [activePeriodIndex, setActivePeriodIndex] = useState<number>(1);
   const dueDay = installment.due_date || 1;
   return getPeriodIndexForDate(dueDay) === activePeriodIndex;
 }).map((installment) => {
+  // 🛡️ RESTORED VARIABLES:
+  const isIncluded = !excludedInstallmentIds.has(installment.id);
+  let isPaid = false, isPartial = false;
+  const installmentSchedule = getPaymentSchedule('installment', installment.id, selectedMonth, selectedYear);
+  if (installmentSchedule) {
+    isPaid = checkIfPaidBySchedule('installment', installment.id);
+    isPartial = checkIfPartialBySchedule('installment', installment.id);
+  }
 
-                      return (
-                        <div key={`installment-${installment.id}`} className={`p-4 rounded-xl border-2 border-black bg-blue-50/20 dark:bg-blue-900/10 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] flex flex-col gap-3 transition-all ${isIncluded ? 'opacity-100' : 'opacity-60 bg-gray-50'}`}>
+  return (
+    <div key={`installment-${installment.id}`} className={`p-4 rounded-xl border-2 border-black bg-blue-50/20 dark:bg-blue-900/10 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] flex flex-col gap-3 transition-all ${isIncluded ? 'opacity-100' : 'opacity-60 bg-gray-50'}`}>
+
                           <div className="flex justify-between items-start gap-2">
                             <div>
                               <span className="text-sm font-black text-gray-900 dark:text-gray-100 block">{installment.name}</span>
@@ -3600,15 +3678,24 @@ const [activePeriodIndex, setActivePeriodIndex] = useState<number>(1);
                         
                       
                         {/* --- INSTALLMENTS --- */}
-                        {cat.name === 'Loans' && relevantInstallments.length > 0 && relevantInstallments.filter((installment) => {
-                          if (installment.timing === '1/2') return activePeriodIndex === 1;
-                          if (installment.timing === '2/2') return activePeriodIndex === 2;
-                          const dueDay = installment.dueDate || installment.due_date || 1;
-                          return getPeriodIndexForDate(dueDay) === activePeriodIndex;
-                        }).map((installment) => {
+{cat.name === 'Loans' && relevantInstallments.length > 0 && relevantInstallments.filter((installment) => {
+  if (installment.timing === '1/2') return activePeriodIndex === 1;
+  if (installment.timing === '2/2') return activePeriodIndex === 2;
+  const dueDay = installment.dueDate || installment.due_date || 1;
+  return getPeriodIndexForDate(dueDay) === activePeriodIndex;
+}).map((installment) => {
+  // 🛡️ RESTORED VARIABLES:
+  const isIncluded = !excludedInstallmentIds.has(installment.id);
+  let isPaid = false, isPartial = false;
+  const installmentSchedule = getPaymentSchedule('installment', installment.id, selectedMonth, selectedYear);
+  if (installmentSchedule) {
+    isPaid = checkIfPaidBySchedule('installment', installment.id);
+    isPartial = checkIfPartialBySchedule('installment', installment.id);
+  }
 
-                          return (
-                            <tr key={`installment-${installment.id}`} className={`${isIncluded ? 'bg-blue-50/30 dark:bg-blue-900/10' : 'bg-gray-50 dark:bg-gray-800/50 opacity-60'}`}>
+  return (
+    <tr key={`installment-${installment.id}`} className={`${isIncluded ? 'bg-blue-50/30 dark:bg-blue-900/10' : 'bg-gray-50 dark:bg-gray-800/50 opacity-60'}`}>
+
                               
                               {/* 1. INCLUDE */}
                               <td className="p-4 pl-10 text-center">
@@ -4069,88 +4156,78 @@ const [activePeriodIndex, setActivePeriodIndex] = useState<number>(1);
         </div>
       )}
 
-      {showSalaryModal && (
-        <div className="fixed inset-0 z-[150] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md animate-in fade-in" onClick={() => setShowSalaryModal(false)}>
-          <div className="bg-white dark:bg-gray-900 border-4 border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] rounded-2xl w-full max-w-sm p-6 relative" onClick={e => e.stopPropagation()}>
-            <button onClick={() => setShowSalaryModal(false)} className="absolute right-4 top-4 p-1.5 hover:bg-gray-100 rounded-full transition-colors"><X className="w-5 h-5 text-gray-400" /></button>
-            <h2 className="text-xl font-black text-gray-900 dark:text-gray-100 mb-4">Record Income</h2>
-            <form onSubmit={handleSalaryCashIn} className="space-y-4">
-              <div>
-                <label className="block text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">Transaction Name</label>
-                <input required type="text" value={salaryFormData.name} onChange={(e) => setSalaryFormData({...salaryFormData, name: e.target.value})} className="w-full bg-white dark:bg-gray-800 border-2 border-black rounded-xl p-2.5 text-xs font-bold outline-none" />
-              </div>
-              <div>
-                <label className="block text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">Amount</label>
-                <div className="relative">
-                  <span className="absolute left-3 top-1/2 -translate-y-1/2 font-bold text-gray-400 text-sm">₱</span>
-                  <input required type="number" min="0.01" step="0.01" value={salaryFormData.amount} onChange={(e) => setSalaryFormData({...salaryFormData, amount: e.target.value})} className="w-full bg-white dark:bg-gray-800 border-2 border-black rounded-xl p-2.5 pl-7 outline-none text-base font-black" />
-                </div>
-              </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">Date Received</label>
-                  <input required type="date" value={salaryFormData.date} onChange={(e) => setSalaryFormData({...salaryFormData, date: e.target.value})} className="w-full bg-white dark:bg-gray-800 border-2 border-black rounded-xl px-2 py-2 outline-none font-bold text-xs" />
-                </div>
-                <div>
-                  <label className="block text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">Deposit Account</label>
-                  <select required value={salaryFormData.accountId} onChange={(e) => setSalaryFormData({...salaryFormData, accountId: e.target.value})} className="w-full bg-white dark:bg-gray-800 border-2 border-black rounded-xl px-2 py-2 outline-none font-bold text-xs appearance-none">
-                    <option value="" disabled>Select Account</option>
-                    {accounts.filter(a => a.type === 'Debit').map(acc => <option key={acc.id} value={acc.id}>{acc.bank}</option>)}
-                  </select>
-                </div>
-              </div>
-              <div className="flex space-x-3 pt-2">
-                <button type="button" onClick={() => setShowSalaryModal(false)} className="flex-1 bg-gray-100 dark:bg-gray-800 border-2 border-black py-2.5 rounded-xl font-bold text-xs text-gray-500 uppercase tracking-wider shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[1px] hover:translate-y-[1px] transition-all">Cancel</button>
-                <button type="submit" className="flex-1 bg-green-600 text-white border-2 border-black py-2.5 rounded-xl font-bold text-xs uppercase tracking-wider shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[1px] hover:translate-y-[1px] transition-all">Record</button>
-              </div>
-            </form>
-          </div>
+{showIncomeRecordsModal && (
+  <div className="fixed inset-0 z-[150] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md animate-in fade-in" onClick={() => setShowIncomeRecordsModal(false)}>
+    <div className="bg-white dark:bg-gray-900 border-4 border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] rounded-2xl w-full max-w-sm p-6 relative max-h-[85vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+      <button type="button" onClick={() => setShowIncomeRecordsModal(false)} className="absolute top-4 right-4 p-1.5 hover:bg-gray-100 rounded-full transition-colors"><X className="w-5 h-5 text-gray-400" /></button>
+      <div className="flex items-center justify-between mb-4">
+        <div>
+          <h2 className="text-lg font-black text-gray-900 dark:text-gray-100 mb-0.5">Income</h2>
+          <p className="text-gray-500 text-xs">{selectedMonth} {selectedYear}</p>
         </div>
-      )}
+        <button 
+          type="button" 
+          onClick={() => { 
+            setShowIncomeRecordsModal(false); 
+            const debitAccounts = accounts.filter(a => a.type === 'Debit'); 
+            setSalaryFormData({ name: 'Income', amount: '', date: getTodayIso(), accountId: debitAccounts[0]?.id || '' }); 
+            setShowSalaryModal(true); 
+          }} 
+          className="flex items-center gap-1 bg-indigo-50 border-2 border-black text-indigo-600 px-2.5 py-1.5 rounded-xl font-bold shadow-[1.5px_1.5px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[0.5px] hover:translate-y-[0.5px] transition-all text-xs"
+        >
+          <Plus className="w-3.5 h-3.5" />Add
+        </button>
+      </div>
+      {(!allIncomeTxs || allIncomeTxs.filter(Boolean).length === 0) ? (
+        <div className="text-center py-6 text-gray-400 text-xs italic">No income records found.</div>
+      ) : (
+        <div className="space-y-3">
+          {allIncomeTxs.filter(Boolean).map(tx => {
+            if (!tx || !tx.id) return null;
+            const pmName = accounts?.find(a => a?.id === tx?.payment_method_id)?.bank || tx?.payment_method_id || 'Unknown';
+            const displayDate = tx?.date ? new Date(tx.date).toLocaleDateString() : 'No Date';
+            const displayName = tx?.name || 'Income Record';
+            const displayAmount = formatCurrency(Math.abs(tx?.amount || 0));
 
-      {showIncomeRecordsModal && (
-        <div className="fixed inset-0 z-[150] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md animate-in fade-in" onClick={() => setShowIncomeRecordsModal(false)}>
-          <div className="bg-white dark:bg-gray-900 border-4 border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] rounded-2xl w-full max-w-sm p-6 relative max-h-[85vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
-            <button onClick={() => setShowIncomeRecordsModal(false)} className="absolute top-4 right-4 p-1.5 hover:bg-gray-100 rounded-full transition-colors"><X className="w-5 h-5 text-gray-400" /></button>
-            <div className="flex items-center justify-between mb-4">
-              <div><h2 className="text-lg font-black text-gray-900 dark:text-gray-100 mb-0.5">Income</h2><p className="text-gray-500 text-xs">{selectedMonth} {selectedYear}</p></div>
-              <button onClick={() => { setShowIncomeRecordsModal(false); const debitAccounts = accounts.filter(a => a.type === 'Debit'); setSalaryFormData({ name: 'Income', amount: '', date: getTodayIso(), accountId: debitAccounts[0]?.id || '' }); setShowSalaryModal(true); }} className="flex items-center gap-1 bg-indigo-50 border-2 border-black text-indigo-600 px-2.5 py-1.5 rounded-xl font-bold shadow-[1.5px_1.5px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[0.5px] hover:translate-y-[0.5px] transition-all text-xs"><Plus className="w-3.5 h-3.5" />Add</button>
-            </div>
-            {allIncomeTxs.length === 0 ? <div className="text-center py-6 text-gray-400 text-xs italic">No income records found.</div> : (
-              <div className="space-y-3">
-                {allIncomeTxs.map(tx => {
-                  const pmName = accounts.find(a => a.id === tx.payment_method_id)?.bank || tx.payment_method_id;
-                  return (
-                    <div key={tx.id} className="bg-gray-50 dark:bg-gray-800/50 border-2 border-black rounded-xl p-3 space-y-1">
-                      <div className="flex justify-between items-start"><div className="min-w-0 flex-1"><p className="text-xs font-black text-gray-900 dark:text-gray-100 truncate">{tx.name}</p><p className="text-[10px] text-gray-500 truncate">{pmName} • {new Date(tx.date).toLocaleDateString()}</p></div><span className="text-xs font-black text-green-600 ml-2">{formatCurrency(Math.abs(tx.amount))}</span></div>
-                      <div className="flex justify-end pt-1">
-                        <PinProtectedAction featureId="transaction_deletions"
-  featureId="transaction_deletions" 
-  onVerified={async () => { 
-    try { 
-      const { error } = await deleteTransactionAndRevertSchedule(tx.id); 
-      if (error) throw error; 
-      // HARDENED: Fallback to empty string
-      if ((tx.name || '').trim().toLowerCase() === 'salary') setActualSalary(''); 
-      await reloadTransactions(); 
-      if (onTransactionDeleted) onTransactionDeleted(); 
-    } catch { 
-      alert('Error deleting transaction.'); 
-    } 
-  }} 
-  actionLabel="Delete Record"
->
-                          <button onClick={(e) => e.preventDefault()} className="text-[9px] font-black text-red-500 border-2 border-black bg-white px-2 py-0.5 rounded-lg shadow-[1px_1px_0px_0px_rgba(0,0,0,1)] hover:shadow-none">Delete</button>
-                        </PinProtectedAction>
-                      </div>
-                    </div>
-                  );
-                })}
+            return (
+              <div key={tx.id} className="bg-gray-50 dark:bg-gray-800/50 border-2 border-black rounded-xl p-3 space-y-1">
+                <div className="flex justify-between items-start">
+                  <div className="min-w-0 flex-1">
+                    <p className="text-xs font-black text-gray-900 dark:text-gray-100 truncate">{displayName}</p>
+                    <p className="text-[10px] text-gray-500 truncate">{pmName} • {displayDate}</p>
+                  </div>
+                  <span className="text-xs font-black text-green-600 ml-2">{displayAmount}</span>
+                </div>
+                <div className="flex justify-end pt-1">
+                  <PinProtectedAction 
+                    featureId="transaction_deletions" 
+                    onVerified={async () => { 
+                      try { 
+                        const { error } = await deleteTransactionAndRevertSchedule(tx.id); 
+                        if (error) throw error; 
+                        if (displayName.trim().toLowerCase() === 'salary') setActualSalary(''); 
+                        await reloadTransactions(); 
+                        if (onTransactionDeleted) onTransactionDeleted(); 
+                      } catch (e) { 
+                        console.error(e);
+                        alert('Error deleting transaction.'); 
+                      } 
+                    }} 
+                    actionLabel="Delete Record"
+                  >
+                    <button type="button" onClick={(e) => e.preventDefault()} className="text-[9px] font-black text-red-500 border-2 border-black bg-white px-2 py-0.5 rounded-lg shadow-[1px_1px_0px_0px_rgba(0,0,0,1)] hover:shadow-none">Delete</button>
+                  </PinProtectedAction>
+                </div>
               </div>
-            )}
-          </div>
+            );
+          })}
         </div>
       )}
+    </div>
+  </div>
+)}
+
+
 
       {overdraftPrompt && (
         <div className="fixed inset-0 z-[1500] flex items-center justify-center bg-black/60 p-4 backdrop-blur-md" onClick={closeOverdraftPrompt}>
