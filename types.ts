@@ -114,15 +114,13 @@ export interface Transaction {
 export interface CategorizedSetupItem {
   id: string;
   name: string;
-  amount: string;
+  amount?: string; // Legacy fallback for the lazy merge
+  amountsByPeriod?: Record<number, string>; // NEW: Maps tab index to amount (e.g., { 1: "2500", 2: "2500" })
   included: boolean;
-  status?: 'Allocated' | 'Unallocated';
-  timing?: '1/2' | '2/2';
   isBiller?: boolean;
-  accountId?: string;
-  settled?: boolean;
-  dueDate?: string;
+  timing?: string;
 }
+
 
 export interface SavedBudgetSetup {
   id: string;

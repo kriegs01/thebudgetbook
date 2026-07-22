@@ -20,14 +20,23 @@ export const getActiveRuleForMonth = (
 
   const targetDate = new Date(year, monthIndex, 1);
 
-  // Filter rules that take effect on or before the target month and find the latest one
+  // 👈 THE FIX: Split strings and construct local dates
   const activeRule = rules
-    .filter(rule => new Date(rule.effectiveFromDate) <= targetDate)
-    .sort((a, b) => new Date(b.effectiveFromDate).getTime() - new Date(a.effectiveFromDate).getTime())[0];
+    .filter(rule => {
+      const [ruleYear, ruleMonth, ruleDay] = rule.effectiveFromDate.split('-').map(Number);
+      const localEffectiveDate = new Date(ruleYear, ruleMonth - 1, ruleDay);
+      return localEffectiveDate <= targetDate;
+    })
+    .sort((a, b) => {
+      const [aY, aM, aD] = a.effectiveFromDate.split('-').map(Number);
+      const [bY, bM, bD] = b.effectiveFromDate.split('-').map(Number);
+      return new Date(bY, bM - 1, bD).getTime() - new Date(aY, aM - 1, aD).getTime();
+    })[0];
 
-  // If target date is older than the oldest rule, fall back to the earliest rule available
   return activeRule || rules[0];
 };
+
+
 
 export const getPayPeriodLabel = (index: number, totalPeriods: number): string => {
   const ordinals = ['First', 'Second', 'Third', 'Fourth', 'Fifth'];

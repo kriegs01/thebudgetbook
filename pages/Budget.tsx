@@ -327,6 +327,15 @@ const effectiveCategories = React.useMemo(() => {
 
   const [projectedSalary, setProjectedSalary] = useState<string>('11000');
   const [actualSalary, setActualSalary] = useState<string>('');
+
+// The new tab-mapped income states
+const [projectedSalaryByPeriod, setProjectedSalaryByPeriod] = useState<Record<number, string>>({ 1: '11000' });
+const [actualSalaryByPeriod, setActualSalaryByPeriod] = useState<Record<number, string>>({});
+
+// The master control for which tab is currently active
+const [activePeriodIndex, setActivePeriodIndex] = useState<number>(1);
+
+
   const [isProjectedFocused, setIsProjectedFocused] = useState(false);
   const [isActualFocused, setIsActualFocused] = useState(false);
 
@@ -447,53 +456,103 @@ const effectiveCategories = React.useMemo(() => {
 
 
   useEffect(() => {
-    const existingSetup = savedSetups.find(s => s.month === selectedMonth && s.timing === selectedTiming);
-    if (existingSetup && existingSetup.data) {
-      const incomingData = existingSetup.data;
-      const currentDataStr = JSON.stringify(setupData);
+    // 1. Find ALL setups for the currently selected month & year
+    const setupsForMonth = savedSetups.filter(s => 
+      s.month === selectedMonth && 
+      parseInt(s.data?._year || new Date().getFullYear().toString()) === selectedYear
+    );
+  
+    // 2. Check if a modernized, unified setup already exists
+    const unifiedSetup = setupsForMonth.find(s => s.timing === 'unified');
+  
+    if (unifiedSetup && unifiedSetup.data) {
+      // 🟢 PATH A: Load Unified Setup
       const incomingDataStr = JSON.stringify(Object.fromEntries(
-        Object.entries(incomingData).filter(([key]) => !key.startsWith('_'))
+        Object.entries(unifiedSetup.data).filter(([key]) => !key.startsWith('_'))
       ));
-
-      if (currentDataStr !== incomingDataStr) {
-        setSetupData(JSON.parse(incomingDataStr));
-      }
+      setSetupData(JSON.parse(incomingDataStr));
       
+      // Feed BOTH old and new states so the rest of the file doesn't crash yet
+      setProjectedSalary(unifiedSetup.data._projectedSalary ?? '11000');
+      setActualSalary(unifiedSetup.data._actualSalary ?? '');
+      setProjectedSalaryByPeriod(unifiedSetup.data._projectedSalaryByPeriod || { 1: unifiedSetup.data._projectedSalary ?? '11000' });
+      setActualSalaryByPeriod(unifiedSetup.data._actualSalaryByPeriod || { 1: unifiedSetup.data._actualSalary ?? '' });
+  
+      setExcludedInstallmentIds(new Set(unifiedSetup.data._excludedInstallmentIds || []));
+      setExcludedWalletIds(new Set(unifiedSetup.data._excludedWalletIds || []));
+      setExcludedCreditIds(new Set(unifiedSetup.data._excludedCreditIds || []));
+  
+    } else if (setupsForMonth.length > 0) {
+      // 🟡 PATH B: LAZY MERGE - Stitch legacy fragmented setups together
+      const mergedData: { [key: string]: CategorizedSetupItem[] } = {};
+      const mergedProjected: Record<number, string> = {};
+      const mergedActual: Record<number, string> = {};
       
-      const newProjected = incomingData._projectedSalary ?? '11000';
-      const newActual = incomingData._actualSalary ?? '';
-      if (newProjected !== projectedSalary) setProjectedSalary(newProjected);
-      if (newActual !== actualSalary) setActualSalary(newActual);
-
-      if (Array.isArray(existingSetup.data._excludedInstallmentIds)) {
-        setExcludedInstallmentIds(new Set(existingSetup.data._excludedInstallmentIds));
-      } else {
-        setExcludedInstallmentIds(new Set());
-      }
-      if (Array.isArray(existingSetup.data._excludedWalletIds)) {
-        setExcludedWalletIds(new Set(existingSetup.data._excludedWalletIds));
-      } else {
-        setExcludedWalletIds(new Set());
-      }
-
-      // 1. THIS IS THE CORRECT SPOT FOR THE LOAD LOGIC
-      if (Array.isArray(existingSetup.data._excludedCreditIds)) {
-        setExcludedCreditIds(new Set(existingSetup.data._excludedCreditIds));
-      } else {
-        setExcludedCreditIds(new Set());
-      }
-
+      // Pre-fill empty categories
+      effectiveCategories.forEach(c => mergedData[c.name] = []);
+  
+      setupsForMonth.forEach(setup => {
+         // Convert legacy '1/2' or '2/2' timing into a numeric tab index
+         const periodIndex = setup.timing === '1/2' ? 1 : setup.timing === '2/2' ? 2 : parseInt(setup.timing?.split('/')[0] || '1');
+         
+         // Map legacy income to the correct tab
+         mergedProjected[periodIndex] = setup.data._projectedSalary ?? '11000';
+         if (setup.data._actualSalary) {
+             mergedActual[periodIndex] = setup.data._actualSalary;
+         }
+  
+         Object.entries(setup.data).forEach(([category, items]) => {
+           if (category.startsWith('_') || !Array.isArray(items)) return;
+           if (!mergedData[category]) mergedData[category] = [];
+           
+           items.forEach((oldItem: any) => {
+             let existingItem = mergedData[category].find(i => i.id === oldItem.id || i.name === oldItem.name);
+             
+             if (!existingItem) {
+               existingItem = { ...oldItem, amountsByPeriod: {} };
+               mergedData[category].push(existingItem);
+             }
+             
+             // Inject the amount into the correct tab index
+             existingItem.amountsByPeriod[periodIndex] = oldItem.amount || '0';
+             
+             // Temporary fallback for the current UI
+             if (periodIndex === activePeriodIndex) {
+                 existingItem.amount = oldItem.amount || '0';
+             }
+           });
+         });
+      });
+  
+      setSetupData(mergedData);
+      
+      // Feed the new mapping states
+      setProjectedSalaryByPeriod(mergedProjected);
+      setActualSalaryByPeriod(mergedActual);
+      
+      // Keep the old string state happy with Tab 1's data by default
+      setProjectedSalary(mergedProjected[1] || '11000');
+      setActualSalary(mergedActual[1] || '');
+  
+      // Grab metadata exclusions from the first available fragment
+      const baseSetup = setupsForMonth[0].data;
+      setExcludedInstallmentIds(new Set(baseSetup._excludedInstallmentIds || []));
+      setExcludedWalletIds(new Set(baseSetup._excludedWalletIds || []));
+      setExcludedCreditIds(new Set(baseSetup._excludedCreditIds || []));
+  
     } else {
+      // ⚪ PATH C: Empty State
+      setSetupData({});
       setProjectedSalary('11000');
       setActualSalary('');
+      setProjectedSalaryByPeriod({ 1: '11000' });
+      setActualSalaryByPeriod({});
       setExcludedInstallmentIds(new Set());
       setExcludedWalletIds(new Set());
-      
-      // 2. THIS IS THE CORRECT SPOT FOR THE RESET LOGIC
       setExcludedCreditIds(new Set()); 
     }
-    
-  }, [selectedMonth, selectedTiming, savedSetups]);
+  }, [selectedMonth, selectedYear, savedSetups, effectiveCategories, activePeriodIndex]);
+  
 
   useEffect(() => {
     const loadTransactions = async () => {
@@ -994,6 +1053,60 @@ const effectiveCategories = React.useMemo(() => {
   const [autoSaveStatus, setAutoSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const autoSaveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const lastSavedDataRef = useRef<string>('');
+
+  const handleAmountUpdate = (category: string, id: string, periodIndex: number, value: string) => {
+    setSetupData(prev => ({
+      ...prev,
+      [category]: prev[category].map(item => 
+        item.id === id 
+          ? { 
+              ...item, 
+              amountsByPeriod: {
+                ...(item.amountsByPeriod || {}),
+                [periodIndex]: value
+              }
+            } 
+          : item
+      )
+    }));
+  };
+
+  const getPeriodIndexForDate = (dayOrDate: number | string) => {
+    if (!currentPeriods || currentPeriods.length === 0) return 1;
+  
+    let targetDate: Date;
+    
+    // Check if it's a number OR a numeric string (like "15" or "30")
+    if (typeof dayOrDate === 'number' || (typeof dayOrDate === 'string' && !isNaN(Number(dayOrDate)))) {
+      const dayNumber = Number(dayOrDate);
+      // Construct a valid date using the currently selected month and year
+      const monthIndex = new Date(`${selectedMonth} 1, ${selectedYear}`).getMonth();
+      targetDate = new Date(selectedYear, monthIndex, dayNumber);
+    } else {
+      // Fallback for full date strings like "2026-08-15"
+      targetDate = new Date(dayOrDate);
+    }
+  
+    targetDate.setHours(0, 0, 0, 0);
+  
+    for (let i = 0; i < currentPeriods.length; i++) {
+      const period = currentPeriods[i];
+      if (period?.startDate && period?.endDate) {
+        const start = new Date(period.startDate);
+        const end = new Date(period.endDate);
+        start.setHours(0, 0, 0, 0);
+        end.setHours(23, 59, 59, 999);
+  
+        if (targetDate >= start && targetDate <= end) {
+          return i + 1; // Return 1-based period index
+        }
+      }
+    }
+  
+    return 1; // Fallback to period 1
+  };
+  
+  
 
   const [showPayModal, setShowPayModal] = useState<{ 
     biller: Biller, 
@@ -1513,6 +1626,8 @@ const effectiveCategories = React.useMemo(() => {
       )
     }));
   };
+
+
 
   const addItemToCategory = (category: string) => {
     const newItem: CategorizedSetupItem = {
@@ -2355,25 +2470,6 @@ const effectiveCategories = React.useMemo(() => {
         {MONTHS.map(m => <option key={m} value={m}>{m}</option>)}
     </select>
 
-    {/* 2. THE TIMING DROPDOWN (With a safe fallback to prevent "No Options") */}
-        {/* 2. THE DYNAMIC TIMING DROPDOWN */}
-        <select 
-      value={selectedTiming} 
-      onChange={(e) => setSelectedTiming(e.target.value as any)} 
-      disabled={isReadOnly} 
-      className={`bg-white dark:bg-gray-900 border-2 border-black rounded-xl md:rounded-[1.5rem] h-10 md:h-auto px-3 md:px-8 md:py-4 font-black text-xs md:text-base shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] outline-none disabled:opacity-60 disabled:cursor-not-allowed transition-colors text-center appearance-none ${getAccentClasses('text')}`}
-    >
-        {(timingOptions && timingOptions.length > 0 ? timingOptions : [
-          { value: '1/2', label: 'First Pay', dateRange: '' }, 
-          { value: '2/2', label: 'Second Pay', dateRange: '' }
-        ]).map(opt => (
-          <option key={opt.value} value={opt.value}>
-            {opt.label} {opt.dateRange ? `(${opt.dateRange})` : ''}
-          </option>
-        ))}
-    </select>
-
-
     {legacyMode && (
       <span className="hidden md:block text-[10px] font-black text-gray-400 dark:text-gray-500 bg-gray-100 dark:bg-gray-800 border-2 border-black px-4 py-2 rounded-full uppercase tracking-widest">Legacy Budget</span>
     )}
@@ -2399,6 +2495,39 @@ const effectiveCategories = React.useMemo(() => {
           </div>
         </div>
   
+{/* 2. THE DYNAMIC TABS */}
+<div className="flex space-x-2 overflow-x-auto pb-1 max-w-full scrollbar-hide">
+  {currentPeriods.map((period, index) => {
+    const periodNum = index + 1;
+    const isActive = activePeriodIndex === periodNum;
+    
+    // Format dates for the sub-label
+    const formattedStart = period?.startDate ? new Date(period.startDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '';
+    const formattedEnd = period?.endDate ? new Date(period.endDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '';
+    
+    return (
+      <button
+        key={periodNum}
+        onClick={() => setActivePeriodIndex(periodNum)}
+        disabled={isReadOnly}
+        type="button"
+        className={`flex-shrink-0 px-4 py-2 font-black uppercase text-xs tracking-wider border-2 rounded-xl transition-all shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] disabled:opacity-60 disabled:cursor-not-allowed ${
+          isActive 
+            ? 'bg-indigo-600 text-white border-black translate-x-[1px] translate-y-[1px] shadow-none' 
+            : 'bg-white dark:bg-gray-900 text-gray-500 border-black hover:bg-gray-100 dark:hover:bg-gray-800 hover:translate-x-[1px] hover:translate-y-[1px] hover:shadow-none'
+        }`}
+      >
+        {period.label || `Period ${periodNum}`}
+        {formattedStart && formattedEnd && (
+          <span className={`block text-[9px] font-medium mt-1 ${isActive ? 'text-indigo-200' : 'text-gray-400'}`}>
+            {formattedStart} - {formattedEnd}
+          </span>
+        )}
+      </button>
+    );
+  })}
+</div>
+
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">  
         <div className="bg-white dark:bg-gray-900 rounded-2xl border-4 border-black shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] overflow-hidden w-full transition-colors">
           <div className="p-4 border-b-4 border-black bg-gray-50/30 dark:bg-gray-800/30"><h3 className="text-xs font-black text-gray-900 dark:text-gray-100 uppercase tracking-[0.25em] text-center">BUDGET SUMMARY</h3></div>
@@ -3073,7 +3202,32 @@ const effectiveCategories = React.useMemo(() => {
               <div className="w-full">
                 {isMobile ? (
                   <div className="p-4 space-y-4 bg-gray-50/30 dark:bg-gray-955/10">
-                    {items.length > 0 && items.map((item) => {
+                  {items.length > 0 && items.filter(item => {
+                    const isBillerItem = item.isBiller || billers?.some(b => b.id === item.id);
+                    const isInstallmentItem = item.isInstallment || installments?.some(i => i.id === item.id);
+                
+                    if (isBillerItem || isInstallmentItem || item.isCredit) {
+                      // 1. Look up the true source data
+                      const linkedBiller = billers?.find(b => b.id === item.id);
+                      const linkedInstallment = installments?.find(i => i.id === item.id);
+                
+                      // 2. Grab the true timing
+                      const actualTiming = item.timing || linkedBiller?.timing || linkedInstallment?.timing;
+                
+                      // 3. Lock it to the correct tab
+                      if (actualTiming === '1/2') return activePeriodIndex === 1;
+                      if (actualTiming === '2/2') return activePeriodIndex === 2;
+                
+                      // 4. Fallback for items using dates instead of 1/2 or 2/2
+                      const dueDay = item.dueDay || item.dueDate || linkedBiller?.dueDate || linkedInstallment?.due_date || 1;
+                      return getPeriodIndexForDate(dueDay) === activePeriodIndex;
+                    }
+                
+                    const periodVal = item.amountsByPeriod?.[activePeriodIndex];
+                    return periodVal !== undefined && periodVal !== '' && periodVal !== '0';
+                  }).map((item) => {
+                
+
                       let isPaid = false, isPartial = false, linkedBiller, paymentSchedule;
                       const isBillerItem = item.isBiller || billers.some(b => b.id === item.id);
                       const effectiveTiming = (item.timing as any) || selectedTiming;
@@ -3162,14 +3316,16 @@ const effectiveCategories = React.useMemo(() => {
                       );
                     })}
 
-                    {cat.name === 'Loans' && relevantInstallments.length > 0 && relevantInstallments.map((installment) => {
-                      const isIncluded = !excludedInstallmentIds.has(installment.id);
-                      let isPaid = false, isPartial = false;
-                      const installmentSchedule = getPaymentSchedule('installment', installment.id, selectedMonth, selectedYear);
-                      if (installmentSchedule) {
-                        isPaid = checkIfPaidBySchedule('installment', installment.id);
-                        isPartial = checkIfPartialBySchedule('installment', installment.id);
-                      }
+{cat.name === 'Loans' && relevantInstallments.length > 0 && relevantInstallments.filter((installment) => {
+  // 1. Check for strict timing first
+  if (installment.timing === '1/2') return activePeriodIndex === 1;
+  if (installment.timing === '2/2') return activePeriodIndex === 2;
+  
+  // 2. Fallback to calculating via due date
+  const dueDay = installment.due_date || 1;
+  return getPeriodIndexForDate(dueDay) === activePeriodIndex;
+}).map((installment) => {
+
                       return (
                         <div key={`installment-${installment.id}`} className={`p-4 rounded-xl border-2 border-black bg-blue-50/20 dark:bg-blue-900/10 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] flex flex-col gap-3 transition-all ${isIncluded ? 'opacity-100' : 'opacity-60 bg-gray-50'}`}>
                           <div className="flex justify-between items-start gap-2">
@@ -3221,7 +3377,22 @@ const effectiveCategories = React.useMemo(() => {
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-gray-50 dark:divide-gray-800/50">
-                        {items.length > 0 ? items.map((item) => {
+                        {items.length > 0 ? items.filter(item => {
+                          if (item.isBiller || item.isInstallment || item.isCredit) {
+                            // If the item has an explicit timing property ('1/2' or '2/2'), map it directly to the tab index!
+                            if (item.timing === '1/2') return activePeriodIndex === 1;
+                            if (item.timing === '2/2') return activePeriodIndex === 2;
+                          
+                            // Fallback to due date/day calculation if timing isn't explicitly set
+                            const dueDay = item.dueDay || item.dueDate || 1;
+                            return getPeriodIndexForDate(dueDay) === activePeriodIndex;
+                          }
+                          
+                          
+                          const periodVal = item.amountsByPeriod?.[activePeriodIndex];
+                          return periodVal !== undefined && periodVal !== '' && periodVal !== '0';
+                        }).map((item) => {
+
                           let isPaid = false, isPartial = false, linkedBiller, paymentSchedule;
                           const isBillerItem = item.isBiller || billers.some(b => b.id === item.id);
                           const effectiveTiming = (item.timing as any) || selectedTiming;
@@ -3253,7 +3424,7 @@ const effectiveCategories = React.useMemo(() => {
                                 </button>
                               </td>
                 
-                              {/* 2. NAME (Badges stacked underneath) */}
+                              {/* 2. NAME */}
                               <td className="p-4">
                                 <div className="flex flex-col items-start gap-1 w-full">
                                   <input 
@@ -3266,14 +3437,24 @@ const effectiveCategories = React.useMemo(() => {
                                   {isBillerItem && <span className="text-[9px] font-bold px-2 py-0.5 bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 rounded uppercase ml-1">Biller</span>}
                                 </div>
                               </td>
+
                 
                               {/* 3. AMOUNT */}
-                              <td className="p-4">
-                                <div className="flex items-center space-x-1">
-                                  <span className="text-gray-400 dark:text-gray-500 font-bold">₱</span>
-                                  <input type="number" value={item.amount} onChange={(e) => handleSetupUpdate(cat.name, item.id, 'amount', e.target.value)} onFocus={() => { isFocusedRef.current = true; }} onBlur={() => { isFocusedRef.current = false; }} disabled={isReadOnly} className="bg-transparent border-none text-sm font-black w-24 outline-none dark:text-gray-100" />
-                                </div>
-                              </td>
+                            <td className="p-4">
+                              <div className="flex items-center space-x-1">
+                                <span className="text-gray-400 dark:text-gray-500 font-bold">₱</span>
+                                <input 
+                                  type="number" 
+                                  value={item.amountsByPeriod?.[activePeriodIndex] || ''} 
+                                  onChange={(e) => handleAmountUpdate(cat.name, item.id, activePeriodIndex, e.target.value)} 
+                                  onFocus={() => { isFocusedRef.current = true; }} 
+                                  onBlur={() => { isFocusedRef.current = false; }} 
+                                  disabled={isReadOnly} 
+                                  className="bg-transparent border-none text-sm font-black w-24 outline-none dark:text-gray-100" 
+                                />
+                              </div>
+                            </td>
+
                 
                               {/* 4. DUE */}
                               <td className="p-4 text-center">

@@ -53,22 +53,22 @@ export const savePayScheduleRule = async (rule: PayScheduleRule): Promise<{ data
   if (!user) return { data: null, error: new Error('User not authenticated') };
 
   const payload = {
-    user_id: rule.user_id,
+    user_id: user.id, // 👈 THE FIX: Guarantees the ID is populated securely
     effective_from_date: rule.effectiveFromDate,
     frequency: rule.frequency,
     first_paycheck_date: rule.firstPaycheckDate,
     custom_interval_days: rule.customIntervalDays,
-    // 👇 ADD THESE TO YOUR SAVE PAYLOAD 👇
     pay_date_1: rule.pay_date_1,
     pay_date_2: rule.pay_date_2,
     day_of_week: rule.day_of_week
   };
 
   const { data, error } = await supabase
-    .from(TABLE_NAME)
+    .from('pay_schedule_rules') // Make sure this matches your TABLE_NAME constant
     .insert([payload])
     .select()
     .single();
 
   return { data, error };
 };
+
