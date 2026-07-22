@@ -1157,11 +1157,15 @@ const [activePeriodIndex, setActivePeriodIndex] = useState<number>(1);
   const [loadingScheduleTx, setLoadingScheduleTx] = useState(false);
   const [, setScheduleSignedUrls] = useState<Record<string, string | null>>({});
 
-  const formatDueDate = (due: string) => {
-    const isNextMonth = due.toLowerCase().includes('n') || due.toLowerCase().includes('next');
-    const day = due.replace(/[^0-9]/g, ''); 
+  const formatDueDate = (due: string | number | null | undefined) => {
+    if (!due) return ''; // Safely exit if missing
     
-    if (!day) return due;
+    // Force it into a string so .toLowerCase() never crashes!
+    const dueStr = String(due).toLowerCase();
+    const isNextMonth = dueStr.includes('n') || dueStr.includes('next');
+    const day = String(due).replace(/[^0-9]/g, ''); 
+    
+    if (!day) return String(due);
   
     const d = parseInt(day);
     const suffix = (d % 10 === 1 && d !== 11) ? 'st' : 
@@ -1171,6 +1175,7 @@ const [activePeriodIndex, setActivePeriodIndex] = useState<number>(1);
     const dateStr = `${d}${suffix}`;
     return isNextMonth ? `${dateStr} Next Month` : dateStr;
   };
+
   
   const currentBudgetPeriodIso = `${selectedYear}-${(MONTHS.indexOf(selectedMonth) + 1).toString().padStart(2, '0')}`;
   
@@ -1365,6 +1370,9 @@ const [activePeriodIndex, setActivePeriodIndex] = useState<number>(1);
     year?: number,
     timing?: '1/2' | '2/2'
   ): boolean => {
+    // 1. Instantly exit if the item somehow lost its name
+    if (!itemName) return false; 
+
     const amount = typeof itemAmount === 'string' ? parseFloat(itemAmount) : itemAmount;
     if (isNaN(amount) || amount <= 0) return false;
 
@@ -1374,13 +1382,18 @@ const [activePeriodIndex, setActivePeriodIndex] = useState<number>(1);
     const targetYear = year || new Date().getFullYear();
 
     const matchingTransaction = transactions.find(tx => {
-      const itemNameLower = itemName.toLowerCase();
-      const txNameLower = tx.name.toLowerCase();
+      // 2. Instantly skip transactions that are missing names
+      if (!tx || !tx.name) return false; 
+
+      // 3. Safely cast both to strings before comparing
+      const itemNameLower = String(itemName).toLowerCase();
+      const txNameLower = String(tx.name).toLowerCase();
       
       const nameMatch = (
         (txNameLower.includes(itemNameLower) && itemNameLower.length >= TRANSACTION_MIN_NAME_LENGTH) ||
         (itemNameLower.includes(txNameLower) && txNameLower.length >= TRANSACTION_MIN_NAME_LENGTH)
       );
+
       
       const amountMatch = Math.abs(tx.amount - amount) <= TRANSACTION_AMOUNT_TOLERANCE;
       
@@ -2368,7 +2381,8 @@ const [activePeriodIndex, setActivePeriodIndex] = useState<number>(1);
     if (tx.transaction_type !== 'cash_in') return false;
     
     const isTaggedIncome = tx.notes?.startsWith('Income Record');
-    const nameLower = tx.name.trim().toLowerCase();
+    // HARDENED: Fallback to empty string if name is missing
+    const nameLower = (tx.name || '').trim().toLowerCase(); 
     const isLegacyIncome = nameLower === 'salary' || nameLower === 'income';
     
     if (!isTaggedIncome && !isLegacyIncome) return false;
@@ -2386,10 +2400,13 @@ const [activePeriodIndex, setActivePeriodIndex] = useState<number>(1);
 
     return matchesTiming;
   });
+
   const otherIncomeTxs = allIncomeTxs.filter(tx => {
-    const nameLower = tx.name.trim().toLowerCase();
+    // HARDENED: Fallback to empty string if name is missing
+    const nameLower = (tx.name || '').trim().toLowerCase();
     return nameLower !== 'salary' && nameLower !== 'income';
   });
+
   const totalOtherIncome = otherIncomeTxs.reduce((sum, tx) => sum + Math.abs(tx.amount), 0);
   const hasIncomeRecords = allIncomeTxs.length > 0;
   const actualSalaryValue = actualSalary.trim() !== '' ? parseFloat(actualSalary) : null;
@@ -3086,7 +3103,11 @@ const [activePeriodIndex, setActivePeriodIndex] = useState<number>(1);
   
             {cat.name === 'Credit' && creditBudgetAccounts.length > 0 && (
               <div className="p-4 space-y-4 bg-gray-50/30 dark:bg-gray-955/10">
-                {creditBudgetAccounts.map(account => {
+             {creditBudgetAccounts.length > 0 && creditBudgetAccounts.filter((account) => {
+  const dueDay = account.dueDate || account.billingDate || account.statementDate || 1;
+  return getPeriodIndexForDate(dueDay) === activePeriodIndex;
+}).map(account => {
+
                   
                                     // 2. PERFECTLY SYNCED INDIVIDUAL CARD MATH
                                     const displayAmount = getFrozenCycleAmount(account);
@@ -3203,30 +3224,29 @@ const [activePeriodIndex, setActivePeriodIndex] = useState<number>(1);
                 {isMobile ? (
                   <div className="p-4 space-y-4 bg-gray-50/30 dark:bg-gray-955/10">
                   {items.length > 0 && items.filter(item => {
-                    const isBillerItem = item.isBiller || billers?.some(b => b.id === item.id);
-                    const isInstallmentItem = item.isInstallment || installments?.some(i => i.id === item.id);
-                
-                    if (isBillerItem || isInstallmentItem || item.isCredit) {
-                      // 1. Look up the true source data
-                      const linkedBiller = billers?.find(b => b.id === item.id);
-                      const linkedInstallment = installments?.find(i => i.id === item.id);
-                
-                      // 2. Grab the true timing
-                      const actualTiming = item.timing || linkedBiller?.timing || linkedInstallment?.timing;
-                
-                      // 3. Lock it to the correct tab
-                      if (actualTiming === '1/2') return activePeriodIndex === 1;
-                      if (actualTiming === '2/2') return activePeriodIndex === 2;
-                
-                      // 4. Fallback for items using dates instead of 1/2 or 2/2
-                      const dueDay = item.dueDay || item.dueDate || linkedBiller?.dueDate || linkedInstallment?.due_date || 1;
-                      return getPeriodIndexForDate(dueDay) === activePeriodIndex;
-                    }
-                
-                    const periodVal = item.amountsByPeriod?.[activePeriodIndex];
-                    return periodVal !== undefined && periodVal !== '' && periodVal !== '0';
-                  }).map((item) => {
-                
+  const isBillerItem = item.isBiller || billers?.some(b => b.id === item.id);
+  const isInstallmentItem = item.isInstallment || installments?.some(i => i.id === item.id);
+
+  if (isBillerItem || isInstallmentItem || item.isCredit) {
+    // 1. Look up the true source data
+    const linkedBiller = billers?.find(b => b.id === item.id);
+    const linkedInstallment = installments?.find(i => i.id === item.id);
+
+    // 2. Grab the true timing
+    const actualTiming = item.timing || linkedBiller?.timing || linkedInstallment?.timing;
+
+    // 3. Lock it to the correct tab
+    if (actualTiming === '1/2') return activePeriodIndex === 1;
+    if (actualTiming === '2/2') return activePeriodIndex === 2;
+
+    // 4. Fallback for items using dates instead of 1/2 or 2/2
+    const dueDay = item.dueDay || item.dueDate || linkedBiller?.dueDate || linkedInstallment?.due_date || 1;
+    return getPeriodIndexForDate(dueDay) === activePeriodIndex;
+  }
+
+  const periodVal = item.amountsByPeriod?.[activePeriodIndex];
+  return periodVal !== undefined && periodVal !== '' && periodVal !== '0';
+}).map((item) => {
 
                       let isPaid = false, isPartial = false, linkedBiller, paymentSchedule;
                       const isBillerItem = item.isBiller || billers.some(b => b.id === item.id);
@@ -3377,21 +3397,31 @@ const [activePeriodIndex, setActivePeriodIndex] = useState<number>(1);
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-gray-50 dark:divide-gray-800/50">
-                        {items.length > 0 ? items.filter(item => {
-                          if (item.isBiller || item.isInstallment || item.isCredit) {
-                            // If the item has an explicit timing property ('1/2' or '2/2'), map it directly to the tab index!
-                            if (item.timing === '1/2') return activePeriodIndex === 1;
-                            if (item.timing === '2/2') return activePeriodIndex === 2;
-                          
-                            // Fallback to due date/day calculation if timing isn't explicitly set
-                            const dueDay = item.dueDay || item.dueDate || 1;
-                            return getPeriodIndexForDate(dueDay) === activePeriodIndex;
-                          }
-                          
-                          
-                          const periodVal = item.amountsByPeriod?.[activePeriodIndex];
-                          return periodVal !== undefined && periodVal !== '' && periodVal !== '0';
-                        }).map((item) => {
+                      {items.length > 0 ? items.filter(item => {
+  const isBillerItem = item.isBiller || billers?.some(b => b.id === item.id);
+  const isInstallmentItem = item.isInstallment || installments?.some(i => i.id === item.id);
+
+  if (isBillerItem || isInstallmentItem || item.isCredit) {
+    // 1. Look up the true source data
+    const linkedBiller = billers?.find(b => b.id === item.id);
+    const linkedInstallment = installments?.find(i => i.id === item.id);
+
+    // 2. Grab the true timing
+    const actualTiming = item.timing || linkedBiller?.timing || linkedInstallment?.timing;
+
+    // 3. Lock it to the correct tab
+    if (actualTiming === '1/2') return activePeriodIndex === 1;
+    if (actualTiming === '2/2') return activePeriodIndex === 2;
+
+    // 4. Fallback for items using dates instead of 1/2 or 2/2
+    const dueDay = item.dueDay || item.dueDate || linkedBiller?.dueDate || linkedInstallment?.due_date || 1;
+    return getPeriodIndexForDate(dueDay) === activePeriodIndex;
+  }
+
+  const periodVal = item.amountsByPeriod?.[activePeriodIndex];
+  return periodVal !== undefined && periodVal !== '' && periodVal !== '0';
+}).map((item) => {
+
 
                           let isPaid = false, isPartial = false, linkedBiller, paymentSchedule;
                           const isBillerItem = item.isBiller || billers.some(b => b.id === item.id);
@@ -3568,15 +3598,15 @@ const [activePeriodIndex, setActivePeriodIndex] = useState<number>(1);
                           );
                         }) : (cat.name === 'Loans' && relevantInstallments.length > 0) ? null : <tr><td colSpan={6} className="p-8 text-center text-gray-400 text-sm font-medium">No items yet. Click "Add Item" below to get started.</td></tr>}
                         
+                      
                         {/* --- INSTALLMENTS --- */}
-                        {cat.name === 'Loans' && relevantInstallments.length > 0 && relevantInstallments.map((installment) => {
-                          const isIncluded = !excludedInstallmentIds.has(installment.id);
-                          let isPaid = false, isPartial = false;
-                          const installmentSchedule = getPaymentSchedule('installment', installment.id, selectedMonth, selectedYear);
-                          if (installmentSchedule) {
-                            isPaid = checkIfPaidBySchedule('installment', installment.id);
-                            isPartial = checkIfPartialBySchedule('installment', installment.id);
-                          }
+                        {cat.name === 'Loans' && relevantInstallments.length > 0 && relevantInstallments.filter((installment) => {
+                          if (installment.timing === '1/2') return activePeriodIndex === 1;
+                          if (installment.timing === '2/2') return activePeriodIndex === 2;
+                          const dueDay = installment.dueDate || installment.due_date || 1;
+                          return getPeriodIndexForDate(dueDay) === activePeriodIndex;
+                        }).map((installment) => {
+
                           return (
                             <tr key={`installment-${installment.id}`} className={`${isIncluded ? 'bg-blue-50/30 dark:bg-blue-900/10' : 'bg-gray-50 dark:bg-gray-800/50 opacity-60'}`}>
                               
@@ -3692,7 +3722,7 @@ const [activePeriodIndex, setActivePeriodIndex] = useState<number>(1);
         );
       })}
 
-        {(() => {
+{(() => {
           const creditCardAccounts = accounts.filter(acc => acc.classification === 'Credit Card' && acc.billingDate);
           if (creditCardAccounts.length === 0) return null;
           const monthIndex = MONTHS.indexOf(selectedMonth);
@@ -3723,25 +3753,37 @@ const [activePeriodIndex, setActivePeriodIndex] = useState<number>(1);
                       <tr className="text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase border-b border-gray-50 dark:border-gray-800/50"><th className="p-4 pl-10">Transaction</th><th className="p-4">Date</th><th className="p-4">Amount</th><th className="p-4 pr-10 text-right"></th></tr>
                     </thead>
                     <tbody className="divide-y divide-gray-50 dark:divide-gray-800/50">
-                      {relevantCycle.transactions.map((tx) => (
-                        <tr key={tx.id} className="bg-purple-50/20 dark:bg-purple-900/10">
-                          <td className="p-4 pl-10"><span className="text-sm font-bold text-gray-900 dark:text-gray-100">{tx.name}</span></td>
-                          <td className="p-4"><span className="text-xs text-gray-500 font-medium">{new Date(tx.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span></td>
-                          <td className="p-4 text-sm font-black">₱ {tx.amount.toFixed(2)}</td>
-                          <td className="p-4 pr-10 text-right">
-                            <button
-                              onClick={() => {
-                                const dateStr = tx.date.split('T')[0];
-                                setTransactionFormData({ id: tx.id, name: tx.name, date: dateStr, amount: tx.amount.toFixed(2), accountId: tx.payment_method_id, paymentScheduleId: tx.payment_schedule_id || '', transactionType: 'cash_out' });
-                                setShowTransactionModal(true);
-                              }}
-                              className="text-[10px] font-black text-indigo-600 uppercase tracking-widest border-2 border-black bg-white px-3 py-1.5 rounded-xl shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[1px] hover:translate-y-[1px] transition-all"
-                            >
-                              Edit
-                            </button>
-                          </td>
-                        </tr>
-                      ))}
+                      {relevantCycle.transactions.map((tx) => {
+                        // 🛡️ BULLETPROOF TRY/CATCH WRAPPER
+                        try {
+                          const safeAmount = Number(tx?.amount || 0).toFixed(2);
+                          const safeDateStr = tx?.date ? String(tx.date).split('T')[0] : getTodayIso();
+                          const displayDate = tx?.date ? new Date(tx.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'Unknown Date';
+                          const safeName = tx?.name || 'Unnamed Transaction';
+
+                          return (
+                            <tr key={tx.id} className="bg-purple-50/20 dark:bg-purple-900/10">
+                              <td className="p-4 pl-10"><span className="text-sm font-bold text-gray-900 dark:text-gray-100">{safeName}</span></td>
+                              <td className="p-4"><span className="text-xs text-gray-500 font-medium">{displayDate}</span></td>
+                              <td className="p-4 text-sm font-black">₱ {safeAmount}</td>
+                              <td className="p-4 pr-10 text-right">
+                                <button
+                                  onClick={() => {
+                                    setTransactionFormData({ id: tx.id, name: safeName, date: safeDateStr, amount: safeAmount, accountId: tx.payment_method_id, paymentScheduleId: tx.payment_schedule_id || '', transactionType: 'cash_out' });
+                                    setShowTransactionModal(true);
+                                  }}
+                                  className="text-[10px] font-black text-indigo-600 uppercase tracking-widest border-2 border-black bg-white px-3 py-1.5 rounded-xl shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[1px] hover:translate-y-[1px] transition-all"
+                                >
+                                  Edit
+                                </button>
+                              </td>
+                            </tr>
+                          );
+                        } catch (e) {
+                          console.error("Crashed on credit card transaction:", tx, e);
+                          return null;
+                        }
+                      })}
                     </tbody>
                   </table>
                 </div>
@@ -4082,7 +4124,22 @@ const [activePeriodIndex, setActivePeriodIndex] = useState<number>(1);
                     <div key={tx.id} className="bg-gray-50 dark:bg-gray-800/50 border-2 border-black rounded-xl p-3 space-y-1">
                       <div className="flex justify-between items-start"><div className="min-w-0 flex-1"><p className="text-xs font-black text-gray-900 dark:text-gray-100 truncate">{tx.name}</p><p className="text-[10px] text-gray-500 truncate">{pmName} • {new Date(tx.date).toLocaleDateString()}</p></div><span className="text-xs font-black text-green-600 ml-2">{formatCurrency(Math.abs(tx.amount))}</span></div>
                       <div className="flex justify-end pt-1">
-                        <PinProtectedAction featureId="transaction_deletions" onVerified={async () => { try { const { error } = await deleteTransactionAndRevertSchedule(tx.id); if (error) throw error; if (tx.name.trim().toLowerCase() === 'salary') setActualSalary(''); await reloadTransactions(); if (onTransactionDeleted) onTransactionDeleted(); } catch { alert('Error deleting transaction.'); } }} actionLabel="Delete Record">
+                        <PinProtectedAction featureId="transaction_deletions"
+  featureId="transaction_deletions" 
+  onVerified={async () => { 
+    try { 
+      const { error } = await deleteTransactionAndRevertSchedule(tx.id); 
+      if (error) throw error; 
+      // HARDENED: Fallback to empty string
+      if ((tx.name || '').trim().toLowerCase() === 'salary') setActualSalary(''); 
+      await reloadTransactions(); 
+      if (onTransactionDeleted) onTransactionDeleted(); 
+    } catch { 
+      alert('Error deleting transaction.'); 
+    } 
+  }} 
+  actionLabel="Delete Record"
+>
                           <button onClick={(e) => e.preventDefault()} className="text-[9px] font-black text-red-500 border-2 border-black bg-white px-2 py-0.5 rounded-lg shadow-[1px_1px_0px_0px_rgba(0,0,0,1)] hover:shadow-none">Delete</button>
                         </PinProtectedAction>
                       </div>
