@@ -22,6 +22,10 @@ import { guardFundStashOverdraft } from '../pages/transactions';
 import { useIncomeSlicer } from '../src/components/useIncomeSlicer'; 
 import { recordCreditPayment } from '../src/services/transactionsService';
 import { calculateBillingCycles } from '../src/utils/billingCycles';
+import { getPayScheduleRules, PayScheduleRule } from '../src/services/payScheduleService';
+import { getActiveRuleForMonth, generatePayPeriodsForMonth, findPayPeriodForDueDate, PayPeriod } from '../src/utils/payPeriodUtils';
+import { getPayPeriodLabel } from '../src/utils/payPeriodUtils'; // Or ensure it's imported correctly from your utils path
+import { fetchPaySchedules } from '../src/services/payScheduleService'; 
 
 interface BudgetProps {
   items: BudgetItem[];
@@ -93,9 +97,18 @@ const isLegacyBudget = (year: number, month: string): boolean => {
   return budgetStart < STASH_GO_LIVE;
 };
 
-const parseIsoMonthStart = (iso: string): Date => {
-  const [y, m] = iso.split('-').map(Number);
-  return new Date(y, m - 1, 1);
+
+const parseIsoMonthStart = (iso: any): Date | null => {
+  if (!iso || typeof iso !== 'string' || !iso.includes('-')) return null;
+  try {
+    const parts = iso.split('-');
+    const y = parseInt(parts[0], 10);
+    const m = parseInt(parts[1], 10);
+    if (isNaN(y) || isNaN(m)) return null;
+    return new Date(y, m - 1, 1);
+  } catch (e) {
+    return null;
+  }
 };
 
 const isCategoryActiveForBudget = (
@@ -103,32 +116,25 @@ const isCategoryActiveForBudget = (
   selectedYear: number,
   selectedMonthName: string
 ): boolean => {
-  const monthIndex = MONTHS.indexOf(selectedMonthName);
-  if (monthIndex < 0) return cat.active !== false;
+  try {
+    if (!cat) return false;
+    const monthIndex = MONTHS.indexOf(selectedMonthName);
+    if (monthIndex < 0) return cat.active !== false;
 
-  const budgetMonthStart = new Date(selectedYear, monthIndex, 1);
-  const deactivationDate = cat.deactivatedAt ? parseIsoMonthStart(cat.deactivatedAt) : null;
-  const reactivationDate = cat.reactivatedFrom ? parseIsoMonthStart(cat.reactivatedFrom) : null;
-  
-  if (!deactivationDate && !reactivationDate) {
-    return cat.active !== false;
-  }
+    const budgetMonthStart = new Date(selectedYear, monthIndex, 1);
+    const deactivationDate = cat.deactivatedAt ? parseIsoMonthStart(cat.deactivatedAt) : null;
+    const reactivationDate = cat.reactivatedFrom ? parseIsoMonthStart(cat.reactivatedFrom) : null;
+    
+    if (!deactivationDate && !reactivationDate) return cat.active !== false;
+    if (deactivationDate && !reactivationDate) return budgetMonthStart < deactivationDate;
+    if (!deactivationDate && reactivationDate) return budgetMonthStart >= reactivationDate;
 
-  if (deactivationDate && !reactivationDate) {
-    return budgetMonthStart < deactivationDate;
+    if (deactivationDate && budgetMonthStart < deactivationDate) return true;
+    if (reactivationDate && budgetMonthStart >= reactivationDate) return true;
+    return false;
+  } catch (e) {
+    return true; 
   }
-
-  if (!deactivationDate && reactivationDate) {
-    return budgetMonthStart >= reactivationDate;
-  }
-
-  if (budgetMonthStart < deactivationDate!) {
-    return true;
-  }
-  if (reactivationDate && budgetMonthStart >= reactivationDate) {
-    return true;
-  }
-  return false;
 };
 
 const shouldRenderCategorySection = (
@@ -137,23 +143,29 @@ const shouldRenderCategorySection = (
   selectedYear: number,
   selectedMonthName: string
 ): boolean => {
-  const isActive = isCategoryActiveForBudget(cat, selectedYear, selectedMonthName);
-  if (cat.deactivatedAt) {
-    const monthIndex = MONTHS.indexOf(selectedMonthName);
-    if (monthIndex >= 0) {
-      const budgetMonthStart = new Date(selectedYear, monthIndex, 1);
-      const deactivationDate = parseIsoMonthStart(cat.deactivatedAt);
-      const reactivationDate = cat.reactivatedFrom ? parseIsoMonthStart(cat.reactivatedFrom) : null;
-      const inGap = budgetMonthStart >= deactivationDate && (!reactivationDate || budgetMonthStart < reactivationDate);
-      if (inGap) return false;
+  try {
+    if (!cat) return false;
+    const isActive = isCategoryActiveForBudget(cat, selectedYear, selectedMonthName);
+    
+    if (cat.deactivatedAt) {
+      const monthIndex = MONTHS.indexOf(selectedMonthName);
+      if (monthIndex >= 0) {
+        const budgetMonthStart = new Date(selectedYear, monthIndex, 1);
+        const deactivationDate = parseIsoMonthStart(cat.deactivatedAt);
+        const reactivationDate = cat.reactivatedFrom ? parseIsoMonthStart(cat.reactivatedFrom) : null;
+        
+        if (deactivationDate) {
+          const inGap = budgetMonthStart >= deactivationDate && (!reactivationDate || budgetMonthStart < reactivationDate);
+          if (inGap) return false;
+        }
+      }
     }
-  }
 
-  if (cat.flexiMode === false && !hasData) {
-    return false;
+    if (cat.flexiMode === false && !hasData) return false;
+    return isActive || hasData;
+  } catch (e) {
+    return true; 
   }
-
-  return isActive || hasData;
 };
 
 const isCategoryLegacyForBudget = (
@@ -161,21 +173,25 @@ const isCategoryLegacyForBudget = (
   selectedYear: number,
   selectedMonthName: string
 ): boolean => {
-  if (!cat.deactivatedAt) return false;
-  const monthIndex = MONTHS.indexOf(selectedMonthName);
-  if (monthIndex < 0) return false;
+  try {
+    if (!cat || !cat.deactivatedAt) return false;
+    const monthIndex = MONTHS.indexOf(selectedMonthName);
+    if (monthIndex < 0) return false;
 
-  const budgetMonthStart = new Date(selectedYear, monthIndex, 1);
-  const deactivationDate = parseIsoMonthStart(cat.deactivatedAt);
+    const budgetMonthStart = new Date(selectedYear, monthIndex, 1);
+    const deactivationDate = parseIsoMonthStart(cat.deactivatedAt);
 
-  if (budgetMonthStart >= deactivationDate) return false;
+    if (deactivationDate && budgetMonthStart >= deactivationDate) return false;
 
-  if (cat.legacyFrom) {
-    const legacyFromDate = parseIsoMonthStart(cat.legacyFrom);
-    return budgetMonthStart >= legacyFromDate;
+    if (cat.legacyFrom) {
+      const legacyFromDate = parseIsoMonthStart(cat.legacyFrom);
+      if (legacyFromDate) return budgetMonthStart >= legacyFromDate;
+    }
+
+    return true;
+  } catch (e) {
+    return false;
   }
-
-  return true;
 };
 
 const calculateBudgetRemaining = (
@@ -183,77 +199,84 @@ const calculateBudgetRemaining = (
   transactions: SupabaseTransaction[],
   selectedYear: number
 ): number => {
-  if (!setup.data) return 0;
+  try {
+    if (!setup || !setup.data) return 0;
+    const totalSpend = setup.totalAmount || 0;
+    
+    const actualStr = setup.data._actualSalary;
+    const projectedStr = setup.data._projectedSalary;
+    
+    const actualValue = actualStr && actualStr.trim() !== '' ? parseFloat(actualStr) : null;
+    const projectedValue = parseFloat(projectedStr || '0');
+    const baseSalary = projectedStr !== undefined ? parseFloat(projectedStr) || 0 : 0;
+    const incomeToUse = actualValue !== null && !isNaN(actualValue) ? actualValue : baseSalary;
 
-  // 1. Get total spend from the stored setup total amount
-  const totalSpend = setup.totalAmount || 0;
-
-  // 2. Resolve Income exactly like the live screen:
-  // Check if there's an actual salary saved, or fallback to the saved projected salary
-  const actualStr = setup.data._actualSalary;
-  const projectedStr = setup.data._projectedSalary;
-  
-  const actualValue = actualStr && actualStr.trim() !== '' ? parseFloat(actualStr) : null;
-  const projectedValue = parseFloat(projectedStr || '0');
-
-  // If projected salary string is empty/undefined, default to 0 instead of 11000 if it hasn't been set, 
-  // or use the exact projected string value converted to a number.
-  const baseSalary = projectedStr !== undefined ? parseFloat(projectedStr) || 0 : 0;
-
-  const incomeToUse = actualValue !== null && !isNaN(actualValue) ? actualValue : baseSalary;
-
-  return incomeToUse - totalSpend;
+    return incomeToUse - totalSpend;
+  } catch (e) {
+    return 0;
+  }
 };
 
-  const Budget: React.FC<BudgetProps> = ({ accounts, billers, categories, savedSetups, setSavedSetups, onUpdateBiller, onMoveToTrash, onReloadSetups, onReloadBillers, onUpdateInstallment, installments = [], onTransactionCreated, onTransactionDeleted, onArchiveBudget, onReopenBudget, userProfile }) => {
-  console.log("Budget Setup Categories:", categories.map(c => c.name));
-  const { getAccentClasses } = useTheme();
-  const isMobile = useMediaQuery('(max-width: 767px)');
-  const [view, setView] = useState<'summary' | 'setup'>('summary');
-  const [selectedMonth, setSelectedMonth] = useState(MONTHS[new Date().getMonth()]);
-  const [selectedTiming, setSelectedTiming] = useState<'1/2' | '2/2'>('1/2');
-  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
+const Budget: React.FC<BudgetProps> = ({ 
+  accounts = [], 
+  billers = [], 
+  categories = [], 
+  savedSetups = [], 
+  setSavedSetups, 
+  onUpdateBiller, 
+  onMoveToTrash, 
+  onReloadSetups, 
+  onReloadBillers, 
+  onUpdateInstallment, 
+  installments = [], 
+  onTransactionCreated, 
+  onTransactionDeleted, 
+  onArchiveBudget, 
+  onReopenBudget, 
+  userProfile 
+}) => {
+// Safe console log
+console.log("Budget Setup Categories:", (categories || []).map(c => c?.name));
 
-  const sortedSetups = React.useMemo(() => {
-    return [...savedSetups].sort((a, b) => {
-      // 1. First, compare years
-      const yearA = parseInt(a.data?._year || new Date().getFullYear().toString());
-      const yearB = parseInt(b.data?._year || new Date().getFullYear().toString());
-      
-      if (yearA !== yearB) return yearA - yearB;
-  
-      // 2. If years are same, compare month indices
-      const monthA = MONTHS.indexOf(a.month);
-      const monthB = MONTHS.indexOf(b.month);
-      
-      return monthA - monthB;
+const { getAccentClasses } = useTheme();
+const isMobile = useMediaQuery('(max-width: 767px)');
+const [view, setView] = useState<'summary' | 'setup'>('summary');
+const [selectedMonth, setSelectedMonth] = useState(MONTHS[new Date().getMonth()]);
+const [selectedTiming, setSelectedTiming] = useState<'1/2' | '2/2'>('1/2');
+const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
+
+const sortedSetups = React.useMemo(() => {
+  return [...(savedSetups || [])].sort((a, b) => {
+    const yearA = parseInt(a.data?._year || new Date().getFullYear().toString());
+    const yearB = parseInt(b.data?._year || new Date().getFullYear().toString());
+    
+    if (yearA !== yearB) return yearA - yearB;
+    return MONTHS.indexOf(a.month) - MONTHS.indexOf(b.month);
+  });
+}, [savedSetups]);
+
+const creditBudgetAccounts = React.useMemo(() => {
+  return (accounts || [])
+    .filter(acc => acc?.type === 'Credit' || acc?.classification === 'Credit Card')
+    .sort((a, b) => {
+      const dayA = a.dueDate ? new Date(a.dueDate).getDate() : 999;
+      const dayB = b.dueDate ? new Date(b.dueDate).getDate() : 999;
+      return dayA - dayB;
     });
-  }, [savedSetups]);
+}, [accounts]); 
 
-  const creditBudgetAccounts = React.useMemo(() => {
-    return accounts
-      .filter(acc => acc.type === 'Credit' || acc.classification === 'Credit Card')
-      .sort((a, b) => {
-        // Extract the day, default to 999 if no due date so they fall to the bottom
-        const dayA = a.dueDate ? new Date(a.dueDate).getDate() : 999;
-        const dayB = b.dueDate ? new Date(b.dueDate).getDate() : 999;
-        return dayA - dayB;
-      });
-  }, [accounts]); 
-
-    // 1. Create an effective categories array that guarantees "Credit" exists
-    const effectiveCategories = React.useMemo(() => {
-      const list = [...categories];
-      if (!list.some(c => c.name === 'Credit')) {
-        list.push({
-          id: 'system-credit-category',
-          name: 'Credit',
-          active: true,
-          flexiMode: false
-        });
-      }
-      return list;
-    }, [categories]);
+const effectiveCategories = React.useMemo(() => {
+  const list = [...(categories || [])];
+  if (!list.some(c => c?.name === 'Credit')) {
+    list.push({
+      id: 'system-credit-category',
+      name: 'Credit',
+      active: true,
+      flexiMode: false
+    });
+  }
+  return list;
+}, [categories]);
   
   
   const [searchParams] = useSearchParams();
@@ -341,6 +364,87 @@ const calculateBudgetRemaining = (
   const [showArchived, setShowArchived] = useState(false);
 
   const [paymentSchedules, setPaymentSchedules] = useState<SupabaseMonthlyPaymentSchedule[]>([]);
+
+ //Dynamic budget item distribution by due date
+  const [payRules, setPayRules] = useState<PayScheduleRule[]>([]);
+  const [currentPeriods, setCurrentPeriods] = useState<PayPeriod[]>([]);
+
+  // Fetch pay rules on mount
+  useEffect(() => {
+    const fetchRules = async () => {
+      const { data } = await getPayScheduleRules();
+      if (data && data.length > 0) {
+        setPayRules(data);
+      } else {
+        // Fallback default rule if none created yet (Standard semi-monthly 1st and 15th anchor)
+        setPayRules([{
+          effectiveFromDate: '2000-01-01',
+          frequency: 'semi-monthly',
+          firstPaycheckDate: `${selectedYear}-01-15`
+        }]);
+      }
+    };
+    fetchRules();
+  }, [selectedYear]);
+
+  const timingOptions = React.useMemo(() => {
+    const safePeriods = currentPeriods || [];
+    return safePeriods.map((period, index) => {
+      const periodNumber = index + 1;
+      const totalPeriods = safePeriods.length;
+      
+      // Format the dates nicely (e.g., "Aug 1")
+      const formattedStart = period?.startDate ? new Date(period.startDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '';
+      const formattedEnd = period?.endDate ? new Date(period.endDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '';
+      
+      return {
+        value: `${periodNumber}/${totalPeriods}`,
+        label: getPayPeriodLabel ? getPayPeriodLabel(index, totalPeriods) : `Period ${periodNumber}`,
+        dateRange: formattedStart && formattedEnd ? `${formattedStart} to ${formattedEnd}` : ''
+      };
+    });
+  }, [currentPeriods]);
+
+
+  // Load dynamic periods safely via useEffect
+  useEffect(() => {
+    let isMounted = true;
+    async function loadDynamicPeriods() {
+      const monthIndex = MONTHS.indexOf(selectedMonth);
+      try {
+        // 1. Fetch the rules directly from the database!
+        // (Make sure to pass userProfile.user_id if your function requires it)
+        const response = await getPayScheduleRules(); // Add userProfile?.user_id inside the () if needed
+        const rulesArray = response.data || [];
+        
+        console.log("Fetched Rules Array:", rulesArray);
+        
+        // 2. Pass the fetched array into your active rule checker
+        const activeRule = getActiveRuleForMonth(selectedYear, monthIndex, rulesArray);
+        const periods = generatePayPeriodsForMonth(selectedYear, monthIndex, activeRule);
+        
+        if (isMounted) {
+          if (periods && periods.length > 0) {
+            setCurrentPeriods(periods);
+            if (!periods.some((_, idx) => `${idx + 1}/${periods.length}` === selectedTiming)) {
+              setSelectedTiming('1/4'); // Or '1/2' depending on what you want the default to be
+            }
+          } else {
+            setCurrentPeriods([
+              { startDate: '', endDate: '', label: 'First Pay' },
+              { startDate: '', endDate: '', label: 'Second Pay' }
+            ]);
+          }
+        }
+      } catch (e) {
+        console.error("Failed to load active pay rules for month:", e);
+      }
+    }
+    loadDynamicPeriods();
+    return () => { isMounted = false; };
+  }, [selectedMonth, selectedYear]);
+
+
 
   useEffect(() => {
     const existingSetup = savedSetups.find(s => s.month === selectedMonth && s.timing === selectedTiming);
@@ -1055,103 +1159,20 @@ const calculateBudgetRemaining = (
     return linked.reduce((sum, inst) => sum + inst.monthlyAmount, 0);
   }, [installments]);
 
+  const matchesCurrentPayPeriod = useCallback((dueDayValue: string | number | undefined): boolean => {
+    if (!dueDayValue || currentPeriods.length === 0) return true;
+    const dayNum = typeof dueDayValue === 'string' ? parseInt(dueDayValue.replace(/[^0-9]/g, ''), 10) : dueDayValue;
+    if (isNaN(dayNum)) return true;
+
+    const monthIndex = MONTHS.indexOf(selectedMonth);
+    const matchedPeriod = findPayPeriodForDueDate(dayNum, selectedYear, monthIndex, currentPeriods);
+    
+    const activeIndex = parseInt(selectedTiming.split('/')[0], 10) || 1;
+    return matchedPeriod?.periodIndex === activeIndex;
+  }, [currentPeriods, selectedMonth, selectedYear, selectedTiming]);
+
   useEffect(() => {
-    if (view === 'setup') {
-      setSetupData(prev => {
-        const newData = { ...prev };
-        
-        effectiveCategories.forEach(cat => {
-          if (!newData[cat.name]) newData[cat.name] = [];
-
-          const matchingBillers = billers.filter(b => 
-            (b.category === cat.name || b.category.startsWith(`${cat.name} -`)) && 
-            b.timing === selectedTiming &&
-            b.status === 'active' &&
-            isBillerActiveForPeriod(b, selectedMonth, selectedYear) &&
-            !removedIds.has(b.id)
-          );
-
-          const filteredExisting = newData[cat.name].filter(item => {
-            if (item.isBiller) {
-              const biller = billers.find(b => b.id === item.id);
-              return biller &&
-                biller.timing === selectedTiming &&
-                isBillerActiveForPeriod(biller, selectedMonth, selectedYear);
-            }
-            return true;
-          }).map(item => {
-            if (item.isBiller) {
-              const biller = billers.find(b => b.id === item.id);
-              if (biller) {
-                const instAmount = getLinkedInstallmentsAmount(biller);
-                if (instAmount !== null) {
-                  return { ...item, amount: instAmount.toFixed(2) };
-                }
-                const schedule = biller.schedules.find(s => s.month === selectedMonth);
-                if (schedule) {
-                  const { amount: calculatedAmount } = getScheduleExpectedAmount(
-                    biller,
-                    schedule,
-                    accounts,
-                    transactions
-                  );
-                  return {
-                    ...item,
-                    amount: calculatedAmount.toFixed(2)
-                  };
-                }
-              }
-            }
-            return item;
-          }).filter(item => {
-            if (item.isBiller) {
-              const biller = billers.find(b => b.id === item.id);
-              if (biller?.category.startsWith('Loans') && parseFloat(item.amount) === 0) {
-                return false;
-              }
-            }
-            return true;
-          });
-          const existingIds = new Set(filteredExisting.map(i => i.id));
-          const newItems = matchingBillers
-            .filter(b => !existingIds.has(b.id))
-            .map(b => {
-              const schedule = b.schedules.find(s => s.month === selectedMonth);
-              
-              let amount: number;
-              const instAmount = getLinkedInstallmentsAmount(b);
-              if (instAmount !== null) {
-                amount = instAmount;
-              } else if (schedule) {
-                const { amount: calculatedAmount } = getScheduleExpectedAmount(b, schedule, accounts, transactions);
-                amount = calculatedAmount;
-              } else {
-                const dateStr = `${selectedYear}-${String(MONTHS.indexOf(selectedMonth) + 1).padStart(2, '0')}-01`;
-                amount = getBillerAmountForDate(b, dateStr);
-              }
-              
-              return {
-                id: b.id,
-                name: b.name,
-                amount: amount.toFixed(2),
-                included: true,
-                timing: b.timing,
-                isBiller: true
-              };
-            })
-            .filter(item => {
-              const biller = billers.find(b => b.id === item.id);
-              if (biller?.category.startsWith('Loans') && parseFloat(item.amount) === 0) {
-                return false;
-              }
-              return true;
-            });
-
-          newData[cat.name] = [...filteredExisting, ...newItems];
-        });
-        return newData;
-      });
-    }
+  
   }, [selectedMonth, selectedTiming, selectedYear, billers, view, removedIds, categories, getLinkedInstallmentsAmount, accounts, transactions]);
 
   const formatCurrency = (val: number) => {
@@ -2324,17 +2345,40 @@ const calculateBudgetRemaining = (
               </div>
   
               <div className="flex-grow flex justify-center items-center space-x-2 md:flex-grow-0">
-                  <select value={selectedMonth} onChange={(e) => setSelectedMonth(e.target.value)} disabled={isReadOnly} className={`bg-white dark:bg-gray-900 border-2 border-black rounded-xl md:rounded-[1.5rem] h-10 md:h-auto px-3 md:px-8 md:py-4 font-black text-xs md:text-base shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] outline-none disabled:opacity-60 disabled:cursor-not-allowed transition-colors text-center appearance-none ${getAccentClasses('text')}`}>
-                      {MONTHS.map(m => <option key={m} value={m}>{m}</option>)}
-                  </select>
-                  <select value={selectedTiming} onChange={(e) => setSelectedTiming(e.target.value as '1/2' | '2/2')} disabled={isReadOnly} className={`bg-white dark:bg-gray-900 border-2 border-black rounded-xl md:rounded-[1.5rem] h-10 md:h-auto px-3 md:px-8 md:py-4 font-black text-xs md:text-base shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] outline-none disabled:opacity-60 disabled:cursor-not-allowed transition-colors ${getAccentClasses('text')}`}>
-                      <option value="1/2">1/2</option>
-                      <option value="2/2">2/2</option>
-                  </select>
-                  {legacyMode && (
-                    <span className="hidden md:block text-[10px] font-black text-gray-400 dark:text-gray-500 bg-gray-100 dark:bg-gray-800 border-2 border-black px-4 py-2 rounded-full uppercase tracking-widest">Legacy Budget</span>
-                  )}
-              </div>
+    {/* 1. THE RESTORED MONTH DROPDOWN */}
+    <select 
+      value={selectedMonth} 
+      onChange={(e) => setSelectedMonth(e.target.value)} 
+      disabled={isReadOnly} 
+      className={`bg-white dark:bg-gray-900 border-2 border-black rounded-xl md:rounded-[1.5rem] h-10 md:h-auto px-3 md:px-8 md:py-4 font-black text-xs md:text-base shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] outline-none disabled:opacity-60 disabled:cursor-not-allowed transition-colors text-center appearance-none ${getAccentClasses('text')}`}
+    >
+        {MONTHS.map(m => <option key={m} value={m}>{m}</option>)}
+    </select>
+
+    {/* 2. THE TIMING DROPDOWN (With a safe fallback to prevent "No Options") */}
+        {/* 2. THE DYNAMIC TIMING DROPDOWN */}
+        <select 
+      value={selectedTiming} 
+      onChange={(e) => setSelectedTiming(e.target.value as any)} 
+      disabled={isReadOnly} 
+      className={`bg-white dark:bg-gray-900 border-2 border-black rounded-xl md:rounded-[1.5rem] h-10 md:h-auto px-3 md:px-8 md:py-4 font-black text-xs md:text-base shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] outline-none disabled:opacity-60 disabled:cursor-not-allowed transition-colors text-center appearance-none ${getAccentClasses('text')}`}
+    >
+        {(timingOptions && timingOptions.length > 0 ? timingOptions : [
+          { value: '1/2', label: 'First Pay', dateRange: '' }, 
+          { value: '2/2', label: 'Second Pay', dateRange: '' }
+        ]).map(opt => (
+          <option key={opt.value} value={opt.value}>
+            {opt.label} {opt.dateRange ? `(${opt.dateRange})` : ''}
+          </option>
+        ))}
+    </select>
+
+
+    {legacyMode && (
+      <span className="hidden md:block text-[10px] font-black text-gray-400 dark:text-gray-500 bg-gray-100 dark:bg-gray-800 border-2 border-black px-4 py-2 rounded-full uppercase tracking-widest">Legacy Budget</span>
+    )}
+</div>
+
   
               <div className="flex-none flex items-center gap-2 md:hidden">
                 {currentSetup && !isReadOnly && (

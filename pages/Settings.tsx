@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { ChevronDown, ChevronRight, Hash, Globe, Bell, Lock, Trash2, AlertTriangle, RotateCcw, Plus, X, Database, Copy, Shield, User, Users, Mail, Key, MoreVertical, Check, SlidersHorizontal, Info } from 'lucide-react';
+import { ChevronDown, ChevronRight, Hash, Globe, Bell, Lock, Trash2, AlertTriangle, RotateCcw, Plus, X, Database, Copy, Shield, User, Users, Mail, Key, MoreVertical, Check, SlidersHorizontal, Info, Banknote } from 'lucide-react';
 import { Account, BudgetCategory, Biller, Installment, SupabaseUserProfile } from '../types';
 import { useTestEnvironment } from '../src/contexts/TestEnvironmentContext';
 import { getAllPeople, createPerson, deletePerson } from '../src/services/peopleService';
@@ -12,6 +12,8 @@ import { updateUserEmail, updateUserPassword, updateUserProfile } from '../src/s
 import { useTheme } from '../src/contexts/ThemeContext';
 import { PageHeader } from '../src/components/PageHeader';
 import { updateAccount } from '../src/services/accountsService';
+import { PayScheduleSettings } from '../src/components/PayScheduleSettings'; // adjust path as needed based on your file structure
+
 
 interface SettingsProps {
   currency: string;
@@ -905,6 +907,7 @@ const Settings: React.FC<SettingsProps> = ({ currency, setCurrency, categories, 
         </div>
       )
     },
+
     {
       id: 'general',
       label: 'General',
@@ -1227,6 +1230,22 @@ const Settings: React.FC<SettingsProps> = ({ currency, setCurrency, categories, 
         </div>
       )
     },
+
+    //Pay Frequency Settings
+    {
+      id: 'pay-schedule',
+      label: 'Pay Schedule & Frequencies',
+      icon: <Banknote className="w-5 h-5" />, // or any icon you prefer
+      content: (
+        <div className="space-y-4 pt-2">
+          <PayScheduleSettings onRuleSaved={() => {
+            // Optional: trigger any callback or data refetch if needed
+            console.log('Pay rule updated!');
+          }} />
+        </div>
+      )
+    },
+
     {
       id: 'categories', 
       label: 'Budget Categories', 
