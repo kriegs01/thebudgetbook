@@ -245,6 +245,7 @@ const [selectedMonth, setSelectedMonth] = useState(MONTHS[new Date().getMonth()]
 const [selectedTiming, setSelectedTiming] = useState<'1/2' | '2/2'>('1/2');
 const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
 
+
 const sortedSetups = React.useMemo(() => {
   return [...(savedSetups || [])].sort((a, b) => {
     const yearA = parseInt(a.data?._year || new Date().getFullYear().toString());
@@ -265,6 +266,7 @@ const creditBudgetAccounts = React.useMemo(() => {
     });
 }, [accounts]); 
 
+
 const effectiveCategories = React.useMemo(() => {
   const list = [...(categories || [])];
   if (!list.some(c => c?.name === 'Credit')) {
@@ -282,6 +284,79 @@ const effectiveCategories = React.useMemo(() => {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   
+  // 🟢 THE UNIFIED BUDGET ENGINE (Single Source of Truth)
+  const processedBudgetMap = React.useMemo(() => {
+    // 1. Initialize dynamic buckets (Supports up to 4+ periods safely)
+    const periodMap: Record<number, Record<string, CategorizedSetupItem[]>> = {
+      1: {}, 2: {}, 3: {}, 4: {}
+    };
+
+    // Safely map categories to buckets
+    if (Array.isArray(effectiveCategories)) {
+      effectiveCategories.forEach(cat => {
+        periodMap[1][cat.name] = [];
+        periodMap[2][cat.name] = [];
+        periodMap[3][cat.name] = [];
+        periodMap[4][cat.name] = [];
+      });
+    }
+
+    if (setupData && typeof setupData === 'object') {
+      Object.entries(setupData).forEach(([categoryName, items]) => {
+        // Ignore metadata keys
+        if (categoryName.startsWith('_') || !Array.isArray(items)) return;
+
+        items.forEach(item => {
+          // Skip excluded items
+          if (item.included === false) return;
+
+          let targetPeriod = 1;
+          
+          // Safely check for linked records
+          const linkedBiller = item.isBiller && Array.isArray(billers) ? billers.find(b => b.id === item.id) : null;
+          const linkedInstallment = Array.isArray(installments) ? installments.find(i => i.id === item.id) : null;
+          
+          // 2. Resolve Multi-Frequency Timing
+          const explicitTiming = item.timing || linkedBiller?.timing || linkedInstallment?.timing;
+
+          if (explicitTiming) {
+            // Handle fractional overrides ('1/2', '2/4') or straight integers ('1', '2')
+            if (explicitTiming.includes('1/')) targetPeriod = 1;
+            else if (explicitTiming.includes('2/')) targetPeriod = 2;
+            else if (explicitTiming.includes('3/')) targetPeriod = 3;
+            else if (explicitTiming.includes('4/')) targetPeriod = 4;
+            else {
+               const parsed = parseInt(explicitTiming, 10);
+               if (!isNaN(parsed)) targetPeriod = parsed;
+            }
+          } else {
+             // Fallback to due date math
+             const rawDue = item.dueDay || item.dueDate || linkedBiller?.dueDate || linkedInstallment?.dueDate || 1;
+             const dueNum = typeof rawDue === 'string' ? parseInt(rawDue, 10) : rawDue;
+             
+             // If your global period indexer is available, use it; otherwise, default to standard mid-month split
+             try {
+                targetPeriod = typeof getAccountPeriodIndex === 'function' 
+                  ? getAccountPeriodIndex({ dueDate: isNaN(dueNum) ? 1 : dueNum })
+                  : (dueNum > 15 ? 2 : 1);
+             } catch (e) {
+                targetPeriod = (dueNum > 15 ? 2 : 1);
+             }
+          }
+
+          // 3. Safely push into the resolved period bucket
+          if (!periodMap[targetPeriod]) periodMap[targetPeriod] = {};
+          if (!periodMap[targetPeriod][categoryName]) periodMap[targetPeriod][categoryName] = [];
+
+          periodMap[targetPeriod][categoryName].push(item);
+        });
+      });
+    }
+
+    return periodMap;
+  }, [setupData, effectiveCategories, billers, installments]);
+
+
   useEffect(() => {
     const viewParam = searchParams.get('view');
     const monthParam = searchParams.get('month');
@@ -462,17 +537,78 @@ const [activePeriodIndex, setActivePeriodIndex] = useState<number>(1);
       parseInt(s.data?._year || new Date().getFullYear().toString()) === selectedYear
     );
   
-    // 2. Check if a modernized, unified setup already exists
+    // Helper to inject active billers into a category map if missing
+    const injectActiveBillers = (baseData: { [key: string]: CategorizedSetupItem[] }) => {
+      const merged = { ...baseData };
+      effectiveCategories.forEach(c => {
+        if (!merged[c.name]) merged[c.name] = [];
+      });
+
+      // 1. Inject active non-zero billers
+      (billers || []).forEach(biller => {
+        if (biller.isArchived) return;
+        if (isBillerActiveForPeriod(biller, selectedMonth, selectedYear)) {
+          
+          let resolvedAmount = biller.amount || biller.monthlyAmount || biller.expectedAmount || 0;
+          if (!resolvedAmount && Array.isArray(biller.schedules) && biller.schedules.length > 0) {
+            const matchingSchedule = biller.schedules.find(s => s.month === selectedMonth && Number(s.year) === selectedYear);
+            resolvedAmount = matchingSchedule?.expectedAmount || biller.schedules[biller.schedules.length - 1]?.expectedAmount || 0;
+          }
+
+          if (resolvedAmount <= 0) return;
+
+          let targetCat = biller.category;
+          if (!merged[targetCat]) {
+            const matchedCat = effectiveCategories.find(c => c.name.toLowerCase() === targetCat?.toLowerCase());
+            targetCat = matchedCat ? matchedCat.name : 'Fixed';
+          }
+          if (!merged[targetCat]) merged[targetCat] = [];
+
+          const existingItemIndex = merged[targetCat].findIndex(item => item.id === biller.id || item.name.toLowerCase() === biller.name.toLowerCase());
+          
+          if (existingItemIndex === -1) {
+            merged[targetCat].push({
+              id: biller.id,
+              name: biller.name,
+              amount: String(resolvedAmount),
+              included: true,
+              isBiller: true,
+              timing: biller.timing,
+              dueDay: biller.dueDate
+            });
+          } else if (Number(merged[targetCat][existingItemIndex].amount) === 0) {
+            merged[targetCat][existingItemIndex].amount = String(resolvedAmount);
+          }
+        }
+      });
+
+      // 2. 🔥 Clean up: Remove any biller items that ended up with 0 or empty amounts
+      Object.keys(merged).forEach(cat => {
+        merged[cat] = merged[cat].filter(item => {
+          if (item.isBiller) {
+            const val = parseFloat(item.amount || '0');
+            return !isNaN(val) && val > 0;
+          }
+          return true; // Keep regular non-biller items intact
+        });
+      });
+
+      return merged;
+    };
+
+
+
+
     const unifiedSetup = setupsForMonth.find(s => s.timing === 'unified');
   
     if (unifiedSetup && unifiedSetup.data) {
-      // 🟢 PATH A: Load Unified Setup
-      const incomingDataStr = JSON.stringify(Object.fromEntries(
+      // 🟢 PATH A: Load Unified Setup with auto-injected active billers
+      const rawData = Object.fromEntries(
         Object.entries(unifiedSetup.data).filter(([key]) => !key.startsWith('_'))
-      ));
-      setSetupData(JSON.parse(incomingDataStr));
+      );
+      const incomingData = injectActiveBillers(rawData);
       
-      // Feed BOTH old and new states so the rest of the file doesn't crash yet
+      setSetupData(incomingData);
       setProjectedSalary(unifiedSetup.data._projectedSalary ?? '11000');
       setActualSalary(unifiedSetup.data._actualSalary ?? '');
       setProjectedSalaryByPeriod(unifiedSetup.data._projectedSalaryByPeriod || { 1: unifiedSetup.data._projectedSalary ?? '11000' });
@@ -483,19 +619,16 @@ const [activePeriodIndex, setActivePeriodIndex] = useState<number>(1);
       setExcludedCreditIds(new Set(unifiedSetup.data._excludedCreditIds || []));
   
     } else if (setupsForMonth.length > 0) {
-      // 🟡 PATH B: LAZY MERGE - Stitch legacy fragmented setups together
+      // 🟡 PATH B: LAZY MERGE with auto-injected active billers
       const mergedData: { [key: string]: CategorizedSetupItem[] } = {};
       const mergedProjected: Record<number, string> = {};
       const mergedActual: Record<number, string> = {};
       
-      // Pre-fill empty categories
       effectiveCategories.forEach(c => mergedData[c.name] = []);
   
       setupsForMonth.forEach(setup => {
-         // Convert legacy '1/2' or '2/2' timing into a numeric tab index
          const periodIndex = setup.timing === '1/2' ? 1 : setup.timing === '2/2' ? 2 : parseInt(setup.timing?.split('/')[0] || '1');
          
-         // Map legacy income to the correct tab
          mergedProjected[periodIndex] = setup.data._projectedSalary ?? '11000';
          if (setup.data._actualSalary) {
              mergedActual[periodIndex] = setup.data._actualSalary;
@@ -507,42 +640,38 @@ const [activePeriodIndex, setActivePeriodIndex] = useState<number>(1);
            
            items.forEach((oldItem: any) => {
              let existingItem = mergedData[category].find(i => i.id === oldItem.id || i.name === oldItem.name);
-             
              if (!existingItem) {
                existingItem = { ...oldItem, amountsByPeriod: {} };
                mergedData[category].push(existingItem);
              }
-             
-             // Inject the amount into the correct tab index
              existingItem.amountsByPeriod[periodIndex] = oldItem.amount || '0';
-             
-             // Temporary fallback for the current UI
              if (periodIndex === activePeriodIndex) {
                  existingItem.amount = oldItem.amount || '0';
              }
            });
          });
       });
-  
-      setSetupData(mergedData);
+
+      const finalMergedData = injectActiveBillers(mergedData);
+      setSetupData(finalMergedData);
       
-      // Feed the new mapping states
       setProjectedSalaryByPeriod(mergedProjected);
       setActualSalaryByPeriod(mergedActual);
-      
-      // Keep the old string state happy with Tab 1's data by default
       setProjectedSalary(mergedProjected[1] || '11000');
       setActualSalary(mergedActual[1] || '');
   
-      // Grab metadata exclusions from the first available fragment
       const baseSetup = setupsForMonth[0].data;
       setExcludedInstallmentIds(new Set(baseSetup._excludedInstallmentIds || []));
       setExcludedWalletIds(new Set(baseSetup._excludedWalletIds || []));
       setExcludedCreditIds(new Set(baseSetup._excludedCreditIds || []));
   
     } else {
-      // ⚪ PATH C: Empty State
-      setSetupData({});
+      // ⚪ PATH C: Empty State with auto-injected active billers
+      const initialEmpty: { [key: string]: CategorizedSetupItem[] } = {};
+      effectiveCategories.forEach(c => initialEmpty[c.name] = []);
+      const finalEmptyData = injectActiveBillers(initialEmpty);
+
+      setSetupData(finalEmptyData);
       setProjectedSalary('11000');
       setActualSalary('');
       setProjectedSalaryByPeriod({ 1: '11000' });
@@ -551,7 +680,8 @@ const [activePeriodIndex, setActivePeriodIndex] = useState<number>(1);
       setExcludedWalletIds(new Set());
       setExcludedCreditIds(new Set()); 
     }
-  }, [selectedMonth, selectedYear, savedSetups, effectiveCategories, activePeriodIndex]);
+  }, [selectedMonth, selectedYear, savedSetups, effectiveCategories, activePeriodIndex, billers]);
+
   
 
   useEffect(() => {
@@ -2122,14 +2252,51 @@ const [activePeriodIndex, setActivePeriodIndex] = useState<number>(1);
   };
 
   const handleOpenNew = () => {
-    const emptySetup: { [key: string]: CategorizedSetupItem[] } = {};
-    effectiveCategories.forEach(c => emptySetup[c.name] = []);
-    setSetupData(emptySetup);
+    const initialSetup: { [key: string]: CategorizedSetupItem[] } = {};
+    
+    // 1. Initialize empty arrays for all categories
+    effectiveCategories.forEach(c => {
+      initialSetup[c.name] = [];
+    });
+
+    // 2. Map and inject your active recurring billers directly into their categories
+    (billers || []).forEach(biller => {
+      if (biller.isArchived) return;
+      
+      // Check if active for the selected month/year
+      if (isBillerActiveForPeriod(biller, selectedMonth, selectedYear)) {
+        // Match biller category name to category list, defaulting to 'Utilities' or 'Fixed' if unmatched
+        let targetCat = biller.category;
+        if (!initialSetup[targetCat]) {
+          // Find closest category match if exact string differs
+          const matchedCat = effectiveCategories.find(c => c.name.toLowerCase() === targetCat?.toLowerCase());
+          targetCat = matchedCat ? matchedCat.name : 'Fixed';
+        }
+
+        if (!initialSetup[targetCat]) {
+          initialSetup[targetCat] = [];
+        }
+
+        // Push the biller into the setup template
+        initialSetup[targetCat].push({
+          id: biller.id,
+          name: biller.name,
+          amount: String(biller.amount || '0'),
+          included: true,
+          isBiller: true,
+          timing: biller.timing,
+          dueDay: biller.dueDate
+        });
+      }
+    });
+
+    setSetupData(initialSetup);
     setRemovedIds(new Set());
-    setSelectedMonth(MONTHS[new Date().getMonth()]);
     setSelectedTiming('1/2');
     setView('setup');
   };
+
+
 
   const handleLoadSetup = (setup: SavedBudgetSetup) => {
     if (typeof setup.data !== 'object' || setup.data === null || Array.isArray(setup.data)) {
@@ -2292,36 +2459,34 @@ const [activePeriodIndex, setActivePeriodIndex] = useState<number>(1);
               </div>
             )}
 
-            <div className="bg-white dark:bg-gray-900 rounded-[2.5rem] border-[3px] border-black shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] overflow-hidden">
-                <BudgetSetupsList
-                  setups={activeSetups}
-                  title="Active Budgets"
-                  isArchived={false}
-                  onLoadSetup={handleLoadSetup}
-                  onArchiveSetup={handleArchiveSetup}
-                  onMoveToTrash={(setup) => {
-                    setConfirmModal({
-                      show: true,
-                      title: 'Move to Trash',
-                      message: `Are you sure you want to move the ${setup.month} (${setup.timing}) budget history entry to Trash?`,
-                      onConfirm: () => {
-                        onMoveToTrash?.(setup);
-                        setConfirmModal(prev => ({ ...prev, show: false }));
-                      }
-                    });
-                  }}
-                  formatCurrency={formatCurrency}
-                  calculateBudgetRemaining={(setup) => calculateBudgetRemaining(setup, transactions, selectedYear)}
-                  archiveSubmitting={archiveSubmitting}
-                />
-            </div>
+<BudgetSetupsList
+              setups={activeSetups}
+              title="Active Budgets"
+              isArchived={false}
+              onLoadSetup={handleLoadSetup}
+              onArchiveSetup={handleArchiveSetup}
+              onMoveToTrash={(setup) => {
+                setConfirmModal({
+                  show: true,
+                  title: 'Move to Trash',
+                  message: `Are you sure you want to move the ${setup.month} (${setup.timing}) budget history entry to Trash?`,
+                  onConfirm: () => {
+                    onMoveToTrash?.(setup);
+                    setConfirmModal(prev => ({ ...prev, show: false }));
+                  }
+                });
+              }}
+              formatCurrency={formatCurrency}
+              calculateBudgetRemaining={(setup) => calculateBudgetRemaining(setup, transactions, selectedYear)}
+              archiveSubmitting={archiveSubmitting}
+            />
 
             {archivedSetups.length > 0 && (
-              <div className="bg-white dark:bg-gray-900 rounded-[2.5rem] border-[3px] border-black shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] overflow-hidden">
+              <div className="pt-4">
                   <button
                     type="button"
                     onClick={() => setShowArchived(prev => !prev)}
-                    className="w-full flex items-center justify-between p-8 pl-12 pr-12 hover:bg-amber-50/40 dark:hover:bg-amber-900/20 transition-colors rounded-[2.5rem]"
+                    className="w-full flex items-center justify-between p-8 pl-12 pr-12 bg-white dark:bg-gray-900 border-[3px] border-black shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] hover:bg-amber-50/40 dark:hover:bg-amber-900/20 transition-colors rounded-[2.5rem]"
                   >
                     <div className="flex items-center space-x-3">
                       <Archive className="w-5 h-5 text-amber-500" />
@@ -2330,19 +2495,22 @@ const [activePeriodIndex, setActivePeriodIndex] = useState<number>(1);
                     <ChevronDown className={`w-5 h-5 text-amber-400 transition-transform ${showArchived ? 'rotate-180' : ''}`} />
                   </button>
                   {showArchived && (
-                    <BudgetSetupsList
-                      setups={archivedSetups}
-                      title="Archived Budgets"
-                      isArchived={true}
-                      onLoadSetup={handleLoadSetup}
-                      onReopenSetup={handleReopenSetup}
-                      formatCurrency={formatCurrency}
-                      calculateBudgetRemaining={(setup) => calculateBudgetRemaining(setup, transactions, selectedYear)}
-                      archiveSubmitting={archiveSubmitting}
-                    />
+                    <div className="mt-8">
+                        <BudgetSetupsList
+                          setups={archivedSetups}
+                          title="Archived Budgets"
+                          isArchived={true}
+                          onLoadSetup={handleLoadSetup}
+                          onReopenSetup={handleReopenSetup}
+                          formatCurrency={formatCurrency}
+                          calculateBudgetRemaining={(setup) => calculateBudgetRemaining(setup, transactions, selectedYear)}
+                          archiveSubmitting={archiveSubmitting}
+                        />
+                    </div>
                   )}
                 </div>
             )}
+
         
             {confirmModal.show && <ConfirmDialog {...confirmModal} onClose={() => setConfirmModal(p => ({ ...p, show: false }))} />}
         </div>

@@ -1,10 +1,8 @@
-// src/components/BudgetSetupsList.tsx
 import React from 'react';
-import { SavedBudgetSetup } from '../../types';
-import { Archive, ArrowRight, Loader2, RotateCcw, Trash2 } from 'lucide-react';
-import { PinProtectedAction } from './PinProtectedAction';
-import { useTheme } from '../contexts/ThemeContext';
-import useMediaQuery from '../hooks/useMediaQuery';
+import { SavedBudgetSetup } from '../types';
+import { ArrowRight, Archive, RotateCcw, Trash2 } from 'lucide-react';
+
+const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 
 interface BudgetSetupsListProps {
   setups: SavedBudgetSetup[];
@@ -14,7 +12,7 @@ interface BudgetSetupsListProps {
   onArchiveSetup?: (setup: SavedBudgetSetup) => void;
   onReopenSetup?: (setup: SavedBudgetSetup) => void;
   onMoveToTrash?: (setup: SavedBudgetSetup) => void;
-  formatCurrency: (value: number) => string;
+  formatCurrency: (amount: number) => string;
   calculateBudgetRemaining: (setup: SavedBudgetSetup) => number;
   archiveSubmitting: boolean;
 }
@@ -28,179 +26,145 @@ export const BudgetSetupsList: React.FC<BudgetSetupsListProps> = ({
   onReopenSetup,
   onMoveToTrash,
   formatCurrency,
-  calculateBudgetRemaining,
-  archiveSubmitting,
+  archiveSubmitting
 }) => {
-  const { getAccentClasses } = useTheme();
-  const isMobile = useMediaQuery('(max-width: 767px)');
+  if (!setups || setups.length === 0) {
+    return null;
+  }
 
-  const renderMobileList = () => (
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-      {setups.map((setup) => {
-        const remaining = calculateBudgetRemaining(setup);
-        const remainingColor = remaining >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400';
+  // Group fragments (1/2, 2/2) into a single chronological Monthly Card
+  const groupedSetups = setups.reduce((acc, setup) => {
+    const year = setup.data?._year || new Date().getFullYear();
+    const month = setup.month;
+    const key = `${year}-${month}`;
 
-        return (
-          <div 
-            key={setup.id} 
-            className="bg-white dark:bg-gray-900 rounded-2xl border-[3px] border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] overflow-hidden flex flex-col"
-          >
-            <div className="p-4 flex-grow flex flex-col">
-              <div className="flex justify-between items-start">
-                <div>
-                  <p className={`text-lg font-black uppercase tracking-tight ${getAccentClasses('text')}`}>{setup.month}</p>
-                  <p className="font-semibold text-gray-400 dark:text-gray-500 text-xs">{setup.timing} • <span className="font-bold">{setup.status}</span></p>
-                </div>
-                {onMoveToTrash && (
-                  <PinProtectedAction featureId="budget_deletions" onVerified={() => onMoveToTrash(setup)}>
-                    <button onClick={(e) => e.preventDefault()} className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/50 rounded-lg transition-colors">
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
-                  </PinProtectedAction>
-                )}
-              </div>
-        
-              <div className="mt-4 flex-grow flex items-center justify-between">
-                <div className="space-y-2">
-                  <div className="flex items-baseline gap-2">
-                    <span className="font-medium text-gray-500 dark:text-gray-400 text-xs">Total:</span>
-                    <span className="font-bold text-gray-800 dark:text-gray-200 text-sm">{formatCurrency(setup.totalAmount)}</span>
-                  </div>
-                  <div className="flex items-baseline gap-2">
-                    <span className="font-medium text-gray-500 dark:text-gray-400 text-xs">Remaining:</span>
-                    <span className={`font-bold text-sm ${remainingColor}`}>{formatCurrency(remaining)}</span>
-                  </div>
-                </div>
+    if (!acc[key]) {
+      acc[key] = { key, month, year, setups: [] };
+    }
+    acc[key].setups.push(setup);
+    return acc;
+  }, {} as Record<string, { key: string; month: string; year: number; setups: SavedBudgetSetup[] }>);
 
-                <div className="flex items-center gap-2">
-                  {isArchived ? (
-                    onReopenSetup && (
-                      <PinProtectedAction featureId="budget_modifications" onVerified={() => onReopenSetup(setup)} actionLabel="Reopen Budget">
-                        <button
-                          onClick={(e) => e.preventDefault()}
-                          disabled={archiveSubmitting}
-                          className="w-10 h-10 bg-indigo-100 dark:bg-indigo-900/50 text-indigo-700 dark:text-indigo-300 font-bold text-sm p-2 rounded-xl border-[3px] border-black shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] hover:translate-x-[1px] hover:translate-y-[1px] hover:shadow-none active:translate-x-[3px] active:translate-y-[3px] active:shadow-none transition-all flex items-center justify-center"
-                        >
-                          {archiveSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <RotateCcw className="w-4 h-4" />}
-                        </button>
-                      </PinProtectedAction>
-                    )
-                  ) : (
-                    onArchiveSetup && (
-                      <PinProtectedAction featureId="budget_modifications" onVerified={() => onArchiveSetup(setup)} actionLabel="Archive Budget">
-                        <button
-                          onClick={(e) => e.preventDefault()}
-                          disabled={archiveSubmitting}
-                          className="w-10 h-10 bg-amber-100 dark:bg-amber-900/50 text-amber-700 dark:text-amber-300 font-bold text-sm p-2 rounded-xl border-[3px] border-black shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] hover:translate-x-[1px] hover:translate-y-[1px] hover:shadow-none active:translate-x-[3px] active:translate-y-[3px] active:shadow-none transition-all flex items-center justify-center"
-                        >
-                          {archiveSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Archive className="w-4 h-4" />}
-                         </button>
-                      </PinProtectedAction>
-                    )
-                  )}
-                  <button
-                    onClick={() => onLoadSetup(setup)}
-                    className={`w-10 h-10 rounded-xl border-[3px] border-black shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] hover:translate-x-[1px] hover:translate-y-[1px] hover:shadow-none active:translate-x-[3px] active:translate-y-[3px] active:shadow-none transition-all flex items-center justify-center ${getAccentClasses('bg')}`}
-                  >
-                    <ArrowRight className="w-4 h-4 text-white" />
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-        );
-      })}
-    </div>
-  );
-
-  const renderDesktopTable = () => (
-    <div>
-      <table className="w-full text-left">
-        <thead>
-          <tr className="text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase border-b border-gray-100 dark:border-gray-800">
-            <th className="p-4 pl-8">Month</th>
-            <th className="p-4">Status</th>
-            <th className="p-4 text-center">Total</th>
-            <th className="p-4 text-center">Remaining</th>
-            <th className="p-4 pr-8 text-center">Actions</th>
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
-          {setups.map((setup) => {
-            const remaining = calculateBudgetRemaining(setup);
-            const remainingColor = remaining >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400';
-
-            return (
-              <tr key={setup.id} className="hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
-                <td className="p-4 pl-8">
-                  <p className={`font-black uppercase tracking-tight ${getAccentClasses('text')}`}>{setup.month}</p>
-                  <p className="font-semibold text-gray-400 dark:text-gray-500 text-xs">{setup.timing}</p>
-                </td>
-                <td className="p-4"><span className="text-xs font-bold bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 px-2 py-1 rounded-full">{setup.status}</span></td>
-                <td className="p-4 text-center font-bold text-gray-800 dark:text-gray-200">{formatCurrency(setup.totalAmount)}</td>
-                <td className={`p-4 text-center font-bold ${remainingColor}`}>{formatCurrency(remaining)}</td>
-                <td className="p-4 pr-8">
-                  <div className="flex items-center justify-center gap-2">
-                    {onMoveToTrash && (
-                      <PinProtectedAction featureId="budget_deletions" onVerified={() => onMoveToTrash(setup)}>
-                        <button onClick={(e) => e.preventDefault()} className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/50 rounded-lg transition-colors">
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      </PinProtectedAction>
-                    )}
-                    {isArchived ? (
-                      onReopenSetup && (
-                        <PinProtectedAction featureId="budget_modifications" onVerified={() => onReopenSetup(setup)} actionLabel="Reopen Budget">
-                          <button
-                            onClick={(e) => e.preventDefault()}
-                            disabled={archiveSubmitting}
-                            className="w-10 h-10 bg-indigo-100 dark:bg-indigo-900/50 text-indigo-700 dark:text-indigo-300 font-bold text-sm p-2 rounded-xl border-[3px] border-black shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] hover:translate-x-[1px] hover:translate-y-[1px] hover:shadow-none active:translate-x-[3px] active:translate-y-[3px] active:shadow-none transition-all flex items-center justify-center"
-                          >
-                            {archiveSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <RotateCcw className="w-4 h-4" />}
-                          </button>
-                        </PinProtectedAction>
-                      )
-                    ) : (
-                      onArchiveSetup && (
-                        <PinProtectedAction featureId="budget_modifications" onVerified={() => onArchiveSetup(setup)} actionLabel="Archive Budget">
-                          <button
-                            onClick={(e) => e.preventDefault()}
-                            disabled={archiveSubmitting}
-                            className="w-10 h-10 bg-amber-100 dark:bg-amber-900/50 text-amber-700 dark:text-amber-300 font-bold text-sm p-2 rounded-xl border-[3px] border-black shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] hover:translate-x-[1px] hover:translate-y-[1px] hover:shadow-none active:translate-x-[3px] active:translate-y-[3px] active:shadow-none transition-all flex items-center justify-center"
-                          >
-                            {archiveSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Archive className="w-4 h-4" />}
-                           </button>
-                        </PinProtectedAction>
-                      )
-                    )}
-                    <button
-                      onClick={() => onLoadSetup(setup)}
-                      className={`w-10 h-10 rounded-xl border-[3px] border-black shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] hover:translate-x-[1px] hover:translate-y-[1px] hover:shadow-none active:translate-x-[3px] active:translate-y-[3px] active:shadow-none transition-all flex items-center justify-center ${getAccentClasses('bg')}`}
-                    >
-                      <ArrowRight className="w-4 h-4 text-white" />
-                    </button>
-                  </div>
-                </td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
-    </div>
-  );
+  // Sort Ascending (Oldest on left, Newest on right)
+  const sortedGroups = Object.values(groupedSetups).sort((a, b) => {
+    if (a.year !== b.year) return a.year - b.year;
+    return MONTHS.indexOf(a.month) - MONTHS.indexOf(b.month);
+  });
 
   return (
-    <div>
-      <div className={isMobile ? "p-4" : "p-8"}>
-        <h2 className={`text-xs font-black text-gray-900 dark:text-gray-100 uppercase tracking-[0.25em] mb-6 ${!isMobile && 'px-8'}`}>{title}</h2>
-        {setups.length === 0 ? (
-          <div className="text-center py-12">
-            <p className="text-gray-500 font-bold">No {isArchived ? 'archived' : 'active'} budgets found.</p>
-            <p className="text-sm text-gray-400 mt-2">Click "Open New" to create a new budget setup.</p>
-          </div>
-        ) : (
-          isMobile ? renderMobileList() : renderDesktopTable()
-        )}
+    <div className="w-full">
+      <h2 className="px-4 mb-4 text-sm font-black text-gray-400 uppercase tracking-widest">{title}</h2>
+      <div className="flex overflow-x-auto snap-x snap-mandatory gap-6 pb-8 pt-2 px-4 scrollbar-hide">
+        {sortedGroups.map((group) => {
+          // Use the primary setup to power the card actions
+          const mainSetup = group.setups[0];
+
+          return (
+            <div key={group.key} className="snap-center shrink-0 w-[85vw] md:w-[400px] bg-white dark:bg-gray-900 border-4 border-black rounded-[2rem] p-6 shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] flex flex-col justify-between transition-colors">
+              <div>
+                <div className="flex justify-between items-center mb-6">
+                   <h3 className="text-2xl font-black text-gray-900 dark:text-gray-100 uppercase tracking-tight">
+                     {group.month} {group.year}
+                   </h3>
+                   {isArchived && <span className="bg-amber-100 text-amber-800 border-2 border-black text-[10px] font-black uppercase px-2 py-1 rounded-lg">Archived</span>}
+                </div>
+
+                <div className="space-y-6">
+  {['1/2', '2/2'].map((timingVal) => {
+    // Find the saved setup fragment for this timing if it exists
+    const setup = group.setups.find(s => s.timing === timingVal) || group.setups[0];
+    
+    // Prioritize Actual over Projected income
+    const actualStr = setup.data?._actualSalary;
+    const projectedStr = setup.data?._projectedSalary;
+    const actualValue = actualStr && actualStr.trim() !== '' ? parseFloat(actualStr) : null;
+    const projectedValue = parseFloat(projectedStr || '0');
+    const incomeToUse = actualValue !== null && !isNaN(actualValue) ? actualValue : projectedValue;
+
+    // If this specific timing row hasn't been saved yet, default spent to 0
+    const isThisTimingSaved = group.setups.some(s => s.timing === timingVal);
+    const spent = isThisTimingSaved ? (setup.totalAmount || 0) : 0;
+    
+    const remaining = incomeToUse - spent;
+    const percentSpent = incomeToUse > 0 ? Math.min(100, (spent / incomeToUse) * 100) : 100;
+    const isOverBudget = remaining < 0;
+
+    const timingLabel = timingVal === '1/2' ? 'First Paycheck' : 'Second Paycheck';
+
+    return (
+      <div key={timingVal} className="space-y-2">
+        <div className="flex justify-between items-end">
+          <span className="text-[11px] font-black uppercase tracking-wider text-gray-500 dark:text-gray-400">
+            {timingLabel}
+          </span>
+          <span className={`text-xs font-black ${isOverBudget ? 'text-red-500' : 'text-green-600'}`}>
+            {formatCurrency(Math.abs(remaining))} {isOverBudget ? 'Over' : 'Left'}
+          </span>
+        </div>
+
+        {/* Visual Bar representation */}
+        <div className={`h-5 w-full border-2 border-black rounded-xl overflow-hidden flex relative ${isOverBudget ? 'bg-red-100' : 'bg-green-400'}`}>
+          <div
+            className={`h-full border-r-2 border-black transition-all duration-500 ${isOverBudget ? 'bg-red-500' : 'bg-gray-800 dark:bg-gray-700'}`}
+            style={{ width: `${percentSpent}%` }}
+          />
+        </div>
+
+        <div className="flex justify-between text-[10px] font-bold text-gray-400">
+          <span>{formatCurrency(spent)} Spent</span>
+          <span>{formatCurrency(incomeToUse)} Income</span>
+        </div>
+      </div>
+    );
+  })}
+</div>
+
+              </div>
+
+              <div className="mt-8 pt-6 border-t-2 border-dashed border-gray-200 dark:border-gray-800 flex gap-3">
+                <button
+                  onClick={() => onLoadSetup(mainSetup)}
+                  className="flex-1 bg-indigo-600 text-white border-2 border-black py-3 rounded-xl font-black uppercase tracking-widest text-[10px] shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[1px] hover:translate-y-[1px] transition-all flex justify-center items-center gap-2"
+                >
+                  <span>View</span>
+                  <ArrowRight className="w-3.5 h-3.5" />
+                </button>
+
+                {!isArchived && onArchiveSetup && (
+                  <button
+                    onClick={() => onArchiveSetup(mainSetup)}
+                    disabled={archiveSubmitting}
+                    className="w-12 flex justify-center items-center bg-amber-50 text-amber-700 border-2 border-black rounded-xl shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[1px] hover:translate-y-[1px] transition-all disabled:opacity-50"
+                    title="Close Budget"
+                  >
+                    <Archive className="w-4 h-4" />
+                  </button>
+                )}
+
+                {isArchived && onReopenSetup && (
+                  <button
+                    onClick={() => onReopenSetup(mainSetup)}
+                    disabled={archiveSubmitting}
+                    className="w-12 flex justify-center items-center bg-indigo-50 text-indigo-700 border-2 border-black rounded-xl shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[1px] hover:translate-y-[1px] transition-all disabled:opacity-50"
+                    title="Reopen Budget"
+                  >
+                    <RotateCcw className="w-4 h-4" />
+                  </button>
+                )}
+
+                {isArchived && onMoveToTrash && (
+                  <button
+                    onClick={() => onMoveToTrash(mainSetup)}
+                    className="w-12 flex justify-center items-center bg-red-50 text-red-600 border-2 border-black rounded-xl shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[1px] hover:translate-y-[1px] transition-all"
+                    title="Move to Trash"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                )}
+              </div>
+            </div>
+          );
+        })}
       </div>
     </div>
   );
