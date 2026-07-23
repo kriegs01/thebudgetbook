@@ -283,79 +283,7 @@ const effectiveCategories = React.useMemo(() => {
   
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
-  
-  // 🟢 THE UNIFIED BUDGET ENGINE (Single Source of Truth)
-  const processedBudgetMap = React.useMemo(() => {
-    // 1. Initialize dynamic buckets (Supports up to 4+ periods safely)
-    const periodMap: Record<number, Record<string, CategorizedSetupItem[]>> = {
-      1: {}, 2: {}, 3: {}, 4: {}
-    };
-
-    // Safely map categories to buckets
-    if (Array.isArray(effectiveCategories)) {
-      effectiveCategories.forEach(cat => {
-        periodMap[1][cat.name] = [];
-        periodMap[2][cat.name] = [];
-        periodMap[3][cat.name] = [];
-        periodMap[4][cat.name] = [];
-      });
-    }
-
-    if (setupData && typeof setupData === 'object') {
-      Object.entries(setupData).forEach(([categoryName, items]) => {
-        // Ignore metadata keys
-        if (categoryName.startsWith('_') || !Array.isArray(items)) return;
-
-        items.forEach(item => {
-          // Skip excluded items
-          if (item.included === false) return;
-
-          let targetPeriod = 1;
-          
-          // Safely check for linked records
-          const linkedBiller = item.isBiller && Array.isArray(billers) ? billers.find(b => b.id === item.id) : null;
-          const linkedInstallment = Array.isArray(installments) ? installments.find(i => i.id === item.id) : null;
-          
-          // 2. Resolve Multi-Frequency Timing
-          const explicitTiming = item.timing || linkedBiller?.timing || linkedInstallment?.timing;
-
-          if (explicitTiming) {
-            // Handle fractional overrides ('1/2', '2/4') or straight integers ('1', '2')
-            if (explicitTiming.includes('1/')) targetPeriod = 1;
-            else if (explicitTiming.includes('2/')) targetPeriod = 2;
-            else if (explicitTiming.includes('3/')) targetPeriod = 3;
-            else if (explicitTiming.includes('4/')) targetPeriod = 4;
-            else {
-               const parsed = parseInt(explicitTiming, 10);
-               if (!isNaN(parsed)) targetPeriod = parsed;
-            }
-          } else {
-             // Fallback to due date math
-             const rawDue = item.dueDay || item.dueDate || linkedBiller?.dueDate || linkedInstallment?.dueDate || 1;
-             const dueNum = typeof rawDue === 'string' ? parseInt(rawDue, 10) : rawDue;
-             
-             // If your global period indexer is available, use it; otherwise, default to standard mid-month split
-             try {
-                targetPeriod = typeof getAccountPeriodIndex === 'function' 
-                  ? getAccountPeriodIndex({ dueDate: isNaN(dueNum) ? 1 : dueNum })
-                  : (dueNum > 15 ? 2 : 1);
-             } catch (e) {
-                targetPeriod = (dueNum > 15 ? 2 : 1);
-             }
-          }
-
-          // 3. Safely push into the resolved period bucket
-          if (!periodMap[targetPeriod]) periodMap[targetPeriod] = {};
-          if (!periodMap[targetPeriod][categoryName]) periodMap[targetPeriod][categoryName] = [];
-
-          periodMap[targetPeriod][categoryName].push(item);
-        });
-      });
-    }
-
-    return periodMap;
-  }, [setupData, effectiveCategories, billers, installments]);
-
+    
 
   useEffect(() => {
     const viewParam = searchParams.get('view');
@@ -370,7 +298,7 @@ const effectiveCategories = React.useMemo(() => {
       
       setView('setup');
     }
-  }, [searchParams]);
+  }, []);
 
   useEffect(() => {
     const params = new URLSearchParams();
@@ -452,6 +380,102 @@ const [activePeriodIndex, setActivePeriodIndex] = useState<number>(1);
  //Dynamic budget item distribution by due date
   const [payRules, setPayRules] = useState<PayScheduleRule[]>([]);
   const [currentPeriods, setCurrentPeriods] = useState<PayPeriod[]>([]);
+
+    // --- MULTI-FREQUENCY HELPERS ---
+    const getPeriodIndexForDate = (dayOrDate: number | string) => {
+      if (!currentPeriods || currentPeriods.length === 0) return 1;
+      let targetDate: Date;
+      if (typeof dayOrDate === 'number' || (typeof dayOrDate === 'string' && !isNaN(Number(dayOrDate)))) {
+        const dayNumber = Number(dayOrDate);
+        const monthIndex = new Date(`${selectedMonth} 1, ${selectedYear}`).getMonth();
+        targetDate = new Date(selectedYear, monthIndex, dayNumber);
+      } else {
+        targetDate = new Date(dayOrDate);
+      }
+      targetDate.setHours(0, 0, 0, 0);
+      for (let i = 0; i < currentPeriods.length; i++) {
+        const period = currentPeriods[i];
+        if (period?.startDate && period?.endDate) {
+          const start = new Date(period.startDate);
+          const end = new Date(period.endDate);
+          start.setHours(0, 0, 0, 0);
+          end.setHours(23, 59, 59, 999);
+          if (targetDate >= start && targetDate <= end) return i + 1;
+        }
+      }
+      return 1;
+    };
+  
+    const getAccountPeriodIndex = (account: any) => {
+      if (!currentPeriods || currentPeriods.length === 0) return 1;
+      let dayNum = 1;
+      const rawDue = account.dueDate || account.billingDate || account.statementDate || 1;
+      const dueStr = String(rawDue).toLowerCase();
+      
+      if (typeof rawDue === 'number') {
+        dayNum = rawDue;
+      } else if (typeof rawDue === 'string') {
+        const parsedDate = new Date(rawDue);
+        if (!isNaN(parsedDate.getTime())) dayNum = parsedDate.getDate();
+        else dayNum = parseInt(rawDue.replace(/[^0-9]/g, ''), 10) || 1;
+      }
+      const finalPeriodIndex = currentPeriods.length;
+      if (dueStr.includes('next') || dayNum >= 20) return finalPeriodIndex;
+      return getPeriodIndexForDate(dayNum);
+    };
+  
+    // 🟢 THE UNIFIED BUDGET ENGINE
+    const processedBudgetMap = React.useMemo(() => {
+      const periodMap: Record<number, Record<string, CategorizedSetupItem[]>> = {
+        1: {}, 2: {}, 3: {}, 4: {}
+      };
+  
+      if (Array.isArray(effectiveCategories)) {
+        effectiveCategories.forEach(cat => {
+          periodMap[1][cat.name] = [];
+          periodMap[2][cat.name] = [];
+          periodMap[3][cat.name] = [];
+          periodMap[4][cat.name] = [];
+        });
+      }
+  
+      if (setupData && typeof setupData === 'object') {
+        Object.entries(setupData).forEach(([categoryName, items]) => {
+          if (categoryName.startsWith('_') || !Array.isArray(items)) return;
+  
+          items.forEach(item => {
+            if (!item || item.included === false) return;
+  
+            let targetPeriod = 1;
+            const linkedBiller = item.isBiller && Array.isArray(billers) ? billers.find(b => b.id === item.id) : null;
+            const linkedInstallment = Array.isArray(installments) ? installments.find(i => i.id === item.id) : null;
+            const explicitTiming = item.timing || linkedBiller?.timing || linkedInstallment?.timing;
+  
+            if (explicitTiming && typeof explicitTiming === 'string') {
+              if (explicitTiming.includes('1/')) targetPeriod = 1;
+              else if (explicitTiming.includes('2/')) targetPeriod = 2;
+              else if (explicitTiming.includes('3/')) targetPeriod = 3;
+              else if (explicitTiming.includes('4/')) targetPeriod = 4;
+              else {
+                 const parsed = parseInt(explicitTiming, 10);
+                 if (!isNaN(parsed)) targetPeriod = parsed;
+              }
+            } else {
+               const rawDue = item.dueDay || item.dueDate || linkedBiller?.dueDate || linkedInstallment?.dueDate || 1;
+               targetPeriod = getAccountPeriodIndex({ dueDate: rawDue });
+            }
+  
+            if (!periodMap[targetPeriod]) periodMap[targetPeriod] = {};
+            if (!periodMap[targetPeriod][categoryName]) periodMap[targetPeriod][categoryName] = [];
+  
+            periodMap[targetPeriod][categoryName].push(item);
+          });
+        });
+      }
+  
+      return periodMap;
+    }, [setupData, effectiveCategories, billers, installments, currentPeriods, selectedMonth, selectedYear]);
+  
 
   // Fetch pay rules on mount
   useEffect(() => {
@@ -1201,73 +1225,6 @@ const [activePeriodIndex, setActivePeriodIndex] = useState<number>(1);
     }));
   };
 
-  const getPeriodIndexForDate = (dayOrDate: number | string) => {
-    if (!currentPeriods || currentPeriods.length === 0) return 1;
-  
-    let targetDate: Date;
-    
-    // Check if it's a number OR a numeric string (like "15" or "30")
-    if (typeof dayOrDate === 'number' || (typeof dayOrDate === 'string' && !isNaN(Number(dayOrDate)))) {
-      const dayNumber = Number(dayOrDate);
-      // Construct a valid date using the currently selected month and year
-      const monthIndex = new Date(`${selectedMonth} 1, ${selectedYear}`).getMonth();
-      targetDate = new Date(selectedYear, monthIndex, dayNumber);
-    } else {
-      // Fallback for full date strings like "2026-08-15"
-      targetDate = new Date(dayOrDate);
-    }
-  
-    targetDate.setHours(0, 0, 0, 0);
-  
-    for (let i = 0; i < currentPeriods.length; i++) {
-      const period = currentPeriods[i];
-      if (period?.startDate && period?.endDate) {
-        const start = new Date(period.startDate);
-        const end = new Date(period.endDate);
-        start.setHours(0, 0, 0, 0);
-        end.setHours(23, 59, 59, 999);
-  
-        if (targetDate >= start && targetDate <= end) {
-          return i + 1; // Return 1-based period index
-        }
-      }
-    }
-  
-    return 1; // Fallback to period 1
-  };
-  
-  const getAccountPeriodIndex = (account: any) => {
-    if (!currentPeriods || currentPeriods.length === 0) return 1;
-  
-    let dayNum = 1;
-    const rawDue = account.dueDate || account.billingDate || account.statementDate || 1;
-    const dueStr = String(rawDue).toLowerCase();
-    
-    if (typeof rawDue === 'number') {
-      dayNum = rawDue;
-    } else if (typeof rawDue === 'string') {
-      const parsedDate = new Date(rawDue);
-      if (!isNaN(parsedDate.getTime())) {
-        dayNum = parsedDate.getDate();
-      } else {
-        dayNum = parseInt(rawDue.replace(/[^0-9]/g, ''), 10) || 1;
-      }
-    }
-  
-    const finalPeriodIndex = currentPeriods.length;
-    
-    // If it's explicitly next month or late in the month (20th+), force it to the last paycheck (Paycheck 2)
-    if (dueStr.includes('next') || dayNum >= 20) {
-      return finalPeriodIndex;
-    }
-  
-    return getPeriodIndexForDate(dayNum);
-  };
-  
-  
-  
-  
-
   const [showPayModal, setShowPayModal] = useState<{ 
     biller: Biller, 
     schedule: PaymentSchedule;
@@ -1660,15 +1617,69 @@ const [activePeriodIndex, setActivePeriodIndex] = useState<number>(1);
   const autoSave = useCallback(async () => {
     if (view !== 'setup') return;
     
-    const dataToSave = {
-      ...JSON.parse(JSON.stringify(setupData)),
-      _year: selectedYear, // 🟢 Add this line
-      _projectedSalary: projectedSalary,
-      _actualSalary: actualSalary,
-      _excludedInstallmentIds: [...excludedInstallmentIds],
-      _excludedWalletIds: [...excludedWalletIds],
-      _excludedCreditIds: [...excludedCreditIds]
-    };
+        // 🟢 NEW UNIFIED MATH PAYLOAD
+        const _periodTotals: Record<number, number> = {};
+    
+        [1, 2, 3, 4].forEach(period => {
+          // 1. Regular Items
+          let itemsTotal = 0;
+          if (processedBudgetMap[period]) {
+            Object.values(processedBudgetMap[period]).forEach(catItems => {
+              catItems.forEach(item => {
+                if (item.included) {
+                  const val = item.amountsByPeriod?.[period] !== undefined ? item.amountsByPeriod[period] : item.amount;
+                  itemsTotal += (parseFloat(val) || 0);
+                }
+              });
+            });
+          }
+    
+          // 2. Installments
+          const instTotal = (installments || [])
+            .filter(inst => {
+              if (inst.isArchived || excludedInstallmentIds.has(inst.id)) return false;
+              let targetPeriod = 1;
+              if (inst.timing === '1/2') targetPeriod = 1;
+              else if (inst.timing === '2/2') targetPeriod = 2;
+              else {
+                const dueDay = inst.dueDate || inst.due_date || 1;
+                targetPeriod = getAccountPeriodIndex({ dueDate: dueDay });
+              }
+              if (targetPeriod !== period) return false;
+              
+              const scheduleForMonth = getPaymentSchedule('installment', inst.id, selectedMonth, selectedYear);
+              const isActiveForPeriod = scheduleForMonth !== undefined || shouldShowInstallment(inst, selectedMonth, selectedYear);
+              const isFinished = !scheduleForMonth && inst.totalAmount > 0 && inst.paidAmount >= inst.totalAmount;
+              return isActiveForPeriod && !isFinished;
+            })
+            .reduce((s, inst) => s + inst.monthlyAmount, 0);
+    
+          // 3. Credit Cards
+          const creditTotal = creditBudgetAccounts
+            .filter(acc => !excludedCreditIds.has(acc.id) && getAccountPeriodIndex(acc) === period)
+            .reduce((sum, account) => {
+              const amt = getFrozenCycleAmount(account);
+              return amt >= 0.01 ? sum + amt : sum;
+            }, 0);
+    
+          // Attach stash funding target to period 1
+               // Attach stash funding target to match UI behavior
+      _periodTotals[period] = itemsTotal + instTotal + creditTotal + stashTotal;
+
+        });
+    
+        const dataToSave = {
+          ...JSON.parse(JSON.stringify(setupData)),
+          _year: selectedYear,
+          _projectedSalary: projectedSalary,
+          _actualSalary: actualSalary,
+          _projectedSalaryByPeriod: projectedSalaryByPeriod,
+          _actualSalaryByPeriod: actualSalaryByPeriod,
+          _periodTotals: _periodTotals,
+          _excludedInstallmentIds: [...excludedInstallmentIds],
+          _excludedWalletIds: [...excludedWalletIds],
+          _excludedCreditIds: [...excludedCreditIds]
+        };    
     
     const currentDataString = JSON.stringify(dataToSave);
     if (currentDataString === lastSavedDataRef.current) {
@@ -1700,7 +1711,6 @@ const [activePeriodIndex, setActivePeriodIndex] = useState<number>(1);
         return timingMatch && isActiveForPeriod && !isFinished && notExcluded;
       })
       .reduce((sum, inst) => sum + inst.monthlyAmount, 0);
-    const stashTotal = wallets.filter(w => !excludedWalletIds.has(w.id)).reduce((s, w) => s + Math.max(w.amount, getStashAggregates(w).funded), 0);
     const creditTotal = creditBudgetAccounts
     .filter(acc => !excludedCreditIds.has(acc.id))
     .reduce((sum, account) => {
@@ -2517,81 +2527,61 @@ const [activePeriodIndex, setActivePeriodIndex] = useState<number>(1);
     );
   }
 
+      // 🟢 STEP 1: ENGINE-POWERED CATEGORY SUMMARY (Corrected Installment Sync)
   const categorySummary = effectiveCategories
   .filter(cat => {
-    const catItems = setupData[cat.name] || [];
-    const hasLoansData = cat.name === 'Loans' && installments.some(inst => {
-      if (inst.isArchived) return false;
-      const timingMatch = !inst.timing || inst.timing === selectedTiming;
-      const scheduleForMonth = getPaymentSchedule('installment', inst.id, selectedMonth, selectedYear);
-      const isActiveForPeriod = scheduleForMonth !== undefined || shouldShowInstallment(inst, selectedMonth, selectedYear);
-      const isFinished = !scheduleForMonth && inst.totalAmount > 0 && inst.paidAmount >= inst.totalAmount;
-      return timingMatch && isActiveForPeriod && !isFinished && !excludedInstallmentIds.has(inst.id);
-    });
+    const hasRegularData = processedBudgetMap[activePeriodIndex]?.[cat.name]?.length > 0;
+    const hasLoansData = cat.name === 'Loans' && installments.some(inst => !inst.isArchived);
     const hasCreditData = cat.name === 'Credit' && creditBudgetAccounts.length > 0;
-
-    return shouldRenderCategorySection(
-      cat, 
-      catItems.length > 0 || hasLoansData || hasCreditData,
-      selectedYear, 
-      selectedMonth
-    );
+    
+    return shouldRenderCategorySection(cat, hasRegularData || hasLoansData || hasCreditData, selectedYear, selectedMonth);
   })
   .map((cat) => {
-    const items = setupData[cat.name] || [];
-    
-    const itemsTotal = items.filter(item => {
-      if (!item || !item.included) return false;
-      const isBillerItem = item.isBiller || billers?.some(b => b.id === item.id);
-      const isInstallmentItem = item.isInstallment || installments?.some(i => i.id === item.id);
-    
-      if (isBillerItem || isInstallmentItem || item.isCredit) {
-        const linkedBiller = billers?.find(b => b.id === item.id);
-        const linkedInstallment = installments?.find(i => i.id === item.id);
-        const actualTiming = item.timing || linkedBiller?.timing || linkedInstallment?.timing;
-    
-        if (actualTiming === '1/2') return activePeriodIndex === 1;
-        if (actualTiming === '2/2') return activePeriodIndex === 2;
-    
-        const dueDay = item.dueDay || item.dueDate || linkedBiller?.dueDate || linkedInstallment?.due_date || 1;
-return getAccountPeriodIndex({ dueDate: dueDay }) === activePeriodIndex;
-      }
-    
-      const periodVal = item.amountsByPeriod?.[activePeriodIndex];
-      return periodVal !== undefined && periodVal !== '' && periodVal !== '0';
-    }).reduce((sum, item) => {
+    // 1. Regular Setup Items (Pulled from Engine)
+    const periodItems = processedBudgetMap[activePeriodIndex]?.[cat.name] || [];
+    const itemsTotal = periodItems.reduce((sum, item) => {
       const val = item.amountsByPeriod?.[activePeriodIndex] !== undefined 
         ? item.amountsByPeriod[activePeriodIndex] 
         : item.amount;
       return sum + (parseFloat(val) || 0);
     }, 0);
-    
 
-    // 2. Unified Installments Total Calculation (Matches Table Rows)
+    // 2. Installments (Loans) - MATCHES UI ROWS EXACTLY
     let installmentsTotal = 0;
     if (cat.name === 'Loans') {
       installmentsTotal = (installments || [])
         .filter(inst => {
-          if (inst.isArchived) return false;
-          if (excludedInstallmentIds.has(inst.id)) return false;
+          // Skip excluded or archived
+          if (inst.isArchived || excludedInstallmentIds.has(inst.id)) return false;
+          
+          // A. Timing Match (This is what was missing! Forces "2/2" items into the right tab)
+          let targetPeriod = 1;
+          if (inst.timing === '1/2') targetPeriod = 1;
+          else if (inst.timing === '2/2') targetPeriod = 2;
+          else {
+            const dueDay = inst.dueDate || inst.due_date || 1;
+            targetPeriod = getAccountPeriodIndex({ dueDate: dueDay });
+          }
+          if (targetPeriod !== activePeriodIndex) return false;
 
-          // Use the exact same timing / due date period check as your table rows
-          if (inst.timing === '1/2') return activePeriodIndex === 1;
-          if (inst.timing === '2/2') return activePeriodIndex === 2;
-
-          const dueDay = inst.dueDate || inst.due_date || 1;
-return getAccountPeriodIndex({ dueDate: dueDay }) === activePeriodIndex;
+          // B. Active for Month Match (Ensures we don't count finished loans)
+          const scheduleForMonth = getPaymentSchedule('installment', inst.id, selectedMonth, selectedYear);
+          const isActiveForPeriod = scheduleForMonth !== undefined || shouldShowInstallment(inst, selectedMonth, selectedYear);
+          const isFinished = !scheduleForMonth && inst.totalAmount > 0 && inst.paidAmount >= inst.totalAmount;
+          
+          return isActiveForPeriod && !isFinished;
         })
         .reduce((s, inst) => s + inst.monthlyAmount, 0);
     }
 
-    // 3. Unified Credit Total Calculation (Uses your new auto-float rule)
+    // 3. Credit Cards - MATCHES UI ROWS EXACTLY
     let creditTotal = 0;
     if (cat.name === 'Credit') {
       creditTotal = creditBudgetAccounts
         .filter(acc => {
           if (excludedCreditIds.has(acc.id)) return false;
-          return getAccountPeriodIndex(acc) === activePeriodIndex;
+          const targetPeriod = getAccountPeriodIndex(acc);
+          return targetPeriod === activePeriodIndex;
         })
         .reduce((sum, account) => {
           const amt = getFrozenCycleAmount(account);
@@ -2601,9 +2591,11 @@ return getAccountPeriodIndex({ dueDate: dueDay }) === activePeriodIndex;
 
     return { 
       category: cat.name, 
-      total: itemsTotal + (cat.name === 'Loans' ? installmentsTotal : 0) + (cat.name === 'Credit' ? creditTotal : 0) 
+      total: itemsTotal + installmentsTotal + creditTotal 
     };
   });
+
+
 
   const stashTotal = wallets.filter(w => !excludedWalletIds.has(w.id)).reduce((s, w) => s + Math.max(w.amount, getStashAggregates(w).funded), 0);
   const grandTotal = categorySummary.reduce((sum, cat) => sum + cat.total, 0) + stashTotal;
@@ -3283,7 +3275,7 @@ return getAccountPeriodIndex({ dueDate: dueDay }) === activePeriodIndex;
 
 
 {effectiveCategories.filter(cat => cat.name !== 'Fixed').map((cat) => {
-  const items = Array.isArray(setupData[cat.name]) ? setupData[cat.name] : [];
+  const items = processedBudgetMap[activePeriodIndex]?.[cat.name] || [];
   const matchingSummary = categorySummary.find(s => s.category === cat.name);
 const displayTotal = matchingSummary ? matchingSummary.total : 0;
 
@@ -3496,30 +3488,7 @@ const categoryTotal = categorySummary.find(s => s.category === cat.name)?.total 
               <div className="w-full">
                 {isMobile ? (
                   <div className="p-4 space-y-4 bg-gray-50/30 dark:bg-gray-955/10">
-                  {items.length > 0 && items.filter(item => {
-  const isBillerItem = item.isBiller || billers?.some(b => b.id === item.id);
-  const isInstallmentItem = item.isInstallment || installments?.some(i => i.id === item.id);
-
-  if (isBillerItem || isInstallmentItem || item.isCredit) {
-    // 1. Look up the true source data
-    const linkedBiller = billers?.find(b => b.id === item.id);
-    const linkedInstallment = installments?.find(i => i.id === item.id);
-
-    // 2. Grab the true timing
-    const actualTiming = item.timing || linkedBiller?.timing || linkedInstallment?.timing;
-
-    // 3. Lock it to the correct tab
-    if (actualTiming === '1/2') return activePeriodIndex === 1;
-    if (actualTiming === '2/2') return activePeriodIndex === 2;
-
-    // 4. Fallback for items using dates instead of 1/2 or 2/2
-    const dueDay = item.dueDay || item.dueDate || linkedBiller?.dueDate || linkedInstallment?.due_date || 1;
-return getAccountPeriodIndex({ dueDate: dueDay }) === activePeriodIndex;
-  }
-
-  const periodVal = item.amountsByPeriod?.[activePeriodIndex];
-  return periodVal !== undefined && periodVal !== '' && periodVal !== '0';
-}).map((item) => {
+                  {items.length > 0 && items.map((item) => {
 
                       let isPaid = false, isPartial = false, linkedBiller, paymentSchedule;
                       const isBillerItem = item.isBiller || billers.some(b => b.id === item.id);
@@ -3679,30 +3648,7 @@ return getAccountPeriodIndex({ dueDate: dueDay }) === activePeriodIndex;
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-gray-50 dark:divide-gray-800/50">
-                      {items.length > 0 ? items.filter(item => {
-  const isBillerItem = item.isBiller || billers?.some(b => b.id === item.id);
-  const isInstallmentItem = item.isInstallment || installments?.some(i => i.id === item.id);
-
-  if (isBillerItem || isInstallmentItem || item.isCredit) {
-    // 1. Look up the true source data
-    const linkedBiller = billers?.find(b => b.id === item.id);
-    const linkedInstallment = installments?.find(i => i.id === item.id);
-
-    // 2. Grab the true timing
-    const actualTiming = item.timing || linkedBiller?.timing || linkedInstallment?.timing;
-
-    // 3. Lock it to the correct tab
-    if (actualTiming === '1/2') return activePeriodIndex === 1;
-    if (actualTiming === '2/2') return activePeriodIndex === 2;
-
-    // 4. Fallback for items using dates instead of 1/2 or 2/2
-    const dueDay = item.dueDay || item.dueDate || linkedBiller?.dueDate || linkedInstallment?.due_date || 1;
-return getAccountPeriodIndex({ dueDate: dueDay }) === activePeriodIndex;
-  }
-
-  const periodVal = item.amountsByPeriod?.[activePeriodIndex];
-  return periodVal !== undefined && periodVal !== '' && periodVal !== '0';
-}).map((item) => {
+                      {items.length > 0 ? items.map((item) => {
 
 
                           let isPaid = false, isPartial = false, linkedBiller, paymentSchedule;

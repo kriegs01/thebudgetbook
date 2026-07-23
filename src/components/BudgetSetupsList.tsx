@@ -32,7 +32,6 @@ export const BudgetSetupsList: React.FC<BudgetSetupsListProps> = ({
     return null;
   }
 
-  // Group fragments (1/2, 2/2) into a single chronological Monthly Card
   const groupedSetups = setups.reduce((acc, setup) => {
     const year = setup.data?._year || new Date().getFullYear();
     const month = setup.month;
@@ -45,7 +44,6 @@ export const BudgetSetupsList: React.FC<BudgetSetupsListProps> = ({
     return acc;
   }, {} as Record<string, { key: string; month: string; year: number; setups: SavedBudgetSetup[] }>);
 
-  // Sort Ascending (Oldest on left, Newest on right)
   const sortedGroups = Object.values(groupedSetups).sort((a, b) => {
     if (a.year !== b.year) return a.year - b.year;
     return MONTHS.indexOf(a.month) - MONTHS.indexOf(b.month);
@@ -56,7 +54,6 @@ export const BudgetSetupsList: React.FC<BudgetSetupsListProps> = ({
       <h2 className="px-4 mb-4 text-sm font-black text-gray-400 uppercase tracking-widest">{title}</h2>
       <div className="flex overflow-x-auto snap-x snap-mandatory gap-6 pb-8 pt-2 px-4 scrollbar-hide">
         {sortedGroups.map((group) => {
-          // Use the primary setup to power the card actions
           const mainSetup = group.setups[0];
 
           return (
@@ -70,55 +67,64 @@ export const BudgetSetupsList: React.FC<BudgetSetupsListProps> = ({
                 </div>
 
                 <div className="space-y-6">
-  {['1/2', '2/2'].map((timingVal) => {
-    // Find the saved setup fragment for this timing if it exists
-    const setup = group.setups.find(s => s.timing === timingVal) || group.setups[0];
-    
-    // Prioritize Actual over Projected income
-    const actualStr = setup.data?._actualSalary;
-    const projectedStr = setup.data?._projectedSalary;
-    const actualValue = actualStr && actualStr.trim() !== '' ? parseFloat(actualStr) : null;
-    const projectedValue = parseFloat(projectedStr || '0');
-    const incomeToUse = actualValue !== null && !isNaN(actualValue) ? actualValue : projectedValue;
+                  {['1/2', '2/2'].map((timingVal) => {
+                    const periodIndex = timingVal === '1/2' ? 1 : 2;
+                    // Safely grab the unified setup
+                    const setup = group.setups.find(s => s.timing === timingVal) || mainSetup;
+                    
+                    // 1. Pull period-specific income!
+                    const actualStr = setup.data?._actualSalaryByPeriod?.[periodIndex] || setup.data?._actualSalary;
+                    const projectedStr = setup.data?._projectedSalaryByPeriod?.[periodIndex] || setup.data?._projectedSalary;
+                    const actualValue = actualStr && actualStr.trim() !== '' ? parseFloat(actualStr) : null;
+                    const projectedValue = parseFloat(projectedStr || '0');
+                    const incomeToUse = actualValue !== null && !isNaN(actualValue) ? actualValue : projectedValue;
 
-    // If this specific timing row hasn't been saved yet, default spent to 0
-    const isThisTimingSaved = group.setups.some(s => s.timing === timingVal);
-    const spent = isThisTimingSaved ? (setup.totalAmount || 0) : 0;
-    
-    const remaining = incomeToUse - spent;
-    const percentSpent = incomeToUse > 0 ? Math.min(100, (spent / incomeToUse) * 100) : 100;
-    const isOverBudget = remaining < 0;
+                    // 2. Pull period-specific spent totals!
+                                        // 2. Pull period-specific spent totals!
+                                        let spent = 0;
+                                        // Hunt for ANY setup in the month that has our new engine math
+                                        const setupWithNewMath = group.setups.find(s => s.data && s.data._periodTotals);
+                                        
+                                        if (setupWithNewMath) {
+                                          spent = setupWithNewMath.data._periodTotals[periodIndex] || 0;
+                                        } else {
+                                          const isThisTimingSaved = group.setups.some(s => s.timing === timingVal);
+                                          spent = isThisTimingSaved ? (setup.totalAmount || 0) : 0;
+                                        }
+                    
+                    
+                    const remaining = incomeToUse - spent;
+                    const percentSpent = incomeToUse > 0 ? Math.min(100, (spent / incomeToUse) * 100) : 100;
+                    const isOverBudget = remaining < 0;
 
-    const timingLabel = timingVal === '1/2' ? 'First Paycheck' : 'Second Paycheck';
+                    const timingLabel = timingVal === '1/2' ? 'First Paycheck' : 'Second Paycheck';
 
-    return (
-      <div key={timingVal} className="space-y-2">
-        <div className="flex justify-between items-end">
-          <span className="text-[11px] font-black uppercase tracking-wider text-gray-500 dark:text-gray-400">
-            {timingLabel}
-          </span>
-          <span className={`text-xs font-black ${isOverBudget ? 'text-red-500' : 'text-green-600'}`}>
-            {formatCurrency(Math.abs(remaining))} {isOverBudget ? 'Over' : 'Left'}
-          </span>
-        </div>
+                    return (
+                      <div key={timingVal} className="space-y-2">
+                        <div className="flex justify-between items-end">
+                          <span className="text-[11px] font-black uppercase tracking-wider text-gray-500 dark:text-gray-400">
+                            {timingLabel}
+                          </span>
+                          <span className={`text-xs font-black ${isOverBudget ? 'text-red-500' : 'text-green-600'}`}>
+                            {formatCurrency(Math.abs(remaining))} {isOverBudget ? 'Over' : 'Left'}
+                          </span>
+                        </div>
 
-        {/* Visual Bar representation */}
-        <div className={`h-5 w-full border-2 border-black rounded-xl overflow-hidden flex relative ${isOverBudget ? 'bg-red-100' : 'bg-green-400'}`}>
-          <div
-            className={`h-full border-r-2 border-black transition-all duration-500 ${isOverBudget ? 'bg-red-500' : 'bg-gray-800 dark:bg-gray-700'}`}
-            style={{ width: `${percentSpent}%` }}
-          />
-        </div>
+                        <div className={`h-5 w-full border-2 border-black rounded-xl overflow-hidden flex relative ${isOverBudget ? 'bg-red-100' : 'bg-green-400'}`}>
+                          <div
+                            className={`h-full border-r-2 border-black transition-all duration-500 ${isOverBudget ? 'bg-red-500' : 'bg-gray-800 dark:bg-gray-700'}`}
+                            style={{ width: `${percentSpent}%` }}
+                          />
+                        </div>
 
-        <div className="flex justify-between text-[10px] font-bold text-gray-400">
-          <span>{formatCurrency(spent)} Spent</span>
-          <span>{formatCurrency(incomeToUse)} Income</span>
-        </div>
-      </div>
-    );
-  })}
-</div>
-
+                        <div className="flex justify-between text-[10px] font-bold text-gray-400">
+                          <span>{formatCurrency(spent)} Spent</span>
+                          <span>{formatCurrency(incomeToUse)} Income</span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
 
               <div className="mt-8 pt-6 border-t-2 border-dashed border-gray-200 dark:border-gray-800 flex gap-3">
@@ -154,8 +160,11 @@ export const BudgetSetupsList: React.FC<BudgetSetupsListProps> = ({
 
                 {isArchived && onMoveToTrash && (
                   <button
-                    onClick={() => onMoveToTrash(mainSetup)}
-                    className="w-12 flex justify-center items-center bg-red-50 text-red-600 border-2 border-black rounded-xl shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[1px] hover:translate-y-[1px] transition-all"
+                    onClick={(e) => {
+                       e.stopPropagation(); // Stops it from opening the card
+                       onMoveToTrash(mainSetup);
+                    }}
+                    className="w-12 flex justify-center items-center bg-white dark:bg-gray-800 text-red-500 border-2 border-black rounded-xl shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:bg-red-50 hover:shadow-none hover:translate-x-[1px] hover:translate-y-[1px] transition-all"
                     title="Move to Trash"
                   >
                     <Trash2 className="w-4 h-4" />
