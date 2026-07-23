@@ -2386,9 +2386,7 @@ const [activePeriodIndex, setActivePeriodIndex] = useState<number>(1);
         if (actualTiming === '2/2') return activePeriodIndex === 2;
     
         const dueDay = item.dueDay || item.dueDate || linkedBiller?.dueDate || linkedInstallment?.due_date || 1;
-        
-        // 👈 Use the exact same adjusted period function here so auto-float items match the summary!
-        return getAdjustedPeriodIndex({ dueDate: dueDay }) === activePeriodIndex;
+return getAccountPeriodIndex({ dueDate: dueDay }) === activePeriodIndex;
       }
     
       const periodVal = item.amountsByPeriod?.[activePeriodIndex];
@@ -2414,7 +2412,7 @@ const [activePeriodIndex, setActivePeriodIndex] = useState<number>(1);
           if (inst.timing === '2/2') return activePeriodIndex === 2;
 
           const dueDay = inst.dueDate || inst.due_date || 1;
-          return getPeriodIndexForDate(dueDay) === activePeriodIndex;
+return getAccountPeriodIndex({ dueDate: dueDay }) === activePeriodIndex;
         })
         .reduce((s, inst) => s + inst.monthlyAmount, 0);
     }
@@ -3121,17 +3119,17 @@ const [activePeriodIndex, setActivePeriodIndex] = useState<number>(1);
   const matchingSummary = categorySummary.find(s => s.category === cat.name);
 const displayTotal = matchingSummary ? matchingSummary.total : 0;
 
-  let relevantInstallments: Installment[] = [];
-  if (cat.name === 'Loans') {
-    relevantInstallments = (installments || []).filter(inst => {
-      if (inst.isArchived) return false;
-      const timingMatch = !inst.timing || inst.timing === selectedTiming;
-      const scheduleForMonth = getPaymentSchedule('installment', inst.id, selectedMonth, selectedYear);
-      const isActiveForPeriod = scheduleForMonth !== undefined || shouldShowInstallment(inst, selectedMonth, selectedYear);
-      const isFinished = !scheduleForMonth && inst.totalAmount > 0 && inst.paidAmount >= inst.totalAmount;
-      return timingMatch && isActiveForPeriod && !isFinished;
-    });
-  }
+let relevantInstallments: Installment[] = [];
+if (cat.name === 'Loans') {
+  relevantInstallments = (installments || []).filter(inst => {
+    if (inst.isArchived) return false;
+    const scheduleForMonth = getPaymentSchedule('installment', inst.id, selectedMonth, selectedYear);
+    const isActiveForPeriod = scheduleForMonth !== undefined || shouldShowInstallment(inst, selectedMonth, selectedYear);
+    const isFinished = !scheduleForMonth && inst.totalAmount > 0 && inst.paidAmount >= inst.totalAmount;
+    return isActiveForPeriod && !isFinished; // 👈 Removed the old timingMatch lock!
+  });
+}
+
 
 
         const hasData = items.length > 0 || 
@@ -3162,7 +3160,7 @@ const displayTotal = matchingSummary ? matchingSummary.total : 0;
       if (actualTiming === '2/2') return activePeriodIndex === 2;
 
       const dueDay = item.dueDay || item.dueDate || linkedBiller?.dueDate || linkedInstallment?.due_date || 1;
-      return getPeriodIndexForDate(dueDay) === activePeriodIndex;
+return getAccountPeriodIndex({ dueDate: dueDay }) === activePeriodIndex;
     }
 
     const periodVal = item.amountsByPeriod?.[activePeriodIndex];
@@ -3213,10 +3211,8 @@ const categoryTotal = categorySummary.find(s => s.category === cat.name)?.total 
               <div className="p-4 space-y-4 bg-gray-50/30 dark:bg-gray-955/10">
              {creditBudgetAccounts.length > 0 && creditBudgetAccounts.filter(account => {
   if (excludedCreditIds.has(account.id)) return false;
-  const actualDueDay = item?.dueDay || item?.dueDate || item?.due_date || 1;
-return getAccountPeriodIndex({ dueDate: actualDueDay }) === activePeriodIndex;
+  return getAccountPeriodIndex(account) === activePeriodIndex;
 }).map(account => {
-
                  
                                     // 2. PERFECTLY SYNCED INDIVIDUAL CARD MATH
                                     const displayAmount = getFrozenCycleAmount(account);
@@ -3350,7 +3346,7 @@ return getAccountPeriodIndex({ dueDate: actualDueDay }) === activePeriodIndex;
 
     // 4. Fallback for items using dates instead of 1/2 or 2/2
     const dueDay = item.dueDay || item.dueDate || linkedBiller?.dueDate || linkedInstallment?.due_date || 1;
-    return getPeriodIndexForDate(dueDay) === activePeriodIndex;
+return getAccountPeriodIndex({ dueDate: dueDay }) === activePeriodIndex;
   }
 
   const periodVal = item.amountsByPeriod?.[activePeriodIndex];
@@ -3452,7 +3448,7 @@ return getAccountPeriodIndex({ dueDate: actualDueDay }) === activePeriodIndex;
   
   // 2. Fallback to calculating via due date
   const dueDay = installment.due_date || 1;
-  return getPeriodIndexForDate(dueDay) === activePeriodIndex;
+return getAccountPeriodIndex({ dueDate: dueDay }) === activePeriodIndex;
 }).map((installment) => {
   // 🛡️ RESTORED VARIABLES:
   const isIncluded = !excludedInstallmentIds.has(installment.id);
@@ -3533,7 +3529,7 @@ return getAccountPeriodIndex({ dueDate: actualDueDay }) === activePeriodIndex;
 
     // 4. Fallback for items using dates instead of 1/2 or 2/2
     const dueDay = item.dueDay || item.dueDate || linkedBiller?.dueDate || linkedInstallment?.due_date || 1;
-    return getPeriodIndexForDate(dueDay) === activePeriodIndex;
+return getAccountPeriodIndex({ dueDate: dueDay }) === activePeriodIndex;
   }
 
   const periodVal = item.amountsByPeriod?.[activePeriodIndex];
@@ -3722,7 +3718,7 @@ return getAccountPeriodIndex({ dueDate: actualDueDay }) === activePeriodIndex;
   if (installment.timing === '1/2') return activePeriodIndex === 1;
   if (installment.timing === '2/2') return activePeriodIndex === 2;
   const dueDay = installment.dueDate || installment.due_date || 1;
-  return getPeriodIndexForDate(dueDay) === activePeriodIndex;
+return getAccountPeriodIndex({ dueDate: dueDay }) === activePeriodIndex;
 }).map((installment) => {
   // 🛡️ RESTORED VARIABLES:
   const isIncluded = !excludedInstallmentIds.has(installment.id);
