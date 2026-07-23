@@ -50,6 +50,48 @@ interface BudgetProps {
 
 const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 
+const getNextAvailableDate = (existingSetups: SavedBudgetSetup[]) => {
+  // 1. If no budgets exist, default to the current real-world month
+  if (!existingSetups || existingSetups.length === 0) {
+    const now = new Date();
+    return { 
+      month: MONTHS[now.getMonth()], 
+      year: now.getFullYear() 
+    };
+  }
+
+  // 2. Find the absolute latest setup
+  const latestSetup = existingSetups.reduce((latest, current) => {
+    const currentYear = current.data?._year || new Date().getFullYear();
+    const currentMonthIdx = MONTHS.indexOf(current.month);
+    
+    const latestYear = latest.data?._year || new Date().getFullYear();
+    const latestMonthIdx = MONTHS.indexOf(latest.month);
+
+    if (currentYear > latestYear) return current;
+    if (currentYear === latestYear && currentMonthIdx > latestMonthIdx) return current;
+    return latest;
+  });
+
+  const latestYear = latestSetup.data?._year || new Date().getFullYear();
+  const latestMonthIdx = MONTHS.indexOf(latestSetup.month);
+
+  // 3. Calculate the next month (handling the December -> January rollover)
+  let nextMonthIdx = latestMonthIdx + 1;
+  let nextYear = latestYear;
+
+  if (nextMonthIdx > 11) {
+    nextMonthIdx = 0;
+    nextYear += 1;
+  }
+
+  return { 
+    month: MONTHS[nextMonthIdx], 
+    year: nextYear 
+  };
+};
+
+
 const isBillerActiveForPeriod = (biller: Biller, month: string, year: number): boolean => {
   const monthIdx = MONTHS.indexOf(month);
   if (monthIdx === -1) return false;
@@ -2262,19 +2304,29 @@ const [activePeriodIndex, setActivePeriodIndex] = useState<number>(1);
   };
 
   const handleOpenNew = () => {
+    // 1. Calculate the next available date based on your existing setups
+    const { month, year } = getNextAvailableDate(savedSetups); 
+  
+    // 2. Update your component's state so the UI dropdowns reflect this new date
+    // (Note: Replace these with whatever your actual state setter functions are named!)
+    setSelectedMonth(month); 
+    setSelectedYear(year);
+  
+    // 3. Keep your existing initialization code
     const initialSetup: { [key: string]: CategorizedSetupItem[] } = {};
-    
+  
     // 1. Initialize empty arrays for all categories
     effectiveCategories.forEach(c => {
       initialSetup[c.name] = [];
     });
+  
 
     // 2. Map and inject your active recurring billers directly into their categories
     (billers || []).forEach(biller => {
       if (biller.isArchived) return;
       
       // Check if active for the selected month/year
-      if (isBillerActiveForPeriod(biller, selectedMonth, selectedYear)) {
+      if (isBillerActiveForPeriod(biller, month, year)) {
         // Match biller category name to category list, defaulting to 'Utilities' or 'Fixed' if unmatched
         let targetCat = biller.category;
         if (!initialSetup[targetCat]) {
@@ -2328,16 +2380,19 @@ const [activePeriodIndex, setActivePeriodIndex] = useState<number>(1);
     setView('setup');
   };
 
-  const handleArchiveSetup = (setup: SavedBudgetSetup) => {
+  const handleArchiveSetup = (setupData: SavedBudgetSetup | SavedBudgetSetup[]) => {
+    const setupsToProcess = Array.isArray(setupData) ? setupData : [setupData];
+    const mainSetup = setupsToProcess[0];
+
     setConfirmModal({
       show: true,
       title: 'Close Budget',
-      message: `Close and archive the ${setup.month} (${setup.timing}) budget? You'll still be able to view it in Archived Budgets and it will still be used in projections, but you won't be able to modify it.`,
+      message: `Close the ${mainSetup.month} budget and move it to archives?`,
       onConfirm: () => {
         setConfirmModal(prev => ({ ...prev, show: false }));
         setArchiveSubmitting(true);
-    
-        onArchiveBudget?.(setup)
+
+        Promise.all(setupsToProcess.map(setup => onArchiveBudget?.(setup)))
           .then(() => setArchiveStatusMsg({ msg: 'Budget closed and archived.', type: 'success' }))
           .catch(() => setArchiveStatusMsg({ msg: 'Could not close budget. Please try again.', type: 'error' }))
           .finally(() => {
@@ -2348,15 +2403,22 @@ const [activePeriodIndex, setActivePeriodIndex] = useState<number>(1);
     });
   };
 
-  const handleReopenSetup = (setup: SavedBudgetSetup) => {
+
+  const handleReopenSetup = (setupData: SavedBudgetSetup | SavedBudgetSetup[]) => {
+    // 1. Force into an array to handle groups
+    const setupsToProcess = Array.isArray(setupData) ? setupData : [setupData];
+    const mainSetup = setupsToProcess[0]; // For the modal text
+
     setConfirmModal({
       show: true,
       title: 'Reopen Budget',
-      message: `Reopen the ${setup.month} (${setup.timing}) budget? You'll be able to make changes again. This may affect your projections.`,
+      message: `Reopen the ${mainSetup.month} budget? You'll be able to make changes again. This may affect your projections.`,
       onConfirm: () => {
         setConfirmModal(prev => ({ ...prev, show: false }));
         setArchiveSubmitting(true);
-        onReopenBudget?.(setup)
+
+        // 2. Loop through all setups in the group
+        Promise.all(setupsToProcess.map(setup => onReopenBudget?.(setup)))
           .then(() => setArchiveStatusMsg({ msg: 'Budget reopened. You can edit this budget again.', type: 'success' }))
           .catch(() => setArchiveStatusMsg({ msg: 'Could not reopen budget. Please try again.', type: 'error' }))
           .finally(() => {
@@ -2366,6 +2428,7 @@ const [activePeriodIndex, setActivePeriodIndex] = useState<number>(1);
       }
     });
   };
+
 
   // ... then, update these lines in the 'summary' view block
   if (view === 'summary') {
@@ -2475,17 +2538,24 @@ const [activePeriodIndex, setActivePeriodIndex] = useState<number>(1);
               isArchived={false}
               onLoadSetup={handleLoadSetup}
               onArchiveSetup={handleArchiveSetup}
-              onMoveToTrash={(setup) => {
+              onMoveToTrash={(setupData) => {
+                const setupsToProcess = Array.isArray(setupData) ? setupData : [setupData];
+                const mainSetup = setupsToProcess[0];
+    
                 setConfirmModal({
                   show: true,
                   title: 'Move to Trash',
-                  message: `Are you sure you want to move the ${setup.month} (${setup.timing}) budget history entry to Trash?`,
+                  message: `Are you sure you want to move the ${mainSetup.month} budget history entry to Trash?`,
                   onConfirm: () => {
-                    onMoveToTrash?.(setup);
+                    // Loop through and trigger the outer trash function for each paycheck
+                    setupsToProcess.forEach(setup => {
+                      onMoveToTrash?.(setup);
+                    });
                     setConfirmModal(prev => ({ ...prev, show: false }));
                   }
                 });
               }}
+    
               formatCurrency={formatCurrency}
               calculateBudgetRemaining={(setup) => calculateBudgetRemaining(setup, transactions, selectedYear)}
               archiveSubmitting={archiveSubmitting}

@@ -1,6 +1,6 @@
-import React from 'react';
+import React, { useRef, useState, useEffect } from 'react';
 import { SavedBudgetSetup } from '../types';
-import { ArrowRight, Archive, RotateCcw, Trash2 } from 'lucide-react';
+import { ArrowRight, Archive, RotateCcw, Trash2, ChevronLeft, ChevronRight } from 'lucide-react';
 
 const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 
@@ -9,9 +9,9 @@ interface BudgetSetupsListProps {
   title: string;
   isArchived: boolean;
   onLoadSetup: (setup: SavedBudgetSetup) => void;
-  onArchiveSetup?: (setup: SavedBudgetSetup) => void;
-  onReopenSetup?: (setup: SavedBudgetSetup) => void;
-  onMoveToTrash?: (setup: SavedBudgetSetup) => void;
+  onArchiveSetup?: (setup: SavedBudgetSetup | SavedBudgetSetup[]) => void;
+  onReopenSetup?: (setup: SavedBudgetSetup | SavedBudgetSetup[]) => void;
+  onMoveToTrash?: (setup: SavedBudgetSetup | SavedBudgetSetup[]) => void;
   formatCurrency: (amount: number) => string;
   calculateBudgetRemaining: (setup: SavedBudgetSetup) => number;
   archiveSubmitting: boolean;
@@ -28,6 +28,11 @@ export const BudgetSetupsList: React.FC<BudgetSetupsListProps> = ({
   formatCurrency,
   archiveSubmitting
 }) => {
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const [activeIndex, setActiveIndex] = useState(0);
+  const [canScrollLeft, setCanScrollLeft] = useState(false);
+  const [canScrollRight, setCanScrollRight] = useState(true);
+
   if (!setups || setups.length === 0) {
     return null;
   }
@@ -49,10 +54,49 @@ export const BudgetSetupsList: React.FC<BudgetSetupsListProps> = ({
     return MONTHS.indexOf(a.month) - MONTHS.indexOf(b.month);
   });
 
+  const handleScroll = () => {
+    if (!scrollContainerRef.current) return;
+    const { scrollLeft, scrollWidth, clientWidth } = scrollContainerRef.current;
+    
+    setCanScrollLeft(scrollLeft > 0);
+    // 1px buffer for pixel rounding issues
+    setCanScrollRight(Math.ceil(scrollLeft + clientWidth) < scrollWidth);
+
+    const cardWidth = scrollContainerRef.current.children[0]?.clientWidth || clientWidth;
+    // Calculate which index is most visible
+    const newIndex = Math.round(scrollLeft / cardWidth);
+    setActiveIndex(newIndex);
+  };
+
+  useEffect(() => {
+    handleScroll();
+  }, [sortedGroups.length]);
+
+  const scroll = (direction: 'left' | 'right') => {
+    if (!scrollContainerRef.current) return;
+    const container = scrollContainerRef.current;
+    
+    // Grab the actual width of a single card
+    const cardElement = container.children[0] as HTMLElement;
+    if (!cardElement) return;
+
+    // Scroll by 1 card width + 24px (which is Tailwind's gap-6)
+    const scrollStep = cardElement.clientWidth + 24; 
+    const scrollAmount = direction === 'left' ? -scrollStep : scrollStep;
+    
+    container.scrollBy({ left: scrollAmount, behavior: 'smooth' });
+  };
+
   return (
-    <div className="w-full">
+    <div className="w-full mb-8">
       <h2 className="px-4 mb-4 text-sm font-black text-gray-400 uppercase tracking-widest">{title}</h2>
-      <div className="flex overflow-x-auto snap-x snap-mandatory gap-6 pb-8 pt-2 px-4 scrollbar-hide">
+      
+      {/* Cards Container */}
+      <div 
+        ref={scrollContainerRef}
+        onScroll={handleScroll}
+        className="flex overflow-x-auto snap-x snap-mandatory gap-6 pb-4 pt-2 px-4 scrollbar-hide"
+      >
         {sortedGroups.map((group) => {
           const mainSetup = group.setups[0];
 
@@ -69,35 +113,24 @@ export const BudgetSetupsList: React.FC<BudgetSetupsListProps> = ({
                 <div className="space-y-6">
                   {['1/2', '2/2'].map((timingVal) => {
                     const periodIndex = timingVal === '1/2' ? 1 : 2;
-                    // Safely grab the unified setup
                     const setup = group.setups.find(s => s.timing === timingVal) || mainSetup;
                     
-                    // 1. Pull period-specific income!
                     const actualStr = setup.data?._actualSalaryByPeriod?.[periodIndex] || setup.data?._actualSalary;
                     const projectedStr = setup.data?._projectedSalaryByPeriod?.[periodIndex] || setup.data?._projectedSalary;
                     const actualValue = actualStr && actualStr.trim() !== '' ? parseFloat(actualStr) : null;
                     const projectedValue = parseFloat(projectedStr || '0');
                     const incomeToUse = actualValue !== null && !isNaN(actualValue) ? actualValue : projectedValue;
 
-                    // 2. Pull period-specific spent totals!
-                                        // 2. Pull period-specific spent totals!
-                                                            // 2. Pull period-specific spent totals!
                     let spent = 0;
-                    
-                    // Hunt for ANY setup in the month that has our new engine math stamped on it
                     const setupWithNewMath = group.setups.find(s => s.data && s.data._periodTotals);
                     
                     if (setupWithNewMath && setupWithNewMath.data._periodTotals) {
-                      // If it finds the new math, use it!
                       spent = setupWithNewMath.data._periodTotals[periodIndex] || 0;
                     } else {
-                      // If no save has happened yet, fallback to the old broken math
                       const isThisTimingSaved = group.setups.some(s => s.timing === timingVal);
                       spent = isThisTimingSaved ? (setup.totalAmount || 0) : 0;
                     }
 
-                    
-                    
                     const remaining = incomeToUse - spent;
                     const percentSpent = incomeToUse > 0 ? Math.min(100, (spent / incomeToUse) * 100) : 100;
                     const isOverBudget = remaining < 0;
@@ -143,7 +176,7 @@ export const BudgetSetupsList: React.FC<BudgetSetupsListProps> = ({
 
                 {!isArchived && onArchiveSetup && (
                   <button
-                    onClick={() => onArchiveSetup(mainSetup)}
+                    onClick={() => onArchiveSetup(group.setups)}
                     disabled={archiveSubmitting}
                     className="w-12 flex justify-center items-center bg-amber-50 text-amber-700 border-2 border-black rounded-xl shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[1px] hover:translate-y-[1px] transition-all disabled:opacity-50"
                     title="Close Budget"
@@ -154,7 +187,7 @@ export const BudgetSetupsList: React.FC<BudgetSetupsListProps> = ({
 
                 {isArchived && onReopenSetup && (
                   <button
-                    onClick={() => onReopenSetup(mainSetup)}
+                    onClick={() => onReopenSetup(group.setups)}
                     disabled={archiveSubmitting}
                     className="w-12 flex justify-center items-center bg-indigo-50 text-indigo-700 border-2 border-black rounded-xl shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[1px] hover:translate-y-[1px] transition-all disabled:opacity-50"
                     title="Reopen Budget"
@@ -163,12 +196,11 @@ export const BudgetSetupsList: React.FC<BudgetSetupsListProps> = ({
                   </button>
                 )}
 
-                {/* Removed isArchived condition here so it shows on all cards */}
                 {onMoveToTrash && (
                   <button
                     onClick={(e) => {
-                       e.stopPropagation(); // Stops it from opening the card
-                       onMoveToTrash(mainSetup);
+                       e.stopPropagation();
+                       onMoveToTrash(group.setups);
                     }}
                     className="w-12 flex justify-center items-center bg-white dark:bg-gray-800 text-red-500 border-2 border-black rounded-xl shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:bg-red-50 hover:shadow-none hover:translate-x-[1px] hover:translate-y-[1px] transition-all"
                     title="Move to Trash"
@@ -181,6 +213,41 @@ export const BudgetSetupsList: React.FC<BudgetSetupsListProps> = ({
           );
         })}
       </div>
+
+      {/* Controls Container (Arrows + Dots) */}
+      {sortedGroups.length > 1 && (
+        <div className="flex items-center justify-center gap-6 mt-4">
+          
+          {/* Left Arrow - Uses `invisible` to hide without breaking layout */}
+          <button 
+            onClick={() => scroll('left')}
+            className={`p-2 bg-white dark:bg-gray-800 border-2 border-black rounded-full shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:translate-x-[1px] hover:translate-y-[1px] hover:shadow-none transition-all hidden md:block ${!canScrollLeft ? 'invisible' : ''}`}
+          >
+            <ChevronLeft className="w-5 h-5" />
+          </button>
+
+          {/* Dots */}
+          <div className="flex gap-2">
+            {sortedGroups.map((_, idx) => (
+              <div 
+                key={idx} 
+                className={`h-2 rounded-full transition-all duration-300 border border-black ${
+                  activeIndex === idx ? 'w-6 bg-indigo-600' : 'w-2 bg-gray-300 dark:bg-gray-700'
+                }`}
+              />
+            ))}
+          </div>
+
+          {/* Right Arrow - Uses `invisible` to hide without breaking layout */}
+          <button 
+            onClick={() => scroll('right')}
+            className={`p-2 bg-white dark:bg-gray-800 border-2 border-black rounded-full shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:translate-x-[1px] hover:translate-y-[1px] hover:shadow-none transition-all hidden md:block ${!canScrollRight ? 'invisible' : ''}`}
+          >
+            <ChevronRight className="w-5 h-5" />
+          </button>
+
+        </div>
+      )}
     </div>
   );
 };
