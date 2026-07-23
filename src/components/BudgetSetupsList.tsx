@@ -81,16 +81,21 @@ export const BudgetSetupsList: React.FC<BudgetSetupsListProps> = ({
 
                     // 2. Pull period-specific spent totals!
                                         // 2. Pull period-specific spent totals!
-                                        let spent = 0;
-                                        // Hunt for ANY setup in the month that has our new engine math
-                                        const setupWithNewMath = group.setups.find(s => s.data && s.data._periodTotals);
-                                        
-                                        if (setupWithNewMath) {
-                                          spent = setupWithNewMath.data._periodTotals[periodIndex] || 0;
-                                        } else {
-                                          const isThisTimingSaved = group.setups.some(s => s.timing === timingVal);
-                                          spent = isThisTimingSaved ? (setup.totalAmount || 0) : 0;
-                                        }
+                                                            // 2. Pull period-specific spent totals!
+                    let spent = 0;
+                    
+                    // Hunt for ANY setup in the month that has our new engine math stamped on it
+                    const setupWithNewMath = group.setups.find(s => s.data && s.data._periodTotals);
+                    
+                    if (setupWithNewMath && setupWithNewMath.data._periodTotals) {
+                      // If it finds the new math, use it!
+                      spent = setupWithNewMath.data._periodTotals[periodIndex] || 0;
+                    } else {
+                      // If no save has happened yet, fallback to the old broken math
+                      const isThisTimingSaved = group.setups.some(s => s.timing === timingVal);
+                      spent = isThisTimingSaved ? (setup.totalAmount || 0) : 0;
+                    }
+
                     
                     
                     const remaining = incomeToUse - spent;
@@ -158,7 +163,8 @@ export const BudgetSetupsList: React.FC<BudgetSetupsListProps> = ({
                   </button>
                 )}
 
-                {isArchived && onMoveToTrash && (
+                {/* Removed isArchived condition here so it shows on all cards */}
+                {onMoveToTrash && (
                   <button
                     onClick={(e) => {
                        e.stopPropagation(); // Stops it from opening the card
