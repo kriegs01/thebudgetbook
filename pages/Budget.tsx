@@ -3145,14 +3145,19 @@ if (cat.name === 'Credit') {
         
         // 1. PERFECTLY SYNCED CATEGORY TOTAL MATH
         let creditTotal = 0;
-        if (cat.name === 'Credit') {
-          creditTotal = creditBudgetAccounts
-            .filter(acc => !excludedCreditIds.has(acc.id))
-            .reduce((sum, account) => {
-              const amt = getFrozenCycleAmount(account);
-              return amt >= 0.01 ? sum + amt : sum;
-            }, 0);
-        }
+if (cat.name === 'Credit') {
+  creditTotal = creditBudgetAccounts
+    .filter(acc => {
+      if (excludedCreditIds.has(acc.id)) return false;
+      const dueDay = acc.dueDate || acc.billingDate || acc.statementDate || 1;
+      return getPeriodIndexForDate(dueDay) === activePeriodIndex;
+    })
+    .reduce((sum, account) => {
+      const amt = getFrozenCycleAmount(account);
+      return amt >= 0.01 ? sum + amt : sum;
+    }, 0);
+}
+
 
         const categoryTotal = itemsTotal + 
   (cat.name === 'Loans' ? installmentsTotal : 0) + 
