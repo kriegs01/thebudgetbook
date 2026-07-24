@@ -669,7 +669,9 @@ const [activePeriodIndex, setActivePeriodIndex] = useState<number>(1);
 
 
 
-    const unifiedSetup = setupsForMonth.find(s => s.timing === 'unified');
+    // 🟢 Check for _periodTotals so the loader knows this is an upgraded multi-tab budget!
+const unifiedSetup = setupsForMonth.find(s => s.timing === 'unified' || s.data?._periodTotals);
+
   
     if (unifiedSetup && unifiedSetup.data) {
       // 🟢 PATH A: Load Unified Setup with auto-injected active billers
@@ -697,30 +699,40 @@ const [activePeriodIndex, setActivePeriodIndex] = useState<number>(1);
       effectiveCategories.forEach(c => mergedData[c.name] = []);
   
       setupsForMonth.forEach(setup => {
-         const periodIndex = setup.timing === '1/2' ? 1 : setup.timing === '2/2' ? 2 : parseInt(setup.timing?.split('/')[0] || '1');
-         
-         mergedProjected[periodIndex] = setup.data._projectedSalary ?? '11000';
-         if (setup.data._actualSalary) {
-             mergedActual[periodIndex] = setup.data._actualSalary;
-         }
-  
-         Object.entries(setup.data).forEach(([category, items]) => {
-           if (category.startsWith('_') || !Array.isArray(items)) return;
-           if (!mergedData[category]) mergedData[category] = [];
-           
-           items.forEach((oldItem: any) => {
-             let existingItem = mergedData[category].find(i => i.id === oldItem.id || i.name === oldItem.name);
-             if (!existingItem) {
-               existingItem = { ...oldItem, amountsByPeriod: {} };
-               mergedData[category].push(existingItem);
-             }
-             existingItem.amountsByPeriod[periodIndex] = oldItem.amount || '0';
-             if (periodIndex === activePeriodIndex) {
-                 existingItem.amount = oldItem.amount || '0';
-             }
-           });
-         });
-      });
+        const periodIndex = setup.timing === '1/2' ? 1 : setup.timing === '2/2' ? 2 : parseInt(setup.timing?.split('/')[0] || '1');
+        
+        mergedProjected[periodIndex] = setup.data._projectedSalary ?? '11000';
+        if (setup.data._actualSalary) {
+            mergedActual[periodIndex] = setup.data._actualSalary;
+        }
+ 
+        Object.entries(setup.data).forEach(([category, items]) => {
+          if (category.startsWith('_') || !Array.isArray(items)) return;
+          if (!mergedData[category]) mergedData[category] = [];
+          
+          items.forEach((oldItem: any) => {
+            let existingItem = mergedData[category].find(i => i.id === oldItem.id || i.name === oldItem.name);
+            if (!existingItem) {
+              // 🟢 Safely copy over any existing amountsByPeriod from the saved item
+              existingItem = { ...oldItem, amountsByPeriod: { ...(oldItem.amountsByPeriod || {}) } };
+              mergedData[category].push(existingItem);
+            } else if (oldItem.amountsByPeriod) {
+              // 🟢 Merge them together so we don't lose data from other tabs during Auto-Save!
+              existingItem.amountsByPeriod = { ...existingItem.amountsByPeriod, ...oldItem.amountsByPeriod };
+            }
+            
+            // 🟢 Only use the legacy fallback if the period map is totally empty
+            if (!existingItem.amountsByPeriod[periodIndex]) {
+                existingItem.amountsByPeriod[periodIndex] = oldItem.amount || '0';
+            }
+            
+            if (periodIndex === activePeriodIndex) {
+                existingItem.amount = existingItem.amountsByPeriod[activePeriodIndex] || oldItem.amount || '0';
+            }
+          });
+        });
+     });
+
 
       const finalMergedData = injectActiveBillers(mergedData);
       setSetupData(finalMergedData);
@@ -1261,6 +1273,7 @@ const [activePeriodIndex, setActivePeriodIndex] = useState<number>(1);
         item.id === id 
           ? { 
               ...item, 
+              amount: value, // 🟢 Keeps the legacy fallback happy!
               amountsByPeriod: {
                 ...(item.amountsByPeriod || {}),
                 [periodIndex]: value
@@ -1270,6 +1283,8 @@ const [activePeriodIndex, setActivePeriodIndex] = useState<number>(1);
       )
     }));
   };
+
+
 
   const [showPayModal, setShowPayModal] = useState<{ 
     biller: Biller, 
@@ -1864,12 +1879,18 @@ const [activePeriodIndex, setActivePeriodIndex] = useState<number>(1);
       name: 'New Item',
       amount: '0',
       included: true,
+      // 🟢 Force the item into the currently active tab!
+      timing: `${activePeriodIndex}/${currentPeriods.length || 2}`,
+      amountsByPeriod: {
+        [activePeriodIndex]: '0'
+      }
     };
     setSetupData(prev => ({
       ...prev,
       [category]: [...(prev[category] || []), newItem]
     }));
   };
+
 
   const removeItemFromCategory = (category: string, id: string, name: string) => {
     setConfirmModal({
