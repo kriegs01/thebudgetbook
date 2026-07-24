@@ -2572,7 +2572,7 @@ const [activePeriodIndex, setActivePeriodIndex] = useState<number>(1);
     setShowSandbox(true);
   }}
   className="px-4 py-2 bg-amber-100 text-amber-700 border-2 border-black rounded-lg font-bold shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:translate-x-[1px] hover:translate-y-[1px] hover:shadow-none transition-all mr-2">
-  🧪 Sandbox
+  🔮 Crystal Ball
 </button>
 
 
