@@ -53,30 +53,43 @@ export const useIncomeSlicer = ({
     }, [budgetItems]);
   
 
-  // Filter: Get "fresh" income transactions matching current Month + Year + Timing
-  const availableIncomes = useMemo(() => {
-    const [budgetYear, budgetMonthOneIndexed] = currentBudgetPeriod.split('-').map(Number);
-    const targetMonthIndex = budgetMonthOneIndexed - 1; // JS Month is 0-11
-
-    return transactions.filter(tx => {
-      const isIncome = tx.transaction_type === 'cash_in' && tx.name === 'Income';
-      const isNotYetSliced = !tx.is_sliced; 
-
-      if (!isIncome || !isNotYetSliced) return false;
-
-      // Match the calendar Year and Month
-      const txDate = new Date(tx.date);
-      const yearMatches = txDate.getFullYear() === budgetYear;
-      const monthMatches = txDate.getMonth() === targetMonthIndex;
-
-      // Match the timing cycle from the notes (e.g., "Income Record 1/2" -> "1/2")
-      const txTimingMatch = tx.notes?.match(/\d\/\d/);
-      const txTiming = txTimingMatch ? txTimingMatch[0] : null;
-      const timingMatches = txTiming === currentBudgetTiming;
-
-      return yearMatches && monthMatches && timingMatches;
-    });
-  }, [transactions, currentBudgetPeriod, currentBudgetTiming]);
+    // Filter: Get "fresh" income transactions matching current Month + Year + Timing
+    const availableIncomes = useMemo(() => {
+      const [budgetYear, budgetMonthOneIndexed] = currentBudgetPeriod.split('-').map(Number);
+      const targetMonthIndex = budgetMonthOneIndexed - 1; // JS Month is 0-11
+      
+      return transactions.filter(tx => {
+        const isIncome = tx.transaction_type === 'cash_in' && tx.name === 'Income';
+        const isNotYetSliced = !tx.is_sliced;
+        
+        if (!isIncome || !isNotYetSliced) return false;
+        
+        // Match the calendar Year and Month
+        const txDate = new Date(tx.date);
+        const yearMatches = txDate.getFullYear() === budgetYear;
+        const monthMatches = txDate.getMonth() === targetMonthIndex;
+        
+        // Match the timing cycle from the notes
+        // 1. Extract the current period number from currentBudgetTiming (e.g., "2/2" -> 2)
+        const currentPeriodNum = parseInt(currentBudgetTiming.split('/')[0]);
+        
+        // 2. Check for your NEW naming convention (e.g., "First Paycheck")
+        const periodNames = ['First', 'Second', 'Third', 'Fourth', 'Fifth'];
+        const pName = periodNames[currentPeriodNum - 1] ? `${periodNames[currentPeriodNum - 1]} Paycheck` : `Paycheck ${currentPeriodNum}`;
+        const matchesNewConvention = tx.notes?.includes(`(${pName})`);
+  
+        // 3. Check for the OLD legacy convention (e.g., "1/2") so older budgets don't break
+        const txTimingMatch = tx.notes?.match(/\d\/\d/);
+        const txTiming = txTimingMatch ? txTimingMatch[0] : null;
+        const matchesOldConvention = txTiming === currentBudgetTiming;
+  
+        // 4. If either convention matches, allow the transaction!
+        const timingMatches = matchesNewConvention || matchesOldConvention;
+  
+        return yearMatches && monthMatches && timingMatches;
+      });
+    }, [transactions, currentBudgetPeriod, currentBudgetTiming]);
+  
 
   // Calculate total funds currently sitting in the Tray
   const totalTrayPool = useMemo(() => {

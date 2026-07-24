@@ -1367,7 +1367,7 @@ const [activePeriodIndex, setActivePeriodIndex] = useState<number>(1);
     } = useIncomeSlicer({
       transactions: transactions,
       currentBudgetPeriod: currentBudgetPeriodIso,
-      currentBudgetTiming: selectedTiming,
+      currentBudgetTiming: `${activePeriodIndex}/${(typeof currentPeriods !== 'undefined' && currentPeriods?.length > 0) ? currentPeriods.length : 2}`,
       budgetItems: flattenedBudgetItems || [], // 👈 Pass the array variable directly (no parentheses!)
       accounts: accounts
     });
@@ -2085,28 +2085,44 @@ const [activePeriodIndex, setActivePeriodIndex] = useState<number>(1);
   const handleSalaryCashIn = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    const amount = parseFloat(salaryFormData.amount);
-    if (isNaN(amount) || amount <= 0) return;
+    const rawAmount = parseFloat(salaryFormData.amount);
+    if (isNaN(rawAmount) || rawAmount <= 0) return;
+
+    const periodNames = ['First', 'Second', 'Third', 'Fourth', 'Fifth'];
+    const pIndex = Number(activePeriodIndex) - 1;
+    const pName = periodNames[pIndex] ? `${periodNames[pIndex]} Paycheck` : `Paycheck ${activePeriodIndex}`;
+    const targetLabel = `Income - ${selectedMonth} (${pName})`;
 
     const transaction = {
       name: salaryFormData.name,
-      amount: -Math.abs(amount),
+      amount: rawAmount, 
       date: combineDateWithCurrentTime(salaryFormData.date),
       payment_method_id: salaryFormData.accountId,
       transaction_type: 'cash_in' as const,
-      notes: `Income Record - ${selectedTiming}`
+      notes: targetLabel
     };
+    
     try {
-      const { error } = await createTransaction(transaction);
+      const { error } = await createTransaction(transaction as any);
       if (error) throw error;
       
+      // 🟢 GHOST FIX: We no longer save the transaction amount into the manual input's state.
+      // This ensures that when the transaction is deleted, the fallback is completely blank!
+
       setShowSalaryModal(false);
-      await reloadTransactions();
-      if (onTransactionCreated) onTransactionCreated();
+      
+      // Delay the reload so the database has time to catch up
+      setTimeout(async () => {
+        await reloadTransactions();
+        if (onTransactionCreated) onTransactionCreated();
+      }, 1500);
+
     } catch (error) {
       alert('Failed to record salary. Please try again.');
     }
   };
+
+
 
   const handlePaySubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -2676,8 +2692,8 @@ const [activePeriodIndex, setActivePeriodIndex] = useState<number>(1);
   const allIncomeTxs = (transactions || []).filter(tx => {
     if (tx.transaction_type !== 'cash_in') return false;
     
-    const isTaggedIncome = tx.notes?.startsWith('Income Record');
-    // HARDENED: Fallback to empty string if name is missing
+    // Check for both the old "Income Record" and your new "Income - " convention
+    const isTaggedIncome = tx.notes?.startsWith('Income -') || tx.notes?.startsWith('Income Record');
     const nameLower = (tx.name || '').trim().toLowerCase(); 
     const isLegacyIncome = nameLower === 'salary' || nameLower === 'income';
     
@@ -2686,39 +2702,65 @@ const [activePeriodIndex, setActivePeriodIndex] = useState<number>(1);
     const txDate = new Date(tx.date);
     if (txDate.getMonth() !== currentMonthIndex || txDate.getFullYear() !== selectedYear) return false;
 
-    let matchesTiming = false;
-    if (tx.notes?.includes(' - 1/2') || tx.notes?.includes(' - 2/2')) {
-      matchesTiming = tx.notes.includes(` - ${selectedTiming}`);
+    // 🟢 YOUR NEW CONVENTION: "Income - July (Second Paycheck)"
+    const periodNames = ['First', 'Second', 'Third', 'Fourth', 'Fifth'];
+    const pIndex = Number(activePeriodIndex) - 1;
+    const pName = periodNames[pIndex] ? `${periodNames[pIndex]} Paycheck` : `Paycheck ${activePeriodIndex}`;
+    const targetLabel = `Income - ${selectedMonth} (${pName})`;
+    
+    // Legacy support for older saves so they don't disappear
+    const legacyLabel = Number(activePeriodIndex) === 1 ? '1/2' : '2/2'; 
+
+    if (tx.notes?.startsWith('Income -') || tx.notes?.startsWith('Income Record')) {
+      // Check if it matches your new exact string, OR the old legacy string
+      return tx.notes === targetLabel || tx.notes.includes(`- ${legacyLabel}`);
     } else {
-      const estimatedTiming = txDate.getDate() <= 15 ? '1/2' : '2/2';
-      matchesTiming = estimatedTiming === selectedTiming;
+      // Fallback for untagged transactions
+      return getPeriodIndexForDate(txDate.getDate()) === Number(activePeriodIndex);
     }
-
-    return matchesTiming;
   });
 
-  const otherIncomeTxs = allIncomeTxs.filter(tx => {
-    // HARDENED: Fallback to empty string if name is missing
-    const nameLower = (tx.name || '').trim().toLowerCase();
-    return nameLower !== 'salary' && nameLower !== 'income';
-  });
+    // 🟢 NEW ENGINE: Independent Other Income (Side hustles, refunds, etc.)
+    const otherIncomeTxs = (transactions || []).filter(tx => {
+      // 1. Must be a cash-in transaction
+      if (tx.transaction_type !== 'cash_in') return false;
+  
+      // 2. Must be in the currently selected month and year
+      const txDate = new Date(tx.date);
+      if (txDate.getMonth() !== currentMonthIndex || txDate.getFullYear() !== selectedYear) return false;
+  
+      // 3. EXPLICITLY EXCLUDE PRIMARY PAYCHECKS
+      const isTaggedIncome = tx.notes?.startsWith('Income -') || tx.notes?.startsWith('Income Record');
+      const nameLower = (tx.name || '').trim().toLowerCase(); 
+      const isPrimaryIncome = isTaggedIncome || nameLower === 'salary' || nameLower === 'income';
+      
+      if (isPrimaryIncome) return false;
+  
+      // 4. ISOLATE BY TAB: Push this extra income into the correct tab based on its date
+      return getPeriodIndexForDate(txDate.getDate()) === Number(activePeriodIndex);
+    });
 
   const totalOtherIncome = otherIncomeTxs.reduce((sum, tx) => sum + Math.abs(tx.amount), 0);
   const hasIncomeRecords = allIncomeTxs.length > 0;
   const actualSalaryValue = actualSalary.trim() !== '' ? parseFloat(actualSalary) : null;
   const projectedSalaryValue = parseFloat(projectedSalary) || 0;
   
-  let salaryToUse = 0;
-  if (actualSalaryValue !== null && !isNaN(actualSalaryValue)) {
-    salaryToUse = actualSalaryValue;
-  } else if (hasIncomeRecords) {
-    salaryToUse = 0;
-  } else {
-    salaryToUse = projectedSalaryValue;
-  }
-
-  const netIncome = salaryToUse + totalOtherIncome;
-  const remaining = netIncome - totalSpend;
+    // 🟢 LIVE INCOME CALCULATOR (Tab-Aware)
+    let salaryToUse = 0;
+  
+    if (allIncomeTxs && allIncomeTxs.length > 0) {
+      // 1. First Priority: If we have live transactions, force the math to use their exact sum
+      salaryToUse = allIncomeTxs.reduce((sum, tx) => sum + (parseFloat(tx.amount as any) || 0), 0);
+    } else {
+      // 2. Fallback: Use the manual input for this specific tab, or the projected amount
+      const actualTab = parseFloat(actualSalaryByPeriod[activePeriodIndex]);
+      const projectedTab = parseFloat(projectedSalaryByPeriod[activePeriodIndex]);
+      salaryToUse = !isNaN(actualTab) ? actualTab : (projectedTab || 0);
+    }
+  
+    const netIncome = salaryToUse + totalOtherIncome;
+    const remaining = netIncome - totalSpend;
+  
   const currentSetup = savedSetups.find(s => s.month === selectedMonth && s.timing === selectedTiming);
   const isReadOnly = currentSetup?.isArchived ?? false;
   const legacyMode = isLegacyBudget(selectedYear, selectedMonth);
@@ -2874,7 +2916,7 @@ const [activePeriodIndex, setActivePeriodIndex] = useState<number>(1);
                         className={`text-sm font-black text-gray-900 dark:text-gray-100 ${!isReadOnly ? 'cursor-pointer hover:text-indigo-600 dark:hover:text-indigo-400' : ''} transition-colors`}
                         onClick={() => !isReadOnly && setIsProjectedFocused(true)}
                       >
-                        {formatCurrency(parseFloat(projectedSalary || '0'))}
+                        {formatCurrency(parseFloat(projectedSalaryByPeriod[activePeriodIndex] || '0'))}
                       </span>
                     ) : (
                       <div className="flex items-center justify-end space-x-1">
@@ -2884,13 +2926,12 @@ const [activePeriodIndex, setActivePeriodIndex] = useState<number>(1);
                           type="number" 
                           min="0"
                           step="0.01"
-                          value={projectedSalary} 
-                          onChange={(e) => setProjectedSalary(e.target.value)} 
+                          value={projectedSalaryByPeriod[activePeriodIndex] || ''} 
+                          onChange={(e) => setProjectedSalaryByPeriod(prev => ({ ...prev, [activePeriodIndex]: e.target.value }))} 
                           onFocus={() => { isFocusedRef.current = true; }}
                           onBlur={() => { isFocusedRef.current = false; setIsProjectedFocused(false); }}
                           disabled={isReadOnly}
                           className="bg-transparent border-none text-sm font-black text-gray-900 dark:text-gray-100 w-28 text-right outline-none focus:bg-indigo-50 dark:focus:bg-indigo-900/30 rounded px-1 disabled:opacity-60 disabled:cursor-not-allowed"
-                          aria-label="Projected Income"
                         />
                       </div>
                     )}
@@ -2903,10 +2944,23 @@ const [activePeriodIndex, setActivePeriodIndex] = useState<number>(1);
                   <div className="flex items-center justify-end space-x-2">
                     {!isActualFocused ? (
                       <span 
-                        className={`text-sm font-black ${actualSalary ? 'text-gray-900 dark:text-gray-100' : 'text-gray-400 dark:text-gray-500 italic'} ${!isReadOnly ? 'cursor-pointer hover:text-indigo-600 dark:hover:text-indigo-400' : ''} transition-colors`}
-                        onClick={() => !isReadOnly && setIsActualFocused(true)}
+                        className={`text-sm font-black ${
+                          allIncomeTxs.length > 0 || actualSalaryByPeriod[activePeriodIndex] 
+                            ? 'text-gray-900 dark:text-gray-100' 
+                            : 'text-gray-400 dark:text-gray-500 italic'
+                        } ${!isReadOnly && allIncomeTxs.length === 0 ? 'cursor-pointer hover:text-indigo-600 dark:hover:text-indigo-400' : ''} transition-colors`}
+                        onClick={() => {
+                          // Only allow manual editing if there are no recorded transactions
+                          if (!isReadOnly && allIncomeTxs.length === 0) setIsActualFocused(true);
+                        }}
+                        title={allIncomeTxs.length > 0 ? "Locked to recorded transactions" : ""}
                       >
-                        {actualSalary ? formatCurrency(parseFloat(actualSalary)) : 'Click to add...'}
+                        {allIncomeTxs.length > 0 
+                          // 🟢 DERIVED MATH: If transactions exist, forcefully sum them up and display them!
+                          ? formatCurrency(allIncomeTxs.reduce((sum, tx) => sum + (parseFloat(tx.amount as any) || 0), 0))
+                          // Fallback to manual input if no transactions exist
+                          : (actualSalaryByPeriod[activePeriodIndex] ? formatCurrency(parseFloat(actualSalaryByPeriod[activePeriodIndex])) : 'Click to add...')
+                        }
                       </span>
                     ) : (
                       <div className="flex items-center justify-end space-x-1">
@@ -2916,41 +2970,40 @@ const [activePeriodIndex, setActivePeriodIndex] = useState<number>(1);
                           type="number" 
                           min="0"
                           step="0.01"
-                          value={actualSalary} 
-                          onChange={(e) => setActualSalary(e.target.value)} 
+                          value={actualSalaryByPeriod[activePeriodIndex] || ''} 
+                          onChange={(e) => setActualSalaryByPeriod(prev => ({ ...prev, [activePeriodIndex]: e.target.value }))} 
                           onFocus={() => { isFocusedRef.current = true; }}
                           onBlur={() => { isFocusedRef.current = false; setIsActualFocused(false); }}
                           disabled={isReadOnly}
                           placeholder="Enter actual"
                           className="bg-transparent border-none text-sm font-black text-gray-900 dark:text-gray-100 w-28 text-right outline-none focus:bg-indigo-50 dark:focus:bg-indigo-900/30 rounded px-1 placeholder:text-gray-300 dark:placeholder:text-gray-600 disabled:opacity-60 disabled:cursor-not-allowed"
-                          aria-label="Actual Income"
                         />
                       </div>
                     )}
+                    
+                    {/* The Wallet / List Buttons */}
                     {!isReadOnly && (
-                      hasIncomeRecords ? (
-                        <button
-                          onClick={() => setShowIncomeRecordsModal(true)}
-                          className="p-1.5 bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 rounded-lg border border-black shadow-[1px_1px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[0.5px] hover:translate-y-[0.5px] transition-all"
-                          title="View Income Records"
-                        >
+                      allIncomeTxs.length > 0 ? (
+                        <button onClick={() => setShowIncomeRecordsModal(true)} className="p-1.5 bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 rounded-lg border border-black shadow-[1px_1px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[0.5px] hover:translate-y-[0.5px] transition-all" title="View Income Records">
                           <List className="w-4 h-4" />
                         </button>
                       ) : (
-                        <button
-                          onClick={() => {
+                        <button onClick={() => {
                             const debitAccounts = accounts.filter(a => a.type === 'Debit');
+                            
+                            const yyyy = selectedYear;
+                            const mm = String(MONTHS.indexOf(selectedMonth) + 1).padStart(2, '0');
+                            const dd = activePeriodIndex === 1 ? '01' : '16';
+                            
                             setSalaryFormData({
                               name: 'Income',
-                              amount: actualSalary || projectedSalary || '',
-                              date: getTodayIso(),
+                              amount: actualSalaryByPeriod[activePeriodIndex] || projectedSalaryByPeriod[activePeriodIndex] || '',
+                              date: `${yyyy}-${mm}-${dd}`, 
                               accountId: debitAccounts[0]?.id || ''
                             });
                             setShowSalaryModal(true);
                           }}
-                          className="p-1.5 bg-green-50 dark:bg-green-900/20 text-green-600 dark:text-green-400 rounded-lg border border-black shadow-[1px_1px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[0.5px] hover:translate-y-[0.5px] transition-all"
-                          title="Record as Cash In transaction"
-                        >
+                          className="p-1.5 bg-green-50 dark:bg-green-900/20 text-green-600 dark:text-green-400 rounded-lg border border-black shadow-[1px_1px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[0.5px] hover:translate-y-[0.5px] transition-all" title="Record as Cash In transaction">
                           <WalletIcon className="w-4 h-4" />
                         </button>
                       )
@@ -4447,6 +4500,39 @@ return getAccountPeriodIndex({ dueDate: dueDay }) === activePeriodIndex;
   </div>
 )}
 
+{showSalaryModal && (
+        <div className="fixed inset-0 z-[150] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md animate-in fade-in" onClick={() => setShowSalaryModal(false)}>
+          <div className="bg-white dark:bg-gray-900 border-4 border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] rounded-2xl w-full max-w-sm p-6 relative transition-colors" onClick={e => e.stopPropagation()}>
+            <button onClick={() => setShowSalaryModal(false)} className="absolute right-4 top-4 p-1.5 hover:bg-gray-100 rounded-full transition-colors"><X className="w-5 h-5 text-gray-400" /></button>
+            <h2 className="text-xl font-black text-gray-900 dark:text-gray-100 mb-4">Record Income</h2>
+            <form onSubmit={handleSalaryCashIn} className="space-y-4">
+              <div>
+                <label className="block text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">Amount</label>
+                <div className="relative">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 font-bold text-gray-400">₱</span>
+                  <input required type="number" min="0" step="0.01" value={salaryFormData.amount} onChange={(e) => setSalaryFormData({...salaryFormData, amount: e.target.value})} className="w-full bg-gray-50 dark:bg-gray-800 border-2 border-black rounded-xl p-2.5 pl-7 outline-none text-base font-black dark:text-gray-100" />
+                </div>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">Date</label>
+                  <input required type="date" value={salaryFormData.date} onChange={(e) => setSalaryFormData({...salaryFormData, date: e.target.value})} className="w-full bg-gray-50 dark:bg-gray-800 border-2 border-black rounded-xl px-2.5 py-2 outline-none font-bold text-xs dark:text-gray-100" />
+                </div>
+                <div>
+                  <label className="block text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">Account</label>
+                  <select value={salaryFormData.accountId} onChange={(e) => setSalaryFormData({...salaryFormData, accountId: e.target.value})} className="w-full bg-gray-50 dark:bg-gray-800 border-2 border-black rounded-xl px-2.5 py-2 outline-none font-bold text-xs dark:text-gray-100">
+                    {accounts.filter(a => a.type === 'Debit').map(acc => <option key={acc.id} value={acc.id}>{acc.bank} ({acc.classification})</option>)}
+                  </select>
+                </div>
+              </div>
+              <div className="flex space-x-3 pt-2">
+                <button type="button" onClick={() => setShowSalaryModal(false)} className="flex-1 bg-gray-100 dark:bg-gray-800 border-2 border-black py-2.5 rounded-xl font-black text-xs text-gray-500 uppercase tracking-wider shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[1px] hover:translate-y-[1px] transition-all">Cancel</button>
+                <button type="submit" className="flex-1 bg-green-600 text-white border-2 border-black py-2.5 rounded-xl font-black text-xs uppercase tracking-wider shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[1px] hover:translate-y-[1px] transition-all">Submit</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
 
       {overdraftPrompt && (
