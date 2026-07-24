@@ -2449,6 +2449,26 @@ const [activePeriodIndex, setActivePeriodIndex] = useState<number>(1);
     });
   };
 
+  if (showSandbox) {
+    const sandboxSetup = savedSetups.find(s => s.month === selectedMonth && s.timing === selectedTiming);
+    const sandboxIncomes = transactions.filter(tx => 
+      tx.transaction_type === 'cash_in' && 
+      new Date(tx.date).getMonth() === MONTHS.indexOf(selectedMonth) && 
+      new Date(tx.date).getFullYear() === selectedYear
+    );
+
+    return (
+      <SandboxView 
+        onClose={() => setShowSandbox(false)}
+        liveIncomeTxs={sandboxIncomes}
+        liveSpendTxs={transactions.filter(t => t.transaction_type === 'cash_out')}
+        activeSetup={sandboxSetup}
+        allSetups={savedSetups} 
+        currentYear={selectedYear}
+      />
+    );
+  }
+
 
   // ... then, update these lines in the 'summary' view block
   if (view === 'summary') {
@@ -2781,36 +2801,13 @@ const [activePeriodIndex, setActivePeriodIndex] = useState<number>(1);
   const isReadOnly = currentSetup?.isArchived ?? false;
   const legacyMode = isLegacyBudget(selectedYear, selectedMonth);
 
-   // 🟢 THE INTERCEPTOR: It MUST sit right here, before the main return!
-   if (showSandbox) {
-    return (
-      <SandboxView 
-        onClose={() => setShowSandbox(false)}
-        liveIncomeTxs={allIncomeTxs}
-        liveSpendTxs={transactions.filter(t => t.transaction_type === 'cash_out')}
-        activeSetup={activeSetup}
-      />
-    );
-  }
 
   return (
     <div className={`space-y-8 animate-in slide-in-from-right-4 duration-500 pb-20 w-full ${isMobile ? 'p-2' : 'p-4 md:p-8'} relative`}>
-      
-       {/* 🟢 SANDBOX OVERLAY INTERCEPTOR */}
-       {showSandbox ? (
-        <div className="absolute inset-0 z-50 bg-white dark:bg-gray-950 min-h-screen">
-          <SandboxView 
-            onClose={() => setShowSandbox(false)}
-            liveIncomeTxs={allIncomeTxs}
-            liveSpendTxs={transactions.filter(t => t.transaction_type === 'cash_out')}
-            activeSetup={activeSetup}
-          />
-        </div>
-      ) : (
-        <div className="flex flex-col space-y-6">
-          <PageHeader 
-            title="Budget Setup"
-            subtitle={isReadOnly ? 'Archived – Read Only' : 'Your Money-Pie for the month'}
+      <div className="flex flex-col space-y-6">
+        <PageHeader 
+          title="Budget Setup"
+          subtitle={isReadOnly ? 'Archived – Read Only' : 'Your Money-Pie for the month'}
           icon={
             <div className={`w-14 h-14 rounded-2xl flex items-center justify-center text-white border-[3px] border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] -rotate-3 transition-all hover:rotate-0 hover:scale-110 z-10 relative ${getAccentClasses('bg')}`}>
               <WalletIcon className="w-7 h-7" />
@@ -2837,63 +2834,59 @@ const [activePeriodIndex, setActivePeriodIndex] = useState<number>(1);
               )}
             </div>
           )}
-          />
+        />
 
-          <div className="flex items-center justify-between w-full md:justify-center mb-6 md:relative">
-              <div className="flex-none md:absolute md:left-0 md:top-1/2 md:-translate-y-1/2">
-                  <button 
-                    onClick={async () => {
-                      if (!isReadOnly) {
-                        await autoSave();
-                      }
-                      setView('summary');
-                    }} 
-                    className="flex items-center justify-center w-10 h-10 rounded-xl bg-gray-50 dark:bg-gray-800 text-gray-500 dark:text-gray-400 border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[0.5px] hover:translate-y-[0.5px] transition-all shrink-0"
-                  >
-                      <ArrowLeft className="w-5 h-5" />
-                  </button>
-              </div>
+        <div className="flex items-center justify-between w-full md:justify-center mb-6 md:relative">
+          <div className="flex-none md:absolute md:left-0 md:top-1/2 md:-translate-y-1/2">
+            <button 
+              onClick={async () => {
+                if (!isReadOnly) {
+                  await autoSave();
+                }
+                setView('summary');
+              }} 
+              className="flex items-center justify-center w-10 h-10 rounded-xl bg-gray-50 dark:bg-gray-800 text-gray-500 dark:text-gray-400 border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[0.5px] hover:translate-y-[0.5px] transition-all shrink-0"
+            >
+              <ArrowLeft className="w-5 h-5" />
+            </button>
+          </div>
   
-              <div className="flex-grow flex justify-center items-center space-x-2 md:flex-grow-0">
-    {/* 1. THE RESTORED MONTH DROPDOWN */}
-    <select 
-      value={selectedMonth} 
-      onChange={(e) => setSelectedMonth(e.target.value)} 
-      disabled={isReadOnly} 
-      className={`bg-white dark:bg-gray-900 border-2 border-black rounded-xl md:rounded-[1.5rem] h-10 md:h-auto px-3 md:px-8 md:py-4 font-black text-xs md:text-base shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] outline-none disabled:opacity-60 disabled:cursor-not-allowed transition-colors text-center appearance-none ${getAccentClasses('text')}`}
-    >
-        {MONTHS.map(m => <option key={m} value={m}>{m}</option>)}
-    </select>
+          <div className="flex-grow flex justify-center items-center space-x-2 md:flex-grow-0">
+            <select 
+              value={selectedMonth} 
+              onChange={(e) => setSelectedMonth(e.target.value)} 
+              disabled={isReadOnly} 
+              className={`bg-white dark:bg-gray-900 border-2 border-black rounded-xl md:rounded-[1.5rem] h-10 md:h-auto px-3 md:px-8 md:py-4 font-black text-xs md:text-base shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] outline-none disabled:opacity-60 disabled:cursor-not-allowed transition-colors text-center appearance-none ${getAccentClasses('text')}`}
+            >
+              {MONTHS.map(m => <option key={m} value={m}>{m}</option>)}
+            </select>
 
-    {legacyMode && (
-      <span className="hidden md:block text-[10px] font-black text-gray-400 dark:text-gray-500 bg-gray-100 dark:bg-gray-800 border-2 border-black px-4 py-2 rounded-full uppercase tracking-widest">Legacy Budget</span>
-    )}
-</div>
-
+            {legacyMode && (
+              <span className="hidden md:block text-[10px] font-black text-gray-400 dark:text-gray-500 bg-gray-100 dark:bg-gray-800 border-2 border-black px-4 py-2 rounded-full uppercase tracking-widest">Legacy Budget</span>
+            )}
+          </div>
   
-              <div className="flex-none flex items-center gap-2 md:hidden">
-                {currentSetup && !isReadOnly && (
-                  <PinProtectedAction featureId="budget_modifications" onVerified={() => handleArchiveSetup(currentSetup)} actionLabel="Close Budget">
-                    <button onClick={(e) => e.preventDefault()} disabled={archiveSubmitting} className="flex items-center justify-center w-10 h-10 rounded-xl bg-amber-50 text-amber-700 border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[0.5px] hover:translate-y-[0.5px] transition-all disabled:opacity-50" aria-label="Close">
-                      <Archive className="w-4 h-4" />
-                    </button>
-                  </PinProtectedAction>
-                )}
-                {!isReadOnly && (
-                  <PinProtectedAction featureId="budget_modifications" onVerified={handleSaveSetup} actionLabel="Save Budget">
-                    <button onClick={(e) => e.preventDefault()} className={`flex items-center justify-center w-10 h-10 rounded-xl text-white border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[0.5px] hover:translate-y-[0.5px] ${getAccentClasses('bg')}`} aria-label="Save">
-                      <Save className="w-4 h-4" />
-                    </button>
-                  </PinProtectedAction>
-                )}
-              </div>
+          <div className="flex-none flex items-center gap-2 md:hidden">
+            {currentSetup && !isReadOnly && (
+              <PinProtectedAction featureId="budget_modifications" onVerified={() => handleArchiveSetup(currentSetup)} actionLabel="Close Budget">
+                <button onClick={(e) => e.preventDefault()} disabled={archiveSubmitting} className="flex items-center justify-center w-10 h-10 rounded-xl bg-amber-50 text-amber-700 border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[0.5px] hover:translate-y-[0.5px] transition-all disabled:opacity-50" aria-label="Close">
+                  <Archive className="w-4 h-4" />
+                </button>
+              </PinProtectedAction>
+            )}
+            {!isReadOnly && (
+              <PinProtectedAction featureId="budget_modifications" onVerified={handleSaveSetup} actionLabel="Save Budget">
+                <button onClick={(e) => e.preventDefault()} className={`flex items-center justify-center w-10 h-10 rounded-xl text-white border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[0.5px] hover:translate-y-[0.5px] ${getAccentClasses('bg')}`} aria-label="Save">
+                  <Save className="w-4 h-4" />
+                </button>
+              </PinProtectedAction>
+            )}
           </div>
         </div>
       </div>
-    )
-  }
   
 {/* 2. THE DYNAMIC TABS */}
+
 <div className="flex space-x-2 overflow-x-auto pb-1 max-w-full scrollbar-hide">
   {currentPeriods.map((period, index) => {
     const periodNum = index + 1;

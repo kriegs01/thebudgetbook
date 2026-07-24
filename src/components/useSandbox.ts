@@ -1,44 +1,28 @@
-import { useState, useMemo } from 'react';
+import { useState } from 'react';
 
-// 1. Define the blueprint for a hypothetical purchase
-export interface MockItem {
+export interface MockPurchase {
   id: string;
   name: string;
   amount: number;
-  date: string; // This date is crucial for the Date-Range Mapper to know which tab this falls into!
+  type: 'one-off' | 'installment';
+  startDate: string; // "YYYY-MM-DD"
+  durationMonths?: number;
 }
 
-export const useSandbox = () => {
-  // 2. The Core State
-  const [isSandboxActive, setIsSandboxActive] = useState(false);
+export function useSandbox() {
   const [safetyNet, setSafetyNet] = useState<number>(0);
-  const [mockPurchases, setMockPurchases] = useState<MockItem[]>([]);
+  const [mockPurchases, setMockPurchases] = useState<MockPurchase[]>([]);
 
-  // 3. Action Helpers (Add, Remove, Reset)
-  const addMockPurchase = (item: Omit<MockItem, 'id'>) => {
-    const newItem = { ...item, id: crypto.randomUUID() };
-    setMockPurchases(prev => [...prev, newItem]);
+  const addMockPurchase = (purchase: MockPurchase) => {
+    setMockPurchases(prev => [...prev, purchase]);
   };
 
   const removeMockPurchase = (id: string) => {
-    setMockPurchases(prev => prev.filter(item => item.id !== id));
+    setMockPurchases(prev => prev.filter(p => p.id !== id));
   };
 
-  const resetSandbox = () => {
-    setMockPurchases([]);
-    setSafetyNet(0);
-    setIsSandboxActive(false);
-  };
-
-  // 4. Return everything so the Budget page can use it
   return {
-    isSandboxActive,
-    setIsSandboxActive,
-    safetyNet,
-    setSafetyNet,
-    mockPurchases,
-    addMockPurchase,
-    removeMockPurchase,
-    resetSandbox
+    safetyNet, setSafetyNet,
+    mockPurchases, addMockPurchase, removeMockPurchase
   };
-};
+}
