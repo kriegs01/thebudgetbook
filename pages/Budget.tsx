@@ -26,6 +26,8 @@ import { getPayScheduleRules, PayScheduleRule } from '../src/services/paySchedul
 import { getActiveRuleForMonth, generatePayPeriodsForMonth, findPayPeriodForDueDate, PayPeriod } from '../src/utils/payPeriodUtils';
 import { getPayPeriodLabel } from '../src/utils/payPeriodUtils'; // Or ensure it's imported correctly from your utils path
 import { fetchPaySchedules } from '../src/services/payScheduleService'; 
+import { SandboxView } from '../src/components/SandboxView';
+
 
 interface BudgetProps {
   items: BudgetItem[];
@@ -152,6 +154,7 @@ const parseIsoMonthStart = (iso: any): Date | null => {
     return null;
   }
 };
+
 
 const isCategoryActiveForBudget = (
   cat: BudgetCategory,
@@ -287,6 +290,7 @@ const [selectedMonth, setSelectedMonth] = useState(MONTHS[new Date().getMonth()]
 const [selectedTiming, setSelectedTiming] = useState<'1/2' | '2/2'>('1/2');
 const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
 
+const [showSandbox, setShowSandbox] = useState(false);
 
 const sortedSetups = React.useMemo(() => {
   return [...(savedSetups || [])].sort((a, b) => {
@@ -2540,6 +2544,18 @@ const [activePeriodIndex, setActivePeriodIndex] = useState<number>(1);
                 </button>
               }
             />
+                      {/* Add this inside your header actions area! */}
+                      <button 
+  type="button" // 🟢 Add this to prevent any default form behavior
+  onClick={() => {
+    console.log("Sandbox button clicked!"); // 🟢 Let's force a log to see if it fires
+    setShowSandbox(true);
+  }}
+  className="px-4 py-2 bg-amber-100 text-amber-700 border-2 border-black rounded-lg font-bold shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:translate-x-[1px] hover:translate-y-[1px] hover:shadow-none transition-all mr-2">
+  🧪 Sandbox
+</button>
+
+
 
             {archiveStatusMsg && (
               <div className={`flex items-center space-x-3 px-6 py-4 rounded-2xl text-sm font-bold mb-6 ${archiveStatusMsg.type === 'success' ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'}`}>
@@ -2765,12 +2781,36 @@ const [activePeriodIndex, setActivePeriodIndex] = useState<number>(1);
   const isReadOnly = currentSetup?.isArchived ?? false;
   const legacyMode = isLegacyBudget(selectedYear, selectedMonth);
 
+   // 🟢 THE INTERCEPTOR: It MUST sit right here, before the main return!
+   if (showSandbox) {
+    return (
+      <SandboxView 
+        onClose={() => setShowSandbox(false)}
+        liveIncomeTxs={allIncomeTxs}
+        liveSpendTxs={transactions.filter(t => t.transaction_type === 'cash_out')}
+        activeSetup={activeSetup}
+      />
+    );
+  }
+
   return (
-    <div className={`space-y-8 animate-in slide-in-from-right-4 duration-500 pb-20 w-full ${isMobile ? 'pt-10' : ''}`}>
-      <div className="flex flex-col space-y-6">
-        <PageHeader 
-          title="Budget Setup"
-          subtitle={isReadOnly ? 'Archived — Read Only' : 'Your Money-Pie for the month of:'}
+    <div className={`space-y-8 animate-in slide-in-from-right-4 duration-500 pb-20 w-full ${isMobile ? 'p-2' : 'p-4 md:p-8'} relative`}>
+      
+       {/* 🟢 SANDBOX OVERLAY INTERCEPTOR */}
+       {showSandbox ? (
+        <div className="absolute inset-0 z-50 bg-white dark:bg-gray-950 min-h-screen">
+          <SandboxView 
+            onClose={() => setShowSandbox(false)}
+            liveIncomeTxs={allIncomeTxs}
+            liveSpendTxs={transactions.filter(t => t.transaction_type === 'cash_out')}
+            activeSetup={activeSetup}
+          />
+        </div>
+      ) : (
+        <div className="flex flex-col space-y-6">
+          <PageHeader 
+            title="Budget Setup"
+            subtitle={isReadOnly ? 'Archived – Read Only' : 'Your Money-Pie for the month'}
           icon={
             <div className={`w-14 h-14 rounded-2xl flex items-center justify-center text-white border-[3px] border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] -rotate-3 transition-all hover:rotate-0 hover:scale-110 z-10 relative ${getAccentClasses('bg')}`}>
               <WalletIcon className="w-7 h-7" />
@@ -2849,6 +2889,9 @@ const [activePeriodIndex, setActivePeriodIndex] = useState<number>(1);
               </div>
           </div>
         </div>
+      </div>
+    )
+  }
   
 {/* 2. THE DYNAMIC TABS */}
 <div className="flex space-x-2 overflow-x-auto pb-1 max-w-full scrollbar-hide">
