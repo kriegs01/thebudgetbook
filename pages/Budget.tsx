@@ -292,6 +292,9 @@ const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
 
 const [showSandbox, setShowSandbox] = useState(false);
 
+const [isSlicerExpanded, setIsSlicerExpanded] = useState(false);
+
+
 const sortedSetups = React.useMemo(() => {
   return [...(savedSetups || [])].sort((a, b) => {
     const yearA = parseInt(a.data?._year || new Date().getFullYear().toString());
@@ -1363,16 +1366,111 @@ const unifiedSetup = setupsForMonth.find(s => s.timing === 'unified' || s.data?.
   // ⚡ STEP 2: THE INCOME SLICER HOOK (Wired with real state)
   // =========================================================
     
-  // Safely grab your current period's budget items
+      // ⚡ MASTER BUDGET AGGREGATOR FOR THE SLICER
   const flattenedBudgetItems = React.useMemo(() => {
-    return Object.values(setupData || {})
+    // 1. STANDARD ITEMS & BILLERS (From the Budget Engine)
+    const currentPeriodItems = processedBudgetMap[activePeriodIndex] || {};
+    const baseItems = Object.values(currentPeriodItems)
       .flat()
-      // 🟢 Filter out any items that don't have an ID or a valid Name
-      .filter((item): item is BudgetItem => 
-        !!(item && typeof item === 'object' && 'id' in item && item.id)
-      );
-  }, [setupData]);
-  
+      .filter((item): item is BudgetItem => !!(item && typeof item === 'object' && item.id && item.included))
+      .map((item: any) => ({
+        id: item.id,
+        name: item.name,
+        amount: item.amountsByPeriod?.[activePeriodIndex] !== undefined 
+          ? item.amountsByPeriod[activePeriodIndex] 
+          : item.amount
+      }));
+
+    // 2. INSTALLMENTS (Loans)
+    const installmentItems = (installments || [])
+      .filter(inst => {
+        if (inst.isArchived || excludedInstallmentIds.has(inst.id)) return false;
+        
+        let targetPeriod = 1;
+        if (inst.timing === '1/2') targetPeriod = 1;
+        else if (inst.timing === '2/2') targetPeriod = 2;
+        else targetPeriod = getAccountPeriodIndex({ dueDate: inst.dueDate || inst.due_date || 1 });
+        
+        if (targetPeriod !== activePeriodIndex) return false;
+
+        // INLINED: Find Payment Schedule safely
+        const scheduleForMonth = paymentSchedules.find(
+            s => s.source_type === 'installment' && 
+                 s.source_id === inst.id && 
+                 s.month === selectedMonth && 
+                 s.year === selectedYear
+        );
+
+        // INLINED: Check if the date is active
+        let isDateActive = true;
+        if (inst.startDate) {
+            const [startYear, startMonth] = inst.startDate.split('-').map(Number);
+            const selectedMonthIndex = MONTHS.indexOf(selectedMonth);
+            const startMonthAbs = startYear * 12 + (startMonth - 1);
+            const selectedMonthAbs = selectedYear * 12 + selectedMonthIndex;
+            
+            if (selectedMonthIndex !== -1 && startMonthAbs > selectedMonthAbs) {
+                isDateActive = false;
+            } else {
+                const termMonths = parseInt(inst.termDuration, 10);
+                if (!isNaN(termMonths) && termMonths > 0) {
+                    const lastPaymentMonthAbs = startMonthAbs + (termMonths - 1);
+                    if (selectedMonthAbs > lastPaymentMonthAbs) isDateActive = false;
+                }
+            }
+        }
+
+        const isActiveForPeriod = scheduleForMonth !== undefined || isDateActive;
+        const isFinished = !scheduleForMonth && inst.totalAmount > 0 && inst.paidAmount >= inst.totalAmount;
+        
+        return isActiveForPeriod && !isFinished;
+      })
+      .map(inst => ({
+        id: inst.id,
+        name: inst.name,
+        amount: inst.monthlyAmount
+      }));
+
+    // 3. CREDIT CARDS
+    const creditItems = creditBudgetAccounts
+      .filter(acc => {
+        if (excludedCreditIds.has(acc.id)) return false;
+        return getAccountPeriodIndex(acc) === activePeriodIndex;
+      })
+      .map(acc => ({
+        id: acc.id,
+        name: `${acc.bank} (Credit)`,
+        amount: getFrozenCycleAmount(acc)
+      }))
+      .filter(item => item.amount >= 0.01);
+
+    // 4. STASH (Wallets)
+    const stashItems = wallets
+      .filter(w => !excludedWalletIds.has(w.id))
+      .map(w => ({
+        id: w.id,
+        name: `${w.name} (Stash)`,
+        amount: w.amount
+      }))
+      .filter(item => item.amount > 0);
+
+    // 5. MERGE ALL ACTIVE ITEMS
+    return [...baseItems, ...installmentItems, ...creditItems, ...stashItems];
+  }, [
+    processedBudgetMap, 
+    activePeriodIndex, 
+    installments, 
+    excludedInstallmentIds,
+    paymentSchedules, 
+    selectedMonth, 
+    selectedYear,
+    getAccountPeriodIndex, 
+    creditBudgetAccounts, 
+    excludedCreditIds, 
+    getFrozenCycleAmount,
+    wallets, 
+    excludedWalletIds
+  ]);
 
     // Call the hook and destructure everything cleanly in one go
     const { 
@@ -1396,14 +1494,16 @@ const unifiedSetup = setupsForMonth.find(s => s.timing === 'unified' || s.data?.
   // ⚡ STEP 3: THE EXECUTION HANDLER FOR THE SLICER
   // =========================================================
     // 🟢 Make sure the "async" keyword is right here!
-    const handleSliceSubmit = async () => {
-      if (trayTxIds.length === 0) {
-        alert("Your distribution tray is empty! Add some income transactions first.");
-        return;
-      }
-  
+      // ⚡ STEP 3: THE EXECUTION HANDLER FOR THE SLICER
+  const handleSliceSubmit = async () => {
+    if (trayTxIds.length === 0) {
+      alert("Your distribution tray is empty! Add some income transactions first.");
+      return;
+    }
+
+    // Wrap the actual processing logic in a helper function
+    const processSlice = async () => {
       await executeSlice(
-        // 1. Adapter function 
         async (params: { sourceAccountId: string, destinationAccountId: string, amount: number, description: string, date: string }) => {
           const result = await createTransfer(
             params.sourceAccountId,
@@ -1412,41 +1512,48 @@ const unifiedSetup = setupsForMonth.find(s => s.timing === 'unified' || s.data?.
             params.date,
             0 
           );
-          
-          // ✅ THROW the error back to the hook if the database rejects it
           if (result && result.error) {
             throw new Error(`Transfer failed: ${result.error.message || 'Unknown database error'}`);
           }
-          
           return result;
         }, 
-        // 2. The status update function (Leave this exactly as is!)
         async (ids: string[], status: boolean) => {
-          const updatePromises = ids.map(id => 
-            updateTransaction(id, { is_sliced: status })
-          );
-          
+          const updatePromises = ids.map(id => updateTransaction(id, { is_sliced: status }));
           const results = await Promise.all(updatePromises);
-          
           const failedUpdate = results.find(res => res && res.error);
           if (failedUpdate) {
             throw new Error(`Failed to update transaction status: ${failedUpdate.error.message}`);
           }
         }
       );
-  
-      // Automatically refresh transactions so your screen updates with new balances
+
+      // Refresh transactions
       const { data, error } = await getAllTransactions();
       if (!error && data) {
         const twoYearsAgo = new Date();
         twoYearsAgo.setFullYear(twoYearsAgo.getFullYear() - 2);
-        const recentTransactions = data.filter(tx => {
-          const txDate = new Date(tx.date);
-          return txDate >= twoYearsAgo;
-        });
+        const recentTransactions = data.filter(tx => new Date(tx.date) >= twoYearsAgo);
         setTransactions(recentTransactions);
       }
-    };  
+    };
+
+    // 🟢 THE GUARD: Check if there are unallocated funds
+    if (remainingToAllocate > 0) {
+      setConfirmModal({
+        show: true,
+        title: 'Unallocated Funds',
+        message: "Some items' account are not yet allocated. Sure you want to proceed?",
+        onConfirm: async () => {
+          setConfirmModal(prev => ({ ...prev, show: false }));
+          await processSlice();
+        }
+      });
+    } else {
+      // If perfectly allocated, proceed instantly
+      await processSlice();
+    }
+  };
+
   // =========================================================
 
   const getLinkedInstallmentsAmount = useCallback((biller: Biller): number | null => {
@@ -2137,7 +2244,7 @@ const unifiedSetup = setupsForMonth.find(s => s.timing === 'unified' || s.data?.
       // 1. Send the data to Supabase
       await createTransaction(transaction as any);
       
-    } catch (err) {
+        } catch (err) {
       // We will silently catch any false-alarm errors here since we know the DB saves it successfully!
       console.warn("Caught a post-save warning, continuing safely...", err);
     } finally {
@@ -2150,13 +2257,19 @@ const unifiedSetup = setupsForMonth.find(s => s.timing === 'unified' || s.data?.
         name: 'Salary', 
         amount: '' 
       }));
+
+      await new Promise(resolve => setTimeout(resolve, 500));
       
-      // Reload the budget data so the new income appears instantly
-      if (typeof loadData === 'function') {
-        await loadData();
+      // 🟢 THE FIX: Call your actual local refresh function
+      await reloadTransactions();
+      
+      // Notify parent components if they need to update
+      if (onTransactionCreated) {
+        onTransactionCreated();
       }
     }
-  };
+  }
+
 
 
 
@@ -3106,21 +3219,27 @@ const unifiedSetup = setupsForMonth.find(s => s.timing === 'unified' || s.data?.
         </div>
       </div>
       
-                {/* ========================================================= */}
+                          {/* ========================================================= */}
           {/* ⚡ INCOME SLICER WORKSPACE PANEL                          */}
           {/* ========================================================= */}
           {(availableIncomes || []).length > 0 && (
             <div className="mt-8 bg-[#F4F3EF] dark:bg-gray-900 border-4 border-black p-6 rounded-2xl shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] transition-colors">
               
-              {/* Header Section */}
-              <div className="flex flex-col md:flex-row md:items-center justify-between border-b-4 border-black pb-4 mb-6">
+              {/* Header Section - 🟢 NOW CLICKABLE */}
+              <div 
+                className="flex flex-col md:flex-row md:items-center justify-between border-b-4 border-black pb-4 mb-4 cursor-pointer hover:bg-black/5 dark:hover:bg-white/5 rounded-xl transition-colors -mx-2 px-2"
+                onClick={() => setIsSlicerExpanded(!isSlicerExpanded)}
+              >
                 <div>
                   <span className="bg-amber-300 text-black border-2 border-black px-2.5 py-1 rounded-md text-[10px] font-black uppercase tracking-wider shadow-[1px_1px_0px_0px_rgba(0,0,0,1)]">
                     Slicer Active
                   </span>
-                  <h2 className="text-xl font-black text-gray-900 dark:text-gray-100 mt-2 uppercase tracking-tight">
-                    Distribute Income
-                  </h2>
+                  <div className="flex items-center gap-3 mt-2">
+                    <h2 className="text-xl font-black text-gray-900 dark:text-gray-100 uppercase tracking-tight">
+                      Distribute Income
+                    </h2>
+                    <ChevronDown className={`w-6 h-6 text-gray-900 dark:text-gray-100 transition-transform duration-300 ${isSlicerExpanded ? 'rotate-180' : ''}`} />
+                  </div>
                   <p className="text-xs text-gray-500 dark:text-gray-400 font-medium mt-0.5">
                     Select which recorded income transactions to slice and allocate to your budgets.
                   </p>
@@ -3141,166 +3260,168 @@ const unifiedSetup = setupsForMonth.find(s => s.timing === 'unified' || s.data?.
                 </div>
               </div>
 
-              {/* STEP 1: Select Income Transactions to Load Into Tray */}
-              <div className="mb-6">
-                <h3 className="text-xs font-black uppercase tracking-wider text-gray-400 mb-3">
-                  1. Select Income to Slice
-                </h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  {availableIncomes.map((tx) => {
-                    const isSelected = trayTxIds.includes(tx.id);
-                    const account = accounts.find(a => a.id === tx.payment_method_id);
-                    const accountName = account ? `${account.bank} (${account.classification})` : 'Unknown Account';
-                    
-                    return (
-                      <button
-                        key={tx.id}
-                        type="button"
-                        onClick={() => toggleTrayTransaction(tx.id)}
-                        className={`w-full text-left p-4 border-2 border-black rounded-xl flex items-center justify-between transition-all transform active:scale-[0.98] ${
-                          isSelected
-                            ? 'bg-emerald-100 dark:bg-emerald-950/40 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]'
-                            : 'bg-white dark:bg-gray-800 hover:bg-gray-50 shadow-[1px_1px_0px_0px_rgba(0,0,0,1)] hover:shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]'
-                        }`}
-                      >
-                        <div>
-                          <p className="font-black text-sm text-gray-900 dark:text-gray-100">{tx.notes || 'Income Record'}</p>
-                          <p className="text-[10px] font-bold uppercase text-gray-400 mt-0.5">Origin: {accountName}</p>
-                        </div>
-                        <div className="flex items-center space-x-3">
-                          <span className="font-black text-emerald-600">₱{Math.abs(tx.amount).toLocaleString()}</span>
-                          <div className={`w-6 h-6 border-2 border-black rounded-md flex items-center justify-center ${isSelected ? 'bg-emerald-500' : 'bg-white'}`}>
-                            {isSelected && <Check className="w-4 h-4 text-white stroke-[4]" />}
-                          </div>
-                        </div>
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
+              {/* 🟢 THE EXPANDABLE CONTENT */}
+              {isSlicerExpanded && (
+                <div className="animate-in slide-in-from-top-4 fade-in duration-300 pt-2">
+                  {/* STEP 1: Select Income Transactions to Load Into Tray */}
+                  <div className="mb-6">
+                    <h3 className="text-xs font-black uppercase tracking-wider text-gray-400 mb-3">
+                      1. Select Income to Slice
+                    </h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      {availableIncomes.map((tx) => {
+                        const isSelected = trayTxIds.includes(tx.id);
+                        const account = accounts.find(a => a.id === tx.payment_method_id);
+                        const accountName = account ? `${account.bank} (${account.classification})` : 'Unknown Account';
+                        
+                        return (
+                          <button
+                            key={tx.id}
+                            type="button"
+                            onClick={() => toggleTrayTransaction(tx.id)}
+                            className={`w-full text-left p-4 border-2 border-black rounded-xl flex items-center justify-between transition-all transform active:scale-[0.98] ${
+                              isSelected
+                                ? 'bg-emerald-100 dark:bg-emerald-950/40 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]'
+                                : 'bg-white dark:bg-gray-800 hover:bg-gray-50 shadow-[1px_1px_0px_0px_rgba(0,0,0,1)] hover:shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]'
+                            }`}
+                          >
+                            <div>
+                              <p className="font-black text-sm text-gray-900 dark:text-gray-100">{tx.notes || 'Income Record'}</p>
+                              <p className="text-[10px] font-bold uppercase text-gray-400 mt-0.5">Origin: {accountName}</p>
+                            </div>
+                            <div className="flex items-center space-x-3">
+                              <span className="font-black text-emerald-600">₱{Math.abs(tx.amount).toLocaleString()}</span>
+                              <div className={`w-6 h-6 border-2 border-black rounded-md flex items-center justify-center ${isSelected ? 'bg-emerald-500' : 'bg-white'}`}>
+                                {isSelected && <Check className="w-4 h-4 text-white stroke-[4]" />}
+                              </div>
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
 
-              {/* STEP 2: Allocate to Setup Items */}
-              {trayTxIds.length > 0 && (
-                <div className="space-y-4 border-t-2 border-dashed border-gray-400 pt-6">
-                  <h3 className="text-xs font-black uppercase tracking-wider text-gray-400">
-                    2. Distribute to Budget Items
-                  </h3>
-                  
-                  <div className="overflow-x-auto border-2 border-black rounded-xl bg-white dark:bg-gray-800 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]">
-                    <table className="w-full text-left border-collapse">
-                      <thead>
-                        <tr className="bg-gray-100 dark:bg-gray-700 border-b-2 border-black text-xs font-black uppercase text-gray-600 dark:text-gray-300">
-                          <th className="p-3">Budget Line Item</th>
-                          <th className="p-3">Target Amount</th>
-                          <th className="p-3">Allocate Amount</th>
-                          <th className="p-3">Destination Account</th>
-                          <th className="p-3">Transfer Type</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-gray-200 dark:divide-gray-700 text-sm font-medium">
-                        {flattenedBudgetItems.map((item) => {
-                          const currentAlloc = allocations.find(a => a.budgetItemId === item.id) || { amount: 0, targetAccountId: '' };
-                          
-                          // Determine if we need an actual bank transfer
-                          const activeIncomesInTray = transactions.filter(t => trayTxIds.includes(t.id));
-                          const matchesAllSources = activeIncomesInTray.every(t => t.payment_method_id === currentAlloc.targetAccountId);
-                          const isLocal = activeIncomesInTray.length > 0 && matchesAllSources;
-
-                          return (
-                            <tr key={item.id} className="hover:bg-gray-50 dark:hover:bg-gray-750 transition-colors">
-                              {/* Item Name */}
-                              <td className="p-3 font-black text-gray-900 dark:text-gray-100">
-                                {item.name}
-                              </td>
-
-                              {/* Target/Goal */}
-                              <td className="p-3 text-gray-500">
-                                ₱{(item.amount || 0).toLocaleString()}
-                              </td>
-
-                              {/* Allocation Input */}
-                              <td className="p-3">
-                                <div className="relative max-w-[140px]">
-                                  <span className="absolute left-3 top-1/2 -translate-y-1/2 font-black text-gray-400 text-xs">₱</span>
-                                  <input
-  type="number"
-  value={currentAlloc.amount || ''}
-  // Add item.name as the 2nd argument!
-  onChange={(e) => updateAllocation(item.id, item.name, { amount: Number(e.target.value) })}
-  placeholder="0"
-  className="w-full pl-6 pr-2 py-1.5 border-2 border-black rounded-lg text-sm font-black focus:outline-none focus:ring-2 focus:ring-emerald-400 bg-white dark:bg-gray-900"
-/>
-
-                                </div>
-                              </td>
-
-                              {/* Destination Account Selection */}
-                              <td className="p-3">
-                              <select 
-  value={currentAlloc.targetAccountId || ""} 
-  // Add item.name as the 2nd argument!
-  onChange={(e) => updateAllocation(item.id, item.name, { targetAccountId: e.target.value })}
-  className="w-full bg-white dark:bg-gray-900 border-2 border-black rounded-lg text-sm font-black px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-emerald-400"
->
-  <option value="" disabled>Select Account</option>
-  {accounts
-    .filter(a => a.type !== 'Credit')
-    .map(acc => (
-      <option key={acc.id} value={acc.id}>
-        {acc.bank} ({acc.classification})
-      </option>
-  ))}
-</select>
-</td>
-
-                              {/* Local vs Transfer Indicator */}
-                              <td className="p-3">
-                                {currentAlloc.amount > 0 ? (
-                                  isLocal ? (
-                                    <span className="bg-blue-100 text-blue-800 border border-blue-300 text-[10px] px-2 py-0.5 rounded font-black uppercase">
-                                      ⚡ Local (No Swap)
-                                    </span>
-                                  ) : (
-                                    <span className="bg-amber-100 text-amber-800 border border-amber-300 text-[10px] px-2 py-0.5 rounded font-black uppercase">
-                                      💸 Auto Transfer
-                                    </span>
-                                  )
-                                ) : (
-                                  <span className="text-gray-300 text-xs">—</span>
-                                )}
-                              </td>
+                  {/* STEP 2: Allocate to Setup Items */}
+                  {trayTxIds.length > 0 && (
+                    <div className="space-y-4 border-t-2 border-dashed border-gray-400 pt-6">
+                      <h3 className="text-xs font-black uppercase tracking-wider text-gray-400">
+                        2. Distribute to Budget Items
+                      </h3>
+                      
+                      <div className="overflow-x-auto border-2 border-black rounded-xl bg-white dark:bg-gray-800 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]">
+                        <table className="w-full text-left border-collapse">
+                          <thead>
+                            <tr className="bg-gray-100 dark:bg-gray-700 border-b-2 border-black text-xs font-black uppercase text-gray-600 dark:text-gray-300">
+                              <th className="p-3">Budget Line Item</th>
+                              <th className="p-3">Target Amount</th>
+                              <th className="p-3">Allocate Amount</th>
+                              <th className="p-3">Destination Account</th>
+                              <th className="p-3">Transfer Type</th>
                             </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
+                          </thead>
+                          <tbody className="divide-y divide-gray-200 dark:divide-gray-700 text-sm font-medium">
+                            {flattenedBudgetItems.map((item) => {
+                              const currentAlloc = allocations.find(a => a.budgetItemId === item.id) || { amount: 0, targetAccountId: '' };
+                              
+                              // Determine if we need an actual bank transfer
+                              const activeIncomesInTray = transactions.filter(t => trayTxIds.includes(t.id));
+                              const matchesAllSources = activeIncomesInTray.every(t => t.payment_method_id === currentAlloc.targetAccountId);
+                              const isLocal = activeIncomesInTray.length > 0 && matchesAllSources;
 
-                  {/* Action Button */}
-                  <div className="flex justify-end pt-4">
-                  <button
-  type="button"
-  onClick={handleSliceSubmit}
-  // Disable ONLY if tray is empty OR no valid allocation exists
-  disabled={
-    trayTxIds.length === 0 || 
-    !allocations.some(a => a.amount > 0 && a.targetAccountId)
-  }
-  className={`px-6 py-3 rounded-xl font-black uppercase tracking-wider text-xs border-2 border-black shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] transition-all ${
-    // Apply active styling if there is a valid allocation
-    trayTxIds.length > 0 && allocations.some(a => a.amount > 0 && a.targetAccountId)
-      ? 'bg-emerald-400 text-black hover:bg-emerald-500 active:translate-x-[2px] active:translate-y-[2px] active:shadow-[1px_1px_0px_0px_rgba(0,0,0,1)]'
-      : 'bg-gray-200 dark:bg-gray-700 text-gray-400 cursor-not-allowed border-gray-300 dark:border-gray-600 shadow-none'
-  }`}
->
-  Execute Slice & Fund
-</button>
+                              return (
+                                <tr key={item.id} className="hover:bg-gray-50 dark:hover:bg-gray-750 transition-colors">
+                                  {/* Item Name */}
+                                  <td className="p-3 font-black text-gray-900 dark:text-gray-100">
+                                    {item.name}
+                                  </td>
 
-                  </div>
+                                  {/* Target/Goal */}
+                                  <td className="p-3 text-gray-500">
+                                    ₱{(item.amount || 0).toLocaleString()}
+                                  </td>
+
+                                  {/* Allocation Input */}
+                                  <td className="p-3">
+                                    <div className="relative max-w-[140px]">
+                                      <span className="absolute left-3 top-1/2 -translate-y-1/2 font-black text-gray-400 text-xs">₱</span>
+                                      <input
+                                        type="number"
+                                        value={currentAlloc.amount || ''}
+                                        onChange={(e) => updateAllocation(item.id, item.name, { amount: Number(e.target.value) })}
+                                        placeholder="0"
+                                        className="w-full pl-6 pr-2 py-1.5 border-2 border-black rounded-lg text-sm font-black focus:outline-none focus:ring-2 focus:ring-emerald-400 bg-white dark:bg-gray-900"
+                                      />
+                                    </div>
+                                  </td>
+
+                                  {/* Destination Account Selection */}
+                                  <td className="p-3">
+                                    <select 
+                                      value={currentAlloc.targetAccountId || ""} 
+                                      onChange={(e) => updateAllocation(item.id, item.name, { targetAccountId: e.target.value })}
+                                      className="w-full bg-white dark:bg-gray-900 border-2 border-black rounded-lg text-sm font-black px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-emerald-400"
+                                    >
+                                      <option value="" disabled>Select Account</option>
+                                      {accounts
+                                        .filter(a => a.type !== 'Credit')
+                                        .map(acc => (
+                                          <option key={acc.id} value={acc.id}>
+                                            {acc.bank} ({acc.classification})
+                                          </option>
+                                      ))}
+                                    </select>
+                                  </td>
+
+                                  {/* Local vs Transfer Indicator */}
+                                  <td className="p-3">
+                                    {currentAlloc.amount > 0 ? (
+                                      isLocal ? (
+                                        <span className="bg-blue-100 text-blue-800 border border-blue-300 text-[10px] px-2 py-0.5 rounded font-black uppercase">
+                                          ⚡ Local (No Swap)
+                                        </span>
+                                      ) : (
+                                        <span className="bg-amber-100 text-amber-800 border border-amber-300 text-[10px] px-2 py-0.5 rounded font-black uppercase">
+                                          💸 Auto Transfer
+                                        </span>
+                                      )
+                                    ) : (
+                                      <span className="text-gray-300 text-xs">—</span>
+                                    )}
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+
+                      {/* Action Button */}
+                      <div className="flex justify-end pt-4">
+                        <button
+                          type="button"
+                          onClick={handleSliceSubmit}
+                          // Disable ONLY if tray is empty OR no valid allocation exists
+                          disabled={
+                            trayTxIds.length === 0 || 
+                            !allocations.some(a => a.amount > 0 && a.targetAccountId)
+                          }
+                          className={`px-6 py-3 rounded-xl font-black uppercase tracking-wider text-xs border-2 border-black shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] transition-all ${
+                            // Apply active styling if there is a valid allocation
+                            trayTxIds.length > 0 && allocations.some(a => a.amount > 0 && a.targetAccountId)
+                              ? 'bg-emerald-400 text-black hover:bg-emerald-500 active:translate-x-[2px] active:translate-y-[2px] active:shadow-[1px_1px_0px_0px_rgba(0,0,0,1)]'
+                              : 'bg-gray-200 dark:bg-gray-700 text-gray-400 cursor-not-allowed border-gray-300 dark:border-gray-600 shadow-none'
+                          }`}
+                        >
+                          Execute Slice & Fund
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
           )}
+
 
       <div className="space-y-6">
         {wallets.length > 0 && (

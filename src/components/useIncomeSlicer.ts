@@ -29,28 +29,41 @@ export const useIncomeSlicer = ({
   
   // State to track the allocations per budget item
   const [allocations, setAllocations] = useState<SliceAllocation[]>([]);
+
+  // 🟢 ADD THIS NEW BLOCK: 
+  // Wipe the selected tray clean whenever the user switches tabs or months
+  useEffect(() => {
+    setTrayTxIds([]);
+  }, [currentBudgetTiming, currentBudgetPeriod]);
+  
     // Preload the remaining target amount safely using properties that exist on your budget items
+      // Safely initialize the allocation table without wiping user inputs
+    // Safely initialize the allocation table without wiping user inputs
     useEffect(() => {
       if (budgetItems && budgetItems.length > 0) {
-        const initialAllocations = budgetItems.map((item) => {
-          // Fallback to item.amount (parsed as a number) since targetAmount doesn't exist here
-          const target = typeof item.amount === 'number' 
-            ? item.amount 
-            : parseFloat(item.amount) || 0;
-  
-          // Fallback to 0 if actualCollected is not defined on these items
-          const collected = item.actualCollected || 0;
-          const remainingNeeded = target - collected;
-  
-          return {
-            budgetItemId: item.id,
-            amount: remainingNeeded > 0 ? remainingNeeded : 0,
-          };
+        setAllocations(prevAllocations => {
+          return budgetItems.map((item) => {
+            // 1. Check if the user already started modifying this item
+            const existing = prevAllocations.find(a => a.budgetItemId === item.id);
+            
+            if (existing) {
+              // 2. If it exists, PRESERVE their selected account and amount!
+              return existing; 
+            }
+            
+            // 3. Preload the exact target amount automatically!
+            return {
+              budgetItemId: item.id,
+              budgetItemName: item.name,
+              targetAccountId: '',
+              amount: parseFloat(item.amount) || 0, 
+            };
+          });
         });
-  
-        setAllocations(initialAllocations);
       }
     }, [budgetItems]);
+  
+
   
 
     // Filter: Get "fresh" income transactions matching current Month + Year + Timing
@@ -59,7 +72,7 @@ export const useIncomeSlicer = ({
       const targetMonthIndex = budgetMonthOneIndexed - 1; // JS Month is 0-11
       
       return transactions.filter(tx => {
-        const isIncome = tx.transaction_type === 'cash_in' && tx.name === 'Income';
+        const isIncome = tx.transaction_type === 'income' && tx.name === 'Income';
         const isNotYetSliced = !tx.is_sliced;
         
         if (!isIncome || !isNotYetSliced) return false;
