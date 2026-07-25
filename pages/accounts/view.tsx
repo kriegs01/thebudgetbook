@@ -24,6 +24,7 @@ const TRANSACTION_TYPE_OPTIONS: { value: string; label: string }[] = [
   { value: 'cash_in', label: 'Cash In' },
   { value: 'loan_payment', label: 'Loan Payment' },
   { value: 'credit_payment', label: 'Credit Card Payment' },
+  { value: 'income', label: 'Income' },
 ];
 
 type Transaction = {
@@ -32,7 +33,7 @@ type Transaction = {
   date: string; // ISO string
   amount: number;
   paymentMethodId: string;
-  transaction_type?: 'payment' | 'withdraw' | 'transfer' | 'loan' | 'cash_in' | 'loan_payment' | 'credit_payment';
+  transaction_type?: 'payment' | 'withdraw' | 'transfer' | 'loan' | 'cash_in' | 'loan_payment' | 'credit_payment' | 'income';
   notes?: string | null;
   related_transaction_id?: string | null;
   receiptUrl?: string | null;
@@ -833,6 +834,7 @@ const AccountFilteredTransactions: React.FC<AccountFilteredTransactionsProps> = 
       cash_in: { color: 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400', label: 'Cash In' },
       loan_payment: { color: 'bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-400', label: 'Loan Payment' },
       credit_payment: { color: 'bg-teal-100 dark:bg-teal-900/30 text-teal-700 dark:text-teal-400', label: 'Card Payment' },
+      income: { color: 'bg-emerald-300 dark:bg-emerald-900/40 text-black dark:text-emerald-300', label: 'Income' }, 
     };
     
     const key = type || 'payment';

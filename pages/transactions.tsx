@@ -1364,10 +1364,18 @@ function TransactionsPage({ transactions, loading = false, onTransactionDeleted,
                 </div>
                 <div className="flex-1 overflow-y-auto overflow-x-hidden pr-2 -mr-2">
                   <dl className="space-y-4 mb-6">
-                    <div className="flex justify-between">
-                      <dt className="text-[10px] font-black text-gray-400 uppercase tracking-widest self-center">Name</dt>
-                      <dd className="text-sm font-bold text-gray-900 dark:text-gray-100">{selectedTx.name}</dd>
-                    </div>
+                  <div className="flex justify-between">
+                    <dt className="text-[10px] font-black text-gray-400 uppercase tracking-widest self-center">Name</dt>
+                    <dd className="text-sm font-bold text-gray-900 dark:text-gray-100 flex items-center">
+                      {selectedTx.name}
+                      {/* 🟢 NEW INCOME BADGE */}
+                      {selectedTx.transaction_type === 'income' && (
+                        <span className="ml-2 inline-flex items-center bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 border border-emerald-300 dark:border-emerald-700 px-2 py-0.5 rounded-lg text-[9px] font-black uppercase tracking-widest shadow-[1px_1px_0px_0px_rgba(0,0,0,0.1)]">
+                          Income
+                        </span>
+                      )}
+                    </dd>
+                  </div>
                     <div className="flex justify-between">
                       <dt className="text-[10px] font-black text-gray-400 uppercase tracking-widest self-center">Date</dt>
                       <dd className="text-sm text-gray-900 dark:text-gray-100">

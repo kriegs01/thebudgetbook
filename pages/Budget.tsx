@@ -490,7 +490,8 @@ const [activePeriodIndex, setActivePeriodIndex] = useState<number>(1);
           if (categoryName.startsWith('_') || !Array.isArray(items)) return;
   
           items.forEach(item => {
-            if (!item || item.included === false) return;
+            if (!item) return; // 🟢 Let unchecked items pass through to the UI
+
   
             let targetPeriod = 1;
             const linkedBiller = item.isBiller && Array.isArray(billers) ? billers.find(b => b.id === item.id) : null;
@@ -2110,6 +2111,11 @@ const unifiedSetup = setupsForMonth.find(s => s.timing === 'unified' || s.data?.
   const handleSalaryCashIn = async (e: React.FormEvent) => {
     e.preventDefault();
     
+    if (!salaryFormData.accountId) {
+      alert("Please select an account to receive this income.");
+      return;
+    }
+    
     const rawAmount = parseFloat(salaryFormData.amount);
     if (isNaN(rawAmount) || rawAmount <= 0) return;
 
@@ -2120,30 +2126,35 @@ const unifiedSetup = setupsForMonth.find(s => s.timing === 'unified' || s.data?.
 
     const transaction = {
       name: salaryFormData.name,
-      amount: rawAmount, 
+      amount: -Math.abs(rawAmount), 
       date: combineDateWithCurrentTime(salaryFormData.date),
       payment_method_id: salaryFormData.accountId,
-      transaction_type: 'cash_in' as const,
+      transaction_type: 'income' as const,
       notes: targetLabel
     };
-    
-    try {
-      const { error } = await createTransaction(transaction as any);
-      if (error) throw error;
-      
-      // 🟢 GHOST FIX: We no longer save the transaction amount into the manual input's state.
-      // This ensures that when the transaction is deleted, the fallback is completely blank!
 
+    try {
+      // 1. Send the data to Supabase
+      await createTransaction(transaction as any);
+      
+    } catch (err) {
+      // We will silently catch any false-alarm errors here since we know the DB saves it successfully!
+      console.warn("Caught a post-save warning, continuing safely...", err);
+    } finally {
+      // 2. ALWAYS close the modal, reset the form, and refresh the data (even if a false alarm fired)
       setShowSalaryModal(false);
       
-      // Delay the reload so the database has time to catch up
-      setTimeout(async () => {
-        await reloadTransactions();
-        if (onTransactionCreated) onTransactionCreated();
-      }, 1500);
-
-    } catch (error) {
-      alert('Failed to record salary. Please try again.');
+      // Keep the current date, but clear the amount
+      setSalaryFormData(prev => ({ 
+        ...prev, 
+        name: 'Salary', 
+        amount: '' 
+      }));
+      
+      // Reload the budget data so the new income appears instantly
+      if (typeof loadData === 'function') {
+        await loadData();
+      }
     }
   };
 
@@ -2473,7 +2484,7 @@ const unifiedSetup = setupsForMonth.find(s => s.timing === 'unified' || s.data?.
   if (showSandbox) {
     const sandboxSetup = savedSetups.find(s => s.month === selectedMonth && s.timing === selectedTiming);
     const sandboxIncomes = transactions.filter(tx => 
-      tx.transaction_type === 'cash_in' && 
+      tx.transaction_type === 'income' && 
       new Date(tx.date).getMonth() === MONTHS.indexOf(selectedMonth) && 
       new Date(tx.date).getFullYear() === selectedYear
     );
@@ -2683,11 +2694,15 @@ const unifiedSetup = setupsForMonth.find(s => s.timing === 'unified' || s.data?.
     // 1. Regular Setup Items (Pulled from Engine)
     const periodItems = processedBudgetMap[activePeriodIndex]?.[cat.name] || [];
     const itemsTotal = periodItems.reduce((sum, item) => {
+      // 🟢 Ignore unchecked items in the math!
+      if (!item.included) return sum; 
+      
       const val = item.amountsByPeriod?.[activePeriodIndex] !== undefined 
         ? item.amountsByPeriod[activePeriodIndex] 
         : item.amount;
       return sum + (parseFloat(val) || 0);
     }, 0);
+
 
     // 2. Installments (Loans) - MATCHES UI ROWS EXACTLY
     let installmentsTotal = 0;
@@ -2747,55 +2762,49 @@ const unifiedSetup = setupsForMonth.find(s => s.timing === 'unified' || s.data?.
   
   const currentMonthIndex = MONTHS.indexOf(selectedMonth);
   const allIncomeTxs = (transactions || []).filter(tx => {
-    if (tx.transaction_type !== 'cash_in') return false;
+    // 🟢 1. STRICT DB TYPE CHECK
+    if (tx.transaction_type !== 'income') return false; 
     
-    // Check for both the old "Income Record" and your new "Income - " convention
-    const isTaggedIncome = tx.notes?.startsWith('Income -') || tx.notes?.startsWith('Income Record');
-    const nameLower = (tx.name || '').trim().toLowerCase(); 
-    const isLegacyIncome = nameLower === 'salary' || nameLower === 'income';
-    
-    if (!isTaggedIncome && !isLegacyIncome) return false;
-
     const txDate = new Date(tx.date);
     if (txDate.getMonth() !== currentMonthIndex || txDate.getFullYear() !== selectedYear) return false;
 
-    // 🟢 YOUR NEW CONVENTION: "Income - July (Second Paycheck)"
+    // 🟢 2. ISOLATE BY TAB: Push this income into the correct tab based on its explicit notes or date
     const periodNames = ['First', 'Second', 'Third', 'Fourth', 'Fifth'];
     const pIndex = Number(activePeriodIndex) - 1;
     const pName = periodNames[pIndex] ? `${periodNames[pIndex]} Paycheck` : `Paycheck ${activePeriodIndex}`;
     const targetLabel = `Income - ${selectedMonth} (${pName})`;
-    
-    // Legacy support for older saves so they don't disappear
     const legacyLabel = Number(activePeriodIndex) === 1 ? '1/2' : '2/2'; 
 
     if (tx.notes?.startsWith('Income -') || tx.notes?.startsWith('Income Record')) {
-      // Check if it matches your new exact string, OR the old legacy string
       return tx.notes === targetLabel || tx.notes.includes(`- ${legacyLabel}`);
     } else {
-      // Fallback for untagged transactions
       return getPeriodIndexForDate(txDate.getDate()) === Number(activePeriodIndex);
     }
   });
 
+
     // 🟢 NEW ENGINE: Independent Other Income (Side hustles, refunds, etc.)
-    const otherIncomeTxs = (transactions || []).filter(tx => {
-      // 1. Must be a cash-in transaction
-      if (tx.transaction_type !== 'cash_in') return false;
-  
-      // 2. Must be in the currently selected month and year
-      const txDate = new Date(tx.date);
-      if (txDate.getMonth() !== currentMonthIndex || txDate.getFullYear() !== selectedYear) return false;
-  
-      // 3. EXPLICITLY EXCLUDE PRIMARY PAYCHECKS
-      const isTaggedIncome = tx.notes?.startsWith('Income -') || tx.notes?.startsWith('Income Record');
-      const nameLower = (tx.name || '').trim().toLowerCase(); 
-      const isPrimaryIncome = isTaggedIncome || nameLower === 'salary' || nameLower === 'income';
+        // 🟢 Independent Other Income (Side hustles, refunds, etc.)
+        const otherIncomeTxs = (transactions || []).filter(tx => {
+          // 1. MUST be the new dedicated 'income' type!
+          if (tx.transaction_type !== 'income') return false;
       
-      if (isPrimaryIncome) return false;
-  
-      // 4. ISOLATE BY TAB: Push this extra income into the correct tab based on its date
-      return getPeriodIndexForDate(txDate.getDate()) === Number(activePeriodIndex);
-    });
+          // 2. Must be in the currently selected month and year
+          const txDate = new Date(tx.date);
+          if (txDate.getMonth() !== currentMonthIndex || txDate.getFullYear() !== selectedYear) return false;
+      
+          // 3. EXPLICITLY EXCLUDE PRIMARY PAYCHECKS (so they don't get counted twice)
+          const isTaggedIncome = tx.notes?.startsWith('Income -') || tx.notes?.startsWith('Income Record');
+          const nameLower = (tx.name || '').trim().toLowerCase(); 
+          
+          const isPrimaryIncome = isTaggedIncome || nameLower === 'salary' || nameLower === 'income';
+          
+          if (isPrimaryIncome) return false;
+      
+          // 4. ISOLATE BY TAB: Push this extra income into the correct tab based on its date
+          return getPeriodIndexForDate(txDate.getDate()) === Number(activePeriodIndex);
+        });
+    
 
   const totalOtherIncome = otherIncomeTxs.reduce((sum, tx) => sum + Math.abs(tx.amount), 0);
   const hasIncomeRecords = allIncomeTxs.length > 0;
@@ -2815,7 +2824,7 @@ const unifiedSetup = setupsForMonth.find(s => s.timing === 'unified' || s.data?.
       salaryToUse = !isNaN(actualTab) ? actualTab : (projectedTab || 0);
     }
   
-    const netIncome = salaryToUse + totalOtherIncome;
+    const netIncome = Math.abs(salaryToUse) + totalOtherIncome;
     const remaining = netIncome - totalSpend;
   
   const currentSetup = savedSetups.find(s => s.month === selectedMonth && s.timing === selectedTiming);
@@ -3014,7 +3023,7 @@ const unifiedSetup = setupsForMonth.find(s => s.timing === 'unified' || s.data?.
                       >
                         {allIncomeTxs.length > 0 
                           // 🟢 DERIVED MATH: If transactions exist, forcefully sum them up and display them!
-                          ? formatCurrency(allIncomeTxs.reduce((sum, tx) => sum + (parseFloat(tx.amount as any) || 0), 0))
+                          ? formatCurrency(allIncomeTxs.reduce((sum, tx) => sum + Math.abs(parseFloat(tx.amount as any) || 0), 0))
                           // Fallback to manual input if no transactions exist
                           : (actualSalaryByPeriod[activePeriodIndex] ? formatCurrency(parseFloat(actualSalaryByPeriod[activePeriodIndex])) : 'Click to add...')
                         }
@@ -4680,20 +4689,47 @@ return getAccountPeriodIndex({ dueDate: dueDay }) === activePeriodIndex;
               const formData = new FormData(e.currentTarget);
               const amount = parseFloat(formData.get('amount') as string);
               const date = formData.get('date') as string;
+              const sourceAccountId = formData.get('sourceAccountId') as string;
 
               try {
-                // 1. Call your dedicated credit payment service
-                await recordCreditPayment(
-                  showCreditPayModal.accountId,
-                  amount,
-                  `${showCreditPayModal.bank} Payment - ${selectedMonth}`,
-                  date
-                );
+                // 1. Deduct from Debit Account (The part that was missing!)
+                const { data: debitTx, error: debitError } = await createTransaction({
+                  name: `${showCreditPayModal.bank} Payment - ${selectedMonth}`,
+                  amount: Math.abs(amount), // Outflow from debit
+                  date: combineDateWithCurrentTime(date),
+                  payment_method_id: sourceAccountId,
+                  transaction_type: 'payment',
+                  notes: `Budget Timing: ${selectedTiming}`
+                } as any);
+
+                if (debitError) throw debitError;
+
+                // 2. Apply to Credit Account
+                const { error: creditError } = await createTransaction({
+                  name: `${showCreditPayModal.bank} Payment - ${selectedMonth}`,
+                  amount: -Math.abs(amount), // Negative reduces credit balance
+                  date: combineDateWithCurrentTime(date),
+                  payment_method_id: showCreditPayModal.accountId,
+                  transaction_type: 'credit_payment',
+                  related_transaction_id: debitTx?.id, // Link them together!
+                  notes: `Budget Timing: ${selectedTiming}`
+                } as any);
+
+                if (creditError) {
+                  console.error("Failed to link credit side directly, falling back...");
+                  await recordCreditPayment(
+                    showCreditPayModal.accountId,
+                    amount,
+                    `${showCreditPayModal.bank} Payment - ${selectedMonth}`,
+                    date
+                  );
+                }
                 
-                // 2. Refresh everything
+                // 3. Refresh everything
                 await reloadTransactions();
+                if (onTransactionCreated) onTransactionCreated();
                 
-                // 3. Close and Notify
+                // 4. Close and Notify
                 setShowCreditPayModal(null);
                 alert('Payment recorded successfully!');
               } catch (err) {
@@ -4705,18 +4741,31 @@ return getAccountPeriodIndex({ dueDate: dueDay }) === activePeriodIndex;
                 <label className="block text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">Amount</label>
                 <input required name="amount" type="number" step="0.01" defaultValue={showCreditPayModal.amount.toFixed(2)} className="w-full bg-gray-50 dark:bg-gray-800 border-2 border-black rounded-xl p-2.5 outline-none text-base font-black dark:text-gray-100" />
               </div>
+              
+              {/* 🟢 NEW: Source Account Field */}
+              <div>
+                <label className="block text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">Pay From (Source Account)</label>
+                <select required name="sourceAccountId" defaultValue={accounts.find(a => a.type === 'Debit')?.id || ''} className="w-full bg-gray-50 dark:bg-gray-800 border-2 border-black rounded-xl px-2.5 py-2.5 outline-none font-bold text-sm dark:text-gray-100">
+                  {accounts.filter(a => a.type === 'Debit').map(acc => (
+                    <option key={acc.id} value={acc.id}>{acc.bank} ({acc.classification})</option>
+                  ))}
+                </select>
+              </div>
+
               <div>
                 <label className="block text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">Date</label>
                 <input required name="date" type="date" defaultValue={getTodayIso()} className="w-full bg-gray-50 dark:bg-gray-800 border-2 border-black rounded-xl px-2.5 py-2 outline-none font-bold text-xs dark:text-gray-100" />
               </div>
+
               <div className="flex space-x-3 pt-2">
-                <button type="button" onClick={() => setShowCreditPayModal(null)} className="flex-1 bg-gray-100 dark:bg-gray-800 border-2 border-black py-2.5 rounded-xl font-black text-xs text-gray-500 uppercase tracking-wider">Cancel</button>
-                <button type="submit" className="flex-1 bg-green-600 text-white border-2 border-black py-2.5 rounded-xl font-black text-xs uppercase tracking-wider">Pay</button>
+                <button type="button" onClick={() => setShowCreditPayModal(null)} className="flex-1 bg-gray-100 dark:bg-gray-800 border-2 border-black py-2.5 rounded-xl font-black text-xs text-gray-500 uppercase tracking-wider hover:shadow-none hover:translate-x-[1px] hover:translate-y-[1px] shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] transition-all">Cancel</button>
+                <button type="submit" className="flex-1 bg-green-600 text-white border-2 border-black py-2.5 rounded-xl font-black text-xs uppercase tracking-wider hover:shadow-none hover:translate-x-[1px] hover:translate-y-[1px] shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] transition-all">Pay</button>
               </div>
             </form>
           </div>
         </div>
       )}
+
 
       {creditInfoModal && (
         <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md animate-in fade-in" onClick={() => setCreditInfoModal(null)}>

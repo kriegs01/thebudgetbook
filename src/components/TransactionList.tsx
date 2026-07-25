@@ -60,7 +60,14 @@ export const TransactionList: React.FC<TransactionListProps> = ({
                         className="rounded h-5 w-5 mt-0.5"
                       />
                     )}
+                    <div className="flex items-center gap-2 min-w-0">
                     <p className="text-sm font-bold text-gray-900 dark:text-gray-100 truncate">{tx.name}</p>
+                    {tx.transaction_type === 'income' && (
+                      <span className="inline-flex items-center bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 border border-emerald-300 dark:border-emerald-700 px-1.5 py-0.5 rounded-md text-[8px] font-black uppercase tracking-widest shrink-0">
+                        Income
+                      </span>
+                    )}
+                  </div>
                   </div>
                   <p className={`text-xl font-black mt-2 ${tx.amount > 0 ? 'text-red-600 dark:text-red-400' : 'text-green-600 dark:text-green-400'}`}>{formatCurrency(-tx.amount)}</p>
                 </div>
@@ -143,7 +150,16 @@ export const TransactionList: React.FC<TransactionListProps> = ({
                     />
                   </td>
                 )}
-                <td className="px-4 py-3"><div className="text-sm font-medium text-gray-900 dark:text-gray-100">{tx.name}</div></td>
+                <td className="px-4 py-3">
+                <div className="flex items-center gap-2">
+                  <div className="text-sm font-medium text-gray-900 dark:text-gray-100">{tx.name}</div>
+                  {tx.transaction_type === 'income' && (
+                    <span className="inline-flex items-center bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 border border-emerald-300 dark:border-emerald-700 px-2 py-0.5 rounded-lg text-[9px] font-black uppercase tracking-widest shadow-[1px_1px_0px_0px_rgba(0,0,0,0.1)]">
+                      Income
+                    </span>
+                  )}
+                </div>
+              </td>
                 <td className="px-4 py-3">
                   <div className="text-sm text-gray-900 dark:text-gray-100">{new Date(tx.date).toLocaleDateString()}</div>
                   <div className="text-xs text-gray-400">{new Date(tx.date).toLocaleTimeString()}</div>
