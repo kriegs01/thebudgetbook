@@ -223,7 +223,6 @@ const retroPanelClass = 'rounded-[1.5rem] border-[3px] border-black bg-white/80 
 const retroGhostButton = 'bg-gray-200 py-4 rounded-xl font-black uppercase tracking-widest text-[10px] text-gray-800 dark:bg-gray-700 dark:text-gray-200 border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[1px] hover:translate-y-[1px] transition-all';
 const retroCloseButton = 'absolute right-4 top-4 flex h-10 w-10 items-center justify-center rounded-full border-[3px] border-black bg-white text-gray-700 shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] transition-all hover:translate-x-[1px] hover:translate-y-[1px] hover:shadow-none dark:bg-gray-800 dark:text-gray-100';
 
-
 function TransactionsPage({ transactions, loading = false, onTransactionDeleted, onTransactionCreated }) {
   const { getAccentClasses } = useTheme();
   const { userProfile } = useAuth();
