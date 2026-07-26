@@ -2610,6 +2610,7 @@ const unifiedSetup = setupsForMonth.find(s => s.timing === 'unified' || s.data?.
         activeSetup={sandboxSetup}
         allSetups={savedSetups} 
         currentYear={selectedYear}
+        accounts={accounts}
       />
     );
   }

@@ -1,8 +1,11 @@
+// src/components/SandboxView.tsx
 import React, { useState, useRef } from 'react';
 import { useSandbox } from '../components/useSandbox';
-import { Plus, Trash2, Calendar, WalletCards, CalendarDays, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Plus, Trash2, Calendar, WalletCards, CalendarDays, ChevronLeft, ChevronRight, CreditCard } from 'lucide-react';
 import { PageHeader } from './PageHeader';
 import { useTheme } from '../contexts/ThemeContext';
+import { calculateBillingCycles } from '../utils/billingCycles';
+
 
 interface SandboxViewProps {
   onClose: () => void;
@@ -11,11 +14,12 @@ interface SandboxViewProps {
   activeSetup: any;
   allSetups?: any[];
   currentYear?: number;
+  accounts: any[]; // 🟢 ADD THIS PROP
 }
 
 const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 
-export const SandboxView: React.FC<SandboxViewProps> = ({ onClose, liveIncomeTxs, liveSpendTxs, activeSetup, allSetups, currentYear }) => {
+export const SandboxView: React.FC<SandboxViewProps> = ({ onClose, liveIncomeTxs, liveSpendTxs, activeSetup, allSetups, currentYear, accounts }) => {
   const {
     safetyNet, setSafetyNet,
     mockPurchases, addMockPurchase, removeMockPurchase
@@ -39,6 +43,17 @@ export const SandboxView: React.FC<SandboxViewProps> = ({ onClose, liveIncomeTxs
   const [purchaseType, setPurchaseType] = useState<'one-off' | 'installment'>('one-off');
   const [purchaseDate, setPurchaseDate] = useState(new Date().toISOString().split('T')[0]);
   const [durationMonths, setDurationMonths] = useState('3');
+  
+  // 🟢 NEW: Credit Card Sweep State
+  const [paymentMethod, setPaymentMethod] = useState<'cash' | 'credit'>('cash');
+  const [selectedCreditCardId, setSelectedCreditCardId] = useState<string>('');
+
+  // 🟢 NEW: Filter down to just the user's credit cards
+  const creditCardAccounts = React.useMemo(() => {
+    return (accounts || []).filter(acc => acc.type === 'Credit' || acc.classification === 'Credit Card');
+  }, [accounts]);
+
+
 
   // --- ISOLATED FORECAST MATH ---
   const startMonthIdx = activeSetup?.month ? MONTHS.indexOf(activeSetup.month) : new Date().getMonth();
@@ -111,15 +126,44 @@ export const SandboxView: React.FC<SandboxViewProps> = ({ onClose, liveIncomeTxs
     
     mockPurchases.forEach(purchase => {
       const pDate = new Date(purchase.startDate);
-      const pYear = pDate.getFullYear();
-      const pMonth = pDate.getMonth();
-      const pDay = pDate.getDate();
-      const pAbsMonth = pYear * 12 + pMonth;
+      
+      // 🟢 1. BASELINE: Assume it's a cash purchase hitting immediately
+      let effectiveAbsMonth = pDate.getFullYear() * 12 + pDate.getMonth();
+      let effectiveDay = pDate.getDate();
 
+      // 🟢 2. TIME TRAVEL: If it's a credit card swipe, calculate the future hit!
+      if (purchase.paymentMethod === 'credit' && purchase.creditCardId) {
+        // Find the specific card to get its billing and due dates
+        const card = accounts?.find(a => a.id === purchase.creditCardId);
+        
+        if (card && card.billingDate && typeof calculateBillingCycles === 'function') {
+          try {
+            // Generate the card's statement cycles
+            const cycles = calculateBillingCycles(card.billingDate, 24, false);
+            
+            // Find the exact statement window that catches this purchase date
+            const targetCycle = cycles.find((c: any) => pDate >= c.startDate && pDate <= c.endDate);
+            
+            if (targetCycle) {
+              // Shift the expense to the month the statement ENDS
+              effectiveAbsMonth = targetCycle.endDate.getFullYear() * 12 + targetCycle.endDate.getMonth();
+              
+              // Assign it to Paycheck 1 or Paycheck 2 based on the card's Due Date
+              effectiveDay = card.dueDate 
+                ? parseInt(String(card.dueDate).replace(/[^0-9]/g, ''), 10) || 28 
+                : 28;
+            }
+          } catch (e) {
+            console.warn("Cycle math failed, falling back to standard date");
+          }
+        }
+      }
+
+      // 🟢 3. ASSIGN EXPENSE: Apply the shifted dates to the timeline
       if (purchase.type === 'one-off') {
-        if (pAbsMonth === targetAbsMonth) {
+        if (effectiveAbsMonth === targetAbsMonth) {
           if (isPaycheck) {
-            const hitsPay1 = pDay <= 15;
+            const hitsPay1 = effectiveDay <= 15;
             if ((periodIndex === 1 && hitsPay1) || (periodIndex === 2 && !hitsPay1)) {
               periodMockSpend += purchase.amount;
             }
@@ -130,11 +174,13 @@ export const SandboxView: React.FC<SandboxViewProps> = ({ onClose, liveIncomeTxs
       } else if (purchase.type === 'installment') {
         const duration = purchase.durationMonths || 1;
         const monthlyAmount = purchase.amount; 
-        const endAbsMonth = pAbsMonth + duration - 1;
+        
+        // For installments, the timeline starts at the shifted month and runs for `duration` months
+        const endAbsMonth = effectiveAbsMonth + duration - 1;
 
-        if (targetAbsMonth >= pAbsMonth && targetAbsMonth <= endAbsMonth) {
+        if (targetAbsMonth >= effectiveAbsMonth && targetAbsMonth <= endAbsMonth) {
           if (isPaycheck) {
-            const hitsPay1 = pDay <= 15;
+            const hitsPay1 = effectiveDay <= 15;
             if ((periodIndex === 1 && hitsPay1) || (periodIndex === 2 && !hitsPay1)) {
               periodMockSpend += monthlyAmount;
             }
@@ -152,6 +198,7 @@ export const SandboxView: React.FC<SandboxViewProps> = ({ onClose, liveIncomeTxs
       id: i, label, income: periodIncome, spend: periodSpend, mockSpend: periodMockSpend, remaining: periodRemaining, isSafe, isFirstPeriod
     };
   });
+
 
   const isAbsolutelySafe = timeline.every(p => p.isSafe);
 
@@ -237,7 +284,41 @@ export const SandboxView: React.FC<SandboxViewProps> = ({ onClose, liveIncomeTxs
                 </div>
 
                 <div className="space-y-3 mb-4">
+                  
+                  {/* 🟢 NEW: Payment Method Toggle */}
+                  <div className="flex bg-gray-100 p-1 rounded-xl border-2 border-black">
+                    <button 
+                      onClick={() => { setPaymentMethod('cash'); setSelectedCreditCardId(''); }} 
+                      className={`flex-1 py-1.5 text-xs font-black uppercase rounded-lg transition-all flex items-center justify-center gap-1.5 ${paymentMethod === 'cash' ? 'bg-white border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] text-green-600' : 'text-gray-500 border-2 border-transparent'}`}
+                    >
+                       Cash/Debit
+                    </button>
+                    <button 
+                      onClick={() => setPaymentMethod('credit')} 
+                      className={`flex-1 py-1.5 text-xs font-black uppercase rounded-lg transition-all flex items-center justify-center gap-1.5 ${paymentMethod === 'credit' ? 'bg-white border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] text-purple-600' : 'text-gray-500 border-2 border-transparent'}`}
+                    >
+                      <CreditCard className="w-3.5 h-3.5" /> Swipe It
+                    </button>
+                  </div>
+
+                  {/* 🟢 NEW: Credit Card Selector Dropdown */}
+                  {paymentMethod === 'credit' && creditCardAccounts.length > 0 && (
+                     <div className="animate-in slide-in-from-top-2 duration-300">
+                        <select 
+                          value={selectedCreditCardId}
+                          onChange={(e) => setSelectedCreditCardId(e.target.value)}
+                          className="w-full bg-purple-50 border-2 border-black text-purple-700 rounded-xl px-3 py-2 outline-none font-bold text-xs shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] mb-1"
+                        >
+                          <option value="" disabled>Select Credit Card...</option>
+                          {creditCardAccounts.map(acc => (
+                            <option key={acc.id} value={acc.id}>{acc.bank}</option>
+                          ))}
+                        </select>
+                     </div>
+                  )}
+
                   <input type="text" value={newPurchaseName} onChange={(e) => setNewPurchaseName(e.target.value)} placeholder="Item name" className="w-full bg-gray-50 dark:bg-gray-800 border-2 border-black rounded-xl px-3 py-2 outline-none font-bold text-xs" />
+
                   
                   <div className="flex gap-2">
                     <div className="relative flex-1">
@@ -261,15 +342,30 @@ export const SandboxView: React.FC<SandboxViewProps> = ({ onClose, liveIncomeTxs
                 <button 
                   onClick={() => {
                     if (newPurchaseName && newPurchaseAmount) {
+                      // Prevent submission if they chose Credit but didn't pick a card
+                      if (paymentMethod === 'credit' && !selectedCreditCardId) {
+                         alert("Please select a credit card to swipe.");
+                         return;
+                      }
+
                       addMockPurchase({ 
-                        id: Date.now().toString(), name: newPurchaseName, amount: Number(newPurchaseAmount),
-                        type: purchaseType, startDate: purchaseDate, durationMonths: purchaseType === 'installment' ? Number(durationMonths) : undefined
+                        id: Date.now().toString(), 
+                        name: newPurchaseName, 
+                        amount: Number(newPurchaseAmount),
+                        type: purchaseType, 
+                        startDate: purchaseDate, 
+                        durationMonths: purchaseType === 'installment' ? Number(durationMonths) : undefined,
+                        // 🟢 Send the swipe data to the engine
+                        paymentMethod: paymentMethod,
+                        creditCardId: paymentMethod === 'credit' ? selectedCreditCardId : undefined
                       });
+
                       setNewPurchaseName(''); setNewPurchaseAmount('');
                     }
                   }}
                   className="w-full flex items-center justify-center gap-2 bg-black text-white p-3 rounded-xl border-2 border-black shadow-[2px_2px_0px_0px_rgba(200,200,200,1)] active:shadow-none active:translate-x-[1px] active:translate-y-[1px] transition-all font-black text-xs uppercase"
                 >
+
                   <Plus className="w-4 h-4" /> Add to cart!
                 </button>
               </div>

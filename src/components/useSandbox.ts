@@ -7,6 +7,9 @@ export interface MockPurchase {
   type: 'one-off' | 'installment';
   startDate: string; // "YYYY-MM-DD"
   durationMonths?: number;
+  // 🟢 NEW: Credit Card Sweep Fields
+  paymentMethod?: 'cash' | 'credit';
+  creditCardId?: string;
 }
 
 export function useSandbox() {
