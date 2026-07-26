@@ -115,6 +115,22 @@ const ContactDropdown = ({ value, onChange, contacts, placeholder }: { value: st
   useEffect(() => { setSearch(value); }, [value]);
 
   useEffect(() => {
+    // Note: Change 'setShowFabMenu' to whatever your function is to open the add menu/modal in this file!
+    const handleOpenModal = () => setShowFabMenu(true); 
+    window.addEventListener('open_add_transaction_modal', handleOpenModal);
+    return () => window.removeEventListener('open_add_transaction_modal', handleOpenModal);
+  }, []);
+
+  const [isTrayOpen, setIsTrayOpen] = useState(false);
+
+  useEffect(() => {
+    const handleToggleTray = () => setIsTrayOpen(true); 
+    window.addEventListener('open_add_transaction_modal', handleToggleTray);
+    return () => window.removeEventListener('open_add_transaction_modal', handleToggleTray);
+  }, []);
+
+
+  useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
       if (wrapperRef.current && !wrapperRef.current.contains(e.target as Node)) setIsOpen(false);
     };
@@ -1523,47 +1539,63 @@ function TransactionsPage({ transactions, loading = false, onTransactionDeleted,
           </div>
         )}
 
-        {/* Floating Action Button (FAB) with Fan Layout */}
-        {(isMobile || showFloatingAdd) && (
-          <div className="fixed bottom-8 right-8 z-40 animate-in fade-in zoom-in duration-300">
-            {/* Backdrop when fan is open */}
-            {showFabMenu && <div className="fixed inset-0 z-30" onClick={() => setShowFabMenu(false)} />}
+              {/* 🟢 Apple Music-Inspired Pull-Up Tray for Mobile */}
+      {isMobile && (
+        <>
+          {/* Darkened Backdrop Overlay */}
+          {isTrayOpen && (
+            <div 
+              className="fixed inset-0 bg-black/40 backdrop-blur-sm z-[90] animate-in fade-in duration-200"
+              onClick={() => setIsTrayOpen(false)} 
+            />
+          )}
 
-            <div className="relative z-40 flex items-center justify-center">
-              {/* Fan Items Container */}
-              <div className={`absolute inset-0 pointer-events-none`}>
-                {TRANSACTION_TYPES.map((item, index) => (
-                  <div
+          {/* Sliding Tray */}
+          <div 
+            className={`fixed bottom-0 left-0 right-0 z-[100] bg-white dark:bg-gray-900 border-t-[3px] border-black rounded-t-[2.5rem] transition-transform duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] flex flex-col pb-safe ${
+              isTrayOpen ? 'translate-y-0 shadow-[0px_-8px_20px_rgba(0,0,0,0.15)]' : 'translate-y-full'
+            }`}
+          >
+            {/* Grab Handle Pill */}
+            <div 
+              className="w-full flex justify-center pt-5 pb-3 cursor-pointer" 
+              onClick={() => setIsTrayOpen(false)}
+            >
+              <div className="w-14 h-1.5 bg-gray-300 dark:bg-gray-700 rounded-full" />
+            </div>
+
+            {/* Tray Content */}
+            <div className="px-6 pb-12 pt-2 space-y-4">
+              <h3 className="text-xl font-black uppercase tracking-tight text-center text-gray-900 dark:text-white mb-6">
+                New Transaction
+              </h3>
+              
+              <div className="grid grid-cols-1 gap-3">
+                {TRANSACTION_TYPES.map((item) => (
+                  <button
                     key={item.id}
-                    className={`absolute inset-0 flex items-center justify-center transition-all duration-300 ease-out ${showFabMenu ? 'opacity-100' : 'opacity-0 scale-50'}`}
-                    style={{
-                      transform: showFabMenu ? `translate(${item.x}px, ${item.y}px)` : 'translate(0px, 0px)',
-                      transitionDelay: showFabMenu ? `${index * 40}ms` : '0ms'
+                    onClick={() => {
+                      openAddForm(item.id, 'fab');
+                      setIsTrayOpen(false);
                     }}
+                    className="flex items-center p-4 bg-gray-50 dark:bg-gray-800 rounded-2xl border-[3px] border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] active:translate-x-[2px] active:translate-y-[2px] active:shadow-none transition-all group"
                   >
-                    <button
-                      onClick={() => openAddForm(item.id, 'fab')}
-                      className={`w-12 h-12 bg-white dark:bg-gray-800 rounded-full border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] flex items-center justify-center hover:scale-110 transition-all pointer-events-auto group ${getAccentClasses('hover:bg')} text-gray-700 dark:text-gray-300 hover:text-white`}>
+                    {/* Icon Box */}
+                    <div className="w-12 h-12 rounded-xl border-2 border-black bg-white dark:bg-gray-700 flex items-center justify-center mr-4 group-hover:scale-105 transition-transform">
                       {item.icon}
-                      <span className="absolute right-full mr-3 px-3 py-1.5 bg-gray-900 dark:bg-gray-100 text-white dark:text-gray-900 text-[10px] font-black uppercase tracking-widest rounded-xl opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap shadow-sm pointer-events-none">
-                        {item.label}
-                      </span>
-                    </button>
-                  </div>
+                    </div>
+                    {/* Label */}
+                    <span className="font-bold text-lg text-gray-900 dark:text-white uppercase tracking-wide">
+                      {item.label}
+                    </span>
+                  </button>
                 ))}
               </div>
-
-              {/* Main FAB */}
-              <button
-                onClick={() => setShowFabMenu(!showFabMenu)}
-                className={`relative z-10 w-14 h-14 text-white rounded-2xl border-[3px] border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] flex items-center justify-center transition-all duration-300 ${getAccentClasses('bg')} ${showFabMenu ? 'rotate-[135deg] scale-110' : 'hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none'}`}
-                aria-label="Add Transaction"
-              >
-                <Plus className="w-6 h-6" />
-              </button>
             </div>
           </div>
-        )}
+        </>
+      )}
+
 
         {/* Intercept Modal for Unlinked Budies */}
         {pendingProfileModal && (
