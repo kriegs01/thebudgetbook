@@ -1,5 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Menu, ChevronLeft, SlidersHorizontal, ArrowUp, ArrowDown, Eye, EyeOff, X, ChevronDown, LogOut, Lock, Users, Bell, MessageCircle, AlertCircle } from 'lucide-react';
+import { 
+  Menu, ChevronLeft, SlidersHorizontal, ArrowUp, ArrowDown, Eye, EyeOff, X, ChevronDown, 
+  LogOut, Lock, Users, Bell, MessageCircle, AlertCircle, LayoutDashboard, PieChart, 
+  WalletCards, Plus, MoreHorizontal, Receipt, Wallet, FileText, CreditCard 
+} from 'lucide-react';
 import { BrowserRouter, Routes, Route, NavLink, useLocation, Navigate, Outlet } from 'react-router-dom';
 import { FloatingHUD } from './FloatingHUD';
 import { QueryClient, QueryClientProvider, useQueryClient } from '@tanstack/react-query';
@@ -234,6 +238,7 @@ const MainApp: React.FC = () => {
   const [txAccountSelections, setTxAccountSelections] = useState<Record<string, string>>({});
   const [resolvingIds, setResolvingIds] = useState<Set<string>>(new Set());
   const { getAccentClasses } = useTheme();
+  const [showMobileMore, setShowMobileMore] = useState(false);
 
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [budgetItems, setBudgetItems] = useState(INITIAL_BUDGET);
@@ -1337,8 +1342,18 @@ const MainApp: React.FC = () => {
             25% { transform: rotate(0); }
             100% { transform: rotate(0); }
           }
-          .animate-ring { animation: ring 2s ease-in-out infinite; }`}
+          .animate-ring { animation: ring 2s ease-in-out infinite; }
+          
+          @keyframes mitosis {
+            0% { gap: 0.5rem; padding-left: 1rem; padding-right: 1rem; }
+            50% { gap: 1rem; padding-left: 1.5rem; padding-right: 1.5rem; }
+            100% { gap: 1.5rem; padding-left: 1rem; padding-right: 1rem; }
+          }
+          .animate-mitosis {
+            animation: mitosis 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+          }`}
         </style>
+
         <div className="flex h-[100dvh] bg-gray-100 dark:bg-gray-950 w-full overflow-hidden fixed inset-0 transition-colors duration-200">
 				{isSidebarOpen && isMobile && (
         <div
@@ -1346,6 +1361,7 @@ const MainApp: React.FC = () => {
           onClick={() => setIsSidebarOpen(false)}
         />
       )}
+      
         <aside className={`fixed inset-y-0 left-0 z-50 bg-gray-50 dark:bg-gray-900 transition-all duration-300 ease-in-out ${isSidebarOpen ? 'w-52' : 'hidden md:flex w-20'} overscroll-none ${
           isScrolled ? 'border-r border-gray-200 dark:border-gray-800' : 'border-none'
         }`}> 
@@ -1471,15 +1487,7 @@ const MainApp: React.FC = () => {
         } ${
           isScrolled ? `${getAccentClasses('bg')} shadow-lg border-b-4 border-black` : 'bg-transparent border-transparent'
         }`}>
-          <div className="flex items-center space-x-2">
-            {isMobile && (
-              <button
-                onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-                className={`relative p-2 -ml-2 border-[3px] border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] transition-all duration-200 hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none ${isScrolled ? 'bg-white' : getAccentClasses('bg')}`}>
-                <Menu className={`w-5 h-5 ${isScrolled ? getAccentClasses('text') : 'text-white'}`} />
-              </button>
-            )}
-          </div>
+          
 
           <div className="flex-1 md:hidden" />
 
@@ -1890,10 +1898,129 @@ const MainApp: React.FC = () => {
   }}
 />
 )}
+
+                {/* 🟢 MOBILE NAVIGATION: Floating Bar & More Tray */}
+      {isMobile && (
+        <>
+          {/* 1. Floating Nav Bar */}
+          <div id="global-nav-bar" className="fixed bottom-6 left-0 right-0 z-[100] flex items-center justify-center pointer-events-none">
+            <nav className={`pointer-events-auto flex items-center bg-white dark:bg-gray-900 border-[3px] border-black rounded-full px-4 py-2.5 shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] transition-all duration-300 ${
+              ['/accounts', '/transactions', '/budget', '/billers', '/installments'].includes(location.pathname) ? 'animate-mitosis' : 'gap-2'
+            }`}>
+              
+              <div className="flex items-center gap-1">
+                <NavLink to="/" className={({ isActive }) => `p-2.5 rounded-2xl transition-all ${isActive ? getAccentClasses('bg') + ' text-white -rotate-3 border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]' : 'text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800'}`}>
+                  <LayoutDashboard className="w-5 h-5" />
+                </NavLink>
+                <NavLink to="/transactions" className={({ isActive }) => `p-2.5 rounded-2xl transition-all ${isActive ? getAccentClasses('bg') + ' text-white -rotate-3 border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]' : 'text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800'}`}>
+                  <FileText className="w-5 h-5" />
+                </NavLink>
+              </div>
+
+              {['/accounts', '/transactions', '/budget', '/billers', '/installments'].includes(location.pathname) && (
+                <div id="global-mobile-fab" className="animate-in zoom-in-50 duration-300 px-1 -my-4 relative z-10">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const eventMap: Record<string, string> = {
+                        '/accounts': 'open_add_account_modal',
+                        '/transactions': 'open_add_transaction_modal',
+                        '/budget': 'open_add_budget_modal',
+                        '/billers': 'open_add_biller_modal',
+                        '/installments': 'open_add_installment_modal'
+                      };
+                      const eventName = eventMap[location.pathname];
+                      if (eventName) {
+                        window.dispatchEvent(new CustomEvent(eventName));
+                      }
+                    }}
+                    className={`flex h-14 w-14 items-center justify-center rounded-full border-[3px] border-black text-white shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] transition-transform active:translate-x-[2px] active:translate-y-[2px] active:shadow-none ${getAccentClasses('bg')}`}
+                  >
+                    <Plus className="h-6 w-6" strokeWidth={3} />
+                  </button>
+                </div>
+              )}
+
+              <div className="flex items-center gap-1">
+                <NavLink to="/budget" className={({ isActive }) => `p-2.5 rounded-2xl transition-all ${isActive ? getAccentClasses('bg') + ' text-white -rotate-3 border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]' : 'text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800'}`}>
+                  <PieChart className="w-5 h-5" />
+                </NavLink>
+                <button 
+                  type="button"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    setShowMobileMore(true);
+                  }} 
+                  className={`p-2.5 rounded-2xl transition-all ${['/accounts', '/billers', '/installments', '/wallet', '/people', '/settings'].includes(location.pathname) ? getAccentClasses('bg') + ' text-white -rotate-3 border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]' : 'text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800'}`}
+                >
+                  <MoreHorizontal className="w-5 h-5" />
+                </button>
+              </div>
+
+            </nav>
+          </div>
+
+          {/* 2. Mobile "More" Tray */}
+          {showMobileMore && (
+            <div 
+              className="fixed inset-0 bg-black/40 backdrop-blur-sm z-[110] animate-in fade-in duration-200"
+              onClick={() => setShowMobileMore(false)} 
+            />
+          )}
+
+          <div 
+            className={`fixed bottom-0 left-0 right-0 z-[120] bg-white dark:bg-gray-900 border-t-[3px] border-black rounded-t-[2.5rem] transition-transform duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] flex flex-col pb-8 ${
+              showMobileMore ? 'translate-y-0 shadow-[0px_-8px_20px_rgba(0,0,0,0.15)]' : 'translate-y-full'
+            }`}
+          >
+            <div 
+              className="w-full flex justify-center pt-5 pb-3 cursor-pointer" 
+              onClick={() => setShowMobileMore(false)}
+            >
+              <div className="w-14 h-1.5 bg-gray-300 dark:bg-gray-700 rounded-full" />
+            </div>
+
+            <div className="px-6 pb-6 pt-2">
+              <h3 className="text-xl font-black uppercase tracking-tight text-center text-gray-900 dark:text-white mb-6">
+                Other Pages
+              </h3>
+              
+              <div className="grid grid-cols-2 gap-3">
+                {[
+                  { path: '/accounts', label: 'Accounts', icon: <WalletCards className="w-6 h-6" /> },
+                  { path: '/billers', label: 'Billers', icon: <Receipt className="w-6 h-6" /> },
+                  { path: '/installments', label: 'Installments', icon: <CreditCard className="w-6 h-6" /> },
+                  { path: '/wallet', label: 'Wallet', icon: <Wallet className="w-6 h-6" /> },
+                  { path: '/people', label: 'People', icon: <Users className="w-6 h-6" /> },
+                  { path: '/settings', label: 'Settings', icon: <SlidersHorizontal className="w-6 h-6" /> },
+                ].map((item) => (
+                  <NavLink
+                    key={item.path}
+                    to={item.path}
+                    onClick={() => setShowMobileMore(false)}
+                    className={({ isActive }) => `flex flex-col items-center justify-center p-4 rounded-2xl border-[3px] border-black transition-all active:translate-x-[2px] active:translate-y-[2px] active:shadow-none ${
+                      isActive 
+                        ? getAccentClasses('bg') + ' text-white shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]' 
+                        : 'bg-gray-50 dark:bg-gray-800 text-gray-700 dark:text-gray-300 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]'
+                    }`}
+                  >
+                    <div className="mb-2">{item.icon}</div>
+                    <span className="font-bold text-xs sm:text-sm uppercase tracking-wide">{item.label}</span>
+                  </NavLink>
+                ))}
+              </div>
+            </div>
+          </div>
+        </>
+      )}
+
     </>
   );
 };
 
+
+    
 // Main App component with Auth Provider
 const App: React.FC = () => {
   return (

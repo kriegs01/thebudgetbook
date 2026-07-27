@@ -115,22 +115,6 @@ const ContactDropdown = ({ value, onChange, contacts, placeholder }: { value: st
   useEffect(() => { setSearch(value); }, [value]);
 
   useEffect(() => {
-    // Note: Change 'setShowFabMenu' to whatever your function is to open the add menu/modal in this file!
-    const handleOpenModal = () => setShowFabMenu(true); 
-    window.addEventListener('open_add_transaction_modal', handleOpenModal);
-    return () => window.removeEventListener('open_add_transaction_modal', handleOpenModal);
-  }, []);
-
-  const [isTrayOpen, setIsTrayOpen] = useState(false);
-
-  useEffect(() => {
-    const handleToggleTray = () => setIsTrayOpen(true); 
-    window.addEventListener('open_add_transaction_modal', handleToggleTray);
-    return () => window.removeEventListener('open_add_transaction_modal', handleToggleTray);
-  }, []);
-
-
-  useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
       if (wrapperRef.current && !wrapperRef.current.contains(e.target as Node)) setIsOpen(false);
     };
@@ -247,13 +231,19 @@ function TransactionsPage({ transactions, loading = false, onTransactionDeleted,
   // Transaction details modal
   const [selectedTx, setSelectedTx] = useState<Transaction | null>(null);
   // Signed URL for displaying a receipt (generated fresh each time the modal opens)
-  // undefined = loading, null = error/no receipt, string = ready
   const [receiptSignedUrl, setReceiptSignedUrl] = useState<string | null | undefined>(undefined);
   // Receipt preview modal
   const [previewReceiptUrl, setPreviewReceiptUrl] = useState<string | null>(null);
   const [zoom, setZoom] = useState(0.5);
   // Receipt file for the add-transaction form
   const [receiptFile, setReceiptFile] = useState<File | null>(null);
+
+  // 🟢 Global Mitosis FAB listener to toggle the pull-up tray
+  useEffect(() => {
+    const handleToggleTray = () => setShowFabMenu(true); 
+    window.addEventListener('open_add_transaction_modal', handleToggleTray);
+    return () => window.removeEventListener('open_add_transaction_modal', handleToggleTray);
+  }, []);
 
   const [form, setForm] = useState({
     name: '',
@@ -263,7 +253,7 @@ function TransactionsPage({ transactions, loading = false, onTransactionDeleted,
     paymentMethodId: '',
     transactionType: 'payment',
     transferToAccountId: '',
-    borrowerName: '', // New field for loan transactions
+    borrowerName: '',
     personName: ''
   });
 
@@ -289,7 +279,6 @@ function TransactionsPage({ transactions, loading = false, onTransactionDeleted,
   const [showBatchConfirm, setShowBatchConfirm] = useState(false);
   const [isBatchDeleting, setIsBatchDeleting] = useState(false);
 
-  // Extract unique people names from both the People table and historical transactions
   const uniquePeopleNames = useMemo(() => {
     const names = [
       ...people.map(p => p.name),
@@ -297,6 +286,7 @@ function TransactionsPage({ transactions, loading = false, onTransactionDeleted,
     ];
     return Array.from(new Set(names));
   }, [people, transactions]);
+  
   const selectedPaymentAccount = useMemo(
     () => accounts.find(account => account.id === form.paymentMethodId) ?? null,
     [accounts, form.paymentMethodId]
@@ -383,11 +373,8 @@ function TransactionsPage({ transactions, loading = false, onTransactionDeleted,
     onConfirm: () => void;
   }>({ show: false, title: '', message: '', onConfirm: () => { } });
 
-  // ── Derived: filtered transactions ────────────────────────────────────────
   const filteredTransactions = useMemo(() => {
     return transactions.filter(tx => {
-      // Hide credit_payment counterparts — they live exclusively on the credit account
-      // statement and should not appear in the global transaction list.
       if (tx.transaction_type === 'credit_payment') return false;
       const d = tx.date.slice(0, 10);
       if (filterStartDate && d < filterStartDate) return false;
@@ -397,13 +384,11 @@ function TransactionsPage({ transactions, loading = false, onTransactionDeleted,
     });
   }, [transactions, filterStartDate, filterEndDate, filterPaymentMethods]);
 
-  // ── Derived: total spend (positive amounts = money going out) ─────────────
   const totalSpend = useMemo(
     () => filteredTransactions.reduce((sum, tx) => sum + (tx.amount > 0 ? tx.amount : 0), 0),
     [filteredTransactions]
   );
 
-  // Load transactions and accounts from Supabase in parallel
   const loadData = useCallback(async () => {
     setIsLoading(true);
     try {
@@ -456,7 +441,6 @@ function TransactionsPage({ transactions, loading = false, onTransactionDeleted,
     loadData();
   }, [loadData]);
 
-  // Instantly sync data if a notification payment is accepted globally
   useEffect(() => {
     const handleUpdate = () => loadData();
     window.addEventListener('transactions_updated', handleUpdate);
@@ -501,7 +485,6 @@ function TransactionsPage({ transactions, loading = false, onTransactionDeleted,
     return list;
   }, [people, friendProfiles, uniquePeopleNames]);
 
-  // Observer to show floating add button when scrolled past header
   useEffect(() => {
     const observer = new IntersectionObserver(
       ([entry]) => {
@@ -516,26 +499,23 @@ function TransactionsPage({ transactions, loading = false, onTransactionDeleted,
   }, []);
 
   useEffect(() => {
-    // Set default paymentMethodId when accounts are loaded and form hasn't been touched
     if (accounts.length > 0 && !form.paymentMethodId) {
       const defaultAcc = accounts.find(a => form.transactionType === 'payment' ? a.classification !== 'Credit Card' : a.type !== 'Credit') || accounts[0];
       setForm(f => ({ ...f, paymentMethodId: defaultAcc?.id ?? '' }));
     }
   }, [accounts, form.paymentMethodId, form.transactionType]);
 
-  // Generate a fresh signed URL whenever the Transaction Details modal opens
   useEffect(() => {
     if (selectedTx?.receiptUrl) {
-      setReceiptSignedUrl(undefined); // reset to loading state
+      setReceiptSignedUrl(undefined);
       getReceiptSignedUrl(selectedTx.receiptUrl)
-        .then(url => setReceiptSignedUrl(url)) // null on internal error, string on success
+        .then(url => setReceiptSignedUrl(url))
         .catch(() => setReceiptSignedUrl(null));
     } else {
       setReceiptSignedUrl(null);
     }
   }, [selectedTx]);
 
-  // Close payment-method dropdown when clicking outside
   useEffect(() => {
     const handler = (e: MouseEvent) => {
       if (pmDropdownRef.current && !pmDropdownRef.current.contains(e.target as Node)) {
@@ -546,7 +526,6 @@ function TransactionsPage({ transactions, loading = false, onTransactionDeleted,
     return () => document.removeEventListener('mousedown', handler);
   }, []);
 
-  // ── Form helpers ──────────────────────────────────────────────────────────
   const openAddForm = (type: string, source: 'top' | 'fab' = 'top') => {
     setForm({
       name: '',
@@ -572,7 +551,7 @@ function TransactionsPage({ transactions, loading = false, onTransactionDeleted,
     setShowForm(false);
     setEditingTxId(null);
     setFormSource(null);
-    setReceiptFile(null); // Clear receipt file
+    setReceiptFile(null);
     setForm({ name: '', date: todayIso(), amount: '', paymentMethodId: accounts[0]?.id ?? '', transactionType: 'payment', transferToAccountId: '', borrowerName: '', personName: '' });
   };
 
@@ -582,7 +561,7 @@ function TransactionsPage({ transactions, loading = false, onTransactionDeleted,
     setForm({
       name: tx.name,
       date: toLocalDateInputValue(tx.date),
-      amount: Math.abs(tx.amount).toFixed(2), // Absolute value makes editing easier
+      amount: Math.abs(tx.amount).toFixed(2),
       paymentMethodId: tx.paymentMethodId,
       transactionType: tx.transaction_type || 'payment',
       transferToAccountId: '',
@@ -594,7 +573,6 @@ function TransactionsPage({ transactions, loading = false, onTransactionDeleted,
   };
 
   const executeTransactionSubmit = async () => {
-    // Transfer creation logic (uses specialized service)
     if (form.transactionType === 'transfer' && transferTab === 'accounts' && !editingTxId) {
       if (!form.paymentMethodId || !form.transferToAccountId || !form.amount || !form.date) return;
 
@@ -620,7 +598,6 @@ function TransactionsPage({ transactions, loading = false, onTransactionDeleted,
           }
         }
       );
-
       return;
     }
 
@@ -629,10 +606,8 @@ function TransactionsPage({ transactions, loading = false, onTransactionDeleted,
       txName = `Transfer to ${form.personName}`;
     }
 
-    // Standard transaction creation/update logic
     if (!txName || !form.date || !form.amount || !form.paymentMethodId) return;
 
-    // Apply correct positive/negative sign based on transaction type
     let finalAmount = parseFloat(form.amount);
     if (form.transactionType === 'cash_in') {
       finalAmount = -Math.abs(finalAmount);
@@ -671,8 +646,6 @@ function TransactionsPage({ transactions, loading = false, onTransactionDeleted,
               await updateTransaction(editingTxId, { receipt_url: path });
             }
           }
-
-          console.log('[Transactions Page] Transaction updated successfully');
         } else {
           const transaction = {
             name: txName,
@@ -692,8 +665,6 @@ function TransactionsPage({ transactions, loading = false, onTransactionDeleted,
             return;
           }
 
-          console.log('Transaction created successfully:', data);
-
           if (receiptFile && data) {
             const { path, error: uploadError } = await uploadTransactionReceipt(data.id, receiptFile);
             if (uploadError) {
@@ -706,12 +677,9 @@ function TransactionsPage({ transactions, loading = false, onTransactionDeleted,
         }
 
         await loadData();
-
         if (onTransactionCreated) {
-          console.log('[Transactions Page] Notifying parent of transaction change');
           onTransactionCreated();
         }
-
         closeForm();
       } catch (error) {
         console.error('Error saving transaction:', error);
@@ -744,17 +712,10 @@ function TransactionsPage({ transactions, loading = false, onTransactionDeleted,
       onConfirm: async () => {
         setConfirmModal(prev => ({ ...prev, show: false }));
         try {
-          console.log('[Transactions Page] Deleting transaction with reversion:', id);
           const { error } = await deleteTransactionAndRevertSchedule(id);
           if (error) throw error;
-
-          console.log('[Transactions Page] Transaction deleted successfully');
-          // Reload transactions after deletion
           await loadData();
-
-          // Notify parent if callback provided (for refreshing related data)
           if (onTransactionDeleted) {
-            console.log('[Transactions Page] Notifying parent of transaction deletion');
             onTransactionDeleted();
           }
         } catch (error) {
@@ -765,10 +726,9 @@ function TransactionsPage({ transactions, loading = false, onTransactionDeleted,
     });
   };
 
-  // ── Select / batch-delete helpers ─────────────────────────────────────────
   const toggleSelectMode = () => {
     setIsSelectMode(prev => {
-      if (prev) setSelectedIds(new Set()); // clear selection when turning off
+      if (prev) setSelectedIds(new Set());
       return !prev;
     });
   };
@@ -792,7 +752,6 @@ function TransactionsPage({ transactions, loading = false, onTransactionDeleted,
     try {
       const { errors } = await batchDeleteTransactions([...selectedIds]);
       if (errors.length > 0) {
-        console.error('Some deletions failed:', errors);
         alert(`${errors.length} transaction(s) could not be deleted. Please try again.`);
       }
       setShowBatchConfirm(false);
@@ -808,7 +767,6 @@ function TransactionsPage({ transactions, loading = false, onTransactionDeleted,
     }
   };
 
-  // ── Filter helpers ────────────────────────────────────────────────────────
   const togglePaymentMethodFilter = (id: string) => {
     setFilterPaymentMethods(prev => {
       const next = new Set(prev);
@@ -836,7 +794,6 @@ function TransactionsPage({ transactions, loading = false, onTransactionDeleted,
     <>
       <div className={`min-h-screen bg-gray-50 dark:bg-gray-950 transition-colors duration-200 overflow-x-hidden ${isMobile ? 'pt-10' : 'pt-8'}`}>
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 w-full">
-          {/* ── Header & Controllers ───────────────────────────────────────── */}
           <div ref={headerRef}>
             <PageHeader
               title="Transactions"
@@ -852,7 +809,6 @@ function TransactionsPage({ transactions, loading = false, onTransactionDeleted,
               )} />
           </div>
 
-          {/* ── Filter Bar ──────────────────────────────────────────────────── */}
           <div className="bg-white dark:bg-gray-900 border-4 border-black rounded-2xl shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] mb-6">
             <button
               className="p-4 flex justify-between items-center w-full disabled:cursor-auto"
@@ -922,7 +878,7 @@ function TransactionsPage({ transactions, loading = false, onTransactionDeleted,
                   </div>
                   <button
                     type="button"
-                    onClick={() => { setFilterStartDate(''); setFilterEndDate(''); } }
+                    onClick={() => { setFilterStartDate(''); setFilterEndDate(''); }}
                     className={`self-end px-4 py-2.5 text-xs font-bold rounded-xl border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] transition-all hover:shadow-none hover:translate-x-[0.5px] hover:translate-y-[0.5px] ${getAccentClasses('bg')} text-white`}
                   >
                     All Time
@@ -939,7 +895,6 @@ function TransactionsPage({ transactions, loading = false, onTransactionDeleted,
             )}
           </div>
 
-          {/* ── Total Spend Dashboard ────────────────────────────────────────── */}
           <div className="mb-6 w-full">
             <div className={`${getAccentClasses('bg')} border-4 border-black rounded-2xl shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] p-5 text-white w-full`}>
               <p className="text-xs font-black uppercase tracking-widest text-indigo-200 mb-1">Total Spend</p>
@@ -953,7 +908,6 @@ function TransactionsPage({ transactions, loading = false, onTransactionDeleted,
               <h2 className="text-sm font-bold uppercase text-gray-600 dark:text-gray-400 tracking-widest">All transactions</h2>
               <div className="flex items-center gap-2">
                 <div className="text-sm text-gray-500">{filteredTransactions.length} items</div>
-                {/* Batch delete trash icon — shown only when ≥1 selected */}
                 {isSelectMode && selectedIds.size > 0 && (
                   <button
                     onClick={() => setShowBatchConfirm(true)}
@@ -965,7 +919,6 @@ function TransactionsPage({ transactions, loading = false, onTransactionDeleted,
                     <span>{selectedIds.size}</span>
                   </button>
                 )}
-                {/* Select toggle */}
                 <button
                   onClick={toggleSelectMode}
                   title={isSelectMode ? 'Cancel selection' : 'Select transactions'}
@@ -1008,15 +961,13 @@ function TransactionsPage({ transactions, loading = false, onTransactionDeleted,
       </div>
 
       <Portal>
-        {/* QA: Consistent Transaction Form - with receipt upload, exclude credit accounts */}
         {showForm && (
           <div className="fixed inset-0 z-[999] flex items-center justify-center p-2 sm:p-4 bg-black/60 backdrop-blur-md">
             <div className="w-full max-w-md bg-white dark:bg-gray-900 border-4 border-black rounded-2xl shadow-2xl sm:shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] transition-all max-h-[95vh] flex flex-col">
-              {/* --- MODAL HEADER --- */}
               <div className="flex-shrink-0 p-6 md:p-8 pb-4 md:pb-6 relative">
                 {formSource === 'top' && !editingTxId && (
                   <button
-                    onClick={() => { setShowForm(false); setShowTypeModal(true); setFormSource(null); } }
+                    onClick={() => { setShowForm(false); setShowTypeModal(true); setFormSource(null); }}
                     className="absolute left-4 top-4 md:left-6 md:top-6 p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full transition-colors"
                     aria-label="Back to type selection"
                   >
@@ -1050,10 +1001,8 @@ function TransactionsPage({ transactions, loading = false, onTransactionDeleted,
                 </p>
               </div>
 
-              {/* --- SCROLLABLE FORM CONTENT --- */}
               <div className="flex-1 overflow-y-auto overflow-x-hidden px-6 md:px-8">
                 <form id="transaction-form" onSubmit={onSubmit} className="space-y-4 md:space-y-5">
-                  {/* Conditional Name Field — Hide for Transfers since they auto-generate names */}
                   {(form.transactionType !== 'transfer' || editingTxId) && (
                     <div>
                       <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">
@@ -1088,7 +1037,6 @@ function TransactionsPage({ transactions, loading = false, onTransactionDeleted,
 
                   {form.transactionType === 'transfer' && !editingTxId ? (
                     <>
-                      {/* Tab Selector */}
                       <div className={`flex p-1 bg-gray-200 dark:bg-gray-800 rounded-xl mb-4 mt-2 border-2 border-black`}>
                         <button
                           type="button"
@@ -1106,11 +1054,9 @@ function TransactionsPage({ transactions, loading = false, onTransactionDeleted,
                         </button>
                       </div>
 
-                      {/* TAB 1: MY ACCOUNTS */}
                       {transferTab === 'accounts' && (
                         <div className="space-y-4 md:space-y-5 animate-in fade-in slide-in-from-left-4 duration-300">
                           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 relative">
-                            {/* Swap Accounts Button */}
                             <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 mt-0 sm:mt-3 flex items-center justify-center pointer-events-none z-10">
                               <button
                                 type="button"
@@ -1123,7 +1069,7 @@ function TransactionsPage({ transactions, loading = false, onTransactionDeleted,
                                       transferToAccountId: f.paymentMethodId
                                     };
                                   });
-                                } }
+                                }}
                                 className={`pointer-events-auto w-10 h-10 rounded-full bg-white dark:bg-gray-700 border-4 border-white dark:border-gray-900 flex items-center justify-center text-gray-500 transition-all shadow-sm ${getAccentClasses('hoverLight')}`}
                                 title="Swap accounts"
                               >
@@ -1182,7 +1128,6 @@ function TransactionsPage({ transactions, loading = false, onTransactionDeleted,
                         </div>
                       )}
 
-                      {/* TAB 2: FRIENDS */}
                       {transferTab === 'friends' && (
                         <div className="space-y-4 md:space-y-5 animate-in fade-in slide-in-from-right-4 duration-300">
                           <div>
@@ -1224,7 +1169,7 @@ function TransactionsPage({ transactions, loading = false, onTransactionDeleted,
                                 value={form.date}
                                 onChange={e => setForm(f => ({ ...f, date: e.target.value }))}
                                 required
-                                className={`w-full bg-white dark:bg-gray-800 border-2 border-black dark:border-gray-700 rounded-xl p-3.5 font-bold outline-none focus:ring-offset-2 ${getAccentClasses('ring')} transition-all text-sm`} />
+                                className={`w-full min-w-0 bg-white dark:bg-gray-800 border-2 border-black dark:border-gray-700 rounded-xl p-3.5 font-bold outline-none focus:ring-offset-2 ${getAccentClasses('ring')} transition-all text-sm`} />
                             </div>
                           </div>
                         </div>
@@ -1261,7 +1206,6 @@ function TransactionsPage({ transactions, loading = false, onTransactionDeleted,
                     </div>
                   )}
 
-                  {/* Borrower Field for Loan Transactions */}
                   {form.transactionType === 'loan' && userProfile?.settings?.peopleEnabled && (
                     <div>
                       <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Borrower (Optional)</label>
@@ -1294,7 +1238,6 @@ function TransactionsPage({ transactions, loading = false, onTransactionDeleted,
                 </form>
               </div>
 
-              {/* --- MODAL FOOTER --- */}
               <div className="flex-shrink-0 p-6 md:p-8 pt-4 md:pt-6">
                 <div className="flex space-x-3">
                   <button type="button" onClick={closeForm} className="flex-1 bg-gray-200 dark:bg-gray-700 py-3.5 rounded-xl font-bold text-gray-800 dark:text-gray-200 border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[1px] hover:translate-y-[1px] transition-all">Cancel</button>
@@ -1307,7 +1250,6 @@ function TransactionsPage({ transactions, loading = false, onTransactionDeleted,
           </div>
         )}
 
-        {/* ── Batch Delete Confirmation Modal ─────────────────────────────────── */}
         {showBatchConfirm && (
           <div className="fixed inset-0 z-[1000] flex items-center justify-center p-2 sm:p-4 bg-black/60 backdrop-blur-md">
             <div className="w-full max-w-sm bg-white dark:bg-gray-900 border-4 border-black rounded-2xl shadow-2xl sm:shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] p-6 md:p-8 transition-all flex flex-col max-h-[95vh]">
@@ -1349,7 +1291,6 @@ function TransactionsPage({ transactions, loading = false, onTransactionDeleted,
           </div>
         )}
 
-        {/* Transaction Details Modal */}
         {selectedTx && (() => {
           const pm = accounts.find(a => a.id === selectedTx.paymentMethodId);
           const linkedTransferTx = selectedTx.transaction_type === 'transfer' && selectedTx.related_transaction_id
@@ -1383,7 +1324,6 @@ function TransactionsPage({ transactions, loading = false, onTransactionDeleted,
                     <dt className="text-[10px] font-black text-gray-400 uppercase tracking-widest self-center">Name</dt>
                     <dd className="text-sm font-bold text-gray-900 dark:text-gray-100 flex items-center">
                       {selectedTx.name}
-                      {/* 🟢 NEW INCOME BADGE */}
                       {selectedTx.transaction_type === 'income' && (
                         <span className="ml-2 inline-flex items-center bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 border border-emerald-300 dark:border-emerald-700 px-2 py-0.5 rounded-lg text-[9px] font-black uppercase tracking-widest shadow-[1px_1px_0px_0px_rgba(0,0,0,0.1)]">
                           Income
@@ -1434,9 +1374,9 @@ function TransactionsPage({ transactions, loading = false, onTransactionDeleted,
                             src={receiptSignedUrl}
                             alt="Receipt thumbnail"
                             className="w-16 h-16 rounded-xl object-cover border-2 border-black"
-                            onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none'; } } />
+                            onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
                           <button
-                            onClick={() => { setZoom(0.5); setPreviewReceiptUrl(receiptSignedUrl); } }
+                            onClick={() => { setZoom(0.5); setPreviewReceiptUrl(receiptSignedUrl); }}
                             title="Preview receipt"
                             className={`flex items-center space-x-1 px-3 py-2 rounded-xl text-sm font-bold border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[1px] hover:translate-y-[1px] transition-all ${getAccentClasses('lightBg')}`}>
                             <Eye className="w-4 h-4" />
@@ -1456,7 +1396,6 @@ function TransactionsPage({ transactions, loading = false, onTransactionDeleted,
           );
         })()}
 
-        {/* Receipt Preview Modal — overlays the details modal without dimming the background */}
         {previewReceiptUrl && (
           <div className="fixed inset-0 z-[2000] flex items-center justify-center p-4" onClick={() => setPreviewReceiptUrl(null)}>
             <div className="w-full max-w-2xl bg-white rounded-3xl shadow-2xl flex flex-col overflow-hidden" style={{ maxHeight: '90vh' }} onClick={e => e.stopPropagation()}>
@@ -1511,7 +1450,6 @@ function TransactionsPage({ transactions, loading = false, onTransactionDeleted,
           </div>
         )}
 
-        {/* Type Selection Modal for Top Button */}
         {showTypeModal && (
           <div className="fixed inset-0 z-[999] flex items-center justify-center p-2 sm:p-4 bg-black/60 backdrop-blur-md animate-in fade-in">
             <div className="w-full max-w-lg bg-white dark:bg-gray-900 border-4 border-black rounded-2xl shadow-2xl sm:shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] p-6 sm:p-10 relative transition-all animate-in zoom-in-95">
@@ -1538,65 +1476,57 @@ function TransactionsPage({ transactions, loading = false, onTransactionDeleted,
           </div>
         )}
 
-              {/* 🟢 Apple Music-Inspired Pull-Up Tray for Mobile */}
-      {isMobile && (
-        <>
-          {/* Darkened Backdrop Overlay */}
-          {isTrayOpen && (
-            <div 
-              className="fixed inset-0 bg-black/40 backdrop-blur-sm z-[90] animate-in fade-in duration-200"
-              onClick={() => setIsTrayOpen(false)} 
-            />
-          )}
+        {/* 🟢 Apple Music-Inspired Pull-Up Tray for Mobile */}
+        {isMobile && (
+          <>
+            {showFabMenu && (
+              <div 
+                className="fixed inset-0 bg-black/40 backdrop-blur-sm z-[90] animate-in fade-in duration-200"
+                onClick={() => setShowFabMenu(false)} 
+              />
+            )}
 
-          {/* Sliding Tray */}
-          <div 
-            className={`fixed bottom-0 left-0 right-0 z-[100] bg-white dark:bg-gray-900 border-t-[3px] border-black rounded-t-[2.5rem] transition-transform duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] flex flex-col pb-safe ${
-              isTrayOpen ? 'translate-y-0 shadow-[0px_-8px_20px_rgba(0,0,0,0.15)]' : 'translate-y-full'
-            }`}
-          >
-            {/* Grab Handle Pill */}
             <div 
-              className="w-full flex justify-center pt-5 pb-3 cursor-pointer" 
-              onClick={() => setIsTrayOpen(false)}
+              className={`fixed bottom-0 left-0 right-0 z-[100] bg-white dark:bg-gray-900 border-t-[3px] border-black rounded-t-[2.5rem] transition-transform duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] flex flex-col pb-safe ${
+                showFabMenu ? 'translate-y-0 shadow-[0px_-8px_20px_rgba(0,0,0,0.15)]' : 'translate-y-full'
+              }`}
             >
-              <div className="w-14 h-1.5 bg-gray-300 dark:bg-gray-700 rounded-full" />
-            </div>
+              <div 
+                className="w-full flex justify-center pt-5 pb-3 cursor-pointer" 
+                onClick={() => setShowFabMenu(false)}
+              >
+                <div className="w-14 h-1.5 bg-gray-300 dark:bg-gray-700 rounded-full" />
+              </div>
 
-            {/* Tray Content */}
-            <div className="px-6 pb-12 pt-2 space-y-4">
-              <h3 className="text-xl font-black uppercase tracking-tight text-center text-gray-900 dark:text-white mb-6">
-                New Transaction
-              </h3>
-              
-              <div className="grid grid-cols-1 gap-3">
-                {TRANSACTION_TYPES.map((item) => (
-                  <button
-                    key={item.id}
-                    onClick={() => {
-                      openAddForm(item.id, 'fab');
-                      setIsTrayOpen(false);
-                    }}
-                    className="flex items-center p-4 bg-gray-50 dark:bg-gray-800 rounded-2xl border-[3px] border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] active:translate-x-[2px] active:translate-y-[2px] active:shadow-none transition-all group"
-                  >
-                    {/* Icon Box */}
-                    <div className="w-12 h-12 rounded-xl border-2 border-black bg-white dark:bg-gray-700 flex items-center justify-center mr-4 group-hover:scale-105 transition-transform">
-                      {item.icon}
-                    </div>
-                    {/* Label */}
-                    <span className="font-bold text-lg text-gray-900 dark:text-white uppercase tracking-wide">
-                      {item.label}
-                    </span>
-                  </button>
-                ))}
+              <div className="px-6 pb-12 pt-2 space-y-4">
+                <h3 className="text-xl font-black uppercase tracking-tight text-center text-gray-900 dark:text-white mb-6">
+                  New Transaction
+                </h3>
+                
+                <div className="grid grid-cols-1 gap-3">
+                  {TRANSACTION_TYPES.map((item) => (
+                    <button
+                      key={item.id}
+                      onClick={() => {
+                        openAddForm(item.id, 'fab');
+                        setShowFabMenu(false);
+                      }}
+                      className="flex items-center p-4 bg-gray-50 dark:bg-gray-800 rounded-2xl border-[3px] border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] active:translate-x-[2px] active:translate-y-[2px] active:shadow-none transition-all group"
+                    >
+                      <div className="w-12 h-12 rounded-xl border-2 border-black bg-white dark:bg-gray-700 flex items-center justify-center mr-4 group-hover:scale-105 transition-transform">
+                        {item.icon}
+                      </div>
+                      <span className="font-bold text-lg text-gray-900 dark:text-white uppercase tracking-wide">
+                        {item.label}
+                      </span>
+                    </button>
+                  ))}
+                </div>
               </div>
             </div>
-          </div>
-        </>
-      )}
+          </>
+        )}
 
-
-        {/* Intercept Modal for Unlinked Budies */}
         {pendingProfileModal && (
           <div className="fixed inset-0 z-[1000] flex items-center justify-center p-2 sm:p-4 bg-black/60 backdrop-blur-sm animate-in fade-in">
             <div className="bg-white dark:bg-gray-900 rounded-2xl w-full max-w-sm p-6 md:p-8 border-4 border-black shadow-2xl sm:shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] relative transition-all animate-in zoom-in-95 flex flex-col items-center text-center">
@@ -1633,7 +1563,7 @@ function TransactionsPage({ transactions, loading = false, onTransactionDeleted,
                       console.error('Failed to create profile', e);
                       alert('Failed to create local profile.');
                     } finally { setIsSubmitting(false); }
-                  } }
+                  }}
                   className={`w-full py-4 rounded-xl font-black uppercase tracking-widest text-[10px] transition-all border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[1px] hover:translate-y-[1px] disabled:opacity-50 disabled:bg-gray-300 ${getAccentClasses('bg')}`}
                 >
                   {isSubmitting ? 'Processing...' : 'Create Profile & Continue'}
@@ -1718,7 +1648,8 @@ function TransactionsPage({ transactions, loading = false, onTransactionDeleted,
               </div>
             </div>
           </div>
-        )}      {confirmModal.show && <ConfirmDialog {...confirmModal} onClose={() => setConfirmModal(p => ({ ...p, show: false }))} />}
+        )}
+        {confirmModal.show && <ConfirmDialog {...confirmModal} onClose={() => setConfirmModal(p => ({ ...p, show: false }))} />}
       </Portal>
     </>
   );

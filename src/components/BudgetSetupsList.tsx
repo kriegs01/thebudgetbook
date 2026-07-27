@@ -89,7 +89,7 @@ export const BudgetSetupsList: React.FC<BudgetSetupsListProps> = ({
 
   return (
     <div className="w-full mb-8">
-      <h2 className="px-4 mb-4 text-sm font-black text-gray-400 uppercase tracking-widest">{title}</h2>
+      <h2 className="px-4 mb-4 text-sm font-black text-gray-400 uppercase tracking-widest hidden lg:block">{title}</h2>
       
       {/* Cards Container */}
       <div 

@@ -11,7 +11,10 @@ export interface Account {
   billingDate?: string;
   dueDate?: string;
   overdraftMode?: 'allow' | 'warn' | 'block';
+  // 🟢 NEW: Add this line here
+  lastFour?: string;
 }
+
 
 export interface BudgetItem {
   id: string;

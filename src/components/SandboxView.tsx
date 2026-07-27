@@ -222,9 +222,25 @@ export const SandboxView: React.FC<SandboxViewProps> = ({ onClose, liveIncomeTxs
   const handlePrev = () => scrollToCard(Math.max(0, activeIndex - 1));
   const handleNext = () => scrollToCard(Math.min(timeline.length - 1, activeIndex + 1));
 
+  React.useEffect(() => {
+    // Grab the entire global navigation bar
+    const navBar = document.getElementById('global-nav-bar');
+    
+    // Hide it completely the moment Crystal Ball opens
+    if (navBar) navBar.style.display = 'none';
+    
+    // Bring it back exactly as it was when you hit Exit!
+    return () => {
+      if (navBar) navBar.style.display = 'flex';
+    };
+  }, []);
+
+
+
+
   return (
-    <div className="animate-in slide-in-from-bottom-4 duration-500 bg-[#F4F3EF] dark:bg-gray-950 min-h-screen pb-32 w-full px-4 md:px-8 pt-0 relative overflow-hidden flex flex-col">
-      
+    <div className={`slide-in-from-bottom-4 duration-500 bg-[#F4F3EF] dark:bg-gray-950 min-h-screen pb-48 overflow-y-auto w-full px-1 lg:px-8 ${isTrayOpen ? 'relative z-[9999]' : 'animate-in'}`}>
+
       {/* 🔮 PAGE HEADER COMPONENT */}
       <div className="shrink-0 mb-6 w-full">
         <PageHeader 
@@ -252,7 +268,7 @@ export const SandboxView: React.FC<SandboxViewProps> = ({ onClose, liveIncomeTxs
         {/* 🎶 APPLE MUSIC TRAY / LEFT COLUMN (Locked to 380px on Desktop) */}
         <div className={`
           order-2 lg:order-1 w-full lg:w-[380px] shrink-0 flex flex-col gap-6 lg:sticky lg:top-4 lg:translate-y-0 lg:h-[calc(100vh-8rem)]
-          fixed inset-x-0 bottom-0 z-50 lg:z-auto lg:relative bg-[#F4F3EF] dark:bg-gray-900 lg:bg-transparent lg:dark:bg-transparent
+          fixed inset-x-0 bottom-0 z-[120] lg:z-auto lg:relative bg-[#F4F3EF] dark:bg-gray-900 lg:bg-transparent lg:dark:bg-transparent
           rounded-t-[2.5rem] lg:rounded-none border-t-4 border-l-4 border-r-4 lg:border-none border-black
           shadow-[0px_-8px_20px_rgba(0,0,0,0.15)] lg:shadow-none transition-transform duration-500 ease-[cubic-bezier(0.32,0.72,0,1)]
           ${isTrayOpen ? 'translate-y-0' : 'translate-y-[calc(100%-4.5rem)] lg:translate-y-0'}
@@ -260,11 +276,14 @@ export const SandboxView: React.FC<SandboxViewProps> = ({ onClose, liveIncomeTxs
           <div className="lg:hidden w-full h-[4.5rem] flex flex-col items-center justify-center cursor-pointer active:bg-gray-200 rounded-t-[2.5rem] transition-colors bg-white border-b-4 border-black" onClick={() => setIsTrayOpen(!isTrayOpen)}>
             <div className="w-12 h-1.5 bg-black rounded-full mb-2"></div>
             <p className="font-black text-black uppercase tracking-widest text-sm">
-              {isTrayOpen ? 'Swipe Down to Close' : 'Tap to Add Purchases'}
+              {isTrayOpen ? 'Tap to Close' : 'Tap to Add Purchases'}
             </p>
           </div>
 
-          <div className="px-6 pb-12 pt-6 lg:p-0 max-h-[75vh] lg:h-full flex flex-col gap-6 bg-[#F4F3EF] lg:bg-transparent">
+          <div className="px-6 pb-40 pt-6 lg:p-0 max-h-[70vh] overflow-y-auto block space-y-6 bg-[#F4F3EF] lg:bg-transparent">
+
+
+
             
             <div className="p-6 bg-white dark:bg-gray-900 border-4 border-black rounded-2xl shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] shrink-0">
               <h2 className="text-xl font-black mb-2 uppercase">Money-Chill Zone</h2>
@@ -401,32 +420,37 @@ export const SandboxView: React.FC<SandboxViewProps> = ({ onClose, liveIncomeTxs
         </div>
 
         {/* 🟡 FORECAST BOARD */}
-        <div className="flex-1 min-w-0 flex flex-col gap-6 order-1 lg:order-2 overflow-hidden">
+        <div className="flex-1 min-w-0 w-full flex flex-col gap-6 order-1 lg:order-2 overflow-hidden">
           
-          <div className="flex flex-wrap gap-4 items-center bg-white dark:bg-gray-900 border-4 border-black p-4 rounded-2xl shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] shrink-0">
-            <div className="flex items-center gap-2">
-              <Calendar className="w-5 h-5 text-indigo-500" />
-              <div className="flex items-center gap-2 bg-gray-50 dark:bg-gray-800 border-2 border-black rounded-lg px-2 py-1 outline-none font-black text-xs uppercase">
-                <span className="text-gray-400 px-1 hidden sm:inline">From</span>
-                <span className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded px-2 py-1 text-gray-500 select-none">
-                  {startLabel}
-                </span>
-                <span className="text-gray-400 px-1">To</span>
-                <select 
-                  value={forecastMonths}
-                  onChange={(e) => setForecastMonths(Number(e.target.value))}
-                  className="bg-white dark:bg-gray-900 border-2 border-black rounded px-2 py-1 outline-none text-indigo-600 dark:text-indigo-400 cursor-pointer shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] transition-all hover:translate-x-[1px] hover:translate-y-[1px] hover:shadow-none"
-                >
-                  {endOptions.map(opt => (
-                    <option key={opt.months} value={opt.months}>
-                      {opt.label} ({opt.months} {opt.months === 1 ? 'mo' : 'mos'})
-                    </option>
-                  ))}
-                </select>
-              </div>
-            </div>
+          <div className="flex flex-wrap gap-2 items-center bg-white dark:bg-gray-900 border-4 border-black p-4 rounded-2xl shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] shrink-0">
+          <div className="flex items-center gap-2 w-full min-w-0">
+  <Calendar className="w-5 h-5 text-indigo-500 shrink-0" />
+  
+  <div className="flex items-center gap-1.5 bg-gray-50 dark:bg-gray-800 border-2 border-black rounded-lg px-1.5 py-1 flex-1 min-w-0 overflow-hidden">
+    
+    <span className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded px-1.5 py-1 text-gray-500 select-none whitespace-nowrap shrink-0 text-sm">
+      {startLabel}
+    </span>
+    
+    <span className="text-gray-400 text-sm shrink-0">To</span>
+    
+    <select
+      value={forecastMonths}
+      onChange={(e) => setForecastMonths(Number(e.target.value))}
+      className="bg-white dark:bg-gray-900 border-2 border-black rounded px-1 py-1 outline-none text-indigo-600 dark:text-indigo-400 flex-1 min-w-0 text-ellipsis whitespace-nowrap text-sm"
+    >
+      {endOptions.map(opt => (
+        <option key={opt.months} value={opt.months}>
+          {opt.label} ({opt.months} {opt.months === 1 ? 'mo' : 'mos'})
+        </option>
+      ))}
+    </select>
+    
+  </div>
+</div>
 
-            <div className="flex items-center gap-2">
+
+            <div className="flex flex-wrap items-center gap-2">
               <WalletCards className="w-5 h-5 text-indigo-500" />
               <select 
                 value={forecastInterval}
@@ -457,7 +481,7 @@ export const SandboxView: React.FC<SandboxViewProps> = ({ onClose, liveIncomeTxs
           </div>
 
           {/* TIMELINE UI (with Carousel Support) */}
-          <div className="p-6 bg-white dark:bg-gray-900 border-4 border-black rounded-2xl shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] flex-1 flex flex-col overflow-hidden min-h-[400px]">
+          <div className="p-4 bg-white dark:bg-gray-900 border-4 border-black rounded-2xl shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] flex-1 flex flex-col overflow-hidden min-h-[400px]">
             <div className="mb-6 flex justify-between items-end shrink-0">
               <h2 className="text-xl font-black uppercase">Take a peek!</h2>
               {totalMockSpend > 0 && (

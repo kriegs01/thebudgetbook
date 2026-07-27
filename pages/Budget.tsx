@@ -350,17 +350,26 @@ const effectiveCategories = React.useMemo(() => {
   }, []);
 
   useEffect(() => {
-    const params = new URLSearchParams();
     if (view === 'setup') {
+      const params = new URLSearchParams();
       params.set('view', 'setup');
       params.set('month', selectedMonth);
       params.set('year', String(selectedYear));
       params.set('timing', selectedTiming);
-      navigate(`?${params.toString()}`, { replace: true });
+      
+      // 🟢 GUARD 1: Only update the URL if the parameters actually changed
+      if (searchParams.toString() !== params.toString()) {
+        navigate(`?${params.toString()}`, { replace: true });
+      }
     } else {
-      navigate('', { replace: true });
+      // 🟢 GUARD 2: Only clear the URL if we are actively leaving a setup view.
+      // This stops the Budget page from cancelling your clicks to other pages!
+      if (searchParams.has('view')) {
+        navigate('', { replace: true });
+      }
     }
-  }, [view, selectedMonth, selectedYear, selectedTiming, navigate]);
+  }, [view, selectedMonth, selectedYear, selectedTiming, navigate, searchParams]);
+
 
   const [setupData, setSetupData] = useState<{ [key: string]: CategorizedSetupItem[] }>({});
   const [removedIds, setRemovedIds] = useState<Set<string>>(new Set());
@@ -1464,13 +1473,13 @@ const unifiedSetup = setupsForMonth.find(s => s.timing === 'unified' || s.data?.
     paymentSchedules, 
     selectedMonth, 
     selectedYear,
-    getAccountPeriodIndex, 
     creditBudgetAccounts, 
     excludedCreditIds, 
-    getFrozenCycleAmount,
     wallets, 
-    excludedWalletIds
+    excludedWalletIds,
+    transactions // 🟢 Added this so credit balances still update live!
   ]);
+
 
     // Call the hook and destructure everything cleanly in one go
     const { 
