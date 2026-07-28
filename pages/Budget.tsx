@@ -2703,7 +2703,8 @@ const unifiedSetup = setupsForMonth.find(s => s.timing === 'unified' || s.data?.
 
     return (
 // ... keep everything else underneath the exact same (the <div className="space-y-8... block)
-        <div className={`space-y-8 animate-in fade-in duration-500 w-full max-w-7xl mx-auto ${isMobile ? 'pt-10' : ''}`}>
+<div className="space-y-3 lg:space-y-8 animate-in fade-in duration-500 w-full max-w-7xl mx-auto pt-2 lg:pt-10">
+
             <PageHeader 
               title="Budget"
               subtitle="Vibe check for the Month"
@@ -2726,11 +2727,39 @@ const unifiedSetup = setupsForMonth.find(s => s.timing === 'unified' || s.data?.
     console.log("Sandbox button clicked!"); // 🟢 Let's force a log to see if it fires
     setShowSandbox(true);
   }}
-  className="px-4 py-2 bg-amber-100 text-amber-700 border-2 border-black rounded-lg font-bold shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:translate-x-[1px] hover:translate-y-[1px] hover:shadow-none transition-all mr-2">
+  className="hidden lg:block px-4 py-2 bg-amber-100 text-amber-700 border-2 border-black rounded-lg font-bold shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:translate-x-[1px] hover:translate-y-[1px] hover:shadow-none transition-all mr-2">
   🔮 Crystal Ball
 </button>
 
+{/* 📱 MOBILE-ONLY 3-WAY TAB BAR */}
+<div className="flex lg:hidden w-full border-[3px] border-black rounded-xl overflow-hidden mb-2 bg-white shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] text-xs sm:text-sm font-black uppercase tracking-wider">
+  
+  {/* ACTIVE TAB */}
+  <button 
+    onClick={() => setShowArchived(false)}
+    className={`flex-1 py-3 transition-colors ${!showArchived ? 'bg-indigo-200' : 'bg-white hover:bg-gray-100'}`}
+  >
+    Active
+  </button>
+  
+  {/* ARCHIVED TAB */}
+  <button 
+    onClick={() => setShowArchived(true)}
+    className={`flex-1 py-3 border-l-[3px] border-black transition-colors ${showArchived ? 'bg-indigo-200' : 'bg-white hover:bg-gray-100'}`}
+  >
+    Archived
+  </button>
+  
+  {/* CRYSTAL BALL TRIGGER */}
+  <button 
+    onClick={() => setShowSandbox(true)}
+    className="flex-1 py-3 border-l-[3px] border-black bg-[#F4F3EF] flex items-center justify-center gap-1.5 transition-colors"
+  >
+    <span>🔮</span>
+    <span className="hidden sm:inline">Forecast</span>
+  </button>
 
+</div>
 
             {archiveStatusMsg && (
               <div className={`flex items-center space-x-3 px-6 py-4 rounded-2xl text-sm font-bold mb-6 ${archiveStatusMsg.type === 'success' ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'}`}>
@@ -2739,64 +2768,77 @@ const unifiedSetup = setupsForMonth.find(s => s.timing === 'unified' || s.data?.
               </div>
             )}
 
-<BudgetSetupsList
-              setups={activeSetups}
-              title="Active Budgets"
-              isArchived={false}
-              onLoadSetup={handleLoadSetup}
-              onArchiveSetup={handleArchiveSetup}
-              onMoveToTrash={(setupData) => {
-                const setupsToProcess = Array.isArray(setupData) ? setupData : [setupData];
-                const mainSetup = setupsToProcess[0];
-    
-                setConfirmModal({
-                  show: true,
-                  title: 'Move to Trash',
-                  message: `Are you sure you want to move the ${mainSetup.month} budget history entry to Trash?`,
-                  onConfirm: () => {
-                    // Loop through and trigger the outer trash function for each paycheck
-                    setupsToProcess.forEach(setup => {
-                      onMoveToTrash?.(setup);
-                    });
-                    setConfirmModal(prev => ({ ...prev, show: false }));
-                  }
-                });
-              }}
-    
-              formatCurrency={formatCurrency}
-              calculateBudgetRemaining={(setup) => calculateBudgetRemaining(setup, transactions, selectedYear)}
-              archiveSubmitting={archiveSubmitting}
-            />
+            {/* --- BUDGET LISTS WRAPPER --- */}
+<div className="w-full flex flex-col gap-0 lg:gap-8">
+  
+  {/* 1. ACTIVE BUDGETS */}
+  <div className={showArchived ? 'hidden lg:block' : 'block'}>
+    <BudgetSetupsList
+      setups={activeSetups}
+      title="Active Budgets"
+      isArchived={false}
+      onLoadSetup={handleLoadSetup}
+      onArchiveSetup={handleArchiveSetup}
+      onMoveToTrash={(setupData) => {
+        const setupsToProcess = Array.isArray(setupData) ? setupData : [setupData];
+        const mainSetup = setupsToProcess[0];
 
-            {archivedSetups.length > 0 && (
-              <div className="pt-4">
-                  <button
-                    type="button"
-                    onClick={() => setShowArchived(prev => !prev)}
-                    className="w-full flex items-center justify-between p-8 pl-12 pr-12 bg-white dark:bg-gray-900 border-[3px] border-black shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] hover:bg-amber-50/40 dark:hover:bg-amber-900/20 transition-colors rounded-[2.5rem]"
-                  >
-                    <div className="flex items-center space-x-3">
-                      <Archive className="w-5 h-5 text-amber-500" />
-                      <span className="text-xs font-black text-amber-700 dark:text-amber-500 uppercase tracking-[0.25em]">Archived Budgets ({archivedSetups.length})</span>
-                    </div>
-                    <ChevronDown className={`w-5 h-5 text-amber-400 transition-transform ${showArchived ? 'rotate-180' : ''}`} />
-                  </button>
-                  {showArchived && (
-                    <div className="mt-8">
-                        <BudgetSetupsList
-                          setups={archivedSetups}
-                          title="Archived Budgets"
-                          isArchived={true}
-                          onLoadSetup={handleLoadSetup}
-                          onReopenSetup={handleReopenSetup}
-                          formatCurrency={formatCurrency}
-                          calculateBudgetRemaining={(setup) => calculateBudgetRemaining(setup, transactions, selectedYear)}
-                          archiveSubmitting={archiveSubmitting}
-                        />
-                    </div>
-                  )}
-                </div>
-            )}
+        setConfirmModal({
+          show: true,
+          title: 'Move to Trash',
+          message: `Are you sure you want to move the ${mainSetup.month} budget history entry to Trash?`,
+          onConfirm: () => {
+            setupsToProcess.forEach(setup => {
+              onMoveToTrash?.(setup);
+            });
+            setConfirmModal(prev => ({ ...prev, show: false }));
+          }
+        });
+      }}
+      formatCurrency={formatCurrency}
+      calculateBudgetRemaining={(setup) => calculateBudgetRemaining(setup, transactions, selectedYear)}
+      archiveSubmitting={archiveSubmitting}
+    />
+  </div>
+
+  {/* 2. ARCHIVED BUDGETS */}
+  {archivedSetups.length > 0 && (
+    <div className={showArchived ? 'block' : 'hidden lg:block'}>
+      
+      {/* Desktop Accordion Button (Hidden on Mobile) */}
+      <button
+        type="button"
+        onClick={() => setShowArchived(prev => !prev)}
+        className="hidden lg:flex w-full items-center justify-between p-8 pl-12 pr-12 bg-white dark:bg-gray-900 border-[3px] border-black shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] hover:bg-amber-50/40 dark:hover:bg-amber-900/20 transition-colors rounded-[2.5rem]"
+      >
+        <div className="flex items-center space-x-3">
+          <Archive className="w-5 h-5 text-amber-500" />
+          <span className="text-xs font-black text-amber-700 dark:text-amber-500 uppercase tracking-[0.25em]">Archived Budgets ({archivedSetups.length})</span>
+        </div>
+        <ChevronDown className={`w-5 h-5 text-amber-400 transition-transform ${showArchived ? 'rotate-180' : ''}`} />
+      </button>
+      
+      {/* The Actual Archived List */}
+      <div className={`lg:mt-8 ${showArchived ? 'block' : 'hidden'}`}>
+        <BudgetSetupsList
+          setups={archivedSetups}
+          title="Archived Budgets"
+          isArchived={true}
+          onLoadSetup={handleLoadSetup}
+          onReopenSetup={handleReopenSetup}
+          formatCurrency={formatCurrency}
+          calculateBudgetRemaining={(setup) => calculateBudgetRemaining(setup, transactions, selectedYear)}
+          archiveSubmitting={archiveSubmitting}
+        />
+      </div>
+      
+    </div>
+  )}
+  
+</div>
+{/* --- END BUDGET LISTS WRAPPER --- */}
+
+            
 
         
             {confirmModal.show && <ConfirmDialog {...confirmModal} onClose={() => setConfirmModal(p => ({ ...p, show: false }))} />}

@@ -336,21 +336,44 @@ export const SandboxView: React.FC<SandboxViewProps> = ({ onClose, liveIncomeTxs
                      </div>
                   )}
 
-                  <input type="text" value={newPurchaseName} onChange={(e) => setNewPurchaseName(e.target.value)} placeholder="Item name" className="w-full bg-gray-50 dark:bg-gray-800 border-2 border-black rounded-xl px-3 py-2 outline-none font-bold text-xs" />
+<input 
+  type="text" 
+  value={newPurchaseName} 
+  onChange={(e) => setNewPurchaseName(e.target.value)} 
+  placeholder="Item name" 
+  className="w-full bg-gray-50 dark:bg-gray-800 border-2 border-black rounded-xl px-3 py-2 outline-none font-bold text-[16px]" 
+/>
+
 
                   
-                  <div className="flex gap-2">
-                    <div className="relative flex-1">
-                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 font-bold text-xs">₱</span>
-                      <input type="number" value={newPurchaseAmount} onChange={(e) => setNewPurchaseAmount(e.target.value)} placeholder={purchaseType === 'installment' ? 'Monthly Amount' : 'Amount'} className="w-full pl-6 bg-gray-50 dark:bg-gray-800 border-2 border-black rounded-xl px-3 py-2 outline-none font-black text-xs" />
-                    </div>
-                    {purchaseType === 'installment' && (
-                      <div className="relative flex-[0.5]">
-                        <input type="number" value={durationMonths} onChange={(e) => setDurationMonths(e.target.value)} placeholder="Months" className="w-full bg-gray-50 dark:bg-gray-800 border-2 border-black rounded-xl px-3 py-2 outline-none font-black text-xs" />
-                        <span className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 font-bold text-[10px] uppercase">Mos</span>
-                      </div>
-                    )}
-                  </div>
+<div className="flex gap-2">
+  <div className="relative flex-1">
+    {/* Scaled the peso sign to 16px on mobile to match the input, shrinks back to text-xs on desktop */}
+    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 font-bold text-[16px] md:text-xs">₱</span>
+    <input 
+      type="number" 
+      value={newPurchaseAmount} 
+      onChange={(e) => setNewPurchaseAmount(e.target.value)} 
+      placeholder={purchaseType === 'installment' ? 'Monthly Amount' : 'Amount'} 
+      className="w-full pl-7 md:pl-6 bg-gray-50 dark:bg-gray-800 border-2 border-black rounded-xl px-3 py-2 outline-none font-black text-[16px] md:text-xs" 
+    />
+  </div>
+  
+  {purchaseType === 'installment' && (
+    <div className="relative flex-[0.5]">
+      <input 
+        type="number" 
+        value={durationMonths} 
+        onChange={(e) => setDurationMonths(e.target.value)} 
+        placeholder="Months" 
+        className="w-full bg-gray-50 dark:bg-gray-800 border-2 border-black rounded-xl px-3 py-2 outline-none font-black text-[16px] md:text-xs" 
+      />
+      {/* Kept "Mos" small since it acts as a tiny decorative label */}
+      <span className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 font-bold text-[10px] uppercase">Mos</span>
+    </div>
+  )}
+</div>
+
                   
                   <div className="relative">
                     <CalendarDays className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
