@@ -1482,16 +1482,17 @@ const MainApp: React.FC = () => {
         <TestModeBanner sidebarOpen={isSidebarOpen} />
 
         {/* Top Navigation Bar - Reactive for Dashboard, Static for others */}
-        <header className={`fixed top-0 right-0 left-0 h-14 px-4 md:px-8 flex items-center justify-between transition-all duration-300 z-30 ${
-          isSidebarOpen && !isMobile ? 'md:ml-52' : isMobile ? '' : 'md:ml-20'
-        } ${
-          isScrolled ? `${getAccentClasses('bg')} shadow-lg border-b-4 border-black` : 'bg-transparent border-transparent'
-        }`}>
-          
+{/* CHANGED: 'justify-between' to 'justify-end' */}
+<header className={`fixed top-0 right-0 left-0 h-14 px-4 md:px-8 flex items-center justify-end transition-all duration-300 z-30 ${
+  isSidebarOpen && !isMobile ? 'md:ml-52' : isMobile ? '' : 'md:ml-20'
+} ${
+  isScrolled ? `${getAccentClasses('bg')} shadow-lg border-b-4 border-black` : 'bg-transparent border-transparent'
+}`}>
+  
+  {/* REMOVED: <div className="flex-1 md:hidden" /> */}
 
-          <div className="flex-1 md:hidden" />
+  <div className="flex items-center space-x-2 md:space-x-4">
 
-          <div className="flex items-center space-x-2 md:space-x-4">
             {/* Messages */}
             <div className="relative">
               <button 

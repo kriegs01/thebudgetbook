@@ -239,7 +239,7 @@ export const SandboxView: React.FC<SandboxViewProps> = ({ onClose, liveIncomeTxs
 
 
   return (
-    <div className={`slide-in-from-bottom-4 duration-500 bg-[#F4F3EF] dark:bg-gray-950 min-h-screen pb-48 overflow-y-auto w-full px-1 lg:px-8 ${isTrayOpen ? 'relative z-[9999]' : 'animate-in'}`}>
+    <div className={`slide-in-from-bottom-4 duration-500 bg-[#F4F3EF] dark:bg-gray-950 min-h-screen pb-48 pt-16 overflow-y-auto w-full px-1 lg:px-8 ${isTrayOpen ? 'relative z-20' : 'animate-in'}`}>
 
       {/* 🔮 PAGE HEADER COMPONENT */}
       <div className="shrink-0 mb-6 w-full">
@@ -266,21 +266,27 @@ export const SandboxView: React.FC<SandboxViewProps> = ({ onClose, liveIncomeTxs
       <div className="flex flex-col lg:flex-row gap-8 flex-1 min-h-0">
         
         {/* 🎶 APPLE MUSIC TRAY / LEFT COLUMN (Locked to 380px on Desktop) */}
-        <div className={`
-          order-2 lg:order-1 w-full lg:w-[380px] shrink-0 flex flex-col gap-6 lg:sticky lg:top-4 lg:translate-y-0 lg:h-[calc(100vh-8rem)]
-          fixed inset-x-0 bottom-0 z-[120] lg:z-auto lg:relative bg-[#F4F3EF] dark:bg-gray-900 lg:bg-transparent lg:dark:bg-transparent
-          rounded-t-[2.5rem] lg:rounded-none border-t-4 border-l-4 border-r-4 lg:border-none border-black
-          shadow-[0px_-8px_20px_rgba(0,0,0,0.15)] lg:shadow-none transition-transform duration-500 ease-[cubic-bezier(0.32,0.72,0,1)]
-          ${isTrayOpen ? 'translate-y-0' : 'translate-y-[calc(100%-4.5rem)] lg:translate-y-0'}
-        `}>
-          <div className="lg:hidden w-full h-[4.5rem] flex flex-col items-center justify-center cursor-pointer active:bg-gray-200 rounded-t-[2.5rem] transition-colors bg-white border-b-4 border-black" onClick={() => setIsTrayOpen(!isTrayOpen)}>
-            <div className="w-12 h-1.5 bg-black rounded-full mb-2"></div>
-            <p className="font-black text-black uppercase tracking-widest text-sm">
+        {/* TO (Notice 'top-14 lg:top-auto' added to the second line): */}
+<div className={`
+  order-2 lg:order-1 w-full lg:w-[380px] shrink-0 flex flex-col gap-6 lg:sticky lg:top-4 lg:translate-y-0 lg:h-[calc(100vh-8rem)]
+  fixed inset-x-0 bottom-0 top-14 lg:top-auto z-[120] lg:z-auto lg:relative bg-[#F4F3EF] dark:bg-gray-900 lg:bg-transparent lg:dark:bg-transparent
+  rounded-t-[2.5rem] lg:rounded-none border-t-4 border-l-4 border-r-4 lg:border-none border-black
+  shadow-[0px_-8px_20px_rgba(0,0,0,0.15)] lg:shadow-none transition-transform duration-500 ease-[cubic-bezier(0.32,0.72,0,1)]
+  ${isTrayOpen ? 'translate-y-0' : 'translate-y-[calc(100%-4.5rem)] lg:translate-y-0'}
+`}>
+
+          {/* TO: */}
+<div className="lg:hidden w-full h-[4.5rem] flex flex-col items-center justify-center cursor-pointer active:bg-gray-200 dark:active:bg-gray-800 rounded-t-[2.5rem] transition-colors bg-white dark:bg-gray-900 border-b-4 border-black" onClick={() => setIsTrayOpen(!isTrayOpen)}>
+  <div className="w-12 h-1.5 bg-black dark:bg-gray-500 rounded-full mb-2"></div>
+  <p className="font-black text-black dark:text-white uppercase tracking-widest text-sm">
+
               {isTrayOpen ? 'Tap to Close' : 'Tap to Add Purchases'}
             </p>
           </div>
 
-          <div className="px-6 pb-40 pt-6 lg:p-0 max-h-[70vh] overflow-y-auto block space-y-6 bg-[#F4F3EF] lg:bg-transparent">
+          {/* TO: */}
+<div className="px-6 pb-40 pt-6 lg:p-0 max-h-[70vh] lg:max-h-none overflow-y-auto lg:overflow-visible block space-y-6 bg-[#F4F3EF] dark:bg-gray-900 lg:bg-transparent lg:dark:bg-transparent">
+
 
 
 
@@ -293,32 +299,36 @@ export const SandboxView: React.FC<SandboxViewProps> = ({ onClose, liveIncomeTxs
               </div>
             </div>
 
-            <div className="p-6 bg-white dark:bg-gray-900 border-4 border-black rounded-2xl shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] flex-1 flex flex-col overflow-hidden">
+            <div className="p-6 bg-white dark:bg-gray-900 border-4 border-black rounded-2xl shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] flex-1 lg:flex-none lg:h-fit flex flex-col">
               <div className="shrink-0 mb-6">
                 <h2 className="text-xl font-black mb-4 uppercase">What if I buy...</h2>
                 
-                <div className="flex gap-2 mb-4 bg-gray-100 p-1 rounded-xl border-2 border-black">
-                  <button onClick={() => setPurchaseType('one-off')} className={`flex-1 py-1.5 text-xs font-black uppercase rounded-lg transition-all ${purchaseType === 'one-off' ? 'bg-white border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]' : 'text-gray-500 border-2 border-transparent'}`}>One-Off</button>
-                  <button onClick={() => setPurchaseType('installment')} className={`flex-1 py-1.5 text-xs font-black uppercase rounded-lg transition-all ${purchaseType === 'installment' ? 'bg-white border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]' : 'text-gray-500 border-2 border-transparent'}`}>Installment</button>
-                </div>
+                {/* TO: */}
+<div className="flex gap-2 mb-4 bg-gray-100 dark:bg-gray-800 p-1 rounded-xl border-2 border-black">
+  <button onClick={() => setPurchaseType('one-off')} className={`flex-1 py-1.5 text-xs font-black uppercase rounded-lg transition-all ${purchaseType === 'one-off' ? 'bg-white dark:bg-gray-700 dark:text-white border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]' : 'text-gray-500 dark:text-gray-400 border-2 border-transparent'}`}>One-Off</button>
+  <button onClick={() => setPurchaseType('installment')} className={`flex-1 py-1.5 text-xs font-black uppercase rounded-lg transition-all ${purchaseType === 'installment' ? 'bg-white dark:bg-gray-700 dark:text-white border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]' : 'text-gray-500 dark:text-gray-400 border-2 border-transparent'}`}>Installment</button>
+</div>
+
 
                 <div className="space-y-3 mb-4">
                   
                   {/* 🟢 NEW: Payment Method Toggle */}
-                  <div className="flex bg-gray-100 p-1 rounded-xl border-2 border-black">
-                    <button 
-                      onClick={() => { setPaymentMethod('cash'); setSelectedCreditCardId(''); }} 
-                      className={`flex-1 py-1.5 text-xs font-black uppercase rounded-lg transition-all flex items-center justify-center gap-1.5 ${paymentMethod === 'cash' ? 'bg-white border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] text-green-600' : 'text-gray-500 border-2 border-transparent'}`}
-                    >
-                       Cash/Debit
-                    </button>
-                    <button 
-                      onClick={() => setPaymentMethod('credit')} 
-                      className={`flex-1 py-1.5 text-xs font-black uppercase rounded-lg transition-all flex items-center justify-center gap-1.5 ${paymentMethod === 'credit' ? 'bg-white border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] text-purple-600' : 'text-gray-500 border-2 border-transparent'}`}
-                    >
-                      <CreditCard className="w-3.5 h-3.5" /> Swipe It
-                    </button>
-                  </div>
+                  {/* TO: */}
+                    <div className="flex bg-gray-100 dark:bg-gray-800 p-1 rounded-xl border-2 border-black">
+                      <button 
+                        onClick={() => { setPaymentMethod('cash'); setSelectedCreditCardId(''); }} 
+                        className={`flex-1 py-1.5 text-xs font-black uppercase rounded-lg transition-all flex items-center justify-center gap-1.5 ${paymentMethod === 'cash' ? 'bg-white dark:bg-gray-700 border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] text-green-600 dark:text-green-400' : 'text-gray-500 dark:text-gray-400 border-2 border-transparent'}`}
+                      >
+                        Cash/Debit
+                      </button>
+                      <button 
+                        onClick={() => setPaymentMethod('credit')} 
+                        className={`flex-1 py-1.5 text-xs font-black uppercase rounded-lg transition-all flex items-center justify-center gap-1.5 ${paymentMethod === 'credit' ? 'bg-white dark:bg-gray-700 border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] text-purple-600 dark:text-purple-400' : 'text-gray-500 dark:text-gray-400 border-2 border-transparent'}`}
+                      >
+                        <CreditCard className="w-3.5 h-3.5" /> Swipe It
+                      </button>
+                    </div>
+
 
                   {/* 🟢 NEW: Credit Card Selector Dropdown */}
                   {paymentMethod === 'credit' && creditCardAccounts.length > 0 && (
@@ -405,7 +415,7 @@ export const SandboxView: React.FC<SandboxViewProps> = ({ onClose, liveIncomeTxs
                       setNewPurchaseName(''); setNewPurchaseAmount('');
                     }
                   }}
-                  className="w-full flex items-center justify-center gap-2 bg-black text-white p-3 rounded-xl border-2 border-black shadow-[2px_2px_0px_0px_rgba(200,200,200,1)] active:shadow-none active:translate-x-[1px] active:translate-y-[1px] transition-all font-black text-xs uppercase"
+                  className="w-full flex items-center justify-center gap-2 bg-amber-400 text-black p-3 rounded-xl border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] active:shadow-none active:translate-x-[2px] active:translate-y-[2px] transition-all font-black text-xs uppercase"
                 >
 
                   <Plus className="w-4 h-4" /> Add to cart!

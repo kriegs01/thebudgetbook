@@ -2732,12 +2732,18 @@ const unifiedSetup = setupsForMonth.find(s => s.timing === 'unified' || s.data?.
 </button>
 
 {/* 📱 MOBILE-ONLY 3-WAY TAB BAR */}
-<div className="flex lg:hidden w-full border-[3px] border-black rounded-xl overflow-hidden mb-2 bg-white shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] text-xs sm:text-sm font-black uppercase tracking-wider">
+{/* TO: */}
+{/* 📱 MOBILE-ONLY 3-WAY TAB BAR */}
+<div className="flex lg:hidden w-full border-[3px] border-black rounded-xl overflow-hidden mb-2 bg-white dark:bg-gray-900 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] text-xs sm:text-sm font-black uppercase tracking-wider transition-colors">
   
   {/* ACTIVE TAB */}
   <button 
     onClick={() => setShowArchived(false)}
-    className={`flex-1 py-3 transition-colors ${!showArchived ? 'bg-indigo-200' : 'bg-white hover:bg-gray-100'}`}
+    className={`flex-1 py-3 transition-colors ${
+      !showArchived 
+        ? 'bg-indigo-200 dark:bg-indigo-600 text-indigo-900 dark:text-white' 
+        : 'bg-white dark:bg-gray-800 text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700'
+    }`}
   >
     Active
   </button>
@@ -2745,7 +2751,11 @@ const unifiedSetup = setupsForMonth.find(s => s.timing === 'unified' || s.data?.
   {/* ARCHIVED TAB */}
   <button 
     onClick={() => setShowArchived(true)}
-    className={`flex-1 py-3 border-l-[3px] border-black transition-colors ${showArchived ? 'bg-indigo-200' : 'bg-white hover:bg-gray-100'}`}
+    className={`flex-1 py-3 border-l-[3px] border-black transition-colors ${
+      showArchived 
+        ? 'bg-indigo-200 dark:bg-indigo-600 text-indigo-900 dark:text-white' 
+        : 'bg-white dark:bg-gray-800 text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700'
+    }`}
   >
     Archived
   </button>
@@ -2753,13 +2763,14 @@ const unifiedSetup = setupsForMonth.find(s => s.timing === 'unified' || s.data?.
   {/* CRYSTAL BALL TRIGGER */}
   <button 
     onClick={() => setShowSandbox(true)}
-    className="flex-1 py-3 border-l-[3px] border-black bg-[#F4F3EF] flex items-center justify-center gap-1.5 transition-colors"
+    className="flex-1 py-3 border-l-[3px] border-black bg-[#F4F3EF] dark:bg-gray-800 text-gray-700 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700 flex items-center justify-center gap-1.5 transition-colors"
   >
     <span>🔮</span>
     <span className="hidden sm:inline">Forecast</span>
   </button>
 
 </div>
+
 
             {archiveStatusMsg && (
               <div className={`flex items-center space-x-3 px-6 py-4 rounded-2xl text-sm font-bold mb-6 ${archiveStatusMsg.type === 'success' ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'}`}>
