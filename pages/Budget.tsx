@@ -305,14 +305,16 @@ const sortedSetups = React.useMemo(() => {
   });
 }, [savedSetups]);
 
+{/* TO: Expand the filter to include Loans and Liabilities */}
 const creditBudgetAccounts = React.useMemo(() => {
   return (accounts || [])
-    .filter(acc => acc?.type === 'Credit' || acc?.classification === 'Credit Card')
-    .sort((a, b) => {
-      const dayA = a.dueDate ? new Date(a.dueDate).getDate() : 999;
-      const dayB = b.dueDate ? new Date(b.dueDate).getDate() : 999;
-      return dayA - dayB;
-    });
+    .filter(acc => 
+      acc?.type === 'Credit' || 
+      acc?.classification === 'Credit Card' || 
+      acc?.type === 'Loan' || 
+      acc?.classification === 'Loan' || 
+      acc?.type === 'Liability'
+    );
 }, [accounts]); 
 
 
@@ -932,9 +934,15 @@ const unifiedSetup = setupsForMonth.find(s => s.timing === 'unified' || s.data?.
       const accountTxs = transactions.filter(tx => tx.payment_method_id === account.id);
       const startingBalance = account.openingBalance || 0;
       
-      const balance = accountTxs.reduce((sum, tx) => {
-        const isCredit = account.type === 'Credit' || account.classification === 'Credit Card';
-        if (isCredit) {
+      {/* TO: Expand the isCredit check */}
+const balance = accountTxs.reduce((sum, tx) => {
+  const isCredit = account.type === 'Credit' || 
+                   account.classification === 'Credit Card' || 
+                   account.type === 'Loan' || 
+                   account.classification === 'Loan' || 
+                   account.type === 'Liability';
+  if (isCredit) {
+
           return sum + tx.amount; 
         } else {
           return tx.amount < 0 ? sum + Math.abs(tx.amount) : sum - tx.amount;
@@ -1846,18 +1854,51 @@ const unifiedSetup = setupsForMonth.find(s => s.timing === 'unified' || s.data?.
 
         });
     
+        {/* TO: We dynamically calculate the true transaction total before saving */}
+        const dynamicActualByPeriod = { ...actualSalaryByPeriod };
+        const currentMonthIdx = MONTHS.indexOf(selectedMonth);
+        
+        [1, 2, 3, 4, 5].forEach(periodNum => {
+          const pName = ['First', 'Second', 'Third', 'Fourth', 'Fifth'][periodNum - 1] ? `${['First', 'Second', 'Third', 'Fourth', 'Fifth'][periodNum - 1]} Paycheck` : `Paycheck ${periodNum}`;
+          const targetLabel = `Income - ${selectedMonth} (${pName})`;
+          const legacyLabel = periodNum === 1 ? '1/2' : '2/2';
+          
+          const incomesForPeriod = (transactions || []).filter(tx => {
+            if (tx.transaction_type !== 'income') return false;
+            const txDate = new Date(tx.date);
+            if (txDate.getMonth() !== currentMonthIdx || txDate.getFullYear() !== selectedYear) return false;
+            
+            const isTaggedIncome = tx.notes?.startsWith('Income -') || tx.notes?.startsWith('Income Record');
+            const nameLower = (tx.name || '').trim().toLowerCase(); 
+            const isPrimaryIncome = isTaggedIncome || nameLower === 'salary' || nameLower === 'income';
+
+            if (isPrimaryIncome) {
+              if (isTaggedIncome) return tx.notes === targetLabel || tx.notes.includes(`- ${legacyLabel}`);
+              return getPeriodIndexForDate(txDate.getDate()) === periodNum;
+            } else {
+              return getPeriodIndexForDate(txDate.getDate()) === periodNum;
+            }
+          });
+
+          if (incomesForPeriod.length > 0) {
+            const sum = incomesForPeriod.reduce((s, tx) => s + Math.abs(parseFloat(tx.amount) || 0), 0);
+            dynamicActualByPeriod[periodNum] = sum.toString();
+          }
+        });
+
         const dataToSave = {
           ...JSON.parse(JSON.stringify(setupData)),
           _year: selectedYear,
           _projectedSalary: projectedSalary,
           _actualSalary: actualSalary,
           _projectedSalaryByPeriod: projectedSalaryByPeriod,
-          _actualSalaryByPeriod: actualSalaryByPeriod,
+          _actualSalaryByPeriod: dynamicActualByPeriod,
           _periodTotals: _periodTotals,
           _excludedInstallmentIds: [...excludedInstallmentIds],
           _excludedWalletIds: [...excludedWalletIds],
           _excludedCreditIds: [...excludedCreditIds]
         };    
+ 
     
     const currentDataString = JSON.stringify(dataToSave);
     if (currentDataString === lastSavedDataRef.current) {
@@ -2061,15 +2102,82 @@ const unifiedSetup = setupsForMonth.find(s => s.timing === 'unified' || s.data?.
     const total = regularItemsTotal + installmentsTotal + stashTotal + creditTotal;
 
     const existingSetup = savedSetups.find(s => s.month === selectedMonth && s.timing === selectedTiming);
+    {/* TO: Matches auto-save perfectly to prevent data loss on manual saves */}
+    const dynamicActualByPeriod = { ...actualSalaryByPeriod };
+    const currentMonthIdx = MONTHS.indexOf(selectedMonth);
+    
+    [1, 2, 3, 4, 5].forEach(periodNum => {
+      const pName = ['First', 'Second', 'Third', 'Fourth', 'Fifth'][periodNum - 1] ? `${['First', 'Second', 'Third', 'Fourth', 'Fifth'][periodNum - 1]} Paycheck` : `Paycheck ${periodNum}`;
+      const targetLabel = `Income - ${selectedMonth} (${pName})`;
+      const legacyLabel = periodNum === 1 ? '1/2' : '2/2';
+      
+      const incomesForPeriod = (transactions || []).filter(tx => {
+        if (tx.transaction_type !== 'income') return false;
+        const txDate = new Date(tx.date);
+        if (txDate.getMonth() !== currentMonthIdx || txDate.getFullYear() !== selectedYear) return false;
+        
+        const isTaggedIncome = tx.notes?.startsWith('Income -') || tx.notes?.startsWith('Income Record');
+        const nameLower = (tx.name || '').trim().toLowerCase(); 
+        const isPrimaryIncome = isTaggedIncome || nameLower === 'salary' || nameLower === 'income';
+
+        if (isPrimaryIncome) {
+          if (isTaggedIncome) return tx.notes === targetLabel || tx.notes.includes(`- ${legacyLabel}`);
+          return getPeriodIndexForDate(txDate.getDate()) === periodNum;
+        } else {
+          return getPeriodIndexForDate(txDate.getDate()) === periodNum;
+        }
+      });
+
+      if (incomesForPeriod.length > 0) {
+        const sum = incomesForPeriod.reduce((s, tx) => s + Math.abs(parseFloat(tx.amount) || 0), 0);
+        dynamicActualByPeriod[periodNum] = sum.toString();
+      }
+    });
+
+    const _periodTotals = {};
+    [1, 2, 3, 4].forEach(period => {
+      let itemsTotal = 0;
+      if (processedBudgetMap[period]) {
+        Object.values(processedBudgetMap[period]).forEach(catItems => {
+          catItems.forEach(item => {
+            if (item.included) {
+              const val = item.amountsByPeriod?.[period] !== undefined ? item.amountsByPeriod[period] : item.amount;
+              itemsTotal += (parseFloat(val) || 0);
+            }
+          });
+        });
+      }
+      const instTotal = (installments || []).filter(inst => {
+          if (inst.isArchived || excludedInstallmentIds.has(inst.id)) return false;
+          let targetPeriod = inst.timing === '1/2' ? 1 : inst.timing === '2/2' ? 2 : getAccountPeriodIndex({ dueDate: inst.dueDate || inst.due_date || 1 });
+          if (targetPeriod !== period) return false;
+          const scheduleForMonth = getPaymentSchedule('installment', inst.id, selectedMonth, selectedYear);
+          const isActiveForPeriod = scheduleForMonth !== undefined || shouldShowInstallment(inst, selectedMonth, selectedYear);
+          const isFinished = !scheduleForMonth && inst.totalAmount > 0 && inst.paidAmount >= inst.totalAmount;
+          return isActiveForPeriod && !isFinished;
+        }).reduce((s, inst) => s + inst.monthlyAmount, 0);
+        
+      const creditTotal = creditBudgetAccounts.filter(acc => !excludedCreditIds.has(acc.id) && getAccountPeriodIndex(acc) === period).reduce((sum, account) => {
+          const amt = getFrozenCycleAmount(account);
+          return amt >= 0.01 ? sum + amt : sum;
+        }, 0);
+        
+      _periodTotals[period] = itemsTotal + instTotal + creditTotal + stashTotal;
+    });
+
     const dataToSave = {
       ...JSON.parse(JSON.stringify(setupData)),
-      _year: selectedYear, // 🟢 Add this line
+      _year: selectedYear,
       _projectedSalary: projectedSalary,
       _actualSalary: actualSalary,
+      _projectedSalaryByPeriod: projectedSalaryByPeriod,
+      _actualSalaryByPeriod: dynamicActualByPeriod,
+      _periodTotals: _periodTotals,
       _excludedInstallmentIds: [...excludedInstallmentIds],
       _excludedWalletIds: [...excludedWalletIds],
       _excludedCreditIds: [...excludedCreditIds]
     };
+
 
     try {
       if (existingSetup) {
@@ -2292,12 +2400,13 @@ const unifiedSetup = setupsForMonth.find(s => s.timing === 'unified' || s.data?.
       
       let transactionData, transactionError;
       
+      {/* TO: Force all biller payments to act as positive expenses */}
       const parsedAmount = parseFloat(payFormData.amount) || 0;
       const selectedAccount = accounts.find(a => a.id === payFormData.accountId);
-      const finalAmount = selectedAccount && selectedAccount.type === 'Credit' ? -Math.abs(parsedAmount) : Math.abs(parsedAmount);
-      const payTransactionType = selectedAccount?.type === 'Credit'
-        ? 'credit_payment'
-        : 'payment';
+      
+      const finalAmount = Math.abs(parsedAmount); 
+      const payTransactionType = 'payment';
+
       
       console.log('[Budget] handlePaySubmit starting:', {
         billerId: biller.id,
@@ -2376,9 +2485,11 @@ const unifiedSetup = setupsForMonth.find(s => s.timing === 'unified' || s.data?.
         }
       }
 
+      {/* TO: Include Loans and Liabilities */}
       if (!isEditing && biller.linkedAccountId && transactionData?.id) {
         const linkedAccount = accounts.find(a => a.id === biller.linkedAccountId);
-        if (linkedAccount?.type === 'Credit') {
+        if (linkedAccount?.type === 'Credit' || linkedAccount?.classification === 'Credit Card' || linkedAccount?.type === 'Loan' || linkedAccount?.classification === 'Loan') {
+
           const { error: creditPaymentError } = await createTransaction({
             name: `${biller.name} - ${schedule.month} ${schedule.year}`,
             date: combineDateWithCurrentTime(payFormData.datePaid),
@@ -2692,10 +2803,48 @@ const unifiedSetup = setupsForMonth.find(s => s.timing === 'unified' || s.data?.
       }, 0);
 
       // Return the setup with the perfectly synced, real-time dynamic total
+      {/* TO: */}
+      // 🟢 INJECT REAL INCOME FOR THE DASHBOARD CARDS
+      const dynamicActualByPeriod = { ...(setup.data?._actualSalaryByPeriod || {}) };
+      
+      [1, 2, 3, 4, 5].forEach(periodNum => {
+        const pName = ['First', 'Second', 'Third', 'Fourth', 'Fifth'][periodNum - 1] ? `${['First', 'Second', 'Third', 'Fourth', 'Fifth'][periodNum - 1]} Paycheck` : `Paycheck ${periodNum}`;
+        const targetLabel = `Income - ${setup.month} (${pName})`;
+        const legacyLabel = periodNum === 1 ? '1/2' : '2/2';
+        
+        const incomesForPeriod = (transactions || []).filter(tx => {
+          if (tx.transaction_type !== 'income') return false;
+          const txDate = new Date(tx.date);
+          if (txDate.getMonth() !== setupMonthIndex || txDate.getFullYear() !== setupYear) return false;
+          
+          const isTaggedIncome = tx.notes?.startsWith('Income -') || tx.notes?.startsWith('Income Record');
+          const nameLower = (tx.name || '').trim().toLowerCase(); 
+          const isPrimaryIncome = isTaggedIncome || nameLower === 'salary' || nameLower === 'income';
+
+          if (isPrimaryIncome) {
+            if (isTaggedIncome) return tx.notes === targetLabel || tx.notes.includes(`- ${legacyLabel}`);
+            return getPeriodIndexForDate(txDate.getDate()) === periodNum;
+          } else {
+            return getPeriodIndexForDate(txDate.getDate()) === periodNum;
+          }
+        });
+
+        if (incomesForPeriod.length > 0) {
+          const sum = incomesForPeriod.reduce((s, tx) => s + Math.abs(parseFloat(tx.amount) || 0), 0);
+          dynamicActualByPeriod[periodNum] = sum.toString();
+        }
+      });
+
+      // Return the setup with perfectly synced spend AND income totals
       return {
         ...setup,
-        totalAmount: regularItemsTotal + installmentsTotal + stashTotal + creditTotal
+        totalAmount: regularItemsTotal + installmentsTotal + stashTotal + creditTotal,
+        data: {
+          ...setup.data,
+          _actualSalaryByPeriod: dynamicActualByPeriod
+        }
       };
+
     });
 
     const activeSetups = dynamicallyUpdatedSetups.filter(s => !s.isArchived);

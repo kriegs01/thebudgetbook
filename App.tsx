@@ -670,13 +670,48 @@ const MainApp: React.FC = () => {
   }, []);
 
   // Auto-recalculate account balances whenever accounts or transactions update!
+  {/* TO: */}
+  // Auto-recalculate account balances whenever accounts or transactions update!
   useEffect(() => {
     if (rawAccounts.length > 0) {
-      setAccounts(recalculateAllAccountBalances(rawAccounts, rawTransactions));
+      const baseCalculated = recalculateAllAccountBalances(rawAccounts, rawTransactions);
+      
+      // 🟢 FORCE FIX FOR ACCOUNT BALANCES: Ensure the live balance strictly sums ALL transaction types 
+      // by value, bypassing aggressive filters in the base calculator that ignored budget 'payment' types.
+      const properlySyncedAccounts = baseCalculated.map(account => {
+        const rawAccount = rawAccounts.find((r: any) => r.id === account.id);
+        const accountTxs = rawTransactions.filter((tx: any) => tx.payment_method_id === account.id);
+        
+        // Safely grab opening balance from raw data if it exists
+        const startingBalance = Number(rawAccount?.opening_balance || rawAccount?.openingBalance) || 0;
+        {/* TO: */}
+        const isCredit = account.type === 'Credit' || 
+        account.classification === 'Credit Card' || 
+        account.type === 'Loan' || 
+        account.classification === 'Loan' || 
+        account.type === 'Liability';
+
+        
+        const liveBalance = accountTxs.reduce((sum: number, tx: any) => {
+          const amt = Number(tx.amount) || 0;
+          if (isCredit) {
+            // Credit: Positive amounts (expenses) increase debt. Negative amounts (payments) decrease debt.
+            return sum + amt; 
+          } else {
+            // Debit: Positive amounts (expenses) decrease balance. Negative amounts (income) increase balance.
+            return amt < 0 ? sum + Math.abs(amt) : sum - amt;
+          }
+        }, startingBalance);
+        
+        return { ...account, balance: liveBalance };
+      });
+
+      setAccounts(properlySyncedAccounts);
     } else {
       setAccounts([]);
     }
   }, [rawAccounts, rawTransactions]);
+
 
   // Setup Wizard Completion Handler
   const handleCompleteWizard = async (wizardCategories: BudgetCategory[], newAccount: Account | null) => {
@@ -1101,20 +1136,15 @@ const MainApp: React.FC = () => {
       }
 
       // Create the transaction linked to the payment schedule
+      {/* TO: */}
       const { data: transaction, error: transactionError } = await createPaymentScheduleTransaction(
         targetSchedule.id,
         {
           name: `${biller.name} - ${targetSchedule.month} ${targetSchedule.year}`,
           date: combineDateWithCurrentTime(payment.date),
-          amount: ((): number => {
-            const acct = accounts.find(a => a.id === payment.accountId);
-            return acct && acct.type === 'Credit' ? -Math.abs(payment.amount) : Math.abs(payment.amount);
-          })(),
+          amount: Math.abs(payment.amount),
           paymentMethodId: payment.accountId,
-          transaction_type: ((): string => {
-            const acct = accounts.find(a => a.id === payment.accountId);
-            return acct?.type === 'Credit' ? 'credit_payment' : 'payment';
-          })(),
+          transaction_type: 'payment',
         }
       );
 
@@ -1139,9 +1169,11 @@ const MainApp: React.FC = () => {
 
       // If this biller is linked to a credit account, record a credit_payment on that account
       // so the outstanding balance and available credit are updated automatically.
+      {/* TO: */}
       if (biller.linkedAccountId) {
         const linkedAccount = accounts.find(a => a.id === biller.linkedAccountId);
-        if (linkedAccount?.type === 'Credit') {
+        if (linkedAccount?.type === 'Credit' || linkedAccount?.classification === 'Credit Card' || linkedAccount?.type === 'Loan' || linkedAccount?.classification === 'Loan') {
+
           const { error: creditTxError } = await createTransaction({
             name: `${biller.name} - ${targetSchedule.month} ${targetSchedule.year}`,
             date: combineDateWithCurrentTime(payment.date),
