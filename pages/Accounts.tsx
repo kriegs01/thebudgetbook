@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { PinProtectedAction } from '../src/components/PinProtectedAction';
-import { Account, AccountClassification } from '../types';
+import { Account, AccountClassification, Installments } from '../types';
 import { supabase } from '../src/utils/supabaseClient';
 import {
   Plus,
@@ -22,6 +22,7 @@ import useMediaQuery from '../src/hooks/useMediaQuery';
 
 interface AccountsProps {
   accounts: Account[];
+  installments: Installment[];
   onAdd: (a: Account) => Promise<void>;
   onDelete?: (id: string) => Promise<void>;
   onEdit?: (a: Account) => Promise<void>;
@@ -36,7 +37,8 @@ const monthNames = [
 
 const FAKE_DATE_PREFIX = '2000-01-';
 
-const Accounts: React.FC<AccountsProps> = ({ accounts, onAdd, onDelete, onEdit, onDeactivate, loading = false, error = null }) => {
+{/* TO: */}
+const Accounts: React.FC<AccountsProps> = ({ accounts, installments = [], onAdd, onDelete, onEdit, onDeactivate, loading = false, error = null }) => {
   const { getAccentClasses } = useTheme();
   const isMobile = useMediaQuery('(max-width: 767px)');
   const [showModal, setShowModal] = useState(false);
@@ -181,12 +183,25 @@ const Accounts: React.FC<AccountsProps> = ({ accounts, onAdd, onDelete, onEdit, 
   const confirmDeactivateScheduled = async () => { if (!deactivateState.accountId) return; await onDeactivate?.(deactivateState.accountId, { month: deactivateState.month, year: deactivateState.year }); setDeactivateState({ show: false, accountId: null, month: 0, year: 0 }); };
 
   // Physical Card Design
+  {/* TO: Add the installment math */}
   const renderAccount = (acc: Account) => {
-    const isCredit = acc.type === 'Credit';
+    const isCredit = acc.type === 'Credit' || acc.classification === 'Credit Card' || acc.type === 'Loan' || acc.classification === 'Loan';
     const creditLimit = acc.creditLimit ?? 0;
-    const usedPercent = creditLimit > 0 ? Math.min(100, Math.round((acc.balance / creditLimit) * 100)) : 0;
+    
+    {/* TO: Look at accountId instead of linkedAccountId */}
+    // 🟢 NEW: Calculate the remaining balance of all active installments linked to this card
+    const installmentBurden = installments
+      .filter(i => (i.accountId === acc.id || i.linkedAccountId === acc.id) && !i.isArchived)
+      .reduce((sum, i) => sum + (i.totalAmount - i.paidAmount), 0);
+
+      
+    // 🟢 NEW: Total Utilized = Actual Statement Balance + Unpaid Installments
+    const totalUtilized = acc.balance + installmentBurden;
+
+    const usedPercent = creditLimit > 0 ? Math.min(100, Math.round((totalUtilized / creditLimit) * 100)) : 0;
     const usedPercentSafe = usedPercent < 0 ? 0 : usedPercent;
     const isActive = (acc as any).isActive !== false;
+
     const deactivationDate = (acc as any).deactivationDate;
     
     const cardSurface = isCredit ? 'bg-purple-50 dark:bg-purple-900/10' : 'bg-[#fffdf7] dark:bg-gray-800';
@@ -238,16 +253,20 @@ const Accounts: React.FC<AccountsProps> = ({ accounts, onAdd, onDelete, onEdit, 
           </div>
         </div>
 
+        {/* TO: Update the labels to show Available Limit and hide closed dates if unnecessary */}
         {/* Credit Limit Bar (Only for Credit) */}
         {isCredit && (
           <div className="mt-3">
             <div className="flex justify-between items-baseline mb-1">
-              <p className="text-[8px] font-bold uppercase text-gray-500">Limit: {formatCurrency(creditLimit)}</p>
-              {isActive && deactivationDate && (
-                <p className="text-[8px] font-bold text-orange-600 uppercase">Closes: {monthNames[deactivationDate.month]} {deactivationDate.year}</p>
-              )}
+              <p className="text-[8px] font-bold uppercase text-gray-500">
+                Avail: {formatCurrency(Math.max(0, creditLimit - totalUtilized))}
+              </p>
+              <p className="text-[8px] font-bold uppercase text-gray-400">
+                Limit: {formatCurrency(creditLimit)}
+              </p>
             </div>
-            <div className="h-1.5 w-full rounded-full bg-black/10 overflow-hidden">
+            <div className="h-1.5 w-full rounded-full bg-black/10 overflow-hidden shadow-[inset_1px_1px_2px_rgba(0,0,0,0.2)]">
+
               <div className={`h-full rounded-full ${usedPercentSafe > 90 ? 'bg-red-500' : 'bg-purple-500'}`} style={{ width: `${usedPercentSafe}%` }} />
             </div>
           </div>

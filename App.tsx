@@ -1784,6 +1784,7 @@ const MainApp: React.FC = () => {
               <Route path="/accounts" element={
                 <Accounts
                   accounts={accounts}
+                  installments={installments}
                   onAdd={handleAddAccount}
                   onEdit={handleEditAccount}
                   onDelete={handleDeleteAccount}
@@ -1816,7 +1817,7 @@ const MainApp: React.FC = () => {
                 />
               } />
               <Route path="/accounts/view" element={<AccountFilteredTransactions accounts={accounts} onTransactionCreated={reloadAccounts} />} />
-              <Route path="/accounts/statement" element={<StatementPage accounts={accounts} />} />
+              <Route path="/accounts/statement" element={<StatementPage accounts={accounts} installments={installments} />} />
               <Route path="/wallets" element={<WalletsPage accounts={accounts} />} />
               <Route path="/wallets/view" element={<WalletView accounts={accounts} />} />
               <Route path="/settings" element={

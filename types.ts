@@ -1,5 +1,6 @@
 export type AccountClassification = 'Checking' | 'Savings' | 'Credit Card' | 'Loan' | 'Investment';
 
+{/* TO: */}
 export interface Account {
   id: string;
   bank: string;
@@ -13,6 +14,8 @@ export interface Account {
   overdraftMode?: 'allow' | 'warn' | 'block';
   // 🟢 NEW: Add this line here
   lastFour?: string;
+  // 🟢 NEW: Monthly interest rate for rollover finance charges
+  interestRate?: number;
 }
 
 
@@ -91,6 +94,8 @@ export interface Installment {
   timing?: '1/2' | '2/2'; // PROTOTYPE: Payment timing within the month
   due_date?: string | null;
   is_migrated?: boolean;
+  // 🟢 NEW: Links this installment to a specific Credit Card statement
+  linkedAccountId?: string;
 }
 
 export interface SavingsJar {

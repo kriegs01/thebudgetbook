@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { ArrowLeft, Calendar, CreditCard, ChevronDown } from 'lucide-react';
 import { useSearchParams, Link } from 'react-router-dom';
-import { Account } from '../../types';
+import { Account, Installment } from '../../types';
 import { getTransactionsByPaymentMethod } from '../../src/services/transactionsService';
 import type { SupabaseTransaction } from '../../src/types/supabase';
 import { calculateBillingCycles, formatDateRange } from '../../src/utils/billingCycles';
@@ -41,9 +41,11 @@ const isInCycle = (transaction: Transaction, cycleStart: Date, cycleEnd: Date): 
 
 interface StatementPageProps {
   accounts: Account[];
+  installments: Istallment[];
 }
 
-const StatementPage: React.FC<StatementPageProps> = ({ accounts }) => {
+{/* TO: */}
+const StatementPage: React.FC<StatementPageProps> = ({ accounts, installments = [] }) => {
   const { getAccentClasses } = useTheme();
   const isMobile = useMediaQuery('(max-width: 767px)');
   const [searchParams] = useSearchParams();
@@ -106,19 +108,67 @@ const StatementPage: React.FC<StatementPageProps> = ({ accounts }) => {
           transaction_type: t.transaction_type ?? null
         }));
         
-        // Group transactions by cycle
-        const billingCycles: BillingCycle[] = cycleData.map((cycle, index) => {
-          const cycleTxs = accountTransactions.filter(tx => 
-            isInCycle(tx, cycle.startDate, cycle.endDate)
-          );
-          
-          return {
-            startDate: cycle.startDate,
-            endDate: cycle.endDate,
-            label: formatDateRange(cycle.startDate, cycle.endDate),
-            transactions: cycleTxs
-          };
-        });
+                // 🟢 NEW: Track rolling balance across cycles
+                let accumulatedRollover = 0;
+
+                // Group transactions by cycle
+                const billingCycles: BillingCycle[] = cycleData.map((cycle, index) => {
+                  const cycleTxs = accountTransactions.filter(tx => 
+                    isInCycle(tx, cycle.startDate, cycle.endDate)
+                  );
+                  
+                  // Auto-inject active installments as statement charges
+                  if (installments && installments.length > 0) {
+                    installments.forEach(inst => {
+                      if ((inst.accountId === accountId || inst.linkedAccountId === accountId) && !inst.isArchived) {
+                        let isAfterStart = true;
+                        if (inst.startDate) {
+                           const [year, month] = inst.startDate.split('-');
+                           const start = new Date(Number(year), Number(month) - 1, 1);
+                           if (cycle.endDate < start) isAfterStart = false;
+                        }
+                        if (isAfterStart) {
+                          cycleTxs.push({
+                            id: `auto-inst-${inst.id}-${index}`,
+                            name: `Installment: ${inst.name}`,
+                            date: cycle.startDate.toISOString(),
+                            amount: -inst.monthlyAmount, // Charge
+                            paymentMethodId: accountId,
+                            transaction_type: 'installment_charge'
+                          });
+                        }
+                      }
+                    });
+                  }
+        
+                  // 🟢 NEW: Inject Previous Unpaid Balance
+                  if (accumulatedRollover > 0) {
+                    cycleTxs.unshift({
+                      id: `rollover-${index}`,
+                      name: `Previous Balance Carried Over`,
+                      date: cycle.startDate.toISOString(),
+                      amount: -accumulatedRollover, // Charge
+                      paymentMethodId: accountId,
+                      transaction_type: 'rollover_carryover'
+                    });
+                  }
+        
+                  // 🟢 NEW: Calculate this cycle's net flow to see what rolls over to next month
+                  const cycleCharges = cycleTxs.filter(tx => tx.transaction_type !== 'credit_payment' && tx.amount < 0).reduce((sum, tx) => sum + Math.abs(tx.amount), 0);
+                  const cyclePayments = cycleTxs.filter(tx => tx.transaction_type === 'credit_payment' || tx.amount > 0).reduce((sum, tx) => sum + Math.abs(tx.amount), 0);
+                  
+                  // What remains unpaid becomes the rollover for the NEXT cycle in the loop
+                  accumulatedRollover = Math.max(0, cycleCharges - cyclePayments);
+                  
+                  return {
+                    startDate: cycle.startDate,
+                    endDate: cycle.endDate,
+                    label: formatDateRange(cycle.startDate, cycle.endDate),
+                    transactions: cycleTxs
+                  };
+                });
+        
+
         
         setCycles(billingCycles);
         const today = new Date();
