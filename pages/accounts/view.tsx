@@ -56,6 +56,9 @@ const formatCurrency = (val: number) =>
     maximumFractionDigits: 2
   }).format(val);
 
+   
+  
+
 interface AccountFilteredTransactionsProps {
   accounts: Account[];
   onTransactionCreated?: () => void;
@@ -71,6 +74,7 @@ const AccountFilteredTransactions: React.FC<AccountFilteredTransactionsProps> = 
   const [loanTransactions, setLoanTransactions] = useState<LoanTransaction[]>([]);
   const [allAccounts, setAllAccounts] = useState<Account[]>([]);
   
+
   // Modal states
   const [showWithdrawModal, setShowWithdrawModal] = useState(false);
   const [showSendModal, setShowSendModal] = useState(false);
@@ -690,7 +694,7 @@ const AccountFilteredTransactions: React.FC<AccountFilteredTransactionsProps> = 
 
   const handleCardPaymentSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!accountId) return;
+    if (!accountId || !account) return;
 
     const raw = cardPaymentForm.amount.trim();
     const amountValue = Math.abs(parseFloat(raw || '0'));
@@ -704,7 +708,7 @@ const AccountFilteredTransactions: React.FC<AccountFilteredTransactionsProps> = 
       const { error } = await createTransaction({
         name: cardPaymentForm.name.trim() || 'Credit Card Payment',
         date: combineDateWithCurrentTime(cardPaymentForm.date),
-        amount: -amountValue,                    // negative → reduces outstanding balance
+        amount: -amountValue,
         payment_method_id: accountId,
         transaction_type: 'credit_payment',
         notes: cardPaymentForm.notes.trim() || null,
@@ -719,6 +723,19 @@ const AccountFilteredTransactions: React.FC<AccountFilteredTransactionsProps> = 
       setCardPaymentForm({ name: '', amount: '', date: getTodayIso(), notes: '' });
       await loadTransactions();
       onTransactionCreated?.();
+
+      // 🟢 CHECK FOR PARTIAL PAYMENT & TRIGGER ROLLOVER PROMPT
+      const currentOutstanding = creditUtilization ? creditUtilization.currentOutstanding : (account.balance - amountValue);
+      if (currentOutstanding > 0) {
+        setRolloverPrompt({
+          show: true,
+          accountId: account.id,
+          accountName: account.bank,
+          remainingBalance: currentOutstanding,
+          interestRate: account.interestRate || 3 // Default 3% monthly if not specified
+        });
+      }
+
     } catch (error) {
       console.error('Error recording credit card payment:', error);
       showMessage('error', 'Failed to record credit card payment');
@@ -726,6 +743,7 @@ const AccountFilteredTransactions: React.FC<AccountFilteredTransactionsProps> = 
       setIsSubmitting(false);
     }
   };
+
 
   const handleRescueTransferSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -2249,6 +2267,64 @@ const AccountFilteredTransactions: React.FC<AccountFilteredTransactionsProps> = 
     </div>
   );
 };
+
+      {/* Smart Rollover Prompt Modal */}
+      {rolloverPrompt.show && (
+        <div className="fixed inset-0 z-[2000] flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm animate-in fade-in">
+          <div className="bg-[#fff7e8] dark:bg-gray-900 rounded-[2rem] border-[4px] border-black w-full max-w-md p-8 shadow-[10px_10px_0px_0px_rgba(0,0,0,1)] relative flex flex-col text-center">
+            
+            <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl border-[3px] border-black bg-purple-200 text-purple-700 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]">
+              <span className="text-2xl font-black">💸</span>
+            </div>
+            
+            <h2 className="mb-2 text-2xl font-black uppercase tracking-tight text-gray-900 dark:text-gray-100">
+              Partial Payment Detected
+            </h2>
+            
+            <p className="mb-6 text-sm font-medium leading-relaxed text-gray-600 dark:text-gray-400">
+              You still have a remaining balance of <strong className="text-red-600 dark:text-red-400">{formatCurrency(rolloverPrompt.remainingBalance)}</strong> on your {rolloverPrompt.accountName}. Would you like to roll this over and apply the monthly finance charge?
+            </p>
+
+            <div className="flex flex-col gap-3 sm:flex-row">
+              <button 
+                onClick={() => {
+                  localStorage.setItem(`pending_rollover_${rolloverPrompt.accountId}`, JSON.stringify({
+                    remainingBalance: rolloverPrompt.remainingBalance,
+                    timestamp: new Date().toISOString()
+                  }));
+                  setRolloverPrompt(prev => ({ ...prev, show: false }));
+                }}
+                className="flex-1 rounded-2xl border-[3px] border-black bg-white dark:bg-gray-800 py-4 text-xs font-black uppercase tracking-widest text-gray-600 dark:text-gray-300 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none transition-all"
+              >
+                Later
+              </button>
+              
+              <button 
+                onClick={async () => {
+                  const interestAmount = rolloverPrompt.remainingBalance * (rolloverPrompt.interestRate / 100);
+                  
+                  await createTransaction({
+                    name: 'Finance Charge (Interest)',
+                    date: combineDateWithCurrentTime(getTodayIso()),
+                    amount: interestAmount, // Positive charge increasing balance
+                    payment_method_id: rolloverPrompt.accountId,
+                    transaction_type: 'payment', // Or standard charge type
+                    notes: 'Automated rollover finance charge'
+                  } as any);
+
+                  localStorage.removeItem(`pending_rollover_${rolloverPrompt.accountId}`);
+                  setRolloverPrompt(prev => ({ ...prev, show: false }));
+                  await loadTransactions();
+                }}
+                className="flex-1 rounded-2xl border-[3px] border-black bg-purple-500 py-4 text-xs font-black uppercase tracking-widest text-white shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none transition-all"
+              >
+                Yep!
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
 
 const ConfirmDialog: React.FC<{ show: boolean; title: string; message: string; onConfirm: () => void; onClose: () => void }> = ({ title, message, onConfirm, onClose }) => (
   <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-in fade-in">

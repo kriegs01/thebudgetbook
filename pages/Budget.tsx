@@ -437,6 +437,22 @@ const [activePeriodIndex, setActivePeriodIndex] = useState<number>(1);
 
   const [paymentSchedules, setPaymentSchedules] = useState<SupabaseMonthlyPaymentSchedule[]>([]);
 
+  // 🟢 Rollover Prompt State for Budget Page
+  const [rolloverPrompt, setRolloverPrompt] = useState<{
+    show: boolean;
+    accountId: string;
+    accountName: string;
+    remainingBalance: number;
+    interestRate: number;
+  }>({
+    show: false,
+    accountId: '',
+    accountName: '',
+    remainingBalance: 0,
+    interestRate: 0
+  });
+
+
  //Dynamic budget item distribution by due date
   const [payRules, setPayRules] = useState<PayScheduleRule[]>([]);
   const [currentPeriods, setCurrentPeriods] = useState<PayPeriod[]>([]);
@@ -5017,59 +5033,70 @@ return getAccountPeriodIndex({ dueDate: dueDay }) === activePeriodIndex;
             <h2 className="text-xl font-black text-gray-900 dark:text-gray-100 mb-1">Pay {showCreditPayModal.bank}</h2>
             <p className="text-gray-500 dark:text-gray-400 text-xs mb-4">Recording credit payment for {selectedMonth}</p>
             
-            <form onSubmit={async (e) => {
-              e.preventDefault();
-              const formData = new FormData(e.currentTarget);
-              const amount = parseFloat(formData.get('amount') as string);
-              const date = formData.get('date') as string;
-              const sourceAccountId = formData.get('sourceAccountId') as string;
+            <form               onSubmit={async (e) => {
+                e.preventDefault();
+                const formData = new FormData(e.currentTarget);
+                const amount = parseFloat(formData.get('amount') as string);
+                const date = formData.get('date') as string;
+                const sourceAccountId = formData.get('sourceAccountId') as string;
 
-              try {
-                // 1. Deduct from Debit Account (The part that was missing!)
-                const { data: debitTx, error: debitError } = await createTransaction({
-                  name: `${showCreditPayModal.bank} Payment - ${selectedMonth}`,
-                  amount: Math.abs(amount), // Outflow from debit
-                  date: combineDateWithCurrentTime(date),
-                  payment_method_id: sourceAccountId,
-                  transaction_type: 'payment',
-                  notes: `Budget Timing: ${selectedTiming}`
-                } as any);
+                try {
+                  const { data: debitTx, error: debitError } = await createTransaction({
+                    name: `${showCreditPayModal.bank} Payment - ${selectedMonth}`,
+                    amount: Math.abs(amount),
+                    date: combineDateWithCurrentTime(date),
+                    payment_method_id: sourceAccountId,
+                    transaction_type: 'payment',
+                    notes: `Budget Timing: ${selectedTiming}`
+                  } as any);
 
-                if (debitError) throw debitError;
+                  if (debitError) throw debitError;
 
-                // 2. Apply to Credit Account
-                const { error: creditError } = await createTransaction({
-                  name: `${showCreditPayModal.bank} Payment - ${selectedMonth}`,
-                  amount: -Math.abs(amount), // Negative reduces credit balance
-                  date: combineDateWithCurrentTime(date),
-                  payment_method_id: showCreditPayModal.accountId,
-                  transaction_type: 'credit_payment',
-                  related_transaction_id: debitTx?.id, // Link them together!
-                  notes: `Budget Timing: ${selectedTiming}`
-                } as any);
+                  const { error: creditError } = await createTransaction({
+                    name: `${showCreditPayModal.bank} Payment - ${selectedMonth}`,
+                    amount: -Math.abs(amount),
+                    date: combineDateWithCurrentTime(date),
+                    payment_method_id: showCreditPayModal.accountId,
+                    transaction_type: 'credit_payment',
+                    related_transaction_id: debitTx?.id,
+                    notes: `Budget Timing: ${selectedTiming}`
+                  } as any);
 
-                if (creditError) {
-                  console.error("Failed to link credit side directly, falling back...");
-                  await recordCreditPayment(
-                    showCreditPayModal.accountId,
-                    amount,
-                    `${showCreditPayModal.bank} Payment - ${selectedMonth}`,
-                    date
-                  );
+                  if (creditError) {
+                    await recordCreditPayment(
+                      showCreditPayModal.accountId,
+                      amount,
+                      `${showCreditPayModal.bank} Payment - ${selectedMonth}`,
+                      date
+                    );
+                  }
+                  
+                  await reloadTransactions();
+                  if (onTransactionCreated) onTransactionCreated();
+                  
+                  const targetAccount = accounts.find(a => a.id === showCreditPayModal.accountId);
+                  const cycleRem = getRemainingCycleAmount(targetAccount!);
+
+                  setShowCreditPayModal(null);
+
+                  // 🟢 TRIGGER ROLLOVER PROMPT IF PARTIAL
+                  if (cycleRem > 0) {
+                    setRolloverPrompt({
+                      show: true,
+                      accountId: showCreditPayModal.accountId,
+                      accountName: showCreditPayModal.bank,
+                      remainingBalance: cycleRem,
+                      interestRate: targetAccount?.interestRate || 3
+                    });
+                  } else {
+                    alert('Payment recorded successfully!');
+                  }
+                } catch (err) {
+                  console.error("Credit Payment Error:", err);
+                  alert('Failed to record payment. Check console for details.');
                 }
-                
-                // 3. Refresh everything
-                await reloadTransactions();
-                if (onTransactionCreated) onTransactionCreated();
-                
-                // 4. Close and Notify
-                setShowCreditPayModal(null);
-                alert('Payment recorded successfully!');
-              } catch (err) {
-                console.error("Credit Payment Error:", err);
-                alert('Failed to record payment. Check console for details.');
-              }
-            }} className="space-y-4">
+              }}
+ className="space-y-4">
               <div>
                 <label className="block text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">Amount</label>
                 <input required name="amount" type="number" step="0.01" defaultValue={showCreditPayModal.amount.toFixed(2)} className="w-full bg-gray-50 dark:bg-gray-800 border-2 border-black rounded-xl p-2.5 outline-none text-base font-black dark:text-gray-100" />
@@ -5147,6 +5174,65 @@ return getAccountPeriodIndex({ dueDate: dueDay }) === activePeriodIndex;
           </div>
         </div>
       )}
+
+      {/* Smart Rollover Prompt Modal for Budget Page */}
+      {rolloverPrompt.show && (
+        <div className="fixed inset-0 z-[2000] flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm animate-in fade-in">
+          <div className="bg-[#fff7e8] dark:bg-gray-900 rounded-[2rem] border-[4px] border-black w-full max-w-md p-8 shadow-[10px_10px_0px_0px_rgba(0,0,0,1)] relative flex flex-col text-center">
+            
+            <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl border-[3px] border-black bg-purple-200 text-purple-700 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]">
+              <span className="text-2xl font-black">💸</span>
+            </div>
+            
+            <h2 className="mb-2 text-2xl font-black uppercase tracking-tight text-gray-900 dark:text-gray-100">
+              Partial Payment Detected
+            </h2>
+            
+            <p className="mb-6 text-sm font-medium leading-relaxed text-gray-600 dark:text-gray-400">
+              You still have a remaining balance of <strong className="text-red-600 dark:text-red-400">{formatCurrency(rolloverPrompt.remainingBalance)}</strong> on your {rolloverPrompt.accountName}. Would you like to roll this over and apply the monthly finance charge?
+            </p>
+
+            <div className="flex flex-col gap-3 sm:flex-row">
+              <button 
+                onClick={() => {
+                  localStorage.setItem(`pending_rollover_${rolloverPrompt.accountId}`, JSON.stringify({
+                    remainingBalance: rolloverPrompt.remainingBalance,
+                    timestamp: new Date().toISOString()
+                  }));
+                  setRolloverPrompt(prev => ({ ...prev, show: false }));
+                }}
+                className="flex-1 rounded-2xl border-[3px] border-black bg-white dark:bg-gray-800 py-4 text-xs font-black uppercase tracking-widest text-gray-600 dark:text-gray-300 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none transition-all"
+              >
+                Later
+              </button>
+              
+              <button 
+                onClick={async () => {
+                  const interestAmount = rolloverPrompt.remainingBalance * (rolloverPrompt.interestRate / 100);
+                  
+                  await createTransaction({
+                    name: 'Finance Charge (Interest)',
+                    date: combineDateWithCurrentTime(getTodayIso()),
+                    amount: interestAmount,
+                    payment_method_id: rolloverPrompt.accountId,
+                    transaction_type: 'payment',
+                    notes: 'Automated rollover finance charge'
+                  } as any);
+
+                  localStorage.removeItem(`pending_rollover_${rolloverPrompt.accountId}`);
+                  setRolloverPrompt(prev => ({ ...prev, show: false }));
+                  await reloadTransactions();
+                }}
+                className="flex-1 rounded-2xl border-[3px] border-black bg-purple-500 py-4 text-xs font-black uppercase tracking-widest text-white shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none transition-all"
+              >
+                Yep!
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+
     </div> // This closes the main div for the Budget component
   );
 }; // This closes the Budget component
