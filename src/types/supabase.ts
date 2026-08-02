@@ -41,6 +41,8 @@ export interface SupabaseAccount {
   overdraft_mode?: 'allow' | 'warn' | 'block' | null;
   created_at: string; // timestamptz, default now()
   user_id: string | null; // uuid, references auth.users(id)
+  interestRate?: number | null;
+  qrCodeBase64?: string | null;
 }
 
 export interface SupabasePerson {

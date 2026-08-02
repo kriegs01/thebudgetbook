@@ -25,6 +25,8 @@ export const supabaseAccountToFrontend = (supabaseAccount: SupabaseAccount): Acc
     billingDate: supabaseAccount.billing_date ?? undefined,
     dueDate: supabaseAccount.due_date ?? undefined,
     overdraftMode: (supabaseAccount.overdraft_mode ?? undefined) as any,
+    interestRate: supabaseAccount.interestRate ?? undefined,
+    qrCodeBase64: supabaseAccount.qrCodeBase64 ?? undefined,
   };
 };
 
@@ -42,6 +44,8 @@ export const frontendAccountToSupabase = (account: Account): Omit<SupabaseAccoun
     billing_date: account.billingDate ?? null,
     due_date: account.dueDate ?? null,
     overdraft_mode: account.overdraftMode ?? null,
+    interestRate: account.interestRate ?? null, // 🟢 ADD THIS
+    qrCodeBase64: account.qrCodeBase64 ?? null, // 🟢 ADD THIS
   };
 };
 

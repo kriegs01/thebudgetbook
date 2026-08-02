@@ -70,10 +70,27 @@ const AccountFilteredTransactions: React.FC<AccountFilteredTransactionsProps> = 
   const [searchParams] = useSearchParams();
   const accountId = searchParams.get("account") || searchParams.get("id");
   const [account, setAccount] = useState<Account | null>(null);
+
+// 🟢 Rollover Prompt State for Budget Page
+const [rolloverPrompt, setRolloverPrompt] = useState<{
+  show: boolean;
+  accountId: string;
+  accountName: string;
+  remainingBalance: number;
+  interestRate: number;
+}>({
+  show: false,
+  accountId: '',
+  accountName: '',
+  remainingBalance: 0,
+  interestRate: 0
+});
+
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [loanTransactions, setLoanTransactions] = useState<LoanTransaction[]>([]);
   const [allAccounts, setAllAccounts] = useState<Account[]>([]);
   
+   
 
   // Modal states
   const [showWithdrawModal, setShowWithdrawModal] = useState(false);
@@ -725,7 +742,7 @@ const AccountFilteredTransactions: React.FC<AccountFilteredTransactionsProps> = 
       onTransactionCreated?.();
 
       // 🟢 CHECK FOR PARTIAL PAYMENT & TRIGGER ROLLOVER PROMPT
-      const currentOutstanding = creditUtilization ? creditUtilization.currentOutstanding : (account.balance - amountValue);
+      const currentOutstanding = creditUtilization ? (creditUtilization.currentOutstanding - amountValue) : (account.balance - amountValue);
       if (currentOutstanding > 0) {
         setRolloverPrompt({
           show: true,
@@ -2263,11 +2280,6 @@ const AccountFilteredTransactions: React.FC<AccountFilteredTransactionsProps> = 
         </div>
       )}
 
-      {confirmModal.show && <ConfirmDialog {...confirmModal} onClose={() => setConfirmModal(p => ({ ...p, show: false }))} />}
-    </div>
-  );
-};
-
       {/* Smart Rollover Prompt Modal */}
       {rolloverPrompt.show && (
         <div className="fixed inset-0 z-[2000] flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm animate-in fade-in">
@@ -2286,10 +2298,11 @@ const AccountFilteredTransactions: React.FC<AccountFilteredTransactionsProps> = 
             </p>
 
             <div className="flex flex-col gap-3 sm:flex-row">
-              <button 
+            <button 
                 onClick={() => {
                   localStorage.setItem(`pending_rollover_${rolloverPrompt.accountId}`, JSON.stringify({
                     remainingBalance: rolloverPrompt.remainingBalance,
+                    interestRate: rolloverPrompt.interestRate, // 🟢 ADD THIS LINE
                     timestamp: new Date().toISOString()
                   }));
                   setRolloverPrompt(prev => ({ ...prev, show: false }));
@@ -2298,6 +2311,7 @@ const AccountFilteredTransactions: React.FC<AccountFilteredTransactionsProps> = 
               >
                 Later
               </button>
+
               
               <button 
                 onClick={async () => {
@@ -2324,6 +2338,12 @@ const AccountFilteredTransactions: React.FC<AccountFilteredTransactionsProps> = 
           </div>
         </div>
       )}
+
+      {confirmModal.show && <ConfirmDialog {...confirmModal} onClose={() => setConfirmModal(p => ({ ...p, show: false }))} />}
+    </div>
+  );
+};
+
 
 
 const ConfirmDialog: React.FC<{ show: boolean; title: string; message: string; onConfirm: () => void; onClose: () => void }> = ({ title, message, onConfirm, onClose }) => (

@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import jsQR from 'jsqr';
 import { Link } from 'react-router-dom';
 import { PinProtectedAction } from '../src/components/PinProtectedAction';
 import { Account, AccountClassification, Installments } from '../types';
@@ -57,8 +58,19 @@ const Accounts: React.FC<AccountsProps> = ({ accounts, installments = [], onAdd,
   }>({ show: false, title: '', message: '', onConfirm: () => {} });
 
   const [formData, setFormData] = useState({
-    bank: '', classification: 'Checking' as AccountClassification, balance: '', type: 'Debit' as 'Debit' | 'Credit', creditLimit: '', billingDate: '', dueDate: '', lastFour: ''
+    bank: '', 
+    classification: 'Checking' as AccountClassification, 
+    balance: '', 
+    type: 'Debit' as 'Debit' | 'Credit', 
+    creditLimit: '', 
+    billingDate: '', 
+    dueDate: '', 
+    lastFour: '',
+    interestRate: '',
+    qrCodeBase64: '' // 🟢 ADD THIS
   });
+
+
 
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
   const [deactivateState, setDeactivateState] = useState<{ show: boolean; accountId?: string | null; month: number; year: number; }>({ show: false, accountId: null, month: 0, year: 0 });
@@ -118,9 +130,11 @@ const Accounts: React.FC<AccountsProps> = ({ accounts, installments = [], onAdd,
   };
 
   const resetForm = () => {
-    setFormData({ bank: '', classification: 'Checking', balance: '', type: 'Debit', creditLimit: '', billingDate: '', dueDate: '', lastFour: '' });
+    setFormData({ bank: '', classification: 'Checking', balance: '', type: 'Debit', creditLimit: '', billingDate: '', dueDate: '', lastFour: '', interestRate: '', qrCodeBase64: '' }); // 🟢 Added qrCodeBase64
     setEditingId(null);
   };
+
+
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -138,8 +152,12 @@ const Accounts: React.FC<AccountsProps> = ({ accounts, installments = [], onAdd,
         creditLimit: formData.type === 'Credit' ? (formData.creditLimit ? parseFloat(formData.creditLimit) : 0) : undefined,
         billingDate: formData.type === 'Credit' ? (formData.billingDate ? `${FAKE_DATE_PREFIX}${formData.billingDate.padStart(2, '0')}` : undefined) : undefined,
         dueDate: formData.type === 'Credit' ? (formData.dueDate ? `${FAKE_DATE_PREFIX}${formData.dueDate.padStart(2, '0')}` : undefined) : undefined,
-        lastFour: formData.lastFour.trim() || undefined
+        lastFour: formData.lastFour.trim() || undefined,
+        interestRate: formData.type === 'Credit' ? (formData.interestRate ? parseFloat(formData.interestRate) : undefined) : undefined,
+        qrCodeBase64: formData.qrCodeBase64 || undefined // 🟢 ADD THIS
       };
+
+
 
       if (editingId) {
         await onEdit?.(created);
@@ -161,11 +179,98 @@ const Accounts: React.FC<AccountsProps> = ({ accounts, installments = [], onAdd,
   const openEditModal = (acc: Account) => {
     setEditingId(acc.id);
     setFormData({
-      bank: acc.bank, classification: acc.classification, balance: (acc.openingBalance ?? 0).toFixed(2), type: acc.type,
-      creditLimit: acc.creditLimit ? acc.creditLimit.toFixed(2) : '', billingDate: acc.billingDate ? String(new Date(acc.billingDate).getDate()) : '',
-      dueDate: acc.dueDate ? String(new Date(acc.dueDate).getDate()) : '', lastFour: acc.lastFour || ''
+      bank: acc.bank, 
+      classification: acc.classification, 
+      balance: (acc.openingBalance ?? 0).toFixed(2), 
+      type: acc.type,
+      creditLimit: acc.creditLimit ? acc.creditLimit.toFixed(2) : '', 
+      billingDate: acc.billingDate ? String(new Date(acc.billingDate).getDate()) : '',
+      dueDate: acc.dueDate ? String(new Date(acc.dueDate).getDate()) : '', 
+      lastFour: acc.lastFour || '',
+      interestRate: acc.interestRate ? acc.interestRate.toString() : '',
+      qrCodeBase64: acc.qrCodeBase64 || '' // 🟢 ADD THIS
     });
     setShowModal(true);
+  };
+
+  const handleQrUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith('image/')) {
+        alert('Please upload an image file.');
+        return;
+    }
+
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      const img = new Image();
+      img.src = reader.result as string;
+      
+      img.onload = () => {
+        // 1. Draw the full screenshot to a hidden canvas to read its pixels
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return;
+
+        canvas.width = img.width;
+        canvas.height = img.height;
+        ctx.drawImage(img, 0, 0, img.width, img.height);
+
+        // 2. Extract the raw image data
+        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        
+        // 3. Let jsQR scan the pixels for a QR code
+        const code = jsQR(imageData.data, imageData.width, imageData.height);
+
+        if (code) {
+          // 🟢 QR FOUND! Calculate its exact bounding box
+          const minX = Math.min(code.location.topLeftCorner.x, code.location.bottomLeftCorner.x);
+          const maxX = Math.max(code.location.topRightCorner.x, code.location.bottomRightCorner.x);
+          const minY = Math.min(code.location.topLeftCorner.y, code.location.topRightCorner.y);
+          const maxY = Math.max(code.location.bottomLeftCorner.y, code.location.bottomRightCorner.y);
+
+          const qrWidth = maxX - minX;
+          const qrHeight = maxY - minY;
+
+          // Add a 40px clean white border around it so it scans easily later
+          const padding = 40;
+          const startX = Math.max(0, minX - padding);
+          const startY = Math.max(0, minY - padding);
+          const cropWidth = Math.min(img.width - startX, qrWidth + (padding * 2));
+          const cropHeight = Math.min(img.height - startY, qrHeight + (padding * 2));
+
+          // 4. Create a new canvas just for the cropped result
+          const cropCanvas = document.createElement('canvas');
+          cropCanvas.width = cropWidth;
+          cropCanvas.height = cropHeight;
+          const cropCtx = cropCanvas.getContext('2d');
+          
+          if (cropCtx) {
+              // Fill background with white (QR codes need high contrast)
+              cropCtx.fillStyle = '#FFFFFF';
+              cropCtx.fillRect(0, 0, cropWidth, cropHeight);
+              
+              // Draw exactly the QR code coordinates onto the new canvas
+              cropCtx.drawImage(
+                  img,
+                  startX, startY, cropWidth, cropHeight, // Source slice
+                  0, 0, cropWidth, cropHeight           // Destination size
+              );
+              
+              // Save the perfect crop!
+              const croppedBase64 = cropCanvas.toDataURL('image/png');
+              setFormData(prev => ({ ...prev, qrCodeBase64: croppedBase64 }));
+          }
+        } else {
+          // 🔴 FALLBACK: If the QR code is too blurry to detect, just save the whole original screenshot
+          alert("Couldn't auto-detect the QR code. Saving the original image instead.");
+          setFormData(prev => ({ ...prev, qrCodeBase64: reader.result as string }));
+        }
+      };
+    };
+
+    reader.readAsDataURL(file);
   };
 
   const handleDeleteTrigger = (id: string, bank: string) => {
@@ -520,11 +625,18 @@ const Accounts: React.FC<AccountsProps> = ({ accounts, installments = [], onAdd,
 
               {formData.type === 'Credit' && (
                 <div className="rounded-[1.4rem] border-[3px] border-black bg-purple-50/50 p-4 dark:bg-purple-900/10">
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    {/* Top Row: Limit and Interest */}
                     <div>
                       <label className="block text-[10px] font-black text-gray-500 uppercase tracking-widest mb-2">Credit Limit</label>
                       <input type="number" value={formData.creditLimit} onChange={(e) => setFormData({...formData, creditLimit: e.target.value})} className="w-full rounded-xl border-[3px] border-black bg-white px-3 py-2 font-bold text-gray-900 outline-none dark:bg-gray-800 dark:text-gray-100" />
                     </div>
+                    <div>
+                      <label className="block text-[10px] font-black text-gray-500 uppercase tracking-widest mb-2">Interest Rate (%)</label>
+                      <input type="number" step="0.01" min="0" placeholder="e.g. 3.00" value={formData.interestRate} onChange={(e) => setFormData({...formData, interestRate: e.target.value})} className="w-full rounded-xl border-[3px] border-black bg-white px-3 py-2 font-bold text-gray-900 outline-none dark:bg-gray-800 dark:text-gray-100" />
+                    </div>
+                    
+                    {/* Bottom Row: Dates */}
                     <div>
                       <label className="block text-[10px] font-black text-gray-500 uppercase tracking-widest mb-2">Statement Day</label>
                       <input type="number" min="1" max="31" placeholder="e.g. 12" value={formData.billingDate} onChange={(e) => setFormData({...formData, billingDate: e.target.value})} className="w-full rounded-xl border-[3px] border-black bg-white px-3 py-2 font-bold text-gray-900 outline-none dark:bg-gray-800 dark:text-gray-100" />
@@ -534,6 +646,7 @@ const Accounts: React.FC<AccountsProps> = ({ accounts, installments = [], onAdd,
                       <input type="number" min="1" max="60" placeholder="e.g. 21" value={formData.dueDate} onChange={(e) => setFormData({...formData, dueDate: e.target.value})} className="w-full rounded-xl border-[3px] border-black bg-white px-3 py-2 font-bold text-gray-900 outline-none dark:bg-gray-800 dark:text-gray-100" />
                     </div>
                   </div>
+                  
                   {formData.billingDate && formData.dueDate && (() => {
                     const statementDay = parseInt(formData.billingDate);
                     const daysToPay = parseInt(formData.dueDate);
@@ -547,7 +660,54 @@ const Accounts: React.FC<AccountsProps> = ({ accounts, installments = [], onAdd,
                 </div>
               )}
 
-              <div className="flex flex-col sm:flex-row gap-3 pt-4">
+              
+              {/* 🟢 NEW: QR Code Upload Section */}     
+            {formData.type === 'Debit' && (
+              <div className="rounded-[1.4rem] border-[3px] border-black bg-blue-50/50 p-4 dark:bg-blue-900/10 mt-4">
+                  <label className="block text-[10px] font-black text-gray-500 uppercase tracking-widest mb-2">
+                      Account QR Code (Optional)
+                  </label>
+                  <p className="text-[10px] text-gray-500 font-bold mb-3">
+                      Upload your bank transfer QR code. It will be stored offline for instant access in your Wallet.
+                  </p>
+                  
+                  <div className="flex flex-col sm:flex-row items-center gap-4">
+                      {/* Preview Area */}
+                      <div className="w-24 h-24 shrink-0 rounded-xl border-[3px] border-dashed border-gray-400 bg-white dark:bg-gray-800 flex items-center justify-center overflow-hidden">
+                          {formData.qrCodeBase64 ? (
+                              <img 
+                                  src={formData.qrCodeBase64} 
+                                  alt="QR Preview" 
+                                  className="w-full h-full object-contain" 
+                              />
+                          ) : (
+                              <span className="text-[10px] font-black text-gray-400 uppercase">No QR</span>
+                          )}
+                      </div>
+
+                      {/* File Input */}
+                      <div className="flex-1 w-full">
+                          <input 
+                              type="file" 
+                              accept="image/*"
+                              onChange={handleQrUpload}
+                              className="w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-sm file:font-black file:bg-blue-100 file:text-blue-700 hover:file:bg-blue-200 dark:file:bg-blue-900/30 dark:file:text-blue-300 transition-all cursor-pointer"
+                          />
+                          {formData.qrCodeBase64 && (
+                              <button 
+                                  type="button"
+                                  onClick={() => setFormData(prev => ({ ...prev, qrCodeBase64: '' }))}
+                                  className="mt-2 text-[10px] font-black uppercase text-red-500 hover:text-red-700 transition-colors"
+                              >
+                                  Remove QR
+                              </button>
+                          )}
+                      </div>
+                    </div>
+                  </div>
+                )}
+      
+                  <div className="flex flex-col sm:flex-row gap-3 pt-4">
                 <button type="button" onClick={() => { setShowModal(false); resetForm(); }} className="flex-1 rounded-2xl border-[3px] border-black bg-white py-3 font-black text-gray-700 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] transition-all hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none dark:bg-gray-800 dark:text-gray-100">Cancel</button>
                 <button type="submit" disabled={isSubmitting} className={`flex-1 rounded-2xl border-[3px] border-black py-3 font-black text-white shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] transition-all hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none disabled:opacity-50 ${getAccentClasses('bg')}`}>{isSubmitting ? 'Saving...' : (editingId ? 'Save Changes' : 'Add Account')}</button>
               </div>

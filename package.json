@@ -11,9 +11,11 @@
   "dependencies": {
     "@supabase/supabase-js": "^2.93.3",
     "@tanstack/react-query": "^5.100.8",
+    "jsqr": "^1.4.0",
     "lucide-react": "^0.563.0",
     "react": "^19.2.3",
     "react-dom": "^19.2.3",
+    "react-pdf": "^10.4.1",
     "react-router-dom": "^7.13.0",
     "recharts": "^3.7.0"
   },

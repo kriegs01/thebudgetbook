@@ -5075,7 +5075,7 @@ return getAccountPeriodIndex({ dueDate: dueDay }) === activePeriodIndex;
                   if (onTransactionCreated) onTransactionCreated();
                   
                   const targetAccount = accounts.find(a => a.id === showCreditPayModal.accountId);
-                  const cycleRem = getRemainingCycleAmount(targetAccount!);
+                  const cycleRem = getRemainingCycleAmount(targetAccount!) - amountValue;
 
                   setShowCreditPayModal(null);
 
@@ -5193,10 +5193,11 @@ return getAccountPeriodIndex({ dueDate: dueDay }) === activePeriodIndex;
             </p>
 
             <div className="flex flex-col gap-3 sm:flex-row">
-              <button 
+            <button 
                 onClick={() => {
                   localStorage.setItem(`pending_rollover_${rolloverPrompt.accountId}`, JSON.stringify({
                     remainingBalance: rolloverPrompt.remainingBalance,
+                    interestRate: rolloverPrompt.interestRate, // 🟢 ADD THIS LINE
                     timestamp: new Date().toISOString()
                   }));
                   setRolloverPrompt(prev => ({ ...prev, show: false }));
@@ -5205,6 +5206,7 @@ return getAccountPeriodIndex({ dueDate: dueDay }) === activePeriodIndex;
               >
                 Later
               </button>
+
               
               <button 
                 onClick={async () => {
