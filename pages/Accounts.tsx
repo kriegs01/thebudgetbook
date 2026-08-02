@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import jsQR from 'jsqr';
+import { JuiceBox } from '../src/components/JuiceBox'; // 🧃 Import your retro sticker component
 import { Link } from 'react-router-dom';
 import { PinProtectedAction } from '../src/components/PinProtectedAction';
 import { Account, AccountClassification, Installments } from '../types';
@@ -453,6 +454,19 @@ const Accounts: React.FC<AccountsProps> = ({ accounts, installments = [], onAdd,
             ) : null
           }
         />
+
+ {/* 🧃 GLOBAL JUICEBOX ACTION BAR */}
+ <div className="mb-6 flex items-center justify-between bg-white dark:bg-gray-900 border-4 border-black p-4 rounded-2xl shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]">
+          <div>
+            <h3 className="font-black uppercase tracking-tight text-sm">Statement Squeezer</h3>
+            <p className="text-xs text-gray-500 font-bold">Upload a bank or e-wallet PDF statement to auto-import transactions.</p>
+          </div>
+          
+          {/* Note: If you use a global button here, you might want your JuiceBox component 
+              to include an account dropdown selector so the user can choose which account 
+              the statement belongs to! */}
+          <JuiceBox selectedAccountId={activeTab === 'Debit' ? debitAccounts[0]?.id : creditAccounts[0]?.id} />
+        </div>
 
         {debitAccounts.length === 0 && creditAccounts.length === 0 && (
           <div className="rounded-[2rem] border-[4px] border-dashed border-black bg-yellow-100 px-8 py-12 text-center shadow-[8px_8px_0px_0px_rgba(0,0,0,1)]">
