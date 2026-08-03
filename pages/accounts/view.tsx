@@ -38,6 +38,7 @@ type Transaction = {
   related_transaction_id?: string | null;
   receiptUrl?: string | null;
   person_name?: string | null;
+  isreconciled?: boolean;
 };
 
 type LoanTransaction = Transaction & {
@@ -1181,8 +1182,16 @@ const [rolloverPrompt, setRolloverPrompt] = useState<{
                       className={`rounded-[1.4rem] border-[3px] border-black p-4 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] ${isSelectMode && selectedIds.has(tx.id) ? 'bg-indigo-50 dark:bg-indigo-900/30' : 'bg-[#fff8ea] dark:bg-gray-800'}`}
                     >
                       <div className="mb-3 flex items-start justify-between gap-3">
-                        <div>
-                          <p className="text-sm font-black text-gray-900 dark:text-gray-100">{tx.name}</p>
+                      <div>
+                          {/* 🟢 WRAP IN A FLEX CONTAINER WITH THE SHIELD */}
+                          <div className="flex items-center gap-2">
+                            <p className="text-sm font-black text-gray-900 dark:text-gray-100">{tx.name}</p>
+                            {tx.is_reconciled && (
+                              <div title="Verified by Bank Statement" className="flex items-center justify-center text-green-600 bg-green-100/80 border border-green-200 dark:bg-green-900/30 dark:border-green-800 rounded-md px-1 py-0.5">
+                                <ShieldCheck className="w-3.5 h-3.5" />
+                              </div>
+                            )}
+                          </div>
                           <p className="mt-1 text-xs font-bold text-gray-500 dark:text-gray-400">{new Date(tx.date).toLocaleDateString()}</p>
                         </div>
                         <div className="text-right">
@@ -1276,7 +1285,16 @@ const [rolloverPrompt, setRolloverPrompt] = useState<{
                             />
                           </td>
                         )}
-                        <td className="px-4 py-3"><div className="text-sm font-medium text-gray-900 dark:text-gray-100">{tx.name}</div></td>
+                        <td className="px-4 py-3">
+                          <div className="flex items-center gap-2 text-sm font-medium text-gray-900 dark:text-gray-100">
+                            <span>{tx.name}</span>
+                            {tx.is_reconciled && (
+                              <div title="Verified by Bank Statement" className="flex items-center justify-center text-green-600 bg-green-100/80 border border-green-200 dark:bg-green-900/30 dark:border-green-800 rounded-md px-1 py-0.5">
+                                <ShieldCheck className="w-3.5 h-3.5" />
+                              </div>
+                            )}
+                          </div>
+                        </td>
                         <td className="px-4 py-3">{getTransactionTypeBadge(tx.transaction_type)}</td>
                         <td className="px-4 py-3"><div className="text-sm text-gray-500 dark:text-gray-400">{new Date(tx.date).toLocaleDateString()}</div></td>
                         <td className="px-4 py-3">

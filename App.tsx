@@ -1785,6 +1785,7 @@ const MainApp: React.FC = () => {
                 <Accounts
                   accounts={accounts}
                   installments={installments}
+                  transactions={transactions}
                   onAdd={handleAddAccount}
                   onEdit={handleEditAccount}
                   onDelete={handleDeleteAccount}

@@ -1,9 +1,20 @@
+// 🟢 1. We added 'raw_text' to the interface so the app can remember the original names
 export interface StandardTransaction {
   name: string;
   date: string;
   amount: number;
   transaction_type: string;
   notes: string;
+  raw_text: string; 
+}
+
+export interface StandardTransaction {
+  name: string;
+  date: string;
+  amount: number;
+  transaction_type: string;
+  notes: string;
+  raw_text: string; 
 }
 
 export const squeezeMariBank = (rawText: string): StandardTransaction[] => {
@@ -11,7 +22,8 @@ export const squeezeMariBank = (rawText: string): StandardTransaction[] => {
   const lines = rawText.split('\n').map(l => l.trim()).filter(Boolean);
 
   const dateRegex = /^(\d{2}\s+[A-Z]{3})/i;
-  const amountRegex = /(\d{1,3}(?:,\d{3})*\.\d{2})/g;
+  // 🟢 NEW: Regex now looks for our injected X-coordinate tag
+  const amountRegex = /(\d{1,3}(?:,\d{3})*\.\d{2})(?:\s*\[X:(\d+)\])?/;
 
   let currentDate = '';
   let shouldParse = false;
@@ -37,38 +49,53 @@ export const squeezeMariBank = (rawText: string): StandardTransaction[] => {
       continue;
     }
 
-    const amounts = line.match(amountRegex);
-    if (amounts && currentDate) {
-      let description = 'MariBank Transaction';
-      for (let j = 1; j <= 2; j++) {
+    const amountMatch = line.match(amountRegex);
+    if (amountMatch && currentDate) {
+      const textLines: string[] = [];
+      
+      for (let j = 1; j <= 3; j++) {
         const prevLine = lines[i - j];
-        if (prevLine && !prevLine.match(dateRegex) && !prevLine.match(amountRegex) && prevLine.length > 2) {
-          description = prevLine;
+        if (!prevLine) break;
+        
+        if (prevLine.match(dateRegex) || prevLine.match(amountRegex)) {
           break;
+        }
+        
+        if (prevLine.length > 1) {
+          textLines.unshift(prevLine); 
         }
       }
 
-      const rawAmount = Number(amounts[0].replace(/,/g, ''));
-      const combinedText = (description + ' ' + line).toLowerCase();
+      const originalName = textLines.length > 0 ? textLines[0] : 'MariBank Transaction';
+      let displayName = originalName;
 
-      // 🟢 UNIVERSAL CHECK: Relies purely on keywords, banking terms, and transaction directions
-      const isIncoming = 
-        combinedText.includes('interest') || 
-        combinedText.includes('reward') || 
-        combinedText.includes('cashback') ||
-        combinedText.includes('incoming') ||
-        combinedText.includes('deposit') ||
-        combinedText.includes('received') ||
-        (combinedText.includes('transfer') && combinedText.includes('from'));
+      const rawAmount = Number(amountMatch[1].replace(/,/g, ''));
+      const combinedText = (textLines.join(' ') + ' ' + line).toLowerCase();
 
-      const amount = isIncoming ? -Math.abs(rawAmount) : Math.abs(rawAmount);
+      if (combinedText.includes('transfer')) {
+        displayName = 'Funds Transfer';
+      }
+
+      // 🟢 NEW: Determine column based on X-coordinate
+      let isIncoming = false;
+      if (amountMatch[2]) {
+        const xCoord = parseInt(amountMatch[2], 10);
+        // Standard A4 width is ~595pt. Outgoing is roughly < 400, Incoming is > 400.
+        isIncoming = xCoord > 400; 
+      } else {
+        // Fallback heuristic if coordinate is missing
+        isIncoming = combinedText.includes('interest') || combinedText.includes('reward') || combinedText.includes('incoming');
+      }
+
+      const amount = isIncoming ? Math.abs(rawAmount) : -Math.abs(rawAmount);
 
       transactions.push({
-        name: description,
+        name: displayName,
         date: new Date(`${currentDate} 2026`).toISOString(),
         amount: amount,
         transaction_type: isIncoming ? 'cash_in' : 'payment',
         notes: isIncoming ? 'Incoming (MariBank)' : 'Outgoing (MariBank)',
+        raw_text: originalName,
       });
 
       currentDate = '';

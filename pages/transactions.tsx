@@ -238,13 +238,10 @@ function TransactionsPage({ transactions, loading = false, onTransactionDeleted,
   // Receipt file for the add-transaction form
   const [receiptFile, setReceiptFile] = useState<File | null>(null);
 
-  // 🟢 Global Mitosis FAB listener to toggle the pull-up tray
-  useEffect(() => {
-    const handleToggleTray = () => setShowFabMenu(true); 
-    window.addEventListener('open_add_transaction_modal', handleToggleTray);
-    return () => window.removeEventListener('open_add_transaction_modal', handleToggleTray);
-  }, []);
+  // 🟢 NEW: State to toggle the IOU UI
+  const [showAdvancedOptions, setShowAdvancedOptions] = useState(false);
 
+  // 🟢 UPDATED: Added payerId and beneficiaryId to the form state
   const [form, setForm] = useState({
     name: '',
     date: todayIso(),
@@ -254,8 +251,19 @@ function TransactionsPage({ transactions, loading = false, onTransactionDeleted,
     transactionType: 'payment',
     transferToAccountId: '',
     borrowerName: '',
-    personName: ''
+    personName: '',
+    payerId: 'me',
+    beneficiaryId: 'me'
   });
+
+
+  // 🟢 Global Mitosis FAB listener to toggle the pull-up tray
+  useEffect(() => {
+    const handleToggleTray = () => setShowFabMenu(true); 
+    window.addEventListener('open_add_transaction_modal', handleToggleTray);
+    return () => window.removeEventListener('open_add_transaction_modal', handleToggleTray);
+  }, []);
+
 
   // ── Filter state ──────────────────────────────────────────────────────────
   const [filterStartDate, setFilterStartDate] = useState<string>(getFirstDayOfCurrentYearIso());
@@ -535,9 +543,12 @@ function TransactionsPage({ transactions, loading = false, onTransactionDeleted,
       transactionType: type,
       transferToAccountId: '',
       borrowerName: '',
-      personName: ''
+      personName: '',
+      payerId: 'me',       // 🟢 Reset to default
+      beneficiaryId: 'me'  // 🟢 Reset to default
     });
     setReceiptFile(null);
+    setShowAdvancedOptions(false); // 🟢 Collapse the accordion
     setShowTypeModal(false);
 
     if (source === 'top') {
@@ -547,13 +558,27 @@ function TransactionsPage({ transactions, loading = false, onTransactionDeleted,
     setShowForm(true);
   };
 
+
   const closeForm = () => {
     setShowForm(false);
     setEditingTxId(null);
     setFormSource(null);
     setReceiptFile(null);
-    setForm({ name: '', date: todayIso(), amount: '', paymentMethodId: accounts[0]?.id ?? '', transactionType: 'payment', transferToAccountId: '', borrowerName: '', personName: '' });
+    setShowAdvancedOptions(false); // 🟢 Collapse the accordion
+    setForm({ 
+      name: '', 
+      date: todayIso(), 
+      amount: '', 
+      paymentMethodId: accounts[0]?.id ?? '', 
+      transactionType: 'payment', 
+      transferToAccountId: '', 
+      borrowerName: '', 
+      personName: '',
+      payerId: 'me',       // 🟢 Reset to default
+      beneficiaryId: 'me'  // 🟢 Reset to default
+    });
   };
+
 
   const openEditForm = (tx: Transaction) => {
     setEditingTxId(tx.id);
@@ -566,11 +591,18 @@ function TransactionsPage({ transactions, loading = false, onTransactionDeleted,
       transactionType: tx.transaction_type || 'payment',
       transferToAccountId: '',
       borrowerName: tx.borrower_name || '',
-      personName: (tx as any).person_name || ''
+      personName: (tx as any).person_name || '',
+      payerId: (tx as any).payer_id || 'me',             // 🟢 Pre-fill existing data
+      beneficiaryId: (tx as any).beneficiary_id || 'me'  // 🟢 Pre-fill existing data
     });
+    
+    // 🟢 Auto-expand advanced options if this transaction has an IOU context
+    setShowAdvancedOptions(!!((tx as any).payer_id || (tx as any).beneficiary_id));
+    
     setReceiptFile(null);
     setShowForm(true);
   };
+
 
   const executeTransactionSubmit = async () => {
     if (form.transactionType === 'transfer' && transferTab === 'accounts' && !editingTxId) {
@@ -608,6 +640,12 @@ function TransactionsPage({ transactions, loading = false, onTransactionDeleted,
 
     if (!txName || !form.date || !form.amount || !form.paymentMethodId) return;
 
+    // 🟢 NEW: Format the IOU relational data
+    const payloadPayerId = form.payerId === 'me' ? null : form.payerId;
+    const payloadBeneficiaryId = form.beneficiaryId === 'me' ? null : form.beneficiaryId;
+    const payloadIouStatus = (payloadPayerId || payloadBeneficiaryId) ? 'pending' : 'none';
+
+
     let finalAmount = parseFloat(form.amount);
     if (form.transactionType === 'cash_in') {
       finalAmount = -Math.abs(finalAmount);
@@ -627,8 +665,12 @@ function TransactionsPage({ transactions, loading = false, onTransactionDeleted,
             payment_method_id: form.paymentMethodId,
             transaction_type: form.transactionType,
             borrower_name: form.transactionType === 'loan' ? form.borrowerName || null : null,
-            person_name: (form.transactionType === 'transfer' && transferTab === 'friends') ? form.personName || null : null
+            person_name: (form.transactionType === 'transfer' && transferTab === 'friends') ? form.personName || null : null,
+            payer_id: payloadPayerId,
+            beneficiary_id: payloadBeneficiaryId,
+            iou_status: payloadIouStatus
           };
+          
 
           const { error } = await updateTransaction(editingTxId, updates);
           if (error) {
@@ -1219,6 +1261,56 @@ function TransactionsPage({ transactions, loading = false, onTransactionDeleted,
                       )}
                     </div>
                   )}
+
+                  {/* 🟢 NEW: Shared & IOU Options (Progressive Disclosure) */}
+                  {(form.transactionType === 'payment' || form.transactionType === 'withdraw' || form.transactionType === 'cash_in') && (
+                    <div className="mt-4 border-t-2 border-gray-200 dark:border-gray-800 pt-4 mb-4">
+                      <button
+                        type="button"
+                        onClick={() => setShowAdvancedOptions(!showAdvancedOptions)}
+                        className="text-xs font-black uppercase tracking-widest text-gray-500 hover:text-black dark:hover:text-white flex items-center gap-1 transition-colors"
+                      >
+                        {showAdvancedOptions ? '− Hide' : '+ Show'} Shared & IOU Options
+                      </button>
+
+                      {showAdvancedOptions && (
+                        <div className="mt-3 p-3 bg-gray-50 dark:bg-gray-800/50 border-2 border-gray-200 dark:border-gray-700 rounded-xl space-y-4 animate-in fade-in slide-in-from-top-2">
+                          
+                          {/* WHO PAID? */}
+                          <div className="flex flex-col gap-1">
+                            <label className="text-[10px] font-black uppercase text-gray-400">Who paid for this?</label>
+                            <select
+                              value={form.payerId}
+                              onChange={(e) => setForm(f => ({ ...f, payerId: e.target.value }))}
+                              className={`p-2 border-2 border-black dark:border-gray-700 rounded-lg text-sm font-bold bg-white dark:bg-gray-900 outline-none focus:ring-offset-2 ${getAccentClasses('ring')} transition-all`}
+                            >
+                              <option value="me">I paid (My Account/Cash)</option>
+                              {selectableContacts.map(c => (
+                                <option key={`payer-${c.id}`} value={c.id}>{c.name} paid (Proxy Pay)</option>
+                              ))}
+                            </select>
+                          </div>
+
+                          {/* WHO WAS IT FOR? */}
+                          <div className="flex flex-col gap-1">
+                            <label className="text-[10px] font-black uppercase text-gray-400">Who is this expense for?</label>
+                            <select
+                              value={form.beneficiaryId}
+                              onChange={(e) => setForm(f => ({ ...f, beneficiaryId: e.target.value }))}
+                              className={`p-2 border-2 border-black dark:border-gray-700 rounded-lg text-sm font-bold bg-white dark:bg-gray-900 outline-none focus:ring-offset-2 ${getAccentClasses('ring')} transition-all`}
+                            >
+                              <option value="me">Just Me</option>
+                              {selectableContacts.map(c => (
+                                <option key={`ben-${c.id}`} value={c.id}>{c.name} (They owe me)</option>
+                              ))}
+                              <option value="split" disabled>Split Bill (Coming Soon)</option>
+                            </select>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
 
                   {form.transactionType === 'payment' && (
                     <div>

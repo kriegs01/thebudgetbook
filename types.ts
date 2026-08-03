@@ -117,7 +117,13 @@ export interface Transaction {
   borrower_name?: string | null;
   receiptUrl?: string | null;
   person_name?: string | null;
+  isreconciled?: boolean;
+  payer_id?: string | null;
+  beneficiary_id?: string | null;
+  iou_status?: 'none' | 'pending' | 'settled';
+  split_details?: Record<string, number> | null; 
 }
+
 
 export interface CategorizedSetupItem {
   id: string;

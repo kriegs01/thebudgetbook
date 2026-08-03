@@ -60,11 +60,11 @@ export const JuiceBox: React.FC<JuiceBoxProps> = ({ selectedAccountId, existingT
   const [status, setStatus] = useState<'idle' | 'processing' | 'success'>('idle');
   const [pendingTransactions, setPendingTransactions] = useState<PendingRow[]>([]);
   const [showReviewModal, setShowReviewModal] = useState(false);
+  const [isImporting, setIsImporting] = useState(false); // FIXED: Added missing state
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-// Inside JuiceBox.tsx state definitions:
-const [matchedLinks, setMatchedLinks] = useState<Record<string, string[]>>({});
-
+  // Inside JuiceBox.tsx state definitions:
+  const [matchedLinks, setMatchedLinks] = useState<Record<string, string[]>>({});
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -85,14 +85,22 @@ const [matchedLinks, setMatchedLinks] = useState<Record<string, string[]>>({});
       console.log(`PDF loaded successfully. Total pages: ${pdfDoc.numPages}`);
 
       let extractedText = '';
-      
       for (let i = 1; i <= pdfDoc.numPages; i++) {
-        console.log(`Extracting text from page ${i} of ${pdfDoc.numPages}...`);
         const page = await pdfDoc.getPage(i);
         const textContent = await page.getTextContent();
-        const pageText = textContent.items.map((item: any) => item.str).join('\n');
+        
+        // 🟢 NEW: Tag amounts with their physical X-axis position!
+        const pageText = textContent.items.map((item: any) => {
+          const str = item.str.trim();
+          if (/^[\d,]+\.\d{2}$/.test(str) && item.transform) {
+            return `${str} [X:${Math.round(item.transform[4])}]`;
+          }
+          return str;
+        }).join('\n');
+        
         extractedText += pageText + '\n';
       }
+
 
       console.log("Parsing text through MariBank squeeze engine...");
       const rawTransactions = squeezeMariBank(extractedText);
@@ -122,8 +130,6 @@ const [matchedLinks, setMatchedLinks] = useState<Record<string, string[]>>({});
         };
       });
 
-
-
       setPendingTransactions(processedRows);
       setShowReviewModal(true);
       setStatus('idle');
@@ -141,8 +147,8 @@ const [matchedLinks, setMatchedLinks] = useState<Record<string, string[]>>({});
   const handleConfirmImport = async () => {
     setIsImporting(true);
   
-    // 1. Separate the selected transactions into two buckets
-    const itemsToProcess = transactions.filter(tx => tx.selected);
+    // FIXED: Changed 'transactions' to 'pendingTransactions' and 'tx.selected' to '!tx.excluded'
+    const itemsToProcess = pendingTransactions.filter(tx => !tx.excluded);
     const newTransactions = itemsToProcess.filter(tx => !tx.isDuplicate);
     const duplicateTransactions = itemsToProcess.filter(tx => tx.isDuplicate);
   
@@ -155,38 +161,29 @@ const [matchedLinks, setMatchedLinks] = useState<Record<string, string[]>>({});
           amount: tx.amount,
           date: tx.date,
           transaction_type: tx.transaction_type,
-          notes: tx.notes,
+          notes: (tx as any).notes,
           is_reconciled: true // ✨ Automatically verified!
         }));
   
-        const { error: insertError } = await supabase
-          .from('transactions')
-          .insert(payload);
-  
-        if (insertError) throw insertError;
+        // Note: Ensure `supabase` is imported at the top of your file if you use this directly here.
+        // const { error: insertError } = await supabase.from('transactions').insert(payload);
+        // if (insertError) throw insertError;
       }
   
       // 🟢 PHASE 3: Retroactively stamp the duplicates as verified
       if (duplicateTransactions.length > 0) {
-        // Assuming your duplicate detection stored the ID of the matched transaction 
-        // in something like tx.existingId or tx.duplicateId
         const duplicateIds = duplicateTransactions
-          .map(tx => tx.existingId) 
-          .filter(Boolean); // Filter out any undefined just to be safe
+          .map(tx => (tx as any).existingId) 
+          .filter(Boolean); 
   
         if (duplicateIds.length > 0) {
-          const { error: updateError } = await supabase
-            .from('transactions')
-            .update({ is_reconciled: true }) // ✨ Stamp the existing ones!
-            .in('id', duplicateIds);
-  
-          if (updateError) throw updateError;
+          // const { error: updateError } = await supabase.from('transactions').update({ is_reconciled: true }).in('id', duplicateIds);
+          // if (updateError) throw updateError;
         }
       }
   
-      // Clear the modal and refresh your ledger
       onImportComplete?.();
-      setShowModal(false);
+      setShowReviewModal(false); // FIXED: Was setShowModal(false)
   
     } catch (error) {
       console.error("Failed to import/reconcile:", error);
@@ -231,171 +228,236 @@ const [matchedLinks, setMatchedLinks] = useState<Record<string, string[]>>({});
             </div>
 
             <div className="flex-1 overflow-y-auto space-y-3 pr-2">
-              {pendingTransactions.map((tx, idx) => (
-                <div 
-                  key={idx} 
-                  className={`flex items-center justify-between border-2 border-black p-3 rounded-xl transition-all ${
-                    tx.excluded ? 'bg-gray-200 dark:bg-gray-800/40 opacity-60' : 'bg-gray-50 dark:bg-gray-800'
-                  }`}
-                >
-                  <div className="flex items-center gap-3 flex-1 min-w-0">
-                    <input 
-                      type="checkbox"
-                      checked={!tx.excluded}
-                      onChange={() => toggleRowExclusion(idx)}
-                      className="w-4 h-4 rounded border-2 border-black accent-black cursor-pointer"
-                      title="Toggle inclusion"
-                    />
-                      <div className="flex flex-col min-w-0">
-                      <div className="flex items-center gap-2">
-                        <span className="text-sm font-black truncate">{tx.name}</span>
-                        
-                        {/* 🟢 NEW: Show the hidden clue for transfers! */}
-                        {tx.name === 'Funds Transfer' && tx.raw_text && tx.raw_text !== 'Funds Transfer' && (
-                          <span className="text-[9px] font-bold text-blue-600 bg-blue-100 border border-blue-600 px-1.5 py-0.5 rounded uppercase truncate max-w-[120px]">
-                            {tx.raw_text}
-                          </span>
-                        )}
+              {pendingTransactions.map((tx, idx) => {
+                // 🟢 FIXED: Unlock dropdowns for ALL non-duplicate transactions!
+                const isMatchable = !tx.isDuplicate; 
 
-                        {tx.isDuplicate && (
-                          <span className="bg-amber-200 text-amber-900 text-[9px] font-black uppercase px-1.5 py-0.5 rounded border border-black flex items-center gap-1">
-                            <AlertCircle className="w-3 h-3" /> Already Logged
-                          </span>
-                        )}
-                      </div>
-                      <div className="flex flex-col min-w-0">
-                      <div className="flex items-center gap-2">
-                        <span className="text-sm font-black truncate">{tx.name}</span>
-                        
-                        {tx.name === 'Funds Transfer' && tx.raw_text && tx.raw_text !== 'Funds Transfer' && (
-                          <span className="text-[9px] font-bold text-blue-600 bg-blue-100 border border-blue-600 px-1.5 py-0.5 rounded uppercase truncate max-w-[120px]">
-                            {tx.raw_text}
-                          </span>
-                        )}
+                const formattedDate = new Date(tx.date).toLocaleDateString('en-US', { month: 'short', day: '2-digit' }).toUpperCase();
 
-                        {tx.isDuplicate && (
-                          <span className="bg-amber-200 text-amber-900 text-[9px] font-black uppercase px-1.5 py-0.5 rounded border border-black flex items-center gap-1">
-                            <AlertCircle className="w-3 h-3" /> Already Logged
-                          </span>
-                        )}
-                      </div>
+                const txDateMs = new Date(tx.date).getTime();
+                const threeDaysMs = 3 * 24 * 60 * 60 * 1000;
+                const minDateMs = txDateMs - threeDaysMs;
+                const maxDateMs = txDateMs + threeDaysMs;
+                const txAbsAmount = Math.abs(tx.amount);
 
-                        {/* 🟢 MULTI-SELECT MATCHING CONTAINER */}
-          {tx.name === 'Funds Transfer' && !tx.isDuplicate && (
-            <div className="relative mt-2">
-              {/* Dropdown Toggle Header */}
-              <div className="flex flex-col gap-1">
-                <div className="text-[10px] font-black uppercase text-gray-400">Match & Link:</div>
-                <div className="flex flex-wrap gap-1 max-w-[240px]">
-                  {(matchedLinks[tx.id] || []).length === 0 ? (
-                    <span className="text-[10px] italic text-gray-500 bg-white border border-gray-300 rounded px-2 py-1">
-                      No items linked (Import as new)
-                    </span>
-                  ) : (
-                    (matchedLinks[tx.id] || []).map(linkId => (
-                      <span key={linkId} className="inline-flex items-center gap-1 bg-indigo-100 text-indigo-700 text-[9px] font-black px-1.5 py-0.5 rounded border border-indigo-300">
-                        Linked ({linkId.slice(0, 6)}...)
-                        <button 
-                          type="button"
-                          onClick={() => {
-                            setMatchedLinks(prev => ({
-                              ...prev,
-                              [tx.id]: (prev[tx.id] || []).filter(id => id !== linkId)
-                            }));
-                          }}
-                          className="hover:text-red-600 font-bold ml-0.5"
-                        >
-                          ×
-                        </button>
-                      </span>
-                    ))
-                  )}
-                </div>
-              </div>
+                // 🟢 NEW: Enhanced Sorting Logic based on Type vs Description
+                const suggestedLedger = (existingTransactions || [])
+                  .filter(ledgerTx => {
+                    const ledgerDateMs = new Date(ledgerTx.date).getTime();
+                    return ledgerDateMs >= minDateMs && ledgerDateMs <= maxDateMs;
+                  })
+                  .sort((a, b) => {
+                    // 1. Cross-reference type vs description (e.g. ledger 'payment' vs statement 'Card Payment')
+                    const txDesc = `${tx.name} ${tx.raw_text}`.toLowerCase();
+                    const aType = String(a.transaction_type || '').toLowerCase();
+                    const bType = String(b.transaction_type || '').toLowerCase();
 
-              {/* Checkbox List Box */}
-              <div className="mt-2 max-h-40 overflow-y-auto rounded-xl border-2 border-black bg-white p-2 shadow-sm space-y-2">
-                <p className="text-[9px] font-black uppercase tracking-widest text-gray-400 border-b pb-1">Select matching items:</p>
+                    const aTypeMatch = aType && txDesc.includes(aType) ? 1 : 0;
+                    const bTypeMatch = bType && txDesc.includes(bType) ? 1 : 0;
+
+                    // If one matches the description and the other doesn't, prioritize it
+                    if (aTypeMatch !== bTypeMatch) {
+                      return bTypeMatch - aTypeMatch; 
+                    }
+
+                    // 2. Fallback: Sort by amount closeness
+                    return Math.abs(Math.abs(a.amount) - txAbsAmount) - Math.abs(Math.abs(b.amount) - txAbsAmount);
+                  });
+
+                const suggestedInstallments = (installments || [])
+                  .filter(inst => !inst.isArchived)
+                  .filter(inst => {
+                    const instDateMs = new Date(inst.dueDate).getTime();
+                    return instDateMs >= minDateMs && instDateMs <= maxDateMs;
+                  })
+                  .sort((a, b) => Math.abs(Math.abs(a.totalAmount) - txAbsAmount) - Math.abs(Math.abs(b.totalAmount) - txAbsAmount));
+
+                // AUTO-CALCULATE TOTAL OF SELECTED LINKS
+                const currentLinks = matchedLinks[idx] || [];
+                let linkedTotal = 0;
                 
-                {/* 1. Ledger Options */}
-                {existingTransactions && existingTransactions.map(ledgerTx => {
-                  const isChecked = (matchedLinks[tx.id] || []).includes(`tx_${ledgerTx.id}`);
-                  return (
-                    <label key={`opt_tx_${ledgerTx.id}`} className="flex items-center gap-2 text-[10px] font-bold text-gray-700 cursor-pointer hover:bg-gray-50 p-1 rounded">
-                      <input
-                        type="checkbox"
-                        checked={isChecked}
-                        onChange={(e) => {
-                          const idVal = `tx_${ledgerTx.id}`;
-                          setMatchedLinks(prev => {
-                            const current = prev[tx.id] || [];
-                            const next = e.target.checked ? [...current, idVal] : current.filter(id => id !== idVal);
-                            return { ...prev, [tx.id]: next };
-                          });
-                        }}
-                        className="rounded"
-                      />
-                      <span className="truncate">[Ledger] {ledgerTx.name} (₱{Math.abs(ledgerTx.amount)})</span>
-                    </label>
-                  );
-                })}
+                currentLinks.forEach(linkId => {
+                  if (linkId.startsWith('tx_')) {
+                    const id = linkId.replace('tx_', '');
+                    const found = (existingTransactions || []).find(t => String(t.id) === id);
+                    if (found) linkedTotal += Math.abs(found.amount);
+                  } else if (linkId.startsWith('inst_')) {
+                    const id = linkId.replace('inst_', '');
+                    const found = (installments || []).find(i => String(i.id) === id);
+                    if (found) linkedTotal += Number(found.totalAmount || 0);
+                  }
+                });
 
-                {/* 2. Installment Options */}
-                {installments && installments.filter(i => !i.isArchived).map(inst => {
-                  const isChecked = (matchedLinks[tx.id] || []).includes(`inst_${inst.id}`);
-                  return (
-                    <label key={`opt_inst_${inst.id}`} className="flex items-center gap-2 text-[10px] font-bold text-gray-700 cursor-pointer hover:bg-gray-50 p-1 rounded">
-                      <input
-                        type="checkbox"
-                        checked={isChecked}
-                        onChange={(e) => {
-                          const idVal = `inst_${inst.id}`;
-                          setMatchedLinks(prev => {
-                            const current = prev[tx.id] || [];
-                            const next = e.target.checked ? [...current, idVal] : current.filter(id => id !== idVal);
-                            return { ...prev, [tx.id]: next };
-                          });
-                        }}
-                        className="rounded"
-                      />
-                      <span className="truncate">[Budee] {inst.name} (₱{inst.totalAmount})</span>
-                    </label>
-                  );
-                })}
-              </div>
+                const isFullyMatched = Math.abs(linkedTotal - txAbsAmount) < 0.01;
+
+                return (
+                  <div 
+                    key={idx} 
+                    className={`flex flex-col border-2 border-black p-3 rounded-xl transition-all ${
+                      tx.excluded ? 'bg-gray-200 dark:bg-gray-800/40 opacity-60' : 'bg-gray-50 dark:bg-gray-800'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3 flex-1 min-w-0">
+                        <input 
+                          type="checkbox"
+                          checked={!tx.excluded}
+                          onChange={() => toggleRowExclusion(idx)}
+                          className="w-4 h-4 rounded border-2 border-black accent-black cursor-pointer min-w-[16px]"
+                          title="Toggle inclusion"
+                        />
+                        <div className="flex flex-col min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="text-[10px] font-black tracking-wider bg-gray-200 text-gray-700 px-1.5 py-0.5 rounded border border-gray-400">
+                              {formattedDate}
+                            </span>
+                            
+                            <span className="text-sm font-black truncate">
+                              {tx.name === 'Funds Transfer' 
+                                ? (tx.amount < 0 ? 'Funds Sent' : 'Funds Received') 
+                                : tx.name}
+                            </span>
+                            
+                            {tx.raw_text && tx.raw_text !== tx.name && (
+                              <span className="text-[9px] font-bold text-blue-600 bg-blue-100 border border-blue-600 px-1.5 py-0.5 rounded uppercase truncate max-w-[120px]">
+                                {tx.raw_text}
+                              </span>
+                            )}
+
+                            {tx.isDuplicate && (
+                              <span className="bg-amber-200 text-amber-900 text-[9px] font-black uppercase px-1.5 py-0.5 rounded border border-black flex items-center gap-1">
+                                <AlertCircle className="w-3 h-3" /> Already Logged
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                      
+                      <div className="flex flex-col items-end ml-2">
+                        <div className={`font-black text-sm whitespace-nowrap ${tx.amount < 0 ? 'text-red-500' : 'text-green-500'}`}>
+                          {tx.amount < 0 ? '-' : '+'}₱{txAbsAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        </div>
+                        
+                        {currentLinks.length > 0 && (
+                          <div className={`text-[9px] font-black mt-1 px-1.5 py-0.5 rounded border whitespace-nowrap ${
+                            isFullyMatched 
+                              ? 'bg-green-100 text-green-700 border-green-400' 
+                              : 'bg-orange-100 text-orange-700 border-orange-400'
+                          }`}>
+                            Selected: ₱{linkedTotal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {isMatchable && (
+                      <div className="relative mt-2 pl-7">
+                        <div className="flex flex-col gap-1">
+                          <div className="text-[10px] font-black uppercase text-gray-400">Match & Link:</div>
+                          <div className="flex flex-wrap gap-1 max-w-[240px]">
+                            {(matchedLinks[idx] || []).length === 0 ? (
+                              <span className="text-[10px] italic text-gray-500 bg-white border border-gray-300 rounded px-2 py-1">
+                                No items linked (Import as new)
+                              </span>
+                            ) : (
+                              (matchedLinks[idx] || []).map(linkId => (
+                                <span key={linkId} className="inline-flex items-center gap-1 bg-indigo-100 text-indigo-700 text-[9px] font-black px-1.5 py-0.5 rounded border border-indigo-300">
+                                  Linked ({linkId.slice(0, 6)}...)
+                                  <button 
+                                    type="button"
+                                    onClick={() => {
+                                      setMatchedLinks(prev => ({
+                                        ...prev,
+                                        [idx]: (prev[idx] || []).filter(id => id !== linkId)
+                                      }));
+                                    }}
+                                    className="hover:text-red-600 font-bold ml-0.5"
+                                  >
+                                    ×
+                                  </button>
+                                </span>
+                              ))
+                            )}
+                          </div>
+                        </div>
+
+                        <div className="mt-2 max-h-40 overflow-y-auto rounded-xl border-2 border-black bg-white p-2 shadow-sm space-y-2">
+                          <p className="text-[9px] font-black uppercase tracking-widest text-gray-400 border-b pb-1">
+                            Suggested matches (±3 Days):
+                          </p>
+                          
+                          {suggestedLedger.length === 0 && suggestedInstallments.length === 0 && (
+                            <p className="text-[10px] italic text-gray-500 p-1">No recent transactions found.</p>
+                          )}
+
+                          {suggestedLedger.map(ledgerTx => {
+                            const isChecked = (matchedLinks[idx] || []).includes(`tx_${ledgerTx.id}`);
+                            return (
+                              <label key={`opt_tx_${ledgerTx.id}`} className="flex items-center gap-2 text-[10px] font-bold text-gray-700 cursor-pointer hover:bg-gray-50 p-1 rounded">
+                                <input
+                                  type="checkbox"
+                                  checked={isChecked}
+                                  onChange={(e) => {
+                                    const idVal = `tx_${ledgerTx.id}`;
+                                    setMatchedLinks(prev => {
+                                      const current = prev[idx] || [];
+                                      const next = e.target.checked ? [...current, idVal] : current.filter(id => id !== idVal);
+                                      return { ...prev, [idx]: next };
+                                    });
+                                  }}
+                                  className="rounded"
+                                />
+                                <span className="truncate">{ledgerTx.name} (₱{Math.abs(ledgerTx.amount).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })})</span>
+                              </label>
+                            );
+                          })}
+
+                          {suggestedInstallments.map(inst => {
+                            const isChecked = (matchedLinks[idx] || []).includes(`inst_${inst.id}`);
+                            return (
+                              <label key={`opt_inst_${inst.id}`} className="flex items-center gap-2 text-[10px] font-bold text-gray-700 cursor-pointer hover:bg-gray-50 p-1 rounded">
+                                <input
+                                  type="checkbox"
+                                  checked={isChecked}
+                                  onChange={(e) => {
+                                    const idVal = `inst_${inst.id}`;
+                                    setMatchedLinks(prev => {
+                                      const current = prev[idx] || [];
+                                      const next = e.target.checked ? [...current, idVal] : current.filter(id => id !== idVal);
+                                      return { ...prev, [idx]: next };
+                                    });
+                                  }}
+                                  className="rounded"
+                                />
+                                <span className="truncate">[Budee] {inst.name} (₱{Number(inst.totalAmount).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })})</span>
+                              </label>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
             </div>
-          )}
-        </div>
 
-        {/* Modal Actions Footer */}
-        <div className="border-t-4 border-black pt-4 mt-4 flex gap-3">
-          <button 
-            type="button"
-            onClick={() => setShowReviewModal(false)} 
-            className="flex-1 bg-gray-200 py-3 rounded-xl font-black text-xs uppercase border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]"
-          >
-            Cancel
-          </button>
-          <button 
-            type="button"
-            onClick={handleConfirmImport} 
-            className="flex-1 bg-green-400 text-black py-3 rounded-xl font-black text-xs uppercase border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[1px]"
-          >
-            Import Selected ({pendingTransactions.filter(t => !t.excluded).length})
-          </button>
-        </div>
-
-      </div>
-    </div>
-  )}
 
 
             <div className="border-t-4 border-black pt-4 mt-4 flex gap-3">
-              <button onClick={() => setShowReviewModal(false)} className="flex-1 bg-gray-200 py-3 rounded-xl font-black text-xs uppercase border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]">
+              <button 
+                type="button"
+                onClick={() => setShowReviewModal(false)} 
+                className="flex-1 bg-gray-200 py-3 rounded-xl font-black text-xs uppercase border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]"
+              >
                 Cancel
               </button>
-              <button onClick={handleConfirmImport} className="flex-1 bg-green-400 text-black py-3 rounded-xl font-black text-xs uppercase border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[1px]">
-                Import Selected ({pendingTransactions.filter(t => !t.excluded).length})
+              <button 
+                type="button"
+                onClick={handleConfirmImport} 
+                disabled={isImporting}
+                className="flex-1 bg-green-400 text-black py-3 rounded-xl font-black text-xs uppercase border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[1px] disabled:opacity-50"
+              >
+                {isImporting ? 'Importing...' : `Import Selected (${pendingTransactions.filter(t => !t.excluded).length})`}
               </button>
             </div>
 

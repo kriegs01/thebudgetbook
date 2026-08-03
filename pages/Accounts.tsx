@@ -3,7 +3,7 @@ import jsQR from 'jsqr';
 import { JuiceBox } from '../src/components/JuiceBox'; // 🧃 Import your retro sticker component
 import { Link } from 'react-router-dom';
 import { PinProtectedAction } from '../src/components/PinProtectedAction';
-import { Account, AccountClassification, Installments } from '../types';
+import { Account, AccountClassification, Installment, Transaction } from '../types';
 import { supabase } from '../src/utils/supabaseClient';
 import {
   Plus,
@@ -15,7 +15,8 @@ import {
   FileText,
   X,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  ShieldCheck
 } from 'lucide-react';
 import { getDueDayForDisplay, ordinalSuffix } from '../src/utils/billingCycles';
 import { useTheme } from '../src/contexts/ThemeContext';
@@ -25,6 +26,7 @@ import useMediaQuery from '../src/hooks/useMediaQuery';
 interface AccountsProps {
   accounts: Account[];
   installments: Installment[];
+  transactions: Transaction[]; // 🟢 ADD THIS
   onAdd: (a: Account) => Promise<void>;
   onDelete?: (id: string) => Promise<void>;
   onEdit?: (a: Account) => Promise<void>;
@@ -33,6 +35,7 @@ interface AccountsProps {
   error?: string | null;
 }
 
+
 const monthNames = [
   'January','February','March','April','May','June','July','August','September','October','November','December'
 ];
@@ -40,7 +43,7 @@ const monthNames = [
 const FAKE_DATE_PREFIX = '2000-01-';
 
 {/* TO: */}
-const Accounts: React.FC<AccountsProps> = ({ accounts, installments = [], onAdd, onDelete, onEdit, onDeactivate, loading = false, error = null }) => {
+const Accounts: React.FC<AccountsProps> = ({ accounts, installments = [], transactions = [], onAdd, onDelete, onEdit, onDeactivate, loading = false, error = null }) => {
   const { getAccentClasses } = useTheme();
   const isMobile = useMediaQuery('(max-width: 767px)');
   const [showModal, setShowModal] = useState(false);
@@ -465,7 +468,10 @@ const Accounts: React.FC<AccountsProps> = ({ accounts, installments = [], onAdd,
           {/* Note: If you use a global button here, you might want your JuiceBox component 
               to include an account dropdown selector so the user can choose which account 
               the statement belongs to! */}
-          <JuiceBox selectedAccountId={activeTab === 'Debit' ? debitAccounts[0]?.id : creditAccounts[0]?.id} />
+          <JuiceBox selectedAccountId={activeTab === 'Debit' ? debitAccounts[0]?.id : creditAccounts[0]?.id} 
+          installments={installments}
+          existingTransactions={transactions}
+          />
         </div>
 
         {debitAccounts.length === 0 && creditAccounts.length === 0 && (
