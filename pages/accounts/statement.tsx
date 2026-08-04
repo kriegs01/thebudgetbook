@@ -108,57 +108,86 @@ const StatementPage: React.FC<StatementPageProps> = ({ accounts, installments = 
           transaction_type: t.transaction_type ?? null
         }));
         
-                // 🟢 NEW: Track rolling balance across cycles
-                let accumulatedRollover = 0;
+                        // 🟢 NEW: Track rolling balance across cycles
+        let accumulatedRollover = 0;
 
-                // Group transactions by cycle
-                const billingCycles: BillingCycle[] = cycleData.map((cycle, index) => {
-                  const cycleTxs = accountTransactions.filter(tx => 
-                    isInCycle(tx, cycle.startDate, cycle.endDate)
-                  );
-                  
-                  // Auto-inject active installments as statement charges
-                  if (installments && installments.length > 0) {
-                    installments.forEach(inst => {
-                      if ((inst.accountId === accountId || inst.linkedAccountId === accountId) && !inst.isArchived) {
-                        let isAfterStart = true;
-                        if (inst.startDate) {
-                           const [year, month] = inst.startDate.split('-');
-                           const start = new Date(Number(year), Number(month) - 1, 1);
-                           if (cycle.endDate < start) isAfterStart = false;
-                        }
-                        if (isAfterStart) {
-                          cycleTxs.push({
-                            id: `auto-inst-${inst.id}-${index}`,
-                            name: `Installment: ${inst.name}`,
-                            date: cycle.startDate.toISOString(),
-                            amount: -inst.monthlyAmount, // Charge
-                            paymentMethodId: accountId,
-                            transaction_type: 'installment_charge'
-                          });
-                        }
-                      }
-                    });
+        // 🟢 NEW: Create a map to track remaining legacy credits for each installment
+        const legacyCredits: Record<string, number> = {};
+        if (installments) {
+          installments.forEach(inst => {
+             // Supports both camelCase and snake_case depending on your TS interface
+             legacyCredits[inst.id] = (inst as any).paidAmount || (inst as any).paid_amount || 0;
+          });
+        }
+
+        // Group transactions by cycle
+        const billingCycles: BillingCycle[] = cycleData.map((cycle, index) => {
+          const cycleTxs = accountTransactions.filter(tx => 
+            isInCycle(tx, cycle.startDate, cycle.endDate)
+          );
+          
+          // Auto-inject active installments as statement charges
+          if (installments && installments.length > 0) {
+            installments.forEach(inst => {
+              if ((inst.accountId === accountId || inst.linkedAccountId === accountId) && !inst.isArchived) {
+                let isAfterStart = true;
+                if (inst.startDate) {
+                   const [year, month] = inst.startDate.split('-');
+                   const start = new Date(Number(year), Number(month) - 1, 1);
+                   if (cycle.endDate < start) isAfterStart = false;
+                }
+                if (isAfterStart) {
+                  // Standard Monthly Charge
+                  cycleTxs.push({
+                    id: `auto-inst-${inst.id}-${index}`,
+                    name: `Installment: ${inst.name}`,
+                    date: cycle.startDate.toISOString(),
+                    amount: -inst.monthlyAmount, // Charge
+                    paymentMethodId: accountId,
+                    transaction_type: 'installment_charge'
+                  });
+
+                  // 🟢 NEW: Apply legacy credit to immediately offset the charge!
+                  if (legacyCredits[inst.id] > 0) {
+                     // Max out at the monthly amount, or whatever credit is left
+                     const creditToApply = Math.min(legacyCredits[inst.id], inst.monthlyAmount);
+                     
+                     cycleTxs.push({
+                        id: `legacy-credit-${inst.id}-${index}`,
+                        name: `Legacy Payment Recognized`,
+                        date: cycle.startDate.toISOString(),
+                        amount: creditToApply, // Positive amount (payment)
+                        paymentMethodId: accountId,
+                        transaction_type: 'credit_payment'
+                     });
+
+                     // Deduct the applied amount from the installment's remaining credit pool
+                     legacyCredits[inst.id] -= creditToApply;
                   }
-        
-                  // 🟢 NEW: Inject Previous Unpaid Balance
-                  if (accumulatedRollover > 0) {
-                    cycleTxs.unshift({
-                      id: `rollover-${index}`,
-                      name: `Previous Balance Carried Over`,
-                      date: cycle.startDate.toISOString(),
-                      amount: -accumulatedRollover, // Charge
-                      paymentMethodId: accountId,
-                      transaction_type: 'rollover_carryover'
-                    });
-                  }
-        
-                  // 🟢 NEW: Calculate this cycle's net flow to see what rolls over to next month
-                  const cycleCharges = cycleTxs.filter(tx => tx.transaction_type !== 'credit_payment' && tx.amount < 0).reduce((sum, tx) => sum + Math.abs(tx.amount), 0);
-                  const cyclePayments = cycleTxs.filter(tx => tx.transaction_type === 'credit_payment' || tx.amount > 0).reduce((sum, tx) => sum + Math.abs(tx.amount), 0);
-                  
-                  // What remains unpaid becomes the rollover for the NEXT cycle in the loop
-                  accumulatedRollover = Math.max(0, cycleCharges - cyclePayments);
+                }
+              }
+            });
+          }
+
+          // 🟢 NEW: Inject Previous Unpaid Balance
+          if (accumulatedRollover > 0) {
+            cycleTxs.unshift({
+              id: `rollover-${index}`,
+              name: `Previous Balance Carried Over`,
+              date: cycle.startDate.toISOString(),
+              amount: -accumulatedRollover, // Charge
+              paymentMethodId: accountId,
+              transaction_type: 'rollover_carryover'
+            });
+          }
+
+          // 🟢 NEW: Calculate this cycle's net flow to see what rolls over to next month
+          const cycleCharges = cycleTxs.filter(tx => tx.transaction_type !== 'credit_payment' && tx.amount < 0).reduce((sum, tx) => sum + Math.abs(tx.amount), 0);
+          const cyclePayments = cycleTxs.filter(tx => tx.transaction_type === 'credit_payment' || tx.amount > 0).reduce((sum, tx) => sum + Math.abs(tx.amount), 0);
+          
+          // What remains unpaid becomes the rollover for the NEXT cycle in the loop
+          accumulatedRollover = Math.max(0, cycleCharges - cyclePayments);
+
                   
                   return {
                     startDate: cycle.startDate,
