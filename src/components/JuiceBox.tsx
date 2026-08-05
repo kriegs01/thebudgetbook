@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { Loader2, CheckCircle2, X, Trash2, AlertCircle } from 'lucide-react';
 import { supabase } from '../utils/supabaseClient';
 import * as pdfjsLib from 'pdfjs-dist';
@@ -8,6 +8,17 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorker;
 import { squeezeMariBank, StandardTransaction } from '../utils/parsers/maribank';
 import { createTransaction } from '../services/transactionsService';
 import type { Transaction } from '../types';
+import { extractTransactions } from '../utils/parserEngine'; // Adjust path as needed
+
+
+// Define the shape of our Bank data
+interface BankConfig {
+  id: string;
+  name: string;
+  category: string;
+  is_visible: boolean;
+}
+
 
 interface PendingRow extends StandardTransaction {
   isDuplicate: boolean;
@@ -67,6 +78,46 @@ export const JuiceBox: React.FC<JuiceBoxProps> = ({ selectedAccountId, existingT
   // Inside JuiceBox.tsx state definitions:
   const [matchedLinks, setMatchedLinks] = useState<Record<string, string[]>>({});
 
+    // 🟢 JuiceBox Parser State
+    const [selectedBank, setSelectedBank] = useState('');
+    const [file, setFile] = useState<File | null>(null);
+  
+      // 🟢 Dynamic Banks State
+  const [availableBanks, setAvailableBanks] = useState<BankConfig[]>([]);
+  const [isLoadingBanks, setIsLoadingBanks] = useState(true);
+
+  // Fetch visible banks from Supabase
+  useEffect(() => {
+    const fetchBanks = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('supported_banks')
+          .select('*')
+          .eq('is_visible', true); // Only fetch active banks
+
+        if (error) throw error;
+        
+        if (data) {
+          setAvailableBanks(data);
+        }
+      } catch (error) {
+        console.error("Error fetching supported banks from Supabase:", error);
+      } finally {
+        setIsLoadingBanks(false);
+      }
+    };
+
+    fetchBanks();
+  }, []);
+
+  // Group the fetched banks by category for the dropdown
+  const groupedBanks = availableBanks.reduce((acc, bank) => {
+    if (!acc[bank.category]) acc[bank.category] = [];
+    acc[bank.category].push(bank);
+    return acc;
+  }, {} as Record<string, BankConfig[]>);
+
+
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file || !selectedAccountId) {
@@ -103,9 +154,10 @@ export const JuiceBox: React.FC<JuiceBoxProps> = ({ selectedAccountId, existingT
       }
 
 
-      console.log("Parsing text through MariBank squeeze engine...");
-      const rawTransactions = squeezeMariBank(extractedText);
-      console.log(`Successfully parsed ${rawTransactions.length} transactions.`);
+      console.log(`Parsing text through squeeze engine for: ${selectedBank}`);
+const rawTransactions = extractTransactions(selectedBank, extractedText);
+console.log(`Successfully parsed ${rawTransactions.length} transactions.`);
+
 
       if (rawTransactions.length === 0) {
         alert("No transactions found or unrecognized statement format.");
@@ -123,13 +175,16 @@ export const JuiceBox: React.FC<JuiceBoxProps> = ({ selectedAccountId, existingT
         // 🟢 THE FIX: Give every parsed row a permanent, unique fake ID
         const uniqueRowId = tx.id || `pdf_row_${idx}_${Date.now()}`;
 
-        // 1. Check for strict duplicates
-        const isMatch = (existingTransactions || []).some(existing => {
-          const existingDateStr = new Date(existing.date).toISOString().slice(0, 10);
-          return existing.paymentMethodId === selectedAccountId &&
-                 Math.abs(existing.amount) === Math.abs(tx.amount) &&
-                 existingDateStr === txDateStr;
-        });
+                // 1. Check for strict duplicates (CHANGED from .some to .find)
+                const matchedExistingTx = (existingTransactions || []).find(existing => {
+                  const existingDateStr = new Date(existing.date).toISOString().slice(0, 10);
+                  return existing.paymentMethodId === selectedAccountId &&
+                         Math.abs(existing.amount) === Math.abs(tx.amount) &&
+                         existingDateStr === txDateStr;
+                });
+        
+                const isMatch = !!matchedExistingTx; // true if it found a match, false if not
+        
 
         // 2. THE IOU SMART MATCHER
         if (tx.name === 'Funds Transfer' && !isMatch) {
@@ -156,9 +211,10 @@ export const JuiceBox: React.FC<JuiceBoxProps> = ({ selectedAccountId, existingT
 
         return {
           ...tx,
-          id: uniqueRowId, // 🟢 Inject the unique ID into the row data
+          id: uniqueRowId, 
           isDuplicate: isMatch,
           excluded: isMatch,
+          existingId: matchedExistingTx?.id // 🟢 NEW: Saves the DB ID so Phase 3 can update it!
         };
       });
 
@@ -183,27 +239,45 @@ export const JuiceBox: React.FC<JuiceBoxProps> = ({ selectedAccountId, existingT
   const handleConfirmImport = async () => {
     setIsImporting(true);
   
+    // 🟢 1. Grab the user and STOP if it fails
+    const { data: { user } } = await supabase.auth.getUser();
+    
+    if (!user) {
+      alert("Error: Could not verify your user ID. Try refreshing the page.");
+      setIsImporting(false);
+      return;
+    }
+
     const itemsToProcess = pendingTransactions.filter(tx => !tx.excluded);
     const newTransactions = itemsToProcess.filter(tx => !tx.isDuplicate);
     const duplicateTransactions = itemsToProcess.filter(tx => tx.isDuplicate);
+
   
     try {
-      // 🟢 PHASE 2: Insert the new transactions with the shield flag
-      if (newTransactions.length > 0) {
-        const payload = newTransactions.map(tx => ({
-          account_id: selectedAccountId,
-          name: tx.name,
-          amount: tx.amount,
-          date: tx.date,
-          transaction_type: tx.transaction_type,
-          notes: (tx as any).notes,
-          is_reconciled: true // ✨ Automatically verified!
-        }));
-  
-        // Note: Uncomment these when you are ready to actually write to the database!
-        // const { error: insertError } = await supabase.from('transactions').insert(payload);
-        // if (insertError) throw insertError;
-      }
+            // 🟢 PHASE 2: Insert the new transactions
+            if (newTransactions.length > 0) {
+              const payload = newTransactions.map(tx => ({
+                payment_method_id: selectedAccountId,
+                user_id: user.id, // 👈 Notice there is no '?' here anymore
+                name: tx.name,
+                amount: tx.amount,
+                date: tx.date,
+                transaction_type: tx.transaction_type,
+                notes: (tx as any).notes,
+                is_reconciled: true 
+              }));
+        
+              // 🔍 THE LIE DETECTOR: Print the payload before sending
+              console.log("🔍 PAYLOAD READY FOR DATABASE:", payload);
+        
+              const { error: insertError } = await supabase.from('transactions').insert(payload);
+              
+              if (insertError) {
+                console.error("DATABASE REJECTED INSERT:", insertError);
+                throw insertError;
+              }
+            }
+      
   
       // 🟢 PHASE 3: Retroactively stamp the duplicates as verified
       if (duplicateTransactions.length > 0) {
@@ -213,8 +287,8 @@ export const JuiceBox: React.FC<JuiceBoxProps> = ({ selectedAccountId, existingT
   
         if (duplicateIds.length > 0) {
           // Note: Uncomment these when you are ready to actually write to the database!
-          // const { error: updateError } = await supabase.from('transactions').update({ is_reconciled: true }).in('id', duplicateIds);
-          // if (updateError) throw updateError;
+          const { error: updateError } = await supabase.from('transactions').update({ is_reconciled: true }).in('id', duplicateIds);
+           if (updateError) throw updateError;
         }
       }
   
@@ -265,18 +339,62 @@ export const JuiceBox: React.FC<JuiceBoxProps> = ({ selectedAccountId, existingT
 
   return (
     <>
-      <div className="relative group inline-block">
-        <input type="file" accept="application/pdf" className="hidden" ref={fileInputRef} onChange={handleFileChange} />
-        <button
-          onClick={() => fileInputRef.current?.click()}
-          disabled={status === 'processing'}
-          className="flex items-center justify-center gap-2 px-5 py-3 bg-yellow-400 text-black border-4 border-black rounded-xl font-black uppercase tracking-widest text-sm shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] transition-all hover:translate-y-[2px]"
-        >
-          {status === 'idle' && <><span>🧃</span><span>Juice PDF</span></>}
-          {status === 'processing' && <Loader2 className="w-5 h-5 animate-spin text-black" />}
-          {status === 'success' && <CheckCircle2 className="w-5 h-5 text-black" />}
-        </button>
-      </div>
+      
+        {/* 🟢 Step 1: The Bank Selector (Traffic Controller) */}
+        <div className="mb-6">
+          <label className="block text-[10px] sm:text-xs font-black text-gray-500 uppercase tracking-widest mb-2">
+            1. Select Institution
+          </label>
+          <div className="relative">
+            <select 
+              value={selectedBank} 
+              onChange={(e) => setSelectedBank(e.target.value)}
+              disabled={isLoadingBanks}
+              className="w-full appearance-none rounded-2xl border-[3px] sm:border-[4px] border-black bg-white dark:bg-gray-800 px-4 py-3 sm:py-4 text-sm sm:text-lg font-black text-gray-900 dark:text-white outline-none cursor-pointer shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] transition-all disabled:opacity-50"
+            >
+              <option value="" disabled>
+                {isLoadingBanks ? 'Loading available banks...' : 'Choose where this file is from...'}
+              </option>
+              
+              {Object.entries(groupedBanks).map(([category, banks]) => (
+                <optgroup key={category} label={category}>
+                  {banks.map((bank) => (
+                    <option key={bank.id} value={bank.id}>
+                      {bank.name}
+                    </option>
+                  ))}
+                </optgroup>
+              ))}
+            </select>
+            
+            <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none">
+              {isLoadingBanks ? (
+                <div className="w-4 h-4 border-2 border-black border-t-transparent rounded-full animate-spin" />
+              ) : (
+                <span className="text-xl font-black">↓</span>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* 🟢 Step 2: The Upload Button (Disabled until a bank is selected) */}
+        <div className={`relative group inline-block transition-opacity duration-300 ${selectedBank ? 'opacity-100' : 'opacity-50 pointer-events-none'}`}>
+          <label className="block text-[10px] sm:text-xs font-black text-gray-500 uppercase tracking-widest mb-2">
+            2. Upload Statement
+          </label>
+          
+          <input type="file" accept="application/pdf" className="hidden" ref={fileInputRef} onChange={handleFileChange} />
+          
+          <button
+            onClick={() => fileInputRef.current?.click()}
+            disabled={status === 'processing'}
+            className="flex items-center justify-center gap-2 px-5 py-3 bg-yellow-400 text-black border-4 border-black font-black uppercase tracking-widest shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] active:translate-x-[4px] active:translate-y-[4px] active:shadow-none transition-all disabled:opacity-50 rounded-xl"
+          >
+            {status === 'idle' && <><span>🧃</span><span>Juice PDF</span></>}
+            {status === 'processing' && <Loader2 className="w-5 h-5 animate-spin text-black" />}
+            {status === 'success' && <CheckCircle2 className="w-5 h-5 text-black" />}
+          </button>
+        </div>
 
       {showReviewModal && (
         <div className="fixed inset-0 z-[1000] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md">
