@@ -1,5 +1,6 @@
 import React, { useState, useRef } from 'react';
 import { Loader2, CheckCircle2, X, Trash2, AlertCircle } from 'lucide-react';
+import { supabase } from '../utils/supabaseClient';
 import * as pdfjsLib from 'pdfjs-dist';
 import pdfWorker from 'pdfjs-dist/build/pdf.worker.mjs?url';
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorker;
@@ -112,10 +113,17 @@ export const JuiceBox: React.FC<JuiceBoxProps> = ({ selectedAccountId, existingT
         return;
       }
 
-      const processedRows: PendingRow[] = rawTransactions.map(tx => {
+                  // 🟢 NEW: Create a temporary object to hold our smart matches
+      const autoMatchedLinks: Record<string, string[]> = {};
+
+      // 👇 Make sure to add `idx` to the map parameters here!
+      const processedRows: PendingRow[] = rawTransactions.map((tx, idx) => {
         const txDateStr = new Date(tx.date).toISOString().slice(0, 10);
         
-        // 🟢 The (existingTransactions || []) prevents the runtime crash!
+        // 🟢 THE FIX: Give every parsed row a permanent, unique fake ID
+        const uniqueRowId = tx.id || `pdf_row_${idx}_${Date.now()}`;
+
+        // 1. Check for strict duplicates
         const isMatch = (existingTransactions || []).some(existing => {
           const existingDateStr = new Date(existing.date).toISOString().slice(0, 10);
           return existing.paymentMethodId === selectedAccountId &&
@@ -123,13 +131,39 @@ export const JuiceBox: React.FC<JuiceBoxProps> = ({ selectedAccountId, existingT
                  existingDateStr === txDateStr;
         });
 
+        // 2. THE IOU SMART MATCHER
+        if (tx.name === 'Funds Transfer' && !isMatch) {
+          const txAmount = Math.abs(tx.amount);
+          const isIncomingTransfer = tx.amount > 0;
+
+          const smartMatch = (existingTransactions || []).find(ledgerTx => {
+            if ((ledgerTx as any).iou_status !== 'pending') return false;
+            
+            const ledgerAmount = Math.abs(ledgerTx.amount);
+            
+            if (isIncomingTransfer) {
+              return (ledgerTx as any).beneficiary_id && ledgerAmount === txAmount;
+            } else {
+              return (ledgerTx as any).payer_id && ledgerAmount === txAmount;
+            }
+          });
+
+          if (smartMatch) {
+            // 👇 Use our new unique ID here
+            autoMatchedLinks[uniqueRowId] = [`tx_${smartMatch.id}`];
+          }
+        }
+
         return {
           ...tx,
+          id: uniqueRowId, // 🟢 Inject the unique ID into the row data
           isDuplicate: isMatch,
           excluded: isMatch,
         };
       });
 
+      setMatchedLinks(autoMatchedLinks);
+      // 👇 RESTORE THIS MISSING BLOCK 👇
       setPendingTransactions(processedRows);
       setShowReviewModal(true);
       setStatus('idle');
@@ -143,11 +177,12 @@ export const JuiceBox: React.FC<JuiceBoxProps> = ({ selectedAccountId, existingT
       setStatus('idle');
     }
   };
+  // 👆 END OF MISSING BLOCK 👆
+      
 
   const handleConfirmImport = async () => {
     setIsImporting(true);
   
-    // FIXED: Changed 'transactions' to 'pendingTransactions' and 'tx.selected' to '!tx.excluded'
     const itemsToProcess = pendingTransactions.filter(tx => !tx.excluded);
     const newTransactions = itemsToProcess.filter(tx => !tx.isDuplicate);
     const duplicateTransactions = itemsToProcess.filter(tx => tx.isDuplicate);
@@ -165,7 +200,7 @@ export const JuiceBox: React.FC<JuiceBoxProps> = ({ selectedAccountId, existingT
           is_reconciled: true // ✨ Automatically verified!
         }));
   
-        // Note: Ensure `supabase` is imported at the top of your file if you use this directly here.
+        // Note: Uncomment these when you are ready to actually write to the database!
         // const { error: insertError } = await supabase.from('transactions').insert(payload);
         // if (insertError) throw insertError;
       }
@@ -177,13 +212,42 @@ export const JuiceBox: React.FC<JuiceBoxProps> = ({ selectedAccountId, existingT
           .filter(Boolean); 
   
         if (duplicateIds.length > 0) {
+          // Note: Uncomment these when you are ready to actually write to the database!
           // const { error: updateError } = await supabase.from('transactions').update({ is_reconciled: true }).in('id', duplicateIds);
           // if (updateError) throw updateError;
         }
       }
   
+      // 🟢 PHASE 4: Settle any linked IOUs!
+      const linkedTxIds: string[] = [];
+      
+      // FIXED: Loop over the original array to preserve the exact 'idx' used in the UI
+      pendingTransactions.forEach((tx, idx) => {
+        if (!tx.excluded) {
+          const stateKey = tx.id || idx;
+          const links = matchedLinks[stateKey] || [];
+          
+          links.forEach(link => {
+            if (typeof link === 'string' && link.startsWith('tx_')) {
+              linkedTxIds.push(link.replace('tx_', ''));
+            }
+          });
+        }
+      });
+      
+      // If we found any linked IOUs, update their status to settled
+      if (linkedTxIds.length > 0) {
+        // 🚨 IMPORTANT: Make sure 'supabase' is imported at the top of JuiceBox.tsx!
+        const { error: iouError } = await supabase
+          .from('transactions')
+          .update({ iou_status: 'settled' })
+          .in('id', linkedTxIds);
+          
+        if (iouError) throw iouError;
+      }
+
       onImportComplete?.();
-      setShowReviewModal(false); // FIXED: Was setShowModal(false)
+      setShowReviewModal(false); 
   
     } catch (error) {
       console.error("Failed to import/reconcile:", error);
@@ -192,6 +256,7 @@ export const JuiceBox: React.FC<JuiceBoxProps> = ({ selectedAccountId, existingT
       setIsImporting(false);
     }
   };
+
   
 
   const toggleRowExclusion = (index: number) => {
@@ -272,172 +337,169 @@ export const JuiceBox: React.FC<JuiceBoxProps> = ({ selectedAccountId, existingT
                   })
                   .sort((a, b) => Math.abs(Math.abs(a.totalAmount) - txAbsAmount) - Math.abs(Math.abs(b.totalAmount) - txAbsAmount));
 
-                // AUTO-CALCULATE TOTAL OF SELECTED LINKS
-                const currentLinks = matchedLinks[idx] || [];
-                let linkedTotal = 0;
-                
-                currentLinks.forEach(linkId => {
-                  if (linkId.startsWith('tx_')) {
-                    const id = linkId.replace('tx_', '');
-                    const found = (existingTransactions || []).find(t => String(t.id) === id);
-                    if (found) linkedTotal += Math.abs(found.amount);
-                  } else if (linkId.startsWith('inst_')) {
-                    const id = linkId.replace('inst_', '');
-                    const found = (installments || []).find(i => String(i.id) === id);
-                    if (found) linkedTotal += Number(found.totalAmount || 0);
-                  }
-                });
+                    // 1. Establish shared state key for THIS row
+    const stateKey = tx.id || idx;
+    
+    // 2. Pre-calculate the top-level calculator totals
+    const activeLinks = matchedLinks[stateKey] || [];
+    const hasSelection = activeLinks.length > 0;
+    
+    let totalSelected = 0;
+    activeLinks.forEach(linkId => {
+      if (typeof linkId === 'string' && linkId.startsWith('tx_')) {
+        const found = existingTransactions?.find(t => String(t.id) === linkId.replace('tx_', ''));
+        if (found?.amount) totalSelected += Math.abs(found.amount);
+      }
+      if (typeof linkId === 'string' && linkId.startsWith('inst_')) {
+        const found = installments?.find(i => String(i.id) === linkId.replace('inst_', ''));
+        if (found?.totalAmount) totalSelected += Math.abs(found.totalAmount);
+      }
+    });
+    
+    const targetAmount = Math.abs(Number(tx.amount) || 0);
+    const diff = targetAmount - totalSelected;
+    const isIncoming = tx.amount > 0;
 
-                const isFullyMatched = Math.abs(linkedTotal - txAbsAmount) < 0.01;
+    return (
+      <div 
+        key={`row_${stateKey}`} 
+        className={`rounded-lg border p-3 flex flex-col gap-3 transition-colors ${
+          tx.excluded ? 'opacity-50 border-gray-800 bg-gray-900/50' : 'border-gray-700 bg-gray-800/80'
+        }`}
+      >
+        {/* 🟢 TOP ROW: Statement Details & Calculator */}
+        <div className="flex justify-between items-start">
+          
+          <div className="flex items-center gap-3">
+            <input 
+              type="checkbox" 
+              checked={!tx.excluded}
+              onChange={() => toggleRowExclusion(idx)}
+              className="rounded bg-gray-900 border-gray-600"
+            />
+            <span className="bg-white text-gray-900 text-[10px] font-black px-2 py-0.5 rounded tracking-wide uppercase">
+              {new Date(tx.date).toLocaleDateString('en-US', { month: 'short', day: '2-digit' })}
+            </span>
+            <span className="text-sm font-bold text-gray-100">{tx.name}</span>
+            {tx.isDuplicate && (
+              <span className="bg-blue-500/20 text-blue-400 border border-blue-500/30 text-[8px] uppercase tracking-widest px-1.5 py-0.5 rounded">
+                Duplicate
+              </span>
+            )}
+          </div>
 
-                return (
-                  <div 
-                    key={idx} 
-                    className={`flex flex-col border-2 border-black p-3 rounded-xl transition-all ${
-                      tx.excluded ? 'bg-gray-200 dark:bg-gray-800/40 opacity-60' : 'bg-gray-50 dark:bg-gray-800'
-                    }`}
-                  >
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-3 flex-1 min-w-0">
-                        <input 
+          <div className="flex flex-col items-end">
+            <span className={`text-sm font-bold ${isIncoming ? 'text-green-500' : 'text-red-500'}`}>
+              {isIncoming ? '+' : '-'}₱{targetAmount.toFixed(2)}
+            </span>
+            
+            {/* THE TOP-LEVEL CALCULATOR */}
+            {hasSelection && (
+              <div className="flex flex-col items-end text-[9px] font-bold uppercase tracking-wider mt-1">
+                <span className="text-gray-400">Selected: ₱{totalSelected.toFixed(2)}</span>
+                {Math.abs(diff) < 0.01 ? (
+                  <span className="text-green-500">✓ Exact Match</span>
+                ) : diff > 0 ? (
+                  <span className="text-amber-500">₱{diff.toFixed(2)} left</span>
+                ) : (
+                  <span className="text-red-500">Over by ₱{Math.abs(diff).toFixed(2)}</span>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* 🟢 BOTTOM ROW: Match & Link Dropdown */}
+        {!tx.isDuplicate && (
+          <div className="bg-gray-950/50 rounded-md p-2">
+            <div className="text-[9px] font-black uppercase tracking-widest text-gray-500 mb-2">Match & Link:</div>
+            
+            {hasSelection ? (
+               <div className="bg-gray-800 text-gray-300 text-[10px] font-bold px-2 py-1.5 rounded border border-gray-700">
+                 {activeLinks.length} Item(s) Linked
+               </div>
+            ) : (
+               <div className="bg-white text-gray-900 text-[10px] font-bold px-2 py-1.5 rounded italic">
+                 No items linked (Import as new)
+               </div>
+            )}
+
+            {/* SUGGESTED LEDGER LIST */}
+            {suggestedLedger.length > 0 && (
+              <div className="mt-3 bg-white rounded p-2">
+                <div className="text-[8px] text-gray-400 font-bold uppercase tracking-widest mb-2">
+                  Suggested Matches (±3 Days):
+                </div>
+                <div className="flex flex-col gap-1">
+                  {suggestedLedger.map(ledgerTx => {
+                    const idVal = `tx_${ledgerTx.id}`;
+                    const isChecked = activeLinks.includes(idVal);
+                    const isPendingIOU = (ledgerTx as any).iou_status === 'pending';
+                    
+                    let dateStr = '--/--/----';
+                    try {
+                      if (ledgerTx.date) {
+                        const d = new Date(ledgerTx.date);
+                        if (!isNaN(d.getTime())) {
+                          dateStr = d.toLocaleDateString('en-US', { month: 'numeric', day: 'numeric', year: 'numeric' });
+                        }
+                      }
+                    } catch (e) {}
+
+                    const badgeText = isPendingIOU ? 'Pending IOU' : (ledgerTx.transaction_type || 'Ledger');
+                    const badgeColor = isPendingIOU 
+                      ? 'bg-amber-200 text-amber-900 border-amber-400' 
+                      : 'bg-gray-800 text-gray-200 border-gray-700';
+
+                    return (
+                      <div 
+                        key={`opt_${stateKey}_${ledgerTx.id}`}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setMatchedLinks(prev => {
+                            const current = prev[stateKey] || [];
+                            const next = current.includes(idVal)
+                              ? current.filter(id => id !== idVal)
+                              : [...current, idVal];
+                            return { ...prev, [stateKey]: next };
+                          });
+                        }}
+                        className={`flex items-center gap-2 text-[10px] font-bold cursor-pointer p-1.5 rounded transition-colors ${
+                          isPendingIOU 
+                            ? 'bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200' 
+                            : 'text-gray-700 hover:bg-gray-50 border border-transparent'
+                        }`}
+                      >
+                        <input
                           type="checkbox"
-                          checked={!tx.excluded}
-                          onChange={() => toggleRowExclusion(idx)}
-                          className="w-4 h-4 rounded border-2 border-black accent-black cursor-pointer min-w-[16px]"
-                          title="Toggle inclusion"
+                          checked={isChecked}
+                          onChange={() => {}}
+                          className={`rounded pointer-events-none ${isPendingIOU ? 'accent-amber-600' : ''}`}
                         />
-                        <div className="flex flex-col min-w-0">
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <span className="text-[10px] font-black tracking-wider bg-gray-200 text-gray-700 px-1.5 py-0.5 rounded border border-gray-400">
-                              {formattedDate}
-                            </span>
-                            
-                            <span className="text-sm font-black truncate">
-                              {tx.name === 'Funds Transfer' 
-                                ? (tx.amount < 0 ? 'Funds Sent' : 'Funds Received') 
-                                : tx.name}
-                            </span>
-                            
-                            {tx.raw_text && tx.raw_text !== tx.name && (
-                              <span className="text-[9px] font-bold text-blue-600 bg-blue-100 border border-blue-600 px-1.5 py-0.5 rounded uppercase truncate max-w-[120px]">
-                                {tx.raw_text}
-                              </span>
-                            )}
-
-                            {tx.isDuplicate && (
-                              <span className="bg-amber-200 text-amber-900 text-[9px] font-black uppercase px-1.5 py-0.5 rounded border border-black flex items-center gap-1">
-                                <AlertCircle className="w-3 h-3" /> Already Logged
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                      
-                      <div className="flex flex-col items-end ml-2">
-                        <div className={`font-black text-sm whitespace-nowrap ${tx.amount < 0 ? 'text-red-500' : 'text-green-500'}`}>
-                          {tx.amount < 0 ? '-' : '+'}₱{txAbsAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                        </div>
                         
-                        {currentLinks.length > 0 && (
-                          <div className={`text-[9px] font-black mt-1 px-1.5 py-0.5 rounded border whitespace-nowrap ${
-                            isFullyMatched 
-                              ? 'bg-green-100 text-green-700 border-green-400' 
-                              : 'bg-orange-100 text-orange-700 border-orange-400'
-                          }`}>
-                            Selected: ₱{linkedTotal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                          </div>
-                        )}
+                        <span className="truncate flex-1 min-w-[100px]">{ledgerTx.name}</span>
+                        
+                        <span className={`shrink-0 px-1.5 py-0.5 rounded text-[8px] uppercase tracking-widest border ${badgeColor}`}>
+                          {badgeText}
+                        </span>
+                        
+                        <span className="shrink-0 w-16 text-right text-gray-400 font-medium">{dateStr}</span>
+                        
+                        <span className="shrink-0 w-16 text-right">₱{Math.abs(ledgerTx.amount).toFixed(2)}</span>
                       </div>
-                    </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    );
 
-                    {isMatchable && (
-                      <div className="relative mt-2 pl-7">
-                        <div className="flex flex-col gap-1">
-                          <div className="text-[10px] font-black uppercase text-gray-400">Match & Link:</div>
-                          <div className="flex flex-wrap gap-1 max-w-[240px]">
-                            {(matchedLinks[idx] || []).length === 0 ? (
-                              <span className="text-[10px] italic text-gray-500 bg-white border border-gray-300 rounded px-2 py-1">
-                                No items linked (Import as new)
-                              </span>
-                            ) : (
-                              (matchedLinks[idx] || []).map(linkId => (
-                                <span key={linkId} className="inline-flex items-center gap-1 bg-indigo-100 text-indigo-700 text-[9px] font-black px-1.5 py-0.5 rounded border border-indigo-300">
-                                  Linked ({linkId.slice(0, 6)}...)
-                                  <button 
-                                    type="button"
-                                    onClick={() => {
-                                      setMatchedLinks(prev => ({
-                                        ...prev,
-                                        [idx]: (prev[idx] || []).filter(id => id !== linkId)
-                                      }));
-                                    }}
-                                    className="hover:text-red-600 font-bold ml-0.5"
-                                  >
-                                    ×
-                                  </button>
-                                </span>
-                              ))
-                            )}
-                          </div>
-                        </div>
 
-                        <div className="mt-2 max-h-40 overflow-y-auto rounded-xl border-2 border-black bg-white p-2 shadow-sm space-y-2">
-                          <p className="text-[9px] font-black uppercase tracking-widest text-gray-400 border-b pb-1">
-                            Suggested matches (±3 Days):
-                          </p>
                           
-                          {suggestedLedger.length === 0 && suggestedInstallments.length === 0 && (
-                            <p className="text-[10px] italic text-gray-500 p-1">No recent transactions found.</p>
-                          )}
-
-                          {suggestedLedger.map(ledgerTx => {
-                            const isChecked = (matchedLinks[idx] || []).includes(`tx_${ledgerTx.id}`);
-                            return (
-                              <label key={`opt_tx_${ledgerTx.id}`} className="flex items-center gap-2 text-[10px] font-bold text-gray-700 cursor-pointer hover:bg-gray-50 p-1 rounded">
-                                <input
-                                  type="checkbox"
-                                  checked={isChecked}
-                                  onChange={(e) => {
-                                    const idVal = `tx_${ledgerTx.id}`;
-                                    setMatchedLinks(prev => {
-                                      const current = prev[idx] || [];
-                                      const next = e.target.checked ? [...current, idVal] : current.filter(id => id !== idVal);
-                                      return { ...prev, [idx]: next };
-                                    });
-                                  }}
-                                  className="rounded"
-                                />
-                                <span className="truncate">{ledgerTx.name} (₱{Math.abs(ledgerTx.amount).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })})</span>
-                              </label>
-                            );
-                          })}
-
-                          {suggestedInstallments.map(inst => {
-                            const isChecked = (matchedLinks[idx] || []).includes(`inst_${inst.id}`);
-                            return (
-                              <label key={`opt_inst_${inst.id}`} className="flex items-center gap-2 text-[10px] font-bold text-gray-700 cursor-pointer hover:bg-gray-50 p-1 rounded">
-                                <input
-                                  type="checkbox"
-                                  checked={isChecked}
-                                  onChange={(e) => {
-                                    const idVal = `inst_${inst.id}`;
-                                    setMatchedLinks(prev => {
-                                      const current = prev[idx] || [];
-                                      const next = e.target.checked ? [...current, idVal] : current.filter(id => id !== idVal);
-                                      return { ...prev, [idx]: next };
-                                    });
-                                  }}
-                                  className="rounded"
-                                />
-                                <span className="truncate">[Budee] {inst.name} (₱{Number(inst.totalAmount).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })})</span>
-                              </label>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                );
+                
               })}
             </div>
 

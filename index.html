@@ -17,17 +17,20 @@
         darkMode: 'class',
       }
     </script>
-    <style>
-      @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
-      body {
-        font-family: 'Inter', sans-serif;
-      }
-      .glass-effect {
-        background: rgba(255, 255, 255, 0.7);
-        backdrop-filter: blur(10px);
-        border: 1px solid rgba(255, 255, 255, 0.2);
-      }
-    </style>
+        <style>
+          @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+          
+          html, body {
+            font-family: 'Inter', sans-serif;
+            overscroll-behavior-y: none;
+          }
+          
+          .glass-effect {
+            background: rgba(255, 255, 255, 0.7);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+          }
+        </style>    
   <script type="importmap">
 {
   "imports": {
@@ -44,7 +47,7 @@
 </script>
 <link rel="stylesheet" href="./index.css">
 </head>
-  <body class="bg-gray-50 text-gray-900 dark:bg-gray-950 dark:text-gray-100 transition-colors duration-200">
+<body class="bg-gray-50 text-gray-900 dark:bg-gray-950 dark:text-gray-100 transition-colors duration-200 overscroll-y-none">
     <div id="root"></div>
   <script type="module" src="/index.tsx"></script>
 </body>

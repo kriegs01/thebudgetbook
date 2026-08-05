@@ -16,6 +16,7 @@ export interface Account {
   lastFour?: string;
   // 🟢 NEW: Monthly interest rate for rollover finance charges
   interestRate?: number;
+  subtype?: string;
 }
 
 

@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { ArrowLeft, Calendar, CreditCard, ChevronDown } from 'lucide-react';
+import { ArrowLeft, Calendar, CreditCard, ChevronDown, Info } from 'lucide-react';
 import { useSearchParams, Link } from 'react-router-dom';
 import { Account, Installment } from '../../types';
 import { getTransactionsByPaymentMethod } from '../../src/services/transactionsService';
@@ -54,6 +54,16 @@ const StatementPage: React.FC<StatementPageProps> = ({ accounts, installments = 
   const [cycles, setCycles] = useState<BillingCycle[]>([]);
   const [selectedCycleIndex, setSelectedCycleIndex] = useState<number>(0);
   const [isLoading, setIsLoading] = useState(true);
+
+  const [expandedInstallments, setExpandedInstallments] = useState<Record<string, boolean>>({});
+
+  const toggleInstallment = (id: string) => {
+    setExpandedInstallments(prev => ({
+      ...prev,
+      [id]: !prev[id]
+    }));
+  };
+
 
   useEffect(() => {
     const loadAccountAndTransactions = async () => {
@@ -240,6 +250,205 @@ const StatementPage: React.FC<StatementPageProps> = ({ accounts, installments = 
       </div>
     );
   }
+
+        // 🟢 NEW: LOAN BUNDLE DASHBOARD OVERRIDE
+  if (account.subtype === 'Loan_Bundle' ) {
+    const bundleInstallments = (installments || []).filter(inst =>
+      (inst.accountId === account.id || inst.linkedAccountId === account.id) && !inst.isArchived
+    );
+
+    // --- 🟢 NEW: MASTER SUMMARY MATH ---
+    let totalUsed = 0;
+    let totalPaidAll = 0;
+    let dueThisMonth = 0;
+
+    const currentMonthName = new Date().toLocaleString('en-US', { month: 'long' });
+    const currentYear = new Date().getFullYear();
+    const currentMonthLabel = `${currentMonthName} ${currentYear}`;
+
+    bundleInstallments.forEach(inst => {
+      totalUsed += inst.totalAmount || 0;
+      totalPaidAll += inst.paidAmount || 0;
+
+      // Project the schedule to find what is due THIS month
+      const term = parseInt(String(inst.termDuration).replace(/\D/g, '')) || 12;
+      let startYear = currentYear;
+      let startMonth = new Date().getMonth() + 1;
+      
+      if (inst.startDate) {
+        const parts = inst.startDate.split('-');
+        startYear = parseInt(parts[0]);
+        startMonth = parseInt(parts[1]);
+      }
+
+      const paidAmount = inst.paidAmount || 0;
+
+      for (let i = 0; i < term; i++) {
+        const monthIndex = (startMonth - 1 + i) % 12;
+        const year = startYear + Math.floor((startMonth - 1 + i) / 12);
+        const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+        const label = `${monthNames[monthIndex]} ${year}`;
+        const isPaid = (i + 1) * inst.monthlyAmount <= paidAmount;
+
+        // If this specific schedule month matches the current calendar month and isn't paid, add it!
+        if (label === currentMonthLabel && !isPaid) {
+          dueThisMonth += inst.monthlyAmount || 0;
+        }
+      }
+    });
+
+    const totalRemaining = totalUsed - totalPaidAll;
+    // ------------------------------------
+
+    return (
+      <div className={`min-h-screen bg-gray-50 dark:bg-gray-950 transition-colors ${isMobile ? 'overflow-x-hidden px-4 pb-8 pt-6' : 'p-8'}`}>
+        <div className="mx-auto max-w-4xl">
+          <PageHeader
+            title={account.bank}
+            subtitle="Loan Bundle Schedule"
+            icon={
+              <div className={`w-14 h-14 rounded-2xl flex items-center justify-center text-white border-[3px] border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] -rotate-3 transition-all hover:rotate-0 hover:scale-110 z-10 relative ${getAccentClasses('bg')}`}>
+                <Calendar className="w-7 h-7" />
+              </div>
+            }
+            backButton={!isMobile ? (
+              <Link to="/accounts" className="inline-flex h-12 w-12 items-center justify-center rounded-2xl border-[3px] border-black bg-white text-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] transition-all hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none dark:bg-gray-900 dark:text-white">
+                <ArrowLeft className="w-5 h-5" />
+              </Link>
+            ) : undefined}
+          />
+
+          <div className="space-y-8 mt-8">
+            
+            {/* 🟢 NEW: BUNDLE SUMMARY CARD */}
+            <div className="bg-white dark:bg-gray-900 border-[4px] border-black rounded-[2rem] p-6 shadow-[8px_8px_0px_0px_rgba(0,0,0,1)]">
+              <h3 className="mb-4 text-sm font-black uppercase tracking-widest text-gray-600 dark:text-gray-400">Bundle Summary</h3>
+              <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
+                <div>
+                  <p className="mb-1 text-[10px] font-black uppercase tracking-widest text-gray-400 dark:text-gray-500">Total Used</p>
+                  <p className="text-lg font-bold text-gray-900 dark:text-gray-100">{formatCurrency(totalUsed)}</p>
+                </div>
+                <div>
+                  <p className="mb-1 text-[10px] font-black uppercase tracking-widest text-gray-400 dark:text-gray-500">Total Paid</p>
+                  <p className="text-lg font-bold text-green-600 dark:text-green-400">{formatCurrency(totalPaidAll)}</p>
+                </div>
+                <div>
+                  <p className="mb-1 text-[10px] font-black uppercase tracking-widest text-gray-400 dark:text-gray-500">Remaining</p>
+                  <p className="text-lg font-bold text-gray-900 dark:text-gray-100">{formatCurrency(totalRemaining)}</p>
+                </div>
+                <div className="rounded-xl border-[3px] border-black bg-indigo-50 dark:bg-indigo-900/30 p-3 shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] -mt-2">
+                  <p className="mb-1 text-[10px] font-black uppercase tracking-widest text-indigo-600 dark:text-indigo-400">Due {currentMonthName}</p>
+                  <p className="text-lg font-bold text-indigo-600 dark:text-indigo-400">{formatCurrency(dueThisMonth)}</p>
+                </div>
+              </div>
+            </div>
+
+            {bundleInstallments.length === 0 ? (
+
+
+                <div className="rounded-[1.8rem] border-[4px] border-black bg-white p-12 text-center shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] dark:bg-gray-900">
+                  <p className="text-sm font-black uppercase tracking-widest text-gray-500 dark:text-gray-400">No active loans in this bundle.</p>
+                </div>
+              ) : (
+                bundleInstallments.map(inst => {
+                  // Generate the localized schedule
+                  const term = parseInt(String(inst.termDuration).replace(/\D/g, '')) || 12;
+                  const schedule = [];
+                  let startYear = new Date().getFullYear();
+                  let startMonth = new Date().getMonth() + 1;
+  
+                  if (inst.startDate) {
+                    const parts = inst.startDate.split('-');
+                    startYear = parseInt(parts[0]);
+                    startMonth = parseInt(parts[1]);
+                  }
+  
+                  const paidAmount = inst.paidAmount || 0;
+  
+                  for (let i = 0; i < term; i++) {
+                    const monthIndex = (startMonth - 1 + i) % 12;
+                    const year = startYear + Math.floor((startMonth - 1 + i) / 12);
+                    const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+                    const isPaid = (i + 1) * inst.monthlyAmount <= paidAmount;
+  
+                    schedule.push({
+                      id: `${inst.id}-${year}-${monthIndex}`,
+                      label: `${monthNames[monthIndex]} ${year}`,
+                      isPaid,
+                    });
+                  }
+  
+                  const isExpanded = expandedInstallments[inst.id];
+
+                  return (
+                    <div key={inst.id} className="bg-white dark:bg-gray-900 border-[4px] border-black rounded-[2rem] p-6 shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] transition-all">
+                      
+                      {/* 🟢 NEW: COLLAPSIBLE HEADER */}
+                      <button 
+                        onClick={() => toggleInstallment(inst.id)}
+                        className="w-full flex items-center justify-between mb-6 group outline-none"
+                      >
+                        <h2 className="text-xl font-black uppercase text-gray-900 dark:text-white tracking-tight pl-2 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">
+                          {inst.name}
+                        </h2>
+                        <div className="p-2 border-2 border-transparent group-hover:border-black group-hover:shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] bg-gray-100 dark:bg-gray-800 rounded-xl group-hover:bg-indigo-100 dark:group-hover:bg-indigo-900/30 transition-all">
+                          <ChevronDown className={`w-5 h-5 transition-transform duration-300 ${isExpanded ? 'rotate-180' : ''}`} />
+                        </div>
+                      </button>
+  
+                      <div className="grid grid-cols-4 gap-4 bg-[#fff8ea] dark:bg-gray-800 p-5 rounded-2xl border-[3px] border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] text-center">
+                        <div>
+                          <p className="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-1">Due</p>
+                          <p className="font-bold text-gray-900 dark:text-gray-100">{inst.due_date || inst.dueDate || 'N/A'}</p>
+                        </div>
+                        <div>
+                          <p className="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-1">Total</p>
+                          <p className="font-bold text-gray-900 dark:text-gray-100">{formatCurrency(inst.totalAmount)}</p>
+                        </div>
+                        <div>
+                          <p className="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-1">Monthly</p>
+                          <p className="font-bold text-indigo-600 dark:text-indigo-400">{formatCurrency(inst.monthlyAmount)}</p>
+                        </div>
+                        <div>
+                          <p className="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-1">Duration</p>
+                          <p className="font-bold text-gray-900 dark:text-gray-100">{inst.termDuration}</p>
+                        </div>
+                      </div>
+  
+                      {/* 🟢 NEW: HIDDEN SCHEDULE BODY */}
+                      {isExpanded && (
+                        <div className="space-y-3 px-2 mt-8 animate-in slide-in-from-top-2 fade-in duration-200">
+                          {schedule.map((month) => (
+                            <div key={month.id} className="flex justify-between items-center py-2 border-b-2 border-dashed border-gray-200 dark:border-gray-800 last:border-0">
+                              <span className="font-bold text-sm text-gray-700 dark:text-gray-300">{month.label}</span>
+                              <div className="flex items-center gap-3">
+                                {month.isPaid ? (
+                                  <>
+                                    <span className="px-3 py-1.5 bg-green-400 text-black text-[10px] font-black uppercase rounded-lg border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] mt-0.5 inline-block">Paid</span>
+                                    <button className="text-gray-400 hover:text-indigo-600 transition-colors p-1" title="View Receipt">
+                                      <Info className="w-5 h-5" />
+                                    </button>
+                                  </>
+                                ) : (
+                                  <Link to="/installments" className="px-4 py-1.5 bg-indigo-600 text-white text-[10px] font-black uppercase rounded-lg border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:translate-y-[1px] hover:translate-x-[1px] hover:shadow-none transition-all mt-0.5 inline-block">
+                                    Pay
+                                  </Link>
+                                )}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  );  
+                })
+              )}
+            </div>
+          </div>
+        </div>
+      );
+    }
+  
 
   if (!account.billingDate) {
     return (

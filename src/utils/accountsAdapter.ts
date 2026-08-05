@@ -27,6 +27,7 @@ export const supabaseAccountToFrontend = (supabaseAccount: SupabaseAccount): Acc
     overdraftMode: (supabaseAccount.overdraft_mode ?? undefined) as any,
     interestRate: supabaseAccount.interestRate ?? undefined,
     qrCodeBase64: supabaseAccount.qrCodeBase64 ?? undefined,
+    subtype: supabaseAccount.subtype ?? undefined,
   };
 };
 
@@ -46,6 +47,7 @@ export const frontendAccountToSupabase = (account: Account): Omit<SupabaseAccoun
     overdraft_mode: account.overdraftMode ?? null,
     interestRate: account.interestRate ?? null, // 🟢 ADD THIS
     qrCodeBase64: account.qrCodeBase64 ?? null, // 🟢 ADD THIS
+    subtype: account.subtype ?? null,
   };
 };
 

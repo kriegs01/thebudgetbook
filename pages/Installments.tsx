@@ -474,6 +474,12 @@ const [editFormData, setEditFormData] = useState({
     // QA: Extract numeric value from termDuration (e.g., "12 months" -> "12")
     const termDurationNumeric = item.termDuration ? item.termDuration.replace(/\D/g, '') : '';
     
+    // 🟢 SAFETY CHECK: Did we historically save the loan bundle ID in accountId instead of linkedAccountId?
+    const isHistoricalCreditLink = accounts.some(a => 
+      a.id === item.accountId && 
+      (a.type === 'Credit' || a.classification === 'Credit Card' || a.type === 'Loan' || a.classification === 'Loan')
+    );
+    
     {/* Populate the state when opening: */}
     setEditFormData({
       name: item.name,
@@ -487,12 +493,14 @@ const [editFormData, setEditFormData] = useState({
       timing: item.timing || '1/2', 
       due_date: item.due_date || '',
       is_migrated: !!item.isMigrated,
-      linkedAccountId: item.linkedAccountId || ''
+      // 🟢 Automatically grab the link, even if it was saved in the older column!
+      linkedAccountId: item.linkedAccountId || (isHistoricalCreditLink ? item.accountId : '')
     });
 
     setShowEditModal(item);
     setOpenMenuId(null);
   };
+
 
   const handleCloseSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

@@ -50,13 +50,30 @@ const Accounts: React.FC<AccountsProps> = ({ accounts, installments = [], transa
   const [editingId, setEditingId] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   
-  // Tab State
-  const [activeTab, setActiveTab] = useState<'Debit' | 'Credit'>('Debit');
+  //new state for the Revolving vs. Loan Bundle submodal
+  const [showCreditTypeModal, setShowCreditTypeModal] = useState(false);
+
+
+  // Tab State: Check local storage first, default to Debit if nothing is saved
+  const [activeTab, setActiveTab] = useState<'Debit' | 'Credit'>(() => {
+    if (typeof window !== 'undefined') {
+      const savedTab = localStorage.getItem('budee_accounts_active_tab');
+      if (savedTab === 'Credit') return 'Credit';
+    }
+    return 'Debit';
+  });
+
+
+  // Save to local storage whenever the tab changes
+  useEffect(() => {
+    localStorage.setItem('budee_accounts_active_tab', activeTab);
+  }, [activeTab]);
 
   // Carousel State & Refs
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const [activeIndex, setActiveIndex] = useState(0);
 
+    
   const [confirmModal, setConfirmModal] = useState<{
     show: boolean; title: string; message: string; onConfirm: () => void;
   }>({ show: false, title: '', message: '', onConfirm: () => {} });
@@ -80,10 +97,38 @@ const Accounts: React.FC<AccountsProps> = ({ accounts, installments = [], transa
   const [deactivateState, setDeactivateState] = useState<{ show: boolean; accountId?: string | null; month: number; year: number; }>({ show: false, accountId: null, month: 0, year: 0 });
   const [deleteFailedModal, setDeleteFailedModal] = useState<{ show: boolean; accountId: string; }>({ show: false, accountId: '' });
   const [statementInfoAccount, setStatementInfoAccount] = useState<Account | null>(null);
+  const [isFlipped, setIsFlipped] = useState(false);
+
 
   const debitAccounts = accounts.filter(a => a.type === 'Debit');
   const creditAccounts = accounts.filter(a => a.type === 'Credit');
-  const visibleAccounts = activeTab === 'Debit' ? debitAccounts : creditAccounts;
+  
+  // 🟢 REVERSED: Now the newest accounts are added to the END (right side)
+  const visibleAccounts = (activeTab === 'Debit' ? debitAccounts : creditAccounts).slice().reverse();
+
+    // 🟢 NEWEST IS LAST: Scroll to the end of the list when a new card drops in
+    const prevAccountsLength = useRef(visibleAccounts.length);
+    const prevTab = useRef(activeTab); // Track tab switches
+    
+    useEffect(() => {
+      // 1. If we just switched tabs, update the refs and DO NOTHING ELSE
+      if (activeTab !== prevTab.current) {
+        prevTab.current = activeTab;
+        prevAccountsLength.current = visibleAccounts.length;
+        return; 
+      }
+  
+      // 2. If the tab is the SAME, but the length grew, a new account was added! Scroll to it.
+      if (visibleAccounts.length > prevAccountsLength.current) {
+        setTimeout(() => {
+          const lastIndex = visibleAccounts.length - 1;
+          scrollToCard(lastIndex); 
+        }, 300);
+      }
+      
+      prevAccountsLength.current = visibleAccounts.length;
+    }, [visibleAccounts.length, activeTab]); // Re-run when length or tab changes
+  
 
   // 🟢 Carousel Scroll Handlers
   const handleScroll = (e: React.UIEvent<HTMLDivElement>) => {
@@ -178,7 +223,16 @@ const Accounts: React.FC<AccountsProps> = ({ accounts, installments = [], transa
     }
   };
 
-  const openAddModal = () => { resetForm(); setShowModal(true); };
+  const openAddModal = () => { 
+    resetForm(); 
+    if (activeTab === 'Credit') {
+      setShowCreditTypeModal(true);
+    } else {
+      setFormData(prev => ({ ...prev, type: 'Debit' }));
+      setShowModal(true); 
+    }
+  };
+
 
   const openEditModal = (acc: Account) => {
     setEditingId(acc.id);
@@ -321,14 +375,18 @@ const Accounts: React.FC<AccountsProps> = ({ accounts, installments = [], transa
         key={acc.id}
         className={`${cardSurface} relative flex flex-col justify-between w-[85vw] sm:w-[22rem] aspect-[1.58/1] shrink-0 rounded-[1.5rem] border-[4px] border-black p-4 sm:p-5 shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] transition-colors duration-200 snap-center`}
       >
-        {/* Top Row: Bank Info & Controls */}
-        <div className="flex justify-between items-start">
+                {/* Top Row: Bank Info & Controls */}
+                <div className="flex justify-between items-start">
           <div className="max-w-[80%]">
             <h3 className={`text-lg sm:text-xl font-black leading-none uppercase tracking-tight truncate ${isCredit ? 'text-purple-900 dark:text-purple-300' : 'text-gray-900 dark:text-gray-100'}`}>
               {acc.bank}
             </h3>
-            <p className="mt-1 text-[9px] sm:text-[10px] font-black uppercase tracking-[0.2em] text-gray-500">{acc.classification}</p>
+            {/* 🟢 NEW: Shows Last 4 here, or defaults to Debit/Credit if empty */}
+            <p className="mt-1 text-[9px] sm:text-[10px] font-black uppercase tracking-[0.2em] text-gray-500">
+              {acc.lastFour ? `•••• ${acc.lastFour}` : (isCredit ? 'Credit Account' : 'Debit Account')}
+            </p>
           </div>
+
           
           <div className="relative">
             <button onClick={(e) => { e.stopPropagation(); setOpenMenuId(openMenuId === acc.id ? null : acc.id); }} className="p-1 -mt-1 -mr-1 text-gray-400 hover:text-black dark:hover:text-white transition-colors">
@@ -390,10 +448,6 @@ const Accounts: React.FC<AccountsProps> = ({ accounts, installments = [], transa
 
         {/* Bottom Row: Faux Numbers & Action */}
         <div className="flex justify-between items-end mt-auto pt-2">
-          <p className="font-mono text-xs sm:text-sm font-black tracking-widest text-gray-400 dark:text-gray-500 pb-1">
-            {displayDigits}
-          </p>
-          
           <div className="flex gap-2 shrink-0">
              {isCredit && (
                <Link
@@ -580,161 +634,223 @@ const Accounts: React.FC<AccountsProps> = ({ accounts, installments = [], transa
         </div>
       )}
 
+{showCreditTypeModal && (
+        <div className="fixed inset-0 z-[99999] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in">
+          <div className="w-full max-w-3xl bg-[#fff7e8] dark:bg-gray-900 rounded-[2rem] border-[4px] border-black shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] p-5 sm:p-8 relative flex flex-col max-h-[75vh]">
+            
+            <button onClick={() => setShowCreditTypeModal(false)} className="absolute right-4 top-4 z-20 p-2 bg-gray-200 dark:bg-gray-800 rounded-full hover:bg-gray-300 transition-colors">
+              <X className="w-5 h-5"/>
+            </button>
+            
+            {/* Header Area */}
+            <div className="shrink-0 pt-2 sm:pt-0">
+              <h2 className="text-xl sm:text-2xl font-black uppercase text-gray-900 dark:text-white mb-1 text-center mr-6 sm:mr-0">Choose Credit Type</h2>
+              <p className="text-[11px] sm:text-sm font-bold text-gray-500 dark:text-gray-400 text-center mb-4 sm:mb-8">
+                <span className="md:hidden">Swipe to explore options ↔</span>
+                <span className="hidden md:inline">How does this credit line operate?</span>
+              </p>
+            </div>
+            
+            {/* 🟢 Mobile: Horizontal Snap Scroll | Desktop: Side-by-Side Grid */}
+            <div className="flex md:grid md:grid-cols-2 gap-4 sm:gap-6 overflow-x-auto md:overflow-visible snap-x snap-mandatory pb-4 pt-1 px-1 md:pb-0" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
+              
+              {/* Revolving Card */}
+              <div className="w-[90%] md:w-auto shrink-0 snap-center bg-white dark:bg-gray-800 border-[3px] border-black rounded-2xl p-5 flex flex-col justify-between shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]">
+                <div>
+                  <h3 className="text-lg sm:text-xl font-black uppercase text-purple-700 dark:text-purple-400 mb-2">Revolving Credit</h3>
+                  <p className="text-[11px] sm:text-xs font-bold text-gray-600 dark:text-gray-300 mb-4 leading-relaxed">
+                    Standard credit cards with a monthly limit. You swipe, you get a single monthly bill, and you pay it back to refresh your limit.
+                  </p>
+                  <div className="bg-gray-100 dark:bg-gray-900 rounded-xl p-3 mb-5 border-2 border-dashed border-gray-300 dark:border-gray-700">
+                    <p className="text-[9px] sm:text-[10px] font-black uppercase tracking-widest text-gray-400 mb-1">Examples</p>
+                    <p className="text-[10px] sm:text-xs font-bold text-gray-700 dark:text-gray-400">BPI Blue, Metrobank Titanium, RCBC Flex, UnionBank Rewards</p>
+                  </div>
+                </div>
+                <button 
+                  onClick={() => {
+                    setFormData(prev => ({ ...prev, type: 'Credit', subtype: 'Revolving', classification: 'Credit Card' }));
+                    setShowCreditTypeModal(false);
+                    setIsFlipped(true);
+                    setShowModal(true);
+                  }}
+                  className={`w-full py-3 rounded-xl border-[3px] border-black font-black uppercase tracking-widest text-[10px] sm:text-xs text-white transition-all shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:translate-x-[1px] hover:translate-y-[1px] hover:shadow-none ${getAccentClasses('bg')}`}
+                >
+                  Select Revolving
+                </button>
+              </div>
 
-
-
-      {showModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-md animate-in fade-in">
-          <div className="flex max-h-[92vh] w-full max-w-3xl flex-col overflow-hidden rounded-[2rem] border-[4px] border-black bg-[#fff7e8] shadow-[10px_10px_0px_0px_rgba(0,0,0,1)] transition-colors md:flex-row dark:bg-gray-900 relative">
-            <button onClick={() => { setShowModal(false); resetForm(); }} className="absolute right-4 top-4 z-10 p-2 bg-white/20 hover:bg-white/40 rounded-full text-white md:text-gray-900 md:bg-gray-100 md:hover:bg-gray-200 transition-colors"><X className="w-5 h-5"/></button>
-            <div className={`${getAccentClasses('bg')} shrink-0 p-6 text-white transition-colors border-b-[4px] border-black md:w-1/3 md:border-b-0 md:border-r-[4px] md:p-8 pt-12`}>
-              <div>
-                <div className="mb-5 inline-flex rounded-2xl border-[3px] border-black bg-white/20 p-3"><WalletCards className="w-8 h-8" /></div>
-                <h2 className="text-2xl font-black mb-2 uppercase text-white">{editingId ? 'Edit Account' : 'Add Account'}</h2>
-                <p className="text-sm text-white/85">Keep your banking setup bold, playful, and easy to scan.</p>
+              {/* Loan Bundle Card */}
+              <div className="w-[90%] md:w-auto shrink-0 snap-center bg-white dark:bg-gray-800 border-[3px] border-black rounded-2xl p-5 flex flex-col justify-between shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]">
+                <div>
+                  <h3 className="text-lg sm:text-xl font-black uppercase text-indigo-600 dark:text-indigo-400 mb-2">Loan Bundle</h3>
+                  <p className="text-[11px] sm:text-xs font-bold text-gray-600 dark:text-gray-300 mb-4 leading-relaxed">
+                    Digital credit lines that automatically chop your specific purchases into fixed monthly installments right at checkout.
+                  </p>
+                  <div className="bg-gray-100 dark:bg-gray-900 rounded-xl p-3 mb-5 border-2 border-dashed border-gray-300 dark:border-gray-700">
+                    <p className="text-[9px] sm:text-[10px] font-black uppercase tracking-widest text-gray-400 mb-1">Examples</p>
+                    <p className="text-[10px] sm:text-xs font-bold text-gray-700 dark:text-gray-400">SPayLater, GCash GGives, Maya Credit, BillEase, LazPayLater</p>
+                  </div>
+                </div>
+                <button 
+                  onClick={() => {
+                    setFormData(prev => ({ ...prev, type: 'Credit', subtype: 'Loan_Bundle', classification: 'Loan' }));
+                    setShowCreditTypeModal(false);
+                    setIsFlipped(true);
+                    setShowModal(true);
+                  }}
+                  className="w-full py-3 rounded-xl border-[3px] border-black bg-indigo-600 font-black uppercase tracking-widest text-[10px] sm:text-xs text-white transition-all shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:translate-x-[1px] hover:translate-y-[1px] hover:shadow-none"
+                >
+                  Select Bundle
+                </button>
               </div>
             </div>
-            <form onSubmit={handleSubmit} className="min-w-0 flex-1 overflow-y-auto bg-[#fff7e8] p-5 space-y-5 sm:p-6 md:p-8 dark:bg-gray-900">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-[10px] font-black text-gray-500 uppercase tracking-[0.2em] mb-2">Bank Name</label>
-                  <input required type="text" value={formData.bank} onChange={(e) => setFormData({...formData, bank: e.target.value})} placeholder="e.g. Chase" className="w-full rounded-2xl border-[3px] border-black bg-white px-4 py-3 font-bold text-gray-900 outline-none dark:bg-gray-800 dark:text-gray-100" />
-                </div>
-                <div>
-                  <label className="block text-[10px] font-black text-gray-500 uppercase tracking-[0.2em] mb-2">Type</label>
-                  <select value={formData.type} onChange={(e) => setFormData({...formData, type: e.target.value as 'Debit' | 'Credit'})} className="w-full rounded-2xl border-[3px] border-black bg-white px-4 py-3 font-bold text-gray-900 outline-none dark:bg-gray-800 dark:text-gray-100">
-                    <option value="Debit">Debit</option>
-                    <option value="Credit">Credit</option>
-                  </select>
-                </div>
-              </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-[10px] font-black text-gray-500 uppercase tracking-[0.2em] mb-2">Classification</label>
-                  <select value={formData.classification} onChange={(e) => setFormData({...formData, classification: e.target.value as AccountClassification})} className="w-full rounded-2xl border-[3px] border-black bg-white px-4 py-3 font-bold text-gray-900 outline-none dark:bg-gray-800 dark:text-gray-100">
-                    <option>Checking</option>
-                    <option>Savings</option>
-                    <option>Investment</option>
-                    <option>Loan</option>
-                    <option>Other</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-[10px] font-black text-gray-500 uppercase tracking-[0.2em] mb-2">Opening Balance</label>
-                  <div className="relative">
-                     <span className="absolute left-4 top-1/2 -translate-y-1/2 font-bold text-gray-400">₱</span>
-                     <input required type="number" step="0.01" value={formData.balance} onChange={(e) => setFormData({...formData, balance: e.target.value})} className="w-full rounded-2xl border-[3px] border-black bg-white pl-8 py-3 font-bold text-gray-900 outline-none dark:bg-gray-800 dark:text-gray-100" />
-                  </div>
-                </div>
-              </div>
-
-              <div>
-                 <label className="block text-[10px] font-black text-gray-500 uppercase tracking-[0.2em] mb-2">Last 4 Digits (Optional)</label>
-                 <input 
-                   type="text" 
-                   maxLength={4} 
-                   pattern="\d{0,4}" 
-                   placeholder="e.g. 1234" 
-                   value={formData.lastFour} 
-                   onChange={(e) => setFormData({...formData, lastFour: e.target.value.replace(/\D/g, '')})} 
-                   className="w-full rounded-2xl border-[3px] border-black bg-white px-4 py-3 font-mono font-bold text-gray-900 tracking-[0.2em] outline-none dark:bg-gray-800 dark:text-gray-100" 
-                 />
-                 <p className="text-[10px] text-gray-400 font-bold mt-1.5 ml-1">Adds a realistic touch to your digital cards.</p>
-              </div>
-
-              {formData.type === 'Credit' && (
-                <div className="rounded-[1.4rem] border-[3px] border-black bg-purple-50/50 p-4 dark:bg-purple-900/10">
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    {/* Top Row: Limit and Interest */}
-                    <div>
-                      <label className="block text-[10px] font-black text-gray-500 uppercase tracking-widest mb-2">Credit Limit</label>
-                      <input type="number" value={formData.creditLimit} onChange={(e) => setFormData({...formData, creditLimit: e.target.value})} className="w-full rounded-xl border-[3px] border-black bg-white px-3 py-2 font-bold text-gray-900 outline-none dark:bg-gray-800 dark:text-gray-100" />
-                    </div>
-                    <div>
-                      <label className="block text-[10px] font-black text-gray-500 uppercase tracking-widest mb-2">Interest Rate (%)</label>
-                      <input type="number" step="0.01" min="0" placeholder="e.g. 3.00" value={formData.interestRate} onChange={(e) => setFormData({...formData, interestRate: e.target.value})} className="w-full rounded-xl border-[3px] border-black bg-white px-3 py-2 font-bold text-gray-900 outline-none dark:bg-gray-800 dark:text-gray-100" />
-                    </div>
-                    
-                    {/* Bottom Row: Dates */}
-                    <div>
-                      <label className="block text-[10px] font-black text-gray-500 uppercase tracking-widest mb-2">Statement Day</label>
-                      <input type="number" min="1" max="31" placeholder="e.g. 12" value={formData.billingDate} onChange={(e) => setFormData({...formData, billingDate: e.target.value})} className="w-full rounded-xl border-[3px] border-black bg-white px-3 py-2 font-bold text-gray-900 outline-none dark:bg-gray-800 dark:text-gray-100" />
-                    </div>
-                    <div>
-                      <label className="block text-[10px] font-black text-gray-500 uppercase tracking-widest mb-2">Days to Pay</label>
-                      <input type="number" min="1" max="60" placeholder="e.g. 21" value={formData.dueDate} onChange={(e) => setFormData({...formData, dueDate: e.target.value})} className="w-full rounded-xl border-[3px] border-black bg-white px-3 py-2 font-bold text-gray-900 outline-none dark:bg-gray-800 dark:text-gray-100" />
-                    </div>
-                  </div>
-                  
-                  {formData.billingDate && formData.dueDate && (() => {
-                    const statementDay = parseInt(formData.billingDate);
-                    const daysToPay = parseInt(formData.dueDate);
-                    if (isNaN(statementDay) || isNaN(daysToPay)) return null;
-                    return (
-                      <p className="mt-3 text-[11px] font-bold text-purple-700 dark:text-purple-400">
-                        Statement cuts on the {statementDay}{ordinalSuffix(statementDay)} · Due around {getDueDayForDisplay(statementDay, daysToPay)}
-                      </p>
-                    );
-                  })()}
-                </div>
-              )}
-
-              
-              {/* 🟢 NEW: QR Code Upload Section */}     
-            {formData.type === 'Debit' && (
-              <div className="rounded-[1.4rem] border-[3px] border-black bg-blue-50/50 p-4 dark:bg-blue-900/10 mt-4">
-                  <label className="block text-[10px] font-black text-gray-500 uppercase tracking-widest mb-2">
-                      Account QR Code (Optional)
-                  </label>
-                  <p className="text-[10px] text-gray-500 font-bold mb-3">
-                      Upload your bank transfer QR code. It will be stored offline for instant access in your Wallet.
-                  </p>
-                  
-                  <div className="flex flex-col sm:flex-row items-center gap-4">
-                      {/* Preview Area */}
-                      <div className="w-24 h-24 shrink-0 rounded-xl border-[3px] border-dashed border-gray-400 bg-white dark:bg-gray-800 flex items-center justify-center overflow-hidden">
-                          {formData.qrCodeBase64 ? (
-                              <img 
-                                  src={formData.qrCodeBase64} 
-                                  alt="QR Preview" 
-                                  className="w-full h-full object-contain" 
-                              />
-                          ) : (
-                              <span className="text-[10px] font-black text-gray-400 uppercase">No QR</span>
-                          )}
-                      </div>
-
-                      {/* File Input */}
-                      <div className="flex-1 w-full">
-                          <input 
-                              type="file" 
-                              accept="image/*"
-                              onChange={handleQrUpload}
-                              className="w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-sm file:font-black file:bg-blue-100 file:text-blue-700 hover:file:bg-blue-200 dark:file:bg-blue-900/30 dark:file:text-blue-300 transition-all cursor-pointer"
-                          />
-                          {formData.qrCodeBase64 && (
-                              <button 
-                                  type="button"
-                                  onClick={() => setFormData(prev => ({ ...prev, qrCodeBase64: '' }))}
-                                  className="mt-2 text-[10px] font-black uppercase text-red-500 hover:text-red-700 transition-colors"
-                              >
-                                  Remove QR
-                              </button>
-                          )}
-                      </div>
-                    </div>
-                  </div>
-                )}
-      
-                  <div className="flex flex-col sm:flex-row gap-3 pt-4">
-                <button type="button" onClick={() => { setShowModal(false); resetForm(); }} className="flex-1 rounded-2xl border-[3px] border-black bg-white py-3 font-black text-gray-700 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] transition-all hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none dark:bg-gray-800 dark:text-gray-100">Cancel</button>
-                <button type="submit" disabled={isSubmitting} className={`flex-1 rounded-2xl border-[3px] border-black py-3 font-black text-white shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] transition-all hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none disabled:opacity-50 ${getAccentClasses('bg')}`}>{isSubmitting ? 'Saving...' : (editingId ? 'Save Changes' : 'Add Account')}</button>
-              </div>
-            </form>
           </div>
         </div>
       )}
+
+
+
+
+{showModal && (
+        // 🟢 Boosted z-index to 9999 to cover the top navigation bar
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in">
+          
+                    {/* 3D Scene Container */}
+                    <div className="group perspective-[1200px] w-full max-w-[22rem] sm:max-w-[32rem] mx-auto relative mt-8 sm:mt-12">
+            
+            {/* X Button (Safely floating above the card) */}
+            <div className="absolute -top-12 sm:-top-14 right-0 z-[110]">
+              <button onClick={() => { setShowModal(false); resetForm(); }} className="p-2 bg-white/20 hover:bg-white/40 backdrop-blur-sm rounded-full text-white border-2 border-white/20 transition-colors">
+                <X className="w-5 h-5 sm:w-6 sm:h-6"/>
+              </button>
+            </div>
+
+            <form 
+              onSubmit={handleSubmit}
+              className={`relative w-full aspect-[1.58/1] transition-transform duration-700 [transform-style:preserve-3d] ${isFlipped ? '[transform:rotateY(180deg)]' : ''}`}
+            >
+              
+              {/* 💳 FRONT OF CARD (Step 3) */}
+              <div className={`absolute inset-0 p-5 sm:p-8 flex flex-col justify-between rounded-[1.5rem] sm:rounded-[2rem] border-[4px] border-black shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] sm:shadow-[12px_12px_0px_0px_rgba(0,0,0,1)] [backface-visibility:hidden] ${formData.type === 'Credit' ? 'bg-purple-100 dark:bg-purple-900/50' : 'bg-[#fff7e8] dark:bg-gray-800'}`}>
+                
+                {/* Top: Name & Flip Button */}
+                <div className="flex justify-between items-start gap-2">
+                  <div className="flex-1 min-w-0">
+                    <label className="block text-[10px] sm:text-xs font-black text-gray-500 uppercase tracking-widest mb-1 sm:mb-2">Bank / Wallet Name</label>
+                    <input required type="text" value={formData.bank} onChange={(e) => setFormData({...formData, bank: e.target.value})} placeholder="e.g. BPI" className="w-full bg-transparent text-2xl sm:text-4xl font-black uppercase border-b-[3px] border-black/10 focus:border-black outline-none placeholder-black/20 text-black dark:text-white transition-colors truncate" />
+                  </div>
+                  {formData.type === 'Credit' && (
+                    <button type="button" onClick={() => setIsFlipped(true)} className="px-3 sm:px-4 py-2 sm:py-3 bg-black dark:bg-white text-white dark:text-black rounded-lg sm:rounded-xl text-[9px] sm:text-[10px] font-black uppercase tracking-widest hover:scale-105 transition-transform flex items-center gap-1 sm:gap-2 shadow-[2px_2px_0px_0px_rgba(0,0,0,0.3)] shrink-0">
+                      Back ↺
+                    </button>
+                  )}
+                </div>
+
+                {/* Middle: Last 4 */}
+                <div>
+                  <label className="block text-[10px] sm:text-xs font-black text-gray-500 uppercase tracking-widest mb-1 sm:mb-2">Card Digits</label>
+                  <div className="flex items-center gap-2 sm:gap-3">
+                    <span className="text-sm sm:text-2xl font-mono text-black/30 dark:text-white/30 tracking-[0.1em] sm:tracking-[0.2em] whitespace-nowrap">•••• •••• ••••</span>
+                    <input type="text" maxLength={4} pattern="\d{0,4}" placeholder="1234" value={formData.lastFour} onChange={(e) => setFormData({...formData, lastFour: e.target.value.replace(/\D/g, '')})} className="w-14 sm:w-24 bg-transparent text-sm sm:text-2xl font-mono font-black tracking-[0.1em] sm:tracking-[0.2em] border-b-[3px] border-black/10 focus:border-black outline-none text-black dark:text-white placeholder-black/20 transition-colors" />
+                  </div>
+                </div>
+
+                {/* Bottom: QR (Debit) & Balance */}
+                <div className="flex justify-between items-end mt-auto">
+                  {formData.type === 'Debit' ? (
+                    <div className="relative group/qr shrink-0">
+                      <input type="file" accept="image/*" onChange={handleQrUpload} className="absolute inset-0 opacity-0 cursor-pointer z-10" />
+                      <div className="w-12 h-12 sm:w-16 sm:h-16 rounded-lg sm:rounded-xl border-[3px] border-dashed border-black/40 bg-black/5 flex items-center justify-center overflow-hidden transition-colors group-hover/qr:bg-black/10 group-hover/qr:border-black">
+                        {formData.qrCodeBase64 ? (
+                          <img src={formData.qrCodeBase64} alt="QR" className="w-full h-full object-contain" />
+                        ) : (
+                          <span className="text-[8px] sm:text-[10px] font-black uppercase text-black/40 text-center leading-tight p-1">Upload<br/>QR</span>
+                        )}
+                      </div>
+                    </div>
+                  ) : <div/>}
+                  
+                  <div className="text-right flex-1 ml-2 min-w-0">
+                    <label className="block text-[10px] sm:text-xs font-black text-gray-500 uppercase tracking-widest mb-1 sm:mb-2">Opening Balance</label>
+                    <div className="flex items-center justify-end font-black text-2xl sm:text-4xl text-black dark:text-white">
+                      <span className="text-black/40 dark:text-white/40 mr-1 sm:mr-2">₱</span>
+                      <input required type="number" step="0.01" value={formData.balance} onChange={(e) => setFormData({...formData, balance: e.target.value})} className="w-full max-w-[140px] sm:max-w-[200px] bg-transparent border-b-[3px] border-black/10 focus:border-black outline-none text-right transition-colors placeholder-black/20" placeholder="0.00" />
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* 🧲 BACK OF CARD (Step 2 - Credit Only) */}
+              <div className={`absolute inset-0 flex flex-col rounded-[1.5rem] sm:rounded-[2rem] border-[4px] border-black shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] sm:shadow-[12px_12px_0px_0px_rgba(0,0,0,1)] [backface-visibility:hidden] [transform:rotateY(180deg)] bg-gray-200 dark:bg-gray-800`}>
+                
+                {/* Magnetic Strip */}
+                <div className="w-full h-10 sm:h-14 bg-gray-900 mt-6 sm:mt-8 mb-4 sm:mb-6"></div>
+                
+                <div className="px-5 sm:px-8 flex-1 flex flex-col justify-between pb-5 sm:pb-8">
+                  <div className="grid grid-cols-2 gap-x-3 sm:gap-x-5 gap-y-3 sm:gap-y-5">
+                    
+                    {/* Credit Limit */}
+                    <div className="col-span-2">
+                       <label className="block text-[10px] sm:text-xs font-black text-gray-600 dark:text-gray-400 uppercase tracking-widest mb-1 sm:mb-2">{formData.subtype === 'Loan_Bundle' ? 'Bundle Limit' : 'Credit Limit'}</label>
+                       <div className="flex items-center rounded-xl sm:rounded-2xl border-[3px] border-black bg-white dark:bg-gray-900 overflow-hidden">
+                         <span className="pl-3 sm:pl-4 text-base sm:text-xl font-black text-gray-400">₱</span>
+                         <input type="number" value={formData.creditLimit} onChange={(e) => setFormData({...formData, creditLimit: e.target.value})} className="w-full bg-transparent px-2 sm:px-3 py-2 sm:py-3 text-base sm:text-xl font-black text-black dark:text-white outline-none" placeholder="0.00" />
+                       </div>
+                    </div>
+
+                    {/* Revolving Only Fields */}
+                    {formData.subtype !== 'Loan_Bundle' ? (
+                      <>
+                        <div>
+                          <label className="block text-[9px] sm:text-xs font-black text-gray-600 dark:text-gray-400 uppercase tracking-widest mb-1 sm:mb-2">Statement Day</label>
+                          <input type="number" min="1" max="31" placeholder="15" value={formData.billingDate} onChange={(e) => setFormData({...formData, billingDate: e.target.value})} className="w-full rounded-xl border-[3px] border-black bg-white dark:bg-gray-900 px-3 py-2 text-sm sm:text-lg font-black text-black dark:text-white outline-none" />
+                        </div>
+                        <div>
+                          <label className="block text-[9px] sm:text-xs font-black text-gray-600 dark:text-gray-400 uppercase tracking-widest mb-1 sm:mb-2">Days to Pay</label>
+                          <input type="number" min="1" max="60" placeholder="21" value={formData.dueDate} onChange={(e) => setFormData({...formData, dueDate: e.target.value})} className="w-full rounded-xl border-[3px] border-black bg-white dark:bg-gray-900 px-3 py-2 text-sm sm:text-lg font-black text-black dark:text-white outline-none" />
+                        </div>
+                      </>
+                    ) : (
+                      <div className="col-span-2 rounded-xl border-[2px] sm:border-[3px] border-dashed border-gray-400 p-2 sm:p-3 mt-1">
+                        <p className="text-[9px] sm:text-xs font-bold text-gray-500 text-center leading-relaxed">Interest and due dates are determined by the individual active loans inside this bundle.</p>
+                      </div>
+                    )}
+                  </div>
+
+                                    {/* Next Button (Inside card for desktop, hidden on mobile) */}
+                                    <div className="hidden sm:flex justify-end mt-4">
+                    <button type="button" onClick={() => setIsFlipped(false)} className={`px-6 py-3 rounded-xl border-[3px] border-black text-white text-[11px] font-black uppercase tracking-widest shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none transition-all ${getAccentClasses('bg')}`}>
+                      Next: Front Details ↺
+                    </button>
+                  </div>
+
+                </div>
+              </div>
+
+            </form>
+            
+          
+
+            {/* 🟢 Mobile Floating "Next" Button (Visible when Flipped) */}
+            <div className={`sm:hidden absolute -bottom-16 left-1/2 -translate-x-1/2 w-max transition-opacity duration-300 delay-150 ${!isFlipped ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
+              <button type="button" onClick={() => setIsFlipped(false)} className={`px-8 py-3 rounded-xl border-[3px] border-black text-[11px] font-black text-white uppercase tracking-widest shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] active:translate-x-[2px] active:translate-y-[2px] active:shadow-none transition-all ${getAccentClasses('bg')}`}>
+                Next: Front Details ↺
+              </button>
+            </div>
+
+            {/* Submit Button Floating Below Card (Visible when NOT Flipped) */}
+            <div className={`absolute -bottom-16 sm:-bottom-24 left-1/2 -translate-x-1/2 w-max transition-opacity duration-300 delay-150 ${isFlipped ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
+              <button onClick={handleSubmit} disabled={isSubmitting} className={`px-10 sm:px-14 py-3 sm:py-4 rounded-xl sm:rounded-2xl border-[3px] sm:border-[4px] border-black text-sm sm:text-lg font-black text-white uppercase tracking-widest shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] sm:shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] active:translate-x-[4px] active:translate-y-[4px] transition-all disabled:opacity-50 ${getAccentClasses('bg')}`}>
+                {isSubmitting ? 'Minting...' : (editingId ? 'Save Updates' : 'Add to Wallet')}
+              </button>
+            </div>
+
+          </div>
+        </div>
+      )}
+
+
 
       {/* Deactivate & Delete Modals remain identical ... */}
       {deactivateState.show && (
