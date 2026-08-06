@@ -82,6 +82,9 @@ export const JuiceBox: React.FC<JuiceBoxProps> = ({ selectedAccountId, existingT
     const [selectedBank, setSelectedBank] = useState('');
     const [file, setFile] = useState<File | null>(null);
   
+    const [existingSchedules, setExistingSchedules] = useState<any[]>([]);
+
+
       // 🟢 Dynamic Banks State
   const [availableBanks, setAvailableBanks] = useState<BankConfig[]>([]);
   const [isLoadingBanks, setIsLoadingBanks] = useState(true);
@@ -236,92 +239,163 @@ console.log(`Successfully parsed ${rawTransactions.length} transactions.`);
   // 👆 END OF MISSING BLOCK 👆
       
 
+  // 🟢 NEW: Instantly select or deselect all extracted transactions
+  const toggleAllExtracted = () => {
+    setPendingTransactions(prev => {
+      // Check if literally every transaction is currently excluded
+      const areAllExcluded = prev.every(tx => tx.excluded);
+      
+      // If all are excluded, turn them ALL on. Otherwise, turn them ALL off.
+      return prev.map(tx => ({
+        ...tx,
+        excluded: !areAllExcluded 
+      }));
+    });
+  };
+
+
   const handleConfirmImport = async () => {
     setIsImporting(true);
   
-    // 🟢 1. Grab the user and STOP if it fails
-    const { data: { user } } = await supabase.auth.getUser();
-    
-    if (!user) {
-      alert("Error: Could not verify your user ID. Try refreshing the page.");
-      setIsImporting(false);
-      return;
-    }
-
-    const itemsToProcess = pendingTransactions.filter(tx => !tx.excluded);
-    const newTransactions = itemsToProcess.filter(tx => !tx.isDuplicate);
-    const duplicateTransactions = itemsToProcess.filter(tx => tx.isDuplicate);
-
-  
     try {
-            // 🟢 PHASE 2: Insert the new transactions
-            if (newTransactions.length > 0) {
-              const payload = newTransactions.map(tx => ({
-                payment_method_id: selectedAccountId,
-                user_id: user.id, // 👈 Notice there is no '?' here anymore
-                name: tx.name,
-                amount: tx.amount,
-                date: tx.date,
-                transaction_type: tx.transaction_type,
-                notes: (tx as any).notes,
-                is_reconciled: true 
-              }));
-        
-              // 🔍 THE LIE DETECTOR: Print the payload before sending
-              console.log("🔍 PAYLOAD READY FOR DATABASE:", payload);
-        
-              const { error: insertError } = await supabase.from('transactions').insert(payload);
-              
-              if (insertError) {
-                console.error("DATABASE REJECTED INSERT:", insertError);
-                throw insertError;
-              }
-            }
-      
-  
-      // 🟢 PHASE 3: Retroactively stamp the duplicates as verified
-      if (duplicateTransactions.length > 0) {
-        const duplicateIds = duplicateTransactions
-          .map(tx => (tx as any).existingId) 
-          .filter(Boolean); 
-  
-        if (duplicateIds.length > 0) {
-          // Note: Uncomment these when you are ready to actually write to the database!
-          const { error: updateError } = await supabase.from('transactions').update({ is_reconciled: true }).in('id', duplicateIds);
-           if (updateError) throw updateError;
-        }
+      // 1. Grab the user
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        alert("Error: Could not verify your user ID. Try refreshing the page.");
+        return;
       }
-  
-      // 🟢 PHASE 4: Settle any linked IOUs!
-      const linkedTxIds: string[] = [];
+
+      // 2. Filter out anything the user manually excluded
+      const itemsToProcess = pendingTransactions.filter(tx => !tx.excluded);
       
-      // FIXED: Loop over the original array to preserve the exact 'idx' used in the UI
-      pendingTransactions.forEach((tx, idx) => {
-        if (!tx.excluded) {
-          const stateKey = tx.id || idx;
-          const links = matchedLinks[stateKey] || [];
-          
-          links.forEach(link => {
-            if (typeof link === 'string' && link.startsWith('tx_')) {
-              linkedTxIds.push(link.replace('tx_', ''));
+      const trulyNewTransactions: PendingRow[] = [];
+      const manualMatchedIds: string[] = [];
+
+      // 🟢 DEFENSIVE CATCH: Scan every possible place JuiceBox might hide matched IDs
+      itemsToProcess.forEach((tx, idx) => {
+        const stateKey = tx.id || idx;
+        
+        let links = matchedLinks[stateKey] || [];
+        if (!Array.isArray(links)) links = [links];
+
+        const existingIds = Array.isArray((tx as any).existingId) ? (tx as any).existingId : ((tx as any).existingId ? [(tx as any).existingId] : []);
+        const matchedObjIds = Array.isArray((tx as any).matchedIds) ? (tx as any).matchedIds : [];
+        
+        const allAssociatedIds = [...links, ...existingIds, ...matchedObjIds];
+        const hasLedgerLink = allAssociatedIds.some(link => typeof link === 'string' && link.length > 10);
+
+        if (hasLedgerLink || tx.isDuplicate) {
+          allAssociatedIds.forEach(link => {
+            if (typeof link === 'string' && link.length > 10) {
+              const cleanId = link.startsWith('tx_') ? link.replace('tx_', '') : link;
+              manualMatchedIds.push(cleanId);
             }
           });
+          
+          // Failsafe: if it's an auto-duplicate but the ID was stored cleanly in existingId
+          if (tx.isDuplicate && tx.existingId && typeof tx.existingId === 'string' && !manualMatchedIds.includes(tx.existingId)) {
+            manualMatchedIds.push(tx.existingId);
+          }
+        } else {
+          // No links found? It's a brand new transaction.
+          trulyNewTransactions.push(tx);
         }
       });
-      
-      // If we found any linked IOUs, update their status to settled
-      if (linkedTxIds.length > 0) {
-        // 🚨 IMPORTANT: Make sure 'supabase' is imported at the top of JuiceBox.tsx!
-        const { error: iouError } = await supabase
-          .from('transactions')
-          .update({ iou_status: 'settled' })
-          .in('id', linkedTxIds);
-          
-        if (iouError) throw iouError;
+
+      // 🟢 PHASE 2: Insert the truly new transactions
+      if (trulyNewTransactions.length > 0) {
+        const payload = trulyNewTransactions.map(tx => ({
+          payment_method_id: selectedAccountId,
+          user_id: user.id, 
+          name: tx.name,
+          amount: -(tx.amount), // Flipped sign so expenses register properly
+          date: tx.date,
+          transaction_type: tx.transaction_type,
+          notes: (tx as any).notes,
+          is_reconciled: true 
+        }));
+        
+        const { error: insertError } = await supabase.from('transactions').insert(payload);
+        if (insertError) throw insertError;
       }
 
-      onImportComplete?.();
-      setShowReviewModal(false); 
+            // 🟢 PHASE 3: Reconcile Matches & Inject Statement Signatures
+            const manualUpdates: { id: string, signature: string }[] = [];
+
+            itemsToProcess.forEach((tx, idx) => {
+              const stateKey = tx.id || idx;
+              let links = matchedLinks[stateKey] || [];
+              if (!Array.isArray(links)) links = [links];
+      
+              const existingIds = Array.isArray((tx as any).existingId) ? (tx as any).existingId : ((tx as any).existingId ? [(tx as any).existingId] : []);
+              const matchedObjIds = Array.isArray((tx as any).matchedIds) ? (tx as any).matchedIds : [];
+              const allAssociatedIds = [...links, ...existingIds, ...matchedObjIds];
+      
+              const hasLedgerLink = allAssociatedIds.some(link => typeof link === 'string' && link.length > 10);
+      
+              if (hasLedgerLink) {
+                // Create the unique fingerprint for the discarded statement row
+                // Generate the fingerprint for the row we are currently parsing
+                const signature = `[JB_Ref: ${tx.name}_${Math.abs(tx.amount)}]`;
+
+                // 🟢 See if ANY transaction in our ledger has this signature in the new statement_ref column
+                const isMatchedByRef = existingTransactions.some(dbTx => 
+                  dbTx.statement_ref && dbTx.statement_ref.includes(signature)
+                );
+
+                if (isMatchedByRef) {
+                    tx.isDuplicate = true;
+                    tx.excluded = true; 
+                }
+              }
+            });
+      
+            if (manualUpdates.length > 0) {
+              // 🔥 It is much faster now! We just update the rows directly with the new column.
+                      // 🔥 Now with explicit error logging!
+                      const updatePromises = manualUpdates.map(async (updateObj) => {
+                        // 1. Try to stamp the Transactions table first
+                        const { data: txData, error: txError } = await supabase
+                          .from('transactions')
+                          .update({ 
+                              is_reconciled: true, 
+                              iou_status: 'settled',
+                              statement_ref: updateObj.signature 
+                          })
+                          .eq('id', updateObj.id)
+                          .select();
+              
+                        // 2. If no rows were updated in Transactions, it must be a Schedule!
+                        if (!txError && (!txData || txData.length === 0)) {
+                          const { data: schData, error: schError } = await supabase
+                            .from('monthly_payment_schedule')
+                            .update({ 
+                                is_reconciled: true, // Assuming this column exists here too!
+                                statement_ref: updateObj.signature 
+                            })
+                            .eq('id', updateObj.id)
+                            .select();
+              
+                          if (schError) {
+                            console.error(`Failed to stamp schedule ${updateObj.id}:`, schError);
+                          } else {
+                            console.log(`Successfully stamped Schedule ${updateObj.id}:`, schData);
+                          }
+                        } else if (txError) {
+                           console.error(`Failed to stamp transaction ${updateObj.id}:`, txError);
+                        } else {
+                           console.log(`Successfully stamped Transaction ${updateObj.id}:`, txData);
+                        }
+                      });
+              
+                      await Promise.all(updatePromises);              
+              
+            }
+      
+            // Success cleanup
+            onImportComplete?.();
+            setShowReviewModal(false); 
+      
   
     } catch (error) {
       console.error("Failed to import/reconcile:", error);
@@ -330,6 +404,8 @@ console.log(`Successfully parsed ${rawTransactions.length} transactions.`);
       setIsImporting(false);
     }
   };
+
+
 
   
 
@@ -400,6 +476,18 @@ console.log(`Successfully parsed ${rawTransactions.length} transactions.`);
         <div className="fixed inset-0 z-[1000] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md">
           <div className="w-full max-w-2xl bg-white dark:bg-gray-900 border-4 border-black rounded-2xl shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] p-6 flex flex-col max-h-[85vh]">
             
+          {/* 🟢 NEW: Select/Deselect All Button */}
+          <div className="mb-4 flex justify-end">
+            <button
+              type="button"
+              onClick={toggleAllExtracted}
+              className="flex items-center gap-2 rounded-xl border-[3px] border-black bg-white px-4 py-2 text-[10px] font-black uppercase tracking-widest text-gray-700 shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] transition-all hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none dark:bg-gray-800 dark:text-gray-300"
+            >
+               <span>☑️</span> Toggle All Selections
+            </button>
+          </div>
+
+
             <div className="flex justify-between items-center border-b-4 border-black pb-4 mb-4">
               <div>
                 <h2 className="text-xl font-black uppercase">JuiceBox Review ({pendingTransactions.length} items)</h2>
@@ -423,13 +511,18 @@ console.log(`Successfully parsed ${rawTransactions.length} transactions.`);
                 const maxDateMs = txDateMs + threeDaysMs;
                 const txAbsAmount = Math.abs(tx.amount);
 
-                // 🟢 NEW: Enhanced Sorting Logic based on Type vs Description
-                const suggestedLedger = (existingTransactions || [])
-                  .filter(ledgerTx => {
-                    const ledgerDateMs = new Date(ledgerTx.date).getTime();
-                    return ledgerDateMs >= minDateMs && ledgerDateMs <= maxDateMs;
-                  })
-                  .sort((a, b) => {
+                 // 🟢 NEW: Enhanced Sorting Logic based on Type vs Description
+                 const suggestedLedger = (existingTransactions || [])
+                 .filter(ledgerTx => {
+                   // 👇 1. STRICT ACCOUNT FILTER: Must belong to the selected account!
+                   const isSameAccount = ledgerTx.paymentMethodId === selectedAccountId || (ledgerTx as any).payment_method_id === selectedAccountId;
+                   if (!isSameAccount) return false;
+
+                   // 2. DATE FILTER: Must be within the 3-day window
+                   const ledgerDateMs = new Date(ledgerTx.date).getTime();
+                   return ledgerDateMs >= minDateMs && ledgerDateMs <= maxDateMs;
+                 })
+                 .sort((a, b) => {
                     // 1. Cross-reference type vs description (e.g. ledger 'payment' vs statement 'Card Payment')
                     const txDesc = `${tx.name} ${tx.raw_text}`.toLowerCase();
                     const aType = String(a.transaction_type || '').toLowerCase();
