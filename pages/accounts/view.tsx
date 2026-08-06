@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useMemo, useRef } from 'react';
-import { ArrowLeft, Info, Eye, ZoomIn, ZoomOut, Download, X, Pencil, BanknoteArrowDown, Trash2, ArrowUpFromLine, ArrowDownToLine, Banknote, CheckSquare, Square, Filter, ChevronDown, ChevronUp, CreditCard, AlertTriangle, Send, User, Landmark, WalletCards } from 'lucide-react';
+import { ArrowLeft, Info, Eye, ZoomIn, ZoomOut, Download, X, Pencil, BanknoteArrowDown, Trash2, ArrowUpFromLine, ArrowDownToLine, Banknote, CheckSquare, Square, Filter, ChevronDown, ChevronUp, CreditCard, AlertTriangle, Send, User, Landmark, WalletCards, ShieldCheck } from 'lucide-react';
 import { useSearchParams, Link } from 'react-router-dom';
 import { Account } from '../../types';
 import { getTransactionsByPaymentMethod, createTransaction, updateTransactionAndSyncSchedule, createTransfer, getLoanTransactionsWithPayments, getReceiptSignedUrl, deleteTransactionAndRevertSchedule, batchDeleteTransactions, getTransactionById } from '../../src/services/transactionsService';
@@ -38,7 +38,7 @@ type Transaction = {
   related_transaction_id?: string | null;
   receiptUrl?: string | null;
   person_name?: string | null;
-  isreconciled?: boolean;
+  is_reconciled?: boolean;
 };
 
 type LoanTransaction = Transaction & {
@@ -185,7 +185,8 @@ const [rolloverPrompt, setRolloverPrompt] = useState<{
         notes: t.notes,
         related_transaction_id: t.related_transaction_id,
         receiptUrl: (t as unknown as { receipt_url?: string | null }).receipt_url ?? null,
-        person_name: (t as any).person_name ?? null
+        person_name: (t as any).person_name ?? null,
+        is_reconciled: (t as any).is_reconciled === true
       }));
       setTransactions(txList);
 

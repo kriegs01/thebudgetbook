@@ -122,7 +122,8 @@ export interface Transaction {
   payer_id?: string | null;
   beneficiary_id?: string | null;
   iou_status?: 'none' | 'pending' | 'settled';
-  split_details?: Record<string, number> | null; 
+  split_details?: Record<string, number> | null;
+  statement_ref?: string | null; 
 }
 
 

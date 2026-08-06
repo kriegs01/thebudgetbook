@@ -82,8 +82,6 @@ export const JuiceBox: React.FC<JuiceBoxProps> = ({ selectedAccountId, existingT
     const [selectedBank, setSelectedBank] = useState('');
     const [file, setFile] = useState<File | null>(null);
   
-    const [existingSchedules, setExistingSchedules] = useState<any[]>([]);
-
 
       // 🟢 Dynamic Banks State
   const [availableBanks, setAvailableBanks] = useState<BankConfig[]>([]);
@@ -112,6 +110,42 @@ export const JuiceBox: React.FC<JuiceBoxProps> = ({ selectedAccountId, existingT
 
     fetchBanks();
   }, []);
+
+    // 🟢 NEW: Master Signature List State
+    const [knownSignatures, setKnownSignatures] = useState<string[]>([]);
+
+    // 🟢 Fetch all signatures from BOTH tables so JuiceBox is fully self-aware
+    useEffect(() => {
+      const fetchSignatures = async () => {
+        try {
+          // 1. Get signatures stamped on Schedules
+          const { data: schData } = await supabase
+            .from('monthly_payment_schedules')
+            .select('statement_ref')
+            .not('statement_ref', 'is', null);
+            
+          // 2. Get signatures stamped on actual Transactions
+          const { data: txData } = await supabase
+            .from('transactions')
+            .select('statement_ref')
+            .not('statement_ref', 'is', null);
+  
+          // Combine them all into one flat array of strings
+          const combined = [
+            ...(schData || []).map(d => d.statement_ref),
+            ...(txData || []).map(d => d.statement_ref)
+          ].filter(Boolean); // Drops any undefined/nulls safely
+  
+          setKnownSignatures(combined);
+        } catch (error) {
+          console.error("Error fetching signatures for JuiceBox:", error);
+        }
+      };
+  
+      fetchSignatures();
+    }, []);
+  
+
 
   // Group the fetched banks by category for the dropdown
   const groupedBanks = availableBanks.reduce((acc, bank) => {
@@ -172,54 +206,63 @@ console.log(`Successfully parsed ${rawTransactions.length} transactions.`);
       const autoMatchedLinks: Record<string, string[]> = {};
 
       // 👇 Make sure to add `idx` to the map parameters here!
-      const processedRows: PendingRow[] = rawTransactions.map((tx, idx) => {
-        const txDateStr = new Date(tx.date).toISOString().slice(0, 10);
-        
-        // 🟢 THE FIX: Give every parsed row a permanent, unique fake ID
-        const uniqueRowId = tx.id || `pdf_row_${idx}_${Date.now()}`;
+            // 👇 Make sure to add `idx` to the map parameters here!
+            const processedRows: PendingRow[] = rawTransactions.map((tx, idx) => {
+              const txDateStr = new Date(tx.date).toISOString().slice(0, 10);
+              
+              // 🟢 THE FIX: Give every parsed row a permanent, unique fake ID
+              const uniqueRowId = tx.id || `pdf_row_${idx}_${Date.now()}`;
+      
+                      // 🟢 Generate the fingerprint we are looking for
+        const signature = `[JB_Ref: ${tx.name}_${Math.abs(tx.amount)}]`;
 
-                // 1. Check for strict duplicates (CHANGED from .some to .find)
-                const matchedExistingTx = (existingTransactions || []).find(existing => {
-                  const existingDateStr = new Date(existing.date).toISOString().slice(0, 10);
-                  return existing.paymentMethodId === selectedAccountId &&
-                         Math.abs(existing.amount) === Math.abs(tx.amount) &&
-                         existingDateStr === txDateStr;
-                });
+        // 1. Check for strict duplicates (Original logic)
+        const matchedExistingTx = (existingTransactions || []).find(existing => {
+          const existingDateStr = new Date(existing.date).toISOString().slice(0, 10);
+          return existing.paymentMethodId === selectedAccountId &&
+                 Math.abs(existing.amount) === Math.abs(tx.amount) &&
+                 existingDateStr === txDateStr;
+        });
         
-                const isMatch = !!matchedExistingTx; // true if it found a match, false if not
-        
+        // 2. 🟢 Check if this signature exists ANYWHERE in our master list!
+        const isMatchedByRef = knownSignatures.some(ref => ref.includes(signature));
+
+        // If it matches either check, flag it as a duplicate!
+        const isMatch = !!matchedExistingTx || isMatchedByRef; 
 
         // 2. THE IOU SMART MATCHER
         if (tx.name === 'Funds Transfer' && !isMatch) {
-          const txAmount = Math.abs(tx.amount);
-          const isIncomingTransfer = tx.amount > 0;
+           // ... (leave your IOU logic exactly as it is here)
 
-          const smartMatch = (existingTransactions || []).find(ledgerTx => {
-            if ((ledgerTx as any).iou_status !== 'pending') return false;
-            
-            const ledgerAmount = Math.abs(ledgerTx.amount);
-            
-            if (isIncomingTransfer) {
-              return (ledgerTx as any).beneficiary_id && ledgerAmount === txAmount;
-            } else {
-              return (ledgerTx as any).payer_id && ledgerAmount === txAmount;
-            }
-          });
-
-          if (smartMatch) {
-            // 👇 Use our new unique ID here
-            autoMatchedLinks[uniqueRowId] = [`tx_${smartMatch.id}`];
-          }
-        }
-
-        return {
-          ...tx,
-          id: uniqueRowId, 
-          isDuplicate: isMatch,
-          excluded: isMatch,
-          existingId: matchedExistingTx?.id // 🟢 NEW: Saves the DB ID so Phase 3 can update it!
-        };
-      });
+                const txAmount = Math.abs(tx.amount);
+                const isIncomingTransfer = tx.amount > 0;
+      
+                const smartMatch = (existingTransactions || []).find(ledgerTx => {
+                  if ((ledgerTx as any).iou_status !== 'pending') return false;
+                  
+                  const ledgerAmount = Math.abs(ledgerTx.amount);
+                  
+                  if (isIncomingTransfer) {
+                    return (ledgerTx as any).beneficiary_id && ledgerAmount === txAmount;
+                  } else {
+                    return (ledgerTx as any).payer_id && ledgerAmount === txAmount;
+                  }
+                });
+      
+                if (smartMatch) {
+                  autoMatchedLinks[uniqueRowId] = [`tx_${smartMatch.id}`];
+                }
+              }
+      
+              return {
+                ...tx,
+                id: uniqueRowId, 
+                isDuplicate: isMatch, // 👈 Now this will be true if it finds the fingerprint!
+                excluded: isMatch,    // 👈 And it will auto-exclude it!
+                existingId: matchedExistingTx?.id 
+              };
+            });
+      
 
       setMatchedLinks(autoMatchedLinks);
       // 👇 RESTORE THIS MISSING BLOCK 👇
@@ -267,37 +310,22 @@ console.log(`Successfully parsed ${rawTransactions.length} transactions.`);
 
       // 2. Filter out anything the user manually excluded
       const itemsToProcess = pendingTransactions.filter(tx => !tx.excluded);
-      
       const trulyNewTransactions: PendingRow[] = [];
-      const manualMatchedIds: string[] = [];
-
-      // 🟢 DEFENSIVE CATCH: Scan every possible place JuiceBox might hide matched IDs
+      
+      // 🟢 PHASE 1: Sort New vs. Linked Transactions
       itemsToProcess.forEach((tx, idx) => {
         const stateKey = tx.id || idx;
-        
         let links = matchedLinks[stateKey] || [];
         if (!Array.isArray(links)) links = [links];
-
+        
         const existingIds = Array.isArray((tx as any).existingId) ? (tx as any).existingId : ((tx as any).existingId ? [(tx as any).existingId] : []);
         const matchedObjIds = Array.isArray((tx as any).matchedIds) ? (tx as any).matchedIds : [];
-        
         const allAssociatedIds = [...links, ...existingIds, ...matchedObjIds];
+        
         const hasLedgerLink = allAssociatedIds.some(link => typeof link === 'string' && link.length > 10);
-
-        if (hasLedgerLink || tx.isDuplicate) {
-          allAssociatedIds.forEach(link => {
-            if (typeof link === 'string' && link.length > 10) {
-              const cleanId = link.startsWith('tx_') ? link.replace('tx_', '') : link;
-              manualMatchedIds.push(cleanId);
-            }
-          });
-          
-          // Failsafe: if it's an auto-duplicate but the ID was stored cleanly in existingId
-          if (tx.isDuplicate && tx.existingId && typeof tx.existingId === 'string' && !manualMatchedIds.includes(tx.existingId)) {
-            manualMatchedIds.push(tx.existingId);
-          }
-        } else {
-          // No links found? It's a brand new transaction.
+        
+        // Only insert if it has NO links and isn't a duplicate
+        if (!hasLedgerLink && !tx.isDuplicate) {
           trulyNewTransactions.push(tx);
         }
       });
@@ -319,84 +347,75 @@ console.log(`Successfully parsed ${rawTransactions.length} transactions.`);
         if (insertError) throw insertError;
       }
 
-            // 🟢 PHASE 3: Reconcile Matches & Inject Statement Signatures
-            const manualUpdates: { id: string, signature: string }[] = [];
+      // 🟢 PHASE 3: Reconcile Matches & Inject Statement Signatures
+      const manualUpdates: { id: string, signature: string }[] = [];
 
-            itemsToProcess.forEach((tx, idx) => {
-              const stateKey = tx.id || idx;
-              let links = matchedLinks[stateKey] || [];
-              if (!Array.isArray(links)) links = [links];
-      
-              const existingIds = Array.isArray((tx as any).existingId) ? (tx as any).existingId : ((tx as any).existingId ? [(tx as any).existingId] : []);
-              const matchedObjIds = Array.isArray((tx as any).matchedIds) ? (tx as any).matchedIds : [];
-              const allAssociatedIds = [...links, ...existingIds, ...matchedObjIds];
-      
-              const hasLedgerLink = allAssociatedIds.some(link => typeof link === 'string' && link.length > 10);
-      
-              if (hasLedgerLink) {
-                // Create the unique fingerprint for the discarded statement row
-                // Generate the fingerprint for the row we are currently parsing
-                const signature = `[JB_Ref: ${tx.name}_${Math.abs(tx.amount)}]`;
+      itemsToProcess.forEach((tx, idx) => {
+        const stateKey = tx.id || idx;
+        let links = matchedLinks[stateKey] || [];
+        if (!Array.isArray(links)) links = [links];
 
-                // 🟢 See if ANY transaction in our ledger has this signature in the new statement_ref column
-                const isMatchedByRef = existingTransactions.some(dbTx => 
-                  dbTx.statement_ref && dbTx.statement_ref.includes(signature)
-                );
+        const existingIds = Array.isArray((tx as any).existingId) ? (tx as any).existingId : ((tx as any).existingId ? [(tx as any).existingId] : []);
+        const matchedObjIds = Array.isArray((tx as any).matchedIds) ? (tx as any).matchedIds : [];
+        const allAssociatedIds = [...links, ...existingIds, ...matchedObjIds];
 
-                if (isMatchedByRef) {
-                    tx.isDuplicate = true;
-                    tx.excluded = true; 
-                }
-              }
-            });
-      
-            if (manualUpdates.length > 0) {
-              // 🔥 It is much faster now! We just update the rows directly with the new column.
-                      // 🔥 Now with explicit error logging!
-                      const updatePromises = manualUpdates.map(async (updateObj) => {
-                        // 1. Try to stamp the Transactions table first
-                        const { data: txData, error: txError } = await supabase
-                          .from('transactions')
-                          .update({ 
-                              is_reconciled: true, 
-                              iou_status: 'settled',
-                              statement_ref: updateObj.signature 
-                          })
-                          .eq('id', updateObj.id)
-                          .select();
-              
-                        // 2. If no rows were updated in Transactions, it must be a Schedule!
-                        if (!txError && (!txData || txData.length === 0)) {
-                          const { data: schData, error: schError } = await supabase
-                            .from('monthly_payment_schedule')
-                            .update({ 
-                                is_reconciled: true, // Assuming this column exists here too!
-                                statement_ref: updateObj.signature 
-                            })
-                            .eq('id', updateObj.id)
-                            .select();
-              
-                          if (schError) {
-                            console.error(`Failed to stamp schedule ${updateObj.id}:`, schError);
-                          } else {
-                            console.log(`Successfully stamped Schedule ${updateObj.id}:`, schData);
-                          }
-                        } else if (txError) {
-                           console.error(`Failed to stamp transaction ${updateObj.id}:`, txError);
-                        } else {
-                           console.log(`Successfully stamped Transaction ${updateObj.id}:`, txData);
-                        }
-                      });
-              
-                      await Promise.all(updatePromises);              
-              
+        const hasLedgerLink = allAssociatedIds.some(link => typeof link === 'string' && link.length > 10);
+
+        if (hasLedgerLink) {
+          const signature = `[JB_Ref: ${tx.name}_${Math.abs(tx.amount)}]`;
+          
+          allAssociatedIds.forEach(link => {
+            if (typeof link === 'string' && link.length > 10) {
+              // 🔥 THE FIX: Strip BOTH prefixes so Supabase gets the pure UUID
+              const cleanId = link.replace('tx_', '').replace('inst_', '');
+              manualUpdates.push({ id: cleanId, signature });
             }
-      
-            // Success cleanup
-            onImportComplete?.();
-            setShowReviewModal(false); 
-      
-  
+          });
+        }
+      });
+
+      if (manualUpdates.length > 0) {
+        const updatePromises = manualUpdates.map(async (updateObj) => {
+          // 1. Try to stamp the Transactions table first
+          const { data: txData, error: txError } = await supabase
+            .from('transactions')
+            .update({ 
+                is_reconciled: true, 
+                iou_status: 'settled',
+                statement_ref: updateObj.signature 
+            })
+            .eq('id', updateObj.id)
+            .select();
+
+          // 2. If no rows were updated in Transactions, it must be a Schedule!
+          if (!txError && (!txData || txData.length === 0)) {
+            const { data: schData, error: schError } = await supabase
+              .from('monthly_payment_schedules')
+              .update({ 
+                  statement_ref: updateObj.signature // Safely omitting is_reconciled here
+              })
+              .eq('id', updateObj.id)
+              .select();
+
+            if (schError) {
+              console.error(`Failed to stamp schedule ${updateObj.id}:`, schError);
+            } else {
+              console.log(`Successfully stamped Schedule ${updateObj.id}:`, schData);
+            }
+          } else if (txError) {
+             console.error(`Failed to stamp transaction ${updateObj.id}:`, txError);
+          } else {
+             console.log(`Successfully stamped Transaction ${updateObj.id}:`, txData);
+          }
+        });
+
+        await Promise.all(updatePromises);
+      }
+
+      // Success cleanup
+      onImportComplete?.();
+      setShowReviewModal(false); 
+
     } catch (error) {
       console.error("Failed to import/reconcile:", error);
       alert("Something went wrong during import.");
@@ -405,9 +424,6 @@ console.log(`Successfully parsed ${rawTransactions.length} transactions.`);
     }
   };
 
-
-
-  
 
   const toggleRowExclusion = (index: number) => {
     setPendingTransactions(prev => prev.map((item, i) => i === index ? { ...item, excluded: !item.excluded } : item));
@@ -511,34 +527,46 @@ console.log(`Successfully parsed ${rawTransactions.length} transactions.`);
                 const maxDateMs = txDateMs + threeDaysMs;
                 const txAbsAmount = Math.abs(tx.amount);
 
-                 // 🟢 NEW: Enhanced Sorting Logic based on Type vs Description
-                 const suggestedLedger = (existingTransactions || [])
-                 .filter(ledgerTx => {
-                   // 👇 1. STRICT ACCOUNT FILTER: Must belong to the selected account!
-                   const isSameAccount = ledgerTx.paymentMethodId === selectedAccountId || (ledgerTx as any).payment_method_id === selectedAccountId;
-                   if (!isSameAccount) return false;
-
-                   // 2. DATE FILTER: Must be within the 3-day window
-                   const ledgerDateMs = new Date(ledgerTx.date).getTime();
-                   return ledgerDateMs >= minDateMs && ledgerDateMs <= maxDateMs;
-                 })
-                 .sort((a, b) => {
-                    // 1. Cross-reference type vs description (e.g. ledger 'payment' vs statement 'Card Payment')
-                    const txDesc = `${tx.name} ${tx.raw_text}`.toLowerCase();
-                    const aType = String(a.transaction_type || '').toLowerCase();
-                    const bType = String(b.transaction_type || '').toLowerCase();
-
-                    const aTypeMatch = aType && txDesc.includes(aType) ? 1 : 0;
-                    const bTypeMatch = bType && txDesc.includes(bType) ? 1 : 0;
-
-                    // If one matches the description and the other doesn't, prioritize it
-                    if (aTypeMatch !== bTypeMatch) {
-                      return bTypeMatch - aTypeMatch; 
-                    }
-
-                    // 2. Fallback: Sort by amount closeness
-                    return Math.abs(Math.abs(a.amount) - txAbsAmount) - Math.abs(Math.abs(b.amount) - txAbsAmount);
-                  });
+                                  // 🟢 NEW: Figure out which items have been claimed by OTHER rows
+                                  const selectedElsewhere = new Set();
+                                  Object.entries(matchedLinks).forEach(([key, links]) => {
+                                    if (key !== String(tx.id || idx)) { 
+                                      links.forEach(link => selectedElsewhere.add(link));
+                                    }
+                                  });
+                 
+                                  // 🟢 ENHANCED: Suggested Sorting & Filtering Logic
+                                  const suggestedLedger = (existingTransactions || [])
+                                  .filter(ledgerTx => {
+                                    // 1. STRICT ACCOUNT FILTER
+                                    const isSameAccount = ledgerTx.paymentMethodId === selectedAccountId || (ledgerTx as any).payment_method_id === selectedAccountId;
+                                    if (!isSameAccount) return false;
+                 
+                                    // 2. DATE FILTER
+                                    const ledgerDateMs = new Date(ledgerTx.date).getTime();
+                                    if (ledgerDateMs < minDateMs || ledgerDateMs > maxDateMs) return false;
+                 
+                                    // 3. 🟢 CLAIM FILTER: Hide it if another row already selected it!
+                                    const idVal = `tx_${ledgerTx.id}`;
+                                    if (selectedElsewhere.has(idVal)) return false;
+                 
+                                    return true;
+                                  })
+                                  .sort((a, b) => {
+                                     const txDesc = `${tx.name} ${tx.raw_text}`.toLowerCase();
+                                     const aType = String(a.transaction_type || '').toLowerCase();
+                                     const bType = String(b.transaction_type || '').toLowerCase();
+                 
+                                     const aTypeMatch = aType && txDesc.includes(aType) ? 1 : 0;
+                                     const bTypeMatch = bType && txDesc.includes(bType) ? 1 : 0;
+                 
+                                     if (aTypeMatch !== bTypeMatch) {
+                                       return bTypeMatch - aTypeMatch; 
+                                     }
+                 
+                                     return Math.abs(Math.abs(a.amount) - txAbsAmount) - Math.abs(Math.abs(b.amount) - txAbsAmount);
+                                   });
+                 
 
                 const suggestedInstallments = (installments || [])
                   .filter(inst => !inst.isArchived)

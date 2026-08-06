@@ -726,6 +726,7 @@ export const getTransactionsByPaymentMethod = async (paymentMethodId: string) =>
       .order('date', { ascending: false });
 
     if (error) throw error;
+    console.log("DB RAW PAYLOAD:", data[0]); //<------ check for is_reconciled inclusion from db fetch
     return { data, error: null };
   } catch (error) {
     console.error('Error fetching transactions by payment method:', error);

@@ -53,6 +53,12 @@ const Accounts: React.FC<AccountsProps> = ({ accounts, installments = [], transa
   //new state for the Revolving vs. Loan Bundle submodal
   const [showCreditTypeModal, setShowCreditTypeModal] = useState(false);
 
+    // 🟢 NEW: State to track which account the JuiceBox should use
+    const [juiceAccountId, setJuiceAccountId] = useState<string>('');
+  
+    // 🟢 NEW: State to show/hide the Squeezer settings modal
+    const [showJuiceModal, setShowJuiceModal] = useState(false);
+  
 
   // Tab State: Check local storage first, default to Debit if nothing is saved
   const [activeTab, setActiveTab] = useState<'Debit' | 'Credit'>(() => {
@@ -512,21 +518,16 @@ const Accounts: React.FC<AccountsProps> = ({ accounts, installments = [], transa
           }
         />
 
- {/* 🧃 GLOBAL JUICEBOX ACTION BAR */}
- <div className="mb-6 flex items-center justify-between bg-white dark:bg-gray-900 border-4 border-black p-4 rounded-2xl shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]">
-          <div>
-            <h3 className="font-black uppercase tracking-tight text-sm">Statement Squeezer</h3>
-            <p className="text-xs text-gray-500 font-bold">Upload a bank or e-wallet PDF statement to auto-import transactions.</p>
-          </div>
-          
-          {/* Note: If you use a global button here, you might want your JuiceBox component 
-              to include an account dropdown selector so the user can choose which account 
-              the statement belongs to! */}
-          <JuiceBox selectedAccountId={activeTab === 'Debit' ? debitAccounts[0]?.id : creditAccounts[0]?.id} 
-          installments={installments}
-          existingTransactions={transactions}
-          />
+         {/* 🧃 COMPACT JUICEBOX BUTTON */}
+         <div className="mb-4 flex justify-end">
+          <button 
+            onClick={() => setShowJuiceModal(true)} 
+            className="flex items-center gap-2 bg-yellow-400 text-black px-4 py-2 sm:px-6 sm:py-3 rounded-xl border-[3px] border-black font-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] transition-all uppercase text-[10px] sm:text-xs"
+          >
+            <span>🧃</span> Squeeze Statement
+          </button>
         </div>
+
 
         {debitAccounts.length === 0 && creditAccounts.length === 0 && (
           <div className="rounded-[2rem] border-[4px] border-dashed border-black bg-yellow-100 px-8 py-12 text-center shadow-[8px_8px_0px_0px_rgba(0,0,0,1)]">
@@ -850,6 +851,58 @@ const Accounts: React.FC<AccountsProps> = ({ accounts, installments = [], transa
         </div>
       )}
 
+      {/* 🧃 THE SQUEEZER SETTINGS MODAL */}
+      {showJuiceModal && (
+        <div className="fixed inset-0 z-[500] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in">
+          <div className="w-full max-w-md bg-[#fff7e8] dark:bg-gray-900 border-[4px] border-black rounded-[2rem] shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] p-6 sm:p-8 relative">
+            
+            <button 
+              onClick={() => setShowJuiceModal(false)} 
+              className="absolute top-4 right-4 p-2 bg-white dark:bg-gray-800 rounded-full border-2 border-black hover:bg-gray-100 transition-colors"
+            >
+              <X className="w-5 h-5" />
+            </button>
+            
+            <div className="mb-6">
+              <h2 className="text-xl sm:text-2xl font-black uppercase text-gray-900 dark:text-white mb-1 tracking-tight">Statement Squeezer</h2>
+              <p className="text-[11px] sm:text-xs font-bold text-gray-500">Configure your target destination before uploading.</p>
+            </div>
+            
+            {/* Target Account Selector */}
+            <div className="mb-6">
+               <label className="block text-[10px] sm:text-xs font-black text-gray-500 uppercase tracking-widest mb-2">
+                 Target Account
+               </label>
+               <div className="relative">
+                 <select
+                  value={juiceAccountId}
+                  onChange={(e) => setJuiceAccountId(e.target.value)}
+                  className="w-full appearance-none rounded-2xl border-[3px] sm:border-[4px] border-black bg-white dark:bg-gray-800 px-4 py-3 sm:py-4 text-sm sm:text-lg font-black text-gray-900 dark:text-white outline-none cursor-pointer shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] transition-all"
+                >
+                  {(activeTab === 'Debit' ? debitAccounts : creditAccounts).map(acc => (
+                    <option key={acc.id} value={acc.id}>
+                      {acc.bank} {acc.lastFour ? `(••${acc.lastFour})` : ''}
+                    </option>
+                  ))}
+                </select>
+                <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none">
+                  <span className="text-xl font-black">↓</span>
+                </div>
+              </div>
+            </div>
+
+            <div className="border-t-[3px] border-dashed border-gray-300 dark:border-gray-700 my-6"></div>
+
+            {/* The JuiceBox Component */}
+            <JuiceBox 
+              selectedAccountId={juiceAccountId} 
+              installments={installments}
+              existingTransactions={transactions}
+              onImportComplete={() => setShowJuiceModal(false)} 
+            />
+          </div>
+        </div>
+      )}
 
 
       {/* Deactivate & Delete Modals remain identical ... */}
