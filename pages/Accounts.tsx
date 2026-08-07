@@ -197,25 +197,20 @@ const Accounts: React.FC<AccountsProps> = ({ accounts, installments = [], transa
 
     setIsSubmitting(true);
     try {
-      // 1. Intercept and Inject Dummy Dates for Loan Bundles
-      const isLoanBundle = formData.subtype === 'Loan_Bundle';
-      const finalBillingDate = isLoanBundle ? '3' : formData.billingDate;
-      const finalDueDate = isLoanBundle ? '1' : formData.dueDate;
+      // 1. Build the Payload
+      const created: Account = {
+        id: editingId ?? '', 
+        bank: formData.bank,
+        classification: formData.classification,
+        balance: parseFloat(formData.balance || '0'),
+        openingBalance: parseFloat(formData.balance || '0'), 
+        type: formData.type,
+        subtype: formData.subtype, 
+        creditLimit: formData.type === 'Credit' ? (formData.creditLimit ? parseFloat(formData.creditLimit) : 0) : undefined,
+        // 🟢 FIX: Use the actual user inputs for all Credit accounts
+        billingDate: formData.type === 'Credit' ? (formData.billingDate ? `${FAKE_DATE_PREFIX}${formData.billingDate.padStart(2, '0')}` : undefined) : undefined,
+        dueDate: formData.type === 'Credit' ? (formData.dueDate ? `${FAKE_DATE_PREFIX}${formData.dueDate.padStart(2, '0')}` : undefined) : undefined,
 
-      // 2. Build the Payload
-      const created: Account = {
-        id: editingId ?? '', 
-        bank: formData.bank,
-        classification: formData.classification,
-        balance: parseFloat(formData.balance || '0'),
-        openingBalance: parseFloat(formData.balance || '0'), 
-        type: formData.type,
-        // 🟢 FIX 1: Explicitly pass the subtype to the payload
-        subtype: formData.subtype, 
-        creditLimit: formData.type === 'Credit' ? (formData.creditLimit ? parseFloat(formData.creditLimit) : 0) : undefined,
-        // 🟢 FIX 2: Use the intercepted final dates
-        billingDate: formData.type === 'Credit' ? (finalBillingDate ? `${FAKE_DATE_PREFIX}${finalBillingDate.padStart(2, '0')}` : undefined) : undefined,
-        dueDate: formData.type === 'Credit' ? (finalDueDate ? `${FAKE_DATE_PREFIX}${finalDueDate.padStart(2, '0')}` : undefined) : undefined,
         lastFour: formData.lastFour.trim() || undefined,
         interestRate: formData.type === 'Credit' ? (formData.interestRate ? parseFloat(formData.interestRate) : undefined) : undefined,
         qrCodeBase64: formData.qrCodeBase64 || undefined 
@@ -810,23 +805,16 @@ const Accounts: React.FC<AccountsProps> = ({ accounts, installments = [], transa
                        </div>
                     </div>
 
-                    {/* Revolving Only Fields */}
-                    {formData.subtype !== 'Loan_Bundle' ? (
-                      <>
-                        <div>
-                          <label className="block text-[9px] sm:text-xs font-black text-gray-600 dark:text-gray-400 uppercase tracking-widest mb-1 sm:mb-2">Statement Day</label>
-                          <input type="number" min="1" max="31" placeholder="15" value={formData.billingDate} onChange={(e) => setFormData({...formData, billingDate: e.target.value})} className="w-full rounded-xl border-[3px] border-black bg-white dark:bg-gray-900 px-3 py-2 text-sm sm:text-lg font-black text-black dark:text-white outline-none" />
-                        </div>
-                        <div>
-                          <label className="block text-[9px] sm:text-xs font-black text-gray-600 dark:text-gray-400 uppercase tracking-widest mb-1 sm:mb-2">Days to Pay</label>
-                          <input type="number" min="1" max="60" placeholder="21" value={formData.dueDate} onChange={(e) => setFormData({...formData, dueDate: e.target.value})} className="w-full rounded-xl border-[3px] border-black bg-white dark:bg-gray-900 px-3 py-2 text-sm sm:text-lg font-black text-black dark:text-white outline-none" />
-                        </div>
-                      </>
-                    ) : (
-                      <div className="col-span-2 rounded-xl border-[2px] sm:border-[3px] border-dashed border-gray-400 p-2 sm:p-3 mt-1">
-                        <p className="text-[9px] sm:text-xs font-bold text-gray-500 text-center leading-relaxed">Interest and due dates are determined by the individual active loans inside this bundle.</p>
-                      </div>
-                    )}
+                    {/* Billing Cycle Fields for ALL Credit Types */}
+                    <div>
+                      <label className="block text-[9px] sm:text-xs font-black text-gray-600 dark:text-gray-400 uppercase tracking-widest mb-1 sm:mb-2">Statement Day</label>
+                      <input type="number" min="1" max="31" placeholder="15" value={formData.billingDate} onChange={(e) => setFormData({...formData, billingDate: e.target.value})} className="w-full rounded-xl border-[3px] border-black bg-white dark:bg-gray-900 px-3 py-2 text-sm sm:text-lg font-black text-black dark:text-white outline-none" />
+                    </div>
+                    <div>
+                      <label className="block text-[9px] sm:text-xs font-black text-gray-600 dark:text-gray-400 uppercase tracking-widest mb-1 sm:mb-2">Days to Pay</label>
+                      <input type="number" min="1" max="60" placeholder="21" value={formData.dueDate} onChange={(e) => setFormData({...formData, dueDate: e.target.value})} className="w-full rounded-xl border-[3px] border-black bg-white dark:bg-gray-900 px-3 py-2 text-sm sm:text-lg font-black text-black dark:text-white outline-none" />
+                    </div>
+
                   </div>
 
                                     {/* Next Button (Inside card for desktop, hidden on mobile) */}

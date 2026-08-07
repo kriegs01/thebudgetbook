@@ -224,17 +224,24 @@ const StatementPage: React.FC<StatementPageProps> = ({ accounts, installments = 
             });
           }
 
-          // Inject Rollover (Positive)
+                              // Inject Rollover (Positive)
           if (accumulatedRollover > 0) {
+            // 🟢 NEW: Step back one month to accurately name the previous statement
+            const prevMonthDate = new Date(cycle.startDate);
+            prevMonthDate.setMonth(prevMonthDate.getMonth() - 1);
+            const prevMonthName = prevMonthDate.toLocaleString('en-US', { month: 'long' });
+
             cycleTxs.unshift({
               id: `rollover-${index}`,
-              name: `Previous Balance Carried Over`,
-              date: cycle.startDate.toISOString(), // Placed at the top of the statement
+              name: `${prevMonthName} Statement Balance`, 
+              date: cycle.startDate.toISOString(),
               amount: accumulatedRollover, 
               paymentMethodId: accountId,
               transaction_type: 'rollover_carryover'
             });
           }
+
+          
 
           // Calculate next month's rollover based on net flow
           const cycleCharges = cycleTxs.filter(tx => tx.amount > 0).reduce((sum, tx) => sum + tx.amount, 0);
@@ -661,7 +668,7 @@ const StatementPage: React.FC<StatementPageProps> = ({ accounts, installments = 
                   <p className="text-lg font-bold text-gray-900 transition-colors dark:text-gray-100">{formatCurrency(account.creditLimit ?? 0)}</p>
                 </div>
               </div>
-
+</div>
 
             {/* Transactions Table */}
             <div className="overflow-hidden rounded-[1.8rem] border-[4px] border-black bg-white shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] transition-colors dark:bg-gray-900">
