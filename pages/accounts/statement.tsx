@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { ArrowLeft, Calendar, CreditCard, ChevronDown, Info } from 'lucide-react';
 import { useSearchParams, Link } from 'react-router-dom';
 import { Account, Installment } from '../../types';
-import { getTransactionsByPaymentMethod } from '../../src/services/transactionsService';
+import { getTransactionsByPaymentMethod, getTransactionsByPaymentSchedule } from '../../src/services/transactionsService';
 import type { SupabaseTransaction } from '../../src/types/supabase';
 import { calculateBillingCycles, formatDateRange } from '../../src/utils/billingCycles';
 import useMediaQuery from '../../src/hooks/useMediaQuery';
@@ -139,111 +139,130 @@ const StatementPage: React.FC<StatementPageProps> = ({ accounts, installments = 
           return;
         }
         
-        // Convert Supabase transactions to local format
-        const accountTransactions: Transaction[] = (transactionsData || []).map(t => ({
-          id: t.id,
-          name: t.name,
-          date: t.date,
-          amount: t.amount,
-          paymentMethodId: t.payment_method_id,
-          transaction_type: t.transaction_type ?? null
-        }));
+                // Convert Supabase transactions to local format
+                let accountTransactions: Transaction[] = (transactionsData || []).map(t => ({
+                  id: t.id,
+                  name: t.name,
+                  date: t.date,
+                  amount: t.amount,
+                  paymentMethodId: t.payment_method_id,
+                  transaction_type: t.transaction_type ?? null
+                }));
         
-                        // 🟢 NEW: Track rolling balance across cycles
-        let accumulatedRollover = 0;
+                // 🟢 NEW: Fetch actual payments made to linked installments and import them!
+                const bundleInstallments = (installments || []).filter(inst =>
+                    (inst.accountId === accountId || inst.linkedAccountId === accountId) && !inst.isArchived
+                );
+        
+                const instPromises = bundleInstallments.map(async (inst) => {
+                    const { data: schedules } = await getPaymentSchedulesBySource('installment', inst.id);
+                    if (schedules) {
+                        for (const schedule of schedules) {
+                            const { data: txs } = await getTransactionsByPaymentSchedule(schedule.id);
+                            if (txs) {
+                                txs.forEach((tx: any) => {
+                                    accountTransactions.push({
+                                        id: tx.id,
+                                        name: `Payment: ${inst.name}`,
+                                        date: tx.date,
+                                        amount: -Math.abs(tx.amount), // Negative amount for payments
+                                        paymentMethodId: tx.payment_method_id,
+                                        transaction_type: 'credit_payment'
+                                    });
+                                });
+                            }
+                        }
+                    }
+                });
+                
+                await Promise.all(instPromises);
+        
+                // Sort all transactions chronologically so rollover calculates properly
+                accountTransactions.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+                
+                        // 🟢 Include the account's opening balance as the initial starting point
+        let accumulatedRollover = account.openingBalance || 0;
 
-        // 🟢 NEW: Create a map to track remaining legacy credits for each installment
-        const legacyCredits: Record<string, number> = {};
-        if (installments) {
-          installments.forEach(inst => {
-             // Supports both camelCase and snake_case depending on your TS interface
-             legacyCredits[inst.id] = (inst as any).paidAmount || (inst as any).paid_amount || 0;
-          });
-        }
+        // Group transactions by cycle (Process oldest to newest)
+        const sortedCycleData = [...cycleData].sort((a, b) => a.startDate.getTime() - b.startDate.getTime());
 
-        // Group transactions by cycle
-        const billingCycles: BillingCycle[] = cycleData.map((cycle, index) => {
+        const chronologicalCycles: BillingCycle[] = sortedCycleData.map((cycle, index) => {
           const cycleTxs = accountTransactions.filter(tx => 
             isInCycle(tx, cycle.startDate, cycle.endDate)
           );
           
-          // Auto-inject active installments as statement charges
-          if (installments && installments.length > 0) {
-            installments.forEach(inst => {
-              if ((inst.accountId === accountId || inst.linkedAccountId === accountId) && !inst.isArchived) {
-                let isAfterStart = true;
-                if (inst.startDate) {
-                   const [year, month] = inst.startDate.split('-');
-                   const start = new Date(Number(year), Number(month) - 1, 1);
-                   if (cycle.endDate < start) isAfterStart = false;
-                }
-                if (isAfterStart) {
-                  // Standard Monthly Charge
-                  cycleTxs.push({
-                    id: `auto-inst-${inst.id}-${index}`,
-                    name: `Installment: ${inst.name}`,
-                    date: cycle.startDate.toISOString(),
-                    amount: -inst.monthlyAmount, // Charge
-                    paymentMethodId: accountId,
-                    transaction_type: 'installment_charge'
-                  });
+          // Auto-inject active installments as statement charges with EXACT precise dates
+          if (bundleInstallments.length > 0) {
+            bundleInstallments.forEach(inst => {
+              if (inst.startDate && !inst.isArchived) {
+                const [year, month] = inst.startDate.split('-');
+                const startYear = parseInt(year);
+                const startMonth = parseInt(month); // 1-12
+                const termNum = parseInt(String(inst.termDuration).replace(/\D/g, '')) || 12;
+                
+                // Fallback to the 1st if no specific due date is set
+                const dueDay = parseInt((inst as any).due_date || (inst as any).dueDate || '1'); 
 
-                  // 🟢 NEW: Apply legacy credit to immediately offset the charge!
-                  if (legacyCredits[inst.id] > 0) {
-                     // Max out at the monthly amount, or whatever credit is left
-                     const creditToApply = Math.min(legacyCredits[inst.id], inst.monthlyAmount);
-                     
-                     cycleTxs.push({
-                        id: `legacy-credit-${inst.id}-${index}`,
-                        name: `Legacy Payment Recognized`,
-                        date: cycle.startDate.toISOString(),
-                        amount: creditToApply, // Positive amount (payment)
-                        paymentMethodId: accountId,
-                        transaction_type: 'credit_payment'
-                     });
+                for (let i = 0; i < termNum; i++) {
+                    // Create the exact date for this specific month's charge
+                    // Use 12:00 PM to safely avoid midnight timezone shifting
+                    const chargeDate = new Date(startYear, startMonth - 1 + i, dueDay, 12, 0, 0);
 
-                     // Deduct the applied amount from the installment's remaining credit pool
-                     legacyCredits[inst.id] -= creditToApply;
-                  }
+                    // Only inject if this exact charge date falls inside the current billing cycle window
+                    if (chargeDate >= cycle.startDate && chargeDate <= cycle.endDate) {
+                        cycleTxs.push({
+                            id: `auto-inst-${inst.id}-${i}`,
+                            name: `Installment: ${inst.name}`,
+                            date: chargeDate.toISOString(),
+                            amount: inst.monthlyAmount, // Positive charge
+                            paymentMethodId: accountId,
+                            transaction_type: 'installment_charge'
+                        });
+                    }
                 }
               }
             });
           }
 
-          // 🟢 NEW: Inject Previous Unpaid Balance
+          // Inject Rollover (Positive)
           if (accumulatedRollover > 0) {
             cycleTxs.unshift({
               id: `rollover-${index}`,
               name: `Previous Balance Carried Over`,
-              date: cycle.startDate.toISOString(),
-              amount: -accumulatedRollover, // Charge
+              date: cycle.startDate.toISOString(), // Placed at the top of the statement
+              amount: accumulatedRollover, 
               paymentMethodId: accountId,
               transaction_type: 'rollover_carryover'
             });
           }
 
-          // 🟢 NEW: Calculate this cycle's net flow to see what rolls over to next month
-          const cycleCharges = cycleTxs.filter(tx => tx.transaction_type !== 'credit_payment' && tx.amount < 0).reduce((sum, tx) => sum + Math.abs(tx.amount), 0);
-          const cyclePayments = cycleTxs.filter(tx => tx.transaction_type === 'credit_payment' || tx.amount > 0).reduce((sum, tx) => sum + Math.abs(tx.amount), 0);
+          // Calculate next month's rollover based on net flow
+          const cycleCharges = cycleTxs.filter(tx => tx.amount > 0).reduce((sum, tx) => sum + tx.amount, 0);
+          const cyclePayments = cycleTxs.filter(tx => tx.amount < 0).reduce((sum, tx) => sum + Math.abs(tx.amount), 0);
           
-          // What remains unpaid becomes the rollover for the NEXT cycle in the loop
           accumulatedRollover = Math.max(0, cycleCharges - cyclePayments);
-
                   
-                  return {
-                    startDate: cycle.startDate,
-                    endDate: cycle.endDate,
-                    label: formatDateRange(cycle.startDate, cycle.endDate),
-                    transactions: cycleTxs
-                  };
-                });
+          // Sort this specific cycle's transactions chronologically before rendering
+          cycleTxs.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+
+          return {
+            startDate: cycle.startDate,
+            endDate: cycle.endDate,
+            label: formatDateRange(cycle.startDate, cycle.endDate),
+            transactions: cycleTxs
+          };
+        });
+        
+        // Reverse for the UI so newest cycle is on top
+        const finalCycles = chronologicalCycles.reverse();
+        setCycles(finalCycles);
+        const today = new Date();
+        const currentCycleIndex = finalCycles.findIndex(cycle => today >= cycle.startDate && today <= cycle.endDate);
+        setSelectedCycleIndex(currentCycleIndex >= 0 ? currentCycleIndex : 0);
+
         
 
         
-        setCycles(billingCycles);
-        const today = new Date();
-        const currentCycleIndex = billingCycles.findIndex(cycle => today >= cycle.startDate && today <= cycle.endDate);
-        setSelectedCycleIndex(currentCycleIndex >= 0 ? currentCycleIndex : 0);
       } catch (error) {
         console.error('Error loading transactions:', error);
       } finally {
@@ -252,7 +271,9 @@ const StatementPage: React.FC<StatementPageProps> = ({ accounts, installments = 
     };
     
     loadAccountAndTransactions();
-  }, [accountId, accounts]);
+  // 🟢 FIX: Ensure calculation runs after paid amounts load
+  }, [accountId, accounts, installments, dbPaidAmounts]); 
+
 
   if (isLoading) {
     return (
@@ -524,11 +545,23 @@ const StatementPage: React.FC<StatementPageProps> = ({ accounts, installments = 
   }
 
   const selectedCycle = cycles[selectedCycleIndex];
-  // Exclude credit_payment transactions from the charge total — payments reduce
-  // the outstanding balance but are not charges for historical record-keeping.
-  const totalAmount = selectedCycle?.transactions
-    .filter(tx => tx.transaction_type !== 'credit_payment')
-    .reduce((sum, tx) => sum + tx.amount, 0) ?? 0;
+
+  // 🟢 FIX: Safely fallback to an empty array to prevent the White Screen of Death
+  const currentTxs = selectedCycle?.transactions || []; 
+
+  // 🟢 Break down the statement math exactly like a real bank
+  const previousBalance = currentTxs.find(tx => tx.transaction_type === 'rollover_carryover')?.amount ?? 0;
+  
+  const newCharges = currentTxs
+    .filter(tx => tx.amount > 0 && tx.transaction_type !== 'rollover_carryover')
+    .reduce((sum, tx) => sum + tx.amount, 0);
+    
+  const totalPayments = currentTxs
+    .filter(tx => tx.amount < 0)
+    .reduce((sum, tx) => sum + Math.abs(tx.amount), 0);
+    
+  const statementBalance = Math.max(0, previousBalance + newCharges - totalPayments);
+
 
   return (
     <div className={`min-h-screen bg-gray-50 dark:bg-gray-950 transition-colors ${isMobile ? 'overflow-x-hidden px-4 pb-8 pt-6' : 'p-8'}`}>
@@ -610,21 +643,25 @@ const StatementPage: React.FC<StatementPageProps> = ({ accounts, installments = 
           <>
             <div className="mb-6 rounded-[1.8rem] border-[4px] border-black bg-white p-6 shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] transition-colors dark:bg-gray-900">
               <h3 className="mb-4 text-sm font-black uppercase tracking-widest text-gray-600 transition-colors dark:text-gray-400">Statement Summary</h3>
-              <div className="grid grid-cols-1 gap-4 md:grid-cols-3 md:gap-6">
+                            <div className="grid grid-cols-2 gap-4 md:grid-cols-4 md:gap-6">
                 <div>
-                  <p className="mb-1 text-xs font-medium text-gray-400 transition-colors dark:text-gray-500">Statement Period</p>
-                  <p className="text-lg font-bold text-gray-900 transition-colors dark:text-gray-100">{selectedCycle.label}</p>
+                  <p className="mb-1 text-xs font-medium text-gray-400 transition-colors dark:text-gray-500">Statement Balance</p>
+                  <p className="text-lg font-bold text-gray-900 transition-colors dark:text-gray-100">{formatCurrency(statementBalance)}</p>
                 </div>
                 <div>
-                  <p className="mb-1 text-xs font-medium text-gray-400 transition-colors dark:text-gray-500">Total Charges</p>
-                  <p className="text-lg font-bold text-red-600 transition-colors dark:text-red-400">{formatCurrency(totalAmount)}</p>
+                  <p className="mb-1 text-xs font-medium text-gray-400 transition-colors dark:text-gray-500">New Charges</p>
+                  <p className="text-lg font-bold text-red-600 transition-colors dark:text-red-400">{formatCurrency(newCharges)}</p>
+                </div>
+                <div>
+                  <p className="mb-1 text-xs font-medium text-gray-400 transition-colors dark:text-gray-500">Payments</p>
+                  <p className="text-lg font-bold text-green-600 transition-colors dark:text-green-400">-{formatCurrency(totalPayments)}</p>
                 </div>
                 <div>
                   <p className="mb-1 text-xs font-medium text-gray-400 transition-colors dark:text-gray-500">Credit Limit</p>
                   <p className="text-lg font-bold text-gray-900 transition-colors dark:text-gray-100">{formatCurrency(account.creditLimit ?? 0)}</p>
                 </div>
               </div>
-            </div>
+
 
             {/* Transactions Table */}
             <div className="overflow-hidden rounded-[1.8rem] border-[4px] border-black bg-white shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] transition-colors dark:bg-gray-900">
@@ -644,9 +681,10 @@ const StatementPage: React.FC<StatementPageProps> = ({ accounts, installments = 
                               {new Date(tx.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
                             </p>
                           </div>
-                          <p className={`text-right text-sm font-black transition-colors ${tx.amount < 0 ? 'text-red-600 dark:text-red-400' : 'text-green-600 dark:text-green-400'}`}>
-                            {formatCurrency(Math.abs(tx.amount))}
+                          <p className={`text-right text-sm font-black transition-colors ${tx.amount > 0 ? 'text-gray-900 dark:text-gray-100' : 'text-green-600 dark:text-green-400'}`}>
+                            {formatCurrency(tx.amount)}
                           </p>
+
                         </div>
                       </div>
                     ))}
@@ -682,9 +720,10 @@ const StatementPage: React.FC<StatementPageProps> = ({ accounts, installments = 
                               </div>
                             </td>
                             <td className="px-4 py-3 text-right">
-                              <div className={`text-sm font-semibold transition-colors ${tx.amount < 0 ? 'text-red-600 dark:text-red-400' : 'text-green-600 dark:text-green-400'}`}>
-                                {formatCurrency(Math.abs(tx.amount))}
-                              </div>
+                            <div className={`text-sm font-semibold transition-colors ${tx.amount > 0 ? 'text-gray-900 dark:text-gray-100' : 'text-green-600 dark:text-green-400'}`}>
+                              {formatCurrency(tx.amount)}
+                            </div>
+
                             </td>
                           </tr>
                         ))}

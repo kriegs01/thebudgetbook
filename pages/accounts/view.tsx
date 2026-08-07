@@ -260,7 +260,7 @@ const [rolloverPrompt, setRolloverPrompt] = useState<{
     };
     
     loadData();
-  }, [accountId, accounts]);
+  }, [accountId, accounts, installments]);
 
   const showMessage = (type: 'success' | 'error', text: string) => {
     setMessage({ type, text });
