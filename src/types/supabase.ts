@@ -82,7 +82,9 @@ export interface SupabaseInstallment {
   timing: string | null; // PROTOTYPE: '1/2' or '2/2' - payment timing within month
   user_id: string | null; // uuid, references auth.users(id)
   friend_user_id?: string | null; // uuid, nullable - links loan to a real Budee friend
+  principal_amount: number;
 }
+
 
 export interface SupabaseSavings {
   id: string; // uuid

@@ -21,6 +21,7 @@ export const supabaseInstallmentToFrontend = (supabaseInstallment: SupabaseInsta
   return {
     id: supabaseInstallment.id,
     name: supabaseInstallment.name,
+    principalAmount: supabaseInstallment.principal_amount,
     totalAmount: supabaseInstallment.total_amount,
     monthlyAmount: supabaseInstallment.monthly_amount,
     termDuration: `${supabaseInstallment.term_duration} months`,
@@ -55,6 +56,7 @@ export const frontendInstallmentToSupabase = (installment: Installment): Omit<Su
   
   return {
     name: installment.name,
+    principal_amount: installment.principalAmount || 0, // Fallback to 0 if undefined
     total_amount: installment.totalAmount,
     monthly_amount: installment.monthlyAmount,
     term_duration: termDurationNum,

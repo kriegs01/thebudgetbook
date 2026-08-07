@@ -8,6 +8,8 @@ import { calculateBillingCycles, formatDateRange } from '../../src/utils/billing
 import useMediaQuery from '../../src/hooks/useMediaQuery';
 import { useTheme } from '../../src/contexts/ThemeContext';
 import { PageHeader } from '../../src/components/PageHeader';
+import { getPaymentSchedulesBySource } from '../../src/services/paymentSchedulesService';
+
 
 type Transaction = {
   id: string;
@@ -56,6 +58,35 @@ const StatementPage: React.FC<StatementPageProps> = ({ accounts, installments = 
   const [isLoading, setIsLoading] = useState(true);
 
   const [expandedInstallments, setExpandedInstallments] = useState<Record<string, boolean>>({});
+
+  const [dbPaidAmounts, setDbPaidAmounts] = useState<Map<string, number>>(new Map());
+
+  // 🟢 NEW: Fetch actual paid schedules for all installments
+  useEffect(() => {
+    const loadAllPaidAmounts = async () => {
+      const paidAmountsMap = new Map<string, number>();
+      const promises = installments.map(async (installment) => {
+        try {
+          const { data, error } = await getPaymentSchedulesBySource('installment', installment.id);
+          if (!error && data) {
+            const totalPaid = data.reduce((sum, schedule) => sum + (schedule.amount_paid || 0), 0);
+            paidAmountsMap.set(installment.id, totalPaid);
+          } else {
+            paidAmountsMap.set(installment.id, 0);
+          }
+        } catch (err) {
+          paidAmountsMap.set(installment.id, 0);
+        }
+      });
+      await Promise.all(promises);
+      setDbPaidAmounts(paidAmountsMap);
+    };
+    
+    if (installments.length > 0) {
+      loadAllPaidAmounts();
+    }
+  }, [installments]);
+
 
   const toggleInstallment = (id: string) => {
     setExpandedInstallments(prev => ({
@@ -257,9 +288,10 @@ const StatementPage: React.FC<StatementPageProps> = ({ accounts, installments = 
       (inst.accountId === account.id || inst.linkedAccountId === account.id) && !inst.isArchived
     );
 
-    // --- 🟢 NEW: MASTER SUMMARY MATH ---
-    let totalUsed = 0;
-    let totalPaidAll = 0;
+            // --- 🟢 NEW: MASTER SUMMARY MATH ---
+    let totalUsed = 0; // Tracks the Principal (Item Cost)
+    let totalPayableAll = 0; // Tracks the True Debt (Principal + Interest)
+    let totalPaidAll = 0; // Tracks Actual Money Paid
     let dueThisMonth = 0;
 
     const currentMonthName = new Date().toLocaleString('en-US', { month: 'long' });
@@ -267,8 +299,15 @@ const StatementPage: React.FC<StatementPageProps> = ({ accounts, installments = 
     const currentMonthLabel = `${currentMonthName} ${currentYear}`;
 
     bundleInstallments.forEach(inst => {
-      totalUsed += inst.totalAmount || 0;
-      totalPaidAll += inst.paidAmount || 0;
+      // 1. Sum up the Principal for the "Total Used" display
+      totalUsed += inst.principalAmount || inst.totalAmount || 0;
+      
+      // 2. Sum up the True Debt for the "Remaining" math
+      totalPayableAll += inst.totalAmount || 0;
+
+      // 3. Sum up the actual payments from the database schedules
+      const paidForThisInst = dbPaidAmounts.get(inst.id) ?? 0;
+      totalPaidAll += paidForThisInst;
 
       // Project the schedule to find what is due THIS month
       const term = parseInt(String(inst.termDuration).replace(/\D/g, '')) || 12;
@@ -281,14 +320,12 @@ const StatementPage: React.FC<StatementPageProps> = ({ accounts, installments = 
         startMonth = parseInt(parts[1]);
       }
 
-      const paidAmount = inst.paidAmount || 0;
-
       for (let i = 0; i < term; i++) {
         const monthIndex = (startMonth - 1 + i) % 12;
         const year = startYear + Math.floor((startMonth - 1 + i) / 12);
         const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
         const label = `${monthNames[monthIndex]} ${year}`;
-        const isPaid = (i + 1) * inst.monthlyAmount <= paidAmount;
+        const isPaid = (i + 1) * inst.monthlyAmount <= paidForThisInst;
 
         // If this specific schedule month matches the current calendar month and isn't paid, add it!
         if (label === currentMonthLabel && !isPaid) {
@@ -297,8 +334,10 @@ const StatementPage: React.FC<StatementPageProps> = ({ accounts, installments = 
       }
     });
 
-    const totalRemaining = totalUsed - totalPaidAll;
+    // 4. Calculate Remaining based on TOTAL PAYABLE, not Total Used
+    const totalRemaining = totalPayableAll - totalPaidAll;
     // ------------------------------------
+
 
     return (
       <div className={`min-h-screen bg-gray-50 dark:bg-gray-950 transition-colors ${isMobile ? 'overflow-x-hidden px-4 pb-8 pt-6' : 'p-8'}`}>
@@ -363,7 +402,7 @@ const StatementPage: React.FC<StatementPageProps> = ({ accounts, installments = 
                     startMonth = parseInt(parts[1]);
                   }
   
-                  const paidAmount = inst.paidAmount || 0;
+                  const paidAmount = dbPaidAmounts.get(inst.id) ?? 0; 
   
                   for (let i = 0; i < term; i++) {
                     const monthIndex = (startMonth - 1 + i) % 12;

@@ -97,6 +97,7 @@ export interface Installment {
   is_migrated?: boolean;
   // 🟢 NEW: Links this installment to a specific Credit Card statement
   linkedAccountId?: string;
+  principalAmount?: number;
 }
 
 export interface SavingsJar {
