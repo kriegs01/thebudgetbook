@@ -1817,7 +1817,7 @@ const MainApp: React.FC = () => {
                   error={accountsError}
                 />
               } />
-              <Route path="/accounts/view" element={<AccountFilteredTransactions accounts={accounts} onTransactionCreated={reloadAccounts} />} />
+              <Route path="/accounts/view" element={<AccountFilteredTransactions accounts={accounts} onTransactionCreated={reloadAccounts} installments={installments} />} />
               <Route path="/accounts/statement" element={<StatementPage accounts={accounts} installments={installments} />} />
               <Route path="/wallets" element={<WalletsPage accounts={accounts} />} />
               <Route path="/wallets/view" element={<WalletView accounts={accounts} />} />

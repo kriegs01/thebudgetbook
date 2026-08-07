@@ -61,9 +61,11 @@ const formatCurrency = (val: number) =>
   
 
 interface AccountFilteredTransactionsProps {
-  accounts: Account[];
-  onTransactionCreated?: () => void;
+  accounts: Account[];
+  installments?: any[]; // 🟢 FIX: Allow installments to be passed down safely
+  onTransactionCreated?: () => void;
 }
+
 
 const AccountFilteredTransactions: React.FC<AccountFilteredTransactionsProps> = ({ accounts, onTransactionCreated }) => {
   const { getAccentClasses } = useTheme();
@@ -260,7 +262,7 @@ const [rolloverPrompt, setRolloverPrompt] = useState<{
     };
     
     loadData();
-  }, [accountId, accounts, installments]);
+  }, [accountId, accounts]);
 
   const showMessage = (type: 'success' | 'error', text: string) => {
     setMessage({ type, text });
