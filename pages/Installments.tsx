@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import useMediaQuery from '../src/hooks/useMediaQuery';
 import { Installment, Account, ViewMode, Biller } from '../types';
-import { Plus, LayoutGrid, List, Calendar, Wallet, Trash2, X, Upload, AlertTriangle, Edit2, Eye, MoreVertical, Info, ZoomIn, ZoomOut, Download, Archive, CheckCircle2, ChevronDown, Hand } from 'lucide-react';
+import { Plus, LayoutGrid, List, Calendar, Wallet, Trash2, X, Upload, AlertTriangle, Edit2, Eye, MoreVertical, Info, ZoomIn, ZoomOut, Download, Archive, CheckCircle2, ChevronDown, Hand, CheckSquare, UserPlus  } from 'lucide-react';
 import { PinProtectedAction } from '../src/components/PinProtectedAction';
 import { getPaymentSchedulesBySource } from '../src/services/paymentSchedulesService';
 import { hasInstallmentPayments, deleteAllInstallmentPaymentsAndResetSchedules } from '../src/services/installmentsService';
@@ -12,10 +12,65 @@ import { supabase } from '../src/utils/supabaseClient';
 import { useTheme } from '../src/contexts/ThemeContext';
 import { PageHeader } from '../src/components/PageHeader';
 
+type ContactOption = {
+  id: string;
+  name: string;
+  handleOrEmail?: string;
+  isLinked: boolean;
+  isBudeeOnly: boolean;
+};
+
+const ContactDropdown = ({ value, onChange, contacts, placeholder }: { value: string, onChange: (val: string) => void, contacts: ContactOption[], placeholder: string }) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const [search, setSearch] = useState(value);
+  const wrapperRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => { setSearch(value); }, [value]);
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (wrapperRef.current && !wrapperRef.current.contains(e.target as Node)) setIsOpen(false);
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const filtered = contacts.filter(c => c.name.toLowerCase().includes(search.toLowerCase()));
+
+  return (
+    <div className="relative" ref={wrapperRef}>
+      <input
+        type="text"
+        value={search}
+        onChange={e => { setSearch(e.target.value); onChange(e.target.value); setIsOpen(true); }}
+        onFocus={() => setIsOpen(true)}
+        placeholder={placeholder}
+        className="w-full bg-white dark:bg-gray-800 border-2 border-black dark:border-gray-700 rounded-xl p-3.5 pr-10 font-bold outline-none focus:ring-2 focus:ring-indigo-500 transition-all text-sm shadow-[2px_2px_0px_rgba(0,0,0,0.12)] text-gray-900 dark:text-gray-100"
+      />
+      {isOpen && filtered.length > 0 && (
+        <div className="absolute z-50 w-full mt-2 bg-white dark:bg-gray-900 border-2 border-black rounded-xl shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] max-h-48 overflow-y-auto">
+          {filtered.map(c => (
+            <div 
+              key={c.id} 
+              onClick={() => { setSearch(c.name); onChange(c.id); setIsOpen(false); }} 
+              className="px-4 py-3 cursor-pointer flex items-center justify-between border-b-2 border-black last:border-0 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+            >
+              <span className="text-sm font-bold truncate text-gray-900 dark:text-gray-100">{c.name}</span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
+
+
+
 interface InstallmentsProps {
   installments: Installment[];
   accounts: Account[];
   billers?: Biller[];
+  people?: { id: string; name: string }[];
   onAdd: (i: Installment) => Promise<void>;
   onUpdate?: (i: Installment) => Promise<void>;
   onDelete?: (id: string) => Promise<void>;
@@ -31,7 +86,18 @@ interface InstallmentsProps {
   error?: string | null;
 }
 
-const Installments: React.FC<InstallmentsProps> = ({ installments, accounts, billers = [], onAdd, onUpdate, onDelete, onPayInstallment, loading = false, error = null }) => {
+const Installments: React.FC<InstallmentsProps> = ({ 
+  installments, 
+  accounts, 
+  billers = [], 
+  people = [], 
+  onAdd, 
+  onUpdate, 
+  onDelete, 
+  onPayInstallment, 
+  loading = false, 
+  error = null 
+}) => {
   const { getAccentClasses } = useTheme();
   const isMobile = useMediaQuery('(max-width: 767px)');
   // Memoized first non-credit account ID to avoid redundant filtering
@@ -102,8 +168,22 @@ const Installments: React.FC<InstallmentsProps> = ({ installments, accounts, bil
     startDate: '', 
     billerId: '', 
     due_date: '',
-    linkedAccountId: ''
+    linkedAccountId: '',
+    fundingFriendId: '',
+    debtorFriendId: '',
+    expectedAccountId: '',
 });
+
+const selectableContacts: ContactOption[] = useMemo(() => {
+  return (people || []).map(p => ({
+    id: p.id,
+    name: p.name,
+    isLinked: false, // You can expand this later if needed
+    isBudeeOnly: false
+  }));
+}, [people]);
+
+
 
 const [editFormData, setEditFormData] = useState({ 
   name: '',
@@ -116,8 +196,17 @@ const [editFormData, setEditFormData] = useState({
   billerId: '', 
   due_date: '',
   is_migrated: false,
-  linkedAccountId: ''
+  linkedAccountId: '',
+  fundingFriendId: '',
+  debtorFriendId: '',
+  expectedAccountId: '',
 });
+
+// 🟢 NEW: Proxy Pay & IOU Toggle States
+const [isProxyPay, setIsProxyPay] = useState(false);
+const [isIOU, setIsIOU] = useState(false);
+
+const [paymentTab, setPaymentTab] = useState<'my_account' | 'budee'>('my_account');
 
 
   const [payFormData, setPayFormData] = useState({
@@ -305,19 +394,23 @@ const [editFormData, setEditFormData] = useState({
         id: '', 
         name: formData.name,
         totalAmount: parseFloat(formData.totalAmount),
-        // 🟢 NEW: Add Principal Amount to payload
         principalAmount: parseFloat(formData.principalAmount), 
         monthlyAmount: parseFloat(formData.monthlyAmount),
         termDuration: termDurationFormatted,
         paidAmount: 0,
-        accountId: formData.accountId,
+        // 🟢 If Proxy Pay is used, clear accountId/linkedAccountId so it doesn't revert
+        accountId: isProxyPay ? '' : formData.accountId,
         startDate: formData.startDate || undefined,
         billerId: formData.billerId || undefined,
-        // 🔴 REMOVE: timing: formData.timing, 
         due_date: formData.due_date || null, 
         is_migrated: true,
-        linkedAccountId: formData.linkedAccountId || undefined
+        linkedAccountId: isProxyPay ? undefined : (formData.linkedAccountId || undefined),
+        // 🟢 Pass settlement fields explicitly
+        funding_friend_id: isProxyPay ? formData.fundingFriendId : null,
+        debtor_friend_id: isIOU ? formData.debtorFriendId : null,
+        expected_account_id: isIOU ? formData.expectedAccountId : null,
       });
+
 
 
       setShowModal(false);
@@ -332,8 +425,15 @@ const [editFormData, setEditFormData] = useState({
         startDate: '', 
         billerId: '', 
         due_date: '', 
-        linkedAccountId: '' 
-      });
+        linkedAccountId: '' ,
+        linkedAccountId: '',
+        fundingFriendId: '',
+        debtorFriendId: '',
+        expectedAccountId: ''
+      });
+      setIsProxyPay(false);
+      setIsIOU(false);
+
     } catch (error) {
       console.error('Failed to add installment:', error);
       // PROTOTYPE: Show helpful message if timing column is missing
@@ -365,19 +465,23 @@ const [editFormData, setEditFormData] = useState({
       ...showEditModal,
       name: editFormData.name,
       totalAmount: parseFloat(editFormData.totalAmount),
-      // 🟢 NEW: Add Principal Amount to payload
       principalAmount: parseFloat(editFormData.principalAmount), 
       monthlyAmount: newMonthlyAmount,
       termDuration: termDurationFormatted,
       paidAmount: showEditModal.paidAmount,
-      accountId: editFormData.accountId,
+      // 🟢 Clear accounts if Budee (Proxy Pay) tab is active
+      accountId: paymentTab === 'budee' ? '' : editFormData.accountId,
       startDate: editFormData.startDate || undefined,
       billerId: editFormData.billerId || undefined,
-      // 🔴 REMOVE: timing: editFormData.timing, 
       due_date: editFormData.due_date,
       isMigrated: true,
-      linkedAccountId: editFormData.linkedAccountId || undefined
+      linkedAccountId: paymentTab === 'budee' ? undefined : (editFormData.linkedAccountId || undefined),
+      // 🟢 Pass edit settlement fields explicitly based on active tab
+      funding_friend_id: paymentTab === 'budee' ? editFormData.fundingFriendId : null,
+      debtor_friend_id: (paymentTab === 'my_account' && isIOU) ? editFormData.debtorFriendId : null,
+      expected_account_id: (paymentTab === 'my_account' && isIOU) ? editFormData.expectedAccountId : null,
     };
+
 
 
 
@@ -516,37 +620,40 @@ const [editFormData, setEditFormData] = useState({
     });
   };
 
-  const openEditModal = (item: Installment) => {
-    // QA: Extract numeric value from termDuration (e.g., "12 months" -> "12")
+  const openEditModal = (item: any) => {
+    setShowEditModal(item);
+    
+    // 🟢 Extract funding friend from either snake_case or camelCase property
+    const activeFundingFriend = item.funding_friend_id || item.fundingFriendId || '';
+    const activeDebtorFriend = item.debtor_friend_id || item.debtorFriendId || '';
+
+    // 🟢 Set the tab state based on the extracted friend ID
+    setPaymentTab(activeFundingFriend ? 'budee' : 'my_account');
+    setIsIOU(!!activeDebtorFriend);
+
     const termDurationNumeric = item.termDuration ? item.termDuration.replace(/\D/g, '') : '';
-    
-    // 🟢 SAFETY CHECK: Did we historically save the loan bundle ID in accountId instead of linkedAccountId?
-    const isHistoricalCreditLink = accounts.some(a => 
-      a.id === item.accountId && 
-      (a.type === 'Credit' || a.classification === 'Credit Card' || a.type === 'Loan' || a.classification === 'Loan')
-    );
-    
-    {/* Populate the state when opening: */}
+
     setEditFormData({
       name: item.name,
-      // 🟢 NEW: Safely load principal if it exists (fallback to empty string for old records)
       principalAmount: item.principalAmount ? item.principalAmount.toFixed(2) : '',
       totalAmount: item.totalAmount.toFixed(2),
       monthlyAmount: item.monthlyAmount.toFixed(2),
       termDuration: termDurationNumeric,
-      accountId: item.accountId,
+      accountId: item.accountId || '',
       startDate: item.startDate || '',
       billerId: item.billerId || '',
-      // 🔴 REMOVE: timing: item.timing || '1/2', 
       due_date: item.due_date || '',
       is_migrated: !!item.isMigrated,
-      linkedAccountId: item.linkedAccountId || (isHistoricalCreditLink ? item.accountId : '')
+      linkedAccountId: item.accountId || '',
+      // 🟢 Map using the safe fallback variables
+      fundingFriendId: activeFundingFriend,
+      debtorFriendId: activeDebtorFriend,
+      expectedAccountId: item.expected_account_id || item.expectedAccountId || ''
     });
 
-
-    setShowEditModal(item);
     setOpenMenuId(null);
   };
+
 
 
   const handleCloseSubmit = async (e: React.FormEvent) => {
@@ -1199,25 +1306,145 @@ const [editFormData, setEditFormData] = useState({
                 />
               </div>
               
-                            {/* THE ONLY ACCOUNT FIELD NEEDED */}
+
+            {/* 🟢 NEW: TABBED PAYMENT LAYOUT */}
+                <div className="mt-6 rounded-2xl border-[3px] border-black bg-gray-50 overflow-hidden shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] dark:bg-gray-900">
+                
+                {/* TABS HEADER */}
+                <div className="flex border-b-[3px] border-black">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setPaymentTab('my_account');
+                      setIsProxyPay(false);
+                    }}
+                    className={`flex-1 py-3 px-4 text-xs font-black uppercase tracking-widest transition-colors ${
+                      paymentTab === 'my_account'
+                        ? 'bg-white text-indigo-600 dark:bg-gray-800 dark:text-indigo-400'
+                        : 'bg-gray-200 text-gray-500 hover:bg-gray-300 dark:bg-gray-900 dark:text-gray-400 dark:hover:bg-gray-800'
+                    }`}
+                  >
+                    My Account
+                  </button>
+                  <div className="w-[3px] bg-black"></div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setPaymentTab('budee');
+                      setIsProxyPay(true);
+                      setIsIOU(false); // Reset IOU when switching to Budee
+                    }}
+                    className={`flex-1 py-3 px-4 text-xs font-black uppercase tracking-widest transition-colors ${
+                      paymentTab === 'budee'
+                        ? 'bg-white text-indigo-600 dark:bg-gray-800 dark:text-indigo-400'
+                        : 'bg-gray-200 text-gray-500 hover:bg-gray-300 dark:bg-gray-900 dark:text-gray-400 dark:hover:bg-gray-800'
+                    }`}
+                  >
+                    Budee
+                  </button>
+                </div>
+
+                {/* TAB CONTENT */}
+                <div className="p-4 bg-white dark:bg-gray-800">
+                  
+                  {/* TAB 1: MY ACCOUNT (Standard & IOU) */}
+                  {paymentTab === 'my_account' && (
+                    <div className="space-y-4 animate-in fade-in slide-in-from-left-2 duration-300">
+                      
+                      {/* Standard Account Dropdown */}
+                      <div>
+                        <label className="block text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-2 transition-colors">Linked Credit Card</label>
+                        <select 
+                          value={formData.linkedAccountId} 
+                          onChange={(e) => setFormData({
+                            ...formData, 
+                            linkedAccountId: e.target.value,
+                            accountId: e.target.value
+                          })} 
+                          className="w-full bg-gray-50 dark:bg-gray-900 dark:text-gray-100 border-2 border-black rounded-2xl p-4 outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 font-bold appearance-none transition-colors shadow-[2px_2px_0px_rgba(0,0,0,0.12)]"
+                        >
+                          <option value="">None (Standard Installment)</option>
+                          {accounts.filter(acc => acc.type === 'Credit' || acc.classification === 'Credit Card' || acc.type === 'Loan' || acc.classification === 'Loan').map(acc => (
+                            <option key={acc.id} value={acc.id}>{acc.bank} - {acc.classification}</option>
+                          ))}
+                        </select>
+                      </div>
+
+                      {/* IOU Checkbox Nest */}
+                      <div className="pt-2 border-t-2 border-dashed border-gray-200 dark:border-gray-700">
+                        <label className="flex items-center gap-3 cursor-pointer mb-3 mt-2">
+                          <input 
+                            type="checkbox" 
+                            className="h-5 w-5 rounded border-black"
+                            checked={isIOU} 
+                            onChange={(e) => setIsIOU(e.target.checked)} 
+                          />
+                          <span className="text-sm font-bold text-gray-800 dark:text-gray-100">I paid for a Budee (IOU)</span>
+                        </label>
+
+                        {isIOU && (
+                          <div className="ml-8 space-y-4 animate-in fade-in slide-in-from-top-2 duration-300">
                             <div>
-                <label className="block text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-2 transition-colors">Linked Credit Card</label>
-                <select 
-                  value={formData.linkedAccountId} 
-                  onChange={(e) => setFormData({
-                    ...formData, 
-                    linkedAccountId: e.target.value,
-                    accountId: e.target.value // Quietly syncs the required DB field so it doesn't break
-                  })} 
-                  className="w-full bg-gray-50 dark:bg-gray-900 dark:text-gray-100 border-2 border-black rounded-2xl p-4 outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 font-bold appearance-none transition-colors shadow-[2px_2px_0px_rgba(0,0,0,0.12)]"
-                >
-                  <option value="">None (Standard Installment)</option>
-                  {accounts.filter(acc => acc.type === 'Credit' || acc.classification === 'Credit Card' || acc.type === 'Loan' || acc.classification === 'Loan').map(acc => (
-                    <option key={acc.id} value={acc.id}>{acc.bank} - {acc.classification}</option>
-                  ))}
-                </select>
-                <p className="text-[9px] text-gray-400 mt-2 font-medium leading-tight">Determines where to deduct the total amount for the installment limit, and where to inject the monthly payment.</p>
+                              <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Who owes you?</label>
+                              <select 
+                                value={formData.debtorFriendId} 
+                                onChange={e => setFormData({...formData, debtorFriendId: e.target.value})}
+                                className="w-full bg-white dark:bg-gray-900 dark:text-gray-100 border-2 border-black rounded-2xl p-4 outline-none font-bold transition-colors shadow-[2px_2px_0px_rgba(0,0,0,0.12)]"
+                                required={isIOU}
+                              >
+                                <option value="">Select a friend...</option>
+                                {(people || []).map(person => (
+                                  <option key={person.id} value={person.id}>{person.name}</option>
+                                ))}
+                              </select>
+                            </div>
+
+
+                            <div>
+                              <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Expected Receiving Account</label>
+                              <select 
+                                value={formData.expectedAccountId} 
+                                onChange={e => setFormData({...formData, expectedAccountId: e.target.value})}
+                                className="w-full bg-gray-50 dark:bg-gray-900 dark:text-gray-100 border-2 border-black rounded-2xl p-3 outline-none font-bold transition-colors shadow-[2px_2px_0px_rgba(0,0,0,0.12)]"
+                                required={isIOU}
+                              >
+                                <option value="">Select account...</option>
+                                {accounts.filter(a => a.type === 'Debit').map(acc => (
+                                  <option key={acc.id} value={acc.id}>{acc.bank}</option>
+                                ))}
+                              </select>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* TAB 2: BUDEE (Proxy Pay) */}
+                  {paymentTab === 'budee' && (
+                    <div className="space-y-4 py-2 animate-in fade-in slide-in-from-right-2 duration-300">
+                        <div>
+                          <label className="block text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-2 transition-colors">Paid by</label>
+                          <select 
+                            value={formData.fundingFriendId} 
+                            onChange={e => setFormData({...formData, fundingFriendId: e.target.value})}
+                            className="w-full bg-gray-50 dark:bg-gray-900 dark:text-gray-100 border-2 border-black rounded-2xl p-4 outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 font-bold appearance-none transition-colors shadow-[2px_2px_0px_rgba(0,0,0,0.12)]"
+                            required={paymentTab === 'budee'}
+                          >
+                            <option value="">Select a friend...</option>
+                            {(people || []).map(person => (
+                              <option key={person.id} value={person.id}>{person.name}</option>
+                            ))}
+                          </select>
+                          <p className="text-[9px] text-gray-400 mt-3 font-medium leading-tight">This will route the entire installment debt directly to this friend's profile instead of deducting from your bank account.</p>
+                        </div>
+
+                    </div>
+                  )}
+                </div>
               </div>
+              {/* 🟢 END TABBED PAYMENT LAYOUT */}
+
 
 
               <div className="flex space-x-4 pt-4">
@@ -1420,8 +1647,8 @@ const [editFormData, setEditFormData] = useState({
         </div>
       )}
 
-      {/* Edit Modal */}
-      {showEditModal && (
+            {/* Edit Modal */}
+            {showEditModal && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md">
           <div className="bg-white dark:bg-gray-900 rounded-[2.5rem] w-full max-w-lg p-10 shadow-2xl animate-in zoom-in-95 max-h-[90vh] overflow-y-auto transition-colors">
             <h2 className="text-2xl font-black text-gray-900 dark:text-gray-100 mb-6 uppercase tracking-tight transition-colors">Edit Installment</h2>
@@ -1465,20 +1692,21 @@ const [editFormData, setEditFormData] = useState({
                 
               </div>
               <div>
-  <label className="block text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-2 transition-colors">
-    Due Date
-  </label>
-  <input 
-    type="number" 
-    min="1" 
-    max="31"
-    value={editFormData.due_date} 
-    onChange={(e) => setEditFormData({...editFormData, due_date: e.target.value})} 
-    placeholder="e.g., 15"
-    className="w-full bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-transparent dark:border-gray-700 rounded-2xl p-4 outline-none focus:ring-2 focus:ring-indigo-500 font-black transition-colors" 
-  />
-</div>            
-              {/* QA: Fix for term duration issue - add term duration input field */}
+                <label className="block text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-2 transition-colors">
+                  Due Date
+                </label>
+                <input 
+                  type="number" 
+                  min="1" 
+                  max="31"
+                  value={editFormData.due_date} 
+                  onChange={(e) => setEditFormData({...editFormData, due_date: e.target.value})} 
+                  placeholder="e.g., 15"
+                  className="w-full bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-transparent dark:border-gray-700 rounded-2xl p-4 outline-none focus:ring-2 focus:ring-indigo-500 font-black transition-colors" 
+                />
+              </div>            
+
+              {/* Term Duration */}
               <div>
                 <label className="block text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-2 transition-colors">Term Duration (months)</label>
                 <input 
@@ -1492,26 +1720,141 @@ const [editFormData, setEditFormData] = useState({
                 />
               </div>
               
-                            {/* THE ONLY ACCOUNT FIELD NEEDED */}
-                            <div>
-                <label className="block text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-2 transition-colors">Linked Credit Card</label>
-                <select 
-                  value={editFormData.linkedAccountId} 
-                  onChange={(e) => setEditFormData({
-                    ...editFormData, 
-                    linkedAccountId: e.target.value,
-                    accountId: e.target.value // Quietly syncs the required DB field so it doesn't break
-                  })} 
-                  className="w-full bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-transparent dark:border-gray-700 rounded-2xl p-4 outline-none focus:ring-2 focus:ring-indigo-500 font-bold appearance-none transition-colors"
-                >
-                  <option value="">None (Standard Installment)</option>
-                  {accounts.filter(acc => acc.type === 'Credit' || acc.classification === 'Credit Card' || acc.type === 'Loan' || acc.classification === 'Loan').map(acc => (
-                    <option key={acc.id} value={acc.id}>{acc.bank} - {acc.classification}</option>
-                  ))}
-                </select>
-                <p className="text-[9px] text-gray-400 mt-2 font-medium leading-tight">Determines where to deduct the total amount for the installment limit, and where to inject the monthly payment.</p>
-              </div>
+              {/* 🟢 NEW: TABBED PAYMENT LAYOUT */}
+              <div className="mt-6 rounded-2xl border-[3px] border-black bg-gray-50 overflow-hidden shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] dark:bg-gray-900">
+                
+                {/* TABS HEADER */}
+                <div className="flex border-b-[3px] border-black">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setPaymentTab('my_account');
+                      setIsProxyPay(false);
+                    }}
+                    className={`flex-1 py-3 px-4 text-xs font-black uppercase tracking-widest transition-colors ${
+                      paymentTab === 'my_account'
+                        ? 'bg-white text-indigo-600 dark:bg-gray-800 dark:text-indigo-400'
+                        : 'bg-gray-200 text-gray-500 hover:bg-gray-300 dark:bg-gray-900 dark:text-gray-400 dark:hover:bg-gray-800'
+                    }`}
+                  >
+                    My Account
+                  </button>
+                  <div className="w-[3px] bg-black"></div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setPaymentTab('budee');
+                      setIsProxyPay(true);
+                      setIsIOU(false);
+                    }}
+                    className={`flex-1 py-3 px-4 text-xs font-black uppercase tracking-widest transition-colors ${
+                      paymentTab === 'budee'
+                        ? 'bg-white text-indigo-600 dark:bg-gray-800 dark:text-indigo-400'
+                        : 'bg-gray-200 text-gray-500 hover:bg-gray-300 dark:bg-gray-900 dark:text-gray-400 dark:hover:bg-gray-800'
+                    }`}
+                  >
+                    Budee
+                  </button>
+                </div>
 
+                {/* TAB CONTENT */}
+                <div className="p-4 bg-white dark:bg-gray-800">
+                  
+                  {/* TAB 1: MY ACCOUNT (Standard & IOU) */}
+                  {paymentTab === 'my_account' && (
+                    <div className="space-y-4 animate-in fade-in slide-in-from-left-2 duration-300">
+                      
+                      {/* Standard Account Dropdown */}
+                      <div>
+                        <label className="block text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-2 transition-colors">Linked Credit Card</label>
+                        <select 
+                          value={editFormData.linkedAccountId} 
+                          onChange={(e) => setEditFormData({
+                            ...editFormData, 
+                            linkedAccountId: e.target.value,
+                            accountId: e.target.value
+                          })} 
+                          className="w-full bg-gray-50 dark:bg-gray-900 dark:text-gray-100 border-2 border-black rounded-2xl p-4 outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 font-bold appearance-none transition-colors shadow-[2px_2px_0px_rgba(0,0,0,0.12)]"
+                        >
+                          <option value="">None (Standard Installment)</option>
+                          {accounts.filter(acc => acc.type === 'Credit' || acc.classification === 'Credit Card' || acc.type === 'Loan' || acc.classification === 'Loan').map(acc => (
+                            <option key={acc.id} value={acc.id}>{acc.bank} - {acc.classification}</option>
+                          ))}
+                        </select>
+                      </div>
+
+                      {/* IOU Checkbox Nest */}
+                      <div className="pt-2 border-t-2 border-dashed border-gray-200 dark:border-gray-700">
+                        <label className="flex items-center gap-3 cursor-pointer mb-3 mt-2">
+                          <input 
+                            type="checkbox" 
+                            className="h-5 w-5 rounded border-black"
+                            checked={isIOU} 
+                            onChange={(e) => setIsIOU(e.target.checked)} 
+                          />
+                          <span className="text-sm font-bold text-gray-800 dark:text-gray-100">I paid for a Budee (IOU)</span>
+                        </label>
+
+                        {isIOU && (
+                          <div className="ml-8 space-y-4 animate-in fade-in slide-in-from-top-2 duration-300">
+                            <div>
+                              <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Who owes you?</label>
+                              <select 
+                                value={editFormData.debtorFriendId} 
+                                onChange={e => setEditFormData({...editFormData, debtorFriendId: e.target.value})}
+                                className="w-full bg-white dark:bg-gray-900 dark:text-gray-100 border-2 border-black rounded-2xl p-4 outline-none font-bold transition-colors shadow-[2px_2px_0px_rgba(0,0,0,0.12)]"
+                                required={isIOU}
+                              >
+                                <option value="">Select a friend...</option>
+                                {(people || []).map(person => (
+                                  <option key={person.id} value={person.id}>{person.name}</option>
+                                ))}
+                              </select>
+                            </div>
+
+                            <div>
+                              <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Expected Receiving Account</label>
+                              <select 
+                                value={editFormData.expectedAccountId} 
+                                onChange={e => setEditFormData({...editFormData, expectedAccountId: e.target.value})}
+                                className="w-full bg-gray-50 dark:bg-gray-900 dark:text-gray-100 border-2 border-black rounded-2xl p-3 outline-none font-bold transition-colors shadow-[2px_2px_0px_rgba(0,0,0,0.12)]"
+                                required={isIOU}
+                              >
+                                <option value="">Select account...</option>
+                                {accounts.filter(a => a.type === 'Debit').map(acc => (
+                                  <option key={acc.id} value={acc.id}>{acc.bank}</option>
+                                ))}
+                              </select>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* TAB 2: BUDEE (Proxy Pay) */}
+                  {paymentTab === 'budee' && (
+                    <div className="space-y-4 py-2 animate-in fade-in slide-in-from-right-2 duration-300">
+                      <div>
+                        <label className="block text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-2 transition-colors">Paid by</label>
+                        <select 
+                          value={editFormData.fundingFriendId} 
+                          onChange={e => setEditFormData({...editFormData, fundingFriendId: e.target.value})}
+                          className="w-full bg-gray-50 dark:bg-gray-900 dark:text-gray-100 border-2 border-black rounded-2xl p-4 outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 font-bold appearance-none transition-colors shadow-[2px_2px_0px_rgba(0,0,0,0.12)]"
+                          required={paymentTab === 'budee'}
+                        >
+                          <option value="">Select a friend...</option>
+                          {(people || []).map(person => (
+                            <option key={person.id} value={person.id}>{person.name}</option>
+                          ))}
+                        </select>
+                        <p className="text-[9px] text-gray-400 mt-3 font-medium leading-tight">This will route the entire installment debt directly to this friend's profile instead of deducting from your bank account.</p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+              {/* 🟢 END TABBED PAYMENT LAYOUT */}
 
               <div className="flex space-x-4 pt-4">
                 <button type="button" onClick={() => setShowEditModal(null)} className="flex-1 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 py-4 rounded-2xl font-black uppercase tracking-widest text-xs text-gray-500 dark:text-gray-300 transition-colors">Cancel</button>
@@ -1521,6 +1864,7 @@ const [editFormData, setEditFormData] = useState({
           </div>
         </div>
       )}
+
 
       {/* View Schedule Modal */}
       {showViewModal && (() => {
