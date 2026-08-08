@@ -4060,11 +4060,6 @@ const categoryTotal = categorySummary.find(s => s.category === cat.name)?.total 
                     );
                   }
 
-                  // 🔴 STANDARD REVOLVING CREDIT CARD UI
-                  const displayAmount = getFrozenCycleAmount(account);
-                  const cycleRemaining = getRemainingCycleAmount(account);
-
-                  if (displayAmount < 0.01) return null; 
                   
                   let calculatedDueDate = 'N/A';
                   if (account.dueDate && account.billingDate) {
@@ -4358,20 +4353,23 @@ return getAccountPeriodIndex({ dueDate: dueDay }) === activePeriodIndex;
 
                 
                               {/* 3. AMOUNT */}
-                            <td className="p-4">
-                              <div className="flex items-center space-x-1">
-                                <span className="text-gray-400 dark:text-gray-500 font-bold">₱</span>
-                                <input 
-                                  type="number" 
-                                  value={item.amountsByPeriod?.[activePeriodIndex] || ''} 
-                                  onChange={(e) => handleAmountUpdate(cat.name, item.id, activePeriodIndex, e.target.value)} 
-                                  onFocus={() => { isFocusedRef.current = true; }} 
-                                  onBlur={() => { isFocusedRef.current = false; }} 
-                                  disabled={isReadOnly} 
-                                  className="bg-transparent border-none text-sm font-black w-24 outline-none dark:text-gray-100" 
-                                />
-                              </div>
-                            </td>
+                              {/* 3. AMOUNT */}
+<td className="p-4">
+  <div className="flex items-center space-x-1">
+    <span className="text-gray-400 dark:text-gray-500 font-bold">₱</span>
+    <input 
+      type="number" 
+      // 🟢 Add the fallback to item.amount here!
+      value={item.amountsByPeriod?.[activePeriodIndex] || item.amount || ''} 
+      onChange={(e) => handleAmountUpdate(cat.name, item.id, activePeriodIndex, e.target.value)} 
+      onFocus={() => { isFocusedRef.current = true; }} 
+      onBlur={() => { isFocusedRef.current = false; }} 
+      disabled={isReadOnly} 
+      className="bg-transparent border-none text-sm font-black w-24 outline-none dark:text-gray-100" 
+    />
+  </div>
+</td>
+
 
                 
                               {/* 4. DUE */}
@@ -4620,72 +4618,91 @@ return getAccountPeriodIndex({ dueDate: dueDay }) === activePeriodIndex;
       })}
 
 {(() => {
-          const creditCardAccounts = accounts.filter(acc => acc.classification === 'Credit Card' && acc.billingDate);
+          // 🟢 Bulletproof filter ensures we only map actual Credit accounts
+          const creditCardAccounts = (accounts || []).filter(acc => 
+            (acc.type === 'Credit' || acc.classification === 'Credit Card')
+          );
+          
           if (creditCardAccounts.length === 0) return null;
           const monthIndex = MONTHS.indexOf(selectedMonth);
           const currentYear = new Date().getFullYear();
 
           return creditCardAccounts.map(account => {
-            const cycleSummaries = aggregateCreditCardPurchases(account, transactions, installments);
-            const relevantCycle = cycleSummaries.find(cycle => {
-              const cycleMonth = cycle.cycleStart.getMonth();
-              const cycleYear = cycle.cycleStart.getFullYear();
-              return (cycleMonth === monthIndex && cycleYear === currentYear) || (cycle.cycleEnd.getMonth() === monthIndex && cycle.cycleEnd.getFullYear() === currentYear);
-            });
+            try {
+              // 🟢 Safe aggregator call: Falls back to empty array if undefined
+              const cycleSummaries = typeof aggregateCreditCardPurchases === 'function' 
+                ? aggregateCreditCardPurchases(account, transactions || [], installments || []) 
+                : [];
+                
+              const relevantCycle = (cycleSummaries || []).find(cycle => {
+                if (!cycle || !cycle.cycleStart || !cycle.cycleEnd) return false;
+                const cycleMonth = cycle.cycleStart.getMonth();
+                const cycleYear = cycle.cycleStart.getFullYear();
+                return (cycleMonth === monthIndex && cycleYear === currentYear) || 
+                       (cycle.cycleEnd.getMonth() === monthIndex && cycle.cycleEnd.getFullYear() === currentYear);
+              });
 
-            if (!relevantCycle || relevantCycle.transactionCount === 0) return null;
-            return (
-              <div key={`cc-${account.id}`} className="bg-white dark:bg-gray-900 rounded-2xl border-4 border-black shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] overflow-hidden w-full transition-colors">
-
-                <div className="px-8 py-5 border-b-4 border-black bg-gray-50/30 dark:bg-gray-800/30 flex justify-between items-center transition-colors">
-                  <div>
-                    <h3 className="text-xs font-black text-gray-900 dark:text-gray-100 uppercase tracking-[0.25em]">Credit Card Purchases</h3>
-                    <p className="text-[10px] text-gray-500 font-medium mt-1">{account.bank} • {relevantCycle.cycleLabel}</p>
+              // 🟢 Safety check to ensure transactions exist before rendering the table
+              if (!relevantCycle || !relevantCycle.transactions || relevantCycle.transactionCount === 0) return null;
+              
+              return (
+                <div key={`cc-${account.id}`} className="bg-white dark:bg-gray-900 rounded-2xl border-4 border-black shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] overflow-hidden w-full transition-colors">
+                  <div className="px-8 py-5 border-b-4 border-black bg-gray-50/30 dark:bg-gray-800/30 flex justify-between items-center transition-colors">
+                    <div>
+                      <h3 className="text-xs font-black text-gray-900 dark:text-gray-100 uppercase tracking-[0.25em]">Credit Card Purchases</h3>
+                      <p className="text-[10px] text-gray-500 font-medium mt-1">{account.bank} • {relevantCycle.cycleLabel}</p>
+                    </div>
+                    <span className="text-lg font-black text-purple-600">{formatCurrency(relevantCycle.totalAmount)}</span>
                   </div>
-                  <span className="text-lg font-black text-purple-600">{formatCurrency(relevantCycle.totalAmount)}</span>
-                </div>
-                <div className="w-full overflow-x-auto">
-                  <table className="w-full text-left">
-                    <thead>
-                      <tr className="text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase border-b border-gray-50 dark:border-gray-800/50"><th className="p-4 pl-10">Transaction</th><th className="p-4">Date</th><th className="p-4">Amount</th><th className="p-4 pr-10 text-right"></th></tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-50 dark:divide-gray-800/50">
-                      {relevantCycle.transactions.map((tx) => {
-                        // 🛡️ BULLETPROOF TRY/CATCH WRAPPER
-                        try {
-                          const safeAmount = Number(tx?.amount || 0).toFixed(2);
-                          const safeDateStr = tx?.date ? String(tx.date).split('T')[0] : getTodayIso();
-                          const displayDate = tx?.date ? new Date(tx.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'Unknown Date';
-                          const safeName = tx?.name || 'Unnamed Transaction';
+                  <div className="w-full overflow-x-auto">
+                    <table className="w-full text-left">
+                      <thead>
+                        <tr className="text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase border-b border-gray-50 dark:border-gray-800/50">
+                          <th className="p-4 pl-10">Transaction</th>
+                          <th className="p-4">Date</th>
+                          <th className="p-4">Amount</th>
+                          <th className="p-4 pr-10 text-right"></th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-50 dark:divide-gray-800/50">
+                        {(relevantCycle.transactions || []).map((tx) => {
+                          try {
+                            const safeAmount = Number(tx?.amount || 0).toFixed(2);
+                            const safeDateStr = tx?.date ? String(tx.date).split('T')[0] : getTodayIso();
+                            const displayDate = tx?.date ? new Date(tx.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'Unknown Date';
+                            const safeName = tx?.name || 'Unnamed Transaction';
 
-                          return (
-                            <tr key={tx.id} className="bg-purple-50/20 dark:bg-purple-900/10">
-                              <td className="p-4 pl-10"><span className="text-sm font-bold text-gray-900 dark:text-gray-100">{safeName}</span></td>
-                              <td className="p-4"><span className="text-xs text-gray-500 font-medium">{displayDate}</span></td>
-                              <td className="p-4 text-sm font-black">₱ {safeAmount}</td>
-                              <td className="p-4 pr-10 text-right">
-                                <button
-                                  onClick={() => {
-                                    setTransactionFormData({ id: tx.id, name: safeName, date: safeDateStr, amount: safeAmount, accountId: tx.payment_method_id, paymentScheduleId: tx.payment_schedule_id || '', transactionType: 'cash_out' });
-                                    setShowTransactionModal(true);
-                                  }}
-                                  className="text-[10px] font-black text-indigo-600 uppercase tracking-widest border-2 border-black bg-white px-3 py-1.5 rounded-xl shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[1px] hover:translate-y-[1px] transition-all"
-                                >
-                                  Edit
-                                </button>
-                              </td>
-                            </tr>
-                          );
-                        } catch (e) {
-                          console.error("Crashed on credit card transaction:", tx, e);
-                          return null;
-                        }
-                      })}
-                    </tbody>
-                  </table>
+                            return (
+                              <tr key={tx.id} className="bg-purple-50/20 dark:bg-purple-900/10">
+                                <td className="p-4 pl-10"><span className="text-sm font-bold text-gray-900 dark:text-gray-100">{safeName}</span></td>
+                                <td className="p-4"><span className="text-xs text-gray-500 font-medium">{displayDate}</span></td>
+                                <td className="p-4 text-sm font-black">₱ {safeAmount}</td>
+                                <td className="p-4 pr-10 text-right">
+                                  <button
+                                    onClick={() => {
+                                      setTransactionFormData({ id: tx.id, name: safeName, date: safeDateStr, amount: safeAmount, accountId: tx.payment_method_id, paymentScheduleId: tx.payment_schedule_id || '', transactionType: 'cash_out' });
+                                      setShowTransactionModal(true);
+                                    }}
+                                    className="text-[10px] font-black text-indigo-600 uppercase tracking-widest border-2 border-black bg-white px-3 py-1.5 rounded-xl shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[1px] hover:translate-y-[1px] transition-all"
+                                  >
+                                    Edit
+                                  </button>
+                                </td>
+                              </tr>
+                            );
+                          } catch (e) {
+                            return null;
+                          }
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
-              </div>
-            );
+              );
+            } catch (e) {
+              console.warn("Skipping rendering for credit card table due to missing cycle data.");
+              return null;
+            }
           });
         })()}
       </div>

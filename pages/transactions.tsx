@@ -240,8 +240,10 @@ function TransactionsPage({ transactions, loading = false, onTransactionDeleted,
   // Receipt file for the add-transaction form
   const [receiptFile, setReceiptFile] = useState<File | null>(null);
 
-  // 🟢 NEW: State to toggle the IOU UI
-  const [showAdvancedOptions, setShowAdvancedOptions] = useState(false);
+    // 🟢 Payment Routing Tabs State
+    const [paymentTab, setPaymentTab] = useState<'my_account' | 'budee'>('my_account');
+    const [isIOU, setIsIOU] = useState(false);
+  
 
   // 🟢 UPDATED: Added payerId and beneficiaryId to the form state
   const [form, setForm] = useState({
@@ -550,8 +552,9 @@ function TransactionsPage({ transactions, loading = false, onTransactionDeleted,
       beneficiaryId: 'me'  // 🟢 Reset to default
     });
     setReceiptFile(null);
-    setShowAdvancedOptions(false); // 🟢 Collapse the accordion
-    setShowTypeModal(false);
+    setPaymentTab('my_account'); // 🟢 Replaces setShowAdvancedOptions(false)
+    setIsIOU(false);
+
 
     if (source === 'top') {
       setShowFabMenu(false);
@@ -566,8 +569,11 @@ function TransactionsPage({ transactions, loading = false, onTransactionDeleted,
     setEditingTxId(null);
     setFormSource(null);
     setReceiptFile(null);
-    setShowAdvancedOptions(false); // 🟢 Collapse the accordion
-    setForm({ 
+    setPaymentTab('my_account'); // 🟢 Replaces setShowAdvancedOptions(false)
+    setIsIOU(false);
+    
+    // 🟢 You missed the setForm call here!
+    setForm({
       name: '', 
       date: todayIso(), 
       amount: '', 
@@ -580,6 +586,8 @@ function TransactionsPage({ transactions, loading = false, onTransactionDeleted,
       beneficiaryId: 'me'  // 🟢 Reset to default
     });
   };
+
+
 
 
   const openEditForm = (tx: Transaction) => {
@@ -601,7 +609,15 @@ function TransactionsPage({ transactions, loading = false, onTransactionDeleted,
     // 🟢 Auto-expand advanced options if this transaction has an IOU context
     setShowAdvancedOptions(!!((tx as any).payer_id || (tx as any).beneficiary_id));
     
-    setReceiptFile(null);
+        // 🟢 Auto-configure tabs based on existing transaction data
+        const hasPayer = (tx as any).payer_id && (tx as any).payer_id !== 'me';
+        const hasBeneficiary = (tx as any).beneficiary_id && (tx as any).beneficiary_id !== 'me';
+        
+        setPaymentTab(hasPayer ? 'budee' : 'my_account');
+        setIsIOU(hasBeneficiary);
+        
+        setReceiptFile(null);
+    
     setShowForm(true);
   };
 
@@ -1219,99 +1235,162 @@ function TransactionsPage({ transactions, loading = false, onTransactionDeleted,
                         </div>
                       )}
                     </>
-                  ) : (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                      <div>
-                        <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">
-                          {['withdraw', 'cash_in', 'loan', 'transfer'].includes(form.transactionType) ? 'Date' : 'Date Paid'}
-                        </label>
-                        <input
-                          type="date"
-                          value={form.date}
-                          onChange={e => setForm(f => ({ ...f, date: e.target.value }))}
-                          required
-                          className={`w-full min-w-0 bg-white dark:bg-gray-800 border-2 border-black dark:border-gray-700 rounded-xl p-3.5 font-bold outline-none focus:ring-offset-2 ${getAccentClasses('ring')} transition-all text-sm`} />
+                                    ) : (
+                                      <div className={`grid grid-cols-1 ${form.transactionType === 'loan' ? 'sm:grid-cols-2' : ''} gap-4`}>
+                                        <div>
+                                          <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">
+                                            {['withdraw', 'cash_in', 'loan', 'transfer'].includes(form.transactionType) ? 'Date' : 'Date Paid'}
+                                          </label>
+                                          <input
+                                            type="date"
+                                            value={form.date}
+                                            onChange={e => setForm(f => ({ ...f, date: e.target.value }))}
+                                            required
+                                            className={`w-full min-w-0 bg-white dark:bg-gray-800 border-2 border-black dark:border-gray-700 rounded-xl p-3.5 font-bold outline-none focus:ring-offset-2 ${getAccentClasses('ring')} transition-all text-sm`} />
+                                        </div>
+                                        
+                                        {/* 🟢 Only show the top account dropdown for Loans now */}
+                                        {form.transactionType === 'loan' && (
+                                          <div>
+                                            <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Account</label>
+                                            {accounts.length === 0 ? (
+                                              <div className="text-xs text-red-600 p-4">No accounts available</div>
+                                            ) : (
+                                              <select
+                                                value={form.paymentMethodId}
+                                                onChange={e => setForm(f => ({ ...f, paymentMethodId: e.target.value }))}
+                                                className={`w-full min-w-0 bg-white dark:bg-gray-800 border-2 border-black dark:border-gray-700 rounded-xl p-3.5 font-bold text-sm appearance-none outline-none focus:ring-offset-2 ${getAccentClasses('ring')}`}>
+                                                {accounts.filter(a => a.type !== 'Credit').map(a => <option key={a.id} value={a.id}>{a.bank}</option>)}
+                                              </select>
+                                            )}
+                                          </div>
+                                        )}
+                                      </div>
+                                    )}
+                  
+
+                                    {/* 🟢 NEW: TABBED PAYMENT LAYOUT */}
+                                    {(form.transactionType === 'payment' || form.transactionType === 'withdraw' || form.transactionType === 'cash_in') && (
+                    <div className="mt-6 rounded-2xl border-[3px] border-black bg-gray-50 overflow-hidden shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] dark:bg-gray-900">
+                      
+                      {/* TABS HEADER */}
+                      <div className="flex border-b-[3px] border-black">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setPaymentTab('my_account');
+                            setForm(f => ({ ...f, payerId: 'me' }));
+                          }}
+                          className={`flex-1 py-3 px-4 text-xs font-black uppercase tracking-widest transition-colors ${
+                            paymentTab === 'my_account'
+                              ? 'bg-white text-indigo-600 dark:bg-gray-800 dark:text-indigo-400'
+                              : 'bg-gray-200 text-gray-500 hover:bg-gray-300 dark:bg-gray-900 dark:text-gray-400 dark:hover:bg-gray-800'
+                          }`}
+                        >
+                          My Account
+                        </button>
+                        <div className="w-[3px] bg-black"></div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setPaymentTab('budee');
+                            setIsIOU(false); 
+                            setForm(f => ({ ...f, beneficiaryId: 'me' }));
+                          }}
+                          className={`flex-1 py-3 px-4 text-xs font-black uppercase tracking-widest transition-colors ${
+                            paymentTab === 'budee'
+                              ? 'bg-white text-indigo-600 dark:bg-gray-800 dark:text-indigo-400'
+                              : 'bg-gray-200 text-gray-500 hover:bg-gray-300 dark:bg-gray-900 dark:text-gray-400 dark:hover:bg-gray-800'
+                          }`}
+                        >
+                          Budee
+                        </button>
                       </div>
-                      <div>
-                        <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">
-                          {['withdraw', 'cash_in', 'loan', 'transfer'].includes(form.transactionType) ? 'Account' : 'Payment Method'}
-                        </label>
-                        {accounts.length === 0 ? (
-                          <div className="text-xs text-red-600 p-4">No accounts available</div>
-                        ) : (
-                          <select
-                            value={form.paymentMethodId}
-                            onChange={e => setForm(f => ({ ...f, paymentMethodId: e.target.value }))}
-                            className={`w-full min-w-0 bg-white dark:bg-gray-800 border-2 border-black dark:border-gray-700 rounded-xl p-3.5 font-bold text-sm appearance-none outline-none focus:ring-offset-2 ${getAccentClasses('ring')}`}>
-                            {accounts.filter(a => form.transactionType === 'payment' ? a.classification !== 'Credit Card' : a.type !== 'Credit').map(a => <option key={a.id} value={a.id}>{a.bank}</option>)}
-                          </select>
+
+                      {/* TAB CONTENT */}
+                      <div className="p-4 bg-white dark:bg-gray-800">
+                        
+                      {/* TAB 1: MY ACCOUNT */}
+                      {paymentTab === 'my_account' && (
+                          <div className="animate-in fade-in slide-in-from-left-2 duration-300">
+                            
+                            {/* 🟢 MOVED ACCOUNT DROPDOWN HERE */}
+                            <div className="mb-4">
+                              <label className="block text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-2 transition-colors">
+                                {['withdraw', 'cash_in'].includes(form.transactionType) ? 'Account' : 'Payment Method'}
+                              </label>
+                              <select 
+                                value={form.paymentMethodId} 
+                                onChange={e => setForm(f => ({ ...f, paymentMethodId: e.target.value }))}
+                                className={`w-full bg-white dark:bg-gray-900 dark:text-gray-100 border-2 border-black rounded-xl p-3.5 outline-none font-bold appearance-none focus:ring-offset-2 ${getAccentClasses('ring')} transition-colors shadow-[2px_2px_0px_rgba(0,0,0,0.12)]`}
+                              >
+                                {accounts.filter(a => form.transactionType === 'payment' ? a.classification !== 'Credit Card' : a.type !== 'Credit').map(a => (
+                                  <option key={a.id} value={a.id}>{a.bank}</option>
+                                ))}
+                              </select>
+                            </div>
+
+                            {/* IOU Section */}
+                            <div className="pt-3 border-t-2 border-dashed border-gray-200 dark:border-gray-700">
+                              <label className="flex items-center gap-3 cursor-pointer py-1">
+                                <input 
+                                  type="checkbox" 
+                                  className="h-5 w-5 rounded border-black"
+                                  checked={isIOU} 
+                                  onChange={(e) => {
+                                    setIsIOU(e.target.checked);
+                                    if (!e.target.checked) setForm(f => ({ ...f, beneficiaryId: 'me' }));
+                                  }} 
+                                />
+                                <span className="text-sm font-bold text-gray-800 dark:text-gray-100">I paid for a Budee (IOU)</span>
+                              </label>
+
+                              {isIOU && (
+                                <div className="mt-4 space-y-4 animate-in fade-in slide-in-from-top-2 duration-300">
+                                  <div>
+                                    <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Who owes you?</label>
+                                    <select
+                                      value={form.beneficiaryId}
+                                      onChange={(e) => setForm(f => ({ ...f, beneficiaryId: e.target.value }))}
+                                      className={`w-full p-4 border-2 border-black dark:border-gray-700 rounded-xl text-sm font-bold bg-white dark:bg-gray-900 outline-none focus:ring-offset-2 ${getAccentClasses('ring')} transition-all shadow-[2px_2px_0px_rgba(0,0,0,0.12)]`}
+                                    >
+                                      <option value="me" disabled>Select a friend...</option>
+                                      {selectableContacts.map(c => (
+                                        <option key={`ben-${c.id}`} value={c.id}>{c.name}</option>
+                                      ))}
+                                    </select>
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        )}
+
+
+                        {/* TAB 2: BUDEE */}
+                        {paymentTab === 'budee' && (
+                          <div className="space-y-4 py-2 animate-in fade-in slide-in-from-right-2 duration-300">
+                            <div>
+                              <label className="block text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-2 transition-colors">Paid by</label>
+                              <select
+                                value={form.payerId}
+                                onChange={(e) => setForm(f => ({ ...f, payerId: e.target.value }))}
+                                className={`w-full p-4 border-2 border-black dark:border-gray-700 rounded-2xl text-sm font-bold bg-gray-50 dark:bg-gray-900 outline-none focus:ring-offset-2 ${getAccentClasses('ring')} transition-all shadow-[2px_2px_0px_rgba(0,0,0,0.12)]`}
+                                required={paymentTab === 'budee'}
+                              >
+                                <option value="me" disabled>Select a friend...</option>
+                                {selectableContacts.map(c => (
+                                  <option key={`payer-${c.id}`} value={c.id}>{c.name}</option>
+                                ))}
+                              </select>
+                              <p className="text-[9px] text-gray-400 mt-3 font-medium leading-tight">This will route the entire expense directly to this friend's profile instead of deducting from your bank account.</p>
+                            </div>
+                          </div>
                         )}
                       </div>
                     </div>
                   )}
 
-                  {form.transactionType === 'loan' && userProfile?.settings?.peopleEnabled && (
-                    <div>
-                      <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Borrower (Optional)</label>
-                      <ContactDropdown
-                        contacts={selectableContacts}
-                        value={form.borrowerName || ''}
-                        onChange={val => setForm(f => ({ ...f, borrowerName: val }))}
-                        placeholder="Select or type borrower" />
-                      {people.length === 0 && (
-                        <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">Add people in Settings to see them here.</p>
-                      )}
-                    </div>
-                  )}
-
-                  {/* 🟢 NEW: Shared & IOU Options (Progressive Disclosure) */}
-                  {(form.transactionType === 'payment' || form.transactionType === 'withdraw' || form.transactionType === 'cash_in') && (
-                    <div className="mt-4 border-t-2 border-gray-200 dark:border-gray-800 pt-4 mb-4">
-                      <button
-                        type="button"
-                        onClick={() => setShowAdvancedOptions(!showAdvancedOptions)}
-                        className="text-xs font-black uppercase tracking-widest text-gray-500 hover:text-black dark:hover:text-white flex items-center gap-1 transition-colors"
-                      >
-                        {showAdvancedOptions ? '− Hide' : '+ Show'} Shared & IOU Options
-                      </button>
-
-                      {showAdvancedOptions && (
-                        <div className="mt-3 p-3 bg-gray-50 dark:bg-gray-800/50 border-2 border-gray-200 dark:border-gray-700 rounded-xl space-y-4 animate-in fade-in slide-in-from-top-2">
-                          
-                          {/* WHO PAID? */}
-                          <div className="flex flex-col gap-1">
-                            <label className="text-[10px] font-black uppercase text-gray-400">Who paid for this?</label>
-                            <select
-                              value={form.payerId}
-                              onChange={(e) => setForm(f => ({ ...f, payerId: e.target.value }))}
-                              className={`p-2 border-2 border-black dark:border-gray-700 rounded-lg text-sm font-bold bg-white dark:bg-gray-900 outline-none focus:ring-offset-2 ${getAccentClasses('ring')} transition-all`}
-                            >
-                              <option value="me">I paid (My Account/Cash)</option>
-                              {selectableContacts.map(c => (
-                                <option key={`payer-${c.id}`} value={c.id}>{c.name} paid (Proxy Pay)</option>
-                              ))}
-                            </select>
-                          </div>
-
-                          {/* WHO WAS IT FOR? */}
-                          <div className="flex flex-col gap-1">
-                            <label className="text-[10px] font-black uppercase text-gray-400">Who is this expense for?</label>
-                            <select
-                              value={form.beneficiaryId}
-                              onChange={(e) => setForm(f => ({ ...f, beneficiaryId: e.target.value }))}
-                              className={`p-2 border-2 border-black dark:border-gray-700 rounded-lg text-sm font-bold bg-white dark:bg-gray-900 outline-none focus:ring-offset-2 ${getAccentClasses('ring')} transition-all`}
-                            >
-                              <option value="me">Just Me</option>
-                              {selectableContacts.map(c => (
-                                <option key={`ben-${c.id}`} value={c.id}>{c.name} (They owe me)</option>
-                              ))}
-                              <option value="split" disabled>Split Bill (Coming Soon)</option>
-                            </select>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  )}
 
 
                   {form.transactionType === 'payment' && (
