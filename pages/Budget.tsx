@@ -987,22 +987,27 @@ const balance = accountTxs.reduce((sum, tx) => {
         return endMonth === monthIndex && endYear === selectedYear;
       });
 
-      if (targetCycle) {
-        // 3. Filter transactions that fall within this cycle's start and end dates
-        const cycleCharges = transactions
-          .filter(tx => tx?.payment_method_id === account.id)
-          .filter(tx => {
-            if (!tx?.date) return false;
-            const txDate = new Date(tx.date);
-            return txDate >= targetCycle.startDate && 
-                   txDate <= targetCycle.endDate && 
-                   tx.transaction_type !== 'credit_payment' &&
-                   tx.amount > 0;
-          })
-          .reduce((sum, tx) => sum + tx.amount, 0);
+      if (targetCycle) {
+        // 3. Filter transactions that fall within this cycle's start and end dates
+        const cycleCharges = transactions
+          .filter(tx => tx?.payment_method_id === account.id)
+          .filter(tx => {
+            if (!tx?.date) return false;
+            const txDate = new Date(tx.date);
+            return txDate >= targetCycle.startDate && 
+                   txDate <= targetCycle.endDate && 
+                   tx.transaction_type !== 'credit_payment' &&
+                   tx.amount > 0;
+          })
+          .reduce((sum, tx) => sum + tx.amount, 0);
 
-        return cycleCharges;
-      }
+
+
+
+        // 🟢 FIX: Only return cycle charges if they exist, otherwise fall through to check live balance!
+        if (cycleCharges > 0) return cycleCharges; 
+      }
+
 
       // 4. Fallback if no matching cycle window is found
       const fallbackCharges = transactions
@@ -3846,14 +3851,24 @@ const displayTotal = matchingSummary ? matchingSummary.total : 0;
 
 let relevantInstallments: Installment[] = [];
 if (cat.name === 'Loans') {
-  relevantInstallments = (installments || []).filter(inst => {
-    if (inst.isArchived) return false;
-    const scheduleForMonth = getPaymentSchedule('installment', inst.id, selectedMonth, selectedYear);
-    const isActiveForPeriod = scheduleForMonth !== undefined || shouldShowInstallment(inst, selectedMonth, selectedYear);
-    const isFinished = !scheduleForMonth && inst.totalAmount > 0 && inst.paidAmount >= inst.totalAmount;
-    return isActiveForPeriod && !isFinished; // 👈 Removed the old timingMatch lock!
-  });
+  relevantInstallments = (installments || []).filter(inst => {
+    if (inst.isArchived) return false;
+    
+    // 🟢 FIX: Completely hide the installment from the Loans table if it belongs to a Credit Card or Loan Bundle
+    const linkedId = inst.accountId || inst.account_id || inst.linkedAccountId || inst.linked_account_id;
+    const isSwallowedByCreditAccount = creditBudgetAccounts.some(acc => acc.id === linkedId);
+    if (isSwallowedByCreditAccount) return false;
+
+
+
+
+    const scheduleForMonth = getPaymentSchedule('installment', inst.id, selectedMonth, selectedYear);
+    const isActiveForPeriod = scheduleForMonth !== undefined || shouldShowInstallment(inst, selectedMonth, selectedYear);
+    const isFinished = !scheduleForMonth && inst.totalAmount > 0 && inst.paidAmount >= inst.totalAmount;
+    return isActiveForPeriod && !isFinished; 
+  });
 }
+
 
 
 
@@ -4072,7 +4087,11 @@ const categoryTotal = categorySummary.find(s => s.category === cat.name)?.total 
                   } else if (account.dueDate) {
                     calculatedDueDate = String(new Date(account.dueDate).getDate());
                   }
+                  const displayAmount = getFrozenCycleAmount(account);
+                  const cycleRemaining = getRemainingCycleAmount(account);
                   
+
+                  if (displayAmount < 0.01) return null; 
                   return (
                     <div key={account.id} className={`p-4 border-2 border-black rounded-xl bg-purple-50 dark:bg-purple-900/20 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] flex items-center justify-between transition-all ${isIncluded ? 'opacity-100' : 'opacity-60'}`}>
                       <div className="flex items-center gap-4">
