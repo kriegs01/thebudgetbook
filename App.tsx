@@ -807,6 +807,17 @@ const MainApp: React.FC = () => {
     }
   };
 
+  const [people, setPeople] = useState<any[]>([]);
+
+useEffect(() => {
+  const loadPeople = async () => {
+    const { data, error } = await getAllPeople();
+    if (data) setPeople(data);
+  };
+  loadPeople();
+}, []);
+
+
   // Account handlers
   const handleAddAccount = async (newAccount: Account) => {
     const { data, error } = await createAccountFrontend(newAccount);
@@ -1773,6 +1784,7 @@ const MainApp: React.FC = () => {
                   installments={installments}
                   accounts={accounts}
                   billers={billers}
+                  people={people}
                   onAdd={handleAddInstallment}
                   onUpdate={handleUpdateInstallment}
                   onDelete={handleDeleteInstallment}

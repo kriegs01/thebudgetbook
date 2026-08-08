@@ -846,7 +846,7 @@ const [paymentTab, setPaymentTab] = useState<'my_account' | 'budee'>('my_account
               )}
               
             </div>
-            <span className="text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest transition-colors">{item.termDuration}</span>
+             
           </div>
           <div className="relative">
             <button 

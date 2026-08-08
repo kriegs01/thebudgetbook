@@ -17,6 +17,8 @@ import type { Transaction, Account } from '../types';
 
 const FILTER_MIN_DATE = '2025-01-01';
 
+
+
 // Use the utility function from dateUtils
 const todayIso = getTodayIso;
 

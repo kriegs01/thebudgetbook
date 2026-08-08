@@ -19,23 +19,28 @@ export const supabaseInstallmentToFrontend = (supabaseInstallment: SupabaseInsta
   }
 
   return {
+    // 🟢 Use supabaseInstallment, not item!
     id: supabaseInstallment.id,
     name: supabaseInstallment.name,
-    principalAmount: supabaseInstallment.principal_amount,
     totalAmount: supabaseInstallment.total_amount,
+    principalAmount: supabaseInstallment.principal_amount,
     monthlyAmount: supabaseInstallment.monthly_amount,
-    termDuration: `${supabaseInstallment.term_duration} months`,
-    paidAmount: supabaseInstallment.paid_amount,
-    accountId: supabaseInstallment.account_id,
-    startDate: startDateFormatted,
-    // PROTOTYPE: Handle timing field conversion
-    timing: (supabaseInstallment.timing === '1/2' || supabaseInstallment.timing === '2/2') 
-      ? supabaseInstallment.timing 
-      : undefined,
-    due_date: supabaseInstallment.due_date,
+    termDuration: supabaseInstallment.term_duration?.toString() || '',
+    paidAmount: supabaseInstallment.paid_amount || 0,
+    accountId: supabaseInstallment.account_id || '',
     
-    isMigrated: !!supabaseInstallment.is_migrated, 
-    isArchived: !!supabaseInstallment.is_archived
+    // 🟢 Use the formatted date variable you already calculated
+    startDate: startDateFormatted || '',
+    
+    timing: supabaseInstallment.timing,
+    due_date: supabaseInstallment.due_date,
+    isMigrated: supabaseInstallment.is_migrated,
+    isArchived: supabaseInstallment.is_archived,
+    
+    // 🟢 Safely map the Budee/IOU fields
+    funding_friend_id: supabaseInstallment.funding_friend_id || '',
+    debtor_friend_id: supabaseInstallment.debtor_friend_id || '',
+    expected_account_id: supabaseInstallment.expected_account_id || '',
   };
 };
 
@@ -50,27 +55,34 @@ export const frontendInstallmentToSupabase = (installment: Installment): Omit<Su
     startDateFormatted = `${installment.startDate}-01`;
   }
   
-  if (!installment.accountId || installment.accountId.trim() === '') {
-    throw new Error('Account ID is required.');
+  try {
+    return {
+      name: installment.name,
+      principal_amount: installment.principalAmount || 0,
+      total_amount: installment.totalAmount,
+      monthly_amount: installment.monthlyAmount,
+      term_duration: termDurationNum,
+      paid_amount: installment.paidAmount,
+      
+      // 🟢 Safely allow null or empty account IDs for Budee proxy pays
+      account_id: installment.accountId && installment.accountId.trim() !== '' ? installment.accountId : null,
+      
+      start_date: startDateFormatted,
+      timing: installment.timing || null,
+      due_date: installment.due_date || null,
+      is_migrated: !!(installment.is_migrated || installment.isMigrated), 
+      is_archived: !!installment.isArchived,
+      
+      funding_friend_id: installment.funding_friend_id && installment.funding_friend_id.trim() !== '' ? installment.funding_friend_id : null,
+      debtor_friend_id: installment.debtor_friend_id && installment.debtor_friend_id.trim() !== '' ? installment.debtor_friend_id : null,
+      expected_account_id: installment.expected_account_id && installment.expected_account_id.trim() !== '' ? installment.expected_account_id : null,
+    };
+  } catch (err) {
+    console.error("CRASH in frontendInstallmentToSupabase with object:", installment, err);
+    throw err;
   }
-  
-  return {
-    name: installment.name,
-    principal_amount: installment.principalAmount || 0, // Fallback to 0 if undefined
-    total_amount: installment.totalAmount,
-    monthly_amount: installment.monthlyAmount,
-    term_duration: termDurationNum,
-    paid_amount: installment.paidAmount,
-    account_id: installment.accountId,
-    start_date: startDateFormatted,
-    timing: installment.timing || null,
-    
-    // Correct mapping to match your types.ts and formData
-    due_date: installment.due_date || null,
-    is_migrated: !!(installment.is_migrated || installment.isMigrated), 
-    is_archived: !!installment.isArchived,
-  };
 };
+
 
 /**
  * Convert array of Supabase installments to frontend Installments
