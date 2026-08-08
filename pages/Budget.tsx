@@ -48,7 +48,10 @@ interface BudgetProps {
   onArchiveBudget?: (setup: SavedBudgetSetup) => Promise<void>;
   onReopenBudget?: (setup: SavedBudgetSetup) => Promise<void>;
   userProfile?: any;
+  // 🟢 NEW: Allow the component to receive the people table
+  people?: { id: string; name: string; [key: string]: any }[]; 
 }
+
 
 const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 
@@ -320,6 +323,7 @@ const creditBudgetAccounts = React.useMemo(() => {
 
 const effectiveCategories = React.useMemo(() => {
   const list = [...(categories || [])];
+  
   if (!list.some(c => c?.name === 'Credit')) {
     list.push({
       id: 'system-credit-category',
@@ -328,8 +332,20 @@ const effectiveCategories = React.useMemo(() => {
       flexiMode: false
     });
   }
+  
+  // 🟢 NEW: Inject the Budee category
+  if (!list.some(c => c?.name === 'Budee')) {
+    list.push({
+      id: 'system-budee-category',
+      name: 'Budee',
+      active: true,
+      flexiMode: false
+    });
+  }
+  
   return list;
 }, [categories]);
+
   
   
   const [searchParams] = useSearchParams();
@@ -3027,16 +3043,19 @@ const balance = accountTxs.reduce((sum, tx) => {
     );
   }
 
-      // 🟢 STEP 1: ENGINE-POWERED CATEGORY SUMMARY (Corrected Installment Sync)
-  const categorySummary = effectiveCategories
-  .filter(cat => {
-    const hasRegularData = processedBudgetMap[activePeriodIndex]?.[cat.name]?.length > 0;
-    const hasLoansData = cat.name === 'Loans' && installments.some(inst => !inst.isArchived);
-    const hasCreditData = cat.name === 'Credit' && creditBudgetAccounts.length > 0;
+      // 🟢 STEP 1: ENGINE-POWERED CATEGORY SUMMARY
+      const categorySummary = effectiveCategories
+      .filter(cat => {
+        const hasRegularData = processedBudgetMap[activePeriodIndex]?.[cat.name]?.length > 0;
+        
+        // 🟢 FIX 1: Tell the system to evaluate Budee alongside Loans so it doesn't return 0!
+        const hasLoansData = (cat.name === 'Loans' || cat.name === 'Budee') && installments.some(inst => !inst.isArchived);
+        const hasCreditData = cat.name === 'Credit' && creditBudgetAccounts.length > 0;
+        
+        return shouldRenderCategorySection(cat, hasRegularData || hasLoansData || hasCreditData, selectedYear, selectedMonth);
+      })
+      .map((cat) => {
     
-    return shouldRenderCategorySection(cat, hasRegularData || hasLoansData || hasCreditData, selectedYear, selectedMonth);
-  })
-  .map((cat) => {
     // 1. Regular Setup Items (Pulled from Engine)
     const periodItems = processedBudgetMap[activePeriodIndex]?.[cat.name] || [];
     const itemsTotal = periodItems.reduce((sum, item) => {
@@ -3050,33 +3069,38 @@ const balance = accountTxs.reduce((sum, tx) => {
     }, 0);
 
 
-    // 2. Installments (Loans) - MATCHES UI ROWS EXACTLY
-    let installmentsTotal = 0;
-    if (cat.name === 'Loans') {
-      installmentsTotal = (installments || [])
-        .filter(inst => {
-          // Skip excluded or archived
-          if (inst.isArchived || excludedInstallmentIds.has(inst.id)) return false;
-          
-          // A. Timing Match (This is what was missing! Forces "2/2" items into the right tab)
-          let targetPeriod = 1;
-          if (inst.timing === '1/2') targetPeriod = 1;
-          else if (inst.timing === '2/2') targetPeriod = 2;
-          else {
-            const dueDay = inst.dueDate || inst.due_date || 1;
-            targetPeriod = getAccountPeriodIndex({ dueDate: dueDay });
-          }
-          if (targetPeriod !== activePeriodIndex) return false;
-
-          // B. Active for Month Match (Ensures we don't count finished loans)
-          const scheduleForMonth = getPaymentSchedule('installment', inst.id, selectedMonth, selectedYear);
-          const isActiveForPeriod = scheduleForMonth !== undefined || shouldShowInstallment(inst, selectedMonth, selectedYear);
-          const isFinished = !scheduleForMonth && inst.totalAmount > 0 && inst.paidAmount >= inst.totalAmount;
-          
-          return isActiveForPeriod && !isFinished;
-        })
-        .reduce((s, inst) => s + inst.monthlyAmount, 0);
-    }
+        // 2. Installments (Loans & Budee) - MATCHES UI ROWS EXACTLY
+        let installmentsTotal = 0;
+        if (cat.name === 'Loans' || cat.name === 'Budee') {
+          installmentsTotal = (installments || [])
+            .filter(inst => {
+              if (inst.isArchived || excludedInstallmentIds.has(inst.id)) return false;
+              
+              // 🔥 NEW: Check if this is a Budee item using the adapter fields
+              const isBudee = !!(inst.funding_friend_id || inst.debtor_friend_id);
+              if (cat.name === 'Loans' && isBudee) return false;
+              if (cat.name === 'Budee' && !isBudee) return false;
+    
+              // A. Timing Match
+              let targetPeriod = 1;
+              if (inst.timing === '1/2') targetPeriod = 1;
+              else if (inst.timing === '2/2') targetPeriod = 2;
+              else {
+                const dueDay = inst.dueDate || inst.due_date || 1;
+                targetPeriod = getAccountPeriodIndex({ dueDate: dueDay });
+              }
+              if (targetPeriod !== activePeriodIndex) return false;
+    
+              // B. Active for Month Match
+              const scheduleForMonth = getPaymentSchedule('installment', inst.id, selectedMonth, selectedYear);
+              const isActiveForPeriod = scheduleForMonth !== undefined || shouldShowInstallment(inst, selectedMonth, selectedYear);
+              const isFinished = !scheduleForMonth && inst.totalAmount > 0 && inst.paidAmount >= inst.totalAmount;
+              
+              return isActiveForPeriod && !isFinished;
+            })
+            .reduce((s, inst) => s + inst.monthlyAmount, 0);
+        }
+    
 
         // 3. Credit Cards - MATCHES UI ROWS EXACTLY
         let creditTotal = 0;
@@ -3850,31 +3874,33 @@ const balance = accountTxs.reduce((sum, tx) => {
 const displayTotal = matchingSummary ? matchingSummary.total : 0;
 
 let relevantInstallments: Installment[] = [];
-if (cat.name === 'Loans') {
-  relevantInstallments = (installments || []).filter(inst => {
-    if (inst.isArchived) return false;
-    
-    // 🟢 FIX: Completely hide the installment from the Loans table if it belongs to a Credit Card or Loan Bundle
-    const linkedId = inst.accountId || inst.account_id || inst.linkedAccountId || inst.linked_account_id;
-    const isSwallowedByCreditAccount = creditBudgetAccounts.some(acc => acc.id === linkedId);
-    if (isSwallowedByCreditAccount) return false;
+if (cat.name === 'Loans' || cat.name === 'Budee') {
+  relevantInstallments = (installments || []).filter(inst => {
+    if (inst.isArchived) return false;
+    
+    // 🟢 PRESERVED: Completely hide the installment if it belongs to a Credit Card or Loan Bundle
+    const linkedId = inst.accountId || inst.account_id || inst.linkedAccountId || inst.linked_account_id;
+    const isSwallowedByCreditAccount = creditBudgetAccounts.some(acc => acc.id === linkedId);
+    if (isSwallowedByCreditAccount) return false;
 
+    // 🔥 NEW: Route to Loans or Budee
+    const isBudee = !!(inst.funding_friend_id || inst.debtor_friend_id);
+    if (cat.name === 'Loans' && isBudee) return false;
+    if (cat.name === 'Budee' && !isBudee) return false;
 
-
-
-    const scheduleForMonth = getPaymentSchedule('installment', inst.id, selectedMonth, selectedYear);
-    const isActiveForPeriod = scheduleForMonth !== undefined || shouldShowInstallment(inst, selectedMonth, selectedYear);
-    const isFinished = !scheduleForMonth && inst.totalAmount > 0 && inst.paidAmount >= inst.totalAmount;
-    return isActiveForPeriod && !isFinished; 
-  });
+    const scheduleForMonth = getPaymentSchedule('installment', inst.id, selectedMonth, selectedYear);
+    const isActiveForPeriod = scheduleForMonth !== undefined || shouldShowInstallment(inst, selectedMonth, selectedYear);
+    const isFinished = !scheduleForMonth && inst.totalAmount > 0 && inst.paidAmount >= inst.totalAmount;
+    return isActiveForPeriod && !isFinished; 
+  });
 }
 
+// Update hasData to track Budee as well
+const hasData = items.length > 0 || 
+  ((cat.name === 'Loans' || cat.name === 'Budee') && relevantInstallments.length > 0) || 
+  (cat.name === 'Credit' && creditBudgetAccounts.length > 0);
 
 
-
-        const hasData = items.length > 0 || 
-          (cat.name === 'Loans' && relevantInstallments.length > 0) || 
-          (cat.name === 'Credit' && creditBudgetAccounts.length > 0);
         const shouldRenderCategory = shouldRenderCategorySection(cat, hasData, selectedYear, selectedMonth);
         if (!shouldRenderCategory) return null;
 
@@ -4156,11 +4182,149 @@ const categoryTotal = categorySummary.find(s => s.category === cat.name)?.total 
               </div>
             )}
 
+                        {/* --- BUDEE (NESTED LOAN BUNDLE STYLE) --- */}
+                        {cat.name === 'Budee' && relevantInstallments.length > 0 && (
+              <div className="p-4 space-y-4 bg-gray-50/30 dark:bg-gray-955/10">
+                                {Object.entries(
+                  relevantInstallments.reduce((acc, inst) => {
+                    // Group by the person you owe or are funding
+                    const budeeId = inst.funding_friend_id || inst.debtor_friend_id || 'Unknown_Budee';
+                    if (!acc[budeeId]) acc[budeeId] = [];
+                    acc[budeeId].push(inst);
+                    return acc;
+                  }, {} as Record<string, Installment[]>)
+                ).map(([budeeId, budeeInstallments]) => {
+                  
+                  // 🟢 NEW: Look up the person's real name from the people array
+                  const personProfile = people.find(p => p.id === budeeId);
+                  const displayBudeeName = personProfile 
+                    ? personProfile.name 
+                    : (budeeId === 'Unknown_Budee' ? 'Unknown Profile' : `Budee (${budeeId.slice(0, 8)})`);
 
-            {/* Render Standard Flexi/Loan Items */}
-            {!(cat.name === 'Credit' && items.length === 0) && (
-              <div className="w-full">
-                {isMobile ? (
+                  // Only sum up the INCLUDED items so the group total dynamically updates!
+                  const budeeTotal = budeeInstallments
+                    .filter(inst => !excludedInstallmentIds.has(inst.id))
+                    .reduce((sum, inst) => sum + inst.monthlyAmount, 0);
+
+                  return (
+                    <div key={`budee-group-${budeeId}`} className="p-4 border-2 border-black rounded-xl bg-blue-50/20 dark:bg-blue-900/10 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] transition-all flex flex-col gap-3">
+                      
+                      {/* Person Header (The Parent) */}
+                      <div className="flex items-center justify-between border-b-2 border-black/10 pb-3">
+                        <div className="flex items-center gap-4">
+                          <div>
+                            {/* 🟢 NEW: Render the mapped name! */}
+                            <p className="text-sm font-black text-gray-900 dark:text-gray-100">
+                              {displayBudeeName}
+                            </p>
+                            <span className="text-[9px] font-black px-2 py-0.5 bg-blue-100 border border-black text-blue-600 rounded inline-block mt-1 uppercase">Budee Account</span>
+                          </div>
+                        </div>
+                             
+
+                      {/* Nested Installments for this Person (The Children) */}
+                      <div className="flex flex-col gap-2 pl-4 md:pl-12">
+                        {budeeInstallments.map(inst => {
+                          const isIncluded = !excludedInstallmentIds.has(inst.id);
+                          let isPaid = false, isPartial = false;
+                          const instSchedule = getPaymentSchedule('installment', inst.id, selectedMonth, selectedYear);
+                          
+                          if (instSchedule) {
+                            isPaid = checkIfPaidBySchedule('installment', inst.id);
+                            isPartial = checkIfPartialBySchedule('installment', inst.id);
+                          }
+
+                          return (
+                            <div key={inst.id} className={`flex items-center justify-between p-3 rounded-lg bg-white dark:bg-gray-800 border-2 border-black/20 shadow-sm transition-opacity ${isIncluded ? 'opacity-100' : 'opacity-50'}`}>
+                              
+                              {/* Left Side: Checkbox, Name, Due Date */}
+                              <div className="flex items-center gap-3">
+                                {/* 🟢 FIX 5: Restored Standard Indigo Checkbox */}
+                                <button 
+                                  disabled={isReadOnly}
+                                  onClick={() => !isReadOnly && setExcludedInstallmentIds(prev => {
+                                    const next = new Set(prev);
+                                    if(next.has(inst.id)) next.delete(inst.id); else next.add(inst.id);
+                                    return next;
+                                  })}
+                                  className={`w-8 h-8 rounded-xl border-2 border-black flex items-center justify-center transition-all shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[0.5px] hover:translate-y-[0.5px] ${isIncluded ? 'bg-indigo-600 text-white' : 'bg-white text-transparent'}`}
+                                >
+                                  <Check className="w-4 h-4" />
+                                </button>
+                                <div>
+                                  <p className="text-sm font-bold text-gray-900 dark:text-gray-100">{inst.name}</p>
+                                  <p className="text-[10px] font-black text-gray-500">
+                                    Due: {inst.dueDate || inst.due_date ? formatDueDate(inst.dueDate || inst.due_date) : 'N/A'}
+                                  </p>
+                                </div>
+                              </div>
+                              
+                              {/* Right Side: Amount, Status, Actions */}
+                              <div className="flex items-center gap-3">
+                                <div className="text-right flex items-center gap-2">
+                                  <p className="text-sm font-black text-gray-900 dark:text-gray-100">{formatCurrency(inst.monthlyAmount)}</p>
+                                  {isPaid ? (
+                                    <span className="text-[9px] font-black px-2 py-1 bg-green-400 text-black border-2 border-black rounded-lg shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] uppercase inline-block">Paid</span>
+                                  ) : isPartial ? (
+                                    <span className="text-[9px] font-black px-2 py-1 bg-yellow-300 text-black border-2 border-black rounded-lg shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] uppercase inline-block">Partial</span>
+                                  ) : (
+                                    <span className="text-[9px] font-black px-2 py-1 bg-red-400 text-black border-2 border-black rounded-lg shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] uppercase inline-block">Unpaid</span>
+                                  )}
+                                </div>
+
+                                <div className="flex items-center gap-2">
+                                  <button 
+                                    disabled={!instSchedule}
+                                    onClick={() => instSchedule && openSchedulePaymentsModal(instSchedule.id, `${inst.name} - ${selectedMonth}`)}
+                                    className={`p-1.5 rounded-lg border-2 transition-all ${instSchedule ? 'bg-white text-indigo-600 border-black shadow-[1.5px_1.5px_0px_0px_rgba(0,0,0,1)] hover:translate-x-[1px] hover:translate-y-[1px] hover:shadow-none' : 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed shadow-none'}`}
+                                  >
+                                    <Info className="w-3.5 h-3.5" />
+                                  </button>
+
+                                  {!isPaid && !isReadOnly && (
+                                    /* 🟢 FIX 6: Restored Standard Indigo Pay Button */
+                                    <button 
+                                      onClick={() => {
+                                        setTransactionFormData({ 
+                                          id: '', name: `${inst.name} - ${selectedMonth}`, date: getTodayIso(), 
+                                          amount: isPartial && instSchedule ? Math.max(0, instSchedule.expected_amount - instSchedule.amount_paid).toFixed(2) : inst.monthlyAmount.toFixed(2), 
+                                          accountId: inst.accountId || accounts[0]?.id || '', paymentScheduleId: instSchedule?.id || '', transactionType: 'payment' 
+                                        });
+                                        setShowTransactionModal(true);
+                                      }}
+                                      className="px-3 py-1.5 text-[10px] font-black uppercase rounded-lg border-2 border-black bg-indigo-600 text-white shadow-[1.5px_1.5px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[1px] hover:translate-y-[1px] transition-all"
+                                    >
+                                      Pay
+                                    </button>
+                                  )}
+
+                                  {!isReadOnly && (
+                                    <button 
+                                      onClick={() => setConfirmModal({ show: true, title: 'Exclude Installment', message: `Exclude "${inst.name}"?`, onConfirm: () => { setExcludedInstallmentIds(prev => new Set([...prev, inst.id])); setConfirmModal(p => ({...p, show: false})); } })}
+                                      className="p-1.5 rounded-lg border-2 border-black bg-white text-red-500 shadow-[1.5px_1.5px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[1px] hover:translate-y-[1px] transition-all"
+                                    >
+                                      <Trash2 className="w-3.5 h-3.5" />
+                                    </button>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+
+
+                      {/* Render Standard Flexi/Loan Items */}
+          {!((cat.name === 'Credit' || cat.name === 'Budee') && items.length === 0) && (
+            <div className="w-full">
+              {isMobile ? (
+
                   <div className="p-4 space-y-4 bg-gray-50/30 dark:bg-gray-955/10">
                   {items.length > 0 && items.map((item) => {
 
@@ -4252,8 +4416,7 @@ const categoryTotal = categorySummary.find(s => s.category === cat.name)?.total 
                       );
                     })}
 
-{cat.name === 'Loans' && relevantInstallments.length > 0 && relevantInstallments.filter((installment) => {
-  // 1. Check for strict timing first
+{cat.name === 'Loans' && relevantInstallments.length > 0 && relevantInstallments.filter((installment) => {  // 1. Check for strict timing first
   if (installment.timing === '1/2') return activePeriodIndex === 1;
   if (installment.timing === '2/2') return activePeriodIndex === 2;
   
@@ -4505,8 +4668,7 @@ return getAccountPeriodIndex({ dueDate: dueDay }) === activePeriodIndex;
                         
                       
                         {/* --- INSTALLMENTS --- */}
-{cat.name === 'Loans' && relevantInstallments.length > 0 && relevantInstallments.filter((installment) => {
-  if (installment.timing === '1/2') return activePeriodIndex === 1;
+{cat.name === 'Loans' && relevantInstallments.length > 0 && relevantInstallments.filter((installment) => {  if (installment.timing === '1/2') return activePeriodIndex === 1;
   if (installment.timing === '2/2') return activePeriodIndex === 2;
   const dueDay = installment.dueDate || installment.due_date || 1;
 return getAccountPeriodIndex({ dueDate: dueDay }) === activePeriodIndex;
@@ -4725,6 +4887,9 @@ return getAccountPeriodIndex({ dueDate: dueDay }) === activePeriodIndex;
           });
         })()}
       </div>
+
+      
+
 
       {showPayModal && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md animate-in fade-in">
