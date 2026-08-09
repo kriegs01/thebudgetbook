@@ -28,6 +28,8 @@ import { getPayPeriodLabel } from '../src/utils/payPeriodUtils'; // Or ensure it
 import { fetchPaySchedules } from '../src/services/payScheduleService'; 
 import { SandboxView } from '../src/components/SandboxView';
 import { processBudeeTransaction } from '../src/services/budeeService';
+import { determineItemPeriod } from '../src/utils/budgetEngine';
+
 
 interface BudgetProps {
   items: BudgetItem[];
@@ -474,48 +476,8 @@ const [activePeriodIndex, setActivePeriodIndex] = useState<number>(1);
   const [payRules, setPayRules] = useState<PayScheduleRule[]>([]);
   const [currentPeriods, setCurrentPeriods] = useState<PayPeriod[]>([]);
 
-    // --- MULTI-FREQUENCY HELPERS ---
-    const getPeriodIndexForDate = (dayOrDate: number | string) => {
-      if (!currentPeriods || currentPeriods.length === 0) return 1;
-      let targetDate: Date;
-      if (typeof dayOrDate === 'number' || (typeof dayOrDate === 'string' && !isNaN(Number(dayOrDate)))) {
-        const dayNumber = Number(dayOrDate);
-        const monthIndex = new Date(`${selectedMonth} 1, ${selectedYear}`).getMonth();
-        targetDate = new Date(selectedYear, monthIndex, dayNumber);
-      } else {
-        targetDate = new Date(dayOrDate);
-      }
-      targetDate.setHours(0, 0, 0, 0);
-      for (let i = 0; i < currentPeriods.length; i++) {
-        const period = currentPeriods[i];
-        if (period?.startDate && period?.endDate) {
-          const start = new Date(period.startDate);
-          const end = new Date(period.endDate);
-          start.setHours(0, 0, 0, 0);
-          end.setHours(23, 59, 59, 999);
-          if (targetDate >= start && targetDate <= end) return i + 1;
-        }
-      }
-      return 1;
-    };
-  
-    const getAccountPeriodIndex = (account: any) => {
-      if (!currentPeriods || currentPeriods.length === 0) return 1;
-      let dayNum = 1;
-      const rawDue = account.dueDate || account.billingDate || account.statementDate || 1;
-      const dueStr = String(rawDue).toLowerCase();
-      
-      if (typeof rawDue === 'number') {
-        dayNum = rawDue;
-      } else if (typeof rawDue === 'string') {
-        const parsedDate = new Date(rawDue);
-        if (!isNaN(parsedDate.getTime())) dayNum = parsedDate.getDate();
-        else dayNum = parseInt(rawDue.replace(/[^0-9]/g, ''), 10) || 1;
-      }
-      const finalPeriodIndex = currentPeriods.length;
-      if (dueStr.includes('next') || dayNum >= 20) return finalPeriodIndex;
-      return getPeriodIndexForDate(dayNum);
-    };
+        
+    
   
     // 🟢 THE UNIFIED BUDGET ENGINE
     const processedBudgetMap = React.useMemo(() => {
@@ -545,19 +507,8 @@ const [activePeriodIndex, setActivePeriodIndex] = useState<number>(1);
             const linkedInstallment = Array.isArray(installments) ? installments.find(i => i.id === item.id) : null;
             const explicitTiming = item.timing || linkedBiller?.timing || linkedInstallment?.timing;
   
-            if (explicitTiming && typeof explicitTiming === 'string') {
-              if (explicitTiming.includes('1/')) targetPeriod = 1;
-              else if (explicitTiming.includes('2/')) targetPeriod = 2;
-              else if (explicitTiming.includes('3/')) targetPeriod = 3;
-              else if (explicitTiming.includes('4/')) targetPeriod = 4;
-              else {
-                 const parsed = parseInt(explicitTiming, 10);
-                 if (!isNaN(parsed)) targetPeriod = parsed;
-              }
-            } else {
-               const rawDue = item.dueDay || item.dueDate || linkedBiller?.dueDate || linkedInstallment?.dueDate || 1;
-               targetPeriod = getAccountPeriodIndex({ dueDate: rawDue });
-            }
+            const targetPeriod = determineItemPeriod(item, currentPeriods, selectedMonth, selectedYear);
+
   
             if (!periodMap[targetPeriod]) periodMap[targetPeriod] = {};
             if (!periodMap[targetPeriod][categoryName]) periodMap[targetPeriod][categoryName] = [];
@@ -1444,10 +1395,7 @@ const balance = accountTxs.reduce((sum, tx) => {
           // 🔴 NEW: Exclude "To Collect" from the Slicer tray
           if (inst.debtor_friend_id) return false;
   
-          let targetPeriod = 1;
-          if (inst.timing === '1/2') targetPeriod = 1;
-          else if (inst.timing === '2/2') targetPeriod = 2;
-          else targetPeriod = getAccountPeriodIndex({ dueDate: inst.dueDate || inst.due_date || 1 });
+          const targetPeriod = getAccountPeriodIndex({ dueDate: inst.dueDate || inst.due_date || 1 });
           
           if (targetPeriod !== activePeriodIndex) return false;
   
@@ -1968,7 +1916,10 @@ const balance = accountTxs.reduce((sum, tx) => {
         // 🔴 NEW: Prevent "To Collect" from inflating the saved database total!
         if (inst.debtor_friend_id) return false;
 
-        const timingMatch = !inst.timing || inst.timing === selectedTiming;
+        const dueDay = inst.dueDate || inst.due_date || 1;
+        const targetPeriod = getAccountPeriodIndex({ dueDate: dueDay });
+        const selectedPeriod = selectedTiming === '1/2' ? 1 : selectedTiming === '2/2' ? 2 : parseInt(selectedTiming.split('/')[0] || '1');
+        const timingMatch = targetPeriod === selectedPeriod;
         const scheduleForMonth = getPaymentSchedule('installment', inst.id, selectedMonth, selectedYear);
         const isActiveForPeriod = scheduleForMonth !== undefined || shouldShowInstallment(inst, selectedMonth, selectedYear);
         const isFinished = !scheduleForMonth && inst.totalAmount > 0 && inst.paidAmount >= inst.totalAmount;
@@ -2134,7 +2085,10 @@ const balance = accountTxs.reduce((sum, tx) => {
         // 🔴 NEW: Prevent "To Collect" from inflating the saved database total!
         if (inst.debtor_friend_id) return false;
 
-        const timingMatch = !inst.timing || inst.timing === selectedTiming;
+        const dueDay = inst.dueDate || inst.due_date || 1;
+        const targetPeriod = getAccountPeriodIndex({ dueDate: dueDay });
+        const selectedPeriod = selectedTiming === '1/2' ? 1 : selectedTiming === '2/2' ? 2 : parseInt(selectedTiming.split('/')[0] || '1');
+        const timingMatch = targetPeriod === selectedPeriod;
         const scheduleForMonth = getPaymentSchedule('installment', inst.id, selectedMonth, selectedYear);
         const isActiveForPeriod = scheduleForMonth !== undefined || shouldShowInstallment(inst, selectedMonth, selectedYear);
         const isFinished = !scheduleForMonth && inst.totalAmount > 0 && inst.paidAmount >= inst.totalAmount;
@@ -2862,7 +2816,10 @@ const balance = accountTxs.reduce((sum, tx) => {
               // 🔴 NEW: Prevent "To Collect" from inflating the dashboard card total!
               if (inst.debtor_friend_id) return false;
       
-              const timingMatch = !inst.timing || inst.timing === setup.timing;
+              const dueDay = inst.dueDate || inst.due_date || 1;
+              const targetPeriod = getAccountPeriodIndex({ dueDate: dueDay });
+              const setupPeriod = setup.timing === '1/2' ? 1 : setup.timing === '2/2' ? 2 : parseInt(setup.timing.split('/')[0] || '1');
+              const timingMatch = targetPeriod === setupPeriod;
               const scheduleForMonth = getPaymentSchedule('installment', inst.id, setup.month, setupYear);
               const isActiveForPeriod = scheduleForMonth !== undefined || shouldShowInstallment(inst, setup.month, setupYear);
               const isFinished = !scheduleForMonth && inst.totalAmount > 0 && inst.paidAmount >= inst.totalAmount;
@@ -3181,27 +3138,33 @@ const balance = accountTxs.reduce((sum, tx) => {
               const isLoanBundle = account.subtype === 'Loan_Bundle';
 
     
-              // 🟢 LOAN BUNDLES: Sum up the active children for this pay period!
-              if (isLoanBundle) {
-                const bundleInstallments = (installments || []).filter(inst => {
-                  if (inst.isArchived || excludedInstallmentIds.has(inst.id)) return false;
-                  if (inst.accountId !== account.id && inst.account_id !== account.id && inst.linkedAccountId !== account.id && inst.linked_account_id !== account.id) return false;
-                  
-                  let targetPeriod = 1;
-                  if (inst.timing === '1/2') targetPeriod = 1;
-                  else if (inst.timing === '2/2') targetPeriod = 2;
-                  else targetPeriod = getAccountPeriodIndex({ dueDate: inst.dueDate || inst.due_date || 1 });
-                  
-                  if (targetPeriod !== activePeriodIndex) return false;
-                  
-                  const scheduleForMonth = getPaymentSchedule('installment', inst.id, selectedMonth, selectedYear);
-                  const isActiveForPeriod = scheduleForMonth !== undefined || shouldShowInstallment(inst, selectedMonth, selectedYear);
-                  const isFinished = !scheduleForMonth && inst.totalAmount > 0 && inst.paidAmount >= inst.totalAmount;
-                  
-                  return isActiveForPeriod && !isFinished;
-                });
-                return sum + bundleInstallments.reduce((s, inst) => s + inst.monthlyAmount, 0);
-              }
+                            // 🟢 LOAN BUNDLES: Sum up the active children for this pay period!
+                            if (isLoanBundle) {
+                              const bundleInstallments = (installments || []).filter(inst => {
+                                if (inst.isArchived || excludedInstallmentIds.has(inst.id)) return false;
+                                
+                                // 🟢 FIX: Completely exclude Budee items from the Credit expense math!
+                                const isBudee = !!(inst.funding_friend_id || inst.debtor_friend_id || (inst as any).friend_user_id);
+                                if (isBudee) return false;
+              
+                                if (inst.accountId !== account.id && inst.account_id !== account.id && inst.linkedAccountId !== account.id && inst.linked_account_id !== account.id) return false;
+                                
+                                let targetPeriod = 1;
+                                if (inst.timing === '1/2') targetPeriod = 1;
+                                else if (inst.timing === '2/2') targetPeriod = 2;
+                                else targetPeriod = getAccountPeriodIndex({ dueDate: inst.dueDate || inst.due_date || 1 });
+                                
+                                if (targetPeriod !== activePeriodIndex) return false;
+                                
+                                const scheduleForMonth = getPaymentSchedule('installment', inst.id, selectedMonth, selectedYear);
+                                const isActiveForPeriod = scheduleForMonth !== undefined || shouldShowInstallment(inst, selectedMonth, selectedYear);
+                                const isFinished = !scheduleForMonth && inst.totalAmount > 0 && inst.paidAmount >= inst.totalAmount;
+                                
+                                return isActiveForPeriod && !isFinished;
+                              });
+                              return sum + bundleInstallments.reduce((s, inst) => s + inst.monthlyAmount, 0);
+                            }
+              
     
               // 🔴 STANDARD CC: Check master due date and get frozen amount
               if (getAccountPeriodIndex(account) === activePeriodIndex) {
@@ -4089,26 +4052,33 @@ const categoryTotal = itemsTotal + installmentsTotal + creditTotal;
                   const isIncluded = !excludedCreditIds.has(account.id);
                   const isLoanBundle = account.subtype === 'Loan_Bundle';
 
-                  // 🟢 GROUPED LOAN BUNDLE UI
-                  if (isLoanBundle) {
-                    const bundleInstallments = (installments || []).filter(inst => {
-                      if (inst.isArchived || excludedInstallmentIds.has(inst.id)) return false;
-                      if (inst.accountId !== account.id && inst.account_id !== account.id && inst.linkedAccountId !== account.id && inst.linked_account_id !== account.id) return false;                      
-                      let targetPeriod = 1;
-                      if (inst.timing === '1/2') targetPeriod = 1;
-                      else if (inst.timing === '2/2') targetPeriod = 2;
-                      else {
-                        const dueDay = inst.dueDate || inst.due_date || 1;
-                        targetPeriod = getAccountPeriodIndex({ dueDate: dueDay });
-                      }
-                      if (targetPeriod !== activePeriodIndex) return false;
-                      
-                      const scheduleForMonth = getPaymentSchedule('installment', inst.id, selectedMonth, selectedYear);
-                      const isActiveForPeriod = scheduleForMonth !== undefined || shouldShowInstallment(inst, selectedMonth, selectedYear);
-                      const isFinished = !scheduleForMonth && inst.totalAmount > 0 && inst.paidAmount >= inst.totalAmount;
-                      
-                      return isActiveForPeriod && !isFinished;
-                    });
+                                    // 🟢 GROUPED LOAN BUNDLE UI
+                                    if (isLoanBundle) {
+                                      const bundleInstallments = (installments || []).filter(inst => {
+                                        if (inst.isArchived || excludedInstallmentIds.has(inst.id)) return false;
+                                        
+                                        // 🟢 FIX: Hide Budee items from the Credit section so they only appear under the Budee card!
+                                        const isBudee = !!(inst.funding_friend_id || inst.debtor_friend_id || (inst as any).friend_user_id);
+                                        if (isBudee) return false;
+                  
+                                        if (inst.accountId !== account.id && inst.account_id !== account.id && inst.linkedAccountId !== account.id && inst.linked_account_id !== account.id) return false;                      
+                                        
+                                        let targetPeriod = 1;
+                                        if (inst.timing === '1/2') targetPeriod = 1;
+                                        else if (inst.timing === '2/2') targetPeriod = 2;
+                                        else {
+                                          const dueDay = inst.dueDate || inst.due_date || 1;
+                                          targetPeriod = getAccountPeriodIndex({ dueDate: dueDay });
+                                        }
+                                        if (targetPeriod !== activePeriodIndex) return false;
+                                        
+                                        const scheduleForMonth = getPaymentSchedule('installment', inst.id, selectedMonth, selectedYear);
+                                        const isActiveForPeriod = scheduleForMonth !== undefined || shouldShowInstallment(inst, selectedMonth, selectedYear);
+                                        const isFinished = !scheduleForMonth && inst.totalAmount > 0 && inst.paidAmount >= inst.totalAmount;
+                                        
+                                        return isActiveForPeriod && !isFinished;
+                                      });
+                  
 
                     if (bundleInstallments.length === 0) return null;
                     const bundleTotal = bundleInstallments.reduce((sum, inst) => sum + inst.monthlyAmount, 0);
@@ -4528,14 +4498,13 @@ const categoryTotal = itemsTotal + installmentsTotal + creditTotal;
                       );
                     })}
 
-{cat.name === 'Loans' && relevantInstallments.length > 0 && relevantInstallments.filter((installment) => {  // 1. Check for strict timing first
-  if (installment.timing === '1/2') return activePeriodIndex === 1;
-  if (installment.timing === '2/2') return activePeriodIndex === 2;
-  
-  // 2. Fallback to calculating via due date
-  const dueDay = installment.due_date || 1;
-return getAccountPeriodIndex({ dueDate: dueDay }) === activePeriodIndex;
+{cat.name === 'Loans' && relevantInstallments.length > 0 && relevantInstallments.filter((installment) => {
+  const dueDay = installment.dueDate || installment.due_date || 1;
+  return getAccountPeriodIndex({ dueDate: dueDay }) === activePeriodIndex;
 }).map((installment) => {
+
+
+
   // 🛡️ RESTORED VARIABLES:
   const isIncluded = !excludedInstallmentIds.has(installment.id);
   let isPaid = false, isPartial = false;
