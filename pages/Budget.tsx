@@ -417,6 +417,12 @@ const [actualSalaryByPeriod, setActualSalaryByPeriod] = useState<Record<number, 
 // The master control for which tab is currently active
 const [activePeriodIndex, setActivePeriodIndex] = useState<number>(1);
 
+  // 🟢 ENGINE ADAPTER: Catches any leftover old function calls and safely routes them to the new unified engine!
+  const getAccountPeriodIndex = (item: any) => {
+    if (!item) return 1;
+    return determineItemPeriod(item, currentPeriods, selectedMonth, selectedYear);
+  };
+
 
   const [isProjectedFocused, setIsProjectedFocused] = useState(false);
   const [isActualFocused, setIsActualFocused] = useState(false);
@@ -502,12 +508,14 @@ const [activePeriodIndex, setActivePeriodIndex] = useState<number>(1);
             if (!item) return; // 🟢 Let unchecked items pass through to the UI
 
   
-            let targetPeriod = 1;
             const linkedBiller = item.isBiller && Array.isArray(billers) ? billers.find(b => b.id === item.id) : null;
             const linkedInstallment = Array.isArray(installments) ? installments.find(i => i.id === item.id) : null;
-            const explicitTiming = item.timing || linkedBiller?.timing || linkedInstallment?.timing;
-  
-            const targetPeriod = determineItemPeriod(item, currentPeriods, selectedMonth, selectedYear);
+            
+            // Give the engine the best possible item data to work with
+            const itemWithLinks = { ...item, ...linkedBiller, ...linkedInstallment };
+            const targetPeriod = determineItemPeriod(itemWithLinks, currentPeriods, selectedMonth, selectedYear);
+
+
 
   
             if (!periodMap[targetPeriod]) periodMap[targetPeriod] = {};
@@ -944,38 +952,36 @@ const balance = accountTxs.reduce((sum, tx) => {
         return liveBal > 0 ? liveBal : Math.abs(account.openingBalance || 0);
       }
 
-      // 1. Generate historical and forward cycles using billingCycles.ts logic
-      const cycles = calculateBillingCycles(account.billingDate, 24, false);
+      // 1. Call the master aggregator to perfectly sync with the Accounts page
+      const cycleSummaries = typeof aggregateCreditCardPurchases === 'function' 
+        ? aggregateCreditCardPurchases(account, transactions || [], installments || []) 
+        : [];
+        
       const monthIndex = MONTHS.indexOf(selectedMonth);
 
-      // 2. Find the exact cycle whose END DATE (statement cutoff) falls in the selected month/year
-      const targetCycle = cycles.find(cycle => {
-        const endMonth = cycle.endDate.getMonth();
-        const endYear = cycle.endDate.getFullYear();
+      // 2. Find the cycle that ENDS in the current budget month
+      // e.g., "Jul 4 - Aug 3" ends in August (monthIndex 7)
+      const targetCycle = cycleSummaries.find(cycle => {
+        if (!cycle || !cycle.cycleEnd) return false;
+        const endMonth = cycle.cycleEnd.getMonth();
+        const endYear = cycle.cycleEnd.getFullYear();
         return endMonth === monthIndex && endYear === selectedYear;
       });
 
-      if (targetCycle) {
-        // 3. Filter transactions that fall within this cycle's start and end dates
-        const cycleCharges = transactions
-          .filter(tx => tx?.payment_method_id === account.id)
-          .filter(tx => {
-            if (!tx?.date) return false;
-            const txDate = new Date(tx.date);
-            return txDate >= targetCycle.startDate && 
-                   txDate <= targetCycle.endDate && 
-                   tx.transaction_type !== 'credit_payment' &&
-                   tx.amount > 0;
-          })
-          .reduce((sum, tx) => sum + tx.amount, 0);
-
-
-
-
-        // 🟢 FIX: Only return cycle charges if they exist, otherwise fall through to check live balance!
-        if (cycleCharges > 0) return cycleCharges; 
-      }
-
+      // 3. Extract the true "New Charges" for the budget!
+      // We sum the cycle's transactions (which includes your installments) 
+      // but filter out unpaid carry-over balances so we don't double-count them.
+      if (targetCycle && Array.isArray(targetCycle.transactions)) {
+        const freshSpend = targetCycle.transactions
+          .filter((tx: any) => {
+            const nameStr = (tx.name || '').toLowerCase();
+            return !nameStr.includes('statement balance') && !nameStr.includes('previous balance');
+          })
+          .reduce((sum: number, tx: any) => sum + (Number(tx.amount) || 0), 0);
+          
+        if (freshSpend > 0) return freshSpend;
+        if (targetCycle.totalAmount > 0) return targetCycle.totalAmount;
+      }
 
       // 4. Fallback if no matching cycle window is found
       const fallbackCharges = transactions
@@ -995,6 +1001,9 @@ const balance = accountTxs.reduce((sum, tx) => {
       const liveBal = calculateCurrentBalance(account);
       return liveBal > 0 ? liveBal : Math.abs(account.openingBalance || 0);
     };
+
+    
+
 
             // Helper: Get payments made towards the card this month
     const getPaymentsThisMonth = (account: Account): number => {
@@ -1392,12 +1401,13 @@ const balance = accountTxs.reduce((sum, tx) => {
         .filter(inst => {
           if (inst.isArchived || excludedInstallmentIds.has(inst.id)) return false;
           
-          // 🔴 NEW: Exclude "To Collect" from the Slicer tray
-          if (inst.debtor_friend_id) return false;
+                    // 🔴 NEW: Exclude "To Collect" from the Slicer tray
+                    if (inst.debtor_friend_id) return false;
   
-          const targetPeriod = getAccountPeriodIndex({ dueDate: inst.dueDate || inst.due_date || 1 });
+                    const targetPeriod = determineItemPeriod(inst, currentPeriods, selectedMonth, selectedYear);
+                    
+                    if (targetPeriod !== activePeriodIndex) return false;
           
-          if (targetPeriod !== activePeriodIndex) return false;
   
           // INLINED: Find Payment Schedule safely
           const scheduleForMonth = paymentSchedules.find(
@@ -1442,7 +1452,7 @@ const balance = accountTxs.reduce((sum, tx) => {
     const creditItems = creditBudgetAccounts
       .filter(acc => {
         if (excludedCreditIds.has(acc.id)) return false;
-        return getAccountPeriodIndex(acc) === activePeriodIndex;
+        return determineItemPeriod(acc, currentPeriods, selectedMonth, selectedYear) === activePeriodIndex;
       })
       .map(acc => ({
         id: acc.id,
@@ -1916,8 +1926,7 @@ const balance = accountTxs.reduce((sum, tx) => {
         // 🔴 NEW: Prevent "To Collect" from inflating the saved database total!
         if (inst.debtor_friend_id) return false;
 
-        const dueDay = inst.dueDate || inst.due_date || 1;
-        const targetPeriod = getAccountPeriodIndex({ dueDate: dueDay });
+        const targetPeriod = determineItemPeriod(inst, currentPeriods, selectedMonth, selectedYear);
         const selectedPeriod = selectedTiming === '1/2' ? 1 : selectedTiming === '2/2' ? 2 : parseInt(selectedTiming.split('/')[0] || '1');
         const timingMatch = targetPeriod === selectedPeriod;
         const scheduleForMonth = getPaymentSchedule('installment', inst.id, selectedMonth, selectedYear);
@@ -2085,8 +2094,7 @@ const balance = accountTxs.reduce((sum, tx) => {
         // 🔴 NEW: Prevent "To Collect" from inflating the saved database total!
         if (inst.debtor_friend_id) return false;
 
-        const dueDay = inst.dueDate || inst.due_date || 1;
-        const targetPeriod = getAccountPeriodIndex({ dueDate: dueDay });
+        const targetPeriod = determineItemPeriod(inst, currentPeriods, selectedMonth, selectedYear);
         const selectedPeriod = selectedTiming === '1/2' ? 1 : selectedTiming === '2/2' ? 2 : parseInt(selectedTiming.split('/')[0] || '1');
         const timingMatch = targetPeriod === selectedPeriod;
         const scheduleForMonth = getPaymentSchedule('installment', inst.id, selectedMonth, selectedYear);
@@ -2816,8 +2824,7 @@ const balance = accountTxs.reduce((sum, tx) => {
               // 🔴 NEW: Prevent "To Collect" from inflating the dashboard card total!
               if (inst.debtor_friend_id) return false;
       
-              const dueDay = inst.dueDate || inst.due_date || 1;
-              const targetPeriod = getAccountPeriodIndex({ dueDate: dueDay });
+              const targetPeriod = determineItemPeriod(inst, currentPeriods, setup.month, setupYear);
               const setupPeriod = setup.timing === '1/2' ? 1 : setup.timing === '2/2' ? 2 : parseInt(setup.timing.split('/')[0] || '1');
               const timingMatch = targetPeriod === setupPeriod;
               const scheduleForMonth = getPaymentSchedule('installment', inst.id, setup.month, setupYear);
@@ -3113,10 +3120,9 @@ const balance = accountTxs.reduce((sum, tx) => {
               if (cat.name === 'Loans' && isSwallowedByCreditAccount) return false;
 
     
-              // Enforce Tab Timing Match!
-              const dueDay = inst.dueDate || inst.due_date || 1;
-              const targetPeriod = getAccountPeriodIndex({ dueDate: dueDay });
-              if (targetPeriod !== activePeriodIndex) return false;
+              // Enforce Tab Timing Match!
+              const targetPeriod = determineItemPeriod(inst, currentPeriods, selectedMonth, selectedYear);
+              if (targetPeriod !== activePeriodIndex) return false;
     
               // Active for Month Match
               const scheduleForMonth = getPaymentSchedule('installment', inst.id, selectedMonth, selectedYear);
@@ -3167,7 +3173,7 @@ const balance = accountTxs.reduce((sum, tx) => {
               
     
               // 🔴 STANDARD CC: Check master due date and get frozen amount
-              if (getAccountPeriodIndex(account) === activePeriodIndex) {
+              if (determineItemPeriod(account, currentPeriods, selectedMonth, selectedYear) === activePeriodIndex) {
                 const amt = getFrozenCycleAmount(account);
                 return amt >= 0.01 ? sum + amt : sum;
               }
@@ -3931,11 +3937,11 @@ if (cat.name === 'Loans' || cat.name === 'Budee') {
     if (cat.name === 'Loans' && isBudee) return false;
     if (cat.name === 'Budee' && !isBudee) return false;
 
-    // 🔥 NEW: Pure Proximity Rule! (Removed legacy 1/2 and 2/2 hardcodes)
-    const dueDay = inst.dueDate || inst.due_date || 1;
-    const targetPeriod = getAccountPeriodIndex({ dueDate: dueDay });
+        // 🔥 NEW: Pure Proximity Rule! (Removed legacy 1/2 and 2/2 hardcodes)
+        const targetPeriod = determineItemPeriod(inst, currentPeriods, selectedMonth, selectedYear);
     
-    if (targetPeriod !== activePeriodIndex) return false;
+        if (targetPeriod !== activePeriodIndex) return false;
+    
 
     const scheduleForMonth = getPaymentSchedule('installment', inst.id, selectedMonth, selectedYear);
     const isActiveForPeriod = scheduleForMonth !== undefined || shouldShowInstallment(inst, selectedMonth, selectedYear);

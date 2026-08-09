@@ -107,6 +107,7 @@ const WalletView: React.FC<WalletViewProps> = ({ accounts }) => {
   };
 
 
+  
   const getAccountName = (accountId: string) => {
     const acc = accounts.find(a => a.id === accountId);
     return acc ? `${acc.bank} (${acc.classification})` : accountId;

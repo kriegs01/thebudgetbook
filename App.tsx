@@ -1721,6 +1721,7 @@ useEffect(() => {
                   userProfile={userProfile}
                   accounts={accounts} 
                   billers={billers}
+                  people={people}
                   categories={categories}
                   savedSetups={budgetSetups}
                   setSavedSetups={setBudgetSetups}
