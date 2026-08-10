@@ -29,6 +29,7 @@ import { fetchPaySchedules } from '../src/services/payScheduleService';
 import { SandboxView } from '../src/components/SandboxView';
 import { processBudeeTransaction } from '../src/services/budeeService';
 import { determineItemPeriod } from '../src/utils/budgetEngine';
+import { processCreditAccount } from '../src/utils/statementAggregator';
 
 
 interface BudgetProps {
@@ -945,64 +946,34 @@ const balance = accountTxs.reduce((sum, tx) => {
       return Math.abs(balance);
     };
 
-            // Reverse-engineered cycle aggregator for budget setups
+                // Powered by the new Unified Statement Aggregator
     const getFrozenCycleAmount = (account: Account): number => {
-      if (!account.billingDate) {
-        const liveBal = calculateCurrentBalance(account);
-        return liveBal > 0 ? liveBal : Math.abs(account.openingBalance || 0);
-      }
+      try {
+        // 1. Safe fallback for brand new, manually tracked cards without a cycle yet
+        if (!account.billingDate && account.subtype !== 'Loan_Bundle' && account.classification !== 'Loan') {
+          const liveBal = calculateCurrentBalance(account);
+          return liveBal > 0 ? liveBal : Math.abs(account.openingBalance || 0);
+        }
 
-      // 1. Call the master aggregator to perfectly sync with the Accounts page
-      const cycleSummaries = typeof aggregateCreditCardPurchases === 'function' 
-        ? aggregateCreditCardPurchases(account, transactions || [], installments || []) 
-        : [];
+        // 2. Ask the Engine for the exact numbers
+        const statement = processCreditAccount(
+          account,
+          transactions || [],
+          installments || [],
+          selectedMonth,
+          selectedYear
+        );
         
-      const monthIndex = MONTHS.indexOf(selectedMonth);
-
-      // 2. Find the cycle that ENDS in the current budget month
-      // e.g., "Jul 4 - Aug 3" ends in August (monthIndex 7)
-      const targetCycle = cycleSummaries.find(cycle => {
-        if (!cycle || !cycle.cycleEnd) return false;
-        const endMonth = cycle.cycleEnd.getMonth();
-        const endYear = cycle.cycleEnd.getFullYear();
-        return endMonth === monthIndex && endYear === selectedYear;
-      });
-
-      // 3. Extract the true "New Charges" for the budget!
-      // We sum the cycle's transactions (which includes your installments) 
-      // but filter out unpaid carry-over balances so we don't double-count them.
-      if (targetCycle && Array.isArray(targetCycle.transactions)) {
-        const freshSpend = targetCycle.transactions
-          .filter((tx: any) => {
-            const nameStr = (tx.name || '').toLowerCase();
-            return !nameStr.includes('statement balance') && !nameStr.includes('previous balance');
-          })
-          .reduce((sum: number, tx: any) => sum + (Number(tx.amount) || 0), 0);
-          
-        if (freshSpend > 0) return freshSpend;
-        if (targetCycle.totalAmount > 0) return targetCycle.totalAmount;
+        // 3. Return the exact amount you owe the bank (Swipes + ALL Installments)
+        return statement.totalBankBill;
+        
+      } catch (err) {
+        console.error("Critical Math Error in getFrozenCycleAmount:", err);
+        return 0; // Completely shields the UI from crashing
       }
-
-      // 4. Fallback if no matching cycle window is found
-      const fallbackCharges = transactions
-        .filter(tx => tx?.payment_method_id === account.id)
-        .filter(tx => {
-          if (!tx?.date) return false;
-          const txDate = new Date(tx.date);
-          return txDate.getMonth() === monthIndex && 
-                 txDate.getFullYear() === selectedYear &&
-                 tx.transaction_type !== 'credit_payment' &&
-                 tx.amount > 0;
-        })
-        .reduce((sum, tx) => sum + tx.amount, 0);
-
-      if (fallbackCharges > 0) return fallbackCharges;
-      
-      const liveBal = calculateCurrentBalance(account);
-      return liveBal > 0 ? liveBal : Math.abs(account.openingBalance || 0);
     };
+ 
 
-    
 
 
             // Helper: Get payments made towards the card this month
