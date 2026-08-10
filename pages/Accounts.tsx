@@ -22,6 +22,8 @@ import { getDueDayForDisplay, ordinalSuffix } from '../src/utils/billingCycles';
 import { useTheme } from '../src/contexts/ThemeContext';
 import { PageHeader } from '../src/components/PageHeader';
 import useMediaQuery from '../src/hooks/useMediaQuery';
+import { generateCreditBuckets } from '../src/utils/bucketEngine';
+
 
 interface AccountsProps {
   accounts: Account[];
