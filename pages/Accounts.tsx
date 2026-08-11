@@ -364,19 +364,47 @@ const Accounts: React.FC<AccountsProps> = ({ accounts, installments = [], transa
     const isCredit = acc.type === 'Credit' || acc.classification === 'Credit Card' || acc.type === 'Loan' || acc.classification === 'Loan';
     const creditLimit = acc.creditLimit ?? 0;
     
-    {/* TO: Look at accountId instead of linkedAccountId */}
-    // 🟢 NEW: Calculate the remaining balance of all active installments linked to this card
-    const installmentBurden = installments
-      .filter(i => (i.accountId === acc.id || i.linkedAccountId === acc.id) && !i.isArchived)
-      .reduce((sum, i) => sum + (i.totalAmount - i.paidAmount), 0);
+    let displayBalance = acc.balance;
+    let totalUtilized = acc.balance;
 
+    if (isCredit) {
+      // 1. Fetch exact bucket from our waterfall engine for the current month!
+      const now = new Date();
+      const buckets = generateCreditBuckets(acc, transactions || [], installments || [], now.getFullYear(), monthNames[now.getMonth()]);
       
-    // 🟢 NEW: Total Utilized = Actual Statement Balance + Unpaid Installments
-    const totalUtilized = acc.balance + installmentBurden;
+      if (buckets.length > 0) {
+        const currentBucket = buckets[buckets.length - 1];
+        
+        // The face of the card shows the exact ending balance of the current cycle
+        displayBalance = currentBucket.endingBalance;
+
+        // The Limit Bar calculates absolute total debt (All Swipes + All future unpaid installments)
+        const futureInstallmentBurden = installments
+          .filter(i => (i.accountId === acc.id || i.linkedAccountId === acc.id) && !i.isArchived)
+          .reduce((sum, i) => sum + Math.max(0, i.totalAmount - i.paidAmount), 0);
+          
+        const totalSwipesUnpaid = (transactions || [])
+          .filter(tx => tx.payment_method_id === acc.id && tx.transaction_type !== 'credit_payment')
+          .reduce((sum, tx) => sum + Math.max(0, Number(tx.amount)), 0);
+          
+        const totalPayments = (transactions || [])
+          .filter(tx => tx.payment_method_id === acc.id && tx.transaction_type === 'credit_payment')
+          .reduce((sum, tx) => sum + Math.max(0, Number(tx.amount)), 0);
+          
+        totalUtilized = Math.max(0, totalSwipesUnpaid - totalPayments) + futureInstallmentBurden;
+      } else {
+        // Fallback for brand new, empty accounts
+        const installmentBurden = installments
+          .filter(i => (i.accountId === acc.id || i.linkedAccountId === acc.id) && !i.isArchived)
+          .reduce((sum, i) => sum + Math.max(0, i.totalAmount - i.paidAmount), 0);
+        totalUtilized = acc.balance + installmentBurden;
+      }
+    }
 
     const usedPercent = creditLimit > 0 ? Math.min(100, Math.round((totalUtilized / creditLimit) * 100)) : 0;
     const usedPercentSafe = usedPercent < 0 ? 0 : usedPercent;
     const isActive = (acc as any).isActive !== false;
+
 
     const deactivationDate = (acc as any).deactivationDate;
     
@@ -424,11 +452,11 @@ const Accounts: React.FC<AccountsProps> = ({ accounts, installments = [], transa
             <div className="absolute w-3 h-2 border border-black/30 rounded-sm"></div>
           </div>
 
-          {/* Balance */}
-          <div className="text-right pl-2 truncate">
+                    {/* Balance */}
+                    <div className="text-right pl-2 truncate">
             <p className="text-[8px] sm:text-[9px] font-black uppercase tracking-[0.14em] text-gray-500 mb-0.5">Balance</p>
             <p className={`text-xl sm:text-2xl font-black tracking-tight leading-none truncate ${isCredit ? 'text-purple-950 dark:text-purple-100' : 'text-gray-900 dark:text-gray-100'}`}>
-              {formatCurrency(acc.balance)}
+              {formatCurrency(displayBalance)}
             </p>
           </div>
         </div>

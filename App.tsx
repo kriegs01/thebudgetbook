@@ -1715,7 +1715,7 @@ useEffect(() => {
         >
             <Routes>
               <Route path="/" element={<Dashboard accounts={accounts} budget={budgetItems} installments={installments} transactions={transactions} budgetSetups={budgetSetups} userProfile={userProfile} theme={theme} />} />
-              <Route path="/budget" element={
+              <Route path="budget" element={
                 <Budget
                   items={budgetItems} 
                   userProfile={userProfile}
@@ -1766,7 +1766,7 @@ useEffect(() => {
                   }}
                 />
               } />
-              <Route path="/billers" element={
+              <Route path="billers" element={
                 <Billers
                   billers={billers}
                   installments={installments}
@@ -1780,7 +1780,7 @@ useEffect(() => {
                   error={billersError}
                 />
               } />
-              <Route path="/installments" element={
+              <Route path="installments" element={
                 <Installments
                   installments={installments}
                   accounts={accounts}
@@ -1794,11 +1794,11 @@ useEffect(() => {
                   error={installmentsError}
                 />
               } />
-              <Route path="/accounts" element={
+              <Route path="accounts" element={
                 <Accounts
                   accounts={accounts}
                   installments={installments}
-                  transactions={transactions}
+                  transactions={rawTransactions}
                   onAdd={handleAddAccount}
                   onEdit={handleEditAccount}
                   onDelete={handleDeleteAccount}
@@ -1831,7 +1831,7 @@ useEffect(() => {
                 />
               } />
               <Route path="/accounts/view" element={<AccountFilteredTransactions accounts={accounts} onTransactionCreated={reloadAccounts} installments={installments} />} />
-              <Route path="/accounts/statement" element={<StatementPage accounts={accounts} installments={installments} />} />
+              <Route path="/accounts/statement" element={<StatementPage accounts={accounts} installments={installments} transactions={rawTransactions}/>} />
               <Route path="/wallets" element={<WalletsPage accounts={accounts} />} />
               <Route path="/wallets/view" element={<WalletView accounts={accounts} />} />
               <Route path="/settings" element={

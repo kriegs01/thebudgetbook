@@ -2,30 +2,12 @@ import React, { useEffect, useState } from 'react';
 import { ArrowLeft, Calendar, CreditCard, ChevronDown, Info } from 'lucide-react';
 import { useSearchParams, Link } from 'react-router-dom';
 import { Account, Installment } from '../../types';
-import { getTransactionsByPaymentMethod, getTransactionsByPaymentSchedule } from '../../src/services/transactionsService';
-import type { SupabaseTransaction } from '../../src/types/supabase';
-import { calculateBillingCycles, formatDateRange } from '../../src/utils/billingCycles';
+import { getTransactionsByPaymentSchedule } from '../../src/services/transactionsService';
+import { generateCreditBuckets, CreditBucket } from '../../src/utils/bucketEngine';
 import useMediaQuery from '../../src/hooks/useMediaQuery';
 import { useTheme } from '../../src/contexts/ThemeContext';
 import { PageHeader } from '../../src/components/PageHeader';
 import { getPaymentSchedulesBySource } from '../../src/services/paymentSchedulesService';
-
-
-type Transaction = {
-  id: string;
-  name: string;
-  date: string; // ISO string
-  amount: number;
-  paymentMethodId: string;
-  transaction_type: string | null;
-};
-
-type BillingCycle = {
-  startDate: Date;
-  endDate: Date;
-  label: string;
-  transactions: Transaction[];
-};
 
 const formatCurrency = (val: number) =>
   new Intl.NumberFormat('en-PH', {
@@ -35,33 +17,28 @@ const formatCurrency = (val: number) =>
     maximumFractionDigits: 2
   }).format(val);
 
-// Check if transaction falls within a billing cycle
-const isInCycle = (transaction: Transaction, cycleStart: Date, cycleEnd: Date): boolean => {
-  const txDate = new Date(transaction.date);
-  return txDate >= cycleStart && txDate <= cycleEnd;
-};
+const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 
 interface StatementPageProps {
   accounts: Account[];
-  installments: Istallment[];
+  installments: Installment[];
+  transactions?: any[];
 }
 
-{/* TO: */}
-const StatementPage: React.FC<StatementPageProps> = ({ accounts, installments = [] }) => {
+const StatementPage: React.FC<StatementPageProps> = ({ accounts, installments = [], transactions = [] }) => {
   const { getAccentClasses } = useTheme();
   const isMobile = useMediaQuery('(max-width: 767px)');
   const [searchParams] = useSearchParams();
   const accountId = searchParams.get('account');
   const [account, setAccount] = useState<Account | null>(null);
-  const [cycles, setCycles] = useState<BillingCycle[]>([]);
+  const [cycles, setCycles] = useState<CreditBucket[]>([]);
   const [selectedCycleIndex, setSelectedCycleIndex] = useState<number>(0);
   const [isLoading, setIsLoading] = useState(true);
 
   const [expandedInstallments, setExpandedInstallments] = useState<Record<string, boolean>>({});
-
   const [dbPaidAmounts, setDbPaidAmounts] = useState<Map<string, number>>(new Map());
 
-  // 🟢 NEW: Fetch actual paid schedules for all installments
+  // 🟢 Fetch actual paid schedules for all installments
   useEffect(() => {
     const loadAllPaidAmounts = async () => {
       const paidAmountsMap = new Map<string, number>();
@@ -87,14 +64,12 @@ const StatementPage: React.FC<StatementPageProps> = ({ accounts, installments = 
     }
   }, [installments]);
 
-
   const toggleInstallment = (id: string) => {
     setExpandedInstallments(prev => ({
       ...prev,
       [id]: !prev[id]
     }));
   };
-
 
   useEffect(() => {
     const loadAccountAndTransactions = async () => {
@@ -105,182 +80,40 @@ const StatementPage: React.FC<StatementPageProps> = ({ accounts, installments = 
       
       setIsLoading(true);
       try {
-        // Find the account
         const acc = accounts.find(a => a.id === accountId);
         if (!acc || acc.type !== 'Credit') {
-          // If accounts have loaded but this account is missing or not a credit account,
-          // stop loading. If accounts haven't loaded yet (empty array), the effect will
-          // re-run once the parent finishes loading, so keep the spinner up.
-          if (accounts.length > 0) {
-            setIsLoading(false);
-          }
+          if (accounts.length > 0) setIsLoading(false);
           return;
         }
         
         setAccount(acc);
         
-        // Get billing date
-        const billingDate = acc.billingDate;
-        if (!billingDate) {
-          // No billing date set, can't calculate cycles
-          setIsLoading(false);
-          return;
-        }
-        
-        // Calculate billing cycles - Generate both past and future cycles to show all transactions
-        const cycleData = calculateBillingCycles(billingDate, 12, false);
-        
-        // Load only this account's transactions from Supabase
-        const { data: transactionsData, error: transactionsError } = await getTransactionsByPaymentMethod(accountId);
-        
-        if (transactionsError) {
-          console.error('Error loading transactions:', transactionsError);
-          setIsLoading(false);
-          return;
-        }
-        
-                // Convert Supabase transactions to local format
-                let accountTransactions: Transaction[] = (transactionsData || []).map(t => ({
-                  id: t.id,
-                  name: t.name,
-                  date: t.date,
-                  amount: t.amount,
-                  paymentMethodId: t.payment_method_id,
-                  transaction_type: t.transaction_type ?? null
-                }));
-        
-                // 🟢 NEW: Fetch actual payments made to linked installments and import them!
-                const bundleInstallments = (installments || []).filter(inst =>
-                    (inst.accountId === accountId || inst.linkedAccountId === accountId) && !inst.isArchived
-                );
-        
-                const instPromises = bundleInstallments.map(async (inst) => {
-                    const { data: schedules } = await getPaymentSchedulesBySource('installment', inst.id);
-                    if (schedules) {
-                        for (const schedule of schedules) {
-                            const { data: txs } = await getTransactionsByPaymentSchedule(schedule.id);
-                            if (txs) {
-                                txs.forEach((tx: any) => {
-                                    accountTransactions.push({
-                                        id: tx.id,
-                                        name: `Payment: ${inst.name}`,
-                                        date: tx.date,
-                                        amount: -Math.abs(tx.amount), // Negative amount for payments
-                                        paymentMethodId: tx.payment_method_id,
-                                        transaction_type: 'credit_payment'
-                                    });
-                                });
-                            }
-                        }
-                    }
-                });
-                
-                await Promise.all(instPromises);
-        
-                // Sort all transactions chronologically so rollover calculates properly
-                accountTransactions.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
-                
-                        // 🟢 Include the account's opening balance as the initial starting point
-        let accumulatedRollover = account.openingBalance || 0;
+        // 🟢 Generate chronological buckets using our unified waterfall engine
+        const now = new Date();
+        const buckets = generateCreditBuckets(
+          acc,
+          transactions || [],
+          installments || [],
+          now.getFullYear(),
+          monthNames[now.getMonth()]
+        );
 
-        // Group transactions by cycle (Process oldest to newest)
-        const sortedCycleData = [...cycleData].sort((a, b) => a.startDate.getTime() - b.startDate.getTime());
-
-        const chronologicalCycles: BillingCycle[] = sortedCycleData.map((cycle, index) => {
-          const cycleTxs = accountTransactions.filter(tx => 
-            isInCycle(tx, cycle.startDate, cycle.endDate)
-          );
-          
-          // Auto-inject active installments as statement charges with EXACT precise dates
-          if (bundleInstallments.length > 0) {
-            bundleInstallments.forEach(inst => {
-              if (inst.startDate && !inst.isArchived) {
-                const [year, month] = inst.startDate.split('-');
-                const startYear = parseInt(year);
-                const startMonth = parseInt(month); // 1-12
-                const termNum = parseInt(String(inst.termDuration).replace(/\D/g, '')) || 12;
-                
-                // Fallback to the 1st if no specific due date is set
-                const dueDay = parseInt((inst as any).due_date || (inst as any).dueDate || '1'); 
-
-                for (let i = 0; i < termNum; i++) {
-                    // Create the exact date for this specific month's charge
-                    // Use 12:00 PM to safely avoid midnight timezone shifting
-                    const chargeDate = new Date(startYear, startMonth - 1 + i, dueDay, 12, 0, 0);
-
-                    // Only inject if this exact charge date falls inside the current billing cycle window
-                    if (chargeDate >= cycle.startDate && chargeDate <= cycle.endDate) {
-                        cycleTxs.push({
-                            id: `auto-inst-${inst.id}-${i}`,
-                            name: `Installment: ${inst.name}`,
-                            date: chargeDate.toISOString(),
-                            amount: inst.monthlyAmount, // Positive charge
-                            paymentMethodId: accountId,
-                            transaction_type: 'installment_charge'
-                        });
-                    }
-                }
-              }
-            });
-          }
-
-                              // Inject Rollover (Positive)
-          if (accumulatedRollover > 0) {
-            // 🟢 NEW: Step back one month to accurately name the previous statement
-            const prevMonthDate = new Date(cycle.startDate);
-            prevMonthDate.setMonth(prevMonthDate.getMonth() - 1);
-            const prevMonthName = prevMonthDate.toLocaleString('en-US', { month: 'long' });
-
-            cycleTxs.unshift({
-              id: `rollover-${index}`,
-              name: `${prevMonthName} Statement Balance`, 
-              date: cycle.startDate.toISOString(),
-              amount: accumulatedRollover, 
-              paymentMethodId: accountId,
-              transaction_type: 'rollover_carryover'
-            });
-          }
-
-          
-
-          // Calculate next month's rollover based on net flow
-          const cycleCharges = cycleTxs.filter(tx => tx.amount > 0).reduce((sum, tx) => sum + tx.amount, 0);
-          const cyclePayments = cycleTxs.filter(tx => tx.amount < 0).reduce((sum, tx) => sum + Math.abs(tx.amount), 0);
-          
-          accumulatedRollover = Math.max(0, cycleCharges - cyclePayments);
-                  
-          // Sort this specific cycle's transactions chronologically before rendering
-          cycleTxs.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
-
-          return {
-            startDate: cycle.startDate,
-            endDate: cycle.endDate,
-            label: formatDateRange(cycle.startDate, cycle.endDate),
-            transactions: cycleTxs
-          };
-        });
-        
-        // Reverse for the UI so newest cycle is on top
-        const finalCycles = chronologicalCycles.reverse();
-        setCycles(finalCycles);
-        const today = new Date();
-        const currentCycleIndex = finalCycles.findIndex(cycle => today >= cycle.startDate && today <= cycle.endDate);
-        setSelectedCycleIndex(currentCycleIndex >= 0 ? currentCycleIndex : 0);
-
-        
-
+        // Reverse so newest statement is on top for the UI
+        const reversedBuckets = [...buckets].reverse();
+        setCycles(reversedBuckets);
+        
+        // ONLY reset to 0 if we are on a brand new page load or the selection is out of bounds
+        setSelectedCycleIndex(prev => (prev < reversedBuckets.length ? prev : 0));
         
       } catch (error) {
-        console.error('Error loading transactions:', error);
+        console.error('Error loading statement buckets:', error);
       } finally {
         setIsLoading(false);
       }
     };
     
     loadAccountAndTransactions();
-  // 🟢 FIX: Ensure calculation runs after paid amounts load
-  }, [accountId, accounts, installments, dbPaidAmounts]); 
-
+  }, [accountId, accounts, installments, transactions]);
 
   if (isLoading) {
     return (
@@ -310,16 +143,15 @@ const StatementPage: React.FC<StatementPageProps> = ({ accounts, installments = 
     );
   }
 
-        // 🟢 NEW: LOAN BUNDLE DASHBOARD OVERRIDE
+  // 🟢 LOAN BUNDLE DASHBOARD OVERRIDE
   if (account.subtype === 'Loan_Bundle' ) {
     const bundleInstallments = (installments || []).filter(inst =>
       (inst.accountId === account.id || inst.linkedAccountId === account.id) && !inst.isArchived
     );
 
-            // --- 🟢 NEW: MASTER SUMMARY MATH ---
-    let totalUsed = 0; // Tracks the Principal (Item Cost)
-    let totalPayableAll = 0; // Tracks the True Debt (Principal + Interest)
-    let totalPaidAll = 0; // Tracks Actual Money Paid
+    let totalUsed = 0; 
+    let totalPayableAll = 0; 
+    let totalPaidAll = 0; 
     let dueThisMonth = 0;
 
     const currentMonthName = new Date().toLocaleString('en-US', { month: 'long' });
@@ -327,17 +159,12 @@ const StatementPage: React.FC<StatementPageProps> = ({ accounts, installments = 
     const currentMonthLabel = `${currentMonthName} ${currentYear}`;
 
     bundleInstallments.forEach(inst => {
-      // 1. Sum up the Principal for the "Total Used" display
       totalUsed += inst.principalAmount || inst.totalAmount || 0;
-      
-      // 2. Sum up the True Debt for the "Remaining" math
       totalPayableAll += inst.totalAmount || 0;
 
-      // 3. Sum up the actual payments from the database schedules
       const paidForThisInst = dbPaidAmounts.get(inst.id) ?? 0;
       totalPaidAll += paidForThisInst;
 
-      // Project the schedule to find what is due THIS month
       const term = parseInt(String(inst.termDuration).replace(/\D/g, '')) || 12;
       let startYear = currentYear;
       let startMonth = new Date().getMonth() + 1;
@@ -351,21 +178,16 @@ const StatementPage: React.FC<StatementPageProps> = ({ accounts, installments = 
       for (let i = 0; i < term; i++) {
         const monthIndex = (startMonth - 1 + i) % 12;
         const year = startYear + Math.floor((startMonth - 1 + i) / 12);
-        const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
         const label = `${monthNames[monthIndex]} ${year}`;
         const isPaid = (i + 1) * inst.monthlyAmount <= paidForThisInst;
 
-        // If this specific schedule month matches the current calendar month and isn't paid, add it!
         if (label === currentMonthLabel && !isPaid) {
           dueThisMonth += inst.monthlyAmount || 0;
         }
       }
     });
 
-    // 4. Calculate Remaining based on TOTAL PAYABLE, not Total Used
     const totalRemaining = totalPayableAll - totalPaidAll;
-    // ------------------------------------
-
 
     return (
       <div className={`min-h-screen bg-gray-50 dark:bg-gray-950 transition-colors ${isMobile ? 'overflow-x-hidden px-4 pb-8 pt-6' : 'p-8'}`}>
@@ -386,8 +208,6 @@ const StatementPage: React.FC<StatementPageProps> = ({ accounts, installments = 
           />
 
           <div className="space-y-8 mt-8">
-            
-            {/* 🟢 NEW: BUNDLE SUMMARY CARD */}
             <div className="bg-white dark:bg-gray-900 border-[4px] border-black rounded-[2rem] p-6 shadow-[8px_8px_0px_0px_rgba(0,0,0,1)]">
               <h3 className="mb-4 text-sm font-black uppercase tracking-widest text-gray-600 dark:text-gray-400">Bundle Summary</h3>
               <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
@@ -411,14 +231,11 @@ const StatementPage: React.FC<StatementPageProps> = ({ accounts, installments = 
             </div>
 
             {bundleInstallments.length === 0 ? (
-
-
                 <div className="rounded-[1.8rem] border-[4px] border-black bg-white p-12 text-center shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] dark:bg-gray-900">
                   <p className="text-sm font-black uppercase tracking-widest text-gray-500 dark:text-gray-400">No active loans in this bundle.</p>
                 </div>
               ) : (
                 bundleInstallments.map(inst => {
-                  // Generate the localized schedule
                   const term = parseInt(String(inst.termDuration).replace(/\D/g, '')) || 12;
                   const schedule = [];
                   let startYear = new Date().getFullYear();
@@ -435,7 +252,6 @@ const StatementPage: React.FC<StatementPageProps> = ({ accounts, installments = 
                   for (let i = 0; i < term; i++) {
                     const monthIndex = (startMonth - 1 + i) % 12;
                     const year = startYear + Math.floor((startMonth - 1 + i) / 12);
-                    const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
                     const isPaid = (i + 1) * inst.monthlyAmount <= paidAmount;
   
                     schedule.push({
@@ -449,8 +265,6 @@ const StatementPage: React.FC<StatementPageProps> = ({ accounts, installments = 
 
                   return (
                     <div key={inst.id} className="bg-white dark:bg-gray-900 border-[4px] border-black rounded-[2rem] p-6 shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] transition-all">
-                      
-                      {/* 🟢 NEW: COLLAPSIBLE HEADER */}
                       <button 
                         onClick={() => toggleInstallment(inst.id)}
                         className="w-full flex items-center justify-between mb-6 group outline-none"
@@ -482,7 +296,6 @@ const StatementPage: React.FC<StatementPageProps> = ({ accounts, installments = 
                         </div>
                       </div>
   
-                      {/* 🟢 NEW: HIDDEN SCHEDULE BODY */}
                       {isExpanded && (
                         <div className="space-y-3 px-2 mt-8 animate-in slide-in-from-top-2 fade-in duration-200">
                           {schedule.map((month) => (
@@ -510,12 +323,11 @@ const StatementPage: React.FC<StatementPageProps> = ({ accounts, installments = 
                   );  
                 })
               )}
-            </div>
           </div>
         </div>
-      );
-    }
-  
+      </div>
+    );
+  }
 
   if (!account.billingDate) {
     return (
@@ -535,13 +347,6 @@ const StatementPage: React.FC<StatementPageProps> = ({ accounts, installments = 
               </Link>
             ) : undefined}
           />
-          <div className={`${isMobile ? 'mb-5 flex items-start gap-3' : 'mb-6 flex justify-start'}`}>
-            {isMobile && (
-              <Link to="/accounts" className="inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border-[3px] border-black bg-white text-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] transition-all hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none dark:bg-gray-900 dark:text-white">
-                <ArrowLeft className="w-5 h-5" />
-              </Link>
-            )}
-          </div>
           <div className="rounded-[1.8rem] border-[4px] border-black bg-white p-8 text-center shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] transition-colors dark:bg-gray-900">
             <p className="text-gray-500 dark:text-gray-400">No billing date set for this credit account.</p>
             <p className="text-sm text-gray-400 dark:text-gray-500 mt-2">Please edit the account and set a billing date to view statements.</p>
@@ -553,22 +358,26 @@ const StatementPage: React.FC<StatementPageProps> = ({ accounts, installments = 
 
   const selectedCycle = cycles[selectedCycleIndex];
 
-  // 🟢 FIX: Safely fallback to an empty array to prevent the White Screen of Death
-  const currentTxs = selectedCycle?.transactions || []; 
-
   // 🟢 Break down the statement math exactly like a real bank
-  const previousBalance = currentTxs.find(tx => tx.transaction_type === 'rollover_carryover')?.amount ?? 0;
-  
-  const newCharges = currentTxs
-    .filter(tx => tx.amount > 0 && tx.transaction_type !== 'rollover_carryover')
-    .reduce((sum, tx) => sum + tx.amount, 0);
-    
-  const totalPayments = currentTxs
-    .filter(tx => tx.amount < 0)
-    .reduce((sum, tx) => sum + Math.abs(tx.amount), 0);
-    
-  const statementBalance = Math.max(0, previousBalance + newCharges - totalPayments);
+  const previousBalance = selectedCycle?.startingBalance ?? 0;
+  const newCharges = selectedCycle?.newChargesTotal ?? 0;
+  const totalPayments = selectedCycle?.paymentsTotal ?? 0;
+  const statementBalance = selectedCycle?.endingBalance ?? 0;
 
+  // 🟢 Extract the flat transactions safely for the table
+  const currentTxs = selectedCycle ? [
+    ...(selectedCycle.personalBreakdown.unpaidRollover > 0 ? [{
+      id: 'rollover-item',
+      name: 'Previous Statement Balance',
+      date: selectedCycle.cycleStart.toISOString(),
+      amount: selectedCycle.personalBreakdown.unpaidRollover,
+      transaction_type: 'rollover'
+    }] : []),
+    ...selectedCycle.personalBreakdown.swipes,
+    ...selectedCycle.personalBreakdown.activeInstallments.map(i => ({ ...i, transaction_type: 'installment' })),
+    ...selectedCycle.budeeBreakdown.map(b => ({ ...b, name: `Budee: ${b.name}`, transaction_type: 'budee' })),
+    ...selectedCycle.payments.map(p => ({ ...p, amount: -p.amount, transaction_type: 'payment' }))
+  ] : [];
 
   return (
     <div className={`min-h-screen bg-gray-50 dark:bg-gray-950 transition-colors ${isMobile ? 'overflow-x-hidden px-4 pb-8 pt-6' : 'p-8'}`}>
@@ -616,8 +425,8 @@ const StatementPage: React.FC<StatementPageProps> = ({ accounts, installments = 
                     className="w-full appearance-none rounded-2xl border-[3px] border-black bg-[#fff8ea] px-4 py-3 pr-12 text-sm font-black text-gray-900 outline-none transition-colors dark:bg-gray-800 dark:text-gray-100"
                   >
                     {cycles.map((cycle, index) => (
-                      <option key={cycle.label} value={index}>
-                        {cycle.label} ({cycle.transactions.length})
+                      <option key={cycle.cycleLabel} value={index}>
+                        {cycle.cycleLabel}
                       </option>
                     ))}
                   </select>
@@ -627,7 +436,7 @@ const StatementPage: React.FC<StatementPageProps> = ({ accounts, installments = 
                 <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
                   {cycles.map((cycle, index) => (
                     <button
-                      key={cycle.label}
+                      key={cycle.cycleLabel}
                       onClick={() => setSelectedCycleIndex(index)}
                       className={`rounded-[1.3rem] border-[3px] p-4 text-left shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] transition-all ${
                         selectedCycleIndex === index
@@ -635,8 +444,7 @@ const StatementPage: React.FC<StatementPageProps> = ({ accounts, installments = 
                           : 'border-black bg-[#fff8ea] hover:-translate-y-0.5 dark:bg-gray-800'
                       }`}
                     >
-                      <div className="text-sm font-black text-gray-900 dark:text-gray-100 transition-colors">{cycle.label}</div>
-                      <div className="mt-1 text-xs font-bold text-gray-500 dark:text-gray-400 transition-colors">{cycle.transactions.length} transactions</div>
+                      <div className="text-sm font-black text-gray-900 dark:text-gray-100 transition-colors">{cycle.cycleLabel}</div>
                     </button>
                   ))}
                 </div>
@@ -645,12 +453,11 @@ const StatementPage: React.FC<StatementPageProps> = ({ accounts, installments = 
           </div>
         </div>
 
-        {/* Statement Summary */}
         {selectedCycle && (
           <>
             <div className="mb-6 rounded-[1.8rem] border-[4px] border-black bg-white p-6 shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] transition-colors dark:bg-gray-900">
               <h3 className="mb-4 text-sm font-black uppercase tracking-widest text-gray-600 transition-colors dark:text-gray-400">Statement Summary</h3>
-                            <div className="grid grid-cols-2 gap-4 md:grid-cols-4 md:gap-6">
+              <div className="grid grid-cols-2 gap-4 md:grid-cols-4 md:gap-6">
                 <div>
                   <p className="mb-1 text-xs font-medium text-gray-400 transition-colors dark:text-gray-500">Statement Balance</p>
                   <p className="text-lg font-bold text-gray-900 transition-colors dark:text-gray-100">{formatCurrency(statementBalance)}</p>
@@ -661,41 +468,41 @@ const StatementPage: React.FC<StatementPageProps> = ({ accounts, installments = 
                 </div>
                 <div>
                   <p className="mb-1 text-xs font-medium text-gray-400 transition-colors dark:text-gray-500">Payments</p>
-                  <p className="text-lg font-bold text-green-600 transition-colors dark:text-green-400">-{formatCurrency(totalPayments)}</p>
+                  <p className="text-lg font-bold text-green-600 transition-colors dark:text-green-400">{totalPayments > 0 ? '-' : ''}{formatCurrency(totalPayments)}</p>
                 </div>
                 <div>
                   <p className="mb-1 text-xs font-medium text-gray-400 transition-colors dark:text-gray-500">Credit Limit</p>
                   <p className="text-lg font-bold text-gray-900 transition-colors dark:text-gray-100">{formatCurrency(account.creditLimit ?? 0)}</p>
                 </div>
               </div>
-</div>
+            </div>
 
-            {/* Transactions Table */}
             <div className="overflow-hidden rounded-[1.8rem] border-[4px] border-black bg-white shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] transition-colors dark:bg-gray-900">
               <div className="flex items-center justify-between border-b-[4px] border-black px-6 py-4 transition-colors">
                 <h2 className="text-sm font-black uppercase tracking-widest text-gray-600 transition-colors dark:text-gray-400">Transactions</h2>
-                <div className="text-sm text-gray-500 transition-colors dark:text-gray-400">{selectedCycle.transactions.length} items</div>
+                <div className="text-sm text-gray-500 transition-colors dark:text-gray-400">{currentTxs.length} items</div>
               </div>
               <div className="p-4">
                 {isMobile ? (
                   <div className="space-y-3">
-                    {selectedCycle.transactions.map(tx => (
+                    {currentTxs.map(tx => (
                       <div key={tx.id} className="rounded-[1.4rem] border-[3px] border-black bg-[#fff8ea] p-4 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] transition-colors dark:bg-gray-800">
                         <div className="flex items-start justify-between gap-3">
                           <div className="min-w-0">
                             <p className="text-sm font-black text-gray-900 dark:text-gray-100">{tx.name}</p>
-                            <p className="mt-1 text-xs font-bold text-gray-500 dark:text-gray-400">
-                              {new Date(tx.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-                            </p>
+                            {tx.date && (
+                              <p className="mt-1 text-xs font-bold text-gray-500 dark:text-gray-400">
+                                {new Date(tx.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                              </p>
+                            )}
                           </div>
                           <p className={`text-right text-sm font-black transition-colors ${tx.amount > 0 ? 'text-gray-900 dark:text-gray-100' : 'text-green-600 dark:text-green-400'}`}>
                             {formatCurrency(tx.amount)}
                           </p>
-
                         </div>
                       </div>
                     ))}
-                    {selectedCycle.transactions.length === 0 && (
+                    {currentTxs.length === 0 && (
                       <div className="rounded-[1.4rem] border-[3px] border-dashed border-black bg-white p-6 text-center dark:bg-gray-800">
                         <p className="text-sm font-bold text-gray-500 dark:text-gray-400">No transactions in this billing cycle.</p>
                       </div>
@@ -712,29 +519,28 @@ const StatementPage: React.FC<StatementPageProps> = ({ accounts, installments = 
                         </tr>
                       </thead>
                       <tbody>
-                        {selectedCycle.transactions.map(tx => (
+                        {currentTxs.map(tx => (
                           <tr key={tx.id} className="border-t border-gray-100 transition-colors dark:border-gray-800">
                             <td className="px-4 py-3">
                               <div className="text-sm font-medium text-gray-900 transition-colors dark:text-gray-100">{tx.name}</div>
                             </td>
                             <td className="px-4 py-3">
                               <div className="text-sm text-gray-500 transition-colors dark:text-gray-400">
-                                {new Date(tx.date).toLocaleDateString('en-US', {
+                                {tx.date ? new Date(tx.date).toLocaleDateString('en-US', {
                                   month: 'short',
                                   day: 'numeric',
                                   year: 'numeric'
-                                })}
+                                }) : 'N/A'}
                               </div>
                             </td>
                             <td className="px-4 py-3 text-right">
                             <div className={`text-sm font-semibold transition-colors ${tx.amount > 0 ? 'text-gray-900 dark:text-gray-100' : 'text-green-600 dark:text-green-400'}`}>
                               {formatCurrency(tx.amount)}
                             </div>
-
                             </td>
                           </tr>
                         ))}
-                        {selectedCycle.transactions.length === 0 && (
+                        {currentTxs.length === 0 && (
                           <tr>
                             <td colSpan={3} className="px-4 py-6 text-center text-gray-400 transition-colors dark:text-gray-500">
                               No transactions in this billing cycle.

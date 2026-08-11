@@ -30,6 +30,7 @@ import { SandboxView } from '../src/components/SandboxView';
 import { processBudeeTransaction } from '../src/services/budeeService';
 import { determineItemPeriod } from '../src/utils/budgetEngine';
 import { processCreditAccount } from '../src/utils/statementAggregator';
+import { generateCreditBuckets, getBucketForMonth } from '../src/utils/bucketEngine';
 
 
 interface BudgetProps {
@@ -946,32 +947,36 @@ const balance = accountTxs.reduce((sum, tx) => {
       return Math.abs(balance);
     };
 
-                // Powered by the new Unified Statement Aggregator
+                    // Powered by the new Bucket Waterfall Engine
     const getFrozenCycleAmount = (account: Account): number => {
       try {
-        // 1. Safe fallback for brand new, manually tracked cards without a cycle yet
         if (!account.billingDate && account.subtype !== 'Loan_Bundle' && account.classification !== 'Loan') {
           const liveBal = calculateCurrentBalance(account);
           return liveBal > 0 ? liveBal : Math.abs(account.openingBalance || 0);
         }
 
-        // 2. Ask the Engine for the exact numbers
-        const statement = processCreditAccount(
-          account,
-          transactions || [],
-          installments || [],
-          selectedMonth,
-          selectedYear
-        );
-        
-        // 3. Return the exact amount you owe the bank (Swipes + ALL Installments)
-        return statement.totalBankBill;
+        // Generate the chronological buckets and grab the current month
+        const buckets = generateCreditBuckets(account, transactions || [], installments || [], selectedYear, selectedMonth);
+        const targetBucket = getBucketForMonth(buckets, selectedMonth, selectedYear);
+
+        if (targetBucket) {
+          // Return ONLY your personal total (Rollover + Swipes + Personal Installments). 
+          // Budee is naturally excluded!
+          const pb = targetBucket.personalBreakdown;
+          const personalTotal = pb.unpaidRollover + pb.newSwipesTotal + pb.activeInstallments.reduce((s, i) => s + i.amount, 0);
+          
+          if (personalTotal > 0) return personalTotal;
+        }
+
+        const liveBal = calculateCurrentBalance(account);
+        return liveBal > 0 ? liveBal : Math.abs(account.openingBalance || 0);
         
       } catch (err) {
         console.error("Critical Math Error in getFrozenCycleAmount:", err);
-        return 0; // Completely shields the UI from crashing
+        return 0;
       }
     };
+
  
 
 
@@ -2813,31 +2818,13 @@ const balance = accountTxs.reduce((sum, tx) => {
         return s + Math.max(w.amount, funded);
       }, 0);
 
-      // 4. Credit Cards
+                  // 4. Credit Cards (Powered by new Unified Engine)
       const excludedCredits = new Set(setup.data?._excludedCreditIds || []);
       const creditTotal = accounts.filter(acc => (acc.type === 'Credit' || acc.classification === 'Credit Card') && !excludedCredits.has(acc.id)).reduce((sum, account) => {
-        const accountTxs = transactions.filter(tx => tx?.payment_method_id === account.id);
-        let cycleCharges = 0;
-        if (account.billingDate && typeof calculateBillingCycles === 'function') {
-          const cycles = calculateBillingCycles(account.billingDate, 12, false);
-          const targetCycle = cycles.find(cycle => {
-            if (!cycle?.startDate || !cycle?.endDate) return false;
-            return (new Date(cycle.startDate).getMonth() === setupMonthIndex && new Date(cycle.startDate).getFullYear() === setupYear) ||
-                   (new Date(cycle.endDate).getMonth() === setupMonthIndex && new Date(cycle.endDate).getFullYear() === setupYear);
-          });
-          if (targetCycle) {
-            cycleCharges = accountTxs.filter(tx => new Date(tx.date) >= targetCycle.startDate && new Date(tx.date) <= targetCycle.endDate && tx.transaction_type !== 'credit_payment' && tx.amount > 0).reduce((cSum, tx) => cSum + tx.amount, 0);
-          }
-        }
-        if (cycleCharges > 0) return sum + cycleCharges;
-        
-        const fallbackCharges = accountTxs.filter(tx => new Date(tx.date).getMonth() === setupMonthIndex && new Date(tx.date).getFullYear() === setupYear && tx.transaction_type !== 'credit_payment' && tx.amount > 0).reduce((cSum, tx) => cSum + tx.amount, 0);
-        if (fallbackCharges > 0) return sum + fallbackCharges;
-        
-        const liveBal = calculateCurrentBalance(account);
-        const amt = liveBal > 0 ? liveBal : Math.abs(account.openingBalance || 0);
+        const amt = getFrozenCycleAmount(account);
         return amt >= 0.01 ? sum + amt : sum;
       }, 0);
+
 
       // Return the setup with the perfectly synced, real-time dynamic total
       {/* TO: */}
@@ -4003,219 +3990,122 @@ const categoryTotal = itemsTotal + installmentsTotal + creditTotal;
             </div>
   
             {cat.name === 'Credit' && creditBudgetAccounts.length > 0 && (
-              <div className="p-4 space-y-4 bg-gray-50/30 dark:bg-gray-955/10">
-                {creditBudgetAccounts.filter(account => {
-                  if (excludedCreditIds.has(account.id)) return false;
-                  
-                  // 1. LOAN BUNDLES: Check if the folder has any installments due this period
-                  if (account.subtype === 'Loan_Bundle') {
-                     return (installments || []).some(inst => {
-                         if (inst.isArchived || excludedInstallmentIds.has(inst.id)) return false;
-                         if (inst.accountId !== account.id && inst.account_id !== account.id && inst.linkedAccountId !== account.id && inst.linked_account_id !== account.id) return false;                         
-                         let targetPeriod = 1;
-                         if (inst.timing === '1/2') targetPeriod = 1;
-                         else if (inst.timing === '2/2') targetPeriod = 2;
-                         else {
-                           const dueDay = inst.dueDate || inst.due_date || 1;
-                           targetPeriod = getAccountPeriodIndex({ dueDate: dueDay });
-                         }
-                         return targetPeriod === activePeriodIndex;
-                     });
-                  }
-                  
-                  // 2. STANDARD CC: Check master due date
-                  return getAccountPeriodIndex(account) === activePeriodIndex;
-                }).map(account => {
-                  const isIncluded = !excludedCreditIds.has(account.id);
-                  const isLoanBundle = account.subtype === 'Loan_Bundle';
-
-                                    // 🟢 GROUPED LOAN BUNDLE UI
-                                    if (isLoanBundle) {
-                                      const bundleInstallments = (installments || []).filter(inst => {
-                                        if (inst.isArchived || excludedInstallmentIds.has(inst.id)) return false;
-                                        
-                                        // 🟢 FIX: Hide Budee items from the Credit section so they only appear under the Budee card!
-                                        const isBudee = !!(inst.funding_friend_id || inst.debtor_friend_id || (inst as any).friend_user_id);
-                                        if (isBudee) return false;
-                  
-                                        if (inst.accountId !== account.id && inst.account_id !== account.id && inst.linkedAccountId !== account.id && inst.linked_account_id !== account.id) return false;                      
-                                        
-                                        let targetPeriod = 1;
-                                        if (inst.timing === '1/2') targetPeriod = 1;
-                                        else if (inst.timing === '2/2') targetPeriod = 2;
-                                        else {
-                                          const dueDay = inst.dueDate || inst.due_date || 1;
-                                          targetPeriod = getAccountPeriodIndex({ dueDate: dueDay });
-                                        }
-                                        if (targetPeriod !== activePeriodIndex) return false;
-                                        
-                                        const scheduleForMonth = getPaymentSchedule('installment', inst.id, selectedMonth, selectedYear);
-                                        const isActiveForPeriod = scheduleForMonth !== undefined || shouldShowInstallment(inst, selectedMonth, selectedYear);
-                                        const isFinished = !scheduleForMonth && inst.totalAmount > 0 && inst.paidAmount >= inst.totalAmount;
-                                        
-                                        return isActiveForPeriod && !isFinished;
-                                      });
-                  
-
-                    if (bundleInstallments.length === 0) return null;
-                    const bundleTotal = bundleInstallments.reduce((sum, inst) => sum + inst.monthlyAmount, 0);
-
-                    return (
-                      <div key={account.id} className={`p-4 border-2 border-black rounded-xl bg-blue-50/20 dark:bg-blue-900/10 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] transition-all flex flex-col gap-3 ${isIncluded ? 'opacity-100' : 'opacity-60'}`}>
-                        <div className="flex items-center justify-between border-b-2 border-black/10 pb-3">
-                          <div className="flex items-center gap-4">
-                            <button 
-                              onClick={() => setExcludedCreditIds(prev => {
-                                const next = new Set(prev);
-                                if (next.has(account.id)) next.delete(account.id);
-                                else next.add(account.id);
-                                return next;
-                              })}
-                              className={`w-8 h-8 rounded-xl border-2 border-black flex items-center justify-center transition-all ${isIncluded ? 'bg-indigo-600 text-white' : 'bg-white'}`}
-                            >
-                              <Check className="w-4 h-4" />
-                            </button>
-                            <div>
-                              <p className="text-sm font-black text-gray-900 dark:text-gray-100">{account.bank}</p>
-                              <span className="text-[9px] font-black px-2 py-0.5 bg-blue-100 border border-black text-blue-600 rounded inline-block mt-1 uppercase">Loan Bundle</span>
-                            </div>
-                          </div>
-                          <div className="text-right">
-                             <p className="text-xs font-bold text-gray-500 uppercase tracking-widest">Total Due</p>
-                             <p className="text-sm font-black text-blue-600">{formatCurrency(bundleTotal)}</p>
-                          </div>
-                        </div>
-
-                        <div className="flex flex-col gap-2 pl-4 md:pl-12">
-                          {bundleInstallments.map(inst => {
-                            let isPaid = false, isPartial = false;
-                            const instSchedule = getPaymentSchedule('installment', inst.id, selectedMonth, selectedYear);
-                            if (instSchedule) {
-                              isPaid = checkIfPaidBySchedule('installment', inst.id);
-                              isPartial = checkIfPartialBySchedule('installment', inst.id);
-                            }
-
-                            return (
-                              <div key={inst.id} className="flex items-center justify-between p-3 rounded-lg bg-white dark:bg-gray-800 border-2 border-black/20 shadow-sm">
-                                <div>
-                                  <p className="text-sm font-bold text-gray-900 dark:text-gray-100">{inst.name}</p>
-                                  <p className="text-[10px] font-black text-gray-500">
-                                    Due: {inst.dueDate || inst.due_date ? formatDueDate(inst.dueDate || inst.due_date) : 'N/A'}
-                                  </p>
-                                </div>
-                                <div className="flex items-center gap-3">
-                                  <div className="text-right">
-                                    <p className="text-sm font-black text-gray-900 dark:text-gray-100">{formatCurrency(inst.monthlyAmount)}</p>
-                                    {isPaid ? (
-                                      <span className="text-[9px] font-black px-2 py-1 bg-green-400 text-black border-2 border-black rounded-lg shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] uppercase mt-0.5 inline-block">Paid</span>
-                                    ) : isPartial ? (
-                                      <span className="text-[9px] font-black px-2 py-1 bg-yellow-300 text-black border-2 border-black rounded-lg shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] uppercase mt-0.5 inline-block">Partial</span>
-                                    ) : null}
+                            <div className="p-4 space-y-4 bg-gray-50/30 dark:bg-gray-955/10">
+                            {creditBudgetAccounts.filter(account => {
+                              if (excludedCreditIds.has(account.id)) return false;
+                              return getAccountPeriodIndex(account) === activePeriodIndex;
+                            }).map(account => {
+                              const isIncluded = !excludedCreditIds.has(account.id);
+                              
+                              // 1. Fetch exact bucket from our waterfall engine!
+                              const buckets = generateCreditBuckets(account, transactions || [], installments || [], selectedYear, selectedMonth);
+                              const targetBucket = getBucketForMonth(buckets, selectedMonth, selectedYear);
+                              
+                              if (!targetBucket) return null;
+            
+                              // 2. Read the pre-calculated Personal Breakdown (Zero Budee items in here)
+                              const pb = targetBucket.personalBreakdown;
+                              const personalTotal = pb.unpaidRollover + pb.newSwipesTotal + pb.activeInstallments.reduce((s, i) => s + i.amount, 0);
+                              
+                              if (personalTotal <= 0) return null;
+            
+                              const isPaidInFull = getCreditPaymentStatus(account) === 'paid';
+                              const isPartial = getCreditPaymentStatus(account) === 'partial';
+            
+                              return (
+                                <div key={account.id} className={`p-4 border-2 border-black rounded-xl bg-purple-50/20 dark:bg-purple-900/10 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] flex flex-col gap-3 transition-all ${isIncluded ? 'opacity-100' : 'opacity-60'}`}>
+                                  
+                                  {/* PARENT HEADER (The Bank) */}
+                                  <div className="flex items-center justify-between border-b-2 border-black/10 pb-3">
+                                    <div className="flex items-center gap-4">
+                                      <button 
+                                        onClick={() => setExcludedCreditIds(prev => {
+                                          const next = new Set(prev);
+                                          if (next.has(account.id)) next.delete(account.id);
+                                          else next.add(account.id);
+                                          return next;
+                                        })}
+                                        className={`w-8 h-8 rounded-xl border-2 border-black flex items-center justify-center transition-all ${isIncluded ? 'bg-indigo-600 text-white' : 'bg-white'}`}
+                                      >
+                                        <Check className="w-4 h-4" />
+                                      </button>
+                                      <div>
+                                        <p className="text-sm font-black text-gray-900 dark:text-gray-100">{account.bank}</p>
+                                        <span className="text-[9px] font-black px-2 py-0.5 bg-purple-100 border border-black text-purple-600 rounded inline-block mt-1 uppercase">
+                                          {account.subtype === 'Loan_Bundle' ? 'Loan Bundle' : targetBucket.cycleLabel}
+                                        </span>
+                                      </div>
+                                    </div>
+                                    
+                                    <div className="flex items-center gap-3">
+                                       <div className="flex flex-col items-end">
+                                         <p className="text-sm font-black text-purple-600">{formatCurrency(personalTotal)}</p>
+                                         {isPaidInFull ? (
+                                           <span className="text-[9px] font-black px-2 py-1 bg-green-400 text-black border-2 border-black rounded-lg shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] uppercase mt-0.5">Paid</span>
+                                         ) : isPartial ? (
+                                           <span className="text-[9px] font-black px-2 py-1 bg-yellow-300 text-black border-2 border-black rounded-lg shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] uppercase mt-0.5">Partial</span>
+                                         ) : null}
+                                       </div>
+            
+                                       {!isReadOnly && !isPaidInFull && (
+                                         <button 
+                                           onClick={(e) => {
+                                             e.preventDefault(); 
+                                             e.stopPropagation();
+                                             const remaining = Math.max(0, personalTotal - targetBucket.paymentsTotal);
+                                             setShowCreditPayModal({ accountId: account.id, amount: remaining, bank: account.bank });
+                                           }} 
+                                           className="px-4 py-2 text-xs font-black uppercase rounded-xl border-2 border-black bg-indigo-600 text-white shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[1px] hover:translate-y-[1px] transition-all"
+                                         >
+                                           Pay
+                                         </button>
+                                       )}
+                                    </div>
                                   </div>
-
-                                  {!isPaid && !isReadOnly && (
-                                    <button 
-                                      onClick={() => {
-                                        setTransactionFormData({ 
-                                          id: '', name: `${inst.name} - ${selectedMonth}`, date: getTodayIso(), 
-                                          amount: isPartial && instSchedule ? Math.max(0, instSchedule.expected_amount - instSchedule.amount_paid).toFixed(2) : inst.monthlyAmount.toFixed(2), 
-                                          accountId: account.id || accounts[0]?.id || '', paymentScheduleId: instSchedule?.id || '', transactionType: 'payment' 
-                                        });
-                                        setShowTransactionModal(true);
-                                      }}
-                                      className="px-3 py-1.5 text-[10px] font-black uppercase rounded-xl border-2 border-black bg-indigo-600 text-white shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[1px] hover:translate-y-[1px] transition-all"
-                                    >
-                                      Pay
-                                    </button>
-                                  )}
+            
+                                  {/* NESTED CHILDREN (The Breakdown) */}
+                                  <div className="flex flex-col gap-2 pl-4 md:pl-12 pt-1">
+                                    
+                                    {/* 1. Rollover Balances */}
+                                    {pb.unpaidRollover > 0 && (
+                                      <div className="flex items-center justify-between p-3 rounded-lg bg-red-50 dark:bg-red-900/10 border-2 border-red-200/50 shadow-sm">
+                                        <div>
+                                          <p className="text-sm font-bold text-gray-900 dark:text-gray-100">Previous Balance</p>
+                                          <p className="text-[9px] font-black text-red-500 uppercase tracking-widest">Unpaid Rollover</p>
+                                        </div>
+                                        <p className="text-sm font-black text-red-600">{formatCurrency(pb.unpaidRollover)}</p>
+                                      </div>
+                                    )}
+            
+                                    {/* 2. New Standard Swipes */}
+                                    {pb.newSwipesTotal > 0 && (
+                                      <div className="flex items-center justify-between p-3 rounded-lg bg-white dark:bg-gray-800 border-2 border-black/20 shadow-sm">
+                                        <div>
+                                          <p className="text-sm font-bold text-gray-900 dark:text-gray-100">New Charges</p>
+                                          <p className="text-[9px] font-black text-gray-500 uppercase tracking-widest">BNPL / Swipes</p>
+                                        </div>
+                                        <p className="text-sm font-black text-gray-900 dark:text-gray-100">
+                                          {formatCurrency(pb.newSwipesTotal)}
+                                        </p>
+                                      </div>
+                                    )}
+            
+                                    {/* 3. Installments */}
+                                    {pb.activeInstallments.map((inst) => (
+                                      <div key={inst.id} className="flex items-center justify-between p-3 rounded-lg bg-white dark:bg-gray-800 border-2 border-black/20 shadow-sm">
+                                        <div>
+                                          <p className="text-sm font-bold text-gray-900 dark:text-gray-100">{inst.name}</p>
+                                          <p className="text-[9px] font-black text-gray-500 uppercase tracking-widest">Active Installment</p>
+                                        </div>
+                                        <p className="text-sm font-black text-gray-900 dark:text-gray-100">{formatCurrency(inst.amount)}</p>
+                                      </div>
+                                    ))}
+                                    
+                                  </div>
                                 </div>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    );
-                  }
-
-                  
-                  let calculatedDueDate = 'N/A';
-                  if (account.dueDate && account.billingDate) {
-                    const gracePeriodDays = new Date(account.dueDate).getDate();
-                    const stmtDay = new Date(account.billingDate).getDate();
-                    const calcDate = new Date(2024, 0, stmtDay); 
-                    calcDate.setDate(calcDate.getDate() + gracePeriodDays); 
-                    const isNextMonth = calcDate.getMonth() !== 0; 
-                    calculatedDueDate = `${calcDate.getDate()}${isNextMonth ? ' next' : ''}`;
-                  } else if (account.dueDate) {
-                    calculatedDueDate = String(new Date(account.dueDate).getDate());
-                  }
-                  const displayAmount = getFrozenCycleAmount(account);
-                  const cycleRemaining = getRemainingCycleAmount(account);
-                  
-
-                  if (displayAmount < 0.01) return null; 
-                  return (
-                    <div key={account.id} className={`p-4 border-2 border-black rounded-xl bg-purple-50 dark:bg-purple-900/20 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] flex items-center justify-between transition-all ${isIncluded ? 'opacity-100' : 'opacity-60'}`}>
-                      <div className="flex items-center gap-4">
-                        <button 
-                          onClick={() => setExcludedCreditIds(prev => {
-                            const next = new Set(prev);
-                            if (next.has(account.id)) next.delete(account.id);
-                            else next.add(account.id);
-                            return next;
-                          })}
-                          className={`w-8 h-8 rounded-xl border-2 border-black flex items-center justify-center transition-all ${isIncluded ? 'bg-indigo-600 text-white' : 'bg-white'}`}
-                        >
-                          <Check className="w-4 h-4" />
-                        </button>
-                        
-                        <div>
-                          <p className="text-sm font-black text-gray-900 dark:text-gray-100">{account.bank}</p>
-                          <p className="text-[10px] font-black text-purple-600">
-                            Due: {calculatedDueDate !== 'N/A' ? formatDueDate(calculatedDueDate) : 'N/A'}
-                          </p>
-                        </div>
-                      </div>
-
-                      <div className="flex items-center gap-3">
-                         <div className="flex flex-col items-end">
-                           <p className="text-sm font-black text-purple-600">{formatCurrency(displayAmount)}</p>
-                           {(() => {
-                             const status = getCreditPaymentStatus(account);
-                             if (status === 'paid') return <span className="text-[9px] font-black px-2 py-1 bg-green-400 text-black border-2 border-black rounded-lg shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] uppercase mt-0.5">Paid</span>;
-                             if (status === 'partial') return <span className="text-[9px] font-black px-2 py-1 bg-yellow-300 text-black border-2 border-black rounded-lg shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] uppercase mt-0.5">Partial</span>;
-                             return <span className="text-[9px] font-black px-2 py-1 bg-red-400 text-black border-2 border-black rounded-lg shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] uppercase mt-0.5">Unpaid</span>;
-                           })()}
-                         </div>
-                         
-                         <button onClick={(e) => { e.stopPropagation(); setCreditInfoModal({ account: account }); }} className="text-gray-400 hover:text-indigo-600 transition-colors p-1">
-                            <Info className="w-4 h-4" />
-                         </button>
-
-                         {!isReadOnly && (() => {
-                          const status = getCreditPaymentStatus(account);
-                          const isPaidInFull = status === 'paid';
-                          return (
-                            <button 
-                              disabled={isPaidInFull}
-                              onClick={(e) => {
-                                if (isPaidInFull) return;
-                                e.preventDefault(); e.stopPropagation();
-                                setShowCreditPayModal({ accountId: account.id, amount: cycleRemaining, bank: account.bank });
-                              }} 
-                              className={`px-4 py-2 text-xs font-black uppercase rounded-xl border-2 border-black transition-all ${
-                                isPaidInFull ? 'bg-gray-200 text-gray-400 cursor-not-allowed shadow-none' : 'bg-indigo-600 text-white shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[1px] hover:translate-y-[1px]'
-                              }`}
-                            >
-                              {isPaidInFull ? 'Paid' : 'Pay'}
-                            </button>
-                          );
-                        })()}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
+                              );
+                            })}
+                          </div>
             )}
 
                                     {/* --- BUDEE (NESTED LOAN BUNDLE STYLE) --- */}
