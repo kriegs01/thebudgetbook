@@ -364,20 +364,33 @@ const StatementPage: React.FC<StatementPageProps> = ({ accounts, installments = 
   const totalPayments = selectedCycle?.paymentsTotal ?? 0;
   const statementBalance = selectedCycle?.endingBalance ?? 0;
 
-  // 🟢 Extract the flat transactions safely for the table
-  const currentTxs = selectedCycle ? [
-    ...(selectedCycle.personalBreakdown.unpaidRollover > 0 ? [{
-      id: 'rollover-item',
-      name: 'Previous Statement Balance',
-      date: selectedCycle.cycleStart.toISOString(),
-      amount: selectedCycle.personalBreakdown.unpaidRollover,
-      transaction_type: 'rollover'
-    }] : []),
-    ...selectedCycle.personalBreakdown.swipes,
-    ...selectedCycle.personalBreakdown.activeInstallments.map(i => ({ ...i, transaction_type: 'installment' })),
-    ...selectedCycle.budeeBreakdown.map(b => ({ ...b, name: `Budee: ${b.name}`, transaction_type: 'budee' })),
-    ...selectedCycle.payments.map(p => ({ ...p, amount: -p.amount, transaction_type: 'payment' }))
-  ] : [];
+    // 🟢 Extract and sort transactions chronologically (Oldest to Newest)
+    const currentTxs = selectedCycle ? [
+      // 1. The Rollover Balance is ALWAYS first (Beginning of cycle), but only if > 0
+      ...(selectedCycle.personalBreakdown.unpaidRollover > 0 ? [{
+        id: 'rollover-item',
+        name: 'Previous Statement Balance',
+        date: selectedCycle.cycleStart.toISOString(),
+        amount: selectedCycle.personalBreakdown.unpaidRollover,
+        transaction_type: 'rollover'
+      }] : []),
+      
+      // 2. Combine all other items and sort them by date
+      ...[
+        ...selectedCycle.personalBreakdown.swipes,
+        ...selectedCycle.personalBreakdown.activeInstallments.map(i => ({ ...i, transaction_type: 'installment' })),
+        ...selectedCycle.budeeBreakdown.map(b => ({ ...b, name: `Budee: ${b.name}`, transaction_type: 'budee' })),
+        ...selectedCycle.payments.map(p => ({ ...p, amount: -p.amount, transaction_type: 'payment' }))
+      ].sort((a, b) => {
+        // If an item has no specific date (like fixed monthly installments), 
+        // we default it to the very start of the cycle right after the rollover!
+        const dateA = a.date ? new Date(a.date).getTime() : selectedCycle.cycleStart.getTime();
+        const dateB = b.date ? new Date(b.date).getTime() : selectedCycle.cycleStart.getTime();
+        
+        return dateA - dateB; // Sort ascending (Oldest first)
+      })
+    ] : [];
+  
 
   return (
     <div className={`min-h-screen bg-gray-50 dark:bg-gray-950 transition-colors ${isMobile ? 'overflow-x-hidden px-4 pb-8 pt-6' : 'p-8'}`}>

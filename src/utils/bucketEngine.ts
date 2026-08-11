@@ -68,44 +68,64 @@ export const generateCreditBuckets = (
     }
 
     let graceDays = 21; 
-    if (account.dueDate) {
-      const match = String(account.dueDate).match(/\d+/);
-      if (match) graceDays = parseInt(match[0], 10);
+    const rawDueDate = String(account.dueDate || account.due_date || '');
+    // Safely extract the exact days to pay, completely ignoring the "2000-01-" prefix trap!
+    const isoDueMatch = rawDueDate.match(/^\d{4}-\d{2}-(\d{2})/);
+    
+    if (isoDueMatch) {
+      graceDays = parseInt(isoDueMatch[1], 10);
+    } else {
+      const match = rawDueDate.match(/\d+/);
+      if (match) {
+         const parsed = parseInt(match[0], 10);
+         graceDays = parsed > 1000 ? 21 : parsed; // Final failsafe
+      }
     }
 
-        // -- THE GHOST HARVESTER (Strict Mode) --
-        const bankName = String(account.bank || '').toLowerCase().trim();
-        const accountInst = (installments || []).filter(inst => {
-          const linkedId = inst.accountId || inst.account_id || inst.linkedAccountId || inst.linked_account_id;
-          return linkedId === account.id;
+
+            // -- THE GHOST HARVESTER (Strict Mode) --
+    const bankName = String(account.bank || '').toLowerCase().trim();
+    const accountInst = (installments || []).filter(inst => {
+      const linkedId = inst.accountId || inst.account_id || inst.linkedAccountId || inst.linked_account_id;
+      return linkedId === account.id;
+    });
+
+    const harvestedPayments = (transactions || []).filter(tx => {
+      if (getPaymentMethodId(tx) === account.id) return false; 
+      
+      const txName = String(tx.name || '').toLowerCase();
+      const txType = String(getTransactionType(tx)).toLowerCase();
+      
+      // Strict Check 1: Paid the bank explicitly
+      if (bankName && txName.includes(bankName) && (txName.includes('payment') || txType === 'credit_payment')) {
+          return true;
+      }
+      
+      // Strict Check 2: Paid an installment
+      return accountInst.some(inst => {
+        const instName = String(inst.name || '').toLowerCase().trim();
+        if (!instName || instName.length < 3) return false; 
+        
+        if (!txName.includes(instName)) return false;
+
+        const isExplicitPayment = txType === 'credit_payment' || txName.includes('payment') || Number(tx.amount) < 0;
+        
+        // 🟢 THE FIX: Safely catch auto-generated installment payments like "Sofa - June 2026"
+        const hasMonthYearSuffix = MONTHS.some(m => {
+           const mLower = m.toLowerCase();
+           return txName.includes(`- ${mLower}`) || txName.includes(`- ${mLower.substring(0, 3)}`);
         });
-    
-        const harvestedPayments = (transactions || []).filter(tx => {
-          if (getPaymentMethodId(tx) === account.id) return false; 
-          
-          const txName = String(tx.name || '').toLowerCase();
-          const txType = String(getTransactionType(tx)).toLowerCase();
-          
-          // Strict Check 1: Paid the bank explicitly
-          if (bankName && txName.includes(bankName) && (txName.includes('payment') || txType === 'credit_payment')) {
-              return true;
-          }
-          
-          // Strict Check 2: Paid an installment (Requires explicit payment intent, not just a dash)
-          return accountInst.some(inst => {
-            const instName = String(inst.name || '').toLowerCase().trim();
-            if (!instName || instName.length < 3) return false; 
-            
-            const isDefinitivePayment = txType === 'credit_payment' || txName.includes('payment') || Number(tx.amount) < 0;
-            return txName.includes(instName) && isDefinitivePayment;
-          });
-        }).map(tx => ({
-          ...tx,
-          amount: -Math.abs(Number(tx.amount)), 
-          transaction_type: 'credit_payment',
-          payment_method_id: account.id,
-          paymentMethodId: account.id 
-        }));
+
+        return isExplicitPayment || hasMonthYearSuffix;
+      });
+    }).map(tx => ({
+      ...tx,
+      amount: -Math.abs(Number(tx.amount)), 
+      transaction_type: 'credit_payment',
+      payment_method_id: account.id,
+      paymentMethodId: account.id 
+    }));
+
     
 
     const directTxs = (transactions || []).filter(tx => getPaymentMethodId(tx) === account.id);
@@ -196,24 +216,35 @@ export const generateCreditBuckets = (
       
       
       const activeInst = (installments || []).filter(inst => {
-        if (inst.isArchived) return false;
+        // 🟢 THE FIX: We completely removed the `isArchived` check!
+        // Historical ledgers MUST retain archived charges so your ghost payments can offset them to zero.
+        
         const linkedId = inst.accountId || inst.account_id || inst.linkedAccountId || inst.linked_account_id;
         if (linkedId !== account.id) return false;
 
-        if (!inst.startDate) return true;
-        const [startYr, startMo] = inst.startDate.split('-').map(Number);
+        // Safely parse the start date (handles both camelCase and snake_case)
+        const rawStartDate = inst.startDate || inst.start_date || (inst as any).activationDate || (inst as any).activation_date;
+        if (!rawStartDate) return true; 
+        
+        const [startYr, startMo] = String(rawStartDate).split('-').map(Number);
+        if (isNaN(startYr) || isNaN(startMo)) return true;
+
         const startAbs = startYr * 12 + (startMo - 1);
         const cycleAbs = cycleEnd.getFullYear() * 12 + cycleEnd.getMonth();
         
+        // Has the installment started yet?
         if (startAbs > cycleAbs) return false;
         
-        const term = parseInt(String(inst.termDuration).replace(/\D/g, '') || '0', 10);
+        // Has the installment ended? (The engine naturally drops it after the term is over!)
+        const termDurationStr = String(inst.termDuration || inst.term_duration || '0');
+        const term = parseInt(termDurationStr.replace(/\D/g, ''), 10);
         if (term > 0) {
           const endAbs = startAbs + (term - 1);
           if (cycleAbs > endAbs) return false;
         }
         return true;
       });
+
 
       const budeeBreakdown: BucketItem[] = [];
       const personalActiveInstallments: BucketItem[] = [];
