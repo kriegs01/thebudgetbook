@@ -296,35 +296,15 @@ export const generateCreditBuckets = (
         }
       });
 
-           // -- WATERFALL MATH --
-           const totalNewCharges = personalNewChargesTotal + budeeNewChargesTotal;
-
-           // 🟢 THE GRACE PERIOD FENCE
-           // If we are still inside the grace period to pay the *previous* cycle's bill,
-           // or if this is a future cycle, assume the user will pay it on time.
-           // This strictly blocks the balance from cascading until it is ACTUALLY past due!
-           if (buckets.length > 0) {
-              const prevBucket = buckets[buckets.length - 1];
-              const prevDueDate = new Date(prevBucket.calculatedDueDate);
-              const realWorldNow = new Date();
-              
-              // Reset to midnight for a fair date comparison
-              realWorldNow.setHours(0, 0, 0, 0);
-              prevDueDate.setHours(0, 0, 0, 0);
-     
-              if (realWorldNow <= prevDueDate) {
-                 currentStartingBalance = 0;
-              }
-           }
-           
-           // 🟢 THE FIX 3: Pure Ledger Math (Previous + New - Payments)
-           // Only the true unpaid remainder carries over to the next month!
-           const endingBalance = currentStartingBalance + totalNewCharges - paymentsTotal;
-           
-           // Display purposes for the UI
-           const unpaidRollover = Math.max(0, currentStartingBalance);
-     
-
+      // -- WATERFALL MATH --
+      const totalNewCharges = personalNewChargesTotal + budeeNewChargesTotal;
+      
+      // 🟢 THE FIX 3: Pure Ledger Math (Previous + New - Payments)
+      // Only the true unpaid remainder carries over to the next month!
+      const endingBalance = currentStartingBalance + totalNewCharges - paymentsTotal;
+      
+      // Display purposes for the UI
+      const unpaidRollover = Math.max(0, currentStartingBalance);
 
       buckets.push({
         cycleStart,

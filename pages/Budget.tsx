@@ -436,16 +436,6 @@ const [activePeriodIndex, setActivePeriodIndex] = useState<number>(1);
     return determineItemPeriod(item, currentPeriods, selectedMonth, selectedYear);
   };
 
-    // Helper to resolve day of month to pay period index
-    const getPeriodIndexForDate = (day: number) => {
-      if (currentPeriods && currentPeriods.length > 0) {
-        const monthIdx = MONTHS.indexOf(selectedMonth);
-        const matched = findPayPeriodForDueDate(day, selectedYear, monthIdx, currentPeriods);
-        if (matched) return matched.periodIndex;
-      }
-      return day <= 15 ? 1 : 2;
-    };
-  
 
   const [isProjectedFocused, setIsProjectedFocused] = useState(false);
   const [isActualFocused, setIsActualFocused] = useState(false);
@@ -1916,8 +1906,6 @@ const balance = accountTxs.reduce((sum, tx) => {
     const total = Object.values(_periodTotals).reduce((sum, val) => sum + (val as number), 0);
     
     
-    const currentDataString = JSON.stringify(dataToSave);
-
     try {
       setAutoSaveStatus('saving');
       const existingSetup = savedSetups.find(s => s.month === selectedMonth && s.timing === selectedTiming);
@@ -2771,48 +2759,19 @@ const balance = accountTxs.reduce((sum, tx) => {
       let liveGrandTotal = 0;
 
       [1, 2, 3, 4].forEach(period => {
-        let itemsTotal = 0;
-        if (setup.data && typeof setup.data === 'object' && !Array.isArray(setup.data)) {
-           Object.entries(setup.data).forEach(([key, catItems]) => {
-              if (!key.startsWith('_') && Array.isArray(catItems)) {
-                 catItems.forEach((item: any) => {
-                    if (item && item.included) {
-                       
-                       // 🟢 STRICT TAB FILTERING FOR DASHBOARD CARDS
-                       const isBillerItem = item.isBiller || (billers || []).some(b => b.id === item.id);
-                       if (isBillerItem) {
-                          const linkedBiller = (billers || []).find(b => b.id === item.id);
-                          const actualTiming = item.timing || linkedBiller?.timing;
-                          
-                          if (actualTiming === '1/2' && period !== 1) return;
-                          if (actualTiming === '2/2' && period !== 2) return;
-                          if (actualTiming !== '1/2' && actualTiming !== '2/2') {
-                             const dueDay = item.dueDay || item.dueDate || linkedBiller?.dueDate || 1;
-                             if (getAccountPeriodIndex({ dueDate: dueDay }) !== period) return;
-                          }
-                       } else {
-                          // Flexi Items
-                          const pVal = item.amountsByPeriod?.[period];
-                          if (pVal === undefined || pVal === '' || pVal === '0') {
-                             // If no mapping exists at all (legacy item), fallback to the original setup tab
-                             if (!item.amountsByPeriod || Object.keys(item.amountsByPeriod).length === 0) {
-                                const setupPeriod = setup.timing === '1/2' ? 1 : setup.timing === '2/2' ? 2 : parseInt(setup.timing.split('/')[0] || '1');
-                                if (period !== setupPeriod) return;
-                             } else {
-                                return; // Mapping exists, but it is explicitly blank for this tab!
-                             }
-                          }
-                       }
-
-                       // Passed the filters! Add it to the total.
-                       const val = item.amountsByPeriod?.[period] !== undefined ? item.amountsByPeriod[period] : item.amount;
-                       itemsTotal += (parseFloat(val) || 0);
-                    }
-                 });
-              }
-           });
-        }
-
+         let itemsTotal = 0;
+         if (setup.data && typeof setup.data === 'object' && !Array.isArray(setup.data)) {
+            Object.entries(setup.data).forEach(([key, catItems]) => {
+               if (!key.startsWith('_') && Array.isArray(catItems)) {
+                  catItems.forEach((item: any) => {
+                     if (item && item.included) {
+                        const val = item.amountsByPeriod?.[period] !== undefined ? item.amountsByPeriod[period] : item.amount;
+                        itemsTotal += (parseFloat(val) || 0);
+                     }
+                  });
+               }
+            });
+         }
 
          const instTotal = installments.filter(inst => {
             if (inst.isArchived || excludedInsts.has(inst.id)) return false;
@@ -3125,7 +3084,7 @@ const balance = accountTxs.reduce((sum, tx) => {
         }
     
 
-                // 3. Credit Cards - MATCHES UI ROWS EXACTLY
+        // 3. Credit Cards - MATCHES UI ROWS EXACTLY
         let creditTotal = 0;
         if (cat.name === 'Credit') {
           creditTotal = creditBudgetAccounts
@@ -3133,30 +3092,35 @@ const balance = accountTxs.reduce((sum, tx) => {
             .reduce((sum, account) => {
               const isLoanBundle = account.subtype === 'Loan_Bundle';
 
-              // 🟢 LOAN BUNDLES: Sum up the active children for this pay period!
-              if (isLoanBundle) {
-                const bundleInstallments = (installments || []).filter(inst => {
-                  if (inst.isArchived || excludedInstallmentIds.has(inst.id)) return false;
-                  
-                  const isBudee = !!(inst.funding_friend_id || inst.debtor_friend_id || (inst as any).friend_user_id);
-                  if (isBudee) return false;
-
-                  if (inst.accountId !== account.id && inst.account_id !== account.id && inst.linkedAccountId !== account.id && inst.linked_account_id !== account.id) return false;
-                  
-                  // 🟢 UNIFIED CHILD FILTER
-                  if (determineItemPeriod(inst, currentPeriods, selectedMonth, selectedYear) !== activePeriodIndex) return false;
-                  
-                  const scheduleForMonth = getPaymentSchedule('installment', inst.id, selectedMonth, selectedYear);
-                  const isActiveForPeriod = scheduleForMonth !== undefined || shouldShowInstallment(inst, selectedMonth, selectedYear);
-                  const isFinished = !scheduleForMonth && inst.totalAmount > 0 && inst.paidAmount >= inst.totalAmount;
-                  
-                  return isActiveForPeriod && !isFinished;
-                });
-                
-                // 🟢 MATH FIX: Force Number() to stop Javascript from gluing text strings together!
-                return sum + bundleInstallments.reduce((s, inst) => s + (Number(inst.monthlyAmount) || Number(inst.amount) || 0), 0);
-              }
-
+    
+                            // 🟢 LOAN BUNDLES: Sum up the active children for this pay period!
+                            if (isLoanBundle) {
+                              const bundleInstallments = (installments || []).filter(inst => {
+                                if (inst.isArchived || excludedInstallmentIds.has(inst.id)) return false;
+                                
+                                // 🟢 FIX: Completely exclude Budee items from the Credit expense math!
+                                const isBudee = !!(inst.funding_friend_id || inst.debtor_friend_id || (inst as any).friend_user_id);
+                                if (isBudee) return false;
+              
+                                if (inst.accountId !== account.id && inst.account_id !== account.id && inst.linkedAccountId !== account.id && inst.linked_account_id !== account.id) return false;
+                                
+                                let targetPeriod = 1;
+                                if (inst.timing === '1/2') targetPeriod = 1;
+                                else if (inst.timing === '2/2') targetPeriod = 2;
+                                else targetPeriod = getAccountPeriodIndex({ dueDate: inst.dueDate || inst.due_date || 1 });
+                                
+                                if (targetPeriod !== activePeriodIndex) return false;
+                                
+                                const scheduleForMonth = getPaymentSchedule('installment', inst.id, selectedMonth, selectedYear);
+                                const isActiveForPeriod = scheduleForMonth !== undefined || shouldShowInstallment(inst, selectedMonth, selectedYear);
+                                const isFinished = !scheduleForMonth && inst.totalAmount > 0 && inst.paidAmount >= inst.totalAmount;
+                                
+                                return isActiveForPeriod && !isFinished;
+                              });
+                              return sum + bundleInstallments.reduce((s, inst) => s + inst.monthlyAmount, 0);
+                            }
+              
+    
               // 🔴 STANDARD CC: Check master due date and get frozen amount
               if (determineItemPeriod(account, currentPeriods, selectedMonth, selectedYear) === activePeriodIndex) {
                 const amt = getFrozenCycleAmount(account);
@@ -3165,7 +3129,6 @@ const balance = accountTxs.reduce((sum, tx) => {
               return sum;
             }, 0);
         }
-
         
         // 🟢 PUT THIS RETURN STATEMENT BACK IN!
         return { 
@@ -4110,18 +4073,6 @@ const categoryTotal = itemsTotal + installmentsTotal + creditTotal;
                                                }
                                              });
 
-                                             // 🟢 ADD BUDEE ITEMS TO CREDIT PAY CAROUSEL:
-targetBucket.budeeBreakdown.forEach(budeeItem => {
-  if (budeeItem.amount > 0) {
-    carouselItems.push({
-      id: budeeItem.id,
-      name: `Budee: ${budeeItem.name}`,
-      amount: budeeItem.amount,
-      type: 'installment'
-    });
-  }
-});
-
                                              setShowCreditPayModal({ accountId: account.id, bank: account.bank, items: carouselItems });
                                            }} 
                                            className="px-4 py-2 text-xs font-black uppercase rounded-xl border-2 border-black bg-indigo-600 text-white shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[1px] hover:translate-y-[1px] transition-all"
@@ -4139,7 +4090,8 @@ targetBucket.budeeBreakdown.forEach(budeeItem => {
                                       <div className="flex items-center justify-between p-3 rounded-lg bg-red-50 dark:bg-red-900/10 border-2 border-red-200/50 shadow-sm">
                                         <div>
                                           <p className="text-sm font-bold text-gray-900 dark:text-gray-100">Previous Balance</p>
-                                          <p className="text-[9px] font-black text-red-500 uppercase tracking-widest">Statement Balance</p>                                        </div>
+                                          <p className="text-[9px] font-black text-red-500 uppercase tracking-widest">Unpaid Rollover</p>
+                                        </div>
                                         <p className="text-sm font-black text-red-600">{formatCurrency(pb.unpaidRollover)}</p>
                                       </div>
                                     )}
