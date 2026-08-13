@@ -959,40 +959,40 @@ const balance = accountTxs.reduce((sum, tx) => {
     };
 
         // Powered by the new Bucket Waterfall Engine
-        const getFrozenCycleAmount = (account: Account): number => {
-          try {
-            // Unscheduled manual liabilities still use live balance
-            if (!account.billingDate && account.subtype !== 'Loan_Bundle' && account.classification !== 'Loan') {
-              const liveBal = calculateCurrentBalance(account);
-              return liveBal > 0 ? liveBal : Math.abs(account.openingBalance || 0);
-            }
+const getFrozenCycleAmount = (account: Account): number => {
+  try {
+    // Unscheduled manual liabilities still use live balance
+    if (!account.billingDate && account.subtype !== 'Loan_Bundle' && account.classification !== 'Loan') {
+      const liveBal = calculateCurrentBalance(account);
+      return liveBal > 0 ? liveBal : Math.abs(account.openingBalance || 0);
+    }
+
+    // Generate the chronological buckets and grab the current month
+    const buckets = generateCreditBuckets(account, transactions || [], installments || [], selectedYear, selectedMonth);
+    const targetBucket = getBucketForMonth(buckets, selectedMonth, selectedYear);
+
+    if (targetBucket && targetBucket.personalBreakdown) {
+      // Return ONLY your personal total (Rollover + Swipes + Personal Installments). 
+      // Budee is naturally excluded!
+      const pb = targetBucket.personalBreakdown;
+      const personalTotal = (pb.unpaidRollover || 0) + (pb.newSwipesTotal || 0) + (pb.activeInstallments || []).reduce((s: any, i: any) => s + (Number(i.monthlyAmount) || Number(i.amount) || 0), 0);
+
+      // 🟢 FIX 1: Trust the Bucket Engine! Return the exact total, even if it is 0.
+      return personalTotal;
+    }
+
+    // 🟢 FIX 2: If there is no bucket for this month, no bill is due yet.
+    // Do NOT fall back to the lifetime historical account balance!
+    return 0;
     
-            // Generate the chronological buckets and grab the current month
-            const buckets = generateCreditBuckets(account, transactions || [], installments || [], selectedYear, selectedMonth);
-            const targetBucket = getBucketForMonth(buckets, selectedMonth, selectedYear);
-    
-            if (targetBucket) {
-              // Return ONLY your personal total (Rollover + Swipes + Personal Installments). 
-              // Budee is naturally excluded!
-              const pb = targetBucket.personalBreakdown;
-              const personalTotal = pb.unpaidRollover + pb.newSwipesTotal + pb.activeInstallments.reduce((s, i) => s + (Number(i.amount) || 0), 0);
-    
-              // 🟢 FIX 1: Trust the Bucket Engine! Return the exact total, even if it is 0.
-              return personalTotal;
-            }
-    
-            // 🟢 FIX 2: If there is no bucket for this month, no bill is due yet.
-            // Do NOT fall back to the lifetime historical account balance!
-            return 0;
-            
-          } catch (err) {
-            console.error("Critical Math Error in getFrozenCycleAmount:", err);
-            return 0;
-          }
-        };
+  } catch (err) {
+    console.error("Critical Math Error in getFrozenCycleAmount:", err);
+    return 0;
+  }
+};
+
     
 
- 
 
 
 
@@ -3032,122 +3032,86 @@ const balance = accountTxs.reduce((sum, tx) => {
     );
   }
 
-      // 🟢 STEP 1: ENGINE-POWERED CATEGORY SUMMARY
-      const categorySummary = effectiveCategories
-      .filter(cat => {
-        const hasRegularData = processedBudgetMap[activePeriodIndex]?.[cat.name]?.length > 0;
-        
-        // 🟢 FIX 1: Tell the system to evaluate Budee alongside Loans so it doesn't return 0!
-        const hasLoansData = (cat.name === 'Loans' || cat.name === 'Budee') && installments.some(inst => !inst.isArchived);
-        const hasCreditData = cat.name === 'Credit' && creditBudgetAccounts.length > 0;
-        
-        return shouldRenderCategorySection(cat, hasRegularData || hasLoansData || hasCreditData, selectedYear, selectedMonth);
-      })
-      .map((cat) => {
-    
-    // 1. Regular Setup Items (Pulled from Engine)
-    const periodItems = processedBudgetMap[activePeriodIndex]?.[cat.name] || [];
-    const itemsTotal = periodItems.reduce((sum, item) => {
-      // 🟢 Ignore unchecked items in the math!
-      if (!item.included) return sum; 
-      
-      const val = item.amountsByPeriod?.[activePeriodIndex] !== undefined 
-        ? item.amountsByPeriod[activePeriodIndex] 
-        : item.amount;
-      return sum + (parseFloat(val) || 0);
-    }, 0);
-
-
-                                // 2. Installments (Loans & Budee) - MATCHES UI ROWS EXACTLY
-        let installmentsTotal = 0;
-        if (cat.name === 'Loans' || cat.name === 'Budee') {
-          installmentsTotal = (installments || [])
-            .filter(inst => {
-              if (inst.isArchived || excludedInstallmentIds.has(inst.id)) return false;
-              
-              // 🔴 FIX: Completely exclude "To Collect" items from your expense math!
-              if (cat.name === 'Budee' && inst.debtor_friend_id) return false;
-
-              // Ensure Budee items stay with Budee and Loans stay with Loans
-              const isBudee = !!(inst.funding_friend_id || inst.debtor_friend_id || (inst as any).friend_user_id);
-              if (cat.name === 'Loans' && isBudee) return false;
-              if (cat.name === 'Budee' && !isBudee) return false;
-
-              // Prevent double counting if swallowed by credit card
-              const linkedId = inst.accountId || inst.account_id || inst.linkedAccountId || inst.linked_account_id;
-              const isSwallowedByCreditAccount = creditBudgetAccounts.some(acc => acc.id === linkedId);
-              // 🟢 FIX: Never swallow Budee items, only swallow standard Loans!
-              if (cat.name === 'Loans' && isSwallowedByCreditAccount) return false;
-
-    
-              // Enforce Tab Timing Match!
-              const targetPeriod = determineItemPeriod(inst, currentPeriods, selectedMonth, selectedYear);
-              if (targetPeriod !== activePeriodIndex) return false;
-    
-              // Active for Month Match
-              const scheduleForMonth = getPaymentSchedule('installment', inst.id, selectedMonth, selectedYear);
-              const isActiveForPeriod = scheduleForMonth !== undefined || shouldShowInstallment(inst, selectedMonth, selectedYear);
-              const isFinished = !scheduleForMonth && inst.totalAmount > 0 && inst.paidAmount >= inst.totalAmount;
-              
-              return isActiveForPeriod && !isFinished;
+            // 🟢 STEP 1: ENGINE-POWERED CATEGORY SUMMARY
+            const categorySummary = effectiveCategories
+            .filter(cat => {
+              const hasRegularData = processedBudgetMap[activePeriodIndex]?.[cat.name]?.length > 0;
+              const hasLoansData = (cat.name === 'Loans' || cat.name === 'Budee') && installments.some(inst => !inst.isArchived);
+              const hasCreditData = cat.name === 'Credit' && creditBudgetAccounts.length > 0;
+              return shouldRenderCategorySection(cat, hasRegularData || hasLoansData || hasCreditData, selectedYear, selectedMonth);
             })
-            .reduce((s, inst) => s + inst.monthlyAmount, 0);
-        }
-    
-
-                        // 3. Credit Cards - MATCHES UI ROWS EXACTLY
-        let creditTotal = 0;
-        if (cat.name === 'Credit') {
-          creditTotal = (creditBudgetAccounts || [])
-            .filter(acc => !excludedCreditIds.has(`${acc.id}-${activePeriodIndex}`))
-            .reduce((sum, account) => {
-              const isLoanBundle = account.subtype === 'Loan_Bundle';
-
-              // 🟢 LOAN BUNDLES: Check the children, not the parent folder!
-              if (isLoanBundle) {
-                const bundleInstallments = (installments || []).filter(inst => {
-                  if (inst.isArchived || excludedInstallmentIds.has(inst.id)) return false;
-                  const isBudee = !!(inst.funding_friend_id || inst.debtor_friend_id || (inst as any).friend_user_id);
-                  if (isBudee) return false;
-                  
-                  const linkedId = inst.accountId || inst.account_id || inst.linkedAccountId || inst.linked_account_id;
-                  if (linkedId !== account.id) return false;
-                  
-                  // Must belong to the active tab!
-                  if (determineItemPeriod(inst, currentPeriods, selectedMonth, selectedYear) !== activePeriodIndex) return false;
-                  
-                  const scheduleForMonth = getPaymentSchedule('installment', inst.id, selectedMonth, selectedYear);
-                  const isActiveForPeriod = scheduleForMonth !== undefined || shouldShowInstallment(inst, selectedMonth, selectedYear);
-                  const isFinished = !scheduleForMonth && inst.totalAmount > 0 && inst.paidAmount >= inst.totalAmount;
-                  return isActiveForPeriod && !isFinished;
-                });
-                
-                const bundleTotal = bundleInstallments.reduce((s, inst) => s + (Number(inst.monthlyAmount) || Number(inst.amount) || 0), 0);
-                return sum + bundleTotal;
+            .map((cat) => {
+              const periodItems = processedBudgetMap[activePeriodIndex]?.[cat.name] || [];
+              const itemsTotal = periodItems.reduce((sum, item) => {
+                if (!item.included) return sum; 
+                const val = item.amountsByPeriod?.[activePeriodIndex] !== undefined ? item.amountsByPeriod[activePeriodIndex] : item.amount;
+                return sum + (parseFloat(val) || 0);
+              }, 0);
+      
+              let installmentsTotal = 0;
+              if (cat.name === 'Loans' || cat.name === 'Budee') {
+                installmentsTotal = (installments || [])
+                  .filter(inst => {
+                    if (inst.isArchived || excludedInstallmentIds.has(inst.id)) return false;
+                    if (cat.name === 'Budee' && inst.debtor_friend_id) return false;
+      
+                    const isBudee = !!(inst.funding_friend_id || inst.debtor_friend_id || (inst as any).friend_user_id);
+                    if (cat.name === 'Loans' && isBudee) return false;
+                    if (cat.name === 'Budee' && !isBudee) return false;
+      
+                    const linkedId = inst.accountId || inst.account_id || inst.linkedAccountId || inst.linked_account_id;
+                    const isSwallowedByCreditAccount = creditBudgetAccounts.some(acc => acc.id === linkedId);
+                    if (cat.name === 'Loans' && isSwallowedByCreditAccount) return false;
+      
+                    const targetPeriod = determineItemPeriod(inst, currentPeriods, selectedMonth, selectedYear);
+                    if (targetPeriod !== activePeriodIndex) return false;
+          
+                    const scheduleForMonth = getPaymentSchedule('installment', inst.id, selectedMonth, selectedYear);
+                    const isActiveForPeriod = scheduleForMonth !== undefined || shouldShowInstallment(inst, selectedMonth, selectedYear);
+                    const isFinished = !scheduleForMonth && inst.totalAmount > 0 && inst.paidAmount >= inst.totalAmount;
+                    
+                    return isActiveForPeriod && !isFinished;
+                  })
+                  .reduce((s, inst) => s + inst.monthlyAmount, 0);
               }
-
-              // 🔴 STANDARD CC LOGIC
-              if (determineItemPeriod(account, currentPeriods, selectedMonth, selectedYear) === activePeriodIndex) {
-                const amt = getFrozenCycleAmount(account);
-                return amt >= 0.01 ? sum + amt : sum;
+      
+              let creditTotal = 0;
+              if (cat.name === 'Credit') {
+                creditTotal = creditBudgetAccounts.filter(acc => {
+                  const exclusionKey = `${acc.id}-${activePeriodIndex}`;
+                  if (excludedCreditIds.has(exclusionKey)) return false;
+                  
+                  const isLoanBundle = acc.subtype === 'Loan_Bundle';
+                  return isLoanBundle || getAccountPeriodIndex(acc) === activePeriodIndex;
+                }).reduce((sum, account) => {
+                  if (account.subtype === 'Loan_Bundle') {
+                    const bundleInsts = (installments || []).filter(inst => {
+                      if (inst.isArchived || excludedInstallmentIds.has(inst.id)) return false;
+                      const isBudee = !!(inst.funding_friend_id || inst.debtor_friend_id || (inst as any).friend_user_id);
+                      if (isBudee) return false;
+                      if (inst.accountId !== account.id && inst.account_id !== account.id && inst.linkedAccountId !== account.id && inst.linked_account_id !== account.id) return false;
+                      
+                      if (determineItemPeriod(inst, currentPeriods, selectedMonth, selectedYear) !== activePeriodIndex) return false;
+                      
+                      const scheduleForMonth = getPaymentSchedule('installment', inst.id, selectedMonth, selectedYear);
+                      return (scheduleForMonth !== undefined || shouldShowInstallment(inst, selectedMonth, selectedYear)) && !(!scheduleForMonth && inst.totalAmount > 0 && inst.paidAmount >= inst.totalAmount);
+                    });
+                    return sum + bundleInsts.reduce((s, i) => s + (Number(i.monthlyAmount) || Number(i.amount) || 0), 0);
+                  } else {
+                    const amt = getFrozenCycleAmount(account);
+                    return amt >= 0.01 ? sum + amt : sum;
+                  }
+                }, 0);
               }
-              return sum;
-            }, 0);
-        }
-
-        
-        
-        // 🟢 PUT THIS RETURN STATEMENT BACK IN!
-        return { 
-          category: cat.name, 
-          total: itemsTotal + installmentsTotal + creditTotal 
-        };
-            
-        });
-        
-        
-
-        const stashTotal = wallets.filter(w => !excludedWalletIds.has(w.id)).reduce((s, w) => s + Math.max(w.amount, getStashAggregates(w).funded), 0);
+      
+              return { 
+                category: cat.name, 
+                total: itemsTotal + installmentsTotal + creditTotal 
+              };
+            });
+      
+            const stashTotal = wallets.filter(w => !excludedWalletIds.has(w.id)).reduce((s, w) => s + Math.max(w.amount, getStashAggregates(w).funded), 0);
+      
   
         // 🟢 ONLY apply stash to Period 1 so it doesn't double count on your Month Summary!
         const grandTotal = categorySummary.reduce((sum, cat) => sum + cat.total, 0) + (activePeriodIndex === 1 ? stashTotal : 0);
@@ -3960,20 +3924,36 @@ return getAccountPeriodIndex({ dueDate: dueDay }) === activePeriodIndex;
           .filter(inst => !excludedInstallmentIds.has(inst.id))
           .reduce((s, inst) => s + inst.monthlyAmount, 0);
         
-        // 1. PERFECTLY SYNCED CATEGORY TOTAL MATH
-        let creditTotal = 0;
-if (cat.name === 'Credit') {
-  creditTotal = creditBudgetAccounts
-    .filter(acc => {
-      if (excludedCreditIds.has(acc.id)) return false;
-      return getAccountPeriodIndex(acc) === activePeriodIndex; // 👈 Unified check
-    })
-    .reduce((sum, account) => {
-      const amt = getFrozenCycleAmount(account);
-      return amt >= 0.01 ? sum + amt : sum;
-    }, 0);
-}
-
+          let creditTotal = 0;
+          if (cat.name === 'Credit') {
+            creditTotal = creditBudgetAccounts.filter(acc => {
+              const exclusionKey = `${acc.id}-${activePeriodIndex}`;
+              if (excludedCreditIds.has(exclusionKey)) return false;
+              
+              const isLoanBundle = acc.subtype === 'Loan_Bundle';
+              return isLoanBundle || getAccountPeriodIndex(acc) === activePeriodIndex;
+            }).reduce((sum, account) => {
+              if (account.subtype === 'Loan_Bundle') {
+                const bundleInsts = (installments || []).filter(inst => {
+                  if (inst.isArchived || excludedInstallmentIds.has(inst.id)) return false;
+                  const isBudee = !!(inst.funding_friend_id || inst.debtor_friend_id || (inst as any).friend_user_id);
+                  if (isBudee) return false;
+                  if (inst.accountId !== account.id && inst.account_id !== account.id && inst.linkedAccountId !== account.id && inst.linked_account_id !== account.id) return false;
+                  
+                  if (determineItemPeriod(inst, currentPeriods, selectedMonth, selectedYear) !== activePeriodIndex) return false;
+                  
+                  const scheduleForMonth = getPaymentSchedule('installment', inst.id, selectedMonth, selectedYear);
+                  return (scheduleForMonth !== undefined || shouldShowInstallment(inst, selectedMonth, selectedYear)) && !(!scheduleForMonth && inst.totalAmount > 0 && inst.paidAmount >= inst.totalAmount);
+                });
+                return sum + bundleInsts.reduce((s, i) => s + (Number(i.monthlyAmount) || Number(i.amount) || 0), 0);
+              } else {
+                const amt = getFrozenCycleAmount(account);
+                return amt >= 0.01 ? sum + amt : sum;
+              }
+            }, 0);
+          }
+  
+  
 
 
 
@@ -4016,7 +3996,9 @@ const categoryTotal = itemsTotal + installmentsTotal + creditTotal;
          });
       }
       
-      return getAccountPeriodIndex(account) === activePeriodIndex;
+            const isCorrectPeriod = getAccountPeriodIndex(account) === activePeriodIndex;
+      const amountDue = getFrozenCycleAmount(account);
+      return isCorrectPeriod && amountDue > 0;
     }).map(account => {
       // Create a unique key for the specific tab
       const isLoanBundle = account.subtype === 'Loan_Bundle';
@@ -4075,9 +4057,10 @@ const categoryTotal = itemsTotal + installmentsTotal + creditTotal;
           uiRollover = pb.unpaidRollover || 0;
           uiSwipesTotal = pb.newSwipesTotal || 0;
           uiActiveInstallments = pb.activeInstallments || [];
-          personalTotal = uiRollover + uiSwipesTotal + uiActiveInstallments.reduce((s, i) => s + (Number(i.amount) || 0), 0);
+          personalTotal = uiRollover + uiSwipesTotal + uiActiveInstallments.reduce((s: any, i: any) => s + (Number(i.monthlyAmount) || Number(i.amount) || 0), 0);
           cycleLabel = targetBucket.cycleLabel || '';
         } else {
+
           cycleLabel = 'No Statement';
         }
 
@@ -4107,7 +4090,7 @@ const categoryTotal = itemsTotal + installmentsTotal + creditTotal;
                                       <div>
                                         <p className="text-sm font-black text-gray-900 dark:text-gray-100">{account.bank}</p>
                                         <span className="text-[9px] font-black px-2 py-0.5 bg-purple-100 border border-black text-purple-600 rounded inline-block mt-1 uppercase">
-                                          {account.subtype === 'Loan_Bundle' ? 'Loan Bundle' : targetBucket.cycleLabel}
+                                          {account.subtype === 'Loan_Bundle' ? 'Loan Bundle' : cycleLabel}
                                         </span>
                                       </div>
                                     </div>
@@ -4131,7 +4114,7 @@ const categoryTotal = itemsTotal + installmentsTotal + creditTotal;
                                              const carouselItems: { id: string; name: string; amount: number; type: 'base' | 'installment' }[] = [];
                                              
                                              // Card 1: Base Charges
-                                             const baseAmount = pb.unpaidRollover + pb.newSwipesTotal;
+                                             const baseAmount = uiRollover + uiSwipesTotal;
                                              if (baseAmount > 0) {
                                                carouselItems.push({
                                                  id: 'base-charges',
@@ -4142,7 +4125,7 @@ const categoryTotal = itemsTotal + installmentsTotal + creditTotal;
                                              }
                                              
                                              // Cards 2...N: Active Installments
-                                             pb.activeInstallments.forEach(inst => {
+                                             uiActiveInstallments.forEach(inst => {
                                                if (inst.amount > 0) {
                                                  carouselItems.push({
                                                    id: inst.id,
@@ -4166,37 +4149,37 @@ const categoryTotal = itemsTotal + installmentsTotal + creditTotal;
                                   <div className="flex flex-col gap-2 pl-4 md:pl-12 pt-1">
                                     
                                     {/* 1. Rollover Balances */}
-                                    {pb.unpaidRollover > 0 && (
+                                    {uiRollover > 0 && (
                                       <div className="flex items-center justify-between p-3 rounded-lg bg-red-50 dark:bg-red-900/10 border-2 border-red-200/50 shadow-sm">
                                         <div>
                                           <p className="text-sm font-bold text-gray-900 dark:text-gray-100">Previous Balance</p>
                                           <p className="text-[9px] font-black text-red-500 uppercase tracking-widest">Unpaid Rollover</p>
                                         </div>
-                                        <p className="text-sm font-black text-red-600">{formatCurrency(pb.unpaidRollover)}</p>
+                                        <p className="text-sm font-black text-red-600">{formatCurrency(uiRollover)}</p>
                                       </div>
                                     )}
             
                                     {/* 2. New Standard Swipes */}
-                                    {pb.newSwipesTotal > 0 && (
+                                    {uiSwipesTotal > 0 && (
                                       <div className="flex items-center justify-between p-3 rounded-lg bg-white dark:bg-gray-800 border-2 border-black/20 shadow-sm">
                                         <div>
                                           <p className="text-sm font-bold text-gray-900 dark:text-gray-100">New Charges</p>
                                           <p className="text-[9px] font-black text-gray-500 uppercase tracking-widest">BNPL / Swipes</p>
                                         </div>
                                         <p className="text-sm font-black text-gray-900 dark:text-gray-100">
-                                          {formatCurrency(pb.newSwipesTotal)}
+                                          {formatCurrency(uiSwipesTotal)}
                                         </p>
                                       </div>
                                     )}
             
                                     {/* 3. Installments */}
-                                    {pb.activeInstallments.map((inst) => (
+                                    {uiActiveInstallments.map((inst) => (
                                       <div key={inst.id} className="flex items-center justify-between p-3 rounded-lg bg-white dark:bg-gray-800 border-2 border-black/20 shadow-sm">
                                         <div>
                                           <p className="text-sm font-bold text-gray-900 dark:text-gray-100">{inst.name}</p>
                                           <p className="text-[9px] font-black text-gray-500 uppercase tracking-widest">Active Installment</p>
                                         </div>
-                                        <p className="text-sm font-black text-gray-900 dark:text-gray-100">{formatCurrency(inst.amount)}</p>
+                                        <p className="text-sm font-black text-gray-900 dark:text-gray-100">{formatCurrency(Number(inst.monthlyAmount) || Number(inst.amount) || 0)}</p>
                                       </div>
                                     ))}
                                     
@@ -4293,7 +4276,26 @@ const categoryTotal = itemsTotal + installmentsTotal + creditTotal;
                               )}
                             </div>
 
-
+                            <div className="flex items-center gap-2">
+                            {!isPaid && !isReadOnly && (
+                                <button 
+                                  onClick={() => {
+                                    if (isReceivable) {
+                                      // 🟢 Trigger the 2-Step Carousel for Collections
+                                      setShowBudeeCarousel({
+                                        installment: inst,
+                                        scheduleId: instSchedule?.id || '',
+                                        budeeName: displayBudeeName,
+                                        budeeId: inst.debtor_friend_id || (inst as any).friend_user_id || '',
+                                        amount: isPartial && instSchedule ? Math.max(0, instSchedule.expected_amount - instSchedule.amount_paid) : inst.monthlyAmount
+                                      });
+                                    } else {
+                                      // Standard 1-Step Pay Flow for what YOU owe
+                                      setTransactionFormData({ 
+                                        id: '', name: `${inst.name} - ${selectedMonth}`, date: getTodayIso(), 
+                                        amount: isPartial && instSchedule ? Math.max(0, instSchedule.expected_amount - instSchedule.amount_paid).toFixed(2) : inst.monthlyAmount.toFixed(2), 
+                                        accountId: inst.accountId || accounts[0]?.id || '', paymentScheduleId: instSchedule?.id || '', transactionType: 'payment' 
+                                      });
                                       setShowTransactionModal(true);
                                     }
                                   }}
