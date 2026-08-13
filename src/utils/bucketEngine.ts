@@ -296,15 +296,32 @@ export const generateCreditBuckets = (
         }
       });
 
-      // -- WATERFALL MATH --
-      const totalNewCharges = personalNewChargesTotal + budeeNewChargesTotal;
-      
-      // 🟢 THE FIX 3: Pure Ledger Math (Previous + New - Payments)
-      // Only the true unpaid remainder carries over to the next month!
-      const endingBalance = currentStartingBalance + totalNewCharges - paymentsTotal;
-      
-      // Display purposes for the UI
-      const unpaidRollover = Math.max(0, currentStartingBalance);
+            // -- WATERFALL MATH --
+            const totalNewCharges = personalNewChargesTotal + budeeNewChargesTotal;
+      
+            // 🟢 THE FUTURE BUDGET WALL
+            // Completely insulates future budgets from current-month debt.
+            // If this bucket belongs to a month that hasn't arrived in the real world yet,
+            // we zero out the rollover so your future projections stay perfectly clean.
+            const today = new Date();
+            const currentRealMonth = today.getMonth();
+            const currentRealYear = today.getFullYear();
+            
+            const targetMonthIdx = MONTHS.indexOf(targetMonth);
+            const isFutureBucket = (targetYear > currentRealYear) || 
+                                   (targetYear === currentRealYear && targetMonthIdx > currentRealMonth);
+      
+            if (isFutureBucket) {
+               currentStartingBalance = 0;
+            }
+            
+            // 🟢 THE FIX 3: Pure Ledger Math (Previous + New - Payments)
+            const endingBalance = currentStartingBalance + totalNewCharges - paymentsTotal;
+            
+            // Display purposes for the UI
+            const unpaidRollover = Math.max(0, currentStartingBalance);
+      
+
 
       buckets.push({
         cycleStart,

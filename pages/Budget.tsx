@@ -958,35 +958,39 @@ const balance = accountTxs.reduce((sum, tx) => {
       return Math.abs(balance);
     };
 
-                    // Powered by the new Bucket Waterfall Engine
-    const getFrozenCycleAmount = (account: Account): number => {
-      try {
-        if (!account.billingDate && account.subtype !== 'Loan_Bundle' && account.classification !== 'Loan') {
-          const liveBal = calculateCurrentBalance(account);
-          return liveBal > 0 ? liveBal : Math.abs(account.openingBalance || 0);
-        }
-
-        // Generate the chronological buckets and grab the current month
-        const buckets = generateCreditBuckets(account, transactions || [], installments || [], selectedYear, selectedMonth);
-        const targetBucket = getBucketForMonth(buckets, selectedMonth, selectedYear);
-
-        if (targetBucket) {
-          // Return ONLY your personal total (Rollover + Swipes + Personal Installments). 
-          // Budee is naturally excluded!
-          const pb = targetBucket.personalBreakdown;
-          const personalTotal = pb.unpaidRollover + pb.newSwipesTotal + pb.activeInstallments.reduce((s, i) => s + i.amount, 0);
-          
-          if (personalTotal > 0) return personalTotal;
-        }
-
-        const liveBal = calculateCurrentBalance(account);
-        return liveBal > 0 ? liveBal : Math.abs(account.openingBalance || 0);
-        
-      } catch (err) {
-        console.error("Critical Math Error in getFrozenCycleAmount:", err);
-        return 0;
-      }
-    };
+        // Powered by the new Bucket Waterfall Engine
+        const getFrozenCycleAmount = (account: Account): number => {
+          try {
+            // Unscheduled manual liabilities still use live balance
+            if (!account.billingDate && account.subtype !== 'Loan_Bundle' && account.classification !== 'Loan') {
+              const liveBal = calculateCurrentBalance(account);
+              return liveBal > 0 ? liveBal : Math.abs(account.openingBalance || 0);
+            }
+    
+            // Generate the chronological buckets and grab the current month
+            const buckets = generateCreditBuckets(account, transactions || [], installments || [], selectedYear, selectedMonth);
+            const targetBucket = getBucketForMonth(buckets, selectedMonth, selectedYear);
+    
+            if (targetBucket) {
+              // Return ONLY your personal total (Rollover + Swipes + Personal Installments). 
+              // Budee is naturally excluded!
+              const pb = targetBucket.personalBreakdown;
+              const personalTotal = pb.unpaidRollover + pb.newSwipesTotal + pb.activeInstallments.reduce((s, i) => s + (Number(i.amount) || 0), 0);
+    
+              // 🟢 FIX 1: Trust the Bucket Engine! Return the exact total, even if it is 0.
+              return personalTotal;
+            }
+    
+            // 🟢 FIX 2: If there is no bucket for this month, no bill is due yet.
+            // Do NOT fall back to the lifetime historical account balance!
+            return 0;
+            
+          } catch (err) {
+            console.error("Critical Math Error in getFrozenCycleAmount:", err);
+            return 0;
+          }
+        };
+    
 
  
 
@@ -1902,12 +1906,18 @@ const balance = accountTxs.reduce((sum, tx) => {
       _excludedCreditIds: [...excludedCreditIds]
     };    
 
-    // Calculate absolute grand total from our clean period totals!
-    const total = Object.values(_periodTotals).reduce((sum, val) => sum + (val as number), 0);
+        // Calculate absolute grand total from our clean period totals!
+        const total = Object.values(_periodTotals).reduce((sum, val) => sum + (val as number), 0);
     
+        const currentDataString = JSON.stringify(dataToSave);
+        
+        if (currentDataString === lastSavedDataRef.current) {
+          return;
+        }
     
-    try {
-      setAutoSaveStatus('saving');
+        try {
+          setAutoSaveStatus('saving');
+    
       const existingSetup = savedSetups.find(s => s.month === selectedMonth && s.timing === selectedTiming);
       if (existingSetup) {
         const updatedSetup: SavedBudgetSetup = {
@@ -3084,44 +3094,38 @@ const balance = accountTxs.reduce((sum, tx) => {
         }
     
 
-        // 3. Credit Cards - MATCHES UI ROWS EXACTLY
+                        // 3. Credit Cards - MATCHES UI ROWS EXACTLY
         let creditTotal = 0;
         if (cat.name === 'Credit') {
-          creditTotal = creditBudgetAccounts
+          creditTotal = (creditBudgetAccounts || [])
             .filter(acc => !excludedCreditIds.has(acc.id))
             .reduce((sum, account) => {
               const isLoanBundle = account.subtype === 'Loan_Bundle';
 
-    
-                            // 🟢 LOAN BUNDLES: Sum up the active children for this pay period!
-                            if (isLoanBundle) {
-                              const bundleInstallments = (installments || []).filter(inst => {
-                                if (inst.isArchived || excludedInstallmentIds.has(inst.id)) return false;
-                                
-                                // 🟢 FIX: Completely exclude Budee items from the Credit expense math!
-                                const isBudee = !!(inst.funding_friend_id || inst.debtor_friend_id || (inst as any).friend_user_id);
-                                if (isBudee) return false;
-              
-                                if (inst.accountId !== account.id && inst.account_id !== account.id && inst.linkedAccountId !== account.id && inst.linked_account_id !== account.id) return false;
-                                
-                                let targetPeriod = 1;
-                                if (inst.timing === '1/2') targetPeriod = 1;
-                                else if (inst.timing === '2/2') targetPeriod = 2;
-                                else targetPeriod = getAccountPeriodIndex({ dueDate: inst.dueDate || inst.due_date || 1 });
-                                
-                                if (targetPeriod !== activePeriodIndex) return false;
-                                
-                                const scheduleForMonth = getPaymentSchedule('installment', inst.id, selectedMonth, selectedYear);
-                                const isActiveForPeriod = scheduleForMonth !== undefined || shouldShowInstallment(inst, selectedMonth, selectedYear);
-                                const isFinished = !scheduleForMonth && inst.totalAmount > 0 && inst.paidAmount >= inst.totalAmount;
-                                
-                                return isActiveForPeriod && !isFinished;
-                              });
-                              return sum + bundleInstallments.reduce((s, inst) => s + inst.monthlyAmount, 0);
-                            }
-              
-    
-              // 🔴 STANDARD CC: Check master due date and get frozen amount
+              // 🟢 LOAN BUNDLES: Check the children, not the parent folder!
+              if (isLoanBundle) {
+                const bundleInstallments = (installments || []).filter(inst => {
+                  if (inst.isArchived || excludedInstallmentIds.has(inst.id)) return false;
+                  const isBudee = !!(inst.funding_friend_id || inst.debtor_friend_id || (inst as any).friend_user_id);
+                  if (isBudee) return false;
+                  
+                  const linkedId = inst.accountId || inst.account_id || inst.linkedAccountId || inst.linked_account_id;
+                  if (linkedId !== account.id) return false;
+                  
+                  // Must belong to the active tab!
+                  if (determineItemPeriod(inst, currentPeriods, selectedMonth, selectedYear) !== activePeriodIndex) return false;
+                  
+                  const scheduleForMonth = getPaymentSchedule('installment', inst.id, selectedMonth, selectedYear);
+                  const isActiveForPeriod = scheduleForMonth !== undefined || shouldShowInstallment(inst, selectedMonth, selectedYear);
+                  const isFinished = !scheduleForMonth && inst.totalAmount > 0 && inst.paidAmount >= inst.totalAmount;
+                  return isActiveForPeriod && !isFinished;
+                });
+                
+                const bundleTotal = bundleInstallments.reduce((s, inst) => s + (Number(inst.monthlyAmount) || Number(inst.amount) || 0), 0);
+                return sum + bundleTotal;
+              }
+
+              // 🔴 STANDARD CC LOGIC
               if (determineItemPeriod(account, currentPeriods, selectedMonth, selectedYear) === activePeriodIndex) {
                 const amt = getFrozenCycleAmount(account);
                 return amt >= 0.01 ? sum + amt : sum;
@@ -3129,6 +3133,8 @@ const balance = accountTxs.reduce((sum, tx) => {
               return sum;
             }, 0);
         }
+
+        
         
         // 🟢 PUT THIS RETURN STATEMENT BACK IN!
         return { 
@@ -3986,28 +3992,98 @@ const categoryTotal = itemsTotal + installmentsTotal + creditTotal;
   
             {cat.name === 'Credit' && creditBudgetAccounts.length > 0 && (
                             <div className="p-4 space-y-4 bg-gray-50/30 dark:bg-gray-955/10">
-                            {creditBudgetAccounts.filter(account => {
-                              if (excludedCreditIds.has(account.id)) return false;
-                              return getAccountPeriodIndex(account) === activePeriodIndex;
-                            }).map(account => {
-                              const isIncluded = !excludedCreditIds.has(account.id);
-                              
-                              // 1. Fetch exact bucket from our waterfall engine!
-                              const buckets = generateCreditBuckets(account, transactions || [], installments || [], selectedYear, selectedMonth);
-                              const targetBucket = getBucketForMonth(buckets, selectedMonth, selectedYear);
-                              
-                              if (!targetBucket) return null;
+                                {creditBudgetAccounts.filter(account => {
+      // 🟢 THE FIX: We removed the exclusion check here so the card stays on the screen!
+      
+      const isLoanBundle = account.subtype === 'Loan_Bundle';
+      if (isLoanBundle) {
+         // 🟢 UI FIX: A loan bundle belongs in this tab if ANY of its children belong here!
+         return (installments || []).some(inst => {
+            if (inst.isArchived || excludedInstallmentIds.has(inst.id)) return false;
+            const isBudee = !!(inst.funding_friend_id || inst.debtor_friend_id || (inst as any).friend_user_id);
+            if (isBudee) return false;
             
-                              // 2. Read the pre-calculated Personal Breakdown (Zero Budee items in here)
-                              const pb = targetBucket.personalBreakdown;
-                              const personalTotal = pb.unpaidRollover + pb.newSwipesTotal + pb.activeInstallments.reduce((s, i) => s + i.amount, 0);
-                              
-                              if (personalTotal <= 0) return null;
+            const linkedId = inst.accountId || inst.account_id || inst.linkedAccountId || inst.linked_account_id;
+            if (linkedId !== account.id) return false;
             
-                              const isPaidInFull = getCreditPaymentStatus(account) === 'paid';
-                              const isPartial = getCreditPaymentStatus(account) === 'partial';
+            if (determineItemPeriod(inst, currentPeriods, selectedMonth, selectedYear) !== activePeriodIndex) return false;
             
-                              return (
+            const scheduleForMonth = getPaymentSchedule('installment', inst.id, selectedMonth, selectedYear);
+            const isActiveForPeriod = scheduleForMonth !== undefined || shouldShowInstallment(inst, selectedMonth, selectedYear);
+            const isFinished = !scheduleForMonth && inst.totalAmount > 0 && inst.paidAmount >= inst.totalAmount;
+            return isActiveForPeriod && !isFinished;
+         });
+      }
+      
+      return getAccountPeriodIndex(account) === activePeriodIndex;
+    }).map(account => {
+      const isIncluded = !excludedCreditIds.has(account.id);
+      const isLoanBundle = account.subtype === 'Loan_Bundle';
+
+      let personalTotal = 0;
+      let uiRollover = 0;
+      let uiSwipesTotal = 0;
+      let uiActiveInstallments: any[] = [];
+      let cycleLabel = '';
+      let isPaidInFull = false;
+      let isPartial = false;
+      let targetBucket: any = null;
+
+      // 🟢 LOAN BUNDLE UI FIX: Bypass Bucket Engine & Filter by Tab!
+      if (isLoanBundle) {
+        cycleLabel = 'Loan Bundle';
+        uiActiveInstallments = (installments || []).filter(inst => {
+          if (inst.isArchived || excludedInstallmentIds.has(inst.id)) return false;
+          const isBudee = !!(inst.funding_friend_id || inst.debtor_friend_id || (inst as any).friend_user_id);
+          if (isBudee) return false;
+          
+          const linkedId = inst.accountId || inst.account_id || inst.linkedAccountId || inst.linked_account_id;
+          if (linkedId !== account.id) return false;
+          
+          // Must belong to the active tab!
+          if (determineItemPeriod(inst, currentPeriods, selectedMonth, selectedYear) !== activePeriodIndex) return false;
+          
+          const scheduleForMonth = getPaymentSchedule('installment', inst.id, selectedMonth, selectedYear);
+          const isActiveForPeriod = scheduleForMonth !== undefined || shouldShowInstallment(inst, selectedMonth, selectedYear);
+          const isFinished = !scheduleForMonth && inst.totalAmount > 0 && inst.paidAmount >= inst.totalAmount;
+          return isActiveForPeriod && !isFinished;
+        });
+
+        personalTotal = uiActiveInstallments.reduce((s, i) => s + (Number(i.monthlyAmount) || Number(i.amount) || 0), 0);
+
+        const paidCount = uiActiveInstallments.filter(inst => {
+          const schedule = getPaymentSchedule('installment', inst.id, selectedMonth, selectedYear);
+          if (schedule) return schedule.status === 'paid';
+          return checkIfPaidByTransaction(inst.name, inst.monthlyAmount, selectedMonth, selectedYear, activePeriodIndex === 1 ? '1/2' : '2/2');
+        }).length;
+
+        if (paidCount === uiActiveInstallments.length && uiActiveInstallments.length > 0) isPaidInFull = true;
+        else if (paidCount > 0) isPartial = true;
+
+      } else {
+        // 🔴 STANDARD CC LOGIC
+        const buckets = generateCreditBuckets(account, transactions || [], installments || [], selectedYear, selectedMonth);
+        targetBucket = getBucketForMonth(buckets, selectedMonth, selectedYear);
+        
+        // Failsafe: Ensures pb properties are never undefined
+        if (targetBucket && targetBucket.personalBreakdown) {
+          const pb = targetBucket.personalBreakdown;
+          uiRollover = pb.unpaidRollover || 0;
+          uiSwipesTotal = pb.newSwipesTotal || 0;
+          uiActiveInstallments = pb.activeInstallments || [];
+          personalTotal = uiRollover + uiSwipesTotal + uiActiveInstallments.reduce((s, i) => s + (Number(i.amount) || 0), 0);
+          cycleLabel = targetBucket.cycleLabel || '';
+        } else {
+          cycleLabel = 'No Statement';
+        }
+
+        isPaidInFull = getCreditPaymentStatus(account) === 'paid';
+        isPartial = getCreditPaymentStatus(account) === 'partial';
+      }
+
+      return (
+
+
                                 <div key={account.id} className={`p-4 border-2 border-black rounded-xl bg-purple-50/20 dark:bg-purple-900/10 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] flex flex-col gap-3 transition-all ${isIncluded ? 'opacity-100' : 'opacity-60'}`}>
                                   
                                   {/* PARENT HEADER (The Bank) */}
