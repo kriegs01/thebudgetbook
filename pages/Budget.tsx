@@ -1837,7 +1837,8 @@ const balance = accountTxs.reduce((sum, tx) => {
       }).reduce((s, inst) => s + inst.monthlyAmount, 0);
 
       // 3. Credit Cards (Loan bundles vs Standard)
-      const creditTotal = creditBudgetAccounts.filter(acc => !excludedCreditIds.has(acc.id) && getAccountPeriodIndex(acc) === period).reduce((sum, account) => {
+      const creditTotal = creditBudgetAccounts.filter(acc => !excludedCreditIds.has(`${acc.id}-${period}`) && getAccountPeriodIndex(acc) === period).reduce((sum, account) => {
+
         if (account.subtype === 'Loan_Bundle') {
           const bundleInsts = (installments || []).filter(inst => {
             if (inst.isArchived || excludedInstallmentIds.has(inst.id)) return false;
@@ -3098,7 +3099,7 @@ const balance = accountTxs.reduce((sum, tx) => {
         let creditTotal = 0;
         if (cat.name === 'Credit') {
           creditTotal = (creditBudgetAccounts || [])
-            .filter(acc => !excludedCreditIds.has(acc.id))
+            .filter(acc => !excludedCreditIds.has(`${acc.id}-${activePeriodIndex}`))
             .reduce((sum, account) => {
               const isLoanBundle = account.subtype === 'Loan_Bundle';
 
@@ -4017,9 +4018,12 @@ const categoryTotal = itemsTotal + installmentsTotal + creditTotal;
       
       return getAccountPeriodIndex(account) === activePeriodIndex;
     }).map(account => {
-      const isIncluded = !excludedCreditIds.has(account.id);
+      // Create a unique key for the specific tab
       const isLoanBundle = account.subtype === 'Loan_Bundle';
+      const tabbedAccountId = `${account.id}-${activePeriodIndex}`;
+      const isIncluded = !excludedCreditIds.has(tabbedAccountId);
 
+      
       let personalTotal = 0;
       let uiRollover = 0;
       let uiSwipesTotal = 0;
@@ -4092,8 +4096,8 @@ const categoryTotal = itemsTotal + installmentsTotal + creditTotal;
                                       <button 
                                         onClick={() => setExcludedCreditIds(prev => {
                                           const next = new Set(prev);
-                                          if (next.has(account.id)) next.delete(account.id);
-                                          else next.add(account.id);
+                                          if (next.has(tabbedAccountId)) next.delete(tabbedAccountId);
+                                          else next.add(tabbedAccountId); 
                                           return next;
                                         })}
                                         className={`w-8 h-8 rounded-xl border-2 border-black flex items-center justify-center transition-all ${isIncluded ? 'bg-indigo-600 text-white' : 'bg-white'}`}
@@ -4289,26 +4293,7 @@ const categoryTotal = itemsTotal + installmentsTotal + creditTotal;
                               )}
                             </div>
 
-                            <div className="flex items-center gap-2">
-                            {!isPaid && !isReadOnly && (
-                                <button 
-                                  onClick={() => {
-                                    if (isReceivable) {
-                                      // 🟢 Trigger the 2-Step Carousel for Collections
-                                      setShowBudeeCarousel({
-                                        installment: inst,
-                                        scheduleId: instSchedule?.id || '',
-                                        budeeName: displayBudeeName,
-                                        budeeId: inst.debtor_friend_id || (inst as any).friend_user_id || '',
-                                        amount: isPartial && instSchedule ? Math.max(0, instSchedule.expected_amount - instSchedule.amount_paid) : inst.monthlyAmount
-                                      });
-                                    } else {
-                                      // Standard 1-Step Pay Flow for what YOU owe
-                                      setTransactionFormData({ 
-                                        id: '', name: `${inst.name} - ${selectedMonth}`, date: getTodayIso(), 
-                                        amount: isPartial && instSchedule ? Math.max(0, instSchedule.expected_amount - instSchedule.amount_paid).toFixed(2) : inst.monthlyAmount.toFixed(2), 
-                                        accountId: inst.accountId || accounts[0]?.id || '', paymentScheduleId: instSchedule?.id || '', transactionType: 'payment' 
-                                      });
+
                                       setShowTransactionModal(true);
                                     }
                                   }}
