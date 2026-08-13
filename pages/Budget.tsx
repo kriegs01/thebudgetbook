@@ -2756,121 +2756,24 @@ const getFrozenCycleAmount = (account: Account): number => {
 
   // ... then, update these lines in the 'summary' view block
   if (view === 'summary') {
-    // ⚡ DYNAMIC SELF-REFRESH LOGIC: Recalculate totals on the fly before rendering
+        // ⚡ DYNAMIC SELF-REFRESH LOGIC: Disabled to prevent UI flashing!
+    // We now trust the perfectly synced database totals saved by Auto-Save.
     const dynamicallyUpdatedSetups = sortedSetups.map(setup => {
-      const setupYear = parseInt(setup.data?._year || new Date().getFullYear().toString());
-      const setupMonthIndex = MONTHS.indexOf(setup.month);
-
-      // Generate accurate period totals on the fly!
-      const livePeriodTotals: Record<number, number> = {};
-      const excludedInsts = new Set(setup.data?._excludedInstallmentIds || []);
-      const excludedCreds = new Set(setup.data?._excludedCreditIds || []);
-      const excludedWalls = new Set(setup.data?._excludedWalletIds || []);
-
-      let liveGrandTotal = 0;
-
-      [1, 2, 3, 4].forEach(period => {
-         let itemsTotal = 0;
-         if (setup.data && typeof setup.data === 'object' && !Array.isArray(setup.data)) {
-            Object.entries(setup.data).forEach(([key, catItems]) => {
-               if (!key.startsWith('_') && Array.isArray(catItems)) {
-                  catItems.forEach((item: any) => {
-                     if (item && item.included) {
-                        const val = item.amountsByPeriod?.[period] !== undefined ? item.amountsByPeriod[period] : item.amount;
-                        itemsTotal += (parseFloat(val) || 0);
-                     }
-                  });
-               }
-            });
-         }
-
-         const instTotal = installments.filter(inst => {
-            if (inst.isArchived || excludedInsts.has(inst.id)) return false;
-            if (inst.debtor_friend_id) return false;
-            
-            const linkedId = inst.accountId || inst.account_id || inst.linkedAccountId || inst.linked_account_id;
-            const isSwallowed = accounts.some(acc => (acc.type === 'Credit' || acc.classification === 'Credit Card') && acc.id === linkedId);
-            const isBudee = !!(inst.funding_friend_id || inst.debtor_friend_id || (inst as any).friend_user_id);
-            if (!isBudee && isSwallowed) return false;
-
-            const targetPeriod = determineItemPeriod(inst, currentPeriods, setup.month, setupYear);
-            if (targetPeriod !== period) return false;
-
-            const scheduleForMonth = getPaymentSchedule('installment', inst.id, setup.month, setupYear);
-            const isActiveForPeriod = scheduleForMonth !== undefined || shouldShowInstallment(inst, setup.month, setupYear);
-            const isFinished = !scheduleForMonth && inst.totalAmount > 0 && inst.paidAmount >= inst.totalAmount;
-            return isActiveForPeriod && !isFinished;
-         }).reduce((s, inst) => s + inst.monthlyAmount, 0);
-
-         const creditTotal = accounts.filter(acc => (acc.type === 'Credit' || acc.classification === 'Credit Card') && !excludedCreds.has(acc.id) && getAccountPeriodIndex(acc) === period).reduce((sum, account) => {
-            if (account.subtype === 'Loan_Bundle') {
-               const bundleInsts = installments.filter(inst => {
-                  if (inst.isArchived || excludedInsts.has(inst.id)) return false;
-                  const isBudee = !!(inst.funding_friend_id || inst.debtor_friend_id || (inst as any).friend_user_id);
-                  if (isBudee) return false;
-                  if (inst.accountId !== account.id && inst.account_id !== account.id && inst.linkedAccountId !== account.id && inst.linked_account_id !== account.id) return false;
-                  const targetPeriod = determineItemPeriod(inst, currentPeriods, setup.month, setupYear);
-                  if (targetPeriod !== period) return false;
-                  const scheduleForMonth = getPaymentSchedule('installment', inst.id, setup.month, setupYear);
-                  return (scheduleForMonth !== undefined || shouldShowInstallment(inst, setup.month, setupYear)) && !(!scheduleForMonth && inst.totalAmount > 0 && inst.paidAmount >= inst.totalAmount);
-               });
-               return sum + bundleInsts.reduce((s, i) => s + i.monthlyAmount, 0);
-            } else {
-               const amt = getFrozenCycleAmount(account);
-               return amt >= 0.01 ? sum + amt : sum;
-            }
-         }, 0);
-
-         const sTotal = period === 1 ? wallets.filter(w => !excludedWalls.has(w.id)).reduce((s, w) => {
-            const topUps = stashTopUps.filter(tx => tx.wallet_id === w.id && new Date(tx.date).getMonth() === setupMonthIndex && new Date(tx.date).getFullYear() === setupYear);
-            const funded = topUps.reduce((sum, tx) => sum + Math.abs(tx.amount), 0);
-            return s + Math.max(w.amount, funded);
-         }, 0) : 0;
-
-         livePeriodTotals[period] = itemsTotal + instTotal + creditTotal + sTotal;
-         liveGrandTotal += livePeriodTotals[period];
-      });
-
-      const dynamicActualByPeriod = { ...(setup.data?._actualSalaryByPeriod || {}) };
+      // Fallback for older legacy budgets that don't have period totals yet
+      if (!setup.data?._periodTotals) {
+        return {
+           ...setup,
+           data: {
+             ...setup.data,
+             _periodTotals: { 1: setup.totalAmount || 0, 2: 0 }
+           }
+        };
+      }
       
-      [1, 2, 3, 4, 5].forEach(periodNum => {
-        const pName = ['First', 'Second', 'Third', 'Fourth', 'Fifth'][periodNum - 1] ? `${['First', 'Second', 'Third', 'Fourth', 'Fifth'][periodNum - 1]} Paycheck` : `Paycheck ${periodNum}`;
-        const targetLabel = `Income - ${setup.month} (${pName})`;
-        const legacyLabel = periodNum === 1 ? '1/2' : '2/2';
-        
-        const incomesForPeriod = (transactions || []).filter(tx => {
-          if (tx.transaction_type !== 'income') return false;
-          const txDate = new Date(tx.date);
-          if (txDate.getMonth() !== setupMonthIndex || txDate.getFullYear() !== setupYear) return false;
-          
-          const isTaggedIncome = tx.notes?.startsWith('Income -') || tx.notes?.startsWith('Income Record');
-          const nameLower = (tx.name || '').trim().toLowerCase(); 
-          const isPrimaryIncome = isTaggedIncome || nameLower === 'salary' || nameLower === 'income';
-
-          if (isPrimaryIncome) {
-            if (isTaggedIncome) return tx.notes === targetLabel || tx.notes.includes(`- ${legacyLabel}`);
-            return getPeriodIndexForDate(txDate.getDate()) === periodNum;
-          } else {
-            return getPeriodIndexForDate(txDate.getDate()) === periodNum;
-          }
-        });
-
-        if (incomesForPeriod.length > 0) {
-          const sum = incomesForPeriod.reduce((s, tx) => s + Math.abs(parseFloat(tx.amount) || 0), 0);
-          dynamicActualByPeriod[periodNum] = sum.toString();
-        }
-      });
-
-      return {
-        ...setup,
-        totalAmount: liveGrandTotal,
-        data: {
-          ...setup.data,
-          _periodTotals: livePeriodTotals,
-          _actualSalaryByPeriod: dynamicActualByPeriod
-        }
-      };
+      // Return the perfectly synced database data instantly!
+      return setup;
     });
+
 
 
     const activeSetups = dynamicallyUpdatedSetups.filter(s => !s.isArchived);
