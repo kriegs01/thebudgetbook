@@ -1963,7 +1963,7 @@ const getFrozenCycleAmount = (account: Account): number => {
       setAutoSaveStatus('error');
       setTimeout(() => setAutoSaveStatus('idle'), AUTO_SAVE_STATUS_TIMEOUT_MS);
     }
-  }, [view, setupData, projectedSalary, actualSalary, selectedMonth, selectedTiming, savedSetups, excludedInstallmentIds, excludedWalletIds, excludedCreditIds,wallets, getStashAggregates, onReloadSetups, installments, getPaymentSchedule, shouldShowInstallment]);
+  }, [view, setupData, projectedSalary, actualSalary, selectedMonth, selectedTiming, savedSetups, excludedInstallmentIds, excludedWalletIds, excludedCreditIds, wallets, getStashAggregates, onReloadSetups, installments, getPaymentSchedule, shouldShowInstallment, transactions, creditBudgetAccounts, currentPeriods, processedBudgetMap]);
 
   const triggerAutoSave = useCallback(() => {
     if (autoSaveTimeoutRef.current) {
@@ -2112,7 +2112,7 @@ const getFrozenCycleAmount = (account: Account): number => {
         return isActiveForPeriod && !isFinished;
       }).reduce((s, inst) => s + inst.monthlyAmount, 0);
 
-      const creditTotal = creditBudgetAccounts.filter(acc => !excludedCreditIds.has(acc.id) && getAccountPeriodIndex(acc) === period).reduce((sum, account) => {
+      const creditTotal = creditBudgetAccounts.filter(acc => !excludedCreditIds.has(`${acc.id}-${period}`) && getAccountPeriodIndex(acc) === period).reduce((sum, account) => {
         if (account.subtype === 'Loan_Bundle') {
           const bundleInsts = (installments || []).filter(inst => {
             if (inst.isArchived || excludedInstallmentIds.has(inst.id)) return false;
@@ -2755,26 +2755,8 @@ const getFrozenCycleAmount = (account: Account): number => {
 
 
   if (view === 'summary') {
-    // ⚡ DYNAMIC SELF-REFRESH LOGIC: Disabled to prevent UI flashing!
-    // We now trust the perfectly synced database totals saved by Auto-Save.
-    const dynamicallyUpdatedSetups = sortedSetups.map(setup => {
-      // Fallback for older legacy budgets that don't have period totals yet
-      if (!setup.data?._periodTotals) {
-        return {
-           ...setup,
-           data: {
-             ...setup.data,
-             _periodTotals: { 1: setup.totalAmount || 0, 2: 0 }
-           }
-        };
-      }
-      
-      // Return the perfectly synced database data instantly!
-      return setup;
-    });
-
-    const activeSetups = dynamicallyUpdatedSetups.filter(s => !s.isArchived);
-    const archivedSetups = dynamicallyUpdatedSetups.filter(s => s.isArchived);
+    const activeSetups = sortedSetups.filter(s => !s.isArchived);
+    const archivedSetups = sortedSetups.filter(s => s.isArchived);
 
 
     return (

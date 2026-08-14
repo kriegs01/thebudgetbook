@@ -76,11 +76,9 @@ export const BudgetSetupsList: React.FC<BudgetSetupsListProps> = ({
     if (!scrollContainerRef.current) return;
     const container = scrollContainerRef.current;
     
-    // Grab the actual width of a single card
     const cardElement = container.children[0] as HTMLElement;
     if (!cardElement) return;
 
-    // Scroll by 1 card width + 24px (which is Tailwind's gap-6)
     const scrollStep = cardElement.clientWidth + 24; 
     const scrollAmount = direction === 'left' ? -scrollStep : scrollStep;
     
@@ -91,7 +89,6 @@ export const BudgetSetupsList: React.FC<BudgetSetupsListProps> = ({
     <div className="w-full mb-8">
       <h2 className="px-4 mb-4 text-sm font-black text-gray-400 uppercase tracking-widest hidden lg:block">{title}</h2>
       
-      {/* Cards Container */}
       <div 
         ref={scrollContainerRef}
         onScroll={handleScroll}
@@ -111,58 +108,82 @@ export const BudgetSetupsList: React.FC<BudgetSetupsListProps> = ({
                 </div>
 
                 <div className="space-y-6">
-                  {['1/2', '2/2'].map((timingVal) => {
-                    const periodIndex = timingVal === '1/2' ? 1 : 2;
-                    const setup = group.setups.find(s => s.timing === timingVal) || mainSetup;
-                    
-                    const actualStr = setup.data?._actualSalaryByPeriod?.[periodIndex] || setup.data?._actualSalary;
-                    const projectedStr = setup.data?._projectedSalaryByPeriod?.[periodIndex] || setup.data?._projectedSalary;
-                    const actualValue = actualStr && actualStr.trim() !== '' ? parseFloat(actualStr) : null;
-                    const projectedValue = parseFloat(projectedStr || '0');
-                    const incomeToUse = actualValue !== null && !isNaN(actualValue) ? actualValue : projectedValue;
+                  {(() => {
+                    // 1. Find the "Master" setup record to detect active periods
+                    const masterSetup = [...group.setups].sort((a, b) => (b.totalAmount || 0) - (a.totalAmount || 0))[0] || mainSetup;
 
-                    let spent = 0;
-                    const setupWithNewMath = group.setups.find(s => s.data && s.data._periodTotals);
-                    
-                    if (setupWithNewMath && setupWithNewMath.data._periodTotals) {
-                      spent = setupWithNewMath.data._periodTotals[periodIndex] || 0;
-                    } else {
-                      const isThisTimingSaved = group.setups.some(s => s.timing === timingVal);
-                      spent = isThisTimingSaved ? (setup.totalAmount || 0) : 0;
+                    // 2. Detect active pay periods across the Master setup
+                    let activeKeys = [1, 2];
+                    if (masterSetup.data && masterSetup.data._periodTotals) {
+                      const keys = Object.keys(masterSetup.data._periodTotals).map(Number);
+                      keys.forEach(k => {
+                        const spent = masterSetup.data._periodTotals[k] || 0;
+                        const projInc = parseFloat(masterSetup.data._projectedSalaryByPeriod?.[k] || '0');
+                        const actInc = parseFloat(masterSetup.data._actualSalaryByPeriod?.[k] || '0');
+                        if ((spent > 0 || projInc > 0 || actInc > 0) && !activeKeys.includes(k)) {
+                          activeKeys.push(k);
+                        }
+                      });
                     }
+                    const periodsToRender = activeKeys.sort((a, b) => a - b);
 
-                    const remaining = incomeToUse - spent;
-                    const percentSpent = incomeToUse > 0 ? Math.min(100, (spent / incomeToUse) * 100) : 100;
-                    const isOverBudget = remaining < 0;
+                    // 3. Render progress bars using the EXACT record for that tab
+                    return periodsToRender.map((periodIndex) => {
+                      const legacyTimingVal = periodIndex === 1 ? '1/2' : '2/2';
+                      
+                      // 🟢 THE CRITICAL FIX: Grab the setup document that explicitly belongs to this tab!
+                      // This ensures we never read stale cross-tab data just because it has a higher total.
+                      const setup = group.setups.find(s => s.timing === legacyTimingVal) || masterSetup;
+                      
+                      const actualStr = setup.data?._actualSalaryByPeriod?.[periodIndex] || (periodIndex === 1 ? setup.data?._actualSalary : undefined);
+                      const projectedStr = setup.data?._projectedSalaryByPeriod?.[periodIndex] || (periodIndex === 1 ? setup.data?._projectedSalary : undefined);
+                      
+                      const actualValue = actualStr && actualStr.trim() !== '' ? parseFloat(actualStr) : null;
+                      const projectedValue = parseFloat(projectedStr || '0');
+                      const incomeToUse = actualValue !== null && !isNaN(actualValue) ? actualValue : projectedValue;
 
-                    const timingLabel = timingVal === '1/2' ? 'First Paycheck' : 'Second Paycheck';
+                      let spent = 0;
+                      if (setup.data && setup.data._periodTotals) {
+                        spent = setup.data._periodTotals[periodIndex] || 0;
+                      } else {
+                        spent = setup.totalAmount || 0;
+                      }
 
-                    return (
-                      <div key={timingVal} className="space-y-2">
-                        <div className="flex justify-between items-end">
-                          <span className="text-[11px] font-black uppercase tracking-wider text-gray-500 dark:text-gray-400">
-                            {timingLabel}
-                          </span>
-                          <span className={`text-xs font-black ${isOverBudget ? 'text-red-500' : 'text-green-600'}`}>
-                            {formatCurrency(Math.abs(remaining))} {isOverBudget ? 'Over' : 'Left'}
-                          </span>
+                      const remaining = incomeToUse - spent;
+                      const percentSpent = incomeToUse > 0 ? Math.min(100, (spent / incomeToUse) * 100) : 100;
+                      const isOverBudget = remaining < 0;
+
+                      const labels = ['First', 'Second', 'Third', 'Fourth', 'Fifth'];
+                      const timingLabel = labels[periodIndex - 1] ? `${labels[periodIndex - 1]} Paycheck` : `Paycheck ${periodIndex}`;
+
+                      return (
+                        <div key={periodIndex} className="space-y-2">
+                          <div className="flex justify-between items-end">
+                            <span className="text-[11px] font-black uppercase tracking-wider text-gray-500 dark:text-gray-400">
+                              {timingLabel}
+                            </span>
+                            <span className={`text-xs font-black ${isOverBudget ? 'text-red-500' : 'text-green-600'}`}>
+                              {formatCurrency(Math.abs(remaining))} {isOverBudget ? 'Over' : 'Left'}
+                            </span>
+                          </div>
+
+                          <div className={`h-5 w-full border-2 border-black rounded-xl overflow-hidden flex relative ${isOverBudget ? 'bg-red-100' : 'bg-green-400'}`}>
+                            <div
+                              className={`h-full border-r-2 border-black transition-all duration-500 ${isOverBudget ? 'bg-red-500' : 'bg-gray-800 dark:bg-gray-700'}`}
+                              style={{ width: `${percentSpent}%` }}
+                            />
+                          </div>
+
+                          <div className="flex justify-between text-[10px] font-bold text-gray-400">
+                            <span>{formatCurrency(spent)} Spent</span>
+                            <span>{formatCurrency(incomeToUse)} Income</span>
+                          </div>
                         </div>
-
-                        <div className={`h-5 w-full border-2 border-black rounded-xl overflow-hidden flex relative ${isOverBudget ? 'bg-red-100' : 'bg-green-400'}`}>
-                          <div
-                            className={`h-full border-r-2 border-black transition-all duration-500 ${isOverBudget ? 'bg-red-500' : 'bg-gray-800 dark:bg-gray-700'}`}
-                            style={{ width: `${percentSpent}%` }}
-                          />
-                        </div>
-
-                        <div className="flex justify-between text-[10px] font-bold text-gray-400">
-                          <span>{formatCurrency(spent)} Spent</span>
-                          <span>{formatCurrency(incomeToUse)} Income</span>
-                        </div>
-                      </div>
-                    );
-                  })}
+                      );
+                    });
+                  })()}
                 </div>
+
               </div>
 
               <div className="mt-8 pt-6 border-t-2 border-dashed border-gray-200 dark:border-gray-800 flex gap-3">
@@ -214,11 +235,8 @@ export const BudgetSetupsList: React.FC<BudgetSetupsListProps> = ({
         })}
       </div>
 
-      {/* Controls Container (Arrows + Dots) */}
       {sortedGroups.length > 1 && (
         <div className="flex items-center justify-center gap-6 mt-4">
-          
-          {/* Left Arrow - Uses `invisible` to hide without breaking layout */}
           <button 
             onClick={() => scroll('left')}
             className={`p-2 bg-white dark:bg-gray-800 border-2 border-black rounded-full shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:translate-x-[1px] hover:translate-y-[1px] hover:shadow-none transition-all hidden md:block ${!canScrollLeft ? 'invisible' : ''}`}
@@ -226,7 +244,6 @@ export const BudgetSetupsList: React.FC<BudgetSetupsListProps> = ({
             <ChevronLeft className="w-5 h-5" />
           </button>
 
-          {/* Dots */}
           <div className="flex gap-2">
             {sortedGroups.map((_, idx) => (
               <div 
@@ -238,14 +255,12 @@ export const BudgetSetupsList: React.FC<BudgetSetupsListProps> = ({
             ))}
           </div>
 
-          {/* Right Arrow - Uses `invisible` to hide without breaking layout */}
           <button 
             onClick={() => scroll('right')}
             className={`p-2 bg-white dark:bg-gray-800 border-2 border-black rounded-full shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:translate-x-[1px] hover:translate-y-[1px] hover:shadow-none transition-all hidden md:block ${!canScrollRight ? 'invisible' : ''}`}
           >
             <ChevronRight className="w-5 h-5" />
           </button>
-
         </div>
       )}
     </div>
