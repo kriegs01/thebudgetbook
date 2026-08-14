@@ -2754,9 +2754,8 @@ const getFrozenCycleAmount = (account: Account): number => {
   }
 
 
-  // ... then, update these lines in the 'summary' view block
   if (view === 'summary') {
-        // ⚡ DYNAMIC SELF-REFRESH LOGIC: Disabled to prevent UI flashing!
+    // ⚡ DYNAMIC SELF-REFRESH LOGIC: Disabled to prevent UI flashing!
     // We now trust the perfectly synced database totals saved by Auto-Save.
     const dynamicallyUpdatedSetups = sortedSetups.map(setup => {
       // Fallback for older legacy budgets that don't have period totals yet
@@ -2774,10 +2773,9 @@ const getFrozenCycleAmount = (account: Account): number => {
       return setup;
     });
 
-
-
     const activeSetups = dynamicallyUpdatedSetups.filter(s => !s.isArchived);
     const archivedSetups = dynamicallyUpdatedSetups.filter(s => s.isArchived);
+
 
     return (
 // ... keep everything else underneath the exact same (the <div className="space-y-8... block)
