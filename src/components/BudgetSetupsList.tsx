@@ -110,7 +110,10 @@ export const BudgetSetupsList: React.FC<BudgetSetupsListProps> = ({
                 <div className="space-y-6">
                   {(() => {
                     // 1. Find the "Master" setup record to detect active periods
-                    const masterSetup = [...group.setups].sort((a, b) => (b.totalAmount || 0) - (a.totalAmount || 0))[0] || mainSetup;
+                    const masterSetup = group.setups.find(s => s.timing === 'unified') 
+                      || group.setups.find(s => s.data && s.data._periodTotals) 
+                      || [...group.setups].sort((a, b) => (b.totalAmount || 0) - (a.totalAmount || 0))[0] 
+                      || mainSetup;
 
                     // 2. Detect active pay periods across the Master setup
                     let activeKeys = [1, 2];
@@ -131,22 +134,28 @@ export const BudgetSetupsList: React.FC<BudgetSetupsListProps> = ({
                     return periodsToRender.map((periodIndex) => {
                       const legacyTimingVal = periodIndex === 1 ? '1/2' : '2/2';
                       
-                      // 🟢 THE CRITICAL FIX: Grab the setup document that explicitly belongs to this tab!
-                      // This ensures we never read stale cross-tab data just because it has a higher total.
-                      const setup = group.setups.find(s => s.timing === legacyTimingVal) || masterSetup;
+                      // 🟢 THE FIX: Prioritize the specific database record for THIS tab!
+                      // If Tab 1 was saved yesterday and Tab 2 was saved today, Tab 1's snapshot of Tab 2 is stale.
+                      // We must read Tab 2's data directly from Tab 2's record!
+                      const specificSetup = group.setups.find(s => s.timing === legacyTimingVal) || masterSetup;
                       
-                      const actualStr = setup.data?._actualSalaryByPeriod?.[periodIndex] || (periodIndex === 1 ? setup.data?._actualSalary : undefined);
-                      const projectedStr = setup.data?._projectedSalaryByPeriod?.[periodIndex] || (periodIndex === 1 ? setup.data?._projectedSalary : undefined);
+                      const actualStr = specificSetup.data?._actualSalaryByPeriod?.[periodIndex] || masterSetup.data?._actualSalaryByPeriod?.[periodIndex] || (periodIndex === 1 ? specificSetup.data?._actualSalary : undefined);
+                      const projectedStr = specificSetup.data?._projectedSalaryByPeriod?.[periodIndex] || masterSetup.data?._projectedSalaryByPeriod?.[periodIndex] || (periodIndex === 1 ? specificSetup.data?._projectedSalary : undefined);
                       
                       const actualValue = actualStr && actualStr.trim() !== '' ? parseFloat(actualStr) : null;
                       const projectedValue = parseFloat(projectedStr || '0');
                       const incomeToUse = actualValue !== null && !isNaN(actualValue) ? actualValue : projectedValue;
 
                       let spent = 0;
-                      if (setup.data && setup.data._periodTotals) {
-                        spent = setup.data._periodTotals[periodIndex] || 0;
+                      if (specificSetup.data && specificSetup.data._periodTotals && specificSetup.data._periodTotals[periodIndex] !== undefined) {
+                        // Trust the exact tab's record first!
+                        spent = specificSetup.data._periodTotals[periodIndex];
+                      } else if (masterSetup.data && masterSetup.data._periodTotals) {
+                        // Fallback to the master record
+                        spent = masterSetup.data._periodTotals[periodIndex] || 0;
                       } else {
-                        spent = setup.totalAmount || 0;
+                        // Absolute legacy fallback
+                        spent = specificSetup.totalAmount || 0;
                       }
 
                       const remaining = incomeToUse - spent;
@@ -183,7 +192,6 @@ export const BudgetSetupsList: React.FC<BudgetSetupsListProps> = ({
                     });
                   })()}
                 </div>
-
               </div>
 
               <div className="mt-8 pt-6 border-t-2 border-dashed border-gray-200 dark:border-gray-800 flex gap-3">

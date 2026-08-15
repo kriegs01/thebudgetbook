@@ -411,7 +411,11 @@ const effectiveCategories = React.useMemo(() => {
     budeeName: string;
     budeeId: string;
     amount: number;
+    hasUnappliedCollection?: boolean;
+    totalCollected?: number;
+    collectionAccountId?: string;
   } | null>(null);
+
   
   
   // Around line 316
@@ -1799,7 +1803,6 @@ const getFrozenCycleAmount = (account: Account): number => {
     const stashTotal = wallets.filter(w => !excludedWalletIds.has(w.id)).reduce((s, w) => s + Math.max(w.amount, getStashAggregates(w).funded), 0);
 
     [1, 2, 3, 4].forEach(period => {
-      // 1. Regular Items
       let itemsTotal = 0;
       if (processedBudgetMap[period]) {
         Object.values(processedBudgetMap[period]).forEach(catItems => {
@@ -1812,33 +1815,25 @@ const getFrozenCycleAmount = (account: Account): number => {
         });
       }
 
-      // 2. Installments (Strict Exclusions applied!)
       const instTotal = (installments || []).filter(inst => {
         if (inst.isArchived || excludedInstallmentIds.has(inst.id)) return false;
-        if (inst.debtor_friend_id) return false; // 🔴 Exclude Budee collections!
-        
+        if (inst.debtor_friend_id) return false;
         const linkedId = inst.accountId || inst.account_id || inst.linkedAccountId || inst.linked_account_id;
         const isSwallowedByCreditAccount = creditBudgetAccounts.some(acc => acc.id === linkedId);
         const isBudee = !!(inst.funding_friend_id || inst.debtor_friend_id || (inst as any).friend_user_id);
-        
-        if (!isBudee && isSwallowedByCreditAccount) return false; // 🔴 Exclude loans swallowed by Credit Cards
+        if (!isBudee && isSwallowedByCreditAccount) return false;
 
-        let targetPeriod = 1;
-        if (inst.timing === '1/2') targetPeriod = 1;
-        else if (inst.timing === '2/2') targetPeriod = 2;
-        else targetPeriod = getAccountPeriodIndex({ dueDate: inst.dueDate || inst.due_date || 1 });
-        
+        // 🟢 FIX: Strictly use the unified engine for mapping (No hardcoded legacy '1/2' logic)
+        const targetPeriod = determineItemPeriod(inst, currentPeriods, selectedMonth, selectedYear);
         if (targetPeriod !== period) return false;
-        
+
         const scheduleForMonth = getPaymentSchedule('installment', inst.id, selectedMonth, selectedYear);
         const isActiveForPeriod = scheduleForMonth !== undefined || shouldShowInstallment(inst, selectedMonth, selectedYear);
         const isFinished = !scheduleForMonth && inst.totalAmount > 0 && inst.paidAmount >= inst.totalAmount;
         return isActiveForPeriod && !isFinished;
       }).reduce((s, inst) => s + inst.monthlyAmount, 0);
 
-      // 3. Credit Cards (Loan bundles vs Standard)
-      const creditTotal = creditBudgetAccounts.filter(acc => !excludedCreditIds.has(`${acc.id}-${period}`) && getAccountPeriodIndex(acc) === period).reduce((sum, account) => {
-
+      const creditTotal = creditBudgetAccounts.filter(acc => !excludedCreditIds.has(`${acc.id}-${period}`) && (acc.subtype === 'Loan_Bundle' || getAccountPeriodIndex(acc) === period)).reduce((sum, account) => {
         if (account.subtype === 'Loan_Bundle') {
           const bundleInsts = (installments || []).filter(inst => {
             if (inst.isArchived || excludedInstallmentIds.has(inst.id)) return false;
@@ -1846,8 +1841,10 @@ const getFrozenCycleAmount = (account: Account): number => {
             if (isBudee) return false;
             if (inst.accountId !== account.id && inst.account_id !== account.id && inst.linkedAccountId !== account.id && inst.linked_account_id !== account.id) return false;
             
-            let tPeriod = inst.timing === '1/2' ? 1 : inst.timing === '2/2' ? 2 : getAccountPeriodIndex({ dueDate: inst.dueDate || inst.due_date || 1 });
-            if (tPeriod !== period) return false;
+            // 🟢 FIX: Strictly use the unified engine for mapping
+            const targetPeriod = determineItemPeriod(inst, currentPeriods, selectedMonth, selectedYear);
+            if (targetPeriod !== period) return false;
+
             const scheduleForMonth = getPaymentSchedule('installment', inst.id, selectedMonth, selectedYear);
             return (scheduleForMonth !== undefined || shouldShowInstallment(inst, selectedMonth, selectedYear)) && !(!scheduleForMonth && inst.totalAmount > 0 && inst.paidAmount >= inst.totalAmount);
           });
@@ -1858,10 +1855,9 @@ const getFrozenCycleAmount = (account: Account): number => {
         }
       }, 0);
 
-      // 4. Stash (ONLY apply to period 1 so it never double counts!)
-      const sTotal = period === 1 ? stashTotal : 0;
-      _periodTotals[period] = itemsTotal + instTotal + creditTotal + sTotal;
+      _periodTotals[period] = itemsTotal + instTotal + creditTotal + (period === 1 ? stashTotal : 0);
     });
+
 
     const dynamicActualByPeriod = { ...actualSalaryByPeriod };
     const currentMonthIdx = MONTHS.indexOf(selectedMonth);
@@ -1963,7 +1959,7 @@ const getFrozenCycleAmount = (account: Account): number => {
       setAutoSaveStatus('error');
       setTimeout(() => setAutoSaveStatus('idle'), AUTO_SAVE_STATUS_TIMEOUT_MS);
     }
-  }, [view, setupData, projectedSalary, actualSalary, selectedMonth, selectedTiming, savedSetups, excludedInstallmentIds, excludedWalletIds, excludedCreditIds, wallets, getStashAggregates, onReloadSetups, installments, getPaymentSchedule, shouldShowInstallment, transactions, creditBudgetAccounts, currentPeriods, processedBudgetMap]);
+  }, [view, setupData, projectedSalary, actualSalary, selectedMonth, selectedTiming, savedSetups, excludedInstallmentIds, excludedWalletIds, excludedCreditIds, wallets, getStashAggregates, onReloadSetups, installments, getPaymentSchedule, shouldShowInstallment, transactions, creditBudgetAccounts, currentPeriods, billers, processedBudgetMap]);
 
   const triggerAutoSave = useCallback(() => {
     if (autoSaveTimeoutRef.current) {
@@ -2104,23 +2100,28 @@ const getFrozenCycleAmount = (account: Account): number => {
         const isBudee = !!(inst.funding_friend_id || inst.debtor_friend_id || (inst as any).friend_user_id);
         if (!isBudee && isSwallowedByCreditAccount) return false;
 
-        let targetPeriod = inst.timing === '1/2' ? 1 : inst.timing === '2/2' ? 2 : getAccountPeriodIndex({ dueDate: inst.dueDate || inst.due_date || 1 });
+        // 🟢 FIX: Strictly use the unified engine for mapping (No hardcoded legacy '1/2' logic)
+        const targetPeriod = determineItemPeriod(inst, currentPeriods, selectedMonth, selectedYear);
         if (targetPeriod !== period) return false;
+
         const scheduleForMonth = getPaymentSchedule('installment', inst.id, selectedMonth, selectedYear);
         const isActiveForPeriod = scheduleForMonth !== undefined || shouldShowInstallment(inst, selectedMonth, selectedYear);
         const isFinished = !scheduleForMonth && inst.totalAmount > 0 && inst.paidAmount >= inst.totalAmount;
         return isActiveForPeriod && !isFinished;
       }).reduce((s, inst) => s + inst.monthlyAmount, 0);
 
-      const creditTotal = creditBudgetAccounts.filter(acc => !excludedCreditIds.has(`${acc.id}-${period}`) && getAccountPeriodIndex(acc) === period).reduce((sum, account) => {
+      const creditTotal = creditBudgetAccounts.filter(acc => !excludedCreditIds.has(`${acc.id}-${period}`) && (acc.subtype === 'Loan_Bundle' || getAccountPeriodIndex(acc) === period)).reduce((sum, account) => {
         if (account.subtype === 'Loan_Bundle') {
           const bundleInsts = (installments || []).filter(inst => {
             if (inst.isArchived || excludedInstallmentIds.has(inst.id)) return false;
             const isBudee = !!(inst.funding_friend_id || inst.debtor_friend_id || (inst as any).friend_user_id);
             if (isBudee) return false;
             if (inst.accountId !== account.id && inst.account_id !== account.id && inst.linkedAccountId !== account.id && inst.linked_account_id !== account.id) return false;
-            let tPeriod = inst.timing === '1/2' ? 1 : inst.timing === '2/2' ? 2 : getAccountPeriodIndex({ dueDate: inst.dueDate || inst.due_date || 1 });
-            if (tPeriod !== period) return false;
+            
+            // 🟢 FIX: Strictly use the unified engine for mapping
+            const targetPeriod = determineItemPeriod(inst, currentPeriods, selectedMonth, selectedYear);
+            if (targetPeriod !== period) return false;
+
             const scheduleForMonth = getPaymentSchedule('installment', inst.id, selectedMonth, selectedYear);
             return (scheduleForMonth !== undefined || shouldShowInstallment(inst, selectedMonth, selectedYear)) && !(!scheduleForMonth && inst.totalAmount > 0 && inst.paidAmount >= inst.totalAmount);
           });
@@ -2133,6 +2134,7 @@ const getFrozenCycleAmount = (account: Account): number => {
 
       _periodTotals[period] = itemsTotal + instTotal + creditTotal + (period === 1 ? stashTotal : 0);
     });
+
     
     // Calculate absolute grand total from our clean period totals!
     const total = Object.values(_periodTotals).reduce((sum, val) => sum + (val as number), 0);
@@ -2678,9 +2680,10 @@ const getFrozenCycleAmount = (account: Account): number => {
     } else {
       setExcludedInstallmentIds(new Set());
     }
-    setSelectedMonth(setup.month);
-    setSelectedTiming(setup.timing as '1/2' | '2/2');
-    setView('setup');
+    setSelectedMonth(setup.month);
+    setSelectedTiming(setup.timing as '1/2' | '2/2');
+    setActivePeriodIndex(setup.timing === '2/2' ? 2 : parseInt(setup.timing?.split('/')[0] || '1', 10));
+    setView('setup');
   };
 
   const handleArchiveSetup = (setupData: SavedBudgetSetup | SavedBudgetSetup[]) => {
@@ -3170,9 +3173,12 @@ const getFrozenCycleAmount = (account: Account): number => {
     
     return (
       <button
-        key={periodNum}
-        onClick={() => setActivePeriodIndex(periodNum)}
-        disabled={isReadOnly}
+      key={periodNum}
+      onClick={() => {
+        setActivePeriodIndex(periodNum);
+        setSelectedTiming(`${periodNum}/${currentPeriods.length || 2}` as any);
+      }}
+      disabled={isReadOnly}
         type="button"
         className={`flex-shrink-0 px-4 py-2 font-black uppercase text-xs tracking-wider border-2 rounded-xl transition-all shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] disabled:opacity-60 disabled:cursor-not-allowed ${
           isActive 
@@ -4122,7 +4128,12 @@ const categoryTotal = itemsTotal + installmentsTotal + creditTotal;
                         isPartial = checkIfPartialBySchedule('installment', inst.id);
                       }
 
-                      // Theme colors based on Pay vs Collect
+                      // 🟢 SMART DETECTOR: Look for unapplied cash collections
+                      const collectedTxs = transactions.filter(tx => tx.payment_schedule_id === instSchedule?.id && tx.transaction_type === 'cash_in');
+                      const totalCollected = collectedTxs.reduce((sum, tx) => sum + Math.abs(tx.amount), 0);
+                      const hasUnappliedCollection = isReceivable && totalCollected > 0 && !isPaid;
+                      const collectionAccountId = collectedTxs.length > 0 ? collectedTxs[0].payment_method_id : undefined;
+
                       const themeColor = isReceivable ? 'emerald' : 'indigo';
 
                       return (
@@ -4150,10 +4161,14 @@ const categoryTotal = itemsTotal + installmentsTotal + creditTotal;
                           <div className="flex items-center gap-3">
                             <div className="text-right flex items-center gap-2">
                               <p className="text-sm font-black text-gray-900 dark:text-gray-100">{formatCurrency(inst.monthlyAmount)}</p>
+                              
+                              {/* 🟢 DYNAMIC STATUS BADGE */}
                               {isPaid ? (
                                 <span className="text-[9px] font-black px-2 py-1 bg-green-400 text-black border-2 border-black rounded-lg shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] uppercase inline-block">Paid</span>
                               ) : isPartial ? (
                                 <span className="text-[9px] font-black px-2 py-1 bg-yellow-300 text-black border-2 border-black rounded-lg shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] uppercase inline-block">Partial</span>
+                              ) : hasUnappliedCollection ? (
+                                <span className="text-[9px] font-black px-2 py-1 bg-amber-300 text-black border-2 border-black rounded-lg shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] uppercase inline-block">Unapplied</span>
                               ) : (
                                 <span className="text-[9px] font-black px-2 py-1 bg-red-400 text-black border-2 border-black rounded-lg shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] uppercase inline-block">Unpaid</span>
                               )}
@@ -4164,16 +4179,17 @@ const categoryTotal = itemsTotal + installmentsTotal + creditTotal;
                                 <button 
                                   onClick={() => {
                                     if (isReceivable) {
-                                      // 🟢 Trigger the 2-Step Carousel for Collections
                                       setShowBudeeCarousel({
                                         installment: inst,
                                         scheduleId: instSchedule?.id || '',
                                         budeeName: displayBudeeName,
                                         budeeId: inst.debtor_friend_id || (inst as any).friend_user_id || '',
-                                        amount: isPartial && instSchedule ? Math.max(0, instSchedule.expected_amount - instSchedule.amount_paid) : inst.monthlyAmount
+                                        amount: isPartial && instSchedule ? Math.max(0, instSchedule.expected_amount - instSchedule.amount_paid) : inst.monthlyAmount,
+                                        hasUnappliedCollection,
+                                        totalCollected,
+                                        collectionAccountId
                                       });
                                     } else {
-                                      // Standard 1-Step Pay Flow for what YOU owe
                                       setTransactionFormData({ 
                                         id: '', name: `${inst.name} - ${selectedMonth}`, date: getTodayIso(), 
                                         amount: isPartial && instSchedule ? Math.max(0, instSchedule.expected_amount - instSchedule.amount_paid).toFixed(2) : inst.monthlyAmount.toFixed(2), 
@@ -4182,12 +4198,11 @@ const categoryTotal = itemsTotal + installmentsTotal + creditTotal;
                                       setShowTransactionModal(true);
                                     }
                                   }}
-                                  className={`px-3 py-1.5 text-[10px] font-black uppercase rounded-lg border-2 border-black bg-${themeColor}-600 text-white shadow-[1.5px_1.5px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[1px] hover:translate-y-[1px] transition-all`}
+                                  className={`px-3 py-1.5 text-[10px] font-black uppercase rounded-lg border-2 border-black ${hasUnappliedCollection ? 'bg-amber-400 text-black' : `bg-${themeColor}-600 text-white`} shadow-[1.5px_1.5px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[1px] hover:translate-y-[1px] transition-all`}
                                 >
-                                  {isReceivable ? 'Collect' : 'Pay'}
+                                  {hasUnappliedCollection ? 'Apply' : (isReceivable ? 'Collect' : 'Pay')}
                                 </button>
                               )}
-
 
                               {!isReadOnly && (
                                 <button 
@@ -4202,6 +4217,8 @@ const categoryTotal = itemsTotal + installmentsTotal + creditTotal;
                         </div>
                       );
                     };
+
+
 
                     return (
                       <div key={`budee-group-${budeeId}`} className="p-4 border-2 border-black rounded-xl bg-blue-50/20 dark:bg-blue-900/10 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] transition-all flex flex-col gap-3">
@@ -5535,8 +5552,8 @@ return getAccountPeriodIndex({ dueDate: dueDay }) === activePeriodIndex;
               <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="m9 18 6-6-6-6"/></svg>
             </button>
 
-            {/* Swipe Container */}
-            <div 
+                        {/* Swipe Container */}
+                        <div 
               id="budee-carousel"
               className="flex overflow-x-auto snap-x snap-mandatory w-full py-8 px-[7.5vw] sm:px-[calc(50vw-12rem)] gap-4 sm:gap-6" 
               style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
@@ -5554,189 +5571,341 @@ return getAccountPeriodIndex({ dueDate: dueDay }) === activePeriodIndex;
                 });
               }}
             >
-              {/* 🟢 CARD 1: RECEIVE PAYMENT */}
-              <div 
-                className="w-[85vw] sm:w-[24rem] shrink-0 snap-center bg-white dark:bg-gray-900 rounded-[2rem] p-6 sm:p-8 border-4 border-black shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] relative flex flex-col transition-all duration-300 ease-out"
-                style={{ transform: 'scale(1)', opacity: 1 }}
-              >
-                <div className="mb-6">
-                  <span className="text-[10px] font-black uppercase tracking-widest text-emerald-600 bg-emerald-100 border-2 border-black px-3 py-1 rounded-lg mb-3 inline-block shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]">
-                    Step 1 of 2
-                  </span>
-                  <h2 className="text-xl font-black text-gray-900 dark:text-gray-100 leading-tight mb-1">Receive from {showBudeeCarousel.budeeName}</h2>
-                  <p className="text-gray-500 dark:text-gray-400 text-xs font-bold uppercase tracking-widest">{showBudeeCarousel.installment.name}</p>
-                </div>
-
-                <form onSubmit={async (e) => {
-                    e.preventDefault();
-                    const form = e.currentTarget;
-                    const formData = new FormData(form);
-                    const amount = parseFloat(formData.get('amount') as string);
-                    const date = formData.get('date') as string;
-                    const destAccountId = formData.get('destAccountId') as string;
-                    const receiptFile = formData.get('receipt') as File;
-                    const submitBtn = form.querySelector('button[type="submit"]') as HTMLButtonElement;
-
-                    try {
-                      submitBtn.disabled = true; submitBtn.textContent = 'Processing...';
-
-                      const { success, error, transaction } = await processBudeeTransaction({
-                        installmentId: showBudeeCarousel.installment.id,
-                        scheduleId: showBudeeCarousel.scheduleId,
-                        budeeId: showBudeeCarousel.budeeId,
-                        budeeName: showBudeeCarousel.budeeName,
-                        accountId: destAccountId,
-                        amount: Math.abs(amount),
-                        date: combineDateWithCurrentTime(date),
-                        transactionType: 'cash_in',
-                        description: `${showBudeeCarousel.installment.name} - ${selectedMonth}`
-                      });
-
-                      if (!success) throw error;
-
-                      if (receiptFile && receiptFile.size > 0 && transaction?.id) {
-                        const { path } = await uploadTransactionReceipt(transaction.id, receiptFile);
-                        if (path) await updateTransaction(transaction.id, { receipt_url: path });
-                      }
-                      
-                      await reloadTransactions();
-                      submitBtn.className = "w-full bg-gray-200 text-gray-500 border-2 border-black py-4 rounded-xl font-black text-sm uppercase tracking-wider transition-all";
-                      submitBtn.textContent = 'Received! ✓';
-
-                      // Auto-scroll to next card
-                      const container = document.getElementById('budee-carousel');
-                      if (container && container.firstElementChild) {
-                        setTimeout(() => container.scrollTo({ left: container.scrollLeft + (container.firstElementChild!.clientWidth + 24), behavior: 'smooth' }), 600);
-                      }
-                    } catch (err) {
-                      alert('Failed to record collection.');
-                      submitBtn.disabled = false; submitBtn.textContent = 'Log Collection';
-                    }
-                  }}
-                  className="space-y-4 mt-auto"
+                            {/* 🟢 CARD 1: RECEIVE PAYMENT */}
+                            {!showBudeeCarousel.hasUnappliedCollection && (
+                <div 
+                  className="w-[85vw] sm:w-[24rem] shrink-0 snap-center bg-white dark:bg-gray-900 rounded-[2rem] p-6 sm:p-8 border-4 border-black shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] relative flex flex-col transition-all duration-300 ease-out"
+                  style={{ transform: 'scale(1)', opacity: 1 }}
                 >
-                  <div>
-                    <label className="block text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">Amount to Receive</label>
-                    <div className="relative"><span className="absolute left-3 top-1/2 -translate-y-1/2 font-bold text-gray-400">₱</span><input required name="amount" type="number" step="0.01" defaultValue={showBudeeCarousel.amount.toFixed(2)} className="w-full bg-emerald-50 dark:bg-emerald-900/10 border-2 border-black rounded-xl p-3 pl-8 outline-none text-lg font-black text-emerald-700" /></div>
+                  <div className="mb-6">
+                    <span className="text-[10px] font-black uppercase tracking-widest text-emerald-600 bg-emerald-100 border-2 border-black px-3 py-1 rounded-lg mb-3 inline-block shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]">
+                      Step 1 of {showBudeeCarousel.amount < showBudeeCarousel.installment.monthlyAmount ? '3' : '2'}
+                    </span>
+                    <h2 className="text-xl font-black text-gray-900 dark:text-gray-100 leading-tight mb-1">Receive from {showBudeeCarousel.budeeName}</h2>
+                    <p className="text-gray-500 dark:text-gray-400 text-xs font-bold uppercase tracking-widest">{showBudeeCarousel.installment.name}</p>
                   </div>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <label className="block text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">Save Into</label>
-                      <select required name="destAccountId" defaultValue={accounts.find(a => a.type === 'Debit')?.id || ''} className="w-full bg-gray-50 dark:bg-gray-800 border-2 border-black rounded-xl px-2.5 py-3 outline-none font-bold text-xs dark:text-gray-100">
-                        {accounts.filter(a => a.type === 'Debit').map(acc => <option key={acc.id} value={acc.id}>{acc.bank}</option>)}
-                      </select>
-                    </div>
-                    <div>
-                      <label className="block text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">Date</label>
-                      <input required name="date" type="date" defaultValue={getTodayIso()} className="w-full bg-gray-50 dark:bg-gray-800 border-2 border-black rounded-xl px-2.5 py-3 outline-none font-bold text-xs dark:text-gray-100" />
-                    </div>
-                  </div>
-                  <div>
-                    <label className="block text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">Receipt (Optional)</label>
-                    <div className="relative">
-                      <input name="receipt" type="file" accept="image/*" className="absolute inset-0 opacity-0 cursor-pointer" onChange={(e) => e.target.nextElementSibling!.querySelector('span')!.textContent = e.target.files?.[0]?.name || 'Upload receipt'}/>
-                      <div className="w-full bg-white dark:bg-gray-800 border-2 border-dashed border-black rounded-xl p-3 text-center text-xs text-gray-500 flex items-center justify-center gap-2"><Upload className="w-4 h-4 text-emerald-400" /><span className="font-bold truncate">Upload proof</span></div>
-                    </div>
-                  </div>
-                  <div className="pt-2">
-                    <button type="submit" className="w-full bg-emerald-500 text-white border-2 border-black py-4 rounded-xl font-black text-sm uppercase tracking-wider shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[2px] hover:translate-y-[2px] transition-all">Log Collection</button>
-                  </div>
-                </form>
-              </div>
 
-              {/* 🟢 CARD 2: PAY BILLER */}
-              <div 
-                className="w-[85vw] sm:w-[24rem] shrink-0 snap-center bg-white dark:bg-gray-900 rounded-[2rem] p-6 sm:p-8 border-4 border-black shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] relative flex flex-col transition-all duration-300 ease-out"
-                style={{ transform: 'scale(0.9)', opacity: 0.5 }}
-              >
-                <div className="mb-6">
-                  <span className="text-[10px] font-black uppercase tracking-widest text-indigo-600 bg-indigo-100 border-2 border-black px-3 py-1 rounded-lg mb-3 inline-block shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]">
-                    Step 2 of 2
-                  </span>
-                  <h2 className="text-xl font-black text-gray-900 dark:text-gray-100 leading-tight mb-1">Pay Installment</h2>
-                  <p className="text-gray-500 dark:text-gray-400 text-xs font-bold uppercase tracking-widest">{showBudeeCarousel.installment.name}</p>
-                </div>
+                  <form onSubmit={async (e) => {
+                      e.preventDefault();
+                      const form = e.currentTarget;
+                      const formData = new FormData(form);
+                      const amount = parseFloat(formData.get('amount') as string);
+                      const date = formData.get('date') as string;
+                      const destAccountId = formData.get('destAccountId') as string;
+                      const receiptFile = formData.get('receipt') as File;
+                      const submitBtn = form.querySelector('button[type="submit"]') as HTMLButtonElement;
 
-                <form onSubmit={async (e) => {
-                    e.preventDefault();
-                    const form = e.currentTarget;
-                    const formData = new FormData(form);
-                    const amount = parseFloat(formData.get('amount') as string);
-                    const date = formData.get('date') as string;
-                    const sourceAccountId = formData.get('sourceAccountId') as string;
-                    const submitBtn = form.querySelector('button[type="submit"]') as HTMLButtonElement;
+                      try {
+                        submitBtn.disabled = true; submitBtn.textContent = 'Processing...';
 
-                    try {
-                      submitBtn.disabled = true; submitBtn.textContent = 'Processing...';
-                      const txName = `${showBudeeCarousel.installment.name} - ${selectedMonth}`;
-
-                      // 1. Create standard outflow transaction
-                      const result = await createPaymentScheduleTransaction(showBudeeCarousel.scheduleId, {
-                        name: txName,
-                        date: combineDateWithCurrentTime(date),
-                        amount: Math.abs(amount),
-                        paymentMethodId: sourceAccountId,
-                        notes: `Budget Timing: ${selectedTiming}`,
-                        transactionType: 'payment',
-                      });
-
-                      if (result.data) {
-                        // 2. Mark schedule as paid
-                        await recordPaymentViaTransaction(showBudeeCarousel.scheduleId, {
-                          transactionName: txName, amountPaid: Math.abs(amount), datePaid: date, accountId: sourceAccountId
+                        const { success, error, transaction } = await processBudeeTransaction({
+                          installmentId: showBudeeCarousel.installment.id,
+                          scheduleId: showBudeeCarousel.scheduleId,
+                          budeeId: showBudeeCarousel.budeeId,
+                          budeeName: showBudeeCarousel.budeeName,
+                          accountId: destAccountId,
+                          amount: Math.abs(amount),
+                          date: combineDateWithCurrentTime(date),
+                          transactionType: 'cash_in',
+                          description: `${showBudeeCarousel.installment.name} - ${selectedMonth}`
                         });
 
-                        // 3. Offset Credit Card (If this installment lives inside a credit card)
+                        if (!success) throw error;
+                        if (receiptFile && receiptFile.size > 0 && transaction?.id) {
+                          const { path } = await uploadTransactionReceipt(transaction.id, receiptFile);
+                          if (path) await updateTransaction(transaction.id, { receipt_url: path });
+                        }
+                        
+                        await reloadTransactions();
+                        submitBtn.className = "w-full bg-gray-200 text-gray-500 border-2 border-black py-4 rounded-xl font-black text-sm uppercase tracking-wider transition-all";
+                        submitBtn.textContent = 'Received! ✓';
+
+                        // Transition to Step 2!
+                        setShowBudeeCarousel(prev => prev ? {
+                          ...prev,
+                          hasUnappliedCollection: true,
+                          totalCollected: amount,
+                          collectionAccountId: destAccountId
+                        } : null);
+
+                        const container = document.getElementById('budee-carousel');
+                        if (container && container.firstElementChild) {
+                          setTimeout(() => container.scrollTo({ left: container.scrollLeft + (container.firstElementChild!.clientWidth + 24), behavior: 'smooth' }), 600);
+                        }
+                      } catch (err) {
+                        alert('Failed to record collection.');
+                        submitBtn.disabled = false; submitBtn.textContent = 'Log Collection';
+                      }
+                    }}
+                    className="space-y-4 mt-auto"
+                  >
+                    <div>
+                      <label className="block text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">Amount to Receive</label>
+                      <div className="relative"><span className="absolute left-3 top-1/2 -translate-y-1/2 font-bold text-gray-400">₱</span><input required name="amount" type="number" step="0.01" defaultValue={showBudeeCarousel.amount.toFixed(2)} className="w-full bg-emerald-50 dark:bg-emerald-900/10 border-2 border-black rounded-xl p-3 pl-8 outline-none text-lg font-black text-emerald-700" /></div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">Save Into</label>
+                        <select required name="destAccountId" defaultValue={accounts.find(a => a.type === 'Debit')?.id || ''} className="w-full bg-gray-50 dark:bg-gray-800 border-2 border-black rounded-xl px-2.5 py-3 outline-none font-bold text-xs dark:text-gray-100">
+                          {accounts.filter(a => a.type === 'Debit').map(acc => <option key={acc.id} value={acc.id}>{acc.bank}</option>)}
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">Date</label>
+                        <input required name="date" type="date" defaultValue={getTodayIso()} className="w-full bg-gray-50 dark:bg-gray-800 border-2 border-black rounded-xl px-2.5 py-3 outline-none font-bold text-xs dark:text-gray-100" />
+                      </div>
+                    </div>
+                    <div className="pt-2">
+                      <button type="submit" className="w-full bg-emerald-500 text-white border-2 border-black py-4 rounded-xl font-black text-sm uppercase tracking-wider shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[2px] hover:translate-y-[2px] transition-all">Log Collection</button>
+                    </div>
+                  </form>
+                </div>
+              )}
+
+              {/* 🟢 CARD 2: APPLY COLLECTED FUNDS */}
+              {showBudeeCarousel.hasUnappliedCollection && !(showBudeeCarousel as any).collectionApplied && (
+                <div 
+                  className="w-[85vw] sm:w-[24rem] shrink-0 snap-center bg-white dark:bg-gray-900 rounded-[2rem] p-6 sm:p-8 border-4 border-black shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] relative flex flex-col transition-all duration-300 ease-out"
+                  style={{ transform: 'scale(1)', opacity: 1 }}
+                >
+                  <div className="mb-4">
+                    <span className="text-[10px] font-black uppercase tracking-widest text-indigo-600 bg-indigo-100 border-2 border-black px-3 py-1 rounded-lg mb-3 inline-block shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]">
+                      Step 2 of {showBudeeCarousel.totalCollected! < showBudeeCarousel.installment.monthlyAmount ? '3' : '2'}
+                    </span>
+                    <h2 className="text-xl font-black text-gray-900 dark:text-gray-100 leading-tight mb-1">Apply Collection</h2>
+                    <p className="text-gray-500 dark:text-gray-400 text-xs font-bold uppercase tracking-widest">{showBudeeCarousel.installment.name}</p>
+                  </div>
+
+                  <div className="mb-4 bg-indigo-50 border-2 border-indigo-400 p-4 rounded-xl shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]">
+                    <p className="text-xs font-medium text-indigo-900 leading-relaxed">
+                      First, apply the <strong>{formatCurrency(showBudeeCarousel.totalCollected || 0)}</strong> you collected to the schedule.
+                    </p>
+                  </div>
+
+                  <form onSubmit={async (e) => {
+                      e.preventDefault();
+                      const form = e.currentTarget;
+                      const sourceAccountId = (form.elements.namedItem('sourceAccountId') as HTMLSelectElement).value;
+                      const date = (form.elements.namedItem('date') as HTMLInputElement).value;
+                      const submitBtn = form.querySelector('button[type="submit"]') as HTMLButtonElement;
+
+                      const collected = showBudeeCarousel.totalCollected || 0;
+                      const targetAmt = showBudeeCarousel.installment.monthlyAmount;
+
+                      // 🟢 QUICK BALANCE CHECK
+                      const selectedAcc = accounts.find(a => a.id === sourceAccountId);
+                      if (selectedAcc && (selectedAcc.balance || 0) < collected) {
+                        alert(`Overdraft prevented! ${selectedAcc.bank} only has ${formatCurrency(selectedAcc.balance || 0)}. Please select the exact account that received the ${formatCurrency(collected)} in Step 1.`);
+                        return;
+                      }
+
+                      try {
+                        submitBtn.disabled = true; submitBtn.textContent = 'Processing...';
+                        const txName = `${showBudeeCarousel.installment.name} - ${selectedMonth} (Collected)`;
+
+                        // 1. 🟢 RAW API CALL: category_id completely removed!
+                        const res = await createTransaction({
+                          name: txName, 
+                          date: combineDateWithCurrentTime(date), 
+                          amount: collected, 
+                          payment_method_id: sourceAccountId, 
+                          transaction_type: 'payment',
+                          notes: `Budget Timing: ${selectedTiming}`
+                        } as any);
+                        
+                        if (res.error) throw res.error;
+
+                        // 2. Sync Schedule status
+                        try {
+                          await recordPaymentViaTransaction(showBudeeCarousel.scheduleId, {
+                            transactionName: txName, amountPaid: collected, datePaid: date, accountId: sourceAccountId, expectedAmount: targetAmt
+                          });
+                        } catch (schedErr) {
+                          console.warn("Step 2 Schedule sync suppressed (Safe):", schedErr);
+                        }
+
+                        // 3. Offset Credit Card
                         const linkedAccountId = showBudeeCarousel.installment.accountId || (showBudeeCarousel.installment as any).account_id;
                         const linkedAccount = accounts.find(a => a.id === linkedAccountId);
                         if (linkedAccount && (linkedAccount.type === 'Credit' || linkedAccount.classification === 'Credit Card')) {
                            await createTransaction({
-                              name: txName, date: combineDateWithCurrentTime(date), amount: -Math.abs(amount), payment_method_id: linkedAccount.id, transaction_type: 'credit_payment', related_transaction_id: result.data.id, notes: null
+                              name: txName, date: combineDateWithCurrentTime(date), amount: -Math.abs(collected), payment_method_id: linkedAccount.id, transaction_type: 'credit_payment', related_transaction_id: res.data?.id, notes: null
                            } as any);
                         }
+
+                        if (onUpdateInstallment) await onUpdateInstallment({ ...showBudeeCarousel.installment, paidAmount: (showBudeeCarousel.installment.paidAmount || 0) + collected });
+                        await reloadTransactions();
+                        await reloadPaymentSchedules();
+
+                        submitBtn.className = "w-full bg-gray-200 text-gray-500 border-2 border-black py-4 rounded-xl font-black text-sm uppercase tracking-wider transition-all";
+                        submitBtn.textContent = 'Applied! ✓';
+
+                        // 🟢 TRIGGER STEP 3 IF PARTIAL!
+                        if (collected < targetAmt) {
+                          setTimeout(() => {
+                            setShowBudeeCarousel(prev => prev ? { ...prev, collectionApplied: true } as any : null);
+                            const container = document.getElementById('budee-carousel');
+                            if (container && container.lastElementChild) {
+                              setTimeout(() => container.scrollTo({ left: container.scrollWidth, behavior: 'smooth' }), 100);
+                            }
+                          }, 1000);
+                        } else {
+                          setTimeout(() => setShowBudeeCarousel(null), 1000);
+                        }
+                      } catch (err: any) {
+                        console.error(err);
+                        alert(`Failed to apply funds: ${err.message || 'Server rejected the transaction.'}`);
+                        submitBtn.disabled = false; submitBtn.textContent = 'Apply Funds';
                       }
-                      
-                      await reloadTransactions();
-                      submitBtn.className = "w-full bg-gray-200 text-gray-500 border-2 border-black py-4 rounded-xl font-black text-sm uppercase tracking-wider transition-all";
-                      submitBtn.textContent = 'Paid! ✓';
-                      setTimeout(() => setShowBudeeCarousel(null), 1000);
-                    } catch (err) {
-                      alert('Failed to record payment.');
-                      submitBtn.disabled = false; submitBtn.textContent = 'Submit Payment';
-                    }
-                  }}
-                  className="space-y-4 mt-auto"
+                    }}
+                    className="space-y-4 mt-auto"
+                  >
+
+
+                    <div>
+                      <label className="block text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">Amount to Apply</label>
+                      <div className="relative">
+                        <span className="absolute left-3 top-1/2 -translate-y-1/2 font-bold text-gray-400">₱</span>
+                        <input disabled type="number" value={(showBudeeCarousel.totalCollected || 0).toFixed(2)} className="w-full bg-gray-100 dark:bg-gray-800 border-2 border-gray-300 dark:border-gray-700 rounded-xl p-3 pl-8 outline-none text-lg font-black text-gray-500" />
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">Apply From</label>
+                        <select required name="sourceAccountId" defaultValue={showBudeeCarousel.collectionAccountId || accounts.find(a => a.type === 'Debit')?.id || ''} className="w-full bg-gray-50 dark:bg-gray-800 border-2 border-black rounded-xl px-2.5 py-3 outline-none font-bold text-xs dark:text-gray-100">
+                          {accounts.filter(a => a.type === 'Debit').map(acc => <option key={acc.id} value={acc.id}>{acc.bank}</option>)}
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">Date</label>
+                        <input required name="date" type="date" defaultValue={getTodayIso()} className="w-full bg-gray-50 dark:bg-gray-800 border-2 border-black rounded-xl px-2.5 py-3 outline-none font-bold text-xs dark:text-gray-100" />
+                      </div>
+                    </div>
+                    <div className="pt-2">
+                      <button type="submit" className="w-full bg-indigo-600 text-white border-2 border-black py-4 rounded-xl font-black text-sm uppercase tracking-wider shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[2px] hover:translate-y-[2px] transition-all">Apply Funds</button>
+                    </div>
+                  </form>
+                </div>
+              )}
+
+                            {/* 🟢 CARD 3: TOP-UP (Only shown if partial collection was applied in Step 2!) */}
+                            {(showBudeeCarousel as any).collectionApplied && (
+                <div 
+                  className="w-[85vw] sm:w-[24rem] shrink-0 snap-center bg-white dark:bg-gray-900 rounded-[2rem] p-6 sm:p-8 border-4 border-black shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] relative flex flex-col transition-all duration-300 ease-out" 
+                  style={{ transform: 'scale(1)', opacity: 1 }}
                 >
-                  <div>
-                    <label className="block text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">Amount to Pay</label>
-                    <div className="relative"><span className="absolute left-3 top-1/2 -translate-y-1/2 font-bold text-gray-400">₱</span><input required name="amount" type="number" step="0.01" defaultValue={showBudeeCarousel.amount.toFixed(2)} className="w-full bg-gray-50 dark:bg-gray-800 border-2 border-black rounded-xl p-3 pl-8 outline-none text-lg font-black dark:text-gray-100" /></div>
+                  <div className="mb-4">
+                    <span className="text-[10px] font-black uppercase tracking-widest text-orange-600 bg-orange-100 border-2 border-black px-3 py-1 rounded-lg mb-3 inline-block shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]">
+                      Step 3 of 3
+                    </span>
+                    <h2 className="text-xl font-black text-gray-900 dark:text-gray-100 leading-tight mb-1">Settle Balance</h2>
+                    <p className="text-gray-500 dark:text-gray-400 text-xs font-bold uppercase tracking-widest">{showBudeeCarousel.installment.name}</p>
                   </div>
-                  <div className="grid grid-cols-2 gap-3">
+
+                  <div className="mb-4 bg-orange-50 border-2 border-orange-400 p-4 rounded-xl shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]">
+                     <p className="text-xs font-medium text-orange-900 leading-relaxed">
+                       You are short by <strong>{formatCurrency(showBudeeCarousel.installment.monthlyAmount - (showBudeeCarousel.totalCollected || 0))}</strong>. Top-up to fully clear this schedule.
+                     </p>
+                  </div>
+
+                  <form onSubmit={async (e) => {
+                      e.preventDefault();
+                      const form = e.currentTarget;
+                      const sourceAccountId = (form.elements.namedItem('sourceAccountId') as HTMLSelectElement).value;
+                      const date = (form.elements.namedItem('date') as HTMLInputElement).value;
+                      const submitBtn = form.querySelector('button[type="submit"]') as HTMLButtonElement;
+
+                      const amount = parseFloat((form.elements.namedItem('amount') as HTMLInputElement).value);
+
+                      // 🟢 QUICK BALANCE CHECK
+                      const selectedAcc = accounts.find(a => a.id === sourceAccountId);
+                      if (selectedAcc && (selectedAcc.balance || 0) < amount) {
+                        alert(`Not enough funds in ${selectedAcc.bank}. Please choose another account.`);
+                        return;
+                      }
+
+                      try {
+                        submitBtn.disabled = true; submitBtn.textContent = 'Processing...';
+                        const txName = `${showBudeeCarousel.installment.name} - ${selectedMonth} (Top-up)`;
+
+                        // 🟢 RAW API CALL: category_id completely removed!
+                        const res = await createTransaction({
+                           name: txName, 
+                           date: combineDateWithCurrentTime(date), 
+                           amount: amount, 
+                           payment_method_id: sourceAccountId, 
+                           transaction_type: 'payment',
+                           notes: `Budget Timing: ${selectedTiming} - Partial Top-up`
+                        } as any);
+                        
+                        if (res.error) throw res.error;
+
+                        try {
+                           await recordPaymentViaTransaction(showBudeeCarousel.scheduleId, {
+                             transactionName: txName, amountPaid: amount, datePaid: date, accountId: sourceAccountId, expectedAmount: showBudeeCarousel.installment.monthlyAmount
+                           });
+                        } catch (schedErr) {
+                           console.warn("Schedule sync suppressed (Safe):", schedErr);
+                        }
+
+                        const linkedAccountId = showBudeeCarousel.installment.accountId || (showBudeeCarousel.installment as any).account_id;
+                        const linkedAccount = accounts.find(a => a.id === linkedAccountId);
+                        if (linkedAccount && (linkedAccount.type === 'Credit' || linkedAccount.classification === 'Credit Card')) {
+                           await createTransaction({
+                              name: txName, date: combineDateWithCurrentTime(date), amount: -Math.abs(amount), payment_method_id: linkedAccount.id, transaction_type: 'credit_payment', related_transaction_id: res.data?.id, notes: null
+                           } as any);
+                        }
+
+                        if (onUpdateInstallment) await onUpdateInstallment({ ...showBudeeCarousel.installment, paidAmount: (showBudeeCarousel.installment.paidAmount || 0) + amount });
+                        
+                        await reloadTransactions();
+                        await reloadPaymentSchedules();
+
+                        submitBtn.className = "w-full bg-gray-200 text-gray-500 border-2 border-black py-4 rounded-xl font-black text-sm uppercase tracking-wider transition-all";
+                        submitBtn.textContent = 'Settled! ✓';
+                        setTimeout(() => setShowBudeeCarousel(null), 1000);
+                      } catch (err: any) {
+                        console.error(err);
+                        alert(`Failed to settle balance: ${err.message || 'Server rejected the transaction.'}`);
+                        submitBtn.disabled = false; submitBtn.textContent = 'Settle Balance';
+                      }
+                    }}
+                    className="space-y-4 mt-auto"
+                  >
+
                     <div>
-                      <label className="block text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">Pay From</label>
-                      <select required name="sourceAccountId" defaultValue={accounts.find(a => a.type === 'Debit')?.id || ''} className="w-full bg-gray-50 dark:bg-gray-800 border-2 border-black rounded-xl px-2.5 py-3 outline-none font-bold text-xs dark:text-gray-100">
-                        {accounts.filter(a => a.type === 'Debit').map(acc => <option key={acc.id} value={acc.id}>{acc.bank}</option>)}
-                      </select>
+                      <label className="block text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">Top-up Amount</label>
+                      <div className="relative">
+                        <span className="absolute left-3 top-1/2 -translate-y-1/2 font-bold text-gray-400">₱</span>
+                        <input required name="amount" type="number" step="0.01" defaultValue={(showBudeeCarousel.installment.monthlyAmount - (showBudeeCarousel.totalCollected || 0)).toFixed(2)} className="w-full bg-orange-50 dark:bg-orange-900/10 border-2 border-orange-300 rounded-xl p-3 pl-8 outline-none text-lg font-black text-orange-700" />
+                      </div>
                     </div>
-                    <div>
-                      <label className="block text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">Date</label>
-                      <input required name="date" type="date" defaultValue={getTodayIso()} className="w-full bg-gray-50 dark:bg-gray-800 border-2 border-black rounded-xl px-2.5 py-3 outline-none font-bold text-xs dark:text-gray-100" />
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">Top-up From</label>
+                        <select required name="sourceAccountId" defaultValue={accounts.find(a => a.type === 'Debit')?.id || ''} className="w-full bg-gray-50 dark:bg-gray-800 border-2 border-black rounded-xl px-2.5 py-3 outline-none font-bold text-xs dark:text-gray-100">
+                          {accounts.filter(a => a.type === 'Debit').map(acc => <option key={acc.id} value={acc.id}>{acc.bank}</option>)}
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">Date</label>
+                        <input required name="date" type="date" defaultValue={getTodayIso()} className="w-full bg-gray-50 dark:bg-gray-800 border-2 border-black rounded-xl px-2.5 py-3 outline-none font-bold text-xs dark:text-gray-100" />
+                      </div>
                     </div>
-                  </div>
-                  <div className="pt-2">
-                    <button type="submit" className="w-full bg-indigo-600 text-white border-2 border-black py-4 rounded-xl font-black text-sm uppercase tracking-wider shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[2px] hover:translate-y-[2px] transition-all">Submit Payment</button>
-                  </div>
-                </form>
-              </div>
+                    <div className="pt-2">
+                      <button type="submit" className="w-full bg-orange-500 text-white border-2 border-black py-4 rounded-xl font-black text-sm uppercase tracking-wider shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[2px] hover:translate-y-[2px] transition-all">Settle Balance</button>
+                    </div>
+                  </form>
+                </div>
+              )}
 
             </div>
           </div>
         </div>
       )}
 
-
-
       {creditInfoModal && (
+
         <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md animate-in fade-in" onClick={() => setCreditInfoModal(null)}>
           <div className="bg-white dark:bg-gray-900 rounded-2xl w-full max-w-sm p-6 border-4 border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] relative animate-in zoom-in-95 max-h-[80vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
             <button onClick={() => setCreditInfoModal(null)} className="absolute right-4 top-4 p-1.5 hover:bg-gray-100 rounded-full transition-colors"><X className="w-5 h-5 text-gray-400" /></button>
