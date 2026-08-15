@@ -434,6 +434,15 @@ const [actualSalaryByPeriod, setActualSalaryByPeriod] = useState<Record<number, 
 // The master control for which tab is currently active
 const [activePeriodIndex, setActivePeriodIndex] = useState<number>(1);
 
+  // 🟢 ENGINE WAKE-UP: Forces the math to calculate immediately when the Budget opens!
+  React.useEffect(() => {
+    if (view === 'setup') {
+      setActivePeriodIndex(1);
+    }
+  }, [view, selectedMonth]);
+
+
+
   // 🟢 ENGINE ADAPTER: Catches any leftover old function calls and safely routes them to the new unified engine!
   const getAccountPeriodIndex = (item: any) => {
     if (!item) return 1;
@@ -705,6 +714,21 @@ const [activePeriodIndex, setActivePeriodIndex] = useState<number>(1);
 
     // 🟢 Check for _periodTotals so the loader knows this is an upgraded multi-tab budget!
 const unifiedSetup = setupsForMonth.find(s => s.timing === 'unified' || s.data?._periodTotals);
+
+    // 🟢 ANTI-BLEED FIX: If this is a brand new month, force a perfectly clean slate!
+    const hasLegacyFiles = savedSetups.some(s => s.month === selectedMonth && (s.timing === '1/2' || s.timing === '2/2'));
+    
+    if (!unifiedSetup && !hasLegacyFiles) {
+      let cleanSlate: any = {};
+      if (Array.isArray(effectiveCategories)) {
+        effectiveCategories.forEach(cat => {
+          cleanSlate[cat.name] = [];
+        });
+      }
+      setSetupData(injectActiveBillers(cleanSlate));
+      return; // Stop the loader, the pristine new budget is ready!
+    }
+
 
   
     if (unifiedSetup && unifiedSetup.data) {
@@ -1821,13 +1845,25 @@ const getFrozenCycleAmount = (account: Account): number => {
       if (processedBudgetMap[period]) {
         Object.values(processedBudgetMap[period]).forEach(catItems => {
           catItems.forEach(item => {
-            if (item.included) {
-              const val = item.amountsByPeriod?.[period] !== undefined ? item.amountsByPeriod[period] : item.amount;
-              itemsTotal += (parseFloat(val) || 0);
+            if (!item.included) return;
+
+            // 🟢 STRICT SYNC: Match the UI filter exactly so old ghost data is ignored!
+            const isBillerItem = item.isBiller || (billers && billers.some(b => b.id === item.id));
+            const isInstallmentItem = item.isInstallment || (installments && installments.some(i => i.id === item.id));
+
+            if (!isBillerItem && !isInstallmentItem && !item.isCredit) {
+               const periodVal = item.amountsByPeriod?.[period];
+               if (periodVal === undefined || periodVal === '' || periodVal === '0') {
+                 return; // Ghost item detected! Skip it.
+               }
             }
+
+            const val = item.amountsByPeriod?.[period] !== undefined ? item.amountsByPeriod[period] : item.amount;
+            itemsTotal += (parseFloat(val) || 0);
           });
         });
       }
+
 
       const instTotal = (installments || []).filter(inst => {
         if (inst.isArchived || excludedInstallmentIds.has(inst.id)) return false;
@@ -1929,19 +1965,21 @@ const getFrozenCycleAmount = (account: Account): number => {
         try {
           setAutoSaveStatus('saving');
     
-      // 🟢 BUG FIX: Ensures Auto-Save always updates the unified master file instead of fragmenting!
-      const existingSetup = savedSetups.find(s => 
-        s.month === selectedMonth && 
-        (s.timing === 'unified' || s.data?._periodTotals || s.timing === selectedTiming)
-      );
-      if (existingSetup) {
-        const updatedSetup: SavedBudgetSetup = {
-          ...existingSetup,
-          totalAmount: total,
-          data: dataToSave,
-          status: 'Saved'
-        };
-        const { error } = await updateBudgetSetupFrontend(updatedSetup);
+                      // 🟢 BUG FIX: Priority Targeting! Guarantee we grab the Unified Master File first.
+          const unifiedExisting = savedSetups.find(s => s.month === selectedMonth && (s.timing === 'unified' || s.data?._periodTotals));
+          const fallbackExisting = savedSetups.find(s => s.month === selectedMonth && s.timing === selectedTiming);
+          const existingSetup = unifiedExisting || fallbackExisting;
+    
+          if (existingSetup) {
+            const updatedSetup: SavedBudgetSetup = {
+              ...existingSetup,
+              totalAmount: total,
+              timing: 'unified', // 🟢 Force the database to drop legacy tags!
+              data: dataToSave,
+              status: 'Saved'
+            };
+            const { error } = await updateBudgetSetupFrontend(updatedSetup);
+    
         
         if (error) {
           setAutoSaveStatus('error');
@@ -2066,11 +2104,13 @@ const getFrozenCycleAmount = (account: Account): number => {
   const handleSaveSetup = async () => {
     
 
-        // 🟢 BUG FIX: Ensures Manual Save always updates the unified master file!
-        const existingSetup = savedSetups.find(s => 
-          s.month === selectedMonth && 
-          (s.timing === 'unified' || s.data?._periodTotals || s.timing === selectedTiming)
-        );
+        // 🟢 BUG FIX: Priority Targeting! Guarantee we grab the Unified Master File first.
+        const unifiedExisting = savedSetups.find(s => s.month === selectedMonth && (s.timing === 'unified' || s.data?._periodTotals));
+        const fallbackExisting = savedSetups.find(s => s.month === selectedMonth && s.timing === selectedTiming);
+        const existingSetup = unifiedExisting || fallbackExisting;
+    
+        
+  
     
     {/* TO: Matches auto-save perfectly to prevent data loss on manual saves */}
     const dynamicActualByPeriod = { ...actualSalaryByPeriod };
@@ -2112,13 +2152,25 @@ const getFrozenCycleAmount = (account: Account): number => {
       if (processedBudgetMap[period]) {
         Object.values(processedBudgetMap[period]).forEach(catItems => {
           catItems.forEach(item => {
-            if (item.included) {
-              const val = item.amountsByPeriod?.[period] !== undefined ? item.amountsByPeriod[period] : item.amount;
-              itemsTotal += (parseFloat(val) || 0);
+            if (!item.included) return;
+
+            // 🟢 STRICT SYNC: Match the UI filter exactly so old ghost data is ignored!
+            const isBillerItem = item.isBiller || (billers && billers.some(b => b.id === item.id));
+            const isInstallmentItem = item.isInstallment || (installments && installments.some(i => i.id === item.id));
+
+            if (!isBillerItem && !isInstallmentItem && !item.isCredit) {
+               const periodVal = item.amountsByPeriod?.[period];
+               if (periodVal === undefined || periodVal === '' || periodVal === '0') {
+                 return; // Ghost item detected! Skip it.
+               }
             }
+
+            const val = item.amountsByPeriod?.[period] !== undefined ? item.amountsByPeriod[period] : item.amount;
+            itemsTotal += (parseFloat(val) || 0);
           });
         });
       }
+
 
       const instTotal = (installments || []).filter(inst => {
         if (inst.isArchived || excludedInstallmentIds.has(inst.id)) return false;

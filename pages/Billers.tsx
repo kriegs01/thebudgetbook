@@ -730,10 +730,10 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
                     <input value={addFormData.name} onChange={e => setAddFormData(f => ({ ...f, name: e.target.value }))} required className="w-full bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-2 border-gray-200 dark:border-gray-700 rounded-xl p-4 font-bold focus:ring-2 focus:ring-indigo-500 transition-all" />
                   </div>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div>
-                      <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 mb-2">Category</label>
-                      <select value={addFormData.category} onChange={e => setAddFormData(f => ({ ...f, category: e.target.value }))} className="w-full bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-2 border-gray-200 dark:border-gray-700 rounded-xl p-4 font-bold appearance-none focus:ring-2 focus:ring-indigo-500 transition-all">{renderCategoryOptions()}</select>
-                    </div>
+                    <div>
+                      <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 mb-2">Category</label>
+                      <select value={addFormData.category} onChange={e => setAddFormData(f => ({ ...f, category: e.target.value }))} className="w-full bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-2 border-gray-200 dark:border-gray-700 rounded-xl p-4 font-bold appearance-none focus:ring-2 focus:ring-indigo-500 transition-all">{renderCategoryOptions(addFormData.category)}</select>
+                    </div>
                     <div>
                       <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 mb-2">Due Day of Month</label>
                       <input type="text" value={addFormData.dueDate} onChange={e => setAddFormData(f => ({ ...f, dueDate: e.target.value.replace(/[^0-9]/g, '') }))} className="w-full bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-2 border-gray-200 dark:border-gray-700 rounded-xl p-4 font-bold focus:ring-2 focus:ring-indigo-500 transition-all" />
@@ -815,8 +815,9 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div>
                       <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 mb-2">Category</label>
-                      <select value={editFormData.category} onChange={e => setEditFormData(f => ({ ...f, category: e.target.value }))} className="w-full bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-2 border-gray-200 dark:border-gray-700 rounded-xl p-4 font-bold appearance-none focus:ring-2 focus:ring-indigo-500 transition-all">{renderCategoryOptions()}</select>
+                      <select value={editFormData.category} onChange={e => setEditFormData(f => ({ ...f, category: e.target.value }))} className="w-full bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-2 border-gray-200 dark:border-gray-700 rounded-xl p-4 font-bold appearance-none focus:ring-2 focus:ring-indigo-500 transition-all">{renderCategoryOptions(editFormData.category)}</select>
                     </div>
+
                     <div>
                       <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 mb-2">Due Day of Month</label>
                       <input type="text" value={editFormData.dueDate} onChange={e => setEditFormData(f => ({ ...f, dueDate: e.target.value.replace(/[^0-9]/g, '') }))} className="w-full bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-2 border-gray-200 dark:border-gray-700 rounded-xl p-4 font-bold focus:ring-2 focus:ring-indigo-500 transition-all" />
