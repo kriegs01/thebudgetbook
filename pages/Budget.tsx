@@ -2832,9 +2832,12 @@ const getFrozenCycleAmount = (account: Account): number => {
         allSetups={savedSetups} 
         currentYear={selectedYear}
         accounts={accounts}
+        billers={billers}               // 🟢 CABLE 1: Feeds the DB so it can see the 15th!
+        currentPeriods={currentPeriods} // 🟢 CABLE 2: Feeds the Engine so it knows the boundaries!
       />
     );
   }
+
 
 
   if (view === 'summary') {

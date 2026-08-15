@@ -5,7 +5,7 @@ import { Plus, Trash2, Calendar, WalletCards, CalendarDays, ChevronLeft, Chevron
 import { PageHeader } from './PageHeader';
 import { useTheme } from '../contexts/ThemeContext';
 import { calculateBillingCycles } from '../utils/billingCycles';
-
+import { determineItemPeriod } from '../utils/budgetEngine';
 
 interface SandboxViewProps {
   onClose: () => void;
@@ -14,12 +14,17 @@ interface SandboxViewProps {
   activeSetup: any;
   allSetups?: any[];
   currentYear?: number;
-  accounts: any[]; // 🟢 ADD THIS PROP
+  accounts: any[]; 
+  billers?: any[]; 
+  currentPeriods?: any[]; // 🟢 ADD THIS
 }
 
 const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 
-export const SandboxView: React.FC<SandboxViewProps> = ({ onClose, liveIncomeTxs, liveSpendTxs, activeSetup, allSetups, currentYear, accounts }) => {
+
+export const SandboxView: React.FC<SandboxViewProps> = ({ 
+  onClose, liveIncomeTxs, liveSpendTxs, activeSetup, allSetups, currentYear, accounts, billers, currentPeriods 
+}) => {
   const {
     safetyNet, setSafetyNet,
     mockPurchases, addMockPurchase, removeMockPurchase
@@ -131,27 +136,52 @@ export const SandboxView: React.FC<SandboxViewProps> = ({ onClose, liveIncomeTxs
       let effectiveAbsMonth = pDate.getFullYear() * 12 + pDate.getMonth();
       let effectiveDay = pDate.getDate();
 
+                  // 🟢 Scope the biller so the engine can use it in Step 3!
+      let matchedBiller: any = null;
+
       // 🟢 2. TIME TRAVEL: If it's a credit card swipe, calculate the future hit!
       if (purchase.paymentMethod === 'credit' && purchase.creditCardId) {
-        // Find the specific card to get its billing and due dates
         const card = accounts?.find(a => a.id === purchase.creditCardId);
         
-        if (card && card.billingDate && typeof calculateBillingCycles === 'function') {
+        matchedBiller = billers?.find(b => 
+          b.linkedAccountId === card?.id || 
+          b.linked_account_id === card?.id || 
+          (b.name && card?.bank && b.name.toLowerCase() === card.bank.toLowerCase())
+        );
+
+        const actualBillingDate = card?.billingDate || card?.billing_date || card?.statementDate;
+        
+        if (card && actualBillingDate && typeof calculateBillingCycles === 'function') {
           try {
-            // Generate the card's statement cycles
-            const cycles = calculateBillingCycles(card.billingDate, 24, false);
+            const gracePeriod = Number(card.gracePeriod || card.grace_period) || 24;
+            const cycles = calculateBillingCycles(actualBillingDate, gracePeriod, false);
             
-            // Find the exact statement window that catches this purchase date
             const targetCycle = cycles.find((c: any) => pDate >= c.startDate && pDate <= c.endDate);
             
             if (targetCycle) {
-              // Shift the expense to the month the statement ENDS
-              effectiveAbsMonth = targetCycle.endDate.getFullYear() * 12 + targetCycle.endDate.getMonth();
+              let dynamicDueDate = targetCycle.dueDate ? new Date(targetCycle.dueDate) : new Date(targetCycle.endDate);
+              if (!targetCycle.dueDate) dynamicDueDate.setDate(dynamicDueDate.getDate() + gracePeriod);
               
-              // Assign it to Paycheck 1 or Paycheck 2 based on the card's Due Date
-              effectiveDay = card.dueDate 
-                ? parseInt(String(card.dueDate).replace(/[^0-9]/g, ''), 10) || 28 
-                : 28;
+              const hardcodedDueDay = matchedBiller?.dueDate || matchedBiller?.due_date || card?.dueDate || card?.due_date;
+              
+              effectiveDay = hardcodedDueDay 
+                ? parseInt(String(hardcodedDueDay).replace(/[^0-9]/g, ''), 10) 
+                : dynamicDueDate.getDate();
+
+              effectiveAbsMonth = dynamicDueDate.getFullYear() * 12 + dynamicDueDate.getMonth();
+
+              // 🟢 THE 32+ CHOKEHOLD FIX
+              const statementMonth = targetCycle.endDate.getMonth();
+              const dueMonth = dynamicDueDate.getMonth();
+              
+              if (statementMonth !== dueMonth && effectiveDay < 15) {
+                // 1. Shift the month back to the Statement Month
+                effectiveAbsMonth = targetCycle.endDate.getFullYear() * 12 + targetCycle.endDate.getMonth();
+                
+                // 2. 🟢 THE FIX: The engine ignores text tags and only reads numbers! 
+                // We forcefully spoof the day to the 28th so the engine physically plots it in Pay 2!
+                effectiveDay = 28;
+              }
             }
           } catch (e) {
             console.warn("Cycle math failed, falling back to standard date");
@@ -160,11 +190,17 @@ export const SandboxView: React.FC<SandboxViewProps> = ({ onClose, liveIncomeTxs
       }
 
       // 🟢 3. ASSIGN EXPENSE: Apply the shifted dates to the timeline
+      const targetPeriod = currentPeriods && currentPeriods.length > 0 
+        ? determineItemPeriod({ ...matchedBiller, dueDate: effectiveDay }, currentPeriods, monthName, targetYear) 
+        : (effectiveDay <= 15 ? 1 : 2);
+
+      
+
+
       if (purchase.type === 'one-off') {
         if (effectiveAbsMonth === targetAbsMonth) {
           if (isPaycheck) {
-            const hitsPay1 = effectiveDay <= 15;
-            if ((periodIndex === 1 && hitsPay1) || (periodIndex === 2 && !hitsPay1)) {
+            if (periodIndex === targetPeriod) {
               periodMockSpend += purchase.amount;
             }
           } else {
@@ -180,8 +216,7 @@ export const SandboxView: React.FC<SandboxViewProps> = ({ onClose, liveIncomeTxs
 
         if (targetAbsMonth >= effectiveAbsMonth && targetAbsMonth <= endAbsMonth) {
           if (isPaycheck) {
-            const hitsPay1 = effectiveDay <= 15;
-            if ((periodIndex === 1 && hitsPay1) || (periodIndex === 2 && !hitsPay1)) {
+            if (periodIndex === targetPeriod) {
               periodMockSpend += monthlyAmount;
             }
           } else {
@@ -426,25 +461,35 @@ export const SandboxView: React.FC<SandboxViewProps> = ({ onClose, liveIncomeTxs
                 {!hasMockPurchases ? (
                   <p className="text-xs text-gray-400 italic text-center py-4">No mock purchases yet.</p>
                 ) : (
-                  mockPurchases.map(purchase => (
-                    <div key={purchase.id} className="flex justify-between items-center bg-gray-50 dark:bg-gray-800 border-2 border-black p-3 rounded-xl shrink-0">
-                      <div className="flex flex-col min-w-0 pr-2">
-                        <span className="text-sm font-bold truncate">{purchase.name}</span>
-                        <span className="text-[9px] font-black uppercase text-gray-500">
-                          {purchase.type === 'installment' ? `${purchase.durationMonths} Mos • Starts ${new Date(purchase.startDate).toLocaleDateString()}` : `One-off • ${new Date(purchase.startDate).toLocaleDateString()}`}
-                        </span>
+                  mockPurchases.map(purchase => {
+                    let paymentLabel = 'Cash/Debit';
+                    if (purchase.paymentMethod === 'credit' && purchase.creditCardId) {
+                      const card = accounts?.find(a => a.id === purchase.creditCardId);
+                      paymentLabel = card ? card.bank : 'Credit';
+                    }
+
+                    return (
+                      <div key={purchase.id} className="flex justify-between items-center bg-gray-50 dark:bg-gray-800 border-2 border-black p-3 rounded-xl shrink-0">
+                        <div className="flex flex-col min-w-0 pr-2">
+                          <span className="text-sm font-bold truncate">{purchase.name}</span>
+                          <span className="text-[9px] font-black uppercase text-gray-500">
+                            {purchase.type === 'installment' 
+                              ? `${purchase.durationMonths} Mos • Starts ${new Date(purchase.startDate).toLocaleDateString()} • ${paymentLabel}` 
+                              : `One-off • ${new Date(purchase.startDate).toLocaleDateString()} • ${paymentLabel}`}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-3 shrink-0">
+                          <span className="text-sm font-black text-red-500">
+                            ₱{purchase.amount.toLocaleString()}
+                            {purchase.type === 'installment' && <span className="text-[10px] text-gray-500 font-bold ml-1">/ mo</span>}
+                          </span>
+                          <button onClick={() => removeMockPurchase(purchase.id)} className="text-gray-400 hover:text-red-500 transition-colors bg-white border border-gray-200 rounded p-1 shadow-sm">
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
                       </div>
-                      <div className="flex items-center gap-3 shrink-0">
-                        <span className="text-sm font-black text-red-500">
-                          ₱{purchase.amount.toLocaleString()}
-                          {purchase.type === 'installment' && <span className="text-[10px] text-gray-500 font-bold ml-1">/ mo</span>}
-                        </span>
-                        <button onClick={() => removeMockPurchase(purchase.id)} className="text-gray-400 hover:text-red-500 transition-colors bg-white border border-gray-200 rounded p-1 shadow-sm">
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      </div>
-                    </div>
-                  ))
+                    );
+                  })
                 )}
               </div>
             </div>
@@ -453,6 +498,7 @@ export const SandboxView: React.FC<SandboxViewProps> = ({ onClose, liveIncomeTxs
         </div>
 
         {/* 🟡 FORECAST BOARD */}
+
         <div className="flex-1 min-w-0 w-full flex flex-col gap-6 order-1 lg:order-2 overflow-hidden">
           
           <div className="flex flex-wrap gap-2 items-center bg-white dark:bg-gray-900 border-4 border-black p-4 rounded-2xl shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] shrink-0">

@@ -1,5 +1,7 @@
 import { PayPeriod } from './payPeriodUtils';
 
+const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+
 // ==========================================
 // 1. INDESTRUCTIBLE DATE EXTRACTORS
 // ==========================================
