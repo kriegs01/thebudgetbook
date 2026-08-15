@@ -502,49 +502,59 @@ const [activePeriodIndex, setActivePeriodIndex] = useState<number>(1);
         
     
   
-    // 🟢 THE UNIFIED BUDGET ENGINE
-    const processedBudgetMap = React.useMemo(() => {
-      const periodMap: Record<number, Record<string, CategorizedSetupItem[]>> = {
-        1: {}, 2: {}, 3: {}, 4: {}
-      };
-  
-      if (Array.isArray(effectiveCategories)) {
-        effectiveCategories.forEach(cat => {
-          periodMap[1][cat.name] = [];
-          periodMap[2][cat.name] = [];
-          periodMap[3][cat.name] = [];
-          periodMap[4][cat.name] = [];
-        });
-      }
-  
-      if (setupData && typeof setupData === 'object') {
-        Object.entries(setupData).forEach(([categoryName, items]) => {
-          if (categoryName.startsWith('_') || !Array.isArray(items)) return;
-  
-          items.forEach(item => {
-            if (!item) return; // 🟢 Let unchecked items pass through to the UI
-
-  
-            const linkedBiller = item.isBiller && Array.isArray(billers) ? billers.find(b => b.id === item.id) : null;
-            const linkedInstallment = Array.isArray(installments) ? installments.find(i => i.id === item.id) : null;
-            
-            // Give the engine the best possible item data to work with
-            const itemWithLinks = { ...item, ...linkedBiller, ...linkedInstallment };
-            const targetPeriod = determineItemPeriod(itemWithLinks, currentPeriods, selectedMonth, selectedYear);
-
-
-
-  
-            if (!periodMap[targetPeriod]) periodMap[targetPeriod] = {};
-            if (!periodMap[targetPeriod][categoryName]) periodMap[targetPeriod][categoryName] = [];
-  
-            periodMap[targetPeriod][categoryName].push(item);
-          });
-        });
-      }
-  
-      return periodMap;
-    }, [setupData, effectiveCategories, billers, installments, currentPeriods, selectedMonth, selectedYear]);
+        // 🟢 THE UNIFIED BUDGET ENGINE
+        const processedBudgetMap = React.useMemo(() => {
+          const periodMap: Record<number, Record<string, CategorizedSetupItem[]>> = {
+            1: {}, 2: {}, 3: {}, 4: {}
+          };
+      
+          if (Array.isArray(effectiveCategories)) {
+            effectiveCategories.forEach(cat => {
+              periodMap[1][cat.name] = [];
+              periodMap[2][cat.name] = [];
+              periodMap[3][cat.name] = [];
+              periodMap[4][cat.name] = [];
+            });
+          }
+      
+          if (setupData && typeof setupData === 'object') {
+            Object.entries(setupData).forEach(([categoryName, items]) => {
+              if (categoryName.startsWith('_') || !Array.isArray(items)) return;
+      
+              items.forEach(item => {
+                if (!item) return; // 🟢 Let unchecked items pass through to the UI
+      
+                const linkedBiller = item.isBiller && Array.isArray(billers) ? billers.find(b => b.id === item.id) : null;
+                const linkedInstallment = Array.isArray(installments) ? installments.find(i => i.id === item.id) : null;
+                
+                let targetPeriod = determineItemPeriod({ ...item, ...linkedBiller, ...linkedInstallment }, currentPeriods, selectedMonth, selectedYear);
+    
+                // 🟢 FOOLPROOF BYPASS: If it is a manual item, strictly use its stamped data!
+                if (!linkedBiller && !linkedInstallment) {
+                  // Check the amountsByPeriod stamp first (100% reliable)
+                  if (item.amountsByPeriod && Object.keys(item.amountsByPeriod).length > 0) {
+                    const stampedTab = parseInt(Object.keys(item.amountsByPeriod)[0], 10);
+                    if (!isNaN(stampedTab)) targetPeriod = stampedTab;
+                  } 
+                  // Fallback to timing string
+                  else if (item.timing) {
+                    const explicitTab = parseInt(String(item.timing).split('/')[0], 10);
+                    if (!isNaN(explicitTab)) targetPeriod = explicitTab;
+                  }
+                }
+      
+                if (!periodMap[targetPeriod]) periodMap[targetPeriod] = {};
+                if (!periodMap[targetPeriod][categoryName]) periodMap[targetPeriod][categoryName] = [];
+      
+                periodMap[targetPeriod][categoryName].push(item);
+              });
+            });
+          }
+      
+          return periodMap;
+        }, [setupData, effectiveCategories, billers, installments, currentPeriods, selectedMonth, selectedYear]);
+    
+    
   
 
   // Fetch pay rules on mount
@@ -735,7 +745,11 @@ const unifiedSetup = setupsForMonth.find(s => s.timing === 'unified' || s.data?.
           if (!mergedData[category]) mergedData[category] = [];
           
           items.forEach((oldItem: any) => {
-            let existingItem = mergedData[category].find(i => i.id === oldItem.id || i.name === oldItem.name);
+            // 🟢 BUG FIX: Only merge by name if it is a system Biller. 
+            // This stops manual "New Item"s from aggressively eating each other across tabs!
+            let existingItem = mergedData[category].find(i => 
+              i.id === oldItem.id || (i.isBiller && i.name === oldItem.name)
+            );
             if (!existingItem) {
               // 🟢 Safely copy over any existing amountsByPeriod from the saved item
               existingItem = { ...oldItem, amountsByPeriod: { ...(oldItem.amountsByPeriod || {}) } };
@@ -1915,7 +1929,11 @@ const getFrozenCycleAmount = (account: Account): number => {
         try {
           setAutoSaveStatus('saving');
     
-      const existingSetup = savedSetups.find(s => s.month === selectedMonth && s.timing === selectedTiming);
+      // 🟢 BUG FIX: Ensures Auto-Save always updates the unified master file instead of fragmenting!
+      const existingSetup = savedSetups.find(s => 
+        s.month === selectedMonth && 
+        (s.timing === 'unified' || s.data?._periodTotals || s.timing === selectedTiming)
+      );
       if (existingSetup) {
         const updatedSetup: SavedBudgetSetup = {
           ...existingSetup,
@@ -2006,22 +2024,27 @@ const getFrozenCycleAmount = (account: Account): number => {
 
 
   const addItemToCategory = (category: string) => {
+    // 🟢 Forcefully grab the current active tab number
+    const currentTab = activePeriodIndex || 1;
+    
     const newItem: CategorizedSetupItem = {
-      id: Math.random().toString(36).substr(2, 9),
+      id: `item-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
       name: 'New Item',
-      amount: '0',
+      amount: '',
       included: true,
-      // 🟢 Force the item into the currently active tab!
-      timing: `${activePeriodIndex}/${currentPeriods.length || 2}`,
+      timing: selectedTiming as string,
       amountsByPeriod: {
-        [activePeriodIndex]: '0'
+        [currentTab]: '' // 🟢 Strictly stamp the active tab into the object
       }
     };
+    
     setSetupData(prev => ({
       ...prev,
       [category]: [...(prev[category] || []), newItem]
     }));
   };
+
+
 
 
   const removeItemFromCategory = (category: string, id: string, name: string) => {
@@ -2043,7 +2066,12 @@ const getFrozenCycleAmount = (account: Account): number => {
   const handleSaveSetup = async () => {
     
 
-    const existingSetup = savedSetups.find(s => s.month === selectedMonth && s.timing === selectedTiming);
+        // 🟢 BUG FIX: Ensures Manual Save always updates the unified master file!
+        const existingSetup = savedSetups.find(s => 
+          s.month === selectedMonth && 
+          (s.timing === 'unified' || s.data?._periodTotals || s.timing === selectedTiming)
+        );
+    
     {/* TO: Matches auto-save perfectly to prevent data loss on manual saves */}
     const dynamicActualByPeriod = { ...actualSalaryByPeriod };
     const currentMonthIdx = MONTHS.indexOf(selectedMonth);

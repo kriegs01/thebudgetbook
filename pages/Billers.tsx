@@ -289,7 +289,23 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
       };
       await onAdd(newBiller);
       setShowAddModal(false);
-      setAddFormData({ name: '', category: categories[0]?.name || '', dueDate: '', expectedAmount: '', actMonth: MONTHS[(new Date().getMonth() + 1) % 12], actDay: '', actYear: new Date().getFullYear().toString(), deactMonth: '', deactYear: '', linkedAccountId: '' });
+            // 🟢 BUG FIX: Always reset to the first ACTIVE category, not just the first in the database
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const activeCats = categories.filter(c => {
+        if (c.active === false) {
+          if (!c.deactivatedAt) return false;
+          const deactivationDate = new Date(c.deactivatedAt.split('-').map(Number)[0], c.deactivatedAt.split('-').map(Number)[1] - 1, 1);
+          return today < deactivationDate;
+        }
+        return true;
+      });
+      const defaultCat = activeCats[0]?.name || categories[0]?.name || '';
+
+
+
+
+      setAddFormData({ name: '', category: defaultCat, dueDate: '', expectedAmount: '', actMonth: MONTHS[(new Date().getMonth() + 1) % 12], actDay: '', actYear: new Date().getFullYear().toString(), deactMonth: '', deactYear: '', linkedAccountId: '' });
       setAddScheduledIncreases([]);
       setShowAddScheduledSection(false);
       setShowAddDeactSection(false);
@@ -457,7 +473,7 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
     } catch { setEditBillerSchedules([]); }
   };
 
-  const renderCategoryOptions = () => {
+  const renderCategoryOptions = (currentValue?: string) => {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     const activeCats = categories.filter(c => {
@@ -468,17 +484,28 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
       }
       return true;
     });
+
+    // 🟢 SAFETY CHECK: If the current value is missing from active categories, render it as (Inactive)
+    const isCurrentMissing = currentValue && !activeCats.some(c => 
+      c.name === currentValue || 
+      (c.subcategories && c.subcategories.some(sub => `${c.name} - ${sub}` === currentValue))
+    );
+
     return (
       <>
+        {isCurrentMissing && (
+          <option value={currentValue} className="font-bold italic text-gray-400">{currentValue} (Inactive)</option>
+        )}
         {activeCats.map(c => (
           <React.Fragment key={c.id}>
             <option value={c.name} className="font-bold">{c.name}</option>
-            {c.subcategories.map(sub => <option key={`${c.id}-${sub}`} value={`${c.name} - ${sub}`}>&nbsp;&nbsp;&nbsp;{sub}</option>)}
+            {(c.subcategories || []).map(sub => <option key={`${c.id}-${sub}`} value={`${c.name} - ${sub}`}>&nbsp;&nbsp;&nbsp;{sub}</option>)}
           </React.Fragment>
         ))}
       </>
     );
   };
+
 
   const getExpectedAmount = (biller: Biller): number => {
     if (biller.category.startsWith('Loans')) {
@@ -613,28 +640,81 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
             </div>
           ) : (
             <>
-              <PageHeader title="Billers" subtitle="Your forever-bills, on autopilot" icon={<div className={`w-14 h-14 rounded-2xl flex items-center justify-center text-white border-[3px] border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] -rotate-3 transition-all hover:rotate-0 hover:scale-110 z-10 relative ${getAccentClasses('bg')}`}><Receipt className="w-7 h-7" /></div>} actions={<button onClick={() => { setShowAddModal(true); setTimingFeedback(''); }} className={`flex items-center gap-2 text-white px-5 py-3 rounded-xl font-bold text-sm transition-all border-2 border-black shadow-[2px_2px_0px_#000] hover:shadow-none hover:translate-x-[1px] hover:translate-y-[1px] active:translate-x-[2px] active:translate-y-[2px] ${getAccentClasses('bg')}`}><Plus className="w-4 h-4" /><span className="hidden sm:inline">Add Biller</span></button>} />
-              {activeBillers.length > 0 && (
-                <div className="mb-8">
-                  <button onClick={() => setIsActiveOpen(!isActiveOpen)} className="flex items-center space-x-2 mb-4 text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100 font-bold text-lg transition-colors">{isActiveOpen ? <ChevronDown className="w-5 h-5" /> : <ChevronRight className="w-5 h-5" />}<span>Active Billers ({activeBillers.length})</span></button>
-                  {isActiveOpen && <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">{activeBillers.map(renderBillerCard)}</div>}
-                </div>
-              )}
-              {inactiveBillers.length > 0 && (
-                <div>
-                  <button onClick={() => setIsInactiveOpen(!isInactiveOpen)} className="flex items-center space-x-2 mb-4 text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100 font-bold text-lg transition-colors">{isInactiveOpen ? <ChevronDown className="w-5 h-5" /> : <ChevronRight className="w-5 h-5" />}<span>Inactive Billers ({inactiveBillers.length})</span></button>
-                  {isInactiveOpen && <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">{inactiveBillers.map(renderBillerCard)}</div>}
-                </div>
-              )}
-              {activeBillers.length === 0 && inactiveBillers.length === 0 && (
-                <div className="text-center py-12">
-                  <div className="inline-flex items-center justify-center w-20 h-20 rounded-full bg-gray-100 mb-4"><Receipt className="w-10 h-10 text-gray-400" /></div>
-                  <h3 className="text-xl font-bold text-gray-900 dark:text-gray-100 mb-2 transition-colors">No Billers Yet</h3>
-                  <p className="text-gray-500 mb-6">Get started by adding your first recurring bill</p>
-                  <button onClick={() => { setShowAddModal(true); setTimingFeedback(''); }} className="inline-flex items-center space-x-2 bg-indigo-600 text-white px-6 py-3 rounded-2xl font-bold hover:bg-indigo-700 shadow-lg"><Plus className="w-5 h-5" /><span>Add Your First Biller</span></button>
-                </div>
-              )}
-            </>
+            <PageHeader 
+              title="Billers" 
+              subtitle="Your forever-bills, on autopilot" 
+              icon={<div className={`w-14 h-14 rounded-2xl flex items-center justify-center text-white border-[3px] border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] -rotate-3 transition-all hover:rotate-0 hover:scale-110 z-10 relative ${getAccentClasses('bg')}`}><Receipt className="w-7 h-7" /></div>} 
+              actions={
+                <button 
+                  onClick={() => { 
+                    const today = new Date();
+                    today.setHours(0, 0, 0, 0);
+                    const activeCats = categories.filter(c => {
+                      if (c.active === false) {
+                        if (!c.deactivatedAt) return false;
+                        const deactivationDate = new Date(c.deactivatedAt.split('-').map(Number)[0], c.deactivatedAt.split('-').map(Number)[1] - 1, 1);
+                        return today < deactivationDate;
+                      }
+                      return true;
+                    });
+                    const defaultCat = activeCats[0]?.name || categories[0]?.name || '';
+                    
+                    setAddFormData(prev => ({ ...prev, category: defaultCat }));
+                    setShowAddModal(true); 
+                    setTimingFeedback(''); 
+                  }} 
+                  className={`flex items-center gap-2 text-white px-5 py-3 rounded-xl font-bold text-sm transition-all border-2 border-black shadow-[2px_2px_0px_#000] hover:shadow-none hover:translate-x-[1px] hover:translate-y-[1px] active:translate-x-[2px] active:translate-y-[2px] ${getAccentClasses('bg')}`}
+                >
+                  <Plus className="w-4 h-4" /><span className="hidden sm:inline">Add Biller</span>
+                </button>
+              } 
+            />
+            
+            {activeBillers.length > 0 && (
+              <div className="mb-8">
+                <button onClick={() => setIsActiveOpen(!isActiveOpen)} className="flex items-center space-x-2 mb-4 text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100 font-bold text-lg transition-colors">{isActiveOpen ? <ChevronDown className="w-5 h-5" /> : <ChevronRight className="w-5 h-5" />}<span>Active Billers ({activeBillers.length})</span></button>
+                {isActiveOpen && <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">{activeBillers.map(renderBillerCard)}</div>}
+              </div>
+            )}
+            
+            {inactiveBillers.length > 0 && (
+              <div>
+                <button onClick={() => setIsInactiveOpen(!isInactiveOpen)} className="flex items-center space-x-2 mb-4 text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100 font-bold text-lg transition-colors">{isInactiveOpen ? <ChevronDown className="w-5 h-5" /> : <ChevronRight className="w-5 h-5" />}<span>Inactive Billers ({inactiveBillers.length})</span></button>
+                {isInactiveOpen && <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">{inactiveBillers.map(renderBillerCard)}</div>}
+              </div>
+            )}
+            
+            {activeBillers.length === 0 && inactiveBillers.length === 0 && (
+              <div className="text-center py-12">
+                <div className="inline-flex items-center justify-center w-20 h-20 rounded-full bg-gray-100 mb-4"><Receipt className="w-10 h-10 text-gray-400" /></div>
+                <h3 className="text-xl font-bold text-gray-900 dark:text-gray-100 mb-2 transition-colors">No Billers Yet</h3>
+                <p className="text-gray-500 mb-6">Get started by adding your first recurring bill</p>
+                <button 
+                  onClick={() => { 
+                    const today = new Date();
+                    today.setHours(0, 0, 0, 0);
+                    const activeCats = categories.filter(c => {
+                      if (c.active === false) {
+                        if (!c.deactivatedAt) return false;
+                        const deactivationDate = new Date(c.deactivatedAt.split('-').map(Number)[0], c.deactivatedAt.split('-').map(Number)[1] - 1, 1);
+                        return today < deactivationDate;
+                      }
+                      return true;
+                    });
+                    const defaultCat = activeCats[0]?.name || categories[0]?.name || '';
+                    
+                    setAddFormData(prev => ({ ...prev, category: defaultCat }));
+                    setShowAddModal(true); 
+                    setTimingFeedback(''); 
+                  }} 
+                  className="inline-flex items-center space-x-2 bg-indigo-600 text-white px-6 py-3 rounded-2xl font-bold hover:bg-indigo-700 shadow-lg"
+                >
+                  <Plus className="w-5 h-5" /><span>Add Your First Biller</span>
+                </button>
+              </div>
+            )}
+          </>
+
           )}
 
           {showAddModal && (
