@@ -83,48 +83,60 @@ export const generateCreditBuckets = (
     }
 
 
-            // -- THE GHOST HARVESTER (Strict Mode) --
-    const bankName = String(account.bank || '').toLowerCase().trim();
-    const accountInst = (installments || []).filter(inst => {
-      const linkedId = inst.accountId || inst.account_id || inst.linkedAccountId || inst.linked_account_id;
-      return linkedId === account.id;
-    });
-
-    const harvestedPayments = (transactions || []).filter(tx => {
-      if (getPaymentMethodId(tx) === account.id) return false; 
-      
-      const txName = String(tx.name || '').toLowerCase();
-      const txType = String(getTransactionType(tx)).toLowerCase();
-      
-      // Strict Check 1: Paid the bank explicitly
-      if (bankName && txName.includes(bankName) && (txName.includes('payment') || txType === 'credit_payment')) {
-          return true;
-      }
-      
-      // Strict Check 2: Paid an installment
-      return accountInst.some(inst => {
-        const instName = String(inst.name || '').toLowerCase().trim();
-        if (!instName || instName.length < 3) return false; 
-        
-        if (!txName.includes(instName)) return false;
-
-        const isExplicitPayment = txType === 'credit_payment' || txName.includes('payment') || Number(tx.amount) < 0;
-        
-        // 🟢 THE FIX: Safely catch auto-generated installment payments like "Sofa - June 2026"
-        const hasMonthYearSuffix = MONTHS.some(m => {
-           const mLower = m.toLowerCase();
-           return txName.includes(`- ${mLower}`) || txName.includes(`- ${mLower.substring(0, 3)}`);
+        // -- THE GHOST HARVESTER (Strict Mode) --
+        const bankName = String(account.bank || '').toLowerCase().trim();
+        const accountInst = (installments || []).filter(inst => {
+          const linkedId = inst.accountId || inst.account_id || inst.linkedAccountId || inst.linked_account_id;
+          return linkedId === account.id;
         });
-
-        return isExplicitPayment || hasMonthYearSuffix;
-      });
-    }).map(tx => ({
-      ...tx,
-      amount: -Math.abs(Number(tx.amount)), 
-      transaction_type: 'credit_payment',
-      payment_method_id: account.id,
-      paymentMethodId: account.id 
-    }));
+    
+        const harvestedPayments = (transactions || []).filter(tx => {
+          // 1. Ignore if it's already natively attached to the credit card
+          if (getPaymentMethodId(tx) === account.id) return false; 
+          
+          // 2. Ignore if the credit card side of this payment already exists
+          const isDebitHalfOfModernPair = transactions.some(otherTx => 
+            otherTx.related_transaction_id === tx.id || 
+            otherTx.relatedTransactionId === tx.id
+          );
+          if (isDebitHalfOfModernPair) return false;
+    
+          const txName = String(tx.name || '').toLowerCase();
+          const txType = String(getTransactionType(tx)).toLowerCase();
+          
+          // 🟢 THE FIX: Never harvest incoming collections or income!
+          if (txType === 'cash_in' || txType === 'income') return false;
+          
+          // Strict Check 1: Paid the bank explicitly
+          if (bankName && txName.includes(bankName) && (txName.includes('payment') || txType === 'credit_payment')) {
+              return true;
+          }
+    
+          
+          // Strict Check 2: Paid an installment
+          return accountInst.some(inst => {
+            const instName = String(inst.name || '').toLowerCase().trim();
+            if (!instName || instName.length < 3) return false; 
+            
+            if (!txName.includes(instName)) return false;
+    
+            const isExplicitPayment = txType === 'credit_payment' || txName.includes('payment') || Number(tx.amount) < 0;
+            
+            const hasMonthYearSuffix = MONTHS.some(m => {
+               const mLower = m.toLowerCase();
+               return txName.includes(`- ${mLower}`) || txName.includes(`- ${mLower.substring(0, 3)}`);
+            });
+    
+            return isExplicitPayment || hasMonthYearSuffix;
+          });
+        }).map(tx => ({
+          ...tx,
+          amount: -Math.abs(Number(tx.amount)), 
+          transaction_type: 'credit_payment',
+          payment_method_id: account.id,
+          paymentMethodId: account.id 
+        }));
+    
 
     
 

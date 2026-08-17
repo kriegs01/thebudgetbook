@@ -82,23 +82,43 @@ export const processCreditAccount = (
        const cycleStart = new Date(selectedYear, monthIndex - 1, billingDay, 0, 0, 0);
        const cycleEnd = new Date(selectedYear, monthIndex, billingDay - 1, 23, 59, 59);
 
-       // Filter raw transactions to strictly match this cycle window
-       swipeTotal = (transactions || [])
-         .filter(tx => tx?.payment_method_id === account.id && tx.transaction_type !== 'credit_payment')
+       const cycleTransactions = (transactions || [])
+         .filter(tx => 
+            tx?.payment_method_id === account.id && 
+            tx.transaction_type !== 'installment'
+          )
          .filter(tx => {
            if (!tx.date) return false;
            const txDate = new Date(tx.date);
            return txDate >= cycleStart && txDate <= cycleEnd;
-         })
-         .reduce((sum, tx) => sum + (Math.max(0, Number(tx.amount)) || 0), 0);
+         });
 
+       // Calculate new swipes, ignoring payments/refunds which are displayed separately by the UI
+       const newSwipes = cycleTransactions
+         .reduce((sum, tx) => {
+            const amount = Number(tx.amount) || 0;
+            return amount > 0 ? sum + amount : sum;
+         }, 0);
+
+       swipeTotal = newSwipes;
        personalSpend += swipeTotal;
+       
+       // The total bill is the sum of all charges (installments + swipes). 
+       // Payments are not subtracted here to avoid double-counting in the UI.
+       const totalBankBill = personalSpend + budeeReceivable;
+
+       return {
+        totalBankBill,
+        personalSpend,
+        budeeReceivable,
+        swipeTotal,
+        isLoanBundle
+      };
     }
 
     // ==========================================
-    // 3. THE FINAL BANK BILL
+    // 3. THE FINAL BANK BILL (for non-revolving accounts)
     // ==========================================
-    // The bank charges you for everything, regardless of who is supposed to pay you back.
     const totalBankBill = personalSpend + budeeReceivable;
 
     return {
