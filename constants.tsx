@@ -12,7 +12,7 @@ export const NAV_ITEMS = [
   { id: Page.WALLET, label: 'Wallet', icon: <WalletCards className="w-5 h-5" />, path: "/wallets" },
   { id: Page.SETTINGS, label: 'Settings', icon: <Settings className="w-5 h-5" />, path: "/settings" },
   { id: Page.TRASH, label: 'Trash', icon: <Trash2 className="w-5 h-5" />, path: "/trash" },
-  { id: 'scanner' as any, label: 'Scan Item', icon: <ScanLine className="w-5 h-5" />, path: "/scanner" },
+  
 ];
 
 export const INITIAL_CATEGORIES: BudgetCategory[] = [

@@ -2,8 +2,9 @@ import React, { useState, useEffect, useRef } from 'react';
 import { 
   Menu, ChevronLeft, SlidersHorizontal, ArrowUp, ArrowDown, Eye, EyeOff, X, ChevronDown, 
   LogOut, Lock, Users, Bell, MessageCircle, AlertCircle, LayoutDashboard, PieChart, 
-  WalletCards, Plus, MoreHorizontal, Receipt, Wallet, FileText, CreditCard 
+  WalletCards, Plus, MoreHorizontal, Receipt, Wallet, FileText, CreditCard, Tag, ToolCase 
 } from 'lucide-react';
+
 import { BrowserRouter, Routes, Route, NavLink, useLocation, Navigate, Outlet } from 'react-router-dom';
 import { FloatingHUD } from './FloatingHUD';
 import { QueryClient, QueryClientProvider, useQueryClient } from '@tanstack/react-query';
@@ -230,6 +231,7 @@ const MainApp: React.FC = () => {
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
   const [showMigrationModal, setShowMigrationModal] = useState(false);//<=== MigrationModal declaration
+  const [isToolboxOpen, setIsToolboxOpen] = useState(false);
   const [isMigrating, setIsMigrating] = useState(false); // Add this flag
   const migrationAttempted = useRef(false); // Add this ref
   const [isMessagesOpen, setIsMessagesOpen] = useState(false);
@@ -1442,7 +1444,7 @@ useEffect(() => {
               )}
             </div>
             <nav className="flex-1 px-2.5 py-3 space-y-1 overflow-y-auto">
-              {navPreferences.filter(pref => pref.visible).map((pref) => {
+            {navPreferences.filter(pref => pref.visible).map((pref) => {
                 const item = effectiveNavItems.find(n => n.id === pref.id);
                 if (!item) return null;
                 return (
@@ -1478,6 +1480,70 @@ useEffect(() => {
                   </NavLink>
                 );
               })}
+
+              
+              {/* 🟢 TOOLBOX COLLAPSIBLE */}
+              <div className="pt-2 mt-2 border-t border-gray-200/50 dark:border-gray-800/50">
+                <button
+                  onClick={() => {
+                    setIsToolboxOpen(!isToolboxOpen);
+                    if (!isSidebarOpen) setIsSidebarOpen(true); // Auto-expand sidebar if clicking icon
+                  }}
+                  className={`w-full flex items-center justify-between p-2 rounded-xl transition-colors group ${
+                    isToolboxOpen ? 'bg-black/5 dark:bg-white/5' : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800/50'
+                  }`}
+                >
+                                                     <div className="flex items-center">
+                    <div className={`shrink-0 w-9 h-9 rounded-xl flex items-center justify-center border-2 border-black transition-all duration-200 z-10 relative ${
+                      isSidebarOpen ? '' : 'mx-auto'
+                    } ${
+                      isToolboxOpen 
+                        ? `${getAccentClasses('bg')} text-white shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] -rotate-3` 
+                        : 'bg-white dark:bg-gray-800 text-gray-400 dark:text-gray-500 shadow-none'
+                    } group-hover:rotate-0 group-hover:scale-110 group-hover:shadow-[3px_3px_0px_0px_rgba(0,0,0,1)]`}>
+                      <ToolCase className="w-5 h-5" />
+                    </div>
+                    {isSidebarOpen && <span className={`ml-2.5 font-bold text-sm transition-colors ${isToolboxOpen ? 'text-gray-900 dark:text-white' : 'text-gray-600 dark:text-gray-400'}`}>Toolbox</span>}
+                  </div>
+
+
+                  {isSidebarOpen && (
+                    <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform ${isToolboxOpen ? 'rotate-180' : ''}`} />
+                  )}
+                </button>
+                
+                {/* Nested PriceTag Item */}
+                <div className={`overflow-hidden transition-all duration-300 ${isToolboxOpen && isSidebarOpen ? 'max-h-40 opacity-100 mt-1' : 'max-h-0 opacity-0'}`}>
+                  <div className="ml-11">
+                    <NavLink
+                      to="/scanner"
+                      onClick={() => {
+                        if (isMobile) setIsSidebarOpen(false);
+                      }}
+                      className={({ isActive }) =>
+                        `w-full flex items-center p-2 rounded-xl transition-colors group ${
+                          isActive ? 'bg-black/5 dark:bg-white/5' : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800/50'
+                        }`
+                      }
+                    >
+                      {({ isActive }) => (
+                        <>
+                          <div className={`shrink-0 w-7 h-7 rounded-lg flex items-center justify-center border-2 border-black transition-all duration-200 z-10 relative ${
+                            isActive 
+                              ? `${getAccentClasses('bg')} text-white shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] -rotate-3` 
+                              : 'bg-white dark:bg-gray-800 text-gray-400 dark:text-gray-500 shadow-none'
+                          } group-hover:rotate-0 group-hover:scale-110 group-hover:shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]`}>
+                            <Tag className="w-4 h-4" />
+                          </div>
+                          <span className={`ml-2.5 font-bold text-sm transition-colors ${isActive ? 'text-gray-900 dark:text-white' : 'text-gray-600 dark:text-gray-400'}`}>PriceTag</span>
+                        </>
+                      )}
+                    </NavLink>
+                  </div>
+                </div>
+              </div>
+
+
             </nav>
             {isSidebarOpen && (
               <div className="flex justify-center px-4 mb-4 mt-2">
@@ -1490,9 +1556,13 @@ useEffect(() => {
                 </button>
               </div>
             )}
-          <div className="p-3 border-t border-gray-100 dark:border-gray-800 transition-colors">
+                    <div className="p-3 border-t border-gray-100 dark:border-gray-800 transition-colors flex flex-col gap-1">
+            
+            
+
             <NavLink
               to="/settings"
+
               onClick={() => {
                 if (isMobile) {
                   setIsSidebarOpen(false);
@@ -2039,6 +2109,7 @@ useEffect(() => {
               </h3>
               
               <div className="grid grid-cols-2 gap-3">
+                {/* 1. REGULAR PAGES MAP */}
                 {[
                   { path: '/accounts', label: 'Accounts', icon: <WalletCards className="w-6 h-6" /> },
                   { path: '/billers', label: 'Billers', icon: <Receipt className="w-6 h-6" /> },
@@ -2061,8 +2132,46 @@ useEffect(() => {
                     <span className="font-bold text-xs sm:text-sm uppercase tracking-wide">{item.label}</span>
                   </NavLink>
                 ))}
+
+                {/* 2. THE TOOLBOX TILE (Toggles Accordion) */}
+                <button
+                  onClick={(e) => {
+                    e.preventDefault();
+                    setIsToolboxOpen(!isToolboxOpen);
+                  }}
+                  className={`flex flex-col items-center justify-center p-4 rounded-2xl border-[3px] border-black transition-all active:translate-x-[2px] active:translate-y-[2px] active:shadow-none ${
+                    isToolboxOpen 
+                      ? getAccentClasses('bg') + ' text-white shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]' 
+                      : 'bg-gray-50 dark:bg-gray-800 text-gray-700 dark:text-gray-300 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]'
+                  }`}
+                >
+                  <div className="mb-2"><ToolCase className="w-6 h-6" /></div>
+                  <span className="font-bold text-xs sm:text-sm uppercase tracking-wide">Toolbox</span>
+                </button>
               </div>
+
+              {/* 3. NESTED TOOLBOX CONTENT (Expands down) */}
+              <div className={`overflow-hidden transition-all duration-300 ${isToolboxOpen ? 'max-h-40 opacity-100 mt-4' : 'max-h-0 opacity-0'}`}>
+                <div className="p-4 bg-gray-100 dark:bg-gray-800 rounded-3xl border-[3px] border-dashed border-gray-300 dark:border-gray-700">
+                  <div className="grid grid-cols-2 gap-3">
+                    <NavLink
+                      to="/scanner"
+                      onClick={() => setShowMobileMore(false)}
+                      className={({ isActive }) => `flex flex-col items-center justify-center p-3 rounded-2xl border-[3px] border-black transition-all active:translate-x-[2px] active:translate-y-[2px] active:shadow-none ${
+                        isActive 
+                          ? getAccentClasses('bg') + ' text-white shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]' 
+                          : 'bg-white dark:bg-gray-900 text-gray-700 dark:text-gray-300 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]'
+                      }`}
+                    >
+                      <Tag className="w-5 h-5 mb-2" />
+                      <span className="font-bold text-xs uppercase tracking-wide">PriceTag</span>
+                    </NavLink>
+                  </div>
+                </div>
+              </div>
+
             </div>
+
           </div>
         </>
       )}
