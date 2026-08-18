@@ -58,6 +58,8 @@ import { MessagesInbox } from './src/components/MessagesInbox';
 
 import MigrationModal from './src/components/MigrationModal';
 
+import BarcodeScanner from './src/components/BarcodeScanner';
+
 // Helper function to convert UI Account to Supabase format
 const accountToSupabase = (account: Account) => ({
   bank: account.bank,
@@ -1866,7 +1868,9 @@ useEffect(() => {
                 <SupabaseDemo />
               } />
               <Route path="/update-password" element={<UpdatePassword />} />
+              <Route path="/scanner" element={<BarcodeScanner />} />
               {/* Start with Dashboard and redirect anything else unrecognized */}
+              
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
           </div>
