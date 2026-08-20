@@ -368,18 +368,45 @@ const Accounts: React.FC<AccountsProps> = ({ accounts, installments = [], transa
     let totalUtilized = acc.balance;
 
     if (isCredit) {
-      // 1. Fetch exact bucket from our waterfall engine for the current month!
+      // 1. Fetch exact bucket from our waterfall engine for the running cycle!
       const now = new Date();
-      const buckets = generateCreditBuckets(acc, transactions || [], installments || [], now.getFullYear(), monthNames[now.getMonth()]);
+      
+      // 🟢 Look one month ahead to capture the running cycle
+      const targetDate = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+      
+      const buckets = generateCreditBuckets(
+        acc, 
+        transactions || [], 
+        installments || [], 
+        targetDate.getFullYear(), 
+        monthNames[targetDate.getMonth()]
+      );
       
       if (buckets.length > 0) {
         const currentBucket = buckets[buckets.length - 1];
         
-        // The face of the card shows the exact ending balance of the current cycle
-        displayBalance = currentBucket.endingBalance;
+        // 🟢 THE PAST-DUE FIX
+        // The bucket engine artificially zeroes out past-due rollovers for "future" months to protect the budget page.
+        // We replicate its detection logic here to add the unpaid debt back strictly for the UI card face.
+        const currentRealMonth = now.getMonth();
+        const currentRealYear = now.getFullYear();
+        const targetMonthIdx = monthNames.indexOf(currentBucket.targetMonth);
+        
+        const isFutureBucket = (currentBucket.targetYear > currentRealYear) || 
+                               (currentBucket.targetYear === currentRealYear && targetMonthIdx > currentRealMonth);
+
+        let pastDueRollover = 0;
+        if (isFutureBucket && buckets.length > 1) {
+            const previousBucket = buckets[buckets.length - 2];
+            pastDueRollover = Math.max(0, previousBucket.endingBalance);
+        }
+        
+        // The face of the card shows the running balance + any past due debt that was zeroed out
+        displayBalance = currentBucket.endingBalance + pastDueRollover;
 
         // The Limit Bar calculates absolute total debt (All Swipes + All future unpaid installments)
         const futureInstallmentBurden = installments
+
           .filter(i => (i.accountId === acc.id || i.linkedAccountId === acc.id) && !i.isArchived)
           .reduce((sum, i) => sum + Math.max(0, i.totalAmount - i.paidAmount), 0);
           

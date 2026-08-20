@@ -88,19 +88,24 @@ const StatementPage: React.FC<StatementPageProps> = ({ accounts, installments = 
         
         setAccount(acc);
         
-        // 🟢 Generate chronological buckets using our unified waterfall engine
-        const now = new Date();
-        const buckets = generateCreditBuckets(
-          acc,
-          transactions || [],
-          installments || [],
-          now.getFullYear(),
-          monthNames[now.getMonth()]
-        );
-
-        // Reverse so newest statement is on top for the UI
-        const reversedBuckets = [...buckets].reverse();
-        setCycles(reversedBuckets);
+                // 🟢 Generate chronological buckets using our unified waterfall engine
+                const now = new Date();
+        
+                // 🟢 FIX: Look one month ahead to always capture the current "running" (unbilled) cycle!
+                const targetDate = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+        
+                const buckets = generateCreditBuckets(
+                  acc,
+                  transactions || [],
+                  installments || [],
+                  targetDate.getFullYear(),
+                  monthNames[targetDate.getMonth()]
+                );
+        
+                // Reverse so newest statement is on top for the UI
+                const reversedBuckets = [...buckets].reverse();
+                setCycles(reversedBuckets);
+        
         
         // ONLY reset to 0 if we are on a brand new page load or the selection is out of bounds
         setSelectedCycleIndex(prev => (prev < reversedBuckets.length ? prev : 0));

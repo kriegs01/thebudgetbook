@@ -657,18 +657,26 @@ const [activePeriodIndex, setActivePeriodIndex] = useState<number>(1);
         if (!merged[c.name]) merged[c.name] = [];
       });
 
-      // 1. Inject active non-zero billers
-      (billers || []).forEach(biller => {
-        if (biller.isArchived) return;
-        if (isBillerActiveForPeriod(biller, selectedMonth, selectedYear)) {
-          
-          let resolvedAmount = biller.amount || biller.monthlyAmount || biller.expectedAmount || 0;
-          if (!resolvedAmount && Array.isArray(biller.schedules) && biller.schedules.length > 0) {
-            const matchingSchedule = biller.schedules.find(s => s.month === selectedMonth && Number(s.year) === selectedYear);
-            resolvedAmount = matchingSchedule?.expectedAmount || biller.schedules[biller.schedules.length - 1]?.expectedAmount || 0;
-          }
-
-          if (resolvedAmount <= 0) return;
+            // 1. Inject active non-zero billers
+            (billers || []).forEach(biller => {
+              if (biller.isArchived) return;
+              if (isBillerActiveForPeriod(biller, selectedMonth, selectedYear)) {
+                
+                // 🟢 SMART RESOLVER: Feed this into the engine to catch Scheduled Increases & Linked Accounts
+                let baseAmount = biller.expectedAmount || biller.amount || biller.monthlyAmount || 0;
+                
+                const dummySchedule = { 
+                  id: 'temp', 
+                  month: selectedMonth, 
+                  year: selectedYear.toString(), 
+                  expectedAmount: baseAmount 
+                };
+                
+                const { amount: calculatedAmount } = getScheduleExpectedAmount(biller, dummySchedule as any, accounts, transactions);
+                const resolvedAmount = calculatedAmount > 0 ? calculatedAmount : baseAmount;
+      
+                if (resolvedAmount <= 0) return;
+      
 
           let targetCat = biller.category;
           if (!merged[targetCat]) {
@@ -2724,11 +2732,22 @@ const getFrozenCycleAmount = (account: Account): number => {
           initialSetup[targetCat] = [];
         }
 
+        // 🟢 SMART RESOLVER: Ask the engine for the future month's actual price
+        let baseAmount = biller.expectedAmount || biller.amount || biller.monthlyAmount || 0;
+        const dummySchedule = { 
+          id: 'temp', 
+          month: month, 
+          year: year.toString(), 
+          expectedAmount: baseAmount 
+        };
+        const { amount: calculatedAmount } = getScheduleExpectedAmount(biller, dummySchedule as any, accounts, transactions);
+        const resolvedAmount = calculatedAmount > 0 ? calculatedAmount : baseAmount;
+
         // Push the biller into the setup template
         initialSetup[targetCat].push({
           id: biller.id,
           name: biller.name,
-          amount: String(biller.amount || '0'),
+          amount: String(resolvedAmount),
           included: true,
           isBiller: true,
           timing: biller.timing,
@@ -2736,6 +2755,7 @@ const getFrozenCycleAmount = (account: Account): number => {
         });
       }
     });
+
 
     setSetupData(initialSetup);
     setRemovedIds(new Set());

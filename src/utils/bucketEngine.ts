@@ -163,6 +163,9 @@ export const generateCreditBuckets = (
 
     const targetMonthIdx = MONTHS.indexOf(upToMonthName);
     const targetAbsMonth = upToYear * 12 + targetMonthIdx;
+
+    //NEW: Memory tracker to prevent overlapping buckets from double counting payments
+    const claimedPaymentIds = new Set<string>();
     
     while ((currentYear * 12 + currentMonthIdx) <= targetAbsMonth + 2) { 
       
@@ -194,36 +197,44 @@ export const generateCreditBuckets = (
       // 🟢 Swipes are strictly normal purchases
       const swipes = txsInCycle.filter(tx => !isTrueBillPayment(tx) && Number(tx.amount) > 0);
 
-      // 🟢 Smart Envelope Matching for TRUE Payments Only
-      const payments = accountTxs.filter(tx => {
-        if (!isTrueBillPayment(tx)) return false;
-
-        const name = String(tx.name).toLowerCase();
-        const targetMonthLower = targetMonth.toLowerCase();
-        
-        const explicitMonthMatch = MONTHS.find(m => {
-          const mLower = m.toLowerCase();
-          const shortM = mLower.substring(0, 3);
-          const regex = new RegExp(`\\b(${mLower}|${shortM})\\b`, 'i');
-          return regex.test(name);
-        });
-
-        if (explicitMonthMatch) {
-            return explicitMonthMatch.toLowerCase() === targetMonthLower;
-        } 
-        
-        const txDate = parseSafeDate(tx.date);
-        if (!txDate) return false;
-
-        const daysDifference = (txDate.getTime() - dueDateObj.getTime()) / (1000 * 3600 * 24);
-        if (Math.abs(daysDifference) <= 3) {
-            return true;
-        }
-
-        return txDate >= cycleStart && txDate <= cycleEnd;
-      });
+            // 🟢 Smart Envelope Matching for TRUE Payments Only
+            const payments = accountTxs.filter(tx => {
+              if (!isTrueBillPayment(tx)) return false;
+              
+              // 1. If an older statement already claimed this payment, ignore it!
+              if (claimedPaymentIds.has(tx.id)) return false;
       
-      const paymentsTotal = payments.reduce((sum, tx) => sum + Math.abs(Number(tx.amount)), 0);
+              const name = String(tx.name).toLowerCase();
+              const targetMonthLower = targetMonth.toLowerCase();
+              
+              const explicitMonthMatch = MONTHS.find(m => {
+                const mLower = m.toLowerCase();
+                const shortM = mLower.substring(0, 3);
+                const regex = new RegExp(`\\b(${mLower}|${shortM})\\b`, 'i');
+                return regex.test(name);
+              });
+      
+              // 2. Explicit name match (e.g., "August Payment")
+              if (explicitMonthMatch) {
+                  return explicitMonthMatch.toLowerCase() === targetMonthLower;
+              } 
+              
+              const txDate = parseSafeDate(tx.date);
+              if (!txDate) return false;
+      
+              // 3. 🟢 THE FIX: Extend the payment window up to the Due Date (+ 3 days buffer).
+              // This ensures payments made *after* the cycle closes still attach to the bill they are paying!
+              const paymentWindowEnd = new Date(dueDateObj);
+              paymentWindowEnd.setDate(paymentWindowEnd.getDate() + 3);
+      
+              return txDate >= cycleStart && txDate <= paymentWindowEnd;
+            });
+            
+            // 🟢 Lock these payments to this bucket so the next running bucket ignores them
+            payments.forEach(tx => claimedPaymentIds.add(tx.id));
+      
+            const paymentsTotal = payments.reduce((sum, tx) => sum + Math.abs(Number(tx.amount)), 0);
+      
 
       
       

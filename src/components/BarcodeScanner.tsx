@@ -9,6 +9,9 @@ import { createTransaction } from '../services/transactionsService';
 import { getAllBudgetSetupsFrontend, updateBudgetSetupFrontend } from '../services/budgetSetupsService';
 
 import { combineDateWithCurrentTime, getTodayIso } from '../utils/dateUtils';
+import { supabase } from '../utils/supabaseClient';
+
+import { getAllAccountsFrontend } from '../services/accountsService'; // 🟢 NEW IMPORT
 
 
 // Extend our product to include a quantity for the cart
@@ -42,12 +45,41 @@ export default function BarcodeScanner() {
     setIsEditingBudget(false);
   };
  
+    // 🟢 NEW: Startup Budget Modal States
+    const [showStartupModal, setShowStartupModal] = useState(true);
+    const [startupBudgetInput, setStartupBudgetInput] = useState("");
+  
+    const handleStartupSubmit = (e: React.FormEvent) => {
+      e.preventDefault();
+      const parsed = parseFloat(startupBudgetInput);
+      
+      // If they typed a valid number, update the limit. Otherwise, stick to the default 100.
+      if (!isNaN(parsed) && parsed > 0) {
+        setBudgetLimit(parsed);
+      }
+      setShowStartupModal(false);
+    };
+  
   
   const [scannedCode, setScannedCode] = useState<string>("Waiting for barcode...");
   const [highlightedBarcode, setHighlightedBarcode] = useState<string | null>(null); 
   // 🟢 NEW: Scanner feedback states
   const [scanFeedback, setScanFeedback] = useState<{ name: string, isUpdate: boolean } | null>(null);
   const feedbackTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+// 🟢 NEW: Fetch ALL user accounts for checkout (including Credit Cards)
+const [accounts, setAccounts] = useState<any[]>([]);
+
+useEffect(() => {
+  const fetchAccounts = async () => {
+    const { data } = await getAllAccountsFrontend();
+    if (data) {
+      // We removed the filter so you can pay with Cash, Debit, OR Credit!
+      setAccounts(data);
+    }
+  };
+  fetchAccounts();
+}, []);
 
 
 
@@ -64,20 +96,89 @@ export default function BarcodeScanner() {
   // 🟢 NEW: Store live search results
  const [searchResults, setSearchResults] = useState<LocalProduct[]>([]); 
 
- // 🟢 NEW: Live search effect for product names
+    // 🟢 FIXED: Live search effect with Console Logs
  useEffect(() => {
   if (searchMode === 'name' && manualBarcode.trim().length > 1) {
-    const fetchResults = async () => {
-      const results = await localDb.products
-        .filter(p => p.name.toLowerCase().includes(manualBarcode.toLowerCase()))
-        .toArray();
-      setSearchResults(results);
-    };
-    fetchResults();
+    
+    const debounceTimer = setTimeout(async () => {
+      const searchTerm = manualBarcode.toLowerCase();
+      console.log(`\n[Search: Name] 🔍 Live search triggered for: "${searchTerm}"`);
+
+      try {
+        // 1. Instantly search local databases
+        console.log("[Search: Name] 1️⃣ Querying local Dexie databases...");
+        const userResults = await localDb.user_prices
+          .filter(p => p.name.toLowerCase().includes(searchTerm))
+          .toArray();
+          
+        const localGlobalResults = await localDb.global_products
+          .filter(p => p.name.toLowerCase().includes(searchTerm))
+          .toArray();
+
+        console.log(`[Search: Name] 📊 Local Stats: Found ${userResults.length} in user_prices, ${localGlobalResults.length} in global_products.`);
+
+        // Combine local results, prioritizing user prices
+        let combined = [...userResults];
+        const userBarcodes = new Set(userResults.map(r => r.barcode));
+        
+        localGlobalResults.forEach(g => {
+          if (!userBarcodes.has(g.barcode)) {
+            combined.push({ ...g, current_price: 0 } as any); 
+          }
+        });
+
+        // Update UI immediately with local results
+        setSearchResults(combined as any);
+
+        // 2. If online, fetch missing global items in the background
+        if (navigator.onLine) {
+          console.log("[Search: Name] 2️⃣ Online mode active: Querying Supabase global_products in background...");
+          const { data: cloudGlobalItems } = await supabase
+            .from('global_products')
+            .select('*')
+            .ilike('name', `%${searchTerm}%`)
+            .limit(10);
+
+          if (cloudGlobalItems && cloudGlobalItems.length > 0) {
+             const newGlobals = [];
+             
+             cloudGlobalItems.forEach(cloudItem => {
+               if (!combined.some(existing => existing.barcode === cloudItem.barcode)) {
+                 newGlobals.push({ ...cloudItem, current_price: 0 });
+                 
+                 // Sync it to local DB quietly
+                 localDb.global_products.put({
+                   ...cloudItem, 
+                   sync_status: 'synced'
+                 });
+               }
+             });
+
+             if (newGlobals.length > 0) {
+               console.log(`[Search: Name] ✅ Background Sync: Pulled ${newGlobals.length} NEW items from cloud and saved to localDb!`);
+               setSearchResults(prev => [...prev, ...newGlobals] as any);
+             } else {
+               console.log("[Search: Name] ℹ️ Background check finished: Cloud results were already cached locally.");
+             }
+          } else {
+             console.log("[Search: Name] ℹ️ Cloud global_products returned 0 additional matches.");
+          }
+        } else {
+           console.log("[Search: Name] ❌ Offline mode active. Skipping cloud background check.");
+        }
+      } catch (error) {
+        console.error("[Search: Name] 🚨 Live search error:", error);
+      }
+    }, 300);
+
+    return () => clearTimeout(debounceTimer);
   } else {
     setSearchResults([]);
   }
 }, [manualBarcode, searchMode]);
+
+
+  
 
 const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
 const [tripName, setTripName] = useState("");
@@ -87,17 +188,26 @@ const [selectedAccountId, setSelectedAccountId] = useState("");
 
   
 
-
-
-// 🟢 NEW: Handler for clicking a search result
-const handleSelectSearchResult = (product: LocalProduct) => {
-  addToCart(product);
+// 🟢 FIXED: Handler for clicking a search result
+const handleSelectSearchResult = (product: any) => {
   setIsManualInputOpen(false);
   setManualBarcode("");
   setSearchResults([]);
   setScannedCode(product.barcode);
-  setTimeout(() => setScannedCode("Waiting for barcode..."), 2000);
+
+  // Check if it's a global-only item (no user price assigned yet)
+  if (product.current_price === 0 || !product.price_history) {
+    // 🟢 Route to Modal: It's a known item, but they need to set THEIR price
+    setProductName(product.name);
+    setProductPrice(""); // Clear any old leftover price state
+    setIsModalOpen(true);
+  } else {
+    // 🟢 Route to Cart: It's a personal item with a price
+    addToCart(product);
+    setTimeout(() => setScannedCode("Waiting for barcode..."), 2000);
+  }
 };
+
 
   const stateRef = useRef({ scannedCode, isModalOpen });
   useEffect(() => {
@@ -161,81 +271,106 @@ const handleSelectSearchResult = (product: LocalProduct) => {
   };
 
 
-  // --- SCANNER LOGIC ---
-  const { ref } = useZxing({
-    timeBetweenDecodingAttempts: 300,
-    
-    // 🟢 NEW: Force the high-res back camera for crystal clear auto-focus!
-    constraints: {
-      video: {
-        facingMode: 'environment',
-        width: { ideal: 1280 },
-        height: { ideal: 720 }
-      }
-    },
-    
-    onError(error) {
-      console.error("🚨 SCANNER ENGINE ERROR:", error);
-    },
-
-    
-    onDecodeResult(result) {
-      let barcodeString = "";
-      if (typeof result === "string") {
-        barcodeString = result;
-      } else if (result && typeof (result as any).getText === "function") {
-        barcodeString = (result as any).getText();
-      } else if (result && (result as any).text) {
-        barcodeString = (result as any).text;
-      } else if (result && (result as any).rawValue) {
-        barcodeString = (result as any).rawValue; 
-      } else {
-        barcodeString = String(result);
-      }
-
-      barcodeString = String(barcodeString).trim();
-
-      if (!barcodeString || barcodeString === "[object Object]") return;
-      if (stateRef.current.isModalOpen) return;
-      if (barcodeString === stateRef.current.scannedCode) return;
+    // --- SCANNER LOGIC ---
+    const { ref } = useZxing({
+      timeBetweenDecodingAttempts: 300,
       
-      setScannedCode(barcodeString);
-      
-          // 🟢 1. OFFLINE LOOKUP: Check personal price tags first
-    localDb.user_prices.get(barcodeString)
-    .then(async (existingProduct) => {
-      if (existingProduct) {
-        addToCart(existingProduct);
-        setTimeout(() => setScannedCode("Waiting for barcode..."), 2000);
-      } else {
-        // 🟢 2. CLOUD PEEK: If not in personal stash, ask the global dictionary
-        try {
-           const { data } = await supabase
-             .from('global_products')
-             .select('name')
-             .eq('barcode', barcodeString)
-             .single();
-             
-           if (data && data.name) {
-              // Auto-fill the form so the user doesn't have to type it!
-              setProductName(data.name); 
-           } else {
-              setProductName(""); // Blank for true pioneers
-           }
-        } catch (e) {
-           // If offline or not found, just leave it blank
-           setProductName(""); 
+      // 🟢 Force the high-res back camera for crystal clear auto-focus!
+      constraints: {
+        video: {
+          facingMode: 'environment',
+          width: { ideal: 1280 },
+          height: { ideal: 720 }
         }
+      },
+      
+      onError(error) {
+        // Intentionally kept silent to prevent console spam when no barcode is in frame
+      },
+  
+      // 🟢 FIXED: Upgraded to True Local-First async logic
+      async onDecodeResult(result) {
+        let barcodeString = "";
+        if (typeof result === "string") {
+          barcodeString = result;
+        } else if (result && typeof (result as any).getText === "function") {
+          barcodeString = (result as any).getText();
+        } else if (result && (result as any).text) {
+          barcodeString = (result as any).text;
+        } else if (result && (result as any).rawValue) {
+          barcodeString = (result as any).rawValue; 
+        } else {
+          barcodeString = String(result);
+        }
+  
+        barcodeString = String(barcodeString).trim();
+  
+        if (!barcodeString || barcodeString === "[object Object]") return;
+        if (stateRef.current.isModalOpen) return;
+        if (barcodeString === stateRef.current.scannedCode) return;
         
-        setIsModalOpen(true);
-      }
-    })
-    .catch((error) => {
-      console.error("Database error:", error);
+        setScannedCode(barcodeString);
+        
+        console.log(`\n[Scanner: Camera] 🔍 Detected barcode: ${barcodeString}`);
+  
+        try {
+          // 🟢 1. ALWAYS check personal local database first
+          console.log("[Scanner: Camera] 1️⃣ Checking localDb.user_prices...");
+          const userProduct = await localDb.user_prices.get(barcodeString);
+          
+          if (userProduct) {
+            console.log("[Scanner: Camera] ✅ FOUND in localDb.user_prices!");
+            addToCart(userProduct as any);
+            setTimeout(() => setScannedCode("Waiting for barcode..."), 2000); 
+            return;
+          }
+  
+          // 🟢 2. Check local global cache (Offline dictionary)
+          console.log("[Scanner: Camera] 2️⃣ Checking localDb.global_products (offline cache)...");
+          const localGlobal = await localDb.global_products.get(barcodeString);
+          if (localGlobal) {
+            console.log("[Scanner: Camera] ✅ FOUND in localDb.global_products!");
+            setProductName(localGlobal.name);
+            setIsModalOpen(true);
+            return;
+          }
+  
+          // 🟢 3. If online, ask the cloud global dictionary & sync it down
+          if (navigator.onLine) {
+            console.log("[Scanner: Camera] 3️⃣ Online mode active: Querying Supabase global_products...");
+            const { data: cloudGlobalProduct } = await supabase
+              .from('global_products')
+              .select('name, barcode')
+              .eq('barcode', barcodeString)
+              .single();
+  
+            if (cloudGlobalProduct) {
+              console.log("[Scanner: Camera] ✅ FOUND in Supabase global_products! Syncing down...");
+              // Sync to local cache so it works offline next time
+              await localDb.global_products.put({
+                ...cloudGlobalProduct,
+                sync_status: 'synced'
+              });
+              setProductName(cloudGlobalProduct.name);
+            } else {
+              console.log("[Scanner: Camera] ❌ Not found anywhere. Brand new item.");
+              setProductName(""); // Brand new item
+            }
+          } else {
+            console.log("[Scanner: Camera] ❌ Offline mode active. Cannot check Supabase fallback.");
+            setProductName(""); // Offline and not found locally
+          }
+          
+          setIsModalOpen(true);
+          
+        } catch (error) {
+          console.error("[Scanner: Camera] 🚨 Lookup error:", error);
+          setProductName("");
+          setIsModalOpen(true);
+        }
+      },
     });
-
-    },
-  });
+  
 
   const handleFinalizeCheckout = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -251,34 +386,47 @@ const handleSelectSearchResult = (product: LocalProduct) => {
       const tripTitle = tripName || "Grocery Trip";
       const cartSummary = cart.map(item => `${item.quantity}x ${item.name}`).join(", ");
 
-      // 1. 🟢 CREATE THE SUPABASE TRANSACTION
-      const transactionPayload = {
-        name: tripTitle,
-        amount: cartTotal, 
-        date: combineDateWithCurrentTime(todayIso),
-        payment_method_id: selectedAccountId,
-        transaction_type: 'cash_out', // Matches standard expenses
-        notes: `Budget Timing: 1/2\nItems: ${cartSummary}` // Timing tag helps Budget.tsx detect it!
-      };
+      // 1. 🟢 FETCH ACTIVE BUDGET FIRST to power the Smart Checkout
+      const { data: setups } = await getAllBudgetSetupsFrontend();
+      const activeSetup = setups?.find((s: any) => s.month === currentMonth && s.data?._year === currentYear);
       
-      const { data: txData, error: txError } = await createTransaction(transactionPayload as any);
-      if (txError) throw txError;
+      let finalTransactionName = tripTitle;
+      let budgetNeedsUpdate = false;
+      let updatedBudgetData = null;
 
-      // 2. 🟢 INJECT INTO THE ACTIVE BUDGET SETUP
-      // Fetch all setups and find the active one for this month
-      const { data: setups } = await getBudgetSetups();
-      if (setups) {
-        const activeSetup = setups.find((s: any) => s.month === currentMonth && s.data?._year === currentYear);
+      if (activeSetup && activeSetup.data) {
+        budgetNeedsUpdate = true;
+        updatedBudgetData = JSON.parse(JSON.stringify(activeSetup.data));
         
-        if (activeSetup && activeSetup.data) {
-          const budgetData = JSON.parse(JSON.stringify(activeSetup.data));
-          
-          // Ensure the category exists in the JSON
-          if (!budgetData[selectedCategory]) {
-            budgetData[selectedCategory] = [];
-          }
+        if (!updatedBudgetData[selectedCategory]) {
+          updatedBudgetData[selectedCategory] = [];
+        }
 
-          // Create the new budget item matching the transaction
+        // 🟢 SMART SCAN: Look for existing matching item (e.g. "Groceries" or exact trip name)
+        const existingItem = updatedBudgetData[selectedCategory].find((item: any) => 
+          item.name.toLowerCase() === tripTitle.toLowerCase() || 
+          item.name.toLowerCase() === selectedCategory.toLowerCase()
+        );
+
+        if (existingItem) {
+          // LINK: Sync transaction name to the budget item so Budget.tsx auto-tags it as paid
+          finalTransactionName = existingItem.name;
+          
+          // Adjust budget goal if they overspent beyond their original allocation
+          const currentGoal = parseFloat(existingItem.amountsByPeriod?.[1] || existingItem.amount || '0');
+          if (cartTotal > currentGoal) {
+            const difference = cartTotal - currentGoal;
+            existingItem.amountsByPeriod = existingItem.amountsByPeriod || {};
+            existingItem.amountsByPeriod[1] = cartTotal.toString();
+            existingItem.amount = cartTotal.toString(); // Legacy fallback
+
+            if (updatedBudgetData._periodTotals && typeof updatedBudgetData._periodTotals[1] === 'number') {
+              updatedBudgetData._periodTotals[1] += difference;
+            }
+            activeSetup.totalAmount = (activeSetup.totalAmount || 0) + difference;
+          }
+        } else {
+          // ADD NEW: Create brand new item in the category
           const newBudgetItem = {
             id: `item-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
             name: tripTitle,
@@ -287,34 +435,48 @@ const handleSelectSearchResult = (product: LocalProduct) => {
             timing: '1/2',
             amountsByPeriod: { 1: cartTotal.toString() }
           };
-
-          budgetData[selectedCategory].push(newBudgetItem);
-
-          // Recalculate Period 1 Total
-          if (budgetData._periodTotals && typeof budgetData._periodTotals[1] === 'number') {
-            budgetData._periodTotals[1] += cartTotal;
+          updatedBudgetData[selectedCategory].push(newBudgetItem);
+          
+          if (updatedBudgetData._periodTotals && typeof updatedBudgetData._periodTotals[1] === 'number') {
+            updatedBudgetData._periodTotals[1] += cartTotal;
           }
-
-          // Patch the setup in the cloud
-          await updateBudgetSetupFrontend({
-            ...activeSetup,
-            totalAmount: (activeSetup.totalAmount || 0) + cartTotal,
-            data: budgetData
-          });
+          activeSetup.totalAmount = (activeSetup.totalAmount || 0) + cartTotal;
         }
       }
+
+      // 2. 🟢 CREATE THE SUPABASE TRANSACTION (Using the Smart Name)
+      const transactionPayload = {
+        name: finalTransactionName,
+        amount: cartTotal, 
+        date: combineDateWithCurrentTime(todayIso),
+        payment_method_id: selectedAccountId,
+        transaction_type: 'cash_out',
+        notes: `Budget Timing: 1/2\nItems: ${cartSummary}`
+      };
       
-      // 3. Clear the session
+      const { error: txError } = await createTransaction(transactionPayload as any);
+      if (txError) throw txError;
+
+      // 3. 🟢 SYNC BUDGET IF NEEDED
+      if (budgetNeedsUpdate && updatedBudgetData) {
+        await updateBudgetSetupFrontend({
+          ...activeSetup,
+          data: updatedBudgetData
+        });
+      }
+      
+      // 4. Clear the session
       setCart([]);
       setTripName("");
       setIsCheckoutOpen(false);
-      alert("Grocery Trip saved and synced to your Budget!");
+      alert("Checkout complete and synced to your Budget!");
       
     } catch (error) {
       console.error("Cloud sync error during checkout:", error);
-      alert("Failed to sync the grocery trip to the cloud.");
+      alert("Failed to sync checkout to the cloud.");
     }
   };
+
 
 
 
@@ -325,7 +487,7 @@ const handleSelectSearchResult = (product: LocalProduct) => {
     const finalBarcode = stateRef.current.scannedCode;
     const numericPrice = parseFloat(productPrice);
 
-    // 🟢 1. Build the Personal Price Tag
+    // 🟢 1. Build the Personal Price Tag (Always happens)
     const newUserPrice = {
       barcode: finalBarcode,
       user_id: user.id,
@@ -336,20 +498,22 @@ const handleSelectSearchResult = (product: LocalProduct) => {
       last_updated: Date.now()
     };
 
-    // 🟢 2. Build the Global Dictionary Entry
-    const newGlobalProduct = {
-      barcode: finalBarcode,
-      name: productName,
-      sync_status: 'pending_insert' as const
-    };
-
     try {
-      // 🟢 3. DOUBLE SAVE (Super fast, works offline)
+      // 🟢 2. ALWAYS save to the user's personal inventory
       await localDb.user_prices.put(newUserPrice);
-      await localDb.global_products.put(newGlobalProduct);
+
+      // 🟢 3. GUARDRAIL: Only push to the Global Master Dictionary if it is a REAL barcode
+      if (!finalBarcode.startsWith('custom-')) {
+        const newGlobalProduct = {
+          barcode: finalBarcode,
+          name: productName,
+          sync_status: 'pending_insert' as const
+        };
+        await localDb.global_products.put(newGlobalProduct);
+      }
 
       // Add to cart and close modal
-      addToCart(newUserPrice as any); // Cast as any if your cart state still expects the old type
+      addToCart(newUserPrice as any); 
       setIsModalOpen(false);
       setProductName("");
       setProductPrice("");
@@ -359,6 +523,7 @@ const handleSelectSearchResult = (product: LocalProduct) => {
       alert("Could not save the item.");
     }
   };
+
 
 
   const handleManualSubmit = async (e: React.FormEvent) => {
@@ -380,18 +545,97 @@ const handleSelectSearchResult = (product: LocalProduct) => {
     setScannedCode(cleanInput);
     
     try {
-      const existingProduct = await localDb.products.get(cleanInput);
-      if (existingProduct) {
-        addToCart(existingProduct);
+      console.log(`\n[Search: Barcode] 🔍 Starting lookup for barcode: ${cleanInput}`);
+
+      // 🟢 1. ALWAYS check personal local database first
+      console.log("[Search: Barcode] 1️⃣ Checking localDb.user_prices...");
+      const userProduct = await localDb.user_prices.get(cleanInput);
+      
+      if (userProduct) {
+        console.log("[Search: Barcode] ✅ FOUND in localDb.user_prices!");
+        addToCart(userProduct as any);
         setTimeout(() => setScannedCode("Waiting for barcode..."), 2000); 
-      } else {
-        setIsModalOpen(true);
+        return;
       }
+
+      // 🟢 2. Check local global cache (Offline dictionary)
+      console.log("[Search: Barcode] 2️⃣ Not in user prices. Checking localDb.global_products (offline cache)...");
+      const localGlobal = await localDb.global_products.get(cleanInput);
+      if (localGlobal) {
+        console.log("[Search: Barcode] ✅ FOUND in localDb.global_products!");
+        setProductName(localGlobal.name);
+        setIsModalOpen(true);
+        return;
+      }
+
+      // 🟢 3. If online, ask the cloud global dictionary & sync it down
+      if (navigator.onLine) {
+        console.log("[Search: Barcode] 3️⃣ Not found locally. Online mode active: Querying Supabase global_products...");
+        const { data: cloudGlobalProduct } = await supabase
+          .from('global_products')
+          .select('name, barcode')
+          .eq('barcode', cleanInput)
+          .single();
+
+        if (cloudGlobalProduct) {
+          console.log("[Search: Barcode] ✅ FOUND in Supabase global_products! Syncing down to localDb...");
+          // Sync to local cache so it works offline next time
+          await localDb.global_products.put({
+            ...cloudGlobalProduct,
+            sync_status: 'synced'
+          });
+          setProductName(cloudGlobalProduct.name);
+        } else {
+          console.log("[Search: Barcode] ❌ Not found anywhere (Local or Cloud). This is a brand new item.");
+          setProductName(""); // Brand new item
+        }
+      } else {
+        console.log("[Search: Barcode] ❌ Offline mode active. Cannot check Supabase fallback.");
+        setProductName(""); // Offline and not found locally
+      }
+      
+      setIsModalOpen(true);
+      
     } catch (error) {
-      console.error("Database error:", error);
+      console.error("[Search: Barcode] 🚨 Lookup error:", error);
+      setProductName("");
+      setIsModalOpen(true);
     }
   };
 
+  // --- EDIT PRICE ON THE FLY ---
+  const handlePriceChange = (barcode: string, newPriceStr: string) => {
+    const newPrice = parseFloat(newPriceStr);
+    
+    // Update the cart state instantly for a snappy UI
+    setCart(prevCart => prevCart.map(item => 
+      item.barcode === barcode ? { ...item, current_price: isNaN(newPrice) ? 0 : newPrice } : item
+    ));
+  };
+
+  const commitPriceToDB = async (item: CartItem) => {
+    try {
+      const existingProduct = await localDb.user_prices.get(item.barcode);
+      
+      // Only update the database if the price actually changed
+      if (existingProduct && existingProduct.current_price !== item.current_price) {
+        const newEntry = { price: item.current_price, date: new Date().toISOString() };
+        
+        // 🟢 CAPPING HISTORY: Append the new price, but only keep the latest 3 entries
+        const newHistory = [...existingProduct.price_history, newEntry].slice(-3);
+        
+        await localDb.user_prices.update(item.barcode, {
+          current_price: item.current_price,
+          price_history: newHistory,
+          // Flag it so the background engine knows to upload this edit
+          sync_status: existingProduct.sync_status === 'pending_insert' ? 'pending_insert' : 'pending_update',
+          last_updated: Date.now()
+        });
+      }
+    } catch (error) {
+      console.error("Failed to commit price to DB:", error);
+    }
+  };
 
 
 
@@ -551,13 +795,25 @@ const handleSelectSearchResult = (product: LocalProduct) => {
                 >
                   
                   <div className="flex items-start justify-between">
-                    <div>
+                  <div>
                       <p className="font-bold text-gray-900 dark:text-white leading-tight">{item.name}</p>
-                      <p className="text-sm font-medium text-gray-500">
-                        {/* 🟢 CHANGED TO ₱ */}
-                        ₱{(item.current_price ?? (item as any).price ?? 0).toFixed(2)} each
-                      </p>
+                      
+                      {/* 🟢 EDITABLE PRICE FIELD */}
+                      <div className="flex items-center gap-1 text-sm font-medium text-gray-500 mt-0.5">
+                        <span className="font-bold text-gray-400">₱</span>
+                        <input
+                          type="number"
+                          step="0.01"
+                          value={item.current_price === 0 ? '' : item.current_price}
+                          onChange={(e) => handlePriceChange(item.barcode, e.target.value)}
+                          onBlur={() => commitPriceToDB(item)}
+                          className="w-16 bg-transparent border-b-2 border-dashed border-gray-300 dark:border-gray-600 focus:border-indigo-500 dark:focus:border-indigo-400 outline-none text-gray-900 dark:text-white font-bold hide-arrows p-0 text-center transition-colors"
+                          placeholder="0.00"
+                        />
+                        <span className="text-xs">each</span>
+                      </div>
                     </div>
+
                     <div className="flex flex-col items-end">
                       <p className="font-black text-gray-900 dark:text-white">
                         {/* 🟢 CHANGED TO ₱ */}
@@ -705,36 +961,62 @@ const handleSelectSearchResult = (product: LocalProduct) => {
                 />
               </div>
 
-              {/* 🟢 LIVE SEARCH RESULTS DROPDOWN */}
-              {searchMode === 'name' && searchResults.length > 0 && (
+                            {/* 🟢 LIVE SEARCH RESULTS DROPDOWN */}
+                            {searchMode === 'name' && searchResults.length > 0 && (
                 <div className="max-h-48 overflow-y-auto border-[3px] border-black rounded-2xl bg-white dark:bg-gray-800 flex flex-col divide-y-[1px] divide-gray-200 dark:divide-gray-700 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]">
-                  {searchResults.map(product => (
-                    <button
-                      key={product.barcode}
-                      type="button"
-                      onClick={() => handleSelectSearchResult(product)}
-                      className="p-3 text-left hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors flex justify-between items-center"
-                    >
-                      <span className="font-bold text-sm text-gray-900 dark:text-white truncate pr-2">{product.name}</span>
-                      <span className="text-xs font-black text-indigo-600 dark:text-indigo-400 whitespace-nowrap">
-                        ₱{(product.current_price ?? (product as any).price ?? 0).toFixed(2)}
-                      </span>
-                    </button>
-                  ))}
+                  {searchResults.map(product => {
+                    // Check if it's a global-only item
+                    const isGlobalOnly = product.current_price === 0 || !product.price_history;
+
+                    return (
+                      <button
+                        key={product.barcode}
+                        type="button"
+                        onClick={() => handleSelectSearchResult(product)}
+                        className="p-3 text-left hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors flex justify-between items-center group"
+                      >
+                        <span className="font-bold text-sm text-gray-900 dark:text-white truncate pr-2">{product.name}</span>
+                        
+                        {isGlobalOnly ? (
+                          // 🟢 GLOBAL ITEM UI: Prompts them to set a price
+                          <span className="flex items-center gap-1 text-[10px] font-black text-gray-400 group-hover:text-indigo-500 uppercase tracking-widest whitespace-nowrap transition-colors">
+                            <ShoppingCart className="w-3 h-3" /> Set Price
+                          </span>
+                        ) : (
+                          // 🟢 PERSONAL ITEM UI: Shows their saved price
+                          <span className="text-xs font-black text-indigo-600 dark:text-indigo-400 whitespace-nowrap">
+                            ₱{(product.current_price ?? (product as any).price ?? 0).toFixed(2)}
+                          </span>
+                        )}
+                      </button>
+                    );
+                  })}
                 </div>
               )}
               
-              {/* NO RESULTS MESSAGE */}
+              {/* 🟢 UPGRADED NO RESULTS MESSAGE: Generate Custom Item */}
               {searchMode === 'name' && manualBarcode.trim().length > 1 && searchResults.length === 0 && (
-                 <div className="text-center p-4 text-xs font-bold text-gray-500">No matching products found.</div>
+                 <div className="text-center p-6 border-[3px] border-black rounded-2xl bg-gray-50 dark:bg-gray-800 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] flex flex-col items-center gap-3 mt-4 animate-in fade-in slide-in-from-top-2">
+                   <span className="text-xs font-bold text-gray-500">No matching products found.</span>
+                   
+                   <button
+                     type="button"
+                     onClick={() => {
+                        setIsManualInputOpen(false);
+                        setSearchResults([]);
+                        // 🟢 Create a dummy barcode so loose items can be added!
+                        setScannedCode(`custom-${Date.now()}`); 
+                        setProductName(manualBarcode); // Pre-fill their exact search term
+                        setIsModalOpen(true);
+                        setManualBarcode("");
+                     }}
+                     className="w-full flex items-center justify-center gap-2 bg-indigo-100 dark:bg-indigo-900/40 text-indigo-700 dark:text-indigo-300 py-3 rounded-xl font-black uppercase tracking-widest border-2 border-indigo-200 dark:border-indigo-800 hover:border-indigo-400 dark:hover:border-indigo-500 transition-colors text-[10px]"
+                   >
+                     <Plus className="w-4 h-4" /> Create "{manualBarcode}"
+                   </button>
+                 </div>
               )}
-              
-              {/* ONLY SHOW SUBMIT BUTTON IN BARCODE MODE */}
-              {searchMode === 'barcode' && (
-                <button type="submit" className="w-full flex items-center justify-center gap-2 mt-4 bg-indigo-600 text-white py-4 rounded-2xl font-black uppercase tracking-widest border-[3px] border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none transition-all">
-                  Lookup Item
-                </button>
-              )}
+
             </form>
 
 
@@ -796,7 +1078,7 @@ const handleSelectSearchResult = (product: LocalProduct) => {
                   </select>
                 </div>
 
-                {/* 🟢 PAYMENT ACCOUNT DROPDOWN */}
+                                            {/* 🟢 PAYMENT ACCOUNT DROPDOWN */}
                 <div>
                   <label className="block text-[10px] font-black uppercase tracking-widest text-gray-500 mb-2">Paid With</label>
                   <select 
@@ -806,9 +1088,31 @@ const handleSelectSearchResult = (product: LocalProduct) => {
                     className="w-full p-3 rounded-2xl bg-gray-50 dark:bg-gray-800 border-[3px] border-black text-gray-900 dark:text-white font-bold outline-none focus:border-indigo-500 appearance-none text-xs"
                   >
                     <option value="" disabled>Select Account...</option>
-                    {/* Assuming you pass accounts as a prop or fetch them globally! */}
-                    <option value="cash-wallet-id">Cash</option>
-                    <option value="bdo-debit-id">BDO Debit</option>
+                    
+                    {/* 🟢 GROUP 1: Bank & Cash (Debit) */}
+                    <optgroup label="Bank & Cash">
+                      {accounts
+                        .filter(acc => acc.type !== 'Credit' && acc.classification !== 'Credit Card')
+                        .map(acc => (
+                          <option key={acc.id} value={acc.id}>
+                            {acc.bank}
+                          </option>
+                      ))}
+                    </optgroup>
+
+                    {/* 🟢 GROUP 2: Credit Cards */}
+                    {accounts.some(acc => acc.type === 'Credit' || acc.classification === 'Credit Card') && (
+                      <optgroup label="Credit Cards">
+                        {accounts
+                          .filter(acc => acc.type === 'Credit' || acc.classification === 'Credit Card')
+                          .map(acc => (
+                            <option key={acc.id} value={acc.id}>
+                              {acc.bank}
+                            </option>
+                        ))}
+                      </optgroup>
+                    )}
+                    
                   </select>
                 </div>
               </div>
@@ -816,6 +1120,56 @@ const handleSelectSearchResult = (product: LocalProduct) => {
               <button type="submit" className="w-full flex items-center justify-center gap-2 mt-4 bg-indigo-600 text-white py-4 rounded-2xl font-black uppercase tracking-widest border-[3px] border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none transition-all">
                 Finalize & Sync
               </button>
+            </form>
+
+          </div>
+        </div>
+      )}
+
+      {/* 🟢 STARTUP BUDGET MODAL */}
+      {showStartupModal && (
+        <div className="fixed inset-0 z-[300] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md animate-in fade-in zoom-in duration-300">
+          <div className="bg-white dark:bg-gray-900 rounded-[2.5rem] w-full max-w-sm p-8 shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] relative border-4 border-black text-center flex flex-col items-center">
+            
+            <div className="w-16 h-16 bg-indigo-100 dark:bg-indigo-900/40 rounded-full border-2 border-black flex items-center justify-center mb-4 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]">
+              <ShoppingCart className="w-8 h-8 text-indigo-600 dark:text-indigo-400" />
+            </div>
+
+            <h3 className="text-xl font-black text-gray-900 dark:text-white mb-2 uppercase tracking-tight leading-tight">
+              Out for a grocery run I see?
+            </h3>
+            <p className="text-sm font-bold text-gray-500 mb-6">
+              How much is your budget?
+            </p>
+            
+            <form onSubmit={handleStartupSubmit} className="w-full space-y-6">
+              <div className="relative flex justify-center">
+                <span className="absolute left-6 top-1/2 -translate-y-1/2 font-black text-gray-400 text-xl">₱</span>
+                <input 
+                  type="number" 
+                  autoFocus 
+                  value={startupBudgetInput} 
+                  onChange={(e) => setStartupBudgetInput(e.target.value)} 
+                  className="w-full py-4 pl-12 pr-4 rounded-2xl bg-gray-50 dark:bg-gray-800 border-[3px] border-black text-gray-900 dark:text-white text-2xl font-black outline-none focus:border-indigo-500 text-center hide-arrows shadow-inner" 
+                  placeholder="0.00" 
+                />
+              </div>
+
+              <div className="flex gap-3">
+                <button 
+                  type="button" 
+                  onClick={() => setShowStartupModal(false)} 
+                  className="flex-1 py-4 rounded-xl font-black uppercase tracking-widest text-[10px] bg-gray-200 dark:bg-gray-800 text-gray-700 dark:text-gray-300 border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[1px] hover:translate-y-[1px] transition-all"
+                >
+                  Cancel
+                </button>
+                <button 
+                  type="submit" 
+                  className="flex-[2] py-4 rounded-xl font-black uppercase tracking-widest text-[10px] bg-indigo-600 text-white border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[1px] hover:translate-y-[1px] transition-all"
+                >
+                  Let's Go!
+                </button>
+              </div>
             </form>
 
           </div>
