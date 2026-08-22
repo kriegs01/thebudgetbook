@@ -2024,6 +2024,9 @@ useEffect(() => {
                 {/* 🟢 MOBILE NAVIGATION: Floating Bar & More Tray */}
       {isMobile && (
         <>
+ {/* 🟢 BOTTOM BLUR BLANKET */}
+ <div className="fixed bottom-0 left-0 w-full h-32 pointer-events-none z-[90] bg-gradient-to-t from-gray-100 dark:from-gray-950 via-gray-100/80 dark:via-gray-950/80 to-transparent" />
+
           {/* 1. Floating Nav Bar */}
           <div id="global-nav-bar" className="fixed bottom-6 left-0 right-0 z-[100] flex items-center justify-center pointer-events-none">
             <nav className={`pointer-events-auto flex items-center bg-white dark:bg-gray-900 border-[3px] border-black rounded-full px-4 py-2.5 shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] transition-all duration-300 ${

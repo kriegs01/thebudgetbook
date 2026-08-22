@@ -14,6 +14,9 @@ import { useTheme } from '../src/contexts/ThemeContext';
 import useMediaQuery from '../src/hooks/useMediaQuery';
 import { TransactionList } from '../src/components/TransactionList';
 import type { Transaction, Account } from '../types';
+import { useLocation, useNavigate } from 'react-router-dom';
+
+
 
 const FILTER_MIN_DATE = '2025-01-01';
 
@@ -213,6 +216,23 @@ function TransactionsPage({ transactions, loading = false, onTransactionDeleted,
   const { getAccentClasses } = useTheme();
   const { userProfile } = useAuth();
   const isMobile = useMediaQuery('(max-width: 767px)');
+
+  // 🟢 ADD THESE ROUTER HOOKS:
+  const location = useLocation();
+  const navigate = useNavigate();
+
+  // 🟢 ADD THIS EFFECT TO CATCH THE DASHBOARD FLAG:
+  useEffect(() => {
+    if (location.state?.autoOpenAddTray) {
+      if (isMobile) {
+        setShowFabMenu(true);
+      } else {
+        setShowTypeModal(true);
+      }
+      // Clean up the flag so it doesn't pop open again if the user refreshes the page!
+      navigate(location.pathname, { replace: true, state: {} });
+    }
+  }, [location.state, isMobile, navigate, location.pathname]);
 
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [people, setPeople] = useState<SupabasePerson[]>([]);

@@ -521,8 +521,26 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
       const linkedInstallments = installments.filter(inst => inst.billerId === biller.id);
       if (linkedInstallments.length > 0) return linkedInstallments.reduce((sum, inst) => sum + inst.monthlyAmount, 0);
     }
-    return biller.expectedAmount || 0;
+    
+    // 🟢 SMART ENGINE RESOLVER
+    // Evaluates the current real-world month to catch any active scheduled increases
+    const today = new Date();
+    const currentMonthName = MONTHS[today.getMonth()];
+    const currentYearStr = today.getFullYear().toString();
+    
+    const baseAmount = biller.expectedAmount || 0;
+    
+    const dummySchedule = {
+      id: 'temp',
+      month: currentMonthName,
+      year: currentYearStr,
+      expectedAmount: baseAmount
+    };
+    
+    const { amount: calculatedAmount } = getScheduleExpectedAmount(biller, dummySchedule as any, accounts, transactions);
+    return calculatedAmount > 0 ? calculatedAmount : baseAmount;
   };
+
 
   const renderBillerCard = (biller: Biller) => {
     const displayAmount = getExpectedAmount(biller);
