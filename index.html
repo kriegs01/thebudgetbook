@@ -7,7 +7,7 @@
     <link rel="icon" type="image/png" href="/favicon.png" />
     <!-- iPadOS/iOS Home Screen Icon -->
     <link rel="apple-touch-icon" sizes="180x180" href="/favicon.png" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=0, viewport-fit=cover" />
     <meta name="theme-color" content="#4F46E5" />
     <link rel="manifest" href="/manifest.json" />
     <title>Budee</title>
@@ -17,37 +17,46 @@
         darkMode: 'class',
       }
     </script>
-                <style>
-                  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
-                  
-                  /* 🟢 SAFARI ASSASSIN: Completely freeze the background so the OS can't pull it */
-                  html, body {
-                    font-family: 'Inter', sans-serif;
-                    position: fixed;
-                    top: 0;
-                    left: 0;
-                    width: 100%;
-                    height: 100%;
-                    overflow: hidden;
-                    overscroll-behavior: none;
-                    touch-action: none;
-                  }
-        
-                  /* 🟢 Move all scrolling inside your React app instead */
-                  #root {
-                    width: 100%;
-                    height: 100%;
-                    overflow-y: auto;
-                    overflow-x: hidden;
-                    -webkit-overflow-scrolling: touch; /* Keeps the buttery smooth iOS momentum scrolling */
-                  }
-                  
-                  .glass-effect {
-                    background: rgba(255, 255, 255, 0.7);
-                    backdrop-filter: blur(10px);
-                    border: 1px solid rgba(255, 255, 255, 0.2);
-                  }
-                </style> 
+                    <style>
+                      @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+                      
+                      /* 🟢 PROPORTIONAL MOBILE SCALING (Forces UI to scale like a vector on phones) */
+                      @media (max-width: 767px) {
+                        html {
+                          /* Tweak this number (e.g., 3.8vw, 4.5vw) until the UI scale feels perfect! */
+                          font-size: 4.2vw !important;
+                        }
+                      }
+                
+                      /* 🟢 SAFARI ASSASSIN: Completely freeze the background so the OS can't pull it */
+                      html, body {
+                        font-family: 'Inter', sans-serif;
+                        position: fixed;
+                        top: 0;
+                        left: 0;
+                        width: 100%;
+                        height: 100%;
+                        overflow: hidden;
+                        overscroll-behavior: none;
+                        touch-action: none;
+                      }
+                
+                      /* 🟢 Move all scrolling inside your React app instead */
+                      #root {
+                        width: 100%;
+                        height: 100%;
+                        overflow-y: auto;
+                        overflow-x: hidden;
+                        -webkit-overflow-scrolling: touch; /* Keeps the buttery smooth iOS momentum scrolling */
+                      }
+                      
+                      .glass-effect {
+                        background: rgba(255, 255, 255, 0.7);
+                        backdrop-filter: blur(10px);
+                        border: 1px solid rgba(255, 255, 255, 0.2);
+                      }
+                    </style> 
+                
           
   <script type="importmap">
 {

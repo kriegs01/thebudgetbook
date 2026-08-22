@@ -433,7 +433,24 @@ const Dashboard: React.FC<DashboardProps> = ({ accounts, budget, installments, t
       .sort((a, b) => a.dueDate.getTime() - b.dueDate.getTime())
       .slice(0, 5);
 
-
+      const [isAtTop, setIsAtTop] = useState(true);
+      const topSentinelRef = useRef<HTMLDivElement>(null);
+    
+      useEffect(() => {
+        const observer = new IntersectionObserver(
+          ([entry]) => {
+            setIsAtTop(entry.isIntersecting);
+          },
+          { threshold: 0.1 }
+        );
+    
+        if (topSentinelRef.current) {
+          observer.observe(topSentinelRef.current);
+        }
+    
+        return () => observer.disconnect();
+      }, []);
+    
   
   // 🟢 DUE SOON: Custom Alert Window State (Synced to DB)
   const [showUrgentSettings, setShowUrgentSettings] = useState(false);
@@ -514,15 +531,19 @@ const Dashboard: React.FC<DashboardProps> = ({ accounts, budget, installments, t
   
 
   return (
-    <div className={`animate-in fade-in duration-500 max-w-7xl mx-auto w-full overflow-hidden ${isMobile ? 'pt-8' : 'pt-2'}`}>
-      {/* Greeting Header */}
-      <DashboardHeader name={userProfile?.first_name || 'Budee User'} />
+    <div className={`animate-in fade-in duration-500 max-w-7xl mx-auto w-full overflow-hidden ${isMobile ? 'pt-2' : 'pt-2'}`}>
+    {/* 🟢 Invisible Top Marker for Scroll Detection */}
+    <div ref={topSentinelRef} className="h-1 w-full pointer-events-none" />
+
+    {/* Greeting Header */}
+    <DashboardHeader name={userProfile?.first_name || 'Budee User'} />
+
 
       {/* Main Content Area */}
       <div className={`space-y-8 pb-24 ${isMobile ? 'px-4' : 'px-8'}`}>
            {/* Top Cards */}
             {/* 🟢 TOP METRICS CAROUSEL (Now with anchor!) */}
-            <div ref={dashboardTopRef} className="relative w-full -mt-4 scroll-mt-[100px]">
+            <div ref={dashboardTopRef} className="relative w-full -mt-8 scroll-mt-[100px]">
 
         <div 
           ref={metricScrollRef}
@@ -601,7 +622,7 @@ const Dashboard: React.FC<DashboardProps> = ({ accounts, budget, installments, t
         </div>
 
         {/* 🟢 Mobile Dot Indicators */}
-        <div className="flex justify-center gap-2 mt-1 md:hidden">
+        <div className="flex justify-center gap-2 mt-0 md:hidden">
           {[0, 1, 2].map((i) => (
             <div 
               key={i} 
@@ -618,7 +639,7 @@ const Dashboard: React.FC<DashboardProps> = ({ accounts, budget, installments, t
             {/* 🟢 3 QUICK ACTIONS */}
             <div className="grid grid-cols-3 gap-3 !mt-3 !mb-2 px-4 md:px-0">
         {[
-          { icon: Plus, label: 'Add Txn', color: 'bg-[#c4a1ff]', route: '/transactions' },
+          { icon: Plus, label: 'Add Transaction', color: 'bg-[#c4a1ff]', route: '/transactions' },
           { icon: Sparkles, label: 'Crystal Ball', color: 'bg-white', route: '/budget' },
           { icon: Tag, label: 'PriceTag', color: 'bg-white', route: '/scanner' },
         ].map((action, idx) => (
@@ -640,16 +661,20 @@ const Dashboard: React.FC<DashboardProps> = ({ accounts, budget, installments, t
         ))}
       </div>
 
-
-
-                              {/* 🟢 UPCOMING DUE DATES BOX (Collapsible) */}
-        {sortedDues.length > 0 && (
+                {/* 🟢 UPCOMING DUE DATES BOX (Collapsible) */}
+                {sortedDues.length > 0 && (
           <div 
             ref={dueSoonRef} 
-            className={`!mt-2 scroll-mt-[120px] w-full transition-all duration-500 ${isDueSoonExpanded ? '!mb-[55vh]' : '!mb-12'}`}
+            className={`!mt-6 scroll-mt-[120px] w-full transition-all duration-500 md:!mb-2 ${
+              isDueSoonExpanded 
+                ? '!mb-[55vh]' 
+                : isAtTop 
+                  ? '!mb-28' 
+                  : '!mb-4'
+            }`}
           >
 
-            
+ 
             {/* Interactive Header (Restored the slim py-2 px-4 padding!) */}
             <div 
               onClick={handleToggleDueSoon}
@@ -739,9 +764,6 @@ const Dashboard: React.FC<DashboardProps> = ({ accounts, budget, installments, t
             </div>
           </div>
         )}
-
-
-
 
 
              {/* 🟢 RECENT ACTIVITY (Always visible, just gets pushed down!) */}

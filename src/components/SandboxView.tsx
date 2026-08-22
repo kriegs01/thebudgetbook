@@ -1,7 +1,7 @@
 // src/components/SandboxView.tsx
 import React, { useState, useRef } from 'react';
 import { useSandbox } from '../components/useSandbox';
-import { Plus, Trash2, Calendar, WalletCards, CalendarDays, ChevronLeft, ChevronRight, CreditCard } from 'lucide-react';
+import { Plus, Trash2, Calendar, WalletCards, CalendarDays, ChevronLeft, ChevronRight, CreditCard, Sparkles } from 'lucide-react';
 import { PageHeader } from './PageHeader';
 import { useTheme } from '../contexts/ThemeContext';
 import { calculateBillingCycles } from '../utils/billingCycles';
@@ -271,10 +271,8 @@ export const SandboxView: React.FC<SandboxViewProps> = ({
   }, []);
 
 
-
-
   return (
-    <div className={`slide-in-from-bottom-4 duration-500 bg-[#F4F3EF] dark:bg-gray-950 min-h-screen pb-48 pt-16 overflow-y-auto w-full px-1 lg:px-8 ${isTrayOpen ? 'relative z-20' : 'animate-in'}`}>
+    <div className={`slide-in-from-bottom-4 duration-500 bg-[#F4F3EF] dark:bg-gray-950 min-h-screen pb-48 pt-4 overflow-y-auto w-full px-1 lg:px-8 ${isTrayOpen ? 'relative z-20' : 'animate-in'}`}>
 
       {/* 🔮 PAGE HEADER COMPONENT */}
       <div className="shrink-0 mb-6 w-full">
@@ -282,9 +280,8 @@ export const SandboxView: React.FC<SandboxViewProps> = ({
           title="Crystal Ball"
           subtitle="Check your future"
           icon={
-            <div className={`w-14 h-14 rounded-2xl flex items-center justify-center text-3xl border-[3px] border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] -rotate-3 transition-all hover:rotate-0 hover:scale-110 z-10 relative ${getAccentClasses('bg')}`}>
-              🔮
-            </div>
+            <div className={`w-14 h-14 rounded-2xl flex items-center justify-center text-white border-[3px] border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] -rotate-3 transition-all hover:rotate-0 hover:scale-110 z-10 relative ${getAccentClasses('bg')}`}>              {/* 🟢 Replaced the emoji with the Lucide Sparkles icon! */}
+              <Sparkles className="w-7 h-7" />            </div>
           }
           actions={
             <button 
@@ -319,14 +316,10 @@ export const SandboxView: React.FC<SandboxViewProps> = ({
             </p>
           </div>
 
-          {/* TO: */}
-<div className="px-6 pb-40 pt-6 lg:p-0 max-h-[70vh] lg:max-h-none overflow-y-auto lg:overflow-visible block space-y-6 bg-[#F4F3EF] dark:bg-gray-900 lg:bg-transparent lg:dark:bg-transparent">
-
-
-
-
-            
-            <div className="p-6 bg-white dark:bg-gray-900 border-4 border-black rounded-2xl shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] shrink-0">
+          {/* Tray */}
+<div className="px-6 pb-40 pt-1 lg:p-0 max-h-[70vh] lg:max-h-none overflow-y-auto lg:overflow-visible block space-y-6 bg-[#F4F3EF] dark:bg-gray-900 lg:bg-transparent lg:dark:bg-transparent">
+        
+            <div className="p-2 bg-white dark:bg-gray-900 border-4 border-black rounded-2xl shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] shrink-0">
               <h2 className="text-xl font-black mb-2 uppercase">Money-Chill Zone</h2>
               <div className="flex items-center border-2 border-black rounded-xl px-3 py-2.5 bg-gray-50 dark:bg-gray-800 focus-within:ring-2 focus-within:ring-amber-400 transition-all mt-4">
                 <span className="text-gray-400 font-bold mr-2 text-sm">₱</span>

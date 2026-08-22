@@ -217,22 +217,27 @@ function TransactionsPage({ transactions, loading = false, onTransactionDeleted,
   const { userProfile } = useAuth();
   const isMobile = useMediaQuery('(max-width: 767px)');
 
-  // 🟢 ADD THESE ROUTER HOOKS:
-  const location = useLocation();
-  const navigate = useNavigate();
-
-  // 🟢 ADD THIS EFFECT TO CATCH THE DASHBOARD FLAG:
-  useEffect(() => {
-    if (location.state?.autoOpenAddTray) {
-      if (isMobile) {
-        setShowFabMenu(true);
-      } else {
-        setShowTypeModal(true);
+    // 🟢 ADD THESE ROUTER HOOKS:
+    const location = useLocation();
+    const navigate = useNavigate();
+  
+    // 🟢 ADD THIS EFFECT TO CATCH THE DASHBOARD FLAG:
+    useEffect(() => {
+      if (location.state?.autoOpenAddTray) {
+        // 1. Add a tiny delay so the page mounts completely before the tray animates
+        setTimeout(() => {
+          if (isMobile) {
+            setShowFabMenu(true);
+          } else {
+            setShowTypeModal(true);
+          }
+        }, 50);
+        
+        // 2. Erase the flag using the native browser history API to avoid triggering a React re-render
+        window.history.replaceState({}, document.title);
       }
-      // Clean up the flag so it doesn't pop open again if the user refreshes the page!
-      navigate(location.pathname, { replace: true, state: {} });
-    }
-  }, [location.state, isMobile, navigate, location.pathname]);
+    }, [location.state, isMobile]);
+  
 
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [people, setPeople] = useState<SupabasePerson[]>([]);
@@ -872,29 +877,34 @@ function TransactionsPage({ transactions, loading = false, onTransactionDeleted,
 
   return (
     <>
-      <div className={`min-h-screen bg-gray-50 dark:bg-gray-950 transition-colors duration-200 overflow-x-hidden ${isMobile ? 'pt-10' : 'pt-8'}`}>
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 w-full">
-          <div ref={headerRef}>
-            <PageHeader
-              title="Transactions"
-              subtitle="Keep tabs on your funds"
-              icon={<div className={`w-14 h-14 rounded-2xl flex items-center justify-center text-white border-[3px] border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] -rotate-3 transition-all hover:rotate-0 hover:scale-110 z-10 relative ${getAccentClasses('bg')}`}>
-                <FileText className="w-7 h-7" />
-              </div>}
-              actions={!isMobile && (
-                <button onClick={() => setShowTypeModal(true)} className={`flex items-center gap-2 text-white px-5 py-3 rounded-xl font-bold transition-all text-sm border-[3px] border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[2px] hover:translate-y-[2px] ${getAccentClasses('bg')}`}>
-                  <Plus className="w-4 h-4" />
-                  <span>Add Transaction</span>
-                </button>
-              )} />
-          </div>
+      <div className={`min-h-screen bg-gray-50 dark:bg-gray-950 transition-colors duration-200 overflow-x-hidden ${isMobile ? 'pt-6' : 'pt-6'}`}>
+      <div className="space-y-3 lg:space-y-8 animate-in fade-in duration-500 w-full max-w-7xl mx-auto pt-2 lg:pt-10">
+  <div ref={headerRef}> 
+    <PageHeader
+      title="Transactions"
+      subtitle="Keep tabs on your funds"
+      icon={
+        <div className={`w-14 h-14 rounded-2xl flex items-center justify-center text-white border-[3px] border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] -rotate-3 transition-all hover:rotate-0 hover:scale-110 z-10 relative ${getAccentClasses('bg')}`}>
+          <FileText className="w-7 h-7" />
+        </div>
+      }
+      actions={!isMobile && (
+        <button onClick={() => setShowTypeModal(true)} className={`flex items-center gap-2 text-white px-5 py-3 rounded-xl font-bold transition-all text-sm border-[3px] border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[2px] hover:translate-y-[2px] ${getAccentClasses('bg')}`}>
+          <Plus className="w-4 h-4" />
+          <span>Add Transaction</span>
+        </button>
+      )} 
+    />
+  </div>
 
-          <div className="bg-white dark:bg-gray-900 border-4 border-black rounded-2xl shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] mb-6">
-            <button
-              className="p-4 flex justify-between items-center w-full disabled:cursor-auto"
-              onClick={() => setIsFiltersOpen(p => !p)}
-              disabled={!isMobile}
-            >
+            {/* 🟢 Added -mt-6 to pull the filters box upward against the header! */}
+              <div className="!-mt-6 bg-white dark:bg-gray-900 border-4 border-black rounded-2xl shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] mb-2 relative z-10">
+                <button
+                  className="p-4 flex justify-between items-center w-full disabled:cursor-auto"
+                  onClick={() => setIsFiltersOpen(p => !p)}
+                  disabled={!isMobile}
+                >
+
               <div className="flex items-center gap-3">
                 <Filter className="w-5 h-5 text-gray-400" />
                 <h3 className="text-sm font-bold uppercase text-gray-600 dark:text-gray-400 tracking-widest">
