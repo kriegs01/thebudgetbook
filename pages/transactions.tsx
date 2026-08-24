@@ -217,26 +217,29 @@ function TransactionsPage({ transactions, loading = false, onTransactionDeleted,
   const { userProfile } = useAuth();
   const isMobile = useMediaQuery('(max-width: 767px)');
 
-    // 🟢 ADD THESE ROUTER HOOKS:
-    const location = useLocation();
-    const navigate = useNavigate();
-  
-    // 🟢 ADD THIS EFFECT TO CATCH THE DASHBOARD FLAG:
-    useEffect(() => {
-      if (location.state?.autoOpenAddTray) {
-        // 1. Add a tiny delay so the page mounts completely before the tray animates
-        setTimeout(() => {
-          if (isMobile) {
-            setShowFabMenu(true);
-          } else {
-            setShowTypeModal(true);
-          }
-        }, 50);
-        
-        // 2. Erase the flag using the native browser history API to avoid triggering a React re-render
-        window.history.replaceState({}, document.title);
-      }
-    }, [location.state, isMobile]);
+  const location = useLocation();
+  const navigate = useNavigate();
+  const hasAutoOpened = useRef(false);
+
+  useEffect(() => {
+    if (location.state?.autoOpenAddTray && !hasAutoOpened.current) {
+      hasAutoOpened.current = true; 
+
+      setTimeout(() => {
+        if (isMobile) {
+          // 🟢 Only open the sliding tray on mobile
+          setShowFabMenu(true); 
+        } else {
+          // 🟢 Only open the center modal on desktop/iPad
+          setShowTypeModal(true); 
+        }
+      }, 300);
+      
+      // Wipe the history state
+      window.history.replaceState({}, '');
+    }
+  }, [location.state, isMobile]);
+
   
 
   const [accounts, setAccounts] = useState<Account[]>([]);
@@ -1052,15 +1055,17 @@ function TransactionsPage({ transactions, loading = false, onTransactionDeleted,
 
       <Portal>
         {showForm && (
-          <div className="fixed inset-0 z-[999] flex items-center justify-center p-2 sm:p-4 bg-black/60 backdrop-blur-md">
-            <div className="w-full max-w-md bg-white dark:bg-gray-900 border-4 border-black rounded-2xl shadow-2xl sm:shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] transition-all max-h-[95vh] flex flex-col">
-              <div className="flex-shrink-0 p-6 md:p-8 pb-4 md:pb-6 relative">
+          <div className="fixed inset-0 z-[999] flex items-center justify-center p-4 md:p-6 bg-black/60 backdrop-blur-md">
+            <div className="w-full max-w-md bg-white dark:bg-gray-900 border-4 border-black rounded-2xl shadow-2xl sm:shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] transition-all max-h-[75vh] flex flex-col">
+              <div className="flex-shrink-0 p-5 md:p-6 pb-2 md:pb-3 relative">
                 {formSource === 'top' && !editingTxId && (
                   <button
                     onClick={() => { setShowForm(false); setShowTypeModal(true); setFormSource(null); }}
                     className="absolute left-4 top-4 md:left-6 md:top-6 p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full transition-colors"
                     aria-label="Back to type selection"
                   >
+
+
                     <ArrowLeft className="w-5 h-5 text-gray-400" />
                   </button>
                 )}
@@ -1092,7 +1097,7 @@ function TransactionsPage({ transactions, loading = false, onTransactionDeleted,
               </div>
 
               <div className="flex-1 overflow-y-auto overflow-x-hidden px-6 md:px-8">
-                <form id="transaction-form" onSubmit={onSubmit} className="space-y-4 md:space-y-5">
+              <form id="transaction-form" onSubmit={onSubmit} className="space-y-3">⁠
                   {(form.transactionType !== 'transfer' || editingTxId) && (
                     <div>
                       <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">
@@ -1106,7 +1111,7 @@ function TransactionsPage({ transactions, loading = false, onTransactionDeleted,
                           form.transactionType === 'cash_in' ? 'e.g. Salary, Deposit' :
                             form.transactionType === 'loan' ? 'e.g. Loan to John' :
                               'e.g. Groceries, Gas, etc.'}
-                        className={`w-full bg-white dark:bg-gray-800 border-2 border-black dark:border-gray-700 rounded-xl p-3.5 font-bold outline-none focus:ring-offset-2 ${getAccentClasses('ring')} transition-all text-sm`} />
+                        className={`w-full bg-white dark:bg-gray-800 border-2 border-black dark:border-gray-700 rounded-xl py-2.5 px-3 font-bold outline-none focus:ring-offset-2 ${getAccentClasses('ring')} transition-all text-sm`} />
                     </div>
                   )}
 
@@ -1121,7 +1126,7 @@ function TransactionsPage({ transactions, loading = false, onTransactionDeleted,
                         value={form.amount}
                         onChange={e => setForm(f => ({ ...f, amount: e.target.value }))}
                         required
-                        className={`w-full bg-white dark:bg-gray-800 border-2 border-black dark:border-gray-700 rounded-xl p-3.5 pl-8 text-lg font-black outline-none focus:ring-offset-2 ${getAccentClasses('ring')} transition-all`} />
+                        className={`w-full bg-white dark:bg-gray-800 border-2 border-black dark:border-gray-700 rounded-xl py-2.5 px-3py-2.5 px-3 pl-8 text-lg font-black outline-none focus:ring-offset-2 ${getAccentClasses('ring')} transition-all`} />
                     </div>
                   </div>
 
@@ -1175,7 +1180,10 @@ function TransactionsPage({ transactions, loading = false, onTransactionDeleted,
                                   value={form.paymentMethodId}
                                   onChange={e => setForm(f => ({ ...f, paymentMethodId: e.target.value }))}
                                   className={`w-full min-w-0 bg-white dark:bg-gray-800 border-2 border-black dark:border-gray-700 rounded-xl p-3.5 font-bold text-sm appearance-none outline-none focus:ring-offset-2 ${getAccentClasses('ring')}`}>
-                                  {accounts.filter(a => a.type !== 'Credit').map(a => <option key={a.id} value={a.id}>{a.bank}</option>)}
+                                  {/* Transfer From */}
+                                  {accounts.filter(a => a.type !== 'Credit' && a.classification !== 'Revolving Credit' && a.subtype !== 'Loan_Bundle').map(a => (
+                                    <option key={a.id} value={a.id}>{a.bank}</option>
+                                  ))}
                                 </select>
                               )}
                             </div>
@@ -1186,7 +1194,8 @@ function TransactionsPage({ transactions, loading = false, onTransactionDeleted,
                                 onChange={e => setForm(f => ({ ...f, transferToAccountId: e.target.value }))}
                                 className={`w-full min-w-0 bg-white dark:bg-gray-800 border-2 ${getAccentClasses('border')} rounded-xl p-3.5 font-bold text-sm appearance-none outline-none focus:ring-offset-2 ${getAccentClasses('ring')}`}>
                                 <option value="">Select Destination</option>
-                                {accounts.filter(a => a.id !== form.paymentMethodId && a.type !== 'Credit').map(a => (
+                                {/* Transfer To */}
+                                {accounts.filter(a => a.id !== form.paymentMethodId && a.type !== 'Credit' && a.classification !== 'Revolving Credit' && a.subtype !== 'Loan_Bundle').map(a => (
                                   <option key={a.id} value={a.id}>{a.bank}</option>
                                 ))}
                               </select>
@@ -1229,7 +1238,9 @@ function TransactionsPage({ transactions, loading = false, onTransactionDeleted,
                                 value={form.paymentMethodId}
                                 onChange={e => setForm(f => ({ ...f, paymentMethodId: e.target.value }))}
                                 className={`w-full min-w-0 bg-white dark:bg-gray-800 border-2 border-black dark:border-gray-700 rounded-xl p-3.5 font-bold text-sm appearance-none outline-none focus:ring-offset-2 ${getAccentClasses('ring')}`}>
-                                {accounts.filter(a => a.type !== 'Credit').map(a => <option key={a.id} value={a.id}>{a.bank}</option>)}
+                                {accounts.filter(a => a.type !== 'Credit' && a.classification !== 'Revolving Credit' && a.subtype !== 'Loan_Bundle').map(a => (
+                                  <option key={a.id} value={a.id}>{a.bank}</option>
+                                ))}
                               </select>
                             )}
                           </div>
@@ -1259,46 +1270,48 @@ function TransactionsPage({ transactions, loading = false, onTransactionDeleted,
                                 value={form.date}
                                 onChange={e => setForm(f => ({ ...f, date: e.target.value }))}
                                 required
-                                className={`w-full min-w-0 bg-white dark:bg-gray-800 border-2 border-black dark:border-gray-700 rounded-xl p-3.5 font-bold outline-none focus:ring-offset-2 ${getAccentClasses('ring')} transition-all text-sm`} />
+                                className={`w-full bg-white dark:bg-gray-800 border-2 border-black dark:border-gray-700 rounded-xl p-3.5 font-bold outline-none focus:ring-offset-2 ${getAccentClasses('ring')} transition-all text-sm`} />
                             </div>
                           </div>
                         </div>
                       )}
                     </>
-                                    ) : (
-                                      <div className={`grid grid-cols-1 ${form.transactionType === 'loan' ? 'sm:grid-cols-2' : ''} gap-4`}>
-                                        <div>
-                                          <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">
-                                            {['withdraw', 'cash_in', 'loan', 'transfer'].includes(form.transactionType) ? 'Date' : 'Date Paid'}
-                                          </label>
-                                          <input
-                                            type="date"
-                                            value={form.date}
-                                            onChange={e => setForm(f => ({ ...f, date: e.target.value }))}
-                                            required
-                                            className={`w-full min-w-0 bg-white dark:bg-gray-800 border-2 border-black dark:border-gray-700 rounded-xl p-3.5 font-bold outline-none focus:ring-offset-2 ${getAccentClasses('ring')} transition-all text-sm`} />
-                                        </div>
-                                        
-                                        {/* 🟢 Only show the top account dropdown for Loans now */}
-                                        {form.transactionType === 'loan' && (
-                                          <div>
-                                            <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Account</label>
-                                            {accounts.length === 0 ? (
-                                              <div className="text-xs text-red-600 p-4">No accounts available</div>
-                                            ) : (
-                                              <select
-                                                value={form.paymentMethodId}
-                                                onChange={e => setForm(f => ({ ...f, paymentMethodId: e.target.value }))}
-                                                className={`w-full min-w-0 bg-white dark:bg-gray-800 border-2 border-black dark:border-gray-700 rounded-xl p-3.5 font-bold text-sm appearance-none outline-none focus:ring-offset-2 ${getAccentClasses('ring')}`}>
-                                                {accounts.filter(a => a.type !== 'Credit').map(a => <option key={a.id} value={a.id}>{a.bank}</option>)}
-                                              </select>
-                                            )}
-                                          </div>
-                                        )}
-                                      </div>
-                                    )}
-                  
-
+                          ) : (
+                            //Transaction Modal Date Field
+                            <div className={`grid grid-cols-1 ${form.transactionType === 'loan' ? 'sm:grid-cols-2' : ''} gap-4`}>
+                              <div className="w-full min-w-0">
+                                <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">
+                                  {['withdraw', 'cash_in', 'loan', 'transfer'].includes(form.transactionType) ? 'Date' : 'Date Paid'}
+                                </label>
+                                {/* 🟢 Added 'block' and 'appearance-none' to strip the mobile browser's forced width! */}
+                                <input
+                                  type="date"
+                                  value={form.date}
+                                  onChange={e => setForm(f => ({ ...f, date: e.target.value }))}
+                                  required
+                                  className={`block w-full appearance-none min-w-0 bg-white dark:bg-gray-800 border-2 border-black dark:border-gray-700 rounded-xl py-2.5 px-3 font-bold outline-none focus:ring-offset-2 ${getAccentClasses('ring')} transition-all text-sm`} />
+                              </div>
+                              
+                              {form.transactionType === 'loan' && (
+                                <div className="w-full min-w-0">
+                                  <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Account</label>
+                                  {accounts.length === 0 ? (
+                                    <div className="text-xs text-red-600 p-4">No accounts available</div>
+                                  ) : (
+                                    <select
+                                      value={form.paymentMethodId}
+                                      onChange={e => setForm(f => ({ ...f, paymentMethodId: e.target.value }))}
+                                      className={`block w-full appearance-none min-w-0 bg-white dark:bg-gray-800 border-2 border-black dark:border-gray-700 rounded-xl py-2.5 px-3 font-bold text-sm outline-none focus:ring-offset-2 ${getAccentClasses('ring')}`}>
+                                      {accounts.filter(a => a.type !== 'Credit' && a.classification !== 'Revolving Credit' && a.subtype !== 'Loan_Bundle').map(a => (
+                                        <option key={a.id} value={a.id}>{a.bank}</option>
+                                      ))}
+                                    </select>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                          )}
+                                                                      
                                     {/* 🟢 NEW: TABBED PAYMENT LAYOUT */}
                                     {(form.transactionType === 'payment' || form.transactionType === 'withdraw' || form.transactionType === 'cash_in') && (
                     <div className="mt-6 rounded-2xl border-[3px] border-black bg-gray-50 overflow-hidden shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] dark:bg-gray-900">
@@ -1354,9 +1367,13 @@ function TransactionsPage({ transactions, loading = false, onTransactionDeleted,
                                 onChange={e => setForm(f => ({ ...f, paymentMethodId: e.target.value }))}
                                 className={`w-full bg-white dark:bg-gray-900 dark:text-gray-100 border-2 border-black rounded-xl p-3.5 outline-none font-bold appearance-none focus:ring-offset-2 ${getAccentClasses('ring')} transition-colors shadow-[2px_2px_0px_rgba(0,0,0,0.12)]`}
                               >
-                                {accounts.filter(a => form.transactionType === 'payment' ? a.classification !== 'Credit Card' : a.type !== 'Credit').map(a => (
-                                  <option key={a.id} value={a.id}>{a.bank}</option>
-                                ))}
+                                {accounts.filter(a => {
+  const isAllowedBase = form.transactionType === 'payment' ? a.classification !== 'Credit Card' : a.type !== 'Credit';
+  return isAllowedBase && a.classification !== 'Revolving Credit' && a.subtype !== 'Loan_Bundle';
+}).map(a => (
+  <option key={a.id} value={a.id}>{a.bank}</option>
+))}
+
                               </select>
                             </div>
 
@@ -1441,7 +1458,7 @@ function TransactionsPage({ transactions, loading = false, onTransactionDeleted,
                 </form>
               </div>
 
-              <div className="flex-shrink-0 p-6 md:p-8 pt-4 md:pt-6">
+              <div className="flex-shrink-0 p-5 md:p-6 pt-3 md:pt-4">
                 <div className="flex space-x-3">
                   <button type="button" onClick={closeForm} className="flex-1 bg-gray-200 dark:bg-gray-700 py-3.5 rounded-xl font-bold text-gray-800 dark:text-gray-200 border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[1px] hover:translate-y-[1px] transition-all">Cancel</button>
                   <button type="submit" form="transaction-form" disabled={accounts.length === 0 || (form.transactionType === 'transfer' && !editingTxId && transferTab === 'accounts' && !form.transferToAccountId) || (form.transactionType === 'transfer' && !editingTxId && transferTab === 'friends' && !form.personName)} className={`flex-1 bg-green-400 text-black py-3.5 rounded-xl font-bold border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[1px] hover:translate-y-[1px] transition-all disabled:opacity-50 disabled:bg-gray-300`}>
@@ -1679,7 +1696,7 @@ function TransactionsPage({ transactions, loading = false, onTransactionDeleted,
           </div>
         )}
 
-        {/* 🟢 Apple Music-Inspired Pull-Up Tray for Mobile */}
+                        {/* 🟢 Apple Music-Inspired Pull-Up Tray for Mobile */}
         {isMobile && (
           <>
             {showFabMenu && (
@@ -1695,18 +1712,18 @@ function TransactionsPage({ transactions, loading = false, onTransactionDeleted,
               }`}
             >
               <div 
-                className="w-full flex justify-center pt-5 pb-3 cursor-pointer" 
+                className="w-full flex justify-center pt-3 pb-1 cursor-pointer" 
                 onClick={() => setShowFabMenu(false)}
               >
                 <div className="w-14 h-1.5 bg-gray-300 dark:bg-gray-700 rounded-full" />
               </div>
 
-              <div className="px-6 pb-12 pt-2 space-y-4">
-                <h3 className="text-xl font-black uppercase tracking-tight text-center text-gray-900 dark:text-white mb-6">
+              <div className="px-5 pb-6 pt-0">
+                <h3 className="text-lg font-black uppercase tracking-tight text-center text-gray-900 dark:text-white mb-3 mt-1">
                   New Transaction
                 </h3>
                 
-                <div className="grid grid-cols-1 gap-3">
+                <div className="grid grid-cols-1 gap-2">
                   {TRANSACTION_TYPES.map((item) => (
                     <button
                       key={item.id}
@@ -1714,12 +1731,13 @@ function TransactionsPage({ transactions, loading = false, onTransactionDeleted,
                         openAddForm(item.id, 'fab');
                         setShowFabMenu(false);
                       }}
-                      className="flex items-center p-4 bg-gray-50 dark:bg-gray-800 rounded-2xl border-[3px] border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] active:translate-x-[2px] active:translate-y-[2px] active:shadow-none transition-all group"
+                      className="flex items-center p-3 bg-gray-50 dark:bg-gray-800 rounded-xl border-[3px] border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] active:translate-x-[2px] active:translate-y-[2px] active:shadow-none transition-all group"
                     >
-                      <div className="w-12 h-12 rounded-xl border-2 border-black bg-white dark:bg-gray-700 flex items-center justify-center mr-4 group-hover:scale-105 transition-transform">
+                      <div className="w-9 h-9 rounded-lg border-2 border-black bg-white dark:bg-gray-700 flex items-center justify-center mr-3 group-hover:scale-105 transition-transform [&>svg]:w-5 [&>svg]:h-5">
                         {item.icon}
                       </div>
-                      <span className="font-bold text-lg text-gray-900 dark:text-white uppercase tracking-wide">
+                      
+                      <span className="font-bold text-sm text-gray-900 dark:text-white uppercase tracking-wide">
                         {item.label}
                       </span>
                     </button>
@@ -1729,6 +1747,8 @@ function TransactionsPage({ transactions, loading = false, onTransactionDeleted,
             </div>
           </>
         )}
+
+
 
         {pendingProfileModal && (
           <div className="fixed inset-0 z-[1000] flex items-center justify-center p-2 sm:p-4 bg-black/60 backdrop-blur-sm animate-in fade-in">

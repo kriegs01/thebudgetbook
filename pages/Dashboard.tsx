@@ -636,8 +636,8 @@ const Dashboard: React.FC<DashboardProps> = ({ accounts, budget, installments, t
         </div>
       </div>
 
-            {/* 🟢 3 QUICK ACTIONS */}
-            <div className="grid grid-cols-3 gap-3 !mt-3 !mb-2 px-4 md:px-0">
+                    {/* 🟢 3 QUICK ACTIONS */}
+        <div className="grid grid-cols-3 gap-3 !mt-3 !mb-2 px-4 md:px-0">
         {[
           { icon: Plus, label: 'Add Transaction', color: 'bg-[#c4a1ff]', route: '/transactions' },
           { icon: Sparkles, label: 'Crystal Ball', color: 'bg-white', route: '/budget' },
@@ -646,8 +646,8 @@ const Dashboard: React.FC<DashboardProps> = ({ accounts, budget, installments, t
           <button 
             key={idx} 
             onClick={() => {
-              if (action.label === 'Add Txn') {
-                // 🟢 Pass a secret flag to auto-open the tray when we land on the page!
+              // 🟢 FIX: Updated the check to match the exact label string!
+              if (action.label === 'Add Transaction') {
                 navigate('/transactions', { state: { autoOpenAddTray: true } });
               } else {
                 navigate(action.route);
@@ -655,6 +655,7 @@ const Dashboard: React.FC<DashboardProps> = ({ accounts, budget, installments, t
             }}
             className={`flex flex-col items-center justify-center p-2 md:p-3 ${action.color} border-[3px] border-black rounded-2xl shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] active:translate-x-1 active:translate-y-1 active:shadow-none transition-all`}
           >
+
             <action.icon className="w-6 h-6 md:w-8 md:h-8 text-black mb-1" />
             <span className="font-['Titan_One'] text-[9px] md:text-[11px] text-black tracking-wider uppercase text-center leading-tight">{action.label}</span>
           </button>
@@ -1104,7 +1105,7 @@ const Dashboard: React.FC<DashboardProps> = ({ accounts, budget, installments, t
 
 
 
-        {/* Debit Accounts Stats */}
+        {/* Debit Accounts Stats 
         {debitAccounts.length > 0 && (
           <div className="bg-white dark:bg-gray-900 rounded-3xl border-[3px] border-black shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] overflow-hidden">
             <div className="p-6 bg-teal-500 border-b-[3px] border-black flex items-center space-x-2">
@@ -1160,6 +1161,7 @@ const Dashboard: React.FC<DashboardProps> = ({ accounts, budget, installments, t
             </div>
           </div>
         )}
+        */}
       </div>
 
       {/* 🟢 ALERT WINDOW SLIDER MODAL */}
