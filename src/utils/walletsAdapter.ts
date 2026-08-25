@@ -1,9 +1,3 @@
-/**
- * Wallets Adapter
- *
- * Converts between Supabase database schema and frontend types for wallets.
- */
-
 import type { SupabaseWallet } from '../types/supabase';
 import type { Wallet } from '../../types';
 
@@ -16,6 +10,8 @@ export const supabaseWalletToFrontend = (row: SupabaseWallet): Wallet => ({
   name: row.name,
   amount: row.amount,
   accountId: row.account_id,
+  // 🟢 NEW: Map the timing property (defaulting to 'split' just in case)
+  timing: row.timing || 'split', 
   createdAt: row.created_at,
   updatedAt: row.updated_at,
 });
@@ -27,6 +23,8 @@ export const frontendWalletToSupabase = (wallet: Wallet): Omit<SupabaseWallet, '
   name: wallet.name,
   amount: wallet.amount,
   account_id: wallet.accountId,
+  // 🟢 NEW: Pass the timing property back to the database
+  timing: wallet.timing, 
 });
 
 /**

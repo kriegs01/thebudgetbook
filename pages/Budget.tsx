@@ -1502,15 +1502,28 @@ const getFrozenCycleAmount = (account: Account): number => {
       }))
       .filter(item => item.amount >= 0.01);
 
-    // 4. STASH (Wallets)
-    const stashItems = wallets
-      .filter(w => !excludedWalletIds.has(w.id))
-      .map(w => ({
-        id: w.id,
-        name: `${w.name} (Stash)`,
-        amount: w.amount
-      }))
-      .filter(item => item.amount > 0);
+        // 4. STASH (Wallets)
+        const periodCount = currentPeriods.length || 2;
+        const stashItems = wallets
+          .filter(w => !excludedWalletIds.has(w.id))
+          .map(w => {
+            let allocatedAmount = 0;
+            
+            // 🟢 FIX: Route the stash amount based on user preference
+            if (!w.timing || w.timing === 'split') {
+              allocatedAmount = w.amount / periodCount;
+            } else if (parseInt(w.timing, 10) === activePeriodIndex) {
+              allocatedAmount = w.amount;
+            }
+            
+            return {
+              id: w.id,
+              name: `${w.name} (Stash)`,
+              amount: allocatedAmount
+            };
+          })
+          .filter(item => item.amount > 0);
+    
 
     // 5. MERGE ALL ACTIVE ITEMS
     return [...baseItems, ...installmentItems, ...creditItems, ...stashItems];
@@ -1913,7 +1926,19 @@ const getFrozenCycleAmount = (account: Account): number => {
         }
       }, 0);
 
-      _periodTotals[period] = itemsTotal + instTotal + creditTotal + (period === 1 ? stashTotal : 0);
+      const periodCount = currentPeriods.length || 2;
+
+      // 🟢 FIX: Calculate this specific period's stash requirement dynamically
+      const periodStashTotal = wallets.filter(w => !excludedWalletIds.has(w.id)).reduce((s, w) => {
+        const targetAmount = Math.max(w.amount, getStashAggregates(w).funded);
+        
+        if (!w.timing || w.timing === 'split') return s + (targetAmount / periodCount);
+        if (parseInt(w.timing, 10) === period) return s + targetAmount;
+        return s;
+      }, 0);
+
+      _periodTotals[period] = itemsTotal + instTotal + creditTotal + periodStashTotal;
+
     });
 
 
@@ -2153,7 +2178,6 @@ const getFrozenCycleAmount = (account: Account): number => {
     });
 
     const _periodTotals: Record<number, number> = {};
-    const stashTotal = wallets.filter(w => !excludedWalletIds.has(w.id)).reduce((s, w) => s + Math.max(w.amount, getStashAggregates(w).funded), 0);
 
     [1, 2, 3, 4].forEach(period => {
       let itemsTotal = 0;
@@ -2220,7 +2244,19 @@ const getFrozenCycleAmount = (account: Account): number => {
         }
       }, 0);
 
-      _periodTotals[period] = itemsTotal + instTotal + creditTotal + (period === 1 ? stashTotal : 0);
+      const periodCount = currentPeriods.length || 2;
+
+      // 🟢 FIX: Calculate this specific period's stash requirement dynamically
+      const periodStashTotal = wallets.filter(w => !excludedWalletIds.has(w.id)).reduce((s, w) => {
+        const targetAmount = Math.max(w.amount, getStashAggregates(w).funded);
+        
+        if (!w.timing || w.timing === 'split') return s + (targetAmount / periodCount);
+        if (parseInt(w.timing, 10) === period) return s + targetAmount;
+        return s;
+      }, 0);
+
+      _periodTotals[period] = itemsTotal + instTotal + creditTotal + periodStashTotal;
+
     });
 
     
@@ -4100,44 +4136,54 @@ const categoryTotal = itemsTotal + installmentsTotal + creditTotal;
                                        </div>
             
                                        <button 
-                                           onClick={(e) => {
-                                             e.preventDefault(); 
-                                             e.stopPropagation();
-                                             
-                                             // 🟢 BUILD THE CAROUSEL DECK
-                                             const carouselItems: { id: string; name: string; amount: number; type: 'base' | 'installment' }[] = [];
-                                             
-                                             // Card 1: Base Charges
-                                             const baseAmount = uiRollover + uiSwipesTotal;
-                                             if (baseAmount > 0) {
-                                               carouselItems.push({
-                                                 id: 'base-charges',
-                                                 name: 'Previous Balance + New Charges',
-                                                 amount: baseAmount,
-                                                 type: 'base'
-                                               });
-                                             }
-                                             
-                                             // Cards 2...N: Active Installments
-                                             uiActiveInstallments.forEach(inst => {
-                                               if (inst.amount > 0) {
-                                                 carouselItems.push({
-                                                   id: inst.id,
-                                                   name: inst.name,
-                                                   amount: inst.amount,
-                                                   type: 'installment'
-                                                 });
-                                               }
-                                             });
+  disabled={isPaidInFull || isReadOnly}
+  onClick={(e) => {
+    e.preventDefault(); 
+    e.stopPropagation();
+    
+    // 🟢 BUILD THE CAROUSEL DECK
+    const carouselItems: { id: string; name: string; amount: number; type: 'base' | 'installment' }[] = [];
+    
+    // Card 1: Base Charges
+    const baseAmount = uiRollover + uiSwipesTotal;
+    if (baseAmount > 0) {
+      carouselItems.push({
+        id: 'base-charges',
+        name: 'Previous Balance + New Charges',
+        amount: baseAmount,
+        type: 'base'
+      });
+    }
+    
+    // Cards 2...N: Active Installments
+    uiActiveInstallments.forEach(inst => {
+      // 1. Safely extract the amount
+      const validAmount = Number(inst.monthlyAmount) || Number(inst.amount) || 0;
+      
+      if (validAmount > 0) {
+        carouselItems.push({
+          id: inst.id,
+          name: inst.name,
+          amount: validAmount, 
+          type: 'installment'
+        });
+      }
+    });
 
-                                             setShowCreditPayModal({ accountId: account.id, bank: account.bank, items: carouselItems });
-                                           }} 
-                                           className="px-4 py-2 text-xs font-black uppercase rounded-xl border-2 border-black bg-indigo-600 text-white shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[1px] hover:translate-y-[1px] transition-all"
-                                         >
-                                           Pay
-                                         </button>
-                                    </div>
-                                  </div>
+    setShowCreditPayModal({ accountId: account.id, bank: account.bank, items: carouselItems });
+  }} 
+  className={`px-4 py-2 text-xs font-black uppercase rounded-xl border-2 transition-all shrink-0 ${
+    isPaidInFull || isReadOnly
+      ? 'bg-gray-100 dark:bg-gray-800 text-gray-400 border-gray-200 dark:border-gray-700 cursor-not-allowed shadow-none'
+      : 'border-black bg-indigo-600 text-white shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[1px] hover:translate-y-[1px]'
+  }`}
+>
+  Pay
+</button>
+
+
+                                     </div>
+                                   </div>
             
                                   {/* NESTED CHILDREN (The Breakdown) */}
                                   <div className="flex flex-col gap-2 pl-4 md:pl-12 pt-1">
@@ -4234,10 +4280,15 @@ const categoryTotal = itemsTotal + installmentsTotal + creditTotal;
                       }
 
                       // 🟢 SMART DETECTOR: Look for unapplied cash collections
-                      const collectedTxs = transactions.filter(tx => tx.payment_schedule_id === instSchedule?.id && tx.transaction_type === 'cash_in');
-                      const totalCollected = collectedTxs.reduce((sum, tx) => sum + Math.abs(tx.amount), 0);
-                      const hasUnappliedCollection = isReceivable && totalCollected > 0 && !isPaid;
-                      const collectionAccountId = collectedTxs.length > 0 ? collectedTxs[0].payment_method_id : undefined;
+const collectedTxs = transactions.filter(tx => tx.payment_schedule_id === instSchedule?.id && tx.transaction_type === 'cash_in');
+const totalCollected = collectedTxs.reduce((sum, tx) => sum + Math.abs(tx.amount), 0);
+
+// 🟢 FIX: Check if there is an unapplied gap between what we collected and what we applied
+const unappliedAmount = Math.max(0, totalCollected - (instSchedule?.amount_paid || 0));
+const hasUnappliedCollection = isReceivable && unappliedAmount > 0 && !isPaid;
+
+const collectionAccountId = collectedTxs.length > 0 ? collectedTxs[0].payment_method_id : undefined;
+
 
                       const themeColor = isReceivable ? 'emerald' : 'indigo';
 
@@ -4291,9 +4342,11 @@ const categoryTotal = itemsTotal + installmentsTotal + creditTotal;
                                         budeeId: inst.debtor_friend_id || (inst as any).friend_user_id || '',
                                         amount: isPartial && instSchedule ? Math.max(0, instSchedule.expected_amount - instSchedule.amount_paid) : inst.monthlyAmount,
                                         hasUnappliedCollection,
-                                        totalCollected,
+                                        // 🟢 FIX: Only pass the unapplied remainder to the carousel
+                                        totalCollected: hasUnappliedCollection ? unappliedAmount : totalCollected,
                                         collectionAccountId
                                       });
+                                      
                                     } else {
                                       setTransactionFormData({ 
                                         id: '', name: `${inst.name} - ${selectedMonth}`, date: getTodayIso(), 

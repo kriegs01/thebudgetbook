@@ -165,7 +165,10 @@ export interface Wallet {
   accountId: string;
   createdAt: string;
   updatedAt: string;
+  // 🟢 NEW: Add this line to support flexible stash allocations
+  timing?: string;
 }
+
 
 export enum Page {
   DASHBOARD = 'DASHBOARD',

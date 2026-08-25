@@ -72,7 +72,7 @@ const WalletsPage: React.FC<WalletsPageProps> = ({ accounts }) => {
   const [showModal, setShowModal] = useState(false);
   const [editingWallet, setEditingWallet] = useState<Wallet | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [formData, setFormData] = useState({ name: '', amount: '', accountId: '' });
+  const [formData, setFormData] = useState({ name: '', amount: '', accountId: '', timing: 'split' });
   const [formError, setFormError] = useState<string | null>(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -98,17 +98,19 @@ const WalletsPage: React.FC<WalletsPageProps> = ({ accounts }) => {
   const openAddModal = () => {
     setEditingWallet(null);
     const firstDebitAccount = accounts.find((acc) => acc.type !== 'Credit');
-    setFormData({ name: '', amount: '', accountId: firstDebitAccount?.id || '' });
+    setFormData({ name: '', amount: '', accountId: firstDebitAccount?.id || '', timing: 'split' });
     setFormError(null);
     setShowModal(true);
   };
+  
 
   const openEditModal = (wallet: Wallet) => {
     setEditingWallet(wallet);
-    setFormData({ name: wallet.name, amount: wallet.amount.toFixed(2), accountId: wallet.accountId });
+    setFormData({ name: wallet.name, amount: wallet.amount.toFixed(2), accountId: wallet.accountId, timing: wallet.timing || 'split' });
     setFormError(null);
     setShowModal(true);
   };
+  
 
   const closeModal = () => {
     setShowModal(false);
@@ -124,6 +126,7 @@ const WalletsPage: React.FC<WalletsPageProps> = ({ accounts }) => {
     const name = formData.name.trim();
     const amount = parseFloat(formData.amount);
     const accountId = formData.accountId;
+    const timing = formData.timing;
 
     if (!name) { setFormError('Name is required.'); return; }
     if (!formData.amount || isNaN(amount) || amount <= 0) { setFormError('Amount must be a positive number.'); return; }
@@ -134,7 +137,7 @@ const WalletsPage: React.FC<WalletsPageProps> = ({ accounts }) => {
 
     try {
       if (editingWallet) {
-        const { error: err } = await updateWallet(editingWallet.id, { name, amount, account_id: accountId });
+        const { error: err } = await updateWallet(editingWallet.id, { name, amount, account_id: accountId, timing });
         if (err) {
           alert('Failed to update wallet. Please try again.');
         } else {
@@ -142,7 +145,7 @@ const WalletsPage: React.FC<WalletsPageProps> = ({ accounts }) => {
           closeModal();
         }
       } else {
-        const { error: err } = await createWallet({ name, amount, account_id: accountId });
+        const { error: err } = await createWallet({ name, amount, account_id: accountId, timing });
         if (err) {
           alert('Failed to create wallet. Please try again.');
         } else {
@@ -401,6 +404,22 @@ const WalletsPage: React.FC<WalletsPageProps> = ({ accounts }) => {
                   ))}
                 </select>
               </div>
+              <div>
+              <label className="block text-xs font-bold text-gray-400 dark:text-gray-500 uppercase mb-1 transition-colors">Funding Allocation</label>
+              <select
+                required
+                value={formData.timing}
+                onChange={(e) => setFormData({ ...formData, timing: e.target.value })}
+                className="w-full bg-gray-100 dark:bg-black/20 text-black dark:text-white border-2 border-black rounded-lg p-3 font-bold focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors appearance-none"
+              >
+                <option value="split">Split evenly across all paychecks (Default)</option>
+                <option value="1">Fund entirely on 1st Paycheck</option>
+                <option value="2">Fund entirely on 2nd Paycheck</option>
+                <option value="3">Fund entirely on 3rd Paycheck</option>
+                <option value="4">Fund entirely on 4th Paycheck</option>
+              </select>
+            </div>
+
 
               {formError && (
                 <p className="text-sm text-red-600 font-medium">{formError}</p>
