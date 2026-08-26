@@ -11,6 +11,7 @@
   "dependencies": {
     "@supabase/supabase-js": "^2.93.3",
     "@tanstack/react-query": "^5.100.8",
+    "crypto-js": "^4.2.0",
     "dexie": "^4.4.5",
     "jsqr": "^1.4.0",
     "lucide-react": "^1.32.0",
@@ -22,6 +23,7 @@
     "recharts": "^3.7.0"
   },
   "devDependencies": {
+    "@types/crypto-js": "^4.2.2",
     "@types/node": "^22.14.0",
     "@vitejs/plugin-react": "^5.1.0",
     "typescript": "~5.8.2",

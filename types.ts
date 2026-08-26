@@ -6,18 +6,20 @@ export interface Account {
   bank: string;
   classification: AccountClassification;
   balance: number;
-  openingBalance?: number; // Immutable calculation seed — maps to the DB `opening_balance` column (DEFAULT 0). Set once on account creation; NEVER overwritten by recalculation results.
+  openingBalance?: number; 
   type: 'Debit' | 'Credit';
   creditLimit?: number;
   billingDate?: string;
   dueDate?: string;
   overdraftMode?: 'allow' | 'warn' | 'block';
-  // 🟢 NEW: Add this line here
   lastFour?: string;
-  // 🟢 NEW: Monthly interest rate for rollover finance charges
   interestRate?: number;
   subtype?: string;
+  // 🟢 NEW: Vault / Sub-account support
+  hasVaultEnabled?: boolean;
+  vaultId?: string; // The ID of the hidden sub-account (e.g., 'Go Save')
 }
+
 
 
 export interface BudgetItem {
@@ -112,8 +114,9 @@ export interface Transaction {
   name: string;
   date: string;
   amount: number;
-  paymentMethodId: string;
-  transaction_type?: 'payment' | 'withdraw' | 'transfer' | 'loan' | 'cash_in' | 'loan_payment' | 'credit_payment' | null;
+  paymentMethodId: string; // For internal transfers, this points to either the Main Account ID or the Vault ID
+  // 🟢 NEW: Added 'internal_transfer' to the union
+  transaction_type?: 'payment' | 'withdraw' | 'transfer' | 'loan' | 'cash_in' | 'loan_payment' | 'credit_payment' | 'internal_transfer' | null;
   notes?: string | null;
   related_transaction_id?: string | null;
   borrower_name?: string | null;
@@ -126,6 +129,7 @@ export interface Transaction {
   split_details?: Record<string, number> | null;
   statement_ref?: string | null; 
 }
+
 
 
 export interface CategorizedSetupItem {

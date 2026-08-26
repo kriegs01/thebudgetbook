@@ -1930,12 +1930,17 @@ const getFrozenCycleAmount = (account: Account): number => {
 
       // 🟢 FIX: Calculate this specific period's stash requirement dynamically
       const periodStashTotal = wallets.filter(w => !excludedWalletIds.has(w.id)).reduce((s, w) => {
+        
+        // 🟢 PREVENT LEAKS: Stop stash math from bleeding into non-existent tabs (e.g., Tabs 3 & 4)
+        if (period > periodCount) return s;
+        
         const targetAmount = Math.max(w.amount, getStashAggregates(w).funded);
         
         if (!w.timing || w.timing === 'split') return s + (targetAmount / periodCount);
         if (parseInt(w.timing, 10) === period) return s + targetAmount;
         return s;
       }, 0);
+
 
       _periodTotals[period] = itemsTotal + instTotal + creditTotal + periodStashTotal;
 
@@ -2248,12 +2253,17 @@ const getFrozenCycleAmount = (account: Account): number => {
 
       // 🟢 FIX: Calculate this specific period's stash requirement dynamically
       const periodStashTotal = wallets.filter(w => !excludedWalletIds.has(w.id)).reduce((s, w) => {
+        
+        // 🟢 PREVENT LEAKS: Stop stash math from bleeding into non-existent tabs (e.g., Tabs 3 & 4)
+        if (period > periodCount) return s;
+        
         const targetAmount = Math.max(w.amount, getStashAggregates(w).funded);
         
         if (!w.timing || w.timing === 'split') return s + (targetAmount / periodCount);
         if (parseInt(w.timing, 10) === period) return s + targetAmount;
         return s;
       }, 0);
+
 
       _periodTotals[period] = itemsTotal + instTotal + creditTotal + periodStashTotal;
 
@@ -3137,12 +3147,19 @@ const getFrozenCycleAmount = (account: Account): number => {
               };
             });
       
-            const stashTotal = wallets.filter(w => !excludedWalletIds.has(w.id)).reduce((s, w) => s + Math.max(w.amount, getStashAggregates(w).funded), 0);
-      
+            // 🟢 FIX: Calculate the stash total dynamically for the active UI tab
+const periodCount = currentPeriods.length || 2;
+const periodStashTotal = wallets.filter(w => !excludedWalletIds.has(w.id)).reduce((s, w) => {
+  const targetAmount = Math.max(w.amount, getStashAggregates(w).funded);
   
-        // 🟢 ONLY apply stash to Period 1 so it doesn't double count on your Month Summary!
-        const grandTotal = categorySummary.reduce((sum, cat) => sum + cat.total, 0) + (activePeriodIndex === 1 ? stashTotal : 0);
-        const totalSpend = grandTotal;
+  if (!w.timing || w.timing === 'split') return s + (targetAmount / periodCount);
+  if (parseInt(w.timing, 10) === activePeriodIndex) return s + targetAmount;
+  return s;
+}, 0);
+
+const grandTotal = categorySummary.reduce((sum, cat) => sum + cat.total, 0) + periodStashTotal;
+const totalSpend = grandTotal;
+
       
   
   
@@ -3353,12 +3370,13 @@ const getFrozenCycleAmount = (account: Account): number => {
                   <td className="p-3 pr-6 text-right font-black text-gray-900 dark:text-gray-100 text-sm">{formatCurrency(item.total)}</td>
                 </tr>
               ))}
-              {stashTotal > 0 && activePeriodIndex === 1 && (
+              {periodStashTotal > 0 && (
                 <tr>
                   <td className="p-3 pl-6 font-bold text-gray-700 dark:text-gray-300 text-sm">Stash</td>
-                  <td className="p-3 pr-6 text-right font-black text-gray-900 dark:text-gray-100 text-sm">{formatCurrency(stashTotal)}</td>
+                  <td className="p-3 pr-6 text-right font-black text-gray-900 dark:text-gray-100 text-sm">{formatCurrency(periodStashTotal)}</td>
                 </tr>
               )}
+
 
             </tbody>
 
@@ -3722,7 +3740,7 @@ const getFrozenCycleAmount = (account: Account): number => {
                 </span>
               )}
               <span className="text-lg font-black text-indigo-600 dark:text-indigo-400">
-                {formatCurrency(wallets.filter(w => !excludedWalletIds.has(w.id)).reduce((s, w) => s + Math.max(w.amount, getStashAggregates(w).funded), 0))}
+                {formatCurrency(periodStashTotal)}
               </span>
             </div>
           </div>
@@ -3733,6 +3751,13 @@ const getFrozenCycleAmount = (account: Account): number => {
                   const linkedAccount = accounts.find(a => a.id === wallet.accountId);
                   const { funded, isFunded } = getStashAggregates(wallet);
                   const isIncluded = !excludedWalletIds.has(wallet.id);
+
+                  // 🟢 Add this to calculate the split for the UI
+                  const periodCount = currentPeriods.length || 2;
+                  const allocatedAmount = (!wallet.timing || wallet.timing === 'split') 
+                    ? (wallet.amount / periodCount) 
+                    : (parseInt(wallet.timing, 10) === activePeriodIndex ? wallet.amount : 0);
+
                   const isOverFunded = funded > wallet.amount && wallet.amount > 0;
                   const isExactlyFunded = funded === wallet.amount && wallet.amount > 0;
                   return (
@@ -3752,10 +3777,12 @@ const getFrozenCycleAmount = (account: Account): number => {
                         )}
                       </div>
                       <div className="flex justify-between items-center bg-gray-50 dark:bg-gray-900/50 p-2.5 rounded-lg border-2 border-black">
-                        <div>
-                          <span className="text-[10px] font-black uppercase text-gray-400 block tracking-widest">Target</span>
-                          <span className="text-sm font-black text-indigo-600 dark:text-indigo-400">{formatCurrency(wallet.amount)}</span>
-                        </div>
+                      <div>
+                        <span className="text-[10px] font-black uppercase text-gray-400 block tracking-widest">This Paycheck</span>
+                        <span className="text-sm font-black text-indigo-600 dark:text-indigo-400">{formatCurrency(allocatedAmount)}</span>
+                        <span className="text-[9px] font-bold text-gray-400 block mt-0.5">Total Target: {formatCurrency(wallet.amount)}</span>
+                      </div>
+
                         <div className="flex items-center space-x-1">
                           {isOverFunded ? (
                             <span className="text-[9px] font-black text-blue-600 px-2 py-0.5 bg-blue-50 border border-blue-200 rounded">Over +{formatCurrency(funded - wallet.amount)}</span>
@@ -3794,6 +3821,13 @@ const getFrozenCycleAmount = (account: Account): number => {
                                       const linkedAccount = accounts.find(a => a.id === wallet.accountId);
                                       const { funded, isFunded } = getStashAggregates(wallet);
                                       const isIncluded = !excludedWalletIds.has(wallet.id);
+
+                                      // 🟢 Add this to calculate the split for the UI
+                                      const periodCount = currentPeriods.length || 2;
+                                      const allocatedAmount = (!wallet.timing || wallet.timing === 'split') 
+                                        ? (wallet.amount / periodCount) 
+                                        : (parseInt(wallet.timing, 10) === activePeriodIndex ? wallet.amount : 0);
+
                                       const isOverFunded = funded > wallet.amount && wallet.amount > 0;
                                       const isExactlyFunded = funded === wallet.amount && wallet.amount > 0;
                                       
@@ -3815,9 +3849,11 @@ const getFrozenCycleAmount = (account: Account): number => {
                                           
                                           <td className="p-4">
                                             <span className="text-sm font-black text-indigo-600 dark:text-indigo-400">
-                                              {formatCurrency(wallet.amount)}
+                                              {formatCurrency(allocatedAmount)}
                                             </span>
+                                            <span className="text-[9px] font-bold text-gray-400 block mt-0.5 uppercase tracking-widest">Total: {formatCurrency(wallet.amount)}</span>
                                           </td>
+
                                           
                                           <td className="p-4">
                                             <span className="text-sm text-gray-600 dark:text-gray-400">

@@ -10,6 +10,10 @@ import { createTransaction } from '../services/transactionsService';
 import type { Transaction } from '../types';
 import { extractTransactions } from '../utils/parserEngine'; // Adjust path as needed
 
+// 🟢 ADD THESE TWO LINES:
+import { encryptPassword, decryptPassword } from '../utils/cryptoUtils';
+import { getStatementCredential, saveStatementCredential } from '../services/statementCredentialsService';
+
 
 // Define the shape of our Bank data
 interface BankConfig {
@@ -145,6 +149,16 @@ export const JuiceBox: React.FC<JuiceBoxProps> = ({ selectedAccountId, existingT
       fetchSignatures();
     }, []);
   
+  // 🟢 ZERO-KNOWLEDGE PDF UNLOCKER STATE
+  const [pdfUnlockConfig, setPdfUnlockConfig] = useState<{
+    show: boolean;
+    mode: 'unlock' | 'save';
+    encryptedPassword?: string;
+    arrayBuffer?: ArrayBuffer;
+  } | null>(null);
+  const [unlockForm, setUnlockForm] = useState({ pdfPassword: '', webappPin: '' });
+  const [unlockError, setUnlockError] = useState('');
+  const [isUnlocking, setIsUnlocking] = useState(false);
 
 
   // Group the fetched banks by category for the dropdown
@@ -155,30 +169,13 @@ export const JuiceBox: React.FC<JuiceBoxProps> = ({ selectedAccountId, existingT
   }, {} as Record<string, BankConfig[]>);
 
 
-  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file || !selectedAccountId) {
-      alert("Please select an account first!");
-      return;
-    }
-
-    setStatus('processing');
-
-    try {
-      console.log("Loading PDF file into buffer...");
-      const arrayBuffer = await file.arrayBuffer();
-      
-      console.log("Initializing PDF document loader...");
-      const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer });
-      const pdfDoc = await loadingTask.promise;
-      console.log(`PDF loaded successfully. Total pages: ${pdfDoc.numPages}`);
-
+    // 🟢 1. THE EXTRACTION ENGINE (Moved here so both normal and unlocked PDFs can use it)
+    const processPdfDoc = async (pdfDoc: any) => {
       let extractedText = '';
       for (let i = 1; i <= pdfDoc.numPages; i++) {
         const page = await pdfDoc.getPage(i);
         const textContent = await page.getTextContent();
         
-        // 🟢 NEW: Tag amounts with their physical X-axis position!
         const pageText = textContent.items.map((item: any) => {
           const str = item.str.trim();
           if (/^[\d,]+\.\d{2}$/.test(str) && item.transform) {
@@ -189,34 +186,23 @@ export const JuiceBox: React.FC<JuiceBoxProps> = ({ selectedAccountId, existingT
         
         extractedText += pageText + '\n';
       }
-
-
+  
       console.log(`Parsing text through squeeze engine for: ${selectedBank}`);
-const rawTransactions = extractTransactions(selectedBank, extractedText);
-console.log(`Successfully parsed ${rawTransactions.length} transactions.`);
-
-
+      const rawTransactions = extractTransactions(selectedBank, extractedText);
+  
       if (rawTransactions.length === 0) {
         alert("No transactions found or unrecognized statement format.");
         setStatus('idle');
         return;
       }
-
-                  // 🟢 NEW: Create a temporary object to hold our smart matches
+  
       const autoMatchedLinks: Record<string, string[]> = {};
-
-      // 👇 Make sure to add `idx` to the map parameters here!
-            // 👇 Make sure to add `idx` to the map parameters here!
-            const processedRows: PendingRow[] = rawTransactions.map((tx, idx) => {
-              const txDateStr = new Date(tx.date).toISOString().slice(0, 10);
-              
-              // 🟢 THE FIX: Give every parsed row a permanent, unique fake ID
-              const uniqueRowId = tx.id || `pdf_row_${idx}_${Date.now()}`;
-      
-                      // 🟢 Generate the fingerprint we are looking for
+      const processedRows: PendingRow[] = rawTransactions.map((tx, idx) => {
+        const txDateStr = new Date(tx.date).toISOString().slice(0, 10);
+        const uniqueRowId = tx.id || `pdf_row_${idx}_${Date.now()}`;
+  
         const signature = `[JB_Ref: ${tx.name}_${Math.abs(tx.amount)}]`;
-
-        // 1. Check for strict duplicates (Original logic)
+  
         const matchedExistingTx = (existingTransactions || []).find(existing => {
           const existingDateStr = new Date(existing.date).toISOString().slice(0, 10);
           return existing.paymentMethodId === selectedAccountId &&
@@ -224,61 +210,143 @@ console.log(`Successfully parsed ${rawTransactions.length} transactions.`);
                  existingDateStr === txDateStr;
         });
         
-        // 2. 🟢 Check if this signature exists ANYWHERE in our master list!
         const isMatchedByRef = knownSignatures.some(ref => ref.includes(signature));
-
-        // If it matches either check, flag it as a duplicate!
         const isMatch = !!matchedExistingTx || isMatchedByRef; 
-
-        // 2. THE IOU SMART MATCHER
+  
         if (tx.name === 'Funds Transfer' && !isMatch) {
-           // ... (leave your IOU logic exactly as it is here)
-
-                const txAmount = Math.abs(tx.amount);
-                const isIncomingTransfer = tx.amount > 0;
-      
-                const smartMatch = (existingTransactions || []).find(ledgerTx => {
-                  if ((ledgerTx as any).iou_status !== 'pending') return false;
-                  
-                  const ledgerAmount = Math.abs(ledgerTx.amount);
-                  
-                  if (isIncomingTransfer) {
-                    return (ledgerTx as any).beneficiary_id && ledgerAmount === txAmount;
-                  } else {
-                    return (ledgerTx as any).payer_id && ledgerAmount === txAmount;
-                  }
-                });
-      
-                if (smartMatch) {
-                  autoMatchedLinks[uniqueRowId] = [`tx_${smartMatch.id}`];
-                }
-              }
-      
-              return {
-                ...tx,
-                id: uniqueRowId, 
-                isDuplicate: isMatch, // 👈 Now this will be true if it finds the fingerprint!
-                excluded: isMatch,    // 👈 And it will auto-exclude it!
-                existingId: matchedExistingTx?.id 
-              };
-            });
-      
-
+          const txAmount = Math.abs(tx.amount);
+          const isIncomingTransfer = tx.amount > 0;
+  
+          const smartMatch = (existingTransactions || []).find(ledgerTx => {
+            if ((ledgerTx as any).iou_status !== 'pending') return false;
+            
+            const ledgerAmount = Math.abs(ledgerTx.amount);
+            if (isIncomingTransfer) return (ledgerTx as any).beneficiary_id && ledgerAmount === txAmount;
+            return (ledgerTx as any).payer_id && ledgerAmount === txAmount;
+          });
+  
+          if (smartMatch) autoMatchedLinks[uniqueRowId] = [`tx_${smartMatch.id}`];
+        }
+  
+        return {
+          ...tx,
+          id: uniqueRowId, 
+          isDuplicate: isMatch, 
+          excluded: isMatch,    
+          existingId: matchedExistingTx?.id 
+        };
+      });
+  
       setMatchedLinks(autoMatchedLinks);
-      // 👇 RESTORE THIS MISSING BLOCK 👇
       setPendingTransactions(processedRows);
       setShowReviewModal(true);
       setStatus('idle');
-      if (fileInputRef.current) {
-        fileInputRef.current.value = ''; 
+      if (fileInputRef.current) fileInputRef.current.value = ''; 
+    };
+  
+    // 🟢 2. THE NEW INTERCEPTOR
+    const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      if (!file || !selectedAccountId) {
+        alert("Please select an account first!");
+        return;
       }
+  
+      setStatus('processing');
+  
+      try {
+        const arrayBuffer = await file.arrayBuffer();
+        
+        try {
+          // Try to open it normally first
+// 🟢 AFTER: Slice the buffer so the worker doesn't consume our only copy
+const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer.slice(0) });
+          const pdfDoc = await loadingTask.promise;
+          await processPdfDoc(pdfDoc);
+  
+        } catch (pdfError: any) {
+          // 🟢 TRAP THE ENCRYPTION ERROR!
+          if (pdfError.name === 'PasswordException') {
+            console.log("PDF is encrypted. Checking vault for saved credentials...");
+            
+            // Check our new Supabase vault
+            const { data: encryptedPass } = await getStatementCredential(selectedBank);
+  
+            if (encryptedPass) {
+              // We have a saved password! Ask for PIN to unlock it.
+              setPdfUnlockConfig({ show: true, mode: 'unlock', encryptedPassword: encryptedPass, arrayBuffer });
+            } else {
+              // No saved password. Ask for PDF password + PIN to save it.
+              setPdfUnlockConfig({ show: true, mode: 'save', arrayBuffer });
+            }
+            setStatus('idle');
+            return;
+          } else {
+            throw pdfError;
+          }
+        }
+      } catch (error: any) {
+        console.error('FULL PDF ERROR:', error);
+        alert(`Failed to read PDF: ${error?.message || 'Unknown error'}`);
+        setStatus('idle');
+        if (fileInputRef.current) fileInputRef.current.value = '';
+      }
+    };
+  
+    // 🟢 3. THE DECRYPTION HANDLER
+    const handlePdfUnlockSubmit = async (e: React.FormEvent) => {
+      e.preventDefault();
+      if (!pdfUnlockConfig?.arrayBuffer) return;
+  
+      setIsUnlocking(true);
+      setUnlockError('');
+  
+      try {
+        let actualPdfPassword = '';
+  
+        if (pdfUnlockConfig.mode === 'unlock') {
+          // Use their PIN to decrypt the vault string
+          const decrypted = decryptPassword(pdfUnlockConfig.encryptedPassword!, unlockForm.webappPin);
+          if (!decrypted) throw new Error("Incorrect Webapp PIN. Could not decrypt vault.");
+          actualPdfPassword = decrypted;
+        } else {
+          actualPdfPassword = unlockForm.pdfPassword;
+        }
+  
+        // Test the password against the PDF
+        // 🟢 AFTER: Slice the buffer on unlock attempts
+const loadingTask = pdfjsLib.getDocument({
+  data: pdfUnlockConfig.arrayBuffer.slice(0),
+  password: actualPdfPassword
+});
 
-    } catch (error: any) {
-      console.error('FULL PDF ERROR OBJECT:', error);
-      alert(`Failed to read PDF: ${error?.message || 'Unknown error'}`);
-      setStatus('idle');
-    }
-  };
+        const pdfDoc = await loadingTask.promise;
+  
+        // If we are in 'save' mode and the password worked, encrypt and save it!
+        if (pdfUnlockConfig.mode === 'save') {
+          const encrypted = encryptPassword(actualPdfPassword, unlockForm.webappPin);
+          await saveStatementCredential(selectedBank, encrypted);
+        }
+  
+        // Cleanup and process!
+        setPdfUnlockConfig(null);
+        setUnlockForm({ pdfPassword: '', webappPin: '' });
+        setStatus('processing');
+        
+        await processPdfDoc(pdfDoc);
+  
+      } catch (error: any) {
+        console.error("Unlock error:", error);
+        if (error.name === 'PasswordException') {
+          setUnlockError(pdfUnlockConfig.mode === 'unlock' ? 'Stored password failed. You may need to reset it.' : 'Incorrect PDF password.');
+        } else {
+          setUnlockError(error.message || 'Failed to unlock PDF.');
+        }
+      } finally {
+        setIsUnlocking(false);
+      }
+    };
+  
   // 👆 END OF MISSING BLOCK 👆
       
 
@@ -487,6 +555,76 @@ console.log(`Successfully parsed ${rawTransactions.length} transactions.`);
             {status === 'success' && <CheckCircle2 className="w-5 h-5 text-black" />}
           </button>
         </div>
+
+              {/* 🟢 ZERO-KNOWLEDGE UNLOCK MODAL */}
+      {pdfUnlockConfig?.show && (
+        <div className="fixed inset-0 z-[2000] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in">
+          <div className="bg-white dark:bg-gray-900 border-4 border-black rounded-2xl w-full max-w-sm p-6 relative shadow-[8px_8px_0px_0px_rgba(0,0,0,1)]">
+            <button 
+              onClick={() => { setPdfUnlockConfig(null); setUnlockForm({ pdfPassword: '', webappPin: '' }); setUnlockError(''); }} 
+              className="absolute top-4 right-4 p-1.5 hover:bg-gray-100 rounded-full transition-colors"
+            >
+              <X className="w-5 h-5 text-gray-400" />
+            </button>
+            
+            <div className="mb-6">
+              <h2 className="text-xl font-black text-gray-900 dark:text-gray-100 mb-1">
+                {pdfUnlockConfig.mode === 'unlock' ? 'Unlock Statement' : 'Secure Statement'}
+              </h2>
+              <p className="text-xs font-bold text-gray-500">
+                {pdfUnlockConfig.mode === 'unlock' 
+                  ? 'Enter your Webapp PIN to decrypt your saved bank password and open this file.'
+                  : 'This PDF is locked. Enter its password and your Webapp PIN to securely save it to your vault.'}
+              </p>
+            </div>
+
+            <form onSubmit={handlePdfUnlockSubmit} className="space-y-4">
+              {pdfUnlockConfig.mode === 'save' && (
+                <div>
+                  <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Bank PDF Password</label>
+                  <input 
+                    type="password" 
+                    required 
+                    value={unlockForm.pdfPassword}
+                    onChange={e => setUnlockForm(f => ({ ...f, pdfPassword: e.target.value }))}
+                    placeholder="e.g. Birthdate (MMDDYYYY)"
+                    className="w-full bg-gray-50 dark:bg-gray-800 border-2 border-black rounded-xl p-3 outline-none text-sm font-bold focus:ring-2 focus:ring-indigo-500"
+                  />
+                </div>
+              )}
+              
+              <div>
+                <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Webapp PIN</label>
+                <input 
+                  type="password" 
+                  required 
+                  maxLength={6}
+                  value={unlockForm.webappPin}
+                  onChange={e => setUnlockForm(f => ({ ...f, webappPin: e.target.value }))}
+                  placeholder="••••"
+                  className="w-full bg-indigo-50 dark:bg-indigo-900/20 border-2 border-indigo-400 rounded-xl p-3 outline-none text-center tracking-[0.5em] text-lg font-black text-indigo-600 focus:ring-2 focus:ring-indigo-500"
+                />
+              </div>
+
+              {unlockError && (
+                <div className="p-3 bg-red-50 border-2 border-red-200 rounded-xl flex items-start gap-2 text-red-600">
+                  <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+                  <span className="text-xs font-bold">{unlockError}</span>
+                </div>
+              )}
+
+              <button 
+                type="submit" 
+                disabled={isUnlocking || !unlockForm.webappPin || (pdfUnlockConfig.mode === 'save' && !unlockForm.pdfPassword)}
+                className="w-full bg-black text-white py-3.5 rounded-xl font-black text-sm uppercase tracking-wider shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none transition-all disabled:opacity-50 disabled:cursor-not-allowed mt-2"
+              >
+                {isUnlocking ? 'Unlocking...' : (pdfUnlockConfig.mode === 'unlock' ? 'Unlock & Parse' : 'Save & Parse')}
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
+
 
       {showReviewModal && (
         <div className="fixed inset-0 z-[1000] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md">
