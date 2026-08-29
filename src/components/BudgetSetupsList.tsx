@@ -137,26 +137,27 @@ export const BudgetSetupsList: React.FC<BudgetSetupsListProps> = ({
                       // 🟢 THE FIX: Prioritize the specific database record for THIS tab!
                       // If Tab 1 was saved yesterday and Tab 2 was saved today, Tab 1's snapshot of Tab 2 is stale.
                       // We must read Tab 2's data directly from Tab 2's record!
-                      const specificSetup = group.setups.find(s => s.timing === legacyTimingVal) || masterSetup;
+                                            // 🟢 THE REAL FIX: If the master setup has unified math, completely ignore old '1/2' ghost files!
+                                            const hasUnifiedMath = !!(masterSetup.data && masterSetup.data._periodTotals);
+                                            const specificSetup = hasUnifiedMath ? masterSetup : (group.setups.find(s => s.timing === legacyTimingVal) || masterSetup);
+                                            
+                                            const actualStr = specificSetup.data?._actualSalaryByPeriod?.[periodIndex] || masterSetup.data?._actualSalaryByPeriod?.[periodIndex] || (periodIndex === 1 ? specificSetup.data?._actualSalary : undefined);
+                                            const projectedStr = specificSetup.data?._projectedSalaryByPeriod?.[periodIndex] || masterSetup.data?._projectedSalaryByPeriod?.[periodIndex] || (periodIndex === 1 ? specificSetup.data?._projectedSalary : undefined);
+                                            
+                                            const actualValue = actualStr && actualStr.trim() !== '' ? parseFloat(actualStr) : null;
+                                            const projectedValue = parseFloat(projectedStr || '0');
+                                            const incomeToUse = actualValue !== null && !isNaN(actualValue) ? actualValue : projectedValue;
                       
-                      const actualStr = specificSetup.data?._actualSalaryByPeriod?.[periodIndex] || masterSetup.data?._actualSalaryByPeriod?.[periodIndex] || (periodIndex === 1 ? specificSetup.data?._actualSalary : undefined);
-                      const projectedStr = specificSetup.data?._projectedSalaryByPeriod?.[periodIndex] || masterSetup.data?._projectedSalaryByPeriod?.[periodIndex] || (periodIndex === 1 ? specificSetup.data?._projectedSalary : undefined);
+                                            let spent = 0;
+                                            if (hasUnifiedMath) {
+                                              // 🟢 Force the card to strictly read the unified master record!
+                                              spent = masterSetup.data._periodTotals[periodIndex] || 0;
+                                            } else if (specificSetup.data && specificSetup.data._periodTotals && specificSetup.data._periodTotals[periodIndex] !== undefined) {
+                                              spent = specificSetup.data._periodTotals[periodIndex];
+                                            } else {
+                                              spent = specificSetup.totalAmount || 0;
+                                            }
                       
-                      const actualValue = actualStr && actualStr.trim() !== '' ? parseFloat(actualStr) : null;
-                      const projectedValue = parseFloat(projectedStr || '0');
-                      const incomeToUse = actualValue !== null && !isNaN(actualValue) ? actualValue : projectedValue;
-
-                      let spent = 0;
-                      if (specificSetup.data && specificSetup.data._periodTotals && specificSetup.data._periodTotals[periodIndex] !== undefined) {
-                        // Trust the exact tab's record first!
-                        spent = specificSetup.data._periodTotals[periodIndex];
-                      } else if (masterSetup.data && masterSetup.data._periodTotals) {
-                        // Fallback to the master record
-                        spent = masterSetup.data._periodTotals[periodIndex] || 0;
-                      } else {
-                        // Absolute legacy fallback
-                        spent = specificSetup.totalAmount || 0;
-                      }
 
                       const remaining = incomeToUse - spent;
                       const percentSpent = incomeToUse > 0 ? Math.min(100, (spent / incomeToUse) * 100) : 100;

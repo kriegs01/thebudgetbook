@@ -96,7 +96,9 @@ const Accounts: React.FC<AccountsProps> = ({ accounts, installments = [], transa
     dueDate: '', 
     lastFour: '',
     interestRate: '',
-    qrCodeBase64: '' // 🟢 ADD THIS
+    qrCodeBase64: '', // 🟢 ADD THIS
+    hasVaultEnabled: false, // 🟢 NEW
+    vaultId: ''             // 🟢 NEW
   });
 
 
@@ -187,7 +189,20 @@ const Accounts: React.FC<AccountsProps> = ({ accounts, installments = [], transa
   };
 
   const resetForm = () => {
-    setFormData({ bank: '', classification: 'Checking', balance: '', type: 'Debit', creditLimit: '', billingDate: '', dueDate: '', lastFour: '', interestRate: '', qrCodeBase64: '' }); // 🟢 Added qrCodeBase64
+    setFormData({ 
+      bank: '', 
+      classification: 'Checking', 
+      balance: '', 
+      type: 'Debit', 
+      creditLimit: '', 
+      billingDate: '', 
+      dueDate: '', 
+      lastFour: '', 
+      interestRate: '', 
+      qrCodeBase64: '',
+      hasVaultEnabled: false, // 🟢 NEW
+      vaultId: ''             // 🟢 NEW 
+    }); // 🟢 Added qrCodeBase64
     setEditingId(null);
   };
 
@@ -215,7 +230,9 @@ const Accounts: React.FC<AccountsProps> = ({ accounts, installments = [], transa
 
         lastFour: formData.lastFour.trim() || undefined,
         interestRate: formData.type === 'Credit' ? (formData.interestRate ? parseFloat(formData.interestRate) : undefined) : undefined,
-        qrCodeBase64: formData.qrCodeBase64 || undefined 
+        qrCodeBase64: formData.qrCodeBase64 || undefined,
+        hasVaultEnabled: formData.hasVaultEnabled,
+        vaultId: formData.vaultId || undefined  
       };
 
 
@@ -259,10 +276,14 @@ const Accounts: React.FC<AccountsProps> = ({ accounts, installments = [], transa
       dueDate: acc.dueDate ? String(new Date(acc.dueDate).getDate()) : '', 
       lastFour: acc.lastFour || '',
       interestRate: acc.interestRate ? acc.interestRate.toString() : '',
-      qrCodeBase64: acc.qrCodeBase64 || '' // 🟢 ADD THIS
+      qrCodeBase64: acc.qrCodeBase64 || '',
+      // 🟢 NEW: Safely load Vault state
+      hasVaultEnabled: acc.hasVaultEnabled || false,
+      vaultId: acc.vaultId || ''
     });
     setShowModal(true);
   };
+  
 
   const handleQrUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -438,6 +459,19 @@ const Accounts: React.FC<AccountsProps> = ({ accounts, installments = [], transa
     const cardSurface = isCredit ? 'bg-purple-50 dark:bg-purple-900/10' : 'bg-[#fffdf7] dark:bg-gray-800';
     const displayDigits = acc.lastFour ? `•••• •••• ${acc.lastFour}` : '•••• •••• ••••';
 
+// 🟢 CALCULATE VAULT BALANCE
+let stashBalance = 0;
+let availableBalance = displayBalance;
+
+if (acc.hasVaultEnabled && acc.vaultId) {
+  stashBalance = (transactions || [])
+    .filter(tx => tx.paymentMethodId === acc.vaultId || (tx as any).payment_method_id === acc.vaultId)
+    .reduce((sum, tx) => sum + Number(tx.amount), 0);
+    
+  availableBalance = displayBalance - stashBalance;
+}
+
+
     return (
       <div
         key={acc.id}
@@ -479,13 +513,31 @@ const Accounts: React.FC<AccountsProps> = ({ accounts, installments = [], transa
             <div className="absolute w-3 h-2 border border-black/30 rounded-sm"></div>
           </div>
 
-                    {/* Balance */}
-                    <div className="text-right pl-2 truncate">
-            <p className="text-[8px] sm:text-[9px] font-black uppercase tracking-[0.14em] text-gray-500 mb-0.5">Balance</p>
-            <p className={`text-xl sm:text-2xl font-black tracking-tight leading-none truncate ${isCredit ? 'text-purple-950 dark:text-purple-100' : 'text-gray-900 dark:text-gray-100'}`}>
-              {formatCurrency(displayBalance)}
-            </p>
-          </div>
+                    {/* Balance Display */}
+<div className="text-right pl-2 min-w-0">
+  {acc.hasVaultEnabled ? (
+    <>
+      <p className="text-[8px] sm:text-[9px] font-black uppercase tracking-[0.14em] text-gray-500 mb-0.5">Available Spend</p>
+      <p className={`text-xl sm:text-2xl font-black tracking-tight leading-none truncate ${isCredit ? 'text-purple-950 dark:text-purple-100' : 'text-gray-900 dark:text-gray-100'}`}>
+        {formatCurrency(availableBalance)}
+      </p>
+      <div className="mt-1 flex items-center justify-end gap-1.5 opacity-80">
+        <span className="text-[8px] font-black uppercase tracking-widest bg-yellow-300 text-black px-1.5 py-0.5 rounded-sm border-2 border-black shadow-[1px_1px_0px_0px_rgba(0,0,0,1)]">Vault</span>
+        <p className="text-[10px] sm:text-xs font-black tracking-tight text-gray-700 dark:text-gray-300 truncate">
+          {formatCurrency(stashBalance)}
+        </p>
+      </div>
+    </>
+  ) : (
+    <>
+      <p className="text-[8px] sm:text-[9px] font-black uppercase tracking-[0.14em] text-gray-500 mb-0.5">Balance</p>
+      <p className={`text-xl sm:text-2xl font-black tracking-tight leading-none truncate ${isCredit ? 'text-purple-950 dark:text-purple-100' : 'text-gray-900 dark:text-gray-100'}`}>
+        {formatCurrency(displayBalance)}
+      </p>
+    </>
+  )}
+</div>
+
         </div>
 
         {/* TO: Update the labels to show Available Limit and hide closed dates if unnecessary */}
@@ -841,6 +893,40 @@ const Accounts: React.FC<AccountsProps> = ({ accounts, installments = [], transa
                       <input required type="number" step="0.01" value={formData.balance} onChange={(e) => setFormData({...formData, balance: e.target.value})} className="w-full max-w-[140px] sm:max-w-[200px] bg-transparent border-b-[3px] border-black/10 focus:border-black outline-none text-right transition-colors placeholder-black/20" placeholder="0.00" />
                     </div>
                   </div>
+                  {/* 🟢 NEW: Vault Toggle for Debit Accounts */}
+{formData.type === 'Debit' && (
+  <div className="col-span-2 mt-4 p-3 sm:p-4 bg-white/50 dark:bg-black/20 rounded-xl border-[3px] border-black flex justify-between items-center shadow-[inset_2px_2px_0px_rgba(0,0,0,0.1)]">
+    <div>
+      <label className="block text-[10px] sm:text-xs font-black text-gray-800 dark:text-gray-200 uppercase tracking-widest">
+        Enable Go Save Vault
+      </label>
+      <p className="text-[8px] sm:text-[9px] font-bold text-gray-500 uppercase mt-0.5">
+        Auto-splits stash transactions
+      </p>
+    </div>
+    <label className="relative inline-flex items-center cursor-pointer">
+    <input 
+            type="checkbox" 
+            className="sr-only peer"
+            checked={formData.hasVaultEnabled}
+            onChange={(e) => {
+              const isChecked = e.target.checked;
+              // 🟢 FIX: Actively detect and replace the poisoned string
+              const needsNewId = isChecked && (!formData.vaultId || formData.vaultId.startsWith('vault_'));
+              
+              setFormData({
+                ...formData, 
+                hasVaultEnabled: isChecked,
+                vaultId: needsNewId ? crypto.randomUUID() : formData.vaultId 
+              });
+            }}
+          />
+
+      <div className="w-11 h-6 bg-gray-300 border-[3px] border-black peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-black after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-black after:border-[3px] after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-yellow-400"></div>
+    </label>
+  </div>
+)}
+
                 </div>
               </div>
 
@@ -949,12 +1035,14 @@ const Accounts: React.FC<AccountsProps> = ({ accounts, installments = [], transa
             <div className="border-t-[3px] border-dashed border-gray-300 dark:border-gray-700 my-6"></div>
 
             {/* The JuiceBox Component */}
-            <JuiceBox 
-              selectedAccountId={juiceAccountId} 
-              installments={installments}
-              existingTransactions={transactions}
-              onImportComplete={() => setShowJuiceModal(false)} 
-            />
+<JuiceBox 
+  selectedAccountId={juiceAccountId} 
+  vaultAccountId={accounts.find(a => a.id === juiceAccountId)?.vaultId}
+  installments={installments}
+  existingTransactions={transactions}
+  onImportComplete={() => setShowJuiceModal(false)} 
+/>
+
           </div>
         </div>
       )}

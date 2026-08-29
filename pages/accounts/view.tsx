@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useMemo, useRef } from 'react';
-import { ArrowLeft, Info, Eye, ZoomIn, ZoomOut, Download, X, Pencil, BanknoteArrowDown, Trash2, ArrowUpFromLine, ArrowDownToLine, Banknote, CheckSquare, Square, Filter, ChevronDown, ChevronUp, CreditCard, AlertTriangle, Send, User, Landmark, WalletCards, ShieldCheck } from 'lucide-react';
+import { ArrowLeft, Info, Eye, ZoomIn, ZoomOut, Download, X, Pencil, BanknoteArrowDown, Trash2, ArrowUpFromLine, ArrowDownToLine, Banknote, CheckSquare, Square, Filter, ChevronDown, ChevronUp, CreditCard, AlertTriangle, Send, User, Landmark, WalletCards, ShieldCheck, Lock } from 'lucide-react';
 import { useSearchParams, Link } from 'react-router-dom';
 import { Account } from '../../types';
 import { getTransactionsByPaymentMethod, createTransaction, updateTransactionAndSyncSchedule, createTransfer, getLoanTransactionsWithPayments, getReceiptSignedUrl, deleteTransactionAndRevertSchedule, batchDeleteTransactions, getTransactionById } from '../../src/services/transactionsService';
@@ -93,7 +93,9 @@ const [rolloverPrompt, setRolloverPrompt] = useState<{
   const [loanTransactions, setLoanTransactions] = useState<LoanTransaction[]>([]);
   const [allAccounts, setAllAccounts] = useState<Account[]>([]);
   
-   
+     // 🟢 NEW: Tab State
+  const [activeTab, setActiveTab] = useState<'transactions' | 'vault'>('transactions');
+
 
   // Modal states
   const [showWithdrawModal, setShowWithdrawModal] = useState(false);
@@ -145,6 +147,12 @@ const [rolloverPrompt, setRolloverPrompt] = useState<{
   const [editingViewTx, setEditingViewTx] = useState<Transaction | null>(null);
   const [editTxForm, setEditTxForm] = useState({ name: '', amount: '', date: '' });
 
+//Stash states
+const [showStashModal, setShowStashModal] = useState(false);
+const [stashForm, setStashForm] = useState({ amount: '', date: getTodayIso() });
+
+
+
   // ── Filter state ──────────────────────────────────────────────────────────
   const [filterStartDate, setFilterStartDate] = useState<string>(getFirstDayOfCurrentYearIso());
   const [filterEndDate, setFilterEndDate] = useState<string>(getLastDayOfCurrentYearIso());
@@ -169,6 +177,9 @@ const [rolloverPrompt, setRolloverPrompt] = useState<{
     if (typeof window === "undefined" || !accountId) return;
     
     try {
+      const currentAccount = accounts.find(a => a.id === accountId);
+      
+      // 🟢 Just fetch the main account! Vault transactions will live here, tagged.
       const { data: transactionsData, error: transactionsError } = await getTransactionsByPaymentMethod(accountId);
       
       if (transactionsError) {
@@ -177,7 +188,7 @@ const [rolloverPrompt, setRolloverPrompt] = useState<{
         return;
       }
       
-      const txList: Transaction[] = (transactionsData || []).map(t => ({
+      const txList = (transactionsData || []).map(t => ({
         id: t.id,
         name: t.name,
         date: t.date,
@@ -186,27 +197,28 @@ const [rolloverPrompt, setRolloverPrompt] = useState<{
         transaction_type: t.transaction_type,
         notes: t.notes,
         related_transaction_id: t.related_transaction_id,
-        receiptUrl: (t as unknown as { receipt_url?: string | null }).receipt_url ?? null,
+        receiptUrl: (t as any).receipt_url ?? null,
         person_name: (t as any).person_name ?? null,
-        is_reconciled: (t as any).is_reconciled === true
+        is_reconciled: (t as any).is_reconciled === true,
+        walletId: (t as any).wallet_id ?? null // 🟢 Grab the Vault Tag
       }));
-      setTransactions(txList);
+      setTransactions(txList as any);
 
       // Keep the raw Supabase rows for credit utilization computation
       setSupabaseTransactions(transactionsData || []);
 
       // Compute credit utilization if this is a credit account with a limit
-      const currentAccountForUtil = accounts.find(a => a.id === accountId);
-      if (currentAccountForUtil?.type === 'Credit' && currentAccountForUtil.creditLimit != null) {
-        setCreditUtilization(computeCreditUtilization(currentAccountForUtil, transactionsData || []));
+      if (currentAccount?.type === 'Credit' && currentAccount.creditLimit != null) {
+        setCreditUtilization(computeCreditUtilization(currentAccount, transactionsData as any));
       } else {
         setCreditUtilization(null);
       }
 
       // Load loan transactions with payments (only for debit accounts)
-      const currentAccount = accounts.find(a => a.id === accountId);
       if (currentAccount?.type === 'Debit') {
         const { data: loansData } = await getLoanTransactionsWithPayments(accountId);
+
+
         if (loansData) {
           const loansWithMeta = loansData.map(loan => ({
             id: loan.id,
@@ -388,15 +400,32 @@ const [rolloverPrompt, setRolloverPrompt] = useState<{
     if (!isMobile) setShowFiltersPanel(true);
   }, [isMobile]);
 
-  // ── Derived: filtered transactions ────────────────────────────────────────
-  const filteredTransactions = useMemo(() => {
-    return transactions.filter(tx => {
-      const d = tx.date.slice(0, 10);
-      if (d < filterStartDate || d > filterEndDate) return false;
-      if (filterTypes.size > 0 && !filterTypes.has(tx.transaction_type ?? 'payment')) return false;
-      return true;
-    });
-  }, [transactions, filterStartDate, filterEndDate, filterTypes]);
+      // ── Derived: filtered transactions (Tabs & Ghost Mode) ────────────────────
+    // ── Derived: filtered transactions (Tabs & Ghost Mode) ────────────────────
+    const filteredTransactions = useMemo(() => {
+      return transactions.filter(tx => {
+        // 🟢 1. TAB ROUTING BY NOTES TAG
+        const isVaultTx = tx.notes === 'VAULT_STASH';
+        
+        if (activeTab === 'vault') {
+          // Vault Tab: Only show transactions explicitly tagged as a vault stash
+          if (!isVaultTx) return false;
+        } else {
+          // Transactions Tab: Hide any transaction tagged as a vault stash
+          if (isVaultTx) return false;
+        }
+  
+        // 2. Standard Filters (Date & Type)
+        const d = tx.date.slice(0, 10);
+        if (d < filterStartDate || d > filterEndDate) return false;
+        if (filterTypes.size > 0 && !filterTypes.has(tx.transaction_type ?? 'payment')) return false;
+        
+        return true;
+      });
+    }, [transactions, filterStartDate, filterEndDate, filterTypes, activeTab]);
+  
+
+  
 
   // ── Derived: current balance (pre-calculated from App.tsx, no re-reduction needed) ─
   const currentBalance = useMemo(() => account?.balance ?? 0, [account]);
@@ -406,15 +435,26 @@ const [rolloverPrompt, setRolloverPrompt] = useState<{
     [allAccounts, accountId]
   );
 
-  // ── Derived: total in / out from filtered transactions ────────────────────
+    // ── Derived: Vault Total & Adjusted In/Out ────────────────────────────────
+  
+  // 1. Calculate the total money currently sitting in the vault (All-Time)
+  const totalVaultAmount = useMemo(
+    () => transactions.reduce((sum, tx) => sum + (tx.notes === 'VAULT_STASH' ? tx.amount : 0), 0),
+    [transactions]
+  );
+
+  // 2. Calculate Total In (Ignoring Vault transactions so they don't skew your metrics)
   const totalIn = useMemo(
-    () => filteredTransactions.reduce((sum, tx) => sum + (tx.amount < 0 ? -tx.amount : 0), 0),
+    () => filteredTransactions.reduce((sum, tx) => sum + (tx.amount < 0 && tx.notes !== 'VAULT_STASH' ? -tx.amount : 0), 0),
     [filteredTransactions]
   );
+  
+  // 3. Calculate Total Out (Ignoring Vault transactions so stashing isn't an "expense")
   const totalOut = useMemo(
-    () => filteredTransactions.reduce((sum, tx) => sum + (tx.amount > 0 ? tx.amount : 0), 0),
+    () => filteredTransactions.reduce((sum, tx) => sum + (tx.amount > 0 && tx.notes !== 'VAULT_STASH' ? tx.amount : 0), 0),
     [filteredTransactions]
   );
+
 
   // ── Select / batch-delete helpers ─────────────────────────────────────────
   const toggleSelectMode = () => {
@@ -674,6 +714,48 @@ const [rolloverPrompt, setRolloverPrompt] = useState<{
       setIsSubmitting(false);
     }
   };
+
+  const handleStashSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!accountId || !account?.vaultId) return;
+    
+    const amountValue = Math.abs(parseFloat(stashForm.amount || '0'));
+    if (isNaN(amountValue) || amountValue <= 0) {
+      showMessage('error', 'Please enter a valid amount.');
+      return;
+    }
+
+    await guardDebitOutflow(amountValue, async () => {
+      setIsSubmitting(true);
+      try {
+        // 🟢 FIX: Use the 'notes' field as our Magic Tag to avoid foreign key crashes
+        const { error } = await createTransaction({
+          name: 'Stashed to Vault',
+          date: combineDateWithCurrentTime(stashForm.date),
+          amount: amountValue, // Positive amount = money leaves available balance
+          payment_method_id: accountId, 
+          transaction_type: 'transfer', 
+          notes: 'VAULT_STASH', // The plain-text tag that routes it to the Vault Tab
+        } as any);
+
+        if (error) throw error;
+        
+        showMessage('success', 'Funds successfully stashed!');
+        setShowStashModal(false);
+        setStashForm({ amount: '', date: getTodayIso() });
+        await loadTransactions();
+        onTransactionCreated?.();
+      } catch (error) {
+        console.error('Error stashing funds:', error);
+        showMessage('error', 'Failed to stash funds');
+      } finally {
+        setIsSubmitting(false);
+      }
+    });
+  };
+
+
+
 
   const handleLoanPaymentSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -1030,42 +1112,53 @@ const [rolloverPrompt, setRolloverPrompt] = useState<{
         </div>
         </div>
 
-        {/* ── Dashboard ───────────────────────────────────────────────────── */}
-        <div className={`mb-5 grid gap-4 ${isMobile ? 'grid-cols-2' : 'grid-cols-3'}`}>
-          <div className={`${getAccentClasses('bg')} rounded-[1.8rem] border-[4px] border-black p-4 text-white shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] transition-colors ${isMobile ? 'col-span-2 text-center' : ''}`}>
-            <p className="mb-1 text-[10px] font-black uppercase tracking-widest text-indigo-200">Current Balance</p>
-            <p className="text-2xl font-black">{formatCurrency(currentBalance)}</p>
-            <p className="mt-1 text-[10px] text-indigo-300">All time</p>
-          </div>
-          <div className={`rounded-[1.8rem] border-[4px] border-black bg-white p-4 shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] transition-colors dark:bg-gray-900 ${isMobile ? 'aspect-square text-center flex flex-col items-center justify-center' : ''}`}>
-            <p className="mb-1 text-[10px] font-black uppercase tracking-widest text-gray-400 dark:text-gray-500">Total In</p>
-            <p className="text-2xl font-black text-green-600 dark:text-green-400">{formatCurrency(totalIn)}</p>
-            <p className="mt-1 text-[10px] text-gray-400 dark:text-gray-500">Based on filter</p>
-          </div>
-          <div className={`rounded-[1.8rem] border-[4px] border-black bg-white p-4 shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] transition-colors dark:bg-gray-900 ${isMobile ? 'aspect-square text-center flex flex-col items-center justify-center' : ''}`}>
-            <p className="mb-1 text-[10px] font-black uppercase tracking-widest text-gray-400 dark:text-gray-500">Total Out</p>
-            <p className="text-2xl font-black text-red-600 dark:text-red-400">{formatCurrency(totalOut)}</p>
-            <p className="mt-1 text-[10px] text-gray-400 dark:text-gray-500">Based on filter</p>
-          </div>
-        </div>
+          {/* ── Dashboard ───────────────────────────────────────────────────── */}
+          {account?.hasVaultEnabled ? (
+          <div className={`mb-5 grid gap-4 ${isMobile ? 'grid-cols-2' : 'grid-cols-4'}`}>
+            <div className={`${getAccentClasses('bg')} rounded-[1.8rem] border-[4px] border-black p-4 text-white shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] transition-colors ${isMobile ? 'col-span-2 text-center' : ''}`}>
+              <p className="mb-1 text-[10px] font-black uppercase tracking-widest text-indigo-200">Account Balance</p>
+              <p className="text-2xl font-black">{formatCurrency(currentBalance)}</p>
+              <p className="mt-1 text-[10px] text-indigo-300">Available to spend</p>
+            </div>
+            
+            <div className={`rounded-[1.8rem] border-[4px] border-black bg-yellow-400 p-4 text-black shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] transition-colors ${isMobile ? 'col-span-2 text-center' : ''}`}>
+              <p className="mb-1 text-[10px] font-black uppercase tracking-widest text-gray-800">Vault 🔒</p>
+              <p className="text-2xl font-black">{formatCurrency(totalVaultAmount)}</p>
+              <p className="mt-1 text-[10px] text-gray-800">Total stashed</p>
+            </div>
 
-        {/* ── Credit Summary (credit accounts only) ───────────────────────── */}
-        {account?.type === 'Credit' && account.creditLimit != null && creditUtilization && (
-          <div className={`mb-5 grid gap-4 ${isMobile ? 'grid-cols-1' : 'grid-cols-3'}`}>
-            <div className="rounded-[1.8rem] border-[4px] border-black bg-white p-4 shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] transition-colors dark:bg-gray-900">
-              <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 dark:text-gray-500 mb-1">Credit Limit</p>
-              <p className="text-xl font-black text-gray-900 dark:text-gray-100">{formatCurrency(account.creditLimit)}</p>
+            <div className={`rounded-[1.8rem] border-[4px] border-black bg-white p-4 shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] transition-colors dark:bg-gray-900 ${isMobile ? 'aspect-square text-center flex flex-col items-center justify-center' : ''}`}>
+              <p className="mb-1 text-[10px] font-black uppercase tracking-widest text-gray-400 dark:text-gray-500">Total In</p>
+              <p className="text-2xl font-black text-green-600 dark:text-green-400">{formatCurrency(totalIn)}</p>
+              <p className="mt-1 text-[10px] text-gray-400 dark:text-gray-500">Based on filter</p>
             </div>
-            <div className="rounded-[1.8rem] border-[4px] border-black bg-white p-4 shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] transition-colors dark:bg-gray-900">
-              <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 dark:text-gray-500 mb-1">Outstanding Balance</p>
-              <p className="text-xl font-black text-red-600 dark:text-red-400">{formatCurrency(creditUtilization.currentOutstanding)}</p>
+            
+            <div className={`rounded-[1.8rem] border-[4px] border-black bg-white p-4 shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] transition-colors dark:bg-gray-900 ${isMobile ? 'aspect-square text-center flex flex-col items-center justify-center' : ''}`}>
+              <p className="mb-1 text-[10px] font-black uppercase tracking-widest text-gray-400 dark:text-gray-500">Total Out</p>
+              <p className="text-2xl font-black text-red-600 dark:text-red-400">{formatCurrency(totalOut)}</p>
+              <p className="mt-1 text-[10px] text-gray-400 dark:text-gray-500">Based on filter</p>
             </div>
-            <div className="rounded-[1.8rem] border-[4px] border-black bg-white p-4 shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] transition-colors dark:bg-gray-900">
-              <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 dark:text-gray-500 mb-1">Available Credit</p>
-              <p className="text-xl font-black text-green-600 dark:text-green-400">{formatCurrency(creditUtilization.availableCredit ?? 0)}</p>
+          </div>
+        ) : (
+          <div className={`mb-5 grid gap-4 ${isMobile ? 'grid-cols-2' : 'grid-cols-3'}`}>
+            <div className={`${getAccentClasses('bg')} rounded-[1.8rem] border-[4px] border-black p-4 text-white shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] transition-colors ${isMobile ? 'col-span-2 text-center' : ''}`}>
+              <p className="mb-1 text-[10px] font-black uppercase tracking-widest text-indigo-200">Current Balance</p>
+              <p className="text-2xl font-black">{formatCurrency(currentBalance)}</p>
+              <p className="mt-1 text-[10px] text-indigo-300">All time</p>
+            </div>
+            <div className={`rounded-[1.8rem] border-[4px] border-black bg-white p-4 shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] transition-colors dark:bg-gray-900 ${isMobile ? 'aspect-square text-center flex flex-col items-center justify-center' : ''}`}>
+              <p className="mb-1 text-[10px] font-black uppercase tracking-widest text-gray-400 dark:text-gray-500">Total In</p>
+              <p className="text-2xl font-black text-green-600 dark:text-green-400">{formatCurrency(totalIn)}</p>
+              <p className="mt-1 text-[10px] text-gray-400 dark:text-gray-500">Based on filter</p>
+            </div>
+            <div className={`rounded-[1.8rem] border-[4px] border-black bg-white p-4 shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] transition-colors dark:bg-gray-900 ${isMobile ? 'aspect-square text-center flex flex-col items-center justify-center' : ''}`}>
+              <p className="mb-1 text-[10px] font-black uppercase tracking-widest text-gray-400 dark:text-gray-500">Total Out</p>
+              <p className="text-2xl font-black text-red-600 dark:text-red-400">{formatCurrency(totalOut)}</p>
+              <p className="mt-1 text-[10px] text-gray-400 dark:text-gray-500">Based on filter</p>
             </div>
           </div>
         )}
+
 
         <div className="overflow-hidden rounded-[1.8rem] border-[4px] border-black bg-white shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] transition-colors dark:bg-gray-900">
           {account?.type === 'Debit' && (
@@ -1107,6 +1200,20 @@ const [rolloverPrompt, setRolloverPrompt] = useState<{
                     <ArrowDownToLine className={isMobile ? mobileActionIconClass : 'w-4 h-4'} />
                     {!isMobile && <span>Cash-in</span>}
                   </button>
+
+                  {/* 🟢 NEW: Manual Stash Button */}
+                  {account?.hasVaultEnabled && (
+                    <button
+                      onClick={() => setShowStashModal(true)}
+                      title="Stash to Vault"
+                      aria-label="Stash funds to vault"
+                      className={isMobile ? `${mobileSquircleActionButton} bg-yellow-400 text-black border-[3px] border-black` : `${retroActionButtonBase} bg-yellow-400 text-black border-[3px] border-black`}
+                    >
+                      <Lock className={isMobile ? mobileActionIconClass : 'w-4 h-4'} />
+                      {!isMobile && <span>Stash</span>}
+                    </button>
+                  )}
+
                   <button
                     onClick={toggleSelectMode}
                     title={isSelectMode ? 'Cancel selection' : 'Select transactions'}
@@ -1165,10 +1272,42 @@ const [rolloverPrompt, setRolloverPrompt] = useState<{
               </div>
             </div>
           )}
-          <div className="border-b-[4px] border-black px-6 py-4 flex items-center justify-between transition-colors">
-            <h2 className="text-sm font-bold uppercase text-gray-600 dark:text-gray-400 tracking-widest">Transactions</h2>
-            <div className="text-sm text-gray-500 dark:text-gray-400">{filteredTransactions.length} items</div>
+                              {/* 🟢 NEW CENTERED TAB SWITCHER */}
+          <div className="border-b-[4px] border-black flex flex-col items-center justify-center transition-colors bg-[#fff8ea] dark:bg-gray-900 pt-2 pb-2">
+            
+            <div className="flex w-[90%] sm:w-auto border-[4px] border-black rounded-2xl overflow-hidden mb-3 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]">
+              <button
+                onClick={() => setActiveTab('transactions')}
+                className={`flex-1 sm:flex-none px-6 sm:px-12 py-3.5 text-xs sm:text-sm font-black uppercase tracking-widest transition-colors ${
+                  activeTab === 'transactions' 
+                    ? `${getAccentClasses('bg')} text-white` 
+                    : 'bg-white text-gray-600 hover:bg-gray-100 dark:bg-gray-950 dark:text-gray-400 dark:hover:bg-gray-800'
+                }`}
+              >
+                Transactions
+              </button>
+              
+              {account?.hasVaultEnabled && (
+                <button
+                  onClick={() => setActiveTab('vault')}
+                  className={`flex-1 sm:flex-none px-6 sm:px-12 py-3.5 text-xs sm:text-sm font-black uppercase tracking-widest transition-colors border-l-[4px] border-black ${
+                    activeTab === 'vault' 
+                      ? 'bg-yellow-400 text-black' 
+                      : 'bg-white text-gray-600 hover:bg-yellow-100 dark:bg-gray-950 dark:text-gray-400 dark:hover:bg-gray-800'
+                  }`}
+                >
+                  Vault
+                </button>
+              )}
+            </div>
+            
+            <div className="text-[10px] font-black uppercase tracking-widest text-gray-500 dark:text-gray-400">
+              {filteredTransactions.length} item{filteredTransactions.length !== 1 ? 's' : ''}
+            </div>
+            
           </div>
+
+
           <div className="p-4">
             {isLoading ? (
               <div className="text-center py-8">
@@ -1801,6 +1940,68 @@ const [rolloverPrompt, setRolloverPrompt] = useState<{
           </div>
         </div>
       )}
+
+      {/* Stash / Vault Modal */}
+      {showStashModal && account?.hasVaultEnabled && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-md">
+          <div className={`${retroModalShell} relative`}>
+            <button type="button" onClick={() => setShowStashModal(false)} className={retroCloseButton} aria-label="Close stash modal"><X className="w-4 h-4" /></button>
+            <div className="mb-4 inline-flex h-14 w-14 items-center justify-center rounded-[1.5rem] border-[3px] border-black bg-yellow-400 text-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]">
+              <Lock className="w-7 h-7" />
+            </div>
+            <h2 className={retroModalTitle}>Stash Funds</h2>
+            <p className={`${retroModalSubtitle} mb-8`}>Securely lock money away into this account's vault.</p>
+            <form onSubmit={handleStashSubmit} className="space-y-6">
+              <div>
+                <label className="block text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-2">Amount to Stash</label>
+                <div className="relative">
+                  <span className="absolute left-4 top-1/2 -translate-y-1/2 font-bold text-gray-400 dark:text-gray-500">₱</span>
+                  <input 
+                    type="number" 
+                    step="0.01" 
+                    min="0"
+                    value={stashForm.amount} 
+                    onChange={e => setStashForm(f => ({ ...f, amount: e.target.value }))} 
+                    required 
+                    className={`${modalFieldClass} pl-8 text-xl`}
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-2">Date</label>
+                <input 
+                  type="date" 
+                  value={stashForm.date} 
+                  onChange={e => setStashForm(f => ({ ...f, date: e.target.value }))} 
+                  required 
+                  className={modalFieldClass}
+                />
+              </div>
+
+              <div className="flex gap-4 pt-4">
+                <button
+                  type="button"
+                  onClick={() => setShowStashModal(false)}
+                  className={`flex-1 ${retroGhostButton}`}
+                  disabled={isSubmitting}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="flex-1 rounded-2xl border-[3px] border-black bg-yellow-400 py-4 font-black text-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] transition-all hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none disabled:opacity-50"
+                  disabled={isSubmitting}
+                >
+                  {isSubmitting ? 'Processing...' : 'Lock It Away'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+
 
       {/* Loan Payment Modal */}
       {showLoanPaymentModal && selectedLoan && (

@@ -721,7 +721,8 @@ const [activePeriodIndex, setActivePeriodIndex] = useState<number>(1);
 
 
     // 🟢 Check for _periodTotals so the loader knows this is an upgraded multi-tab budget!
-const unifiedSetup = setupsForMonth.find(s => s.timing === 'unified' || s.data?._periodTotals);
+    // 🟢 Check for _periodTotals so the loader knows this is an upgraded multi-tab budget!
+    const unifiedSetup = setupsForMonth.find(s => s.timing === 'unified' || s.data?._periodTotals);
 
     // 🟢 ANTI-BLEED FIX: If this is a brand new month, force a perfectly clean slate!
     const hasLegacyFiles = savedSetups.some(s => s.month === selectedMonth && (s.timing === '1/2' || s.timing === '2/2'));
@@ -734,8 +735,34 @@ const unifiedSetup = setupsForMonth.find(s => s.timing === 'unified' || s.data?.
         });
       }
       setSetupData(injectActiveBillers(cleanSlate));
+      
+      // 🟢 Find the most recent budget to inherit its projected salary
+      const latestSetup = savedSetups.length > 0 
+        ? [...savedSetups].sort((a, b) => {
+            const yearA = parseInt(a.data?._year || new Date().getFullYear().toString());
+            const yearB = parseInt(b.data?._year || new Date().getFullYear().toString());
+            if (yearA !== yearB) return yearB - yearA;
+            return MONTHS.indexOf(b.month) - MONTHS.indexOf(a.month);
+          })[0] 
+        : null;
+      
+      const inheritedProjectedByPeriod = latestSetup?.data?._projectedSalaryByPeriod || { 1: '11000' };
+      const inheritedProjectedLegacy = latestSetup?.data?._projectedSalary || '11000';
+
+      // 🟢 Force memory wipe for actuals, but INHERIT projections!
+      setProjectedSalaryByPeriod(inheritedProjectedByPeriod);
+      setProjectedSalary(inheritedProjectedLegacy);
+      
+      setActualSalaryByPeriod({});
+      setActualSalary('');
+      setExcludedInstallmentIds(new Set());
+      setExcludedWalletIds(new Set());
+      setExcludedCreditIds(new Set());
+
       return; // Stop the loader, the pristine new budget is ready!
     }
+
+    
 
 
   
@@ -1280,6 +1307,25 @@ const getFrozenCycleAmount = (account: Account): number => {
     return `${yearNum}-${paddedMonth}-${paddedDay}`;
   };
 
+  // 🟢 SMART DUAL-DELETE: Finds and deletes both halves of a credit/debit transaction pair
+  const handleDeleteTransactionPair = async (txId: string) => {
+    const targetTx = transactions.find(t => t.id === txId);
+    if (!targetTx) return;
+
+    // Hunt for the twin using the related_transaction_id
+    const pairedTx = transactions.find(t =>
+      (targetTx.related_transaction_id && t.id === targetTx.related_transaction_id) ||
+      (t.related_transaction_id && t.related_transaction_id === targetTx.id)
+    );
+
+    const { error } = await deleteTransactionAndRevertSchedule(targetTx.id);
+    if (error) throw error;
+    
+    if (pairedTx) {
+       await deleteTransactionAndRevertSchedule(pairedTx.id);
+    }
+  };
+
 
   const handleDeleteStashTopUp = (txId: string, amount: number) => {
     const absAmount = Math.abs(amount);
@@ -1561,6 +1607,33 @@ const getFrozenCycleAmount = (account: Account): number => {
       accounts: accounts
     });
   
+  // =========================================================
+  // ⚡ SLICER: REAL-WORLD TRANSFER AGGREGATOR
+  // =========================================================
+  const allocationsByAccount = React.useMemo(() => {
+    const totals: Record<string, number> = {};
+    
+    allocations.forEach(alloc => {
+      if (alloc.targetAccountId && alloc.amount > 0) {
+        totals[alloc.targetAccountId] = (totals[alloc.targetAccountId] || 0) + alloc.amount;
+      }
+    });
+
+    return Object.entries(totals)
+      .map(([accountId, amount]) => {
+        const acc = accounts.find(a => a.id === accountId);
+        return {
+          accountId,
+          name: acc ? `${acc.bank} (${acc.classification})` : 'Unknown Account',
+          amount
+        };
+      })
+      .sort((a, b) => b.amount - a.amount); // Sort largest to smallest
+  }, [allocations, accounts]);
+
+  const PIE_COLORS = ['#34d399', '#818cf8', '#fbbf24', '#f472b6', '#60a5fa', '#a78bfa', '#fb923c'];
+
+
   // =========================================================
   // ⚡ STEP 3: THE EXECUTION HANDLER FOR THE SLICER
   // =========================================================
@@ -1868,20 +1941,12 @@ const getFrozenCycleAmount = (account: Account): number => {
           catItems.forEach(item => {
             if (!item.included) return;
 
-            // 🟢 STRICT SYNC: Match the UI filter exactly so old ghost data is ignored!
-            const isBillerItem = item.isBiller || (billers && billers.some(b => b.id === item.id));
-            const isInstallmentItem = item.isInstallment || (installments && installments.some(i => i.id === item.id));
-
-            if (!isBillerItem && !isInstallmentItem && !item.isCredit) {
-               const periodVal = item.amountsByPeriod?.[period];
-               if (periodVal === undefined || periodVal === '' || periodVal === '0') {
-                 return; // Ghost item detected! Skip it.
-               }
-            }
-
+            // 🟢 UNIFIED MATH: No more ghost filters. If the engine put it in this tab, sum it!
             const val = item.amountsByPeriod?.[period] !== undefined ? item.amountsByPeriod[period] : item.amount;
             itemsTotal += (parseFloat(val) || 0);
           });
+
+
         });
       }
 
@@ -2191,20 +2256,12 @@ const getFrozenCycleAmount = (account: Account): number => {
           catItems.forEach(item => {
             if (!item.included) return;
 
-            // 🟢 STRICT SYNC: Match the UI filter exactly so old ghost data is ignored!
-            const isBillerItem = item.isBiller || (billers && billers.some(b => b.id === item.id));
-            const isInstallmentItem = item.isInstallment || (installments && installments.some(i => i.id === item.id));
-
-            if (!isBillerItem && !isInstallmentItem && !item.isCredit) {
-               const periodVal = item.amountsByPeriod?.[period];
-               if (periodVal === undefined || periodVal === '' || periodVal === '0') {
-                 return; // Ghost item detected! Skip it.
-               }
-            }
-
+            // 🟢 UNIFIED MATH: No more ghost filters. If the engine put it in this tab, sum it!
             const val = item.amountsByPeriod?.[period] !== undefined ? item.amountsByPeriod[period] : item.amount;
             itemsTotal += (parseFloat(val) || 0);
           });
+
+
         });
       }
 
@@ -2743,33 +2800,43 @@ const getFrozenCycleAmount = (account: Account): number => {
   };
 
   const handleOpenNew = () => {
+    // 🟢 FIX 3A: Kill any pending auto-saves before creating a new budget
+    if (autoSaveTimeoutRef.current) clearTimeout(autoSaveTimeoutRef.current);
+
     // 1. Calculate the next available date based on your existing setups
     const { month, year } = getNextAvailableDate(savedSetups); 
   
     // 2. Update your component's state so the UI dropdowns reflect this new date
-    // (Note: Replace these with whatever your actual state setter functions are named!)
     setSelectedMonth(month); 
     setSelectedYear(year);
+
+    // 🟢 NEW: Find the most recent budget to inherit its projected salary
+    const latestSetup = savedSetups.length > 0 
+      ? [...savedSetups].sort((a, b) => {
+          const yearA = parseInt(a.data?._year || new Date().getFullYear().toString());
+          const yearB = parseInt(b.data?._year || new Date().getFullYear().toString());
+          if (yearA !== yearB) return yearB - yearA;
+          return MONTHS.indexOf(b.month) - MONTHS.indexOf(a.month);
+        })[0] 
+      : null;
+    
+    // Safely extract the previous projections, or fallback to default
+    const inheritedProjectedByPeriod = latestSetup?.data?._projectedSalaryByPeriod || { 1: '11000' };
+    const inheritedProjectedLegacy = latestSetup?.data?._projectedSalary || '11000';
   
     // 3. Keep your existing initialization code
     const initialSetup: { [key: string]: CategorizedSetupItem[] } = {};
   
-    // 1. Initialize empty arrays for all categories
     effectiveCategories.forEach(c => {
       initialSetup[c.name] = [];
     });
   
-
-    // 2. Map and inject your active recurring billers directly into their categories
     (billers || []).forEach(biller => {
       if (biller.isArchived) return;
       
-      // Check if active for the selected month/year
       if (isBillerActiveForPeriod(biller, month, year)) {
-        // Match biller category name to category list, defaulting to 'Utilities' or 'Fixed' if unmatched
         let targetCat = biller.category;
         if (!initialSetup[targetCat]) {
-          // Find closest category match if exact string differs
           const matchedCat = effectiveCategories.find(c => c.name.toLowerCase() === targetCat?.toLowerCase());
           targetCat = matchedCat ? matchedCat.name : 'Fixed';
         }
@@ -2778,18 +2845,11 @@ const getFrozenCycleAmount = (account: Account): number => {
           initialSetup[targetCat] = [];
         }
 
-        // 🟢 SMART RESOLVER: Ask the engine for the future month's actual price
         let baseAmount = biller.expectedAmount || biller.amount || biller.monthlyAmount || 0;
-        const dummySchedule = { 
-          id: 'temp', 
-          month: month, 
-          year: year.toString(), 
-          expectedAmount: baseAmount 
-        };
+        const dummySchedule = { id: 'temp', month: month, year: year.toString(), expectedAmount: baseAmount };
         const { amount: calculatedAmount } = getScheduleExpectedAmount(biller, dummySchedule as any, accounts, transactions);
         const resolvedAmount = calculatedAmount > 0 ? calculatedAmount : baseAmount;
 
-        // Push the biller into the setup template
         initialSetup[targetCat].push({
           id: biller.id,
           name: biller.name,
@@ -2802,12 +2862,24 @@ const getFrozenCycleAmount = (account: Account): number => {
       }
     });
 
-
     setSetupData(initialSetup);
     setRemovedIds(new Set());
     setSelectedTiming('1/2');
     setView('setup');
+
+    // 🟢 FIX 3B: Memory wipe for actuals, but INHERIT projections!
+    setProjectedSalaryByPeriod(inheritedProjectedByPeriod);
+    setProjectedSalary(inheritedProjectedLegacy);
+    
+    // Everything else gets strictly wiped
+    setActualSalaryByPeriod({});
+    setActualSalary('');
+    setExcludedInstallmentIds(new Set());
+    setExcludedWalletIds(new Set());
+    setExcludedCreditIds(new Set());
   };
+
+
 
 
 
@@ -3081,9 +3153,29 @@ const getFrozenCycleAmount = (account: Account): number => {
               const periodItems = processedBudgetMap[activePeriodIndex]?.[cat.name] || [];
               const itemsTotal = periodItems.reduce((sum, item) => {
                 if (!item.included) return sum; 
-                const val = item.amountsByPeriod?.[activePeriodIndex] !== undefined ? item.amountsByPeriod[activePeriodIndex] : item.amount;
-                return sum + (parseFloat(val) || 0);
+                
+                const isBillerItem = item.isBiller || (billers && billers.some(b => b.id === item.id));
+                const isInstallmentItem = item.isInstallment || (installments && installments.some(i => i.id === item.id));
+
+                let finalAmount = 0;
+                if (!isBillerItem && !isInstallmentItem && !item.isCredit) {
+                   if (item.amountsByPeriod && item.amountsByPeriod[activePeriodIndex] !== undefined && item.amountsByPeriod[activePeriodIndex] !== '') {
+                     finalAmount = parseFloat(item.amountsByPeriod[activePeriodIndex]) || 0;
+                   } else if (item.amountsByPeriod && Object.keys(item.amountsByPeriod).filter(k => item.amountsByPeriod[k] !== '').length > 0) {
+                     finalAmount = 0; 
+                   } else {
+                     const legacyTab = item.timing ? parseInt(String(item.timing).split('/')[0], 10) : 1;
+                     if (legacyTab === activePeriodIndex) finalAmount = parseFloat(item.amount) || 0;
+                   }
+                } else {
+                   const val = item.amountsByPeriod?.[activePeriodIndex] !== undefined ? item.amountsByPeriod[activePeriodIndex] : item.amount;
+                   finalAmount = parseFloat(val) || 0;
+                }
+
+                return sum + finalAmount;
               }, 0);
+
+
       
               let installmentsTotal = 0;
               if (cat.name === 'Loans' || cat.name === 'Budee') {
@@ -3287,12 +3379,17 @@ const totalSpend = grandTotal;
           <div className="flex-grow flex justify-center items-center space-x-2 md:flex-grow-0">
             <select 
               value={selectedMonth} 
-              onChange={(e) => setSelectedMonth(e.target.value)} 
+              onChange={(e) => {
+                // 🟢 FIX 1: Instantly kill pending Auto-Saves to stop cross-contamination!
+                if (autoSaveTimeoutRef.current) clearTimeout(autoSaveTimeoutRef.current);
+                setSelectedMonth(e.target.value);
+              }} 
               disabled={isReadOnly} 
               className={`bg-white dark:bg-gray-900 border-2 border-black rounded-xl md:rounded-[1.5rem] h-10 md:h-auto px-3 md:px-8 md:py-4 font-black text-xs md:text-base shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] outline-none disabled:opacity-60 disabled:cursor-not-allowed transition-colors text-center appearance-none ${getAccentClasses('text')}`}
             >
               {MONTHS.map(m => <option key={m} value={m}>{m}</option>)}
             </select>
+
 
             {legacyMode && (
               <span className="hidden md:block text-[10px] font-black text-gray-400 dark:text-gray-500 bg-gray-100 dark:bg-gray-800 border-2 border-black px-4 py-2 rounded-full uppercase tracking-widest">Legacy Budget</span>
@@ -3700,6 +3797,61 @@ const totalSpend = grandTotal;
                         </table>
                       </div>
 
+                                            {/* STEP 3: Real-World Transfer Reference */}
+                                            {allocationsByAccount.length > 0 && (
+                        <div className="pt-6 mt-6 border-t-2 border-dashed border-gray-400">
+                          <h3 className="text-xs font-black uppercase tracking-wider text-gray-400 mb-4">
+                            3. So, how much to transfer actually?
+                          </h3>
+                          
+                          <div className="flex flex-col md:flex-row items-center gap-8 bg-white dark:bg-gray-800 p-6 rounded-2xl border-4 border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]">
+                            
+                            {/* CSS Pie Chart */}
+                            <div 
+                              className="w-32 h-32 md:w-40 md:h-40 rounded-full border-4 border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] shrink-0"
+                              style={{ 
+                                background: `conic-gradient(${
+                                  allocationsByAccount.map((item, index) => {
+                                    const totalAllocated = allocationsByAccount.reduce((sum, i) => sum + i.amount, 0);
+                                    const percentage = (item.amount / totalAllocated) * 100;
+                                    
+                                    // Calculate starting point based on previous slices
+                                    const prevPercentage = allocationsByAccount
+                                      .slice(0, index)
+                                      .reduce((sum, i) => sum + ((i.amount / totalAllocated) * 100), 0);
+                                      
+                                    return `${PIE_COLORS[index % PIE_COLORS.length]} ${prevPercentage}% ${prevPercentage + percentage}%`;
+                                  }).join(', ')
+                                })`
+                              }}
+                            />
+
+                            {/* Legend & Totals */}
+                            <div className="w-full flex-1 space-y-3">
+                              <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest border-b-2 border-black/10 pb-2 mb-3">
+                                Transfer Guide
+                              </p>
+                              {allocationsByAccount.map((item, idx) => (
+                                <div key={item.accountId} className="flex items-center justify-between">
+                                  <div className="flex items-center gap-3">
+                                    <div 
+                                      className="w-4 h-4 rounded-md border-2 border-black shadow-[1px_1px_0px_0px_rgba(0,0,0,1)]" 
+                                      style={{ backgroundColor: PIE_COLORS[idx % PIE_COLORS.length] }} 
+                                    />
+                                    <span className="text-sm font-bold text-gray-900 dark:text-gray-100">{item.name}</span>
+                                  </div>
+                                  <span className="text-sm font-black text-gray-900 dark:text-gray-100">
+                                    ₱{item.amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                  </span>
+                                </div>
+                              ))}
+                            </div>
+                            
+                          </div>
+                        </div>
+                      )}
+
+
                       {/* Action Button */}
                       <div className="flex justify-end pt-4">
                         <button
@@ -3959,32 +4111,28 @@ const hasData = items.length > 0 ||
         });
         
         const itemsTotal = items
-  .filter(item => {
-    if (!item || !item.included) return false;
-    const isBillerItem = item.isBiller || billers?.some(b => b.id === item.id);
-    const isInstallmentItem = item.isInstallment || installments?.some(i => i.id === item.id);
+        .filter(item => item && item.included)
+        .reduce((s, item) => {
+           const isBillerItem = item.isBiller || billers?.some(b => b.id === item.id);
+           const isInstallmentItem = item.isInstallment || installments?.some(i => i.id === item.id);
 
-    if (isBillerItem || isInstallmentItem || item.isCredit) {
-      const linkedBiller = billers?.find(b => b.id === item.id);
-      const linkedInstallment = installments?.find(i => i.id === item.id);
-      const actualTiming = item.timing || linkedBiller?.timing || linkedInstallment?.timing;
+           let finalAmount = 0;
+           if (!isBillerItem && !isInstallmentItem && !item.isCredit) {
+              if (item.amountsByPeriod && item.amountsByPeriod[activePeriodIndex] !== undefined && item.amountsByPeriod[activePeriodIndex] !== '') {
+                finalAmount = parseFloat(item.amountsByPeriod[activePeriodIndex]) || 0;
+              } else if (item.amountsByPeriod && Object.keys(item.amountsByPeriod).filter(k => item.amountsByPeriod[k] !== '').length > 0) {
+                finalAmount = 0; 
+              } else {
+                const legacyTab = item.timing ? parseInt(String(item.timing).split('/')[0], 10) : 1;
+                if (legacyTab === activePeriodIndex) finalAmount = parseFloat(item.amount) || 0;
+              }
+           } else {
+              const val = item.amountsByPeriod?.[activePeriodIndex] !== undefined ? item.amountsByPeriod[activePeriodIndex] : item.amount;
+              finalAmount = parseFloat(val) || 0;
+           }
+           return s + finalAmount;
+        }, 0);
 
-      if (actualTiming === '1/2') return activePeriodIndex === 1;
-      if (actualTiming === '2/2') return activePeriodIndex === 2;
-
-      const dueDay = item.dueDay || item.dueDate || linkedBiller?.dueDate || linkedInstallment?.due_date || 1;
-return getAccountPeriodIndex({ dueDate: dueDay }) === activePeriodIndex;
-    }
-
-    const periodVal = item.amountsByPeriod?.[activePeriodIndex];
-    return periodVal !== undefined && periodVal !== '' && periodVal !== '0';
-  })
-  .reduce((s, i) => {
-    const val = i.amountsByPeriod?.[activePeriodIndex] !== undefined 
-      ? i.amountsByPeriod[activePeriodIndex] 
-      : i.amount;
-    return s + (parseFloat(val) || 0);
-  }, 0);
 
         const installmentsTotal = relevantInstallments
           .filter(inst => !excludedInstallmentIds.has(inst.id))
@@ -4171,54 +4319,65 @@ const categoryTotal = itemsTotal + installmentsTotal + creditTotal;
                                          ) : null}
                                        </div>
             
+                                       {/* 🟢 NEW: Top-Level Credit Info Button */}
                                        <button 
-  disabled={isPaidInFull || isReadOnly}
-  onClick={(e) => {
-    e.preventDefault(); 
-    e.stopPropagation();
-    
-    // 🟢 BUILD THE CAROUSEL DECK
-    const carouselItems: { id: string; name: string; amount: number; type: 'base' | 'installment' }[] = [];
-    
-    // Card 1: Base Charges
-    const baseAmount = uiRollover + uiSwipesTotal;
-    if (baseAmount > 0) {
-      carouselItems.push({
-        id: 'base-charges',
-        name: 'Previous Balance + New Charges',
-        amount: baseAmount,
-        type: 'base'
-      });
-    }
-    
-    // Cards 2...N: Active Installments
-    uiActiveInstallments.forEach(inst => {
-      // 1. Safely extract the amount
-      const validAmount = Number(inst.monthlyAmount) || Number(inst.amount) || 0;
-      
-      if (validAmount > 0) {
-        carouselItems.push({
-          id: inst.id,
-          name: inst.name,
-          amount: validAmount, 
-          type: 'installment'
-        });
-      }
-    });
+                                         onClick={(e) => {
+                                           e.preventDefault();
+                                           e.stopPropagation();
+                                           setCreditInfoModal({ account });
+                                         }}
+                                         title="View account payment history"
+                                         className="w-8 h-8 flex items-center justify-center rounded-xl border-2 border-black bg-white dark:bg-gray-800 text-indigo-600 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[1px] hover:translate-y-[1px] transition-all shrink-0"
+                                       >
+                                         <Info className="w-4 h-4" />
+                                       </button>
 
-    setShowCreditPayModal({ accountId: account.id, bank: account.bank, items: carouselItems });
-  }} 
-  className={`px-4 py-2 text-xs font-black uppercase rounded-xl border-2 transition-all shrink-0 ${
-    isPaidInFull || isReadOnly
-      ? 'bg-gray-100 dark:bg-gray-800 text-gray-400 border-gray-200 dark:border-gray-700 cursor-not-allowed shadow-none'
-      : 'border-black bg-indigo-600 text-white shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[1px] hover:translate-y-[1px]'
-  }`}
->
-  Pay
-</button>
-
-
+                                       <button 
+                                         disabled={isPaidInFull || isReadOnly}
+                                         onClick={(e) => {
+                                           e.preventDefault(); 
+                                           e.stopPropagation();
+                                           // ... (keep the rest of your existing onClick logic for the Pay button here!) ...
+                                           
+                                           // 🟢 BUILD THE CAROUSEL DECK
+                                           const carouselItems: { id: string; name: string; amount: number; type: 'base' | 'installment' }[] = [];
+                                           
+                                           // Card 1: Base Charges
+                                           const baseAmount = uiRollover + uiSwipesTotal;
+                                           if (baseAmount > 0) {
+                                             carouselItems.push({
+                                               id: 'base-charges',
+                                               name: 'Previous Balance + New Charges',
+                                               amount: baseAmount,
+                                               type: 'base'
+                                             });
+                                           }
+                                           
+                                           // Cards 2...N: Active Installments
+                                           uiActiveInstallments.forEach(inst => {
+                                             const validAmount = Number(inst.monthlyAmount) || Number(inst.amount) || 0;
+                                             if (validAmount > 0) {
+                                               carouselItems.push({
+                                                 id: inst.id,
+                                                 name: inst.name,
+                                                 amount: validAmount, 
+                                                 type: 'installment'
+                                               });
+                                             }
+                                           });
+                                       
+                                           setShowCreditPayModal({ accountId: account.id, bank: account.bank, items: carouselItems });
+                                         }} 
+                                         className={`px-4 py-2 text-xs font-black uppercase rounded-xl border-2 transition-all shrink-0 ${
+                                           isPaidInFull || isReadOnly
+                                             ? 'bg-gray-100 dark:bg-gray-800 text-gray-400 border-gray-200 dark:border-gray-700 cursor-not-allowed shadow-none'
+                                             : 'border-black bg-indigo-600 text-white shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[1px] hover:translate-y-[1px]'
+                                         }`}
+                                       >
+                                         Pay
+                                       </button>
                                      </div>
+
                                    </div>
             
                                   {/* NESTED CHILDREN (The Breakdown) */}
@@ -4248,16 +4407,47 @@ const categoryTotal = itemsTotal + installmentsTotal + creditTotal;
                                       </div>
                                     )}
             
-                                    {/* 3. Installments */}
-                                    {uiActiveInstallments.map((inst) => (
-                                      <div key={inst.id} className="flex items-center justify-between p-3 rounded-lg bg-white dark:bg-gray-800 border-2 border-black/20 shadow-sm">
-                                        <div>
-                                          <p className="text-sm font-bold text-gray-900 dark:text-gray-100">{inst.name}</p>
-                                          <p className="text-[9px] font-black text-gray-500 uppercase tracking-widest">Active Installment</p>
+                                                                        {/* 3. Installments */}
+                                                                        {uiActiveInstallments.map((inst) => {
+                                      // 🟢 Get the specific schedule so we can track payments
+                                      const schedule = getPaymentSchedule('installment', inst.id, selectedMonth, selectedYear);
+                                      
+                                      return (
+                                        <div key={inst.id} className="flex items-center justify-between p-3 rounded-lg bg-white dark:bg-gray-800 border-2 border-black/20 shadow-sm">
+                                          <div>
+                                            <p className="text-sm font-bold text-gray-900 dark:text-gray-100">{inst.name}</p>
+                                            <p className="text-[9px] font-black text-gray-500 uppercase tracking-widest">Active Installment</p>
+                                          </div>
+                                          
+                                          <div className="flex items-center gap-2 text-right">
+                                            <p className="text-sm font-black text-gray-900 dark:text-gray-100">
+                                              {formatCurrency(Number(inst.monthlyAmount) || Number(inst.amount) || 0)}
+                                            </p>
+                                            
+                                            {/* 🟢 Installment Info Button */}
+                                            <button
+                                              disabled={!schedule}
+                                              onClick={(e) => {
+                                                e.preventDefault();
+                                                e.stopPropagation();
+                                                if (schedule) {
+                                                  openSchedulePaymentsModal(schedule.id, `${inst.name} - ${selectedMonth}`);
+                                                }
+                                              }}
+                                              title={schedule ? "View payment records" : "No schedule found"}
+                                              className={`w-7 h-7 flex items-center justify-center rounded-lg border-2 transition-all shrink-0 ${
+                                                schedule 
+                                                  ? 'bg-white dark:bg-gray-800 border-black text-indigo-600 shadow-[1.5px_1.5px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[1px] hover:translate-y-[1px]' 
+                                                  : 'bg-gray-100 dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-400 cursor-not-allowed shadow-none'
+                                              }`}
+                                            >
+                                              <Info className="w-3.5 h-3.5" />
+                                            </button>
+                                          </div>
                                         </div>
-                                        <p className="text-sm font-black text-gray-900 dark:text-gray-100">{formatCurrency(Number(inst.monthlyAmount) || Number(inst.amount) || 0)}</p>
-                                      </div>
-                                    ))}
+                                      );
+                                    })}
+
                                     
                                   </div>
                                 </div>
@@ -5292,9 +5482,18 @@ return getAccountPeriodIndex({ dueDate: dueDay }) === activePeriodIndex;
                     <div className="flex justify-between text-xs"><span className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Amount</span><span className="font-bold text-red-600">{formatCurrency(tx.amount)}</span></div>
                     <div className="flex justify-between text-xs"><span className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Date</span><span className="text-gray-700">{new Date(tx.date).toLocaleDateString()}</span></div>
                     <div className="flex justify-end pt-1">
-                      <PinProtectedAction featureId="transaction_deletions" onVerified={() => handleDeleteScheduleTx(tx.id)} actionLabel="Delete Record">
+                    <PinProtectedAction featureId="transaction_deletions" onVerified={async () => {
+                        try {
+                          await handleDeleteTransactionPair(tx.id);
+                          await reloadTransactions();
+                          await reloadPaymentSchedules();
+                        } catch {
+                          alert('Error deleting transaction pair.');
+                        }
+                      }} actionLabel="Delete Record">
                         <button onClick={(e) => e.preventDefault()} className="flex items-center space-x-1 px-2.5 py-1.5 rounded-xl bg-red-50 text-red-600 border-2 border-black text-[10px] font-bold shadow-[1.5px_1.5px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[0.5px] hover:translate-y-[0.5px] transition-all"><Trash2 className="w-3 h-3" /><span>Delete</span></button>
                       </PinProtectedAction>
+
                     </div>
                   </div>
                 ))}
@@ -5603,6 +5802,13 @@ return getAccountPeriodIndex({ dueDate: dueDay }) === activePeriodIndex;
                         submitBtn.disabled = true;
                         submitBtn.textContent = 'Processing...';
 
+                        // 🟢 FIX: Fetch the schedule ID FIRST so we can stamp it on the transactions!
+                        let targetScheduleId: string | null = null;
+                        if (item.type === 'installment') {
+                          const schedule = getPaymentSchedule('installment', item.id, selectedMonth, selectedYear);
+                          if (schedule) targetScheduleId = schedule.id;
+                        }
+
                         // 1. Debit out of checking
                         const { data: debitTx, error: debitError } = await createTransaction({
                           name: `${showCreditPayModal.bank} Payment - ${item.name}`,
@@ -5610,6 +5816,7 @@ return getAccountPeriodIndex({ dueDate: dueDay }) === activePeriodIndex;
                           date: combineDateWithCurrentTime(date),
                           payment_method_id: sourceAccountId,
                           transaction_type: 'payment',
+                          payment_schedule_id: targetScheduleId, // 🟢 Links to the Installments Page!
                           notes: `Budget Timing: ${selectedTiming}`
                         } as any);
 
@@ -5623,8 +5830,10 @@ return getAccountPeriodIndex({ dueDate: dueDay }) === activePeriodIndex;
                           payment_method_id: showCreditPayModal.accountId,
                           transaction_type: 'credit_payment',
                           related_transaction_id: debitTx?.id,
+                          // 🟢 FIX: Removed payment_schedule_id so it doesn't double-log in the modal
                           notes: `Budget Timing: ${selectedTiming}`
                         } as any);
+                        
 
                         if (creditError) {
                           await recordCreditPayment(showCreditPayModal.accountId, amount, `${showCreditPayModal.bank} Payment - ${item.name}`, date);
@@ -5639,19 +5848,45 @@ return getAccountPeriodIndex({ dueDate: dueDay }) === activePeriodIndex;
                           }
                         }
                         
+                        // 4. SYNC THE INSTALLMENT SCHEDULE
+                        if (item.type === 'installment' && targetScheduleId) {
+                          try {
+                            await recordPaymentViaTransaction(targetScheduleId, {
+                              transactionName: debitTx?.name || `${showCreditPayModal.bank} Payment - ${item.name}`,
+                              amountPaid: Math.abs(amount),
+                              datePaid: date,
+                              accountId: sourceAccountId,
+                              expectedAmount: Math.abs(amount)
+                            });
+                          } catch (schedErr) {
+                            console.error("Failed to sync schedule:", schedErr);
+                          }
+
+                          // Update the master installment progress bar
+                          const targetInstallment = installments?.find(i => i.id === item.id);
+                          if (targetInstallment && onUpdateInstallment) {
+                            await onUpdateInstallment({
+                              ...targetInstallment,
+                              paidAmount: (targetInstallment.paidAmount || 0) + Math.abs(amount)
+                            });
+                          }
+                        }
+                        
                         await reloadTransactions();
+                        await reloadPaymentSchedules(); 
                         if (onTransactionCreated) onTransactionCreated();
                         
                         // Change button to success state!
                         submitBtn.className = "w-full bg-gray-200 text-gray-500 border-2 border-black py-4 rounded-xl font-black text-sm uppercase tracking-wider transition-all";
                         submitBtn.textContent = 'Paid! ✓';
                         
-                      } catch (err) {
+                      } catch (err: any) {
                         console.error("Payment Error:", err);
-                        alert('Failed to record payment.');
+                        alert(`Payment failed: ${err.message || 'Server rejected the transaction.'}`);
                         submitBtn.disabled = false;
                         submitBtn.textContent = 'Submit Payment';
                       }
+
                     }}
                     className="space-y-4 mt-auto"
                   >
@@ -5904,6 +6139,7 @@ return getAccountPeriodIndex({ dueDate: dueDay }) === activePeriodIndex;
                           amount: collected, 
                           payment_method_id: sourceAccountId, 
                           transaction_type: 'payment',
+                          payment_schedule_id: showBudeeCarousel.scheduleId, // 🟢 FIX: Stamp the Schedule ID!
                           notes: `Budget Timing: ${selectedTiming}`
                         } as any);
                         
@@ -5922,10 +6158,19 @@ return getAccountPeriodIndex({ dueDate: dueDay }) === activePeriodIndex;
                         const linkedAccountId = showBudeeCarousel.installment.accountId || (showBudeeCarousel.installment as any).account_id;
                         const linkedAccount = accounts.find(a => a.id === linkedAccountId);
                         if (linkedAccount && (linkedAccount.type === 'Credit' || linkedAccount.classification === 'Credit Card')) {
-                           await createTransaction({
-                              name: txName, date: combineDateWithCurrentTime(date), amount: -Math.abs(collected), payment_method_id: linkedAccount.id, transaction_type: 'credit_payment', related_transaction_id: res.data?.id, notes: null
-                           } as any);
+                            await createTransaction({
+                              name: txName, 
+                              date: combineDateWithCurrentTime(date), 
+                              amount: -Math.abs(collected), 
+                              payment_method_id: linkedAccount.id, 
+                              transaction_type: 'credit_payment', 
+                              related_transaction_id: res.data?.id, 
+                              // 🟢 FIX: Removed payment_schedule_id
+                              notes: null
+                            } as any);
                         }
+                        
+                        
 
                         if (onUpdateInstallment) await onUpdateInstallment({ ...showBudeeCarousel.installment, paidAmount: (showBudeeCarousel.installment.paidAmount || 0) + collected });
                         await reloadTransactions();
@@ -6022,33 +6267,41 @@ return getAccountPeriodIndex({ dueDate: dueDay }) === activePeriodIndex;
                         submitBtn.disabled = true; submitBtn.textContent = 'Processing...';
                         const txName = `${showBudeeCarousel.installment.name} - ${selectedMonth} (Top-up)`;
 
-                        // 🟢 RAW API CALL: category_id completely removed!
-                        const res = await createTransaction({
-                           name: txName, 
-                           date: combineDateWithCurrentTime(date), 
-                           amount: amount, 
-                           payment_method_id: sourceAccountId, 
-                           transaction_type: 'payment',
-                           notes: `Budget Timing: ${selectedTiming} - Partial Top-up`
+                      // 🟢 RAW API CALL: category_id completely removed!
+                      const res = await createTransaction({
+                        name: txName, 
+                        date: combineDateWithCurrentTime(date), 
+                        amount: amount, 
+                        payment_method_id: sourceAccountId, 
+                        transaction_type: 'payment',
+                        payment_schedule_id: showBudeeCarousel.scheduleId, // 🟢 FIX: Stamp the Schedule ID!
+                        notes: `Budget Timing: ${selectedTiming} - Partial Top-up`
+                      } as any);
+                      
+                      if (res.error) throw res.error;
+
+                      try {
+                        await recordPaymentViaTransaction(showBudeeCarousel.scheduleId, {
+                          transactionName: txName, amountPaid: amount, datePaid: date, accountId: sourceAccountId, expectedAmount: showBudeeCarousel.installment.monthlyAmount
+                        });
+                      } catch (schedErr) {
+                        console.warn("Schedule sync suppressed (Safe):", schedErr);
+                      }
+
+                      const linkedAccountId = showBudeeCarousel.installment.accountId || (showBudeeCarousel.installment as any).account_id;
+                      const linkedAccount = accounts.find(a => a.id === linkedAccountId);
+                      if (linkedAccount && (linkedAccount.type === 'Credit' || linkedAccount.classification === 'Credit Card')) {
+                        await createTransaction({
+                            name: txName, 
+                            date: combineDateWithCurrentTime(date), 
+                            amount: -Math.abs(amount), 
+                            payment_method_id: linkedAccount.id, 
+                            transaction_type: 'credit_payment', 
+                            related_transaction_id: res.data?.id, 
+                            notes: null
                         } as any);
-                        
-                        if (res.error) throw res.error;
-
-                        try {
-                           await recordPaymentViaTransaction(showBudeeCarousel.scheduleId, {
-                             transactionName: txName, amountPaid: amount, datePaid: date, accountId: sourceAccountId, expectedAmount: showBudeeCarousel.installment.monthlyAmount
-                           });
-                        } catch (schedErr) {
-                           console.warn("Schedule sync suppressed (Safe):", schedErr);
-                        }
-
-                        const linkedAccountId = showBudeeCarousel.installment.accountId || (showBudeeCarousel.installment as any).account_id;
-                        const linkedAccount = accounts.find(a => a.id === linkedAccountId);
-                        if (linkedAccount && (linkedAccount.type === 'Credit' || linkedAccount.classification === 'Credit Card')) {
-                           await createTransaction({
-                              name: txName, date: combineDateWithCurrentTime(date), amount: -Math.abs(amount), payment_method_id: linkedAccount.id, transaction_type: 'credit_payment', related_transaction_id: res.data?.id, notes: null
-                           } as any);
-                        }
+                      }
+                       
 
                         if (onUpdateInstallment) await onUpdateInstallment({ ...showBudeeCarousel.installment, paidAmount: (showBudeeCarousel.installment.paidAmount || 0) + amount });
                         
@@ -6135,9 +6388,19 @@ return getAccountPeriodIndex({ dueDate: dueDay }) === activePeriodIndex;
                       </div>
                       <div className="flex items-center space-x-3">
                         <span className="text-xs font-black text-red-600">{formatCurrency(Math.abs(tx.amount))}</span>
-                        <PinProtectedAction featureId="transaction_deletions" onVerified={async () => { try { await deleteTransactionAndRevertSchedule(tx.id); await reloadTransactions(); if (onTransactionDeleted) onTransactionDeleted(); } catch { alert('Error.'); } }} actionLabel="Delete Record">
+                        <PinProtectedAction featureId="transaction_deletions" onVerified={async () => { 
+                          try { 
+                            await handleDeleteTransactionPair(tx.id); 
+                            await reloadTransactions(); 
+                            await reloadPaymentSchedules();
+                            if (onTransactionDeleted) onTransactionDeleted(); 
+                          } catch { 
+                            alert('Error deleting transaction pair.'); 
+                          } 
+                        }} actionLabel="Delete Record">
                           <button onClick={(e) => e.preventDefault()} className="text-gray-400 hover:text-red-600 p-1 rounded-lg hover:bg-red-50"><Trash2 className="w-4 h-4" /></button>
                         </PinProtectedAction>
+
                       </div>
                     </div>
                   ))}

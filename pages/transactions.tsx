@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { Plus, Info, Eye, ZoomIn, ZoomOut, Download, X, ArrowLeft, Pencil, Trash2, CheckSquare, Square, ChevronDown, Filter, AlertTriangle, ArrowUpFromLine, ArrowDownToLine, ArrowLeftRight, Landmark, CreditCard, FileText, User, UserPlus, Hand } from 'lucide-react';
+import { Plus, Info, Eye, ZoomIn, ZoomOut, Download, X, ArrowLeft, Pencil, Trash2, CheckSquare, Square, ChevronDown, Filter, AlertTriangle, ArrowUpFromLine, ArrowDownToLine, ArrowLeftRight, Landmark, CreditCard, FileText, User, UserPlus, Hand, Lock } from 'lucide-react';
 import { PinProtectedAction } from '../src/components/PinProtectedAction';
 import { useAuth } from '../src/contexts/AuthContext';
 import { createTransaction, updateTransaction, deleteTransactionAndRevertSchedule, uploadTransactionReceipt, getReceiptSignedUrl, batchDeleteTransactions, createTransfer } from '../src/services/transactionsService';
@@ -260,6 +260,13 @@ function TransactionsPage({ transactions, loading = false, onTransactionDeleted,
   const [overdraftPrompt, setOverdraftPrompt] = useState<OverdraftPromptState | null>(null);
   // Transaction details modal
   const [selectedTx, setSelectedTx] = useState<Transaction | null>(null);
+
+  // Stash to Vault state
+  const [isStashModalOpen, setIsStashModalOpen] = useState(false);
+  const [stashTx, setStashTx] = useState<Transaction | null>(null);
+  const [stashAmount, setStashAmount] = useState<string>('');
+
+
   // Signed URL for displaying a receipt (generated fresh each time the modal opens)
   const [receiptSignedUrl, setReceiptSignedUrl] = useState<string | null | undefined>(undefined);
   // Receipt preview modal
@@ -792,6 +799,36 @@ function TransactionsPage({ transactions, loading = false, onTransactionDeleted,
     await executeTransactionSubmit();
   };
 
+  const handleStashSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!stashTx || !stashAmount) return;
+
+    const account = accounts.find(a => a.id === stashTx.paymentMethodId);
+    if (!account || !account.hasVaultEnabled || !account.vaultId) return;
+
+    try {
+      const { error } = await createTransfer(
+        stashTx.paymentMethodId,
+        account.vaultId,
+        parseFloat(stashAmount),
+        new Date().toISOString(), // Use current timestamp for the transfer
+        0,
+        null
+      );
+
+      if (error) throw error;
+
+      setIsStashModalOpen(false);
+      setStashAmount('');
+      setStashTx(null);
+      await loadData();
+    } catch (error) {
+      console.error('Failed to stash funds:', error);
+      alert('Failed to stash funds. Please try again.');
+    }
+  };
+
+
   const removeTx = async (id: string, name: string) => {
     setConfirmModal({
       show: true,
@@ -1029,16 +1066,24 @@ function TransactionsPage({ transactions, loading = false, onTransactionDeleted,
                   <div className="text-center py-8 text-gray-500">Loading transactions...</div>
                 ) : (
                   <TransactionList
-                    transactions={filteredTransactions}
-                    accounts={accounts}
-                    isSelectMode={isSelectMode}
-                    selectedIds={selectedIds}
-                    onToggleId={toggleId}
-                    onSelectAll={toggleAllVisible}
-                    allVisibleSelected={allVisibleSelected}
-                    onViewDetails={setSelectedTx}
-                    onEdit={openEditForm}
-                    onDelete={removeTx} />
+                  transactions={filteredTransactions}
+                  accounts={accounts}
+                  isSelectMode={isSelectMode}
+                  selectedIds={selectedIds}
+                  onToggleId={toggleId}
+                  onSelectAll={toggleAllVisible}
+                  allVisibleSelected={allVisibleSelected}
+                  onViewDetails={setSelectedTx}
+                  onEdit={openEditForm}
+                  onDelete={removeTx}
+                  // 🟢 ADD THIS LINE:
+                  onStash={(tx) => {
+                    setStashTx(tx);
+                    setStashAmount(Math.abs(tx.amount).toString());
+                    setIsStashModalOpen(true);
+                  }} 
+                />
+              
                 )}
                 {filteredTransactions.length === 0 && !isLoading && (
                   <div className="text-center py-16 px-6 bg-gray-50 dark:bg-gray-800/50 rounded-2xl border-2 border-dashed border-gray-300 dark:border-gray-700">
@@ -1748,6 +1793,48 @@ function TransactionsPage({ transactions, loading = false, onTransactionDeleted,
           </>
         )}
 
+{isStashModalOpen && stashTx && (
+    <div className="fixed inset-0 z-[2000] flex items-center justify-center p-2 sm:p-4 bg-black/70 backdrop-blur-sm animate-in fade-in">
+      <div className="bg-white dark:bg-gray-900 rounded-2xl w-full max-w-sm p-6 sm:p-10 border-4 border-black shadow-2xl sm:shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] animate-in zoom-in-95 flex flex-col items-center text-center transition-all max-h-[95vh]">
+        <div className="flex-shrink-0 w-full mb-6 text-left">
+          <h3 className="text-2xl font-black text-gray-900 dark:text-gray-100 uppercase tracking-tight mb-2">Stash Funds</h3>
+          <p className="text-sm text-gray-500 font-bold">How much of this {stashTx.name} do you want to lock away?</p>
+        </div>
+        
+        <form onSubmit={handleStashSubmit} className="w-full space-y-6">
+          <div className="flex items-center border-b-4 border-black pb-2">
+            <span className="text-3xl font-black mr-2 text-gray-400">₱</span>
+            <input
+              type="number"
+              step="0.01"
+              max={Math.abs(stashTx.amount)}
+              value={stashAmount}
+              onChange={(e) => setStashAmount(e.target.value)}
+              className="w-full text-4xl font-black bg-transparent outline-none dark:text-white"
+              required
+              autoFocus
+            />
+          </div>
+          
+          <div className="flex flex-col w-full space-y-3">
+            <button
+              type="submit"
+              className={`w-full py-4 rounded-xl font-black uppercase tracking-widest text-[10px] border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[1px] hover:translate-y-[1px] transition-all bg-yellow-400 text-black`}
+            >
+              Lock It
+            </button>
+            <button
+              type="button"
+              onClick={() => setIsStashModalOpen(false)}
+              className="w-full bg-gray-200 dark:bg-gray-700 py-4 rounded-xl font-black uppercase tracking-widest text-[10px] text-gray-800 dark:text-gray-200 border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[1px] hover:translate-y-[1px] transition-all"
+            >
+              Cancel
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  )}
 
 
         {pendingProfileModal && (

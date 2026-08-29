@@ -31,10 +31,12 @@ interface PendingRow extends StandardTransaction {
 
 interface JuiceBoxProps {
   selectedAccountId: string;
+  vaultAccountId?: string; // 🟢 NEW: Allow JuiceBox to know about the Vault
   existingTransactions?: Transaction[];
-  installments?: any[]; // 🟢 Pass your app's installments in here
+  installments?: any[];
   onImportComplete?: () => void;
 }
+
 
 // 🟢 THE (N+3) MATCHING ENGINE
 const findMatchingInstallment = (tx: any, installments: any[]) => {
@@ -72,7 +74,7 @@ const findMatchingInstallment = (tx: any, installments: any[]) => {
 };
 
 
-export const JuiceBox: React.FC<JuiceBoxProps> = ({ selectedAccountId, existingTransactions, installments, onImportComplete }) => {
+export const JuiceBox: React.FC<JuiceBoxProps> = ({ selectedAccountId, vaultAccountId, existingTransactions, installments, onImportComplete }) => {
   const [status, setStatus] = useState<'idle' | 'processing' | 'success'>('idle');
   const [pendingTransactions, setPendingTransactions] = useState<PendingRow[]>([]);
   const [showReviewModal, setShowReviewModal] = useState(false);
@@ -195,6 +197,52 @@ export const JuiceBox: React.FC<JuiceBoxProps> = ({ selectedAccountId, existingT
         setStatus('idle');
         return;
       }
+
+      // 🟢 NEW: The flexible dictionary for bank-specific vault keywords
+const VAULT_DICTIONARY: Record<string, string[]> = {
+  'gotyme': ['go save', 'goalsave'], 
+  'tonik': ['stash'],                
+  'maya': ['personal goals']         
+};
+
+const currentBankName = availableBanks.find(b => b.id === selectedBank)?.name.toLowerCase() || '';
+
+// 🟢 Dynamically load the keywords for the currently selected bank
+const activeVaultKeywords = Object.entries(VAULT_DICTIONARY)
+  .find(([bankKey]) => currentBankName.includes(bankKey))?.[1] || [];
+
+const expandedTransactions = rawTransactions.flatMap(tx => {
+  const rawName = (tx.name || '').toLowerCase();
+  
+  // 🟢 Trigger the split ONLY if the bank has active keywords AND the transaction matches one
+  const isVaultTransfer = activeVaultKeywords.length > 0 && activeVaultKeywords.some(kw => rawName.includes(kw));
+
+    // If it's a stash movement AND this account has a vault configured
+    if (isVaultTransfer && vaultAccountId) {
+      const mainLeg = {
+        ...tx,
+        id: `${tx.id}_main`, // 🟢 FIX: Make the ID unique
+        transaction_type: 'internal_transfer',
+        paymentMethodId: selectedAccountId,
+      };
+  
+      const vaultLeg = {
+        ...tx,
+        id: `${tx.id}_vault`, // 🟢 FIX: Make the ID unique
+        name: `Vault: ${tx.name}`,
+        amount: Math.abs(tx.amount), 
+        transaction_type: 'internal_transfer',
+        paymentMethodId: vaultAccountId, 
+      };
+  
+      return [mainLeg, vaultLeg];
+    }
+  
+
+  // Otherwise, return standard transaction
+  return { ...tx, paymentMethodId: selectedAccountId };
+});
+
   
       const autoMatchedLinks: Record<string, string[]> = {};
       const processedRows: PendingRow[] = rawTransactions.map((tx, idx) => {
@@ -399,17 +447,19 @@ const loadingTask = pdfjsLib.getDocument({
       });
 
       // 🟢 PHASE 2: Insert the truly new transactions
-      if (trulyNewTransactions.length > 0) {
-        const payload = trulyNewTransactions.map(tx => ({
-          payment_method_id: selectedAccountId,
-          user_id: user.id, 
-          name: tx.name,
-          amount: -(tx.amount), // Flipped sign so expenses register properly
-          date: tx.date,
-          transaction_type: tx.transaction_type,
-          notes: (tx as any).notes,
-          is_reconciled: true 
-        }));
+if (trulyNewTransactions.length > 0) {
+  const payload = trulyNewTransactions.map(tx => ({
+    // 🟢 FIX: Check if the tx has a custom ID first (for Vaults), otherwise fallback to the selected account
+    payment_method_id: (tx as any).paymentMethodId || selectedAccountId, 
+    user_id: user.id, 
+    name: tx.name,
+    amount: -(tx.amount),
+    date: tx.date,
+    transaction_type: tx.transaction_type, // 🟢 This will now correctly save 'internal_transfer'
+    notes: (tx as any).notes,
+    is_reconciled: true 
+  }));
+
         
         const { error: insertError } = await supabase.from('transactions').insert(payload);
         if (insertError) throw insertError;

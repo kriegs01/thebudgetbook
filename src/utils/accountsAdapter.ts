@@ -28,6 +28,8 @@ export const supabaseAccountToFrontend = (supabaseAccount: SupabaseAccount): Acc
     interestRate: supabaseAccount.interestRate ?? undefined,
     qrCodeBase64: supabaseAccount.qrCodeBase64 ?? undefined,
     subtype: supabaseAccount.subtype ?? undefined,
+    hasVaultEnabled: supabaseAccount.has_vault_enabled ?? false,
+    vaultId: supabaseAccount.vault_id ?? undefined,
   };
 };
 
@@ -48,6 +50,8 @@ export const frontendAccountToSupabase = (account: Account): Omit<SupabaseAccoun
     interestRate: account.interestRate ?? null, // 🟢 ADD THIS
     qrCodeBase64: account.qrCodeBase64 ?? null, // 🟢 ADD THIS
     subtype: account.subtype ?? null,
+    has_vault_enabled: account.hasVaultEnabled ?? false,
+    vault_id: account.vaultId ?? null,
   };
 };
 

@@ -1,5 +1,5 @@
 import React from 'react';
-import { Info, Pencil, Trash2 } from 'lucide-react';
+import { Info, Pencil, Trash2, Lock } from 'lucide-react';
 import type { Transaction, AccountOption } from '../../types';
 import { useTheme } from '../contexts/ThemeContext';
 import useMediaQuery from '../hooks/useMediaQuery';
@@ -19,6 +19,7 @@ interface TransactionListProps {
   onViewDetails: (transaction: Transaction) => void;
   onEdit: (transaction: Transaction) => void;
   onDelete: (id: string, name: string) => void;
+  onStash: (transaction: Transaction) => void; // 🟢 ADDED onStash
 }
 
 export const TransactionList: React.FC<TransactionListProps> = ({
@@ -32,6 +33,7 @@ export const TransactionList: React.FC<TransactionListProps> = ({
   onViewDetails,
   onEdit,
   onDelete,
+  onStash,
 }) => {
   const { getAccentClasses } = useTheme();
   const isMobile = useMediaQuery('(max-width: 767px)');
@@ -73,6 +75,22 @@ export const TransactionList: React.FC<TransactionListProps> = ({
                 </div>
                 <div className="flex flex-col items-end flex-shrink-0">
                   <div className="flex items-center justify-center gap-1">
+                    {/* 🟢 NEW: Stash Button Logic */}
+                     {/* 🟢 NEW: Smarter Stash Button Logic */}
+                     {((tx.transaction_type === 'cash_in' || 
+                       tx.transaction_type === 'income' || 
+                       (tx.transaction_type === 'transfer' && tx.amount < 0)) && 
+                       pm?.hasVaultEnabled) && (
+                      <button
+                        onClick={() => onStash(tx)}
+                        title="Stash Funds"
+                        aria-label="Stash transaction funds"
+                        className={`w-8 h-8 flex items-center justify-center bg-yellow-100 dark:bg-yellow-900/30 rounded-lg border-2 border-black transition-colors text-yellow-700 dark:text-yellow-400 hover:bg-yellow-200`}
+                      >
+                        <Lock className="w-4 h-4" />
+                      </button>
+                    )}
+                    {/* Existing Info and Pencil Buttons */}
                     <button
                       onClick={() => onViewDetails(tx)}
                       title="View details"
@@ -89,6 +107,7 @@ export const TransactionList: React.FC<TransactionListProps> = ({
                     </button>
                   </div>
                 </div>
+
               </div>
               <div className="mt-3 pt-3 border-t border-gray-100 dark:border-gray-700/50 flex items-center justify-between text-xs">
                 <div className="text-gray-500 dark:text-gray-400 font-medium">
@@ -168,6 +187,22 @@ export const TransactionList: React.FC<TransactionListProps> = ({
                 <td className="px-4 py-3"><div className="text-sm text-gray-700 dark:text-gray-300">{pm ? pm.bank : tx.paymentMethodId}</div></td>
                 <td className="px-4 py-3 text-center">
                   <div className="flex items-center justify-center gap-1">
+                    {/* 🟢 NEW: Stash Button Logic */}
+                     {/* 🟢 NEW: Smarter Stash Button Logic */}
+                     {((tx.transaction_type === 'cash_in' || 
+                       tx.transaction_type === 'income' || 
+                       (tx.transaction_type === 'transfer' && tx.amount < 0)) && 
+                       pm?.hasVaultEnabled) && (
+                      <button
+                        onClick={() => onStash(tx)}
+                        title="Stash Funds"
+                        aria-label="Stash transaction funds"
+                        className="p-1.5 rounded-full transition-all text-yellow-500 hover:text-yellow-600 hover:bg-yellow-100 dark:hover:bg-yellow-900/30"
+                      >
+                        <Lock className="w-4 h-4" />
+                      </button>
+                    )}
+                    {/* Existing Action Buttons */}
                     <button
                       onClick={() => onViewDetails(tx)}
                       title="View details"
@@ -198,6 +233,7 @@ export const TransactionList: React.FC<TransactionListProps> = ({
                     </PinProtectedAction>
                   </div>
                 </td>
+
               </tr>
             );
           })}
