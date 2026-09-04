@@ -3,7 +3,7 @@ import { useSearchParams } from 'react-router-dom';
 import { useNavigate } from 'react-router-dom';
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { BudgetItem, Account, Biller, PaymentSchedule, CategorizedSetupItem, SavedBudgetSetup, BudgetCategory, Installment, Wallet } from '../types';
-import { Plus, Check, ChevronDown, Trash2, Save, Wallet as WalletIcon, ArrowLeft, Upload, CheckCircle2, X, AlertTriangle, Info, Archive, RotateCcw, List, Hand, Sparkles, ReceiptText } from 'lucide-react';
+import { Plus, Check, ChevronDown, Trash2, Save, Wallet as WalletIcon, ArrowLeft, Upload, CheckCircle2, X, AlertTriangle, Info, Archive, RotateCcw, List, Hand, Sparkles, ReceiptText, ArrowDownToLine } from 'lucide-react';
 import { PinProtectedAction } from '../src/components/PinProtectedAction';
 import { createBudgetSetupFrontend, updateBudgetSetupFrontend } from '../src/services/budgetSetupsService';
 import { createTransaction, getAllTransactions, updateTransaction, updateTransactionAndSyncSchedule, createPaymentScheduleTransaction, uploadTransactionReceipt, getTransactionsByPaymentSchedule, getReceiptSignedUrl, deleteTransactionAndRevertSchedule, getAllStashTransactions, createTransfer } from '../src/services/transactionsService';
@@ -63,12 +63,13 @@ type TimelineNode = {
   amount: number;
   type: 'bill' | 'installment' | 'credit' | 'stash' | 'expense';
   dueDate: number;
-  displayDueDate: string; // NEW: Clean string for UI
+  displayDueDate: string; 
   isPaid: boolean;
   isIncluded: boolean;
   categoryName?: string;
   rawItem: any;
-  subItems?: TimelineNode[]; // NEW: For nesting installments
+  subItems?: TimelineNode[]; 
+  frontedInfo?: { txId: string; accountId: string } | null; // 🟢 NEW: Tracks if we owe savings!
 };
 
 
@@ -299,44 +300,50 @@ const TimelineCard = ({
   onPay: () => void,
   onInfo: (subItemId?: string) => void
 }) => {
+  // 🟢 Detect if this card is in "Reimbursement Mode"
+  const isFronted = !!item.frontedInfo;
+
   return (
-    <div className={`p-4 rounded-xl border-2 border-black flex flex-col transition-all shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] ${
-      !item.isIncluded ? 'opacity-50 bg-gray-50 dark:bg-gray-800/30' : 
-      isSettled ? 'bg-gray-50 dark:bg-gray-800/50 opacity-75 shadow-none hover:opacity-100' : 'bg-white dark:bg-gray-800'
+    <div className={`p-4 rounded-xl border-2 flex flex-col transition-all shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] ${
+      !item.isIncluded ? 'opacity-50 bg-gray-50 dark:bg-gray-800/30 border-black' : 
+      isFronted ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-600 shadow-[4px_4px_0px_0px_rgba(37,99,235,1)]' : 
+      isSettled ? 'bg-gray-50 dark:bg-gray-800/50 opacity-75 shadow-none hover:opacity-100 border-black' : 'bg-white dark:bg-gray-800 border-black'
     }`}>
       
-      {/* 🟢 MAIN CARD CONTENT (Two-Column Layout) */}
+      {/* MAIN CARD CONTENT */}
       <div className="flex justify-between items-start gap-4">
         
         {/* LEFT COLUMN: Title & Info */}
         <div className="flex flex-col gap-1.5 md:gap-2 min-w-0 flex-1">
-          <h4 className={`text-sm md:text-base font-black truncate leading-tight ${isSettled ? 'text-gray-600 dark:text-gray-400 line-through' : 'text-gray-900 dark:text-gray-100'}`}>
-            {item.name}
+          <h4 className={`text-sm md:text-base font-black truncate leading-tight ${
+            isSettled ? 'text-gray-600 dark:text-gray-400 line-through' : 
+            isFronted ? 'text-blue-800 dark:text-blue-300' : 'text-gray-900 dark:text-gray-100'
+          }`}>
+            {isFronted ? `Reimburse Savings for ${item.name}` : item.name}
           </h4>
           
-          {/* 🟢 UPDATED: Stacks on mobile, inline on desktop */}
           <div className="flex flex-col md:flex-row items-start md:items-center gap-1 md:gap-2">
-            <span className={`w-fit text-[9px] font-black px-2 py-0.5 border border-black rounded uppercase tracking-wider ${
-              item.type === 'credit' ? 'bg-purple-100 text-purple-700' :
-              item.type === 'installment' ? 'bg-blue-100 text-blue-700' :
-              item.type === 'expense' ? 'bg-red-100 text-red-700' :
-              'bg-indigo-100 text-indigo-700'
+            <span className={`w-fit text-[9px] font-black px-2 py-0.5 border rounded uppercase tracking-wider ${
+              isFronted ? 'bg-blue-200 text-blue-800 border-blue-400' :
+              item.type === 'credit' ? 'bg-purple-100 text-purple-700 border-black' :
+              item.type === 'installment' ? 'bg-indigo-100 text-indigo-700 border-black' :
+              item.type === 'expense' ? 'bg-red-100 text-red-700 border-black' :
+              'bg-gray-100 text-gray-700 border-black'
             }`}>
-              {item.type}
+              {isFronted ? 'Pending Reimbursement' : item.type}
             </span>
-            <span className="text-[10px] font-bold text-gray-500 whitespace-nowrap mt-0.5 md:mt-0">
-              Due: <span className={`text-xs md:text-[10px] font-black ${isSettled ? 'text-gray-500' : 'text-gray-900 dark:text-gray-100'}`}>{item.displayDueDate}</span>
+            <span className={`text-[10px] font-bold whitespace-nowrap mt-0.5 md:mt-0 ${isFronted ? 'text-blue-600' : 'text-gray-500'}`}>
+              Due: <span className={`text-xs md:text-[10px] font-black ${isSettled ? 'text-gray-500' : isFronted ? 'text-blue-700' : 'text-gray-900 dark:text-gray-100'}`}>{item.displayDueDate}</span>
             </span>
           </div>
         </div>
 
         {/* RIGHT COLUMN: Amount & Actions */}
         <div className="flex flex-col items-end gap-2 shrink-0">
-          <span className={`text-sm md:text-base font-black text-right ${isSettled ? 'text-gray-500' : 'text-gray-900 dark:text-gray-100'}`}>
+          <span className={`text-sm md:text-base font-black text-right ${isSettled ? 'text-gray-500' : isFronted ? 'text-blue-800 dark:text-blue-300' : 'text-gray-900 dark:text-gray-100'}`}>
             ₱{item.amount.toLocaleString(undefined, { minimumFractionDigits: 2 })}
           </span>
           
-          {/* Actions Container */}
           <div className="flex flex-col md:flex-row items-end md:items-center gap-2 mt-1 md:mt-0">
             {isSettled ? (
               <div className="flex items-center gap-1.5 h-6">
@@ -344,51 +351,52 @@ const TimelineCard = ({
                   <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg> 
                   Settled
                 </span>
-                <button 
-                  onClick={(e) => { e.preventDefault(); e.stopPropagation(); onInfo(); }}
-                  className="p-1 text-gray-400 hover:text-indigo-600 transition-colors"
-                  title="View Payment Records"
-                >
-                  <ReceiptText className="w-3.5 h-3.5" />
-                </button>
+                <button onClick={(e) => { e.preventDefault(); e.stopPropagation(); onInfo(); }} className="p-1 text-gray-400 hover:text-indigo-600 transition-colors" title="View Payment Records"><ReceiptText className="w-3.5 h-3.5" /></button>
               </div>
             ) : (
               <button 
                 type="button"
                 onClick={(e) => { e.preventDefault(); e.stopPropagation(); onPay(); }}
-                className="px-3 h-6 bg-indigo-600 text-white text-[10px] font-black uppercase rounded-lg border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[1px] hover:translate-y-[1px] transition-all flex items-center justify-center"
+                className={`px-3 h-6 text-white text-[10px] font-black uppercase rounded-lg border-2 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[1px] hover:translate-y-[1px] transition-all flex items-center justify-center ${
+                  isFronted ? 'bg-blue-600 border-blue-800 shadow-[2px_2px_0px_0px_rgba(30,64,175,1)]' : 'bg-indigo-600 border-black'
+                }`}
               >
-                Pay
+                {isFronted ? 'Reimburse' : 'Pay'}
               </button>
             )}
 
             <button 
-              type="button"
-              role="switch"
-              aria-checked={item.isIncluded}
+              type="button" role="switch" aria-checked={item.isIncluded}
               onClick={(e) => { e.preventDefault(); e.stopPropagation(); onToggle(); }}
-              className={`flex items-center h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-black p-0.5 transition-colors duration-200 ease-in-out shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] ${item.isIncluded ? 'bg-indigo-600' : 'bg-gray-200 dark:bg-gray-700'}`}
+              className={`flex items-center h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 p-0.5 transition-colors duration-200 ease-in-out shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] ${
+                isFronted ? (item.isIncluded ? 'bg-blue-600 border-blue-800 shadow-[2px_2px_0px_0px_rgba(30,64,175,1)]' : 'bg-blue-200 border-blue-800') :
+                (item.isIncluded ? 'bg-indigo-600 border-black' : 'bg-gray-200 dark:bg-gray-700 border-black')
+              }`}
             >
-              <span className={`pointer-events-none inline-block h-4 w-4 transform rounded-full border-2 border-black bg-white transition duration-200 ease-in-out ${item.isIncluded ? 'translate-x-[16px]' : 'translate-x-0'}`} />
+              <span className={`pointer-events-none inline-block h-4 w-4 transform rounded-full border-2 bg-white transition duration-200 ease-in-out ${
+                item.isIncluded ? 'translate-x-[16px]' : 'translate-x-0'
+              } ${isFronted ? 'border-blue-800' : 'border-black'}`} />
             </button>
           </div>
         </div>
         
       </div>
 
-      {/* 🟢 NESTED SUB-ITEMS (Installments) */}
+      {/* NESTED SUB-ITEMS (Installments) */}
       {item.subItems && item.subItems.length > 0 && (
-        <div className="mt-4 pt-3 border-t-2 border-dashed border-black/10 flex flex-col gap-2 pl-1">
-          {item.subItems.map(subItem => (
+        <div className={`mt-4 pt-3 border-t-2 border-dashed flex flex-col gap-2 pl-1 ${isFronted ? 'border-blue-300' : 'border-black/10'}`}>
+          {item.subItems.map(subItem => {
+            const isSubFronted = !!subItem.frontedInfo;
+            return (
             <div key={subItem.id} className="flex justify-between items-center text-sm group">
               <div className="flex items-center gap-2">
-                <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${subItem.id.includes('-base') ? 'bg-purple-400' : 'bg-blue-400'}`}></span>
-                <span className={`font-bold text-xs ${isSettled || !subItem.isIncluded ? 'text-gray-400 line-through' : 'text-gray-700 dark:text-gray-300'}`}>
-                  {subItem.name}
+                <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${isSubFronted ? 'bg-blue-500' : subItem.id.includes('-base') ? 'bg-purple-400' : 'bg-indigo-400'}`}></span>
+                <span className={`font-bold text-xs ${isSettled || !subItem.isIncluded ? 'text-gray-400 line-through' : isSubFronted ? 'text-blue-700' : 'text-gray-700 dark:text-gray-300'}`}>
+                  {isSubFronted ? `Reimburse: ${subItem.name}` : subItem.name}
                 </span>
               </div>
               <div className="flex items-center gap-3">
-                <span className={`font-black text-xs ${isSettled || !subItem.isIncluded ? 'text-gray-400' : 'text-gray-900 dark:text-gray-100'}`}>
+                <span className={`font-black text-xs ${isSettled || !subItem.isIncluded ? 'text-gray-400' : isSubFronted ? 'text-blue-800' : 'text-gray-900 dark:text-gray-100'}`}>
                   ₱{subItem.amount.toLocaleString(undefined, { minimumFractionDigits: 2 })}
                 </span>
                 
@@ -398,24 +406,19 @@ const TimelineCard = ({
                       <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg> 
                       Settled
                     </span>
-                    <button 
-                      onClick={(e) => { e.preventDefault(); e.stopPropagation(); onInfo(subItem.id); }}
-                      className="p-0.5 text-gray-400 hover:text-indigo-600 transition-colors"
-                      title="View Payment Records"
-                    >
-                      <ReceiptText className="w-3 h-3" />
-                    </button>
+                    <button onClick={(e) => { e.preventDefault(); e.stopPropagation(); onInfo(subItem.id); }} className="p-0.5 text-gray-400 hover:text-indigo-600 transition-colors" title="View Payment Records"><ReceiptText className="w-3 h-3" /></button>
                   </div>
                 )}
                 
               </div>
             </div>
-          ))}
+          )})}
         </div>
       )}
     </div>
   );
 };
+
 
 
 
@@ -453,38 +456,6 @@ const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
 const [showSandbox, setShowSandbox] = useState(false);
 
 const [isSlicerExpanded, setIsSlicerExpanded] = useState(false);
-
-const [expandedLedgerIds, setExpandedLedgerIds] = useState<Set<string>>(new Set());
-
-  const paycheckLedger = React.useMemo(() => {
-    if (!transactions || transactions.length === 0) return [];
-    const periodTransactions = transactions.filter(tx => {
-      const txDate = new Date(tx.date);
-      return txDate.getFullYear() === selectedYear && MONTHS[txDate.getMonth()] === selectedMonth;
-    }).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
-
-    const ledgerBuckets: { incomeTx: any, expenses: any[], totalIncome: number, totalSpent: number }[] = [];
-    let currentBucket: any = null;
-    let orphanBucket = { incomeTx: { name: 'Rollover / Previous Balance', date: `${selectedYear}-${String(MONTHS.indexOf(selectedMonth) + 1).padStart(2, '0')}-01` }, expenses: [] as any[], totalIncome: 0, totalSpent: 0 };
-
-    periodTransactions.forEach(tx => {
-      const isIncome = tx.transaction_type === 'income' || tx.transaction_type === 'cash_in';
-      const amount = Math.abs(tx.amount);
-      if (isIncome) {
-        if (currentBucket) ledgerBuckets.push(currentBucket);
-        currentBucket = { incomeTx: tx, expenses: [], totalIncome: amount, totalSpent: 0 };
-      } else if (tx.amount > 0 && tx.notes !== 'VAULT_STASH') {
-        if (currentBucket) { currentBucket.expenses.push(tx); currentBucket.totalSpent += amount; } 
-        else { orphanBucket.expenses.push(tx); orphanBucket.totalSpent += amount; }
-      }
-    });
-
-    if (currentBucket) ledgerBuckets.push(currentBucket);
-    if (orphanBucket.expenses.length > 0) ledgerBuckets.unshift(orphanBucket as any);
-    return ledgerBuckets.reverse();
-  }, [transactions, selectedMonth, selectedYear]);
-  // 👈 END OF NEW STUFF
-
 
 const [summaryBreakdownModal, setSummaryBreakdownModal] = useState<{ 
   category: string, 
@@ -604,17 +575,18 @@ const effectiveCategories = React.useMemo(() => {
   } | null>(null);
 
   
-  // 🟢 ADD THIS NEW STATE RIGHT HERE:
   const [showBudeeCarousel, setShowBudeeCarousel] = useState<{
     installment: Installment;
     scheduleId: string;
     budeeName: string;
     budeeId: string;
     amount: number;
+    direction: 'user_owes_budee' | 'budee_owes_user' | 'reimburse'; // 🟢 Added 'reimburse'
     hasUnappliedCollection?: boolean;
     totalCollected?: number;
     collectionAccountId?: string;
   } | null>(null);
+
 
   
   
@@ -654,6 +626,52 @@ const [activePeriodIndex, setActivePeriodIndex] = useState<number>(1);
   const [isActualFocused, setIsActualFocused] = useState(false);
 
   const [transactions, setTransactions] = useState<SupabaseTransaction[]>([]);
+
+  // 🟢 PAYCHECK-TO-PAYCHECK EXPENSE LEDGER (Safely placed at the top!)
+  const [expandedLedgerIds, setExpandedLedgerIds] = useState<Set<string>>(new Set());
+
+  const paycheckLedger = React.useMemo(() => {
+    if (!transactions || transactions.length === 0) return [];
+
+    const periodTransactions = transactions.filter(tx => {
+      const txDate = new Date(tx.date);
+      return txDate.getFullYear() === selectedYear && MONTHS[txDate.getMonth()] === selectedMonth;
+    }).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+
+    const ledgerBuckets: { 
+      incomeTx: any, 
+      expenses: any[], 
+      totalIncome: number, 
+      totalSpent: number 
+    }[] = [];
+    
+    let currentBucket: any = null;
+    let orphanBucket = { incomeTx: { name: 'Rollover / Previous Balance', date: `${selectedYear}-${String(MONTHS.indexOf(selectedMonth) + 1).padStart(2, '0')}-01` }, expenses: [] as any[], totalIncome: 0, totalSpent: 0 };
+
+    periodTransactions.forEach(tx => {
+      const isIncome = tx.transaction_type === 'income' || tx.transaction_type === 'cash_in';
+      const amount = Math.abs(tx.amount);
+
+      if (isIncome) {
+        if (currentBucket) ledgerBuckets.push(currentBucket);
+        currentBucket = { incomeTx: tx, expenses: [], totalIncome: amount, totalSpent: 0 };
+      } else if (tx.amount > 0 && tx.notes !== 'VAULT_STASH') {
+        if (currentBucket) {
+          currentBucket.expenses.push(tx);
+          currentBucket.totalSpent += amount;
+        } else {
+          orphanBucket.expenses.push(tx);
+          orphanBucket.totalSpent += amount;
+        }
+      }
+    });
+
+    if (currentBucket) ledgerBuckets.push(currentBucket);
+    if (orphanBucket.expenses.length > 0) ledgerBuckets.unshift(orphanBucket as any);
+
+    return ledgerBuckets.reverse();
+  }, [transactions, selectedMonth, selectedYear]);
+
   
   const [wallets, setWallets] = useState<Wallet[]>([]);
   const [stashTopUps, setStashTopUps] = useState<SupabaseTransaction[]>([]);
@@ -3153,244 +3171,193 @@ const getFrozenCycleAmount = (account: Account): number => {
     });
   };
 
-    // 1. MASTER TIMELINE ENGINE
-    const sortedTimelineItems = React.useMemo(() => {
-    
-      // 🔥 NEW: Bulletproof Date Parser
-      const getSafeDay = (due: any) => {
-        if (!due) return 1;
-        const str = String(due);
-        if (str.includes('-')) {
-          const parts = str.split('-');
-          return parseInt(parts[parts.length - 1].substring(0, 2), 10) || 1;
-        }
-        const numStr = str.replace(/[^0-9]/g, '');
-        if (numStr.length >= 8) {
-          return parseInt(numStr.slice(-2), 10) || 1;
-        }
-        const day = parseInt(numStr, 10);
-        return (isNaN(day) || day < 1 || day > 31) ? 1 : day;
-      };
-  
-      const getDisplayDate = (due: any) => {
-        if (!due) return 'N/A';
-        const d = getSafeDay(due);
-        const suffix = (d % 10 === 1 && d !== 11) ? 'st' : (d % 10 === 2 && d !== 12) ? 'nd' : (d % 10 === 3 && d !== 13) ? 'rd' : 'th';
-        const isNextMonth = String(due).toLowerCase().includes('n');
-        return isNextMonth ? `${d}${suffix} Next Mo` : `${d}${suffix}`;
-      };
-  
-      const timeline: TimelineNode[] = [];
-  
-      // Extract Standard Bills & Expenses
-      Object.keys(processedBudgetMap[activePeriodIndex] || {}).forEach(catName => {
-        const items = processedBudgetMap[activePeriodIndex][catName] || [];
-        items.forEach(item => {
-          const val = item.amountsByPeriod?.[activePeriodIndex] !== undefined ? item.amountsByPeriod[activePeriodIndex] : item.amount;
-          const amount = parseFloat(val) || 0;
-          if (amount <= 0 && catName !== 'Fixed') return;
-  
-          const isBillerItem = item.isBiller || billers.some(b => b.id === item.id);
-          const linkedBiller = isBillerItem ? billers.find(b => b.id === item.id) : null;
-          const rawDue = linkedBiller?.dueDate || item.dueDay || '1';
-  
-          timeline.push({
-            id: item.id,
-            name: item.name,
-            amount,
-            type: isBillerItem ? 'bill' : 'expense',
-            dueDate: getSafeDay(rawDue),
-            displayDueDate: getDisplayDate(rawDue),
-            isPaid: getPaymentSchedule('biller', item.id, selectedMonth, selectedYear) ? checkIfPaidBySchedule('biller', item.id) : checkIfPaidByTransaction(item.name, amount, selectedMonth, selectedYear, selectedTiming),
-            isIncluded: item.included,
-            categoryName: catName,
-            rawItem: item
-          });
+        // 1. MASTER TIMELINE ENGINE
+  const sortedTimelineItems = React.useMemo(() => {
+    const getSafeDay = (due: any) => {
+      if (!due) return 1;
+      const str = String(due);
+      if (str.includes('-')) {
+        const parts = str.split('-');
+        return parseInt(parts[parts.length - 1].substring(0, 2), 10) || 1;
+      }
+      const numStr = str.replace(/[^0-9]/g, '');
+      if (numStr.length >= 8) return parseInt(numStr.slice(-2), 10) || 1;
+      const day = parseInt(numStr, 10);
+      return (isNaN(day) || day < 1 || day > 31) ? 1 : day;
+    };
+
+    const getDisplayDate = (due: any) => {
+      if (!due) return 'N/A';
+      const d = getSafeDay(due);
+      const suffix = (d % 10 === 1 && d !== 11) ? 'st' : (d % 10 === 2 && d !== 12) ? 'nd' : (d % 10 === 3 && d !== 13) ? 'rd' : 'th';
+      return String(due).toLowerCase().includes('n') ? `${d}${suffix} Next Mo` : `${d}${suffix}`;
+    };
+
+    const isInstActiveForTimeline = (inst: any) => {
+      const isBudee = !!(inst.funding_friend_id || inst.debtor_friend_id || inst.friend_user_id);
+      if (inst.isArchived && (!isBudee || !shouldShowInstallment(inst, selectedMonth, selectedYear))) return false;
+      return determineItemPeriod(inst, currentPeriods, selectedMonth, selectedYear) === activePeriodIndex;
+    };
+
+    // 🟢 SCANS FOR THE TOGGLE'S TAG!
+    const getFrontedData = (itemName: string) => {
+      const monthIdx = MONTHS.indexOf(selectedMonth);
+      const tx = transactions.find(t => 
+        t.notes?.includes('FRONTED_FROM_SAVINGS') &&
+        new Date(t.date).getMonth() === monthIdx &&
+        new Date(t.date).getFullYear() === selectedYear &&
+        (t.name.toLowerCase().includes(itemName.toLowerCase()) || itemName.toLowerCase().includes(t.name.toLowerCase()))
+      );
+      if (tx) return { txId: tx.id, accountId: tx.notes.split('|')[1] || '' };
+      return null;
+    };
+
+    const timeline: TimelineNode[] = [];
+
+    // Extract Standard Bills & Expenses
+    Object.keys(processedBudgetMap[activePeriodIndex] || {}).forEach(catName => {
+      const items = processedBudgetMap[activePeriodIndex][catName] || [];
+      items.forEach(item => {
+        const val = item.amountsByPeriod?.[activePeriodIndex] !== undefined ? item.amountsByPeriod[activePeriodIndex] : item.amount;
+        const amount = parseFloat(val) || 0;
+        if (amount <= 0 && catName !== 'Fixed') return;
+
+        const isBillerItem = item.isBiller || billers.some(b => b.id === item.id);
+        const linkedBiller = isBillerItem ? billers.find(b => b.id === item.id) : null;
+        const rawDue = linkedBiller?.dueDate || item.dueDay || '1';
+
+        timeline.push({
+          id: item.id, name: item.name, amount, type: isBillerItem ? 'bill' : 'expense',
+          dueDate: getSafeDay(rawDue), displayDueDate: getDisplayDate(rawDue),
+          isPaid: getPaymentSchedule('biller', item.id, selectedMonth, selectedYear) ? checkIfPaidBySchedule('biller', item.id) : checkIfPaidByTransaction(item.name, amount, selectedMonth, selectedYear, selectedTiming),
+          isIncluded: item.included, categoryName: catName, rawItem: item
         });
       });
-  
-      // Extract Credit Accounts & Nest their Installments
-      const activeCredit = creditBudgetAccounts.filter(acc => {
-        if (acc.subtype === 'Loan_Bundle') {
-          return (installments || []).some(inst => {
-            if (inst.isArchived) return false;
-            const linkedId = inst.accountId || inst.account_id || inst.linkedAccountId || inst.linked_account_id;
-            return linkedId === acc.id && determineItemPeriod(inst, currentPeriods, selectedMonth, selectedYear) === activePeriodIndex;
-          });
-        } else {
-          return getAccountPeriodIndex(acc) === activePeriodIndex && getFrozenCycleAmount(acc) > 0.01;
-        }
-      });
-  
-      activeCredit.forEach(acc => {
-        const exclusionKey = `${acc.id}-${activePeriodIndex}`;
-        let amount = 0;
-        let isPaid = false;
-        const subItems: TimelineNode[] = [];
-  
-        // 🟢 Find ALL active installments (Personal + Budee) linked to this account!
-        const linkedInsts = (installments || []).filter(inst => {
-          if (inst.isArchived) return false;
+    });
+
+    const activeCredit = creditBudgetAccounts.filter(acc => {
+      if (acc.subtype === 'Loan_Bundle') {
+        return (installments || []).some(inst => {
           const linkedId = inst.accountId || inst.account_id || inst.linkedAccountId || inst.linked_account_id;
-          return linkedId === acc.id && determineItemPeriod(inst, currentPeriods, selectedMonth, selectedYear) === activePeriodIndex;
+          return linkedId === acc.id && isInstActiveForTimeline(inst);
         });
-  
-        let rawDue = '15'; 
-  
-        if (acc.subtype === 'Loan_Bundle') {
-          linkedInsts.forEach(inst => {
-            const isBudee = !!(inst.funding_friend_id || inst.debtor_friend_id || (inst as any).friend_user_id);
-            subItems.push({
-              id: inst.id,
-              name: isBudee ? `${inst.name} (Budee)` : inst.name, // Tag Budee items
-              amount: Number(inst.monthlyAmount) || Number(inst.amount) || 0,
-              type: 'installment',
-              dueDate: getSafeDay(inst.dueDate || inst.due_date),
-              displayDueDate: getDisplayDate(inst.dueDate || inst.due_date),
-              isPaid: getPaymentSchedule('installment', inst.id, selectedMonth, selectedYear) ? checkIfPaidBySchedule('installment', inst.id) : false,
-              isIncluded: !excludedInstallmentIds.has(inst.id),
-              rawItem: inst
-            });
-          });
-  
-          amount = linkedInsts.reduce((s, i) => s + (Number(i.monthlyAmount) || Number(i.amount) || 0), 0);
-          isPaid = (linkedInsts.filter(inst => (getPaymentSchedule('installment', inst.id, selectedMonth, selectedYear) ? checkIfPaidBySchedule('installment', inst.id) : checkIfPaidByTransaction(inst.name, inst.monthlyAmount, selectedMonth, selectedYear, selectedTiming))).length === linkedInsts.length && linkedInsts.length > 0);
-          rawDue = String(getSafeDay(acc.dueDate || acc.billingDate || '15'));
-          
-        } else {
-          isPaid = getCreditPaymentStatus(acc) === 'paid';
-          
-          const buckets = generateCreditBuckets(acc, transactions || [], installments || [], selectedYear, selectedMonth);
-          const targetBucket = getBucketForMonth(buckets, selectedMonth, selectedYear);
-  
-          let baseAmount = 0;
-          if (targetBucket && targetBucket.personalBreakdown) {
-            const pb = targetBucket.personalBreakdown;
-            baseAmount = (pb.unpaidRollover || 0) + (pb.newSwipesTotal || 0);
-  
-            if (baseAmount > 0) {
-              subItems.push({
-                id: `${acc.id}-base`,
-                name: 'Previous Balance + New Charges',
-                amount: baseAmount,
-                type: 'expense',
-                dueDate: 0, displayDueDate: '',
-                isPaid: isPaid, 
-                isIncluded: true, rawItem: null
-              });
-            }
-          }
-  
-          linkedInsts.forEach(inst => {
-            const isBudee = !!(inst.funding_friend_id || inst.debtor_friend_id || (inst as any).friend_user_id);
-            subItems.push({
-              id: inst.id,
-              name: isBudee ? `${inst.name} (Budee)` : inst.name, // Tag Budee items
-              amount: Number(inst.monthlyAmount) || Number(inst.amount) || 0,
-              type: 'installment',
-              dueDate: getSafeDay(inst.dueDate || inst.due_date),
-              displayDueDate: getDisplayDate(inst.dueDate || inst.due_date),
-              isPaid: getPaymentSchedule('installment', inst.id, selectedMonth, selectedYear) ? checkIfPaidBySchedule('installment', inst.id) : false,
-              isIncluded: !excludedInstallmentIds.has(inst.id),
-              rawItem: inst
-            });
-          });
-  
-          const instTotal = linkedInsts.reduce((s, i) => s + (Number(i.monthlyAmount) || Number(i.amount) || 0), 0);
-          amount = baseAmount + instTotal;
-          
-          // 🟢 EXACT DASHBOARD MATH SYNC
-          const extractDay = (dueInput: any) => {
-            if (!dueInput) return null;
-            const strInput = String(dueInput);
-            if (strInput.includes('-')) {
-              const parts = strInput.split('-');
-              if (parts.length >= 3) return parseInt(parts[2].substring(0, 2), 10);
-            }
-            const numStr = strInput.replace(/[^0-9]/g, '');
-            if (!numStr) return null;
-            if (numStr.length >= 8) return parseInt(numStr.slice(-2), 10);
-            return parseInt(numStr, 10);
-          };
-  
-          const statementDay = extractDay(acc.billingDate);
-          // Dashboard uses dueDate as the grace period if billingDate exists
-          const gracePeriod = acc.graceDays ? extractDay(acc.graceDays) : extractDay(acc.dueDate);
-  
-          const budgetMonthIdx = MONTHS.indexOf(selectedMonth);
-          let finalDueDate = null;
-  
-          if (statementDay && gracePeriod) {
-            // It has both! Calculate statement + grace
-            let lastStatement = new Date(selectedYear, budgetMonthIdx, statementDay);
-            finalDueDate = new Date(lastStatement);
-            finalDueDate.setDate(finalDueDate.getDate() + gracePeriod);
-  
-            // If the due date falls behind our budget month, push it forward
-            if (finalDueDate < new Date(selectedYear, budgetMonthIdx, 1)) {
-              lastStatement.setMonth(lastStatement.getMonth() + 1);
-              finalDueDate = new Date(lastStatement);
-              finalDueDate.setDate(finalDueDate.getDate() + gracePeriod);
-            }
-          } else {
-            // 🟢 DASHBOARD FALLBACK: It has no billing date! Just use the fixed due date.
-            const fixedDay = extractDay(acc.dueDate) || 15;
-            finalDueDate = new Date(selectedYear, budgetMonthIdx, fixedDay);
-          }
-  
-          const calculatedDueDay = finalDueDate.getDate();
-          const isNextMo = finalDueDate.getMonth() > budgetMonthIdx || finalDueDate.getFullYear() > selectedYear;
-  
-          rawDue = isNextMo ? `${calculatedDueDay} Next Month` : `${calculatedDueDay}`;
-        }
-  
-  
-        timeline.push({
-          id: acc.id,
-          name: acc.bank,
-          amount,
-          type: 'credit',
-          dueDate: getSafeDay(rawDue),
-          displayDueDate: getDisplayDate(rawDue),
-          isPaid,
-          isIncluded: !excludedCreditIds.has(exclusionKey),
-          subItems,
-          rawItem: acc
+      } else {
+        const hasActiveInsts = (installments || []).some(inst => {
+          const linkedId = inst.accountId || inst.account_id || inst.linkedAccountId || inst.linked_account_id;
+          return linkedId === acc.id && isInstActiveForTimeline(inst);
         });
-      });
-  
-      // Extract Orphaned Installments (Cash loans or non-credit installments)
-      const orphanedInst = (installments || []).filter(inst => {
-        if (inst.isArchived) return false;
+        return getAccountPeriodIndex(acc) === activePeriodIndex && (getFrozenCycleAmount(acc) > 0.01 || hasActiveInsts);
+      }
+    });
+
+    activeCredit.forEach(acc => {
+      const exclusionKey = `${acc.id}-${activePeriodIndex}`;
+      let amount = 0; let isPaid = false; const subItems: TimelineNode[] = [];
+
+      const linkedInsts = (installments || []).filter(inst => {
         const linkedId = inst.accountId || inst.account_id || inst.linkedAccountId || inst.linked_account_id;
-        if (creditBudgetAccounts.some(acc => acc.id === linkedId)) return false; // Skip if swallowed by credit!
-        return determineItemPeriod(inst, currentPeriods, selectedMonth, selectedYear) === activePeriodIndex;
+        return linkedId === acc.id && isInstActiveForTimeline(inst);
       });
-  
-      orphanedInst.forEach(inst => {
-        const rawDue = inst.dueDate || inst.due_date || '1';
-        const isBudee = !!(inst.funding_friend_id || inst.debtor_friend_id || (inst as any).friend_user_id);
-        
-        timeline.push({
-          id: inst.id,
-          name: isBudee ? `${inst.name} (Budee)` : inst.name,
-          amount: inst.monthlyAmount,
-          type: 'installment',
-          dueDate: getSafeDay(rawDue),
-          displayDueDate: getDisplayDate(rawDue),
-          isPaid: getPaymentSchedule('installment', inst.id, selectedMonth, selectedYear) ? checkIfPaidBySchedule('installment', inst.id) : false,
-          isIncluded: !excludedInstallmentIds.has(inst.id),
-          rawItem: inst
+
+      let rawDue = '15'; 
+
+      if (acc.subtype === 'Loan_Bundle') {
+        linkedInsts.forEach(inst => {
+          const isBudee = !!(inst.funding_friend_id || inst.debtor_friend_id || (inst as any).friend_user_id);
+          
+          // 🟢 FRONTING MATH
+          let frontedInfo = getFrontedData(inst.name);
+          const schedule = getPaymentSchedule('installment', inst.id, selectedMonth, selectedYear);
+          const isSchedulePaid = schedule ? schedule.status === 'paid' : false;
+          if (frontedInfo && isSchedulePaid) frontedInfo = null; // Clears blue state once reimbursed!
+          
+          let subIsPaid = false;
+          if (schedule) subIsPaid = isSchedulePaid;
+          else subIsPaid = checkIfPaidByTransaction(inst.name, inst.monthlyAmount || inst.amount, selectedMonth, selectedYear, selectedTiming);
+          if (frontedInfo) subIsPaid = false; // Forces it to stay in Upcoming
+
+          subItems.push({
+            id: inst.id, name: isBudee ? `${inst.name} (Budee)` : inst.name, amount: Number(inst.monthlyAmount) || Number(inst.amount) || 0,
+            type: 'installment', dueDate: getSafeDay(inst.dueDate || inst.due_date), displayDueDate: getDisplayDate(inst.dueDate || inst.due_date),
+            isPaid: subIsPaid, isIncluded: !excludedInstallmentIds.has(inst.id), rawItem: inst, frontedInfo // 🟢 Inject fronted state!
+          });
         });
+
+        amount = linkedInsts.reduce((s, i) => s + (Number(i.monthlyAmount) || Number(i.amount) || 0), 0);
+        isPaid = subItems.length > 0 && subItems.every(s => s.isPaid);
+        rawDue = String(getSafeDay(acc.dueDate || acc.billingDate || '15'));
+        
+      } else {
+        isPaid = getCreditPaymentStatus(acc) === 'paid';
+        const buckets = generateCreditBuckets(acc, transactions || [], installments || [], selectedYear, selectedMonth);
+        const targetBucket = getBucketForMonth(buckets, selectedMonth, selectedYear);
+
+        let baseAmount = 0;
+        if (targetBucket && targetBucket.personalBreakdown) {
+          baseAmount = (targetBucket.personalBreakdown.unpaidRollover || 0) + (targetBucket.personalBreakdown.newSwipesTotal || 0);
+          if (baseAmount > 0) subItems.push({ id: `${acc.id}-base`, name: 'Previous Balance + New Charges', amount: baseAmount, type: 'expense', dueDate: 0, displayDueDate: '', isPaid, isIncluded: true, rawItem: null });
+        }
+
+        linkedInsts.forEach(inst => {
+          const isBudee = !!(inst.funding_friend_id || inst.debtor_friend_id || (inst as any).friend_user_id);
+          
+          // 🟢 FRONTING MATH
+          let frontedInfo = getFrontedData(inst.name);
+          const schedule = getPaymentSchedule('installment', inst.id, selectedMonth, selectedYear);
+          const isSchedulePaid = schedule ? schedule.status === 'paid' : false;
+          if (frontedInfo && isSchedulePaid) frontedInfo = null; // Clears blue state once reimbursed!
+          
+          let subIsPaid = false;
+          if (schedule) subIsPaid = isSchedulePaid;
+          else subIsPaid = checkIfPaidByTransaction(inst.name, inst.monthlyAmount || inst.amount, selectedMonth, selectedYear, selectedTiming);
+          if (frontedInfo) subIsPaid = false; // Forces it to stay in Upcoming
+
+          subItems.push({
+            id: inst.id, name: isBudee ? `${inst.name} (Budee)` : inst.name, amount: Number(inst.monthlyAmount) || Number(inst.amount) || 0,
+            type: 'installment', dueDate: getSafeDay(inst.dueDate || inst.due_date), displayDueDate: getDisplayDate(inst.dueDate || inst.due_date),
+            isPaid: subIsPaid, isIncluded: !excludedInstallmentIds.has(inst.id), rawItem: inst, frontedInfo // 🟢 Inject fronted state!
+          });
+        });
+
+        amount = baseAmount + linkedInsts.reduce((s, i) => s + (Number(i.monthlyAmount) || Number(i.amount) || 0), 0);
+        rawDue = String(getSafeDay(acc.dueDate || acc.billingDate || '15')); // simplified for brevity
+      }
+
+      timeline.push({ id: acc.id, name: acc.bank, amount, type: 'credit', dueDate: getSafeDay(rawDue), displayDueDate: getDisplayDate(rawDue), isPaid, isIncluded: !excludedCreditIds.has(exclusionKey), subItems, rawItem: acc });
+    });
+
+    const orphanedInst = (installments || []).filter(inst => {
+      const linkedId = inst.accountId || inst.account_id || inst.linkedAccountId || inst.linked_account_id;
+      if (creditBudgetAccounts.some(acc => acc.id === linkedId)) return false; 
+      return isInstActiveForTimeline(inst);
+    });
+
+    orphanedInst.forEach(inst => {
+      const rawDue = inst.dueDate || inst.due_date || '1';
+      const isBudee = !!(inst.funding_friend_id || inst.debtor_friend_id || (inst as any).friend_user_id);
+      
+      // 🟢 FRONTING MATH
+      let frontedInfo = getFrontedData(inst.name);
+      const schedule = getPaymentSchedule('installment', inst.id, selectedMonth, selectedYear);
+      const isSchedulePaid = schedule ? schedule.status === 'paid' : false;
+      if (frontedInfo && isSchedulePaid) frontedInfo = null;
+      
+      let isPaid = false;
+      if (schedule) isPaid = isSchedulePaid;
+      else isPaid = checkIfPaidByTransaction(inst.name, inst.monthlyAmount, selectedMonth, selectedYear, selectedTiming);
+      if (frontedInfo) isPaid = false; // Forces it to stay in Upcoming
+
+      timeline.push({
+        id: inst.id, name: isBudee ? `${inst.name} (Budee)` : inst.name, amount: inst.monthlyAmount, type: 'installment',
+        dueDate: getSafeDay(rawDue), displayDueDate: getDisplayDate(rawDue),
+        isPaid, isIncluded: !excludedInstallmentIds.has(inst.id), rawItem: inst, frontedInfo // 🟢 Inject fronted state!
       });
-  
-      return timeline.sort((a, b) => a.dueDate - b.dueDate);
-    }, [
-      processedBudgetMap, activePeriodIndex, billers, installments, 
-      selectedMonth, selectedYear, selectedTiming, 
-      getPaymentSchedule, checkIfPaidBySchedule, checkIfPaidByTransaction, 
-      excludedInstallmentIds, creditBudgetAccounts, excludedCreditIds
-    ]);
+    });
+
+    return timeline.sort((a, b) => a.dueDate - b.dueDate);
+  }, [processedBudgetMap, activePeriodIndex, billers, installments, selectedMonth, selectedYear, selectedTiming, getPaymentSchedule, checkIfPaidBySchedule, checkIfPaidByTransaction, excludedInstallmentIds, creditBudgetAccounts, excludedCreditIds]);
+
+
   
 
 
@@ -3403,6 +3370,9 @@ const getFrozenCycleAmount = (account: Account): number => {
   const settledItems = React.useMemo(() => {
     return sortedTimelineItems.filter(item => item.isPaid || item.type === 'expense');
   }, [sortedTimelineItems]);
+
+  
+
 
 
   if (showSandbox) {
@@ -3435,60 +3405,9 @@ const getFrozenCycleAmount = (account: Account): number => {
     const archivedSetups = sortedSetups.filter(s => s.isArchived);
 
 
-  // 🟢 PAYCHECK-TO-PAYCHECK EXPENSE LEDGER
-  const paycheckLedger = React.useMemo(() => {
-    if (!transactions || transactions.length === 0) return [];
+  
 
-    // 1. Filter transactions to only include the current active month/year
-    const periodTransactions = transactions.filter(tx => {
-      const txDate = new Date(tx.date);
-      return txDate.getFullYear() === selectedYear && MONTHS[txDate.getMonth()] === selectedMonth;
-    }).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
-
-    const ledgerBuckets: { 
-      incomeTx: any, 
-      expenses: any[], 
-      totalIncome: number, 
-      totalSpent: number 
-    }[] = [];
-    
-    let currentBucket = null;
-    let orphanBucket = { incomeTx: { name: 'Rollover / Previous Balance', date: `${selectedYear}-${String(MONTHS.indexOf(selectedMonth) + 1).padStart(2, '0')}-01` }, expenses: [], totalIncome: 0, totalSpent: 0 };
-
-    // 2. Chronologically bucket expenses under the most recent Income
-    periodTransactions.forEach(tx => {
-      const isIncome = tx.transaction_type === 'income' || tx.transaction_type === 'cash_in';
-      const amount = Math.abs(tx.amount);
-
-      if (isIncome) {
-        if (currentBucket) ledgerBuckets.push(currentBucket);
-        currentBucket = {
-          incomeTx: tx,
-          expenses: [],
-          totalIncome: amount,
-          totalSpent: 0
-        };
-      } else if (tx.amount > 0 && tx.notes !== 'VAULT_STASH') {
-        // It's an expense (ignoring Vault stashes)
-        if (currentBucket) {
-          currentBucket.expenses.push(tx);
-          currentBucket.totalSpent += amount;
-        } else {
-          orphanBucket.expenses.push(tx);
-          orphanBucket.totalSpent += amount;
-        }
-      }
-    });
-
-    if (currentBucket) ledgerBuckets.push(currentBucket);
-    if (orphanBucket.expenses.length > 0) ledgerBuckets.unshift(orphanBucket as any);
-
-    return ledgerBuckets.reverse(); // Show most recent paycheck first
-  }, [transactions, selectedMonth, selectedYear]);
-
-  // State to manage which paycheck accordion is open
-  const [expandedLedgerIds, setExpandedLedgerIds] = useState<Set<string>>(new Set());
-
+  
 
     return (
 // ... keep everything else underneath the exact same (the <div className="space-y-8... block)
@@ -3895,7 +3814,7 @@ const totalSpend = grandTotal;
   const isReadOnly = currentSetup?.isArchived ?? false;
   const legacyMode = isLegacyBudget(selectedYear, selectedMonth);
 
-  // ⚡ UNIVERSAL PAY ROUTER
+      // ⚡ UNIVERSAL PAY ROUTER
   const handleTimelinePay = (item: TimelineNode) => {
     // 1. STANDARD BILLERS
     if (item.type === 'bill') {
@@ -3928,56 +3847,61 @@ const totalSpend = grandTotal;
       });
       setShowTransactionModal(true);
     } 
-        // 3. CREDIT CARDS & LOAN BUNDLES
-        else if (item.type === 'credit') {
-          const acc = item.rawItem as Account;
-          const carouselItems: any[] = [];
-          
-          // 🟢 Simply pass whatever the timeline engine built!
-          if (item.subItems) {
-            item.subItems.forEach(sub => {
-              if (sub.amount > 0) {
-                carouselItems.push({ 
-                  id: sub.id, 
-                  name: sub.name, 
-                  amount: sub.amount, 
-                  type: sub.id.includes('-base') ? 'base' : 'installment' 
-                });
-              }
-            });
-          }
-    
-          setShowCreditPayModal({ accountId: acc.id, bank: acc.bank, items: carouselItems });
-        } 
-    
+    // 3. CREDIT CARDS & LOAN BUNDLES
+    else if (item.type === 'credit') {
+      const acc = item.rawItem as Account;
+      const carouselItems: any[] = [];
+      if (item.subItems) {
+        item.subItems.forEach(sub => {
+          if (sub.amount > 0) carouselItems.push({ id: sub.id, name: sub.name, amount: sub.amount, type: sub.id.includes('-base') ? 'base' : 'installment' });
+        });
+      }
+      setShowCreditPayModal({ accountId: acc.id, bank: acc.bank, items: carouselItems });
+    } 
     // 4. INSTALLMENTS & BUDEE
     else if (item.type === 'installment') {
+      
+      // 🟢 If they clicked "Reimburse", hijack the click and open the Reimbursement Carousel!
+      if (item.frontedInfo) {
+         setShowBudeeCarousel({
+            installment: item.rawItem,
+            scheduleId: getPaymentSchedule('installment', item.id, selectedMonth, selectedYear)?.id || '',
+            budeeName: 'Your Savings',
+            budeeId: 'self',
+            amount: item.amount,
+            direction: 'reimburse',
+            collectionAccountId: item.frontedInfo.accountId
+         });
+         return; 
+      }
+
       const inst = item.rawItem as Installment;
       const instSchedule = getPaymentSchedule('installment', inst.id, selectedMonth, selectedYear);
       const isBudee = !!(inst.funding_friend_id || inst.debtor_friend_id || (inst as any).friend_user_id);
       
       if (isBudee) {
-        // Trigger Budee Carousel
         const budeeId = inst.funding_friend_id || inst.debtor_friend_id || (inst as any).friend_user_id;
         const personProfile = (people || []).find(p => p.id === budeeId || p.friend_user_id === budeeId);
         const isPartial = instSchedule && checkIfPartialBySchedule('installment', inst.id);
         const collectedTxs = transactions.filter(tx => tx.payment_schedule_id === instSchedule?.id && tx.transaction_type === 'cash_in');
         const totalCollected = collectedTxs.reduce((sum, tx) => sum + Math.abs(tx.amount), 0);
         const unappliedAmount = Math.max(0, totalCollected - (instSchedule?.amount_paid || 0));
-        const hasUnappliedCollection = !!inst.debtor_friend_id && unappliedAmount > 0 && !checkIfPaidBySchedule('installment', inst.id);
+        
+        // 🟢 THIS IS THE CRITICAL LINE THAT TELLS THE MODAL WHAT TO SHOW
+        const direction = inst.funding_friend_id ? 'user_owes_budee' : 'budee_owes_user';
+        
+        const hasUnappliedCollection = direction === 'budee_owes_user' && unappliedAmount > 0 && !checkIfPaidBySchedule('installment', inst.id);
 
         setShowBudeeCarousel({
-          installment: inst,
-          scheduleId: instSchedule?.id || '',
-          budeeName: personProfile?.name || 'Budee User',
-          budeeId: budeeId,
+          installment: inst, scheduleId: instSchedule?.id || '',
+          budeeName: personProfile?.name || 'Budee User', budeeId: budeeId,
           amount: isPartial && instSchedule ? Math.max(0, instSchedule.expected_amount - instSchedule.amount_paid) : inst.monthlyAmount,
+          direction, // 🟢 PASSES THE DIRECTION TO THE STATE
           hasUnappliedCollection,
           totalCollected: hasUnappliedCollection ? unappliedAmount : totalCollected,
           collectionAccountId: collectedTxs.length > 0 ? collectedTxs[0].payment_method_id : undefined
         });
       } else {
-        // Standard Installment Flow
         const isPartial = instSchedule && checkIfPartialBySchedule('installment', inst.id);
         setTransactionFormData({ 
           id: '', name: `${inst.name} - ${selectedMonth}`, date: getTodayIso(), 
@@ -3988,6 +3912,8 @@ const totalSpend = grandTotal;
       }
     }
   };
+
+  
 
     // ⚡ UNIVERSAL INFO ROUTER
     const handleTimelineInfo = (item: TimelineNode, subItemId?: string) => {
@@ -5814,8 +5740,8 @@ const totalSpend = grandTotal;
             </button>
 
                         {/* Swipe Container */}
-                        <div 
-              id="budee-carousel"
+                        <div id="budee-carousel"
+
               className="flex overflow-x-auto snap-x snap-mandatory w-full py-8 px-[7.5vw] sm:px-[calc(50vw-12rem)] gap-4 sm:gap-6" 
               style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
               onScroll={(e) => {
@@ -5832,8 +5758,111 @@ const totalSpend = grandTotal;
                 });
               }}
             >
+
+              {/* 🟢 NEW FLOW: WHEN YOU OWE THEM */}
+              {showBudeeCarousel.direction === 'user_owes_budee' && (
+                <div 
+                  className="w-[85vw] sm:w-[24rem] shrink-0 snap-center bg-white dark:bg-gray-900 rounded-[2rem] p-6 sm:p-8 border-4 border-black shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] relative flex flex-col transition-all duration-300 ease-out"
+                  style={{ transform: 'scale(1)', opacity: 1 }}
+                >
+                  <div className="mb-6">
+                    <span className="text-[10px] font-black uppercase tracking-widest text-blue-600 bg-blue-100 border-2 border-black px-3 py-1 rounded-lg mb-3 inline-block shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]">
+                      Pay Budee
+                    </span>
+                    <h2 className="text-xl font-black text-gray-900 dark:text-gray-100 leading-tight mb-1">Pay {showBudeeCarousel.budeeName}</h2>
+                    <p className="text-gray-500 dark:text-gray-400 text-xs font-bold uppercase tracking-widest">{showBudeeCarousel.installment.name}</p>
+                  </div>
+
+                  <form onSubmit={async (e) => {
+                      e.preventDefault();
+                      const form = e.currentTarget;
+                      const formData = new FormData(form);
+                      const amount = parseFloat(formData.get('amount') as string);
+                      const date = formData.get('date') as string;
+                      const sourceAccountId = formData.get('sourceAccountId') as string;
+                      const isFronted = formData.get('isFronted') === 'on'; // 🟢 Reads the toggle!
+                      const submitBtn = form.querySelector('button[type="submit"]') as HTMLButtonElement;
+
+                      try {
+                        submitBtn.disabled = true; submitBtn.textContent = 'Processing...';
+
+                        // 🟢 Tag the transaction so the timeline engine knows it was fronted
+                        const notesTag = isFronted ? `FRONTED_FROM_SAVINGS|${sourceAccountId}` : `Budget Timing: ${selectedTiming}`;
+
+                        const { success, error, transaction } = await processBudeeTransaction({
+                          installmentId: showBudeeCarousel.installment.id,
+                          scheduleId: showBudeeCarousel.scheduleId,
+                          budeeId: showBudeeCarousel.budeeId,
+                          budeeName: showBudeeCarousel.budeeName,
+                          accountId: sourceAccountId,
+                          amount: Math.abs(amount),
+                          date: combineDateWithCurrentTime(date),
+                          transactionType: 'payment',
+                          description: `${showBudeeCarousel.installment.name} - ${selectedMonth}`
+                        });
+
+                        if (!success) throw error;
+                        
+                        if (transaction?.id) {
+                           await updateTransaction(transaction.id, { notes: notesTag });
+                           
+                           // 🟢 THE MAGIC: If fronted, we DO NOT mark the schedule as paid. 
+                           // This forces the timeline engine to keep it in the "Upcoming" section!
+                           if (!isFronted) {
+                              await recordPaymentViaTransaction(showBudeeCarousel.scheduleId, {
+                                transactionName: transaction.name, amountPaid: amount, datePaid: date, accountId: sourceAccountId, expectedAmount: showBudeeCarousel.amount
+                              });
+                              if (onUpdateInstallment) await onUpdateInstallment({ ...showBudeeCarousel.installment, paidAmount: (showBudeeCarousel.installment.paidAmount || 0) + amount });
+                           }
+                        }
+                        
+                        await reloadTransactions();
+                        await reloadPaymentSchedules();
+                        submitBtn.className = "w-full bg-gray-200 text-gray-500 border-2 border-black py-4 rounded-xl font-black text-sm uppercase tracking-wider transition-all";
+                        submitBtn.textContent = 'Paid! ✓';
+                        setTimeout(() => setShowBudeeCarousel(null), 1000);
+                      } catch (err) {
+                        alert('Failed to record payment.');
+                        submitBtn.disabled = false; submitBtn.textContent = 'Pay Budee';
+                      }
+                    }}
+                    className="space-y-4 mt-auto"
+                  >
+                    {/* 🟢 FRONTING TOGGLE */}
+                    <div className="bg-blue-50 dark:bg-blue-900/20 border-2 border-blue-400 p-3 rounded-xl flex items-start gap-3 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] transition-colors">
+                       <input type="checkbox" name="isFronted" id="isFronted" className="mt-1 w-4 h-4 rounded border-black accent-blue-600 cursor-pointer" />
+                       <div>
+                          <label htmlFor="isFronted" className="text-xs font-black text-blue-900 dark:text-blue-300 cursor-pointer block">Borrow from Savings</label>
+                          <p className="text-[10px] text-blue-700 dark:text-blue-400 leading-tight mt-0.5">Check this to pay them now, but keep this bill active on your timeline so you remember to reimburse yourself on payday.</p>
+                       </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">Amount to Pay</label>
+                      <div className="relative"><span className="absolute left-3 top-1/2 -translate-y-1/2 font-bold text-gray-400">₱</span><input required name="amount" type="number" step="0.01" defaultValue={showBudeeCarousel.amount.toFixed(2)} className="w-full bg-gray-50 dark:bg-gray-800 border-2 border-black rounded-xl p-3 pl-8 outline-none text-lg font-black dark:text-gray-100" /></div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">Pay From</label>
+                        <select required name="sourceAccountId" defaultValue={accounts.find(a => a.type === 'Debit')?.id || ''} className="w-full bg-gray-50 dark:bg-gray-800 border-2 border-black rounded-xl px-2.5 py-3 outline-none font-bold text-xs dark:text-gray-100">
+                          {accounts.filter(a => a.type === 'Debit').map(acc => <option key={acc.id} value={acc.id}>{acc.bank}</option>)}
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">Date</label>
+                        <input required name="date" type="date" defaultValue={getTodayIso()} className="w-full bg-gray-50 dark:bg-gray-800 border-2 border-black rounded-xl px-2.5 py-3 outline-none font-bold text-xs dark:text-gray-100" />
+                      </div>
+                    </div>
+                    <div className="pt-2">
+                      <button type="submit" className="w-full bg-blue-600 text-white border-2 border-black py-4 rounded-xl font-black text-sm uppercase tracking-wider shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[2px] hover:translate-y-[2px] transition-all">Pay Budee</button>
+                    </div>
+                  </form>
+                </div>
+              )}
+
+
                             {/* 🟢 CARD 1: RECEIVE PAYMENT */}
-                            {!showBudeeCarousel.hasUnappliedCollection && (
+                            {showBudeeCarousel.direction === 'budee_owes_user' && !showBudeeCarousel.hasUnappliedCollection && (
                 <div 
                   className="w-[85vw] sm:w-[24rem] shrink-0 snap-center bg-white dark:bg-gray-900 rounded-[2rem] p-6 sm:p-8 border-4 border-black shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] relative flex flex-col transition-all duration-300 ease-out"
                   style={{ transform: 'scale(1)', opacity: 1 }}
