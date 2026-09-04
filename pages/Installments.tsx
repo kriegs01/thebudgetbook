@@ -172,6 +172,8 @@ const Installments: React.FC<InstallmentsProps> = ({
     fundingFriendId: '',
     debtorFriendId: '',
     expectedAccountId: '',
+    budeeDueDay: '',       // 🟢 NEW
+    budeeMonthOffset: '0', // 🟢 NEW
 });
 
 const selectableContacts: ContactOption[] = useMemo(() => {
@@ -200,6 +202,9 @@ const [editFormData, setEditFormData] = useState({
   fundingFriendId: '',
   debtorFriendId: '',
   expectedAccountId: '',
+  budeeDueDay: '',       // 🟢 NEW
+  budeeMonthOffset: '0', // 🟢 NEW
+  
 });
 
 // 🟢 NEW: Proxy Pay & IOU Toggle States
@@ -405,11 +410,14 @@ const [paymentTab, setPaymentTab] = useState<'my_account' | 'budee'>('my_account
         due_date: formData.due_date || null, 
         is_migrated: true,
         linkedAccountId: isProxyPay ? undefined : (formData.linkedAccountId || undefined),
-        // 🟢 Pass settlement fields explicitly
-        funding_friend_id: isProxyPay ? formData.fundingFriendId : null,
-        debtor_friend_id: isIOU ? formData.debtorFriendId : null,
-        expected_account_id: isIOU ? formData.expectedAccountId : null,
-      });
+          // 🟢 Pass settlement fields explicitly
+          funding_friend_id: isProxyPay ? formData.fundingFriendId : null,
+          debtor_friend_id: isIOU ? formData.debtorFriendId : null,
+          expected_account_id: isIOU ? formData.expectedAccountId : null,
+          // 🟢 NEW: Virtual Billing Schedule
+          budee_due_day: isProxyPay && formData.budeeDueDay ? parseInt(formData.budeeDueDay) : null,
+          budee_month_offset: isProxyPay ? parseInt(formData.budeeMonthOffset) : 0,
+        });
 
 
 

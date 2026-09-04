@@ -100,6 +100,9 @@ export interface Installment {
   // 🟢 NEW: Links this installment to a specific Credit Card statement
   linkedAccountId?: string;
   principalAmount?: number;
+  budee_due_day?: number | null;
+  budee_month_offset?: number;
+
 }
 
 export interface SavingsJar {

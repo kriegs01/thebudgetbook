@@ -581,11 +581,13 @@ const effectiveCategories = React.useMemo(() => {
     budeeName: string;
     budeeId: string;
     amount: number;
-    direction: 'user_owes_budee' | 'budee_owes_user' | 'reimburse'; // 🟢 Added 'reimburse'
+    direction: 'user_owes_budee' | 'budee_owes_user' | 'reimburse';
     hasUnappliedCollection?: boolean;
     totalCollected?: number;
     collectionAccountId?: string;
+    frontedTxId?: string; // 🟢 NEW: Tracks the original transaction so we can untag it!
   } | null>(null);
+
 
 
   
@@ -3861,19 +3863,20 @@ const totalSpend = grandTotal;
     // 4. INSTALLMENTS & BUDEE
     else if (item.type === 'installment') {
       
-      // 🟢 If they clicked "Reimburse", hijack the click and open the Reimbursement Carousel!
-      if (item.frontedInfo) {
-         setShowBudeeCarousel({
-            installment: item.rawItem,
-            scheduleId: getPaymentSchedule('installment', item.id, selectedMonth, selectedYear)?.id || '',
-            budeeName: 'Your Savings',
-            budeeId: 'self',
-            amount: item.amount,
-            direction: 'reimburse',
-            collectionAccountId: item.frontedInfo.accountId
-         });
-         return; 
-      }
+            // 🟢 If they clicked "Reimburse", hijack the click and open the Reimbursement Carousel!
+            if (item.frontedInfo) {
+              setShowBudeeCarousel({
+                 installment: item.rawItem,
+                 scheduleId: getPaymentSchedule('installment', item.id, selectedMonth, selectedYear)?.id || '',
+                 budeeName: 'Your Savings',
+                 budeeId: 'self',
+                 amount: Number(item.amount) || 0,
+                 direction: 'reimburse',
+                 collectionAccountId: item.frontedInfo.accountId,
+                 frontedTxId: item.frontedInfo.txId // 🟢 Pass the ID to the modal!
+              });
+              return; 
+           }
 
       const inst = item.rawItem as Installment;
       const instSchedule = getPaymentSchedule('installment', inst.id, selectedMonth, selectedYear);
@@ -6206,6 +6209,79 @@ const totalSpend = grandTotal;
                   </form>
                 </div>
               )}
+
+              {/* 🟢 SCENARIO 3: REIMBURSE SAVINGS */}
+              {showBudeeCarousel.direction === 'reimburse' && (
+                <div className="w-[85vw] sm:w-[24rem] shrink-0 snap-center bg-white dark:bg-gray-900 rounded-[2rem] p-6 sm:p-8 border-4 border-black shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] relative flex flex-col transition-all duration-300 ease-out" style={{ transform: 'scale(1)', opacity: 1 }}>
+                  <div className="mb-6">
+                    <span className="text-[10px] font-black uppercase tracking-widest text-blue-600 bg-blue-100 border-2 border-black px-3 py-1 rounded-lg mb-3 inline-block shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]">Reimburse</span>
+                    <h2 className="text-xl font-black text-gray-900 dark:text-gray-100 leading-tight mb-1">Pay Back Savings</h2>
+                    <p className="text-gray-500 text-xs font-bold uppercase tracking-widest">For {showBudeeCarousel.installment.name}</p>
+                  </div>
+                  
+                  <form onSubmit={async (e) => {
+                      e.preventDefault();
+                      const form = e.currentTarget;
+                      const sourceAccountId = (form.elements.namedItem('sourceAccountId') as HTMLSelectElement).value;
+                      const submitBtn = form.querySelector('button[type="submit"]') as HTMLButtonElement;
+                      try {
+                        submitBtn.disabled = true; submitBtn.textContent = 'Transferring...';
+                        
+                        await createTransfer(
+                          sourceAccountId,
+                          showBudeeCarousel.collectionAccountId || '',
+                          showBudeeCarousel.amount,
+                          combineDateWithCurrentTime(getTodayIso()),
+                          0
+                        );
+
+                        if (showBudeeCarousel.scheduleId) {
+                          await recordPaymentViaTransaction(showBudeeCarousel.scheduleId, {
+                             transactionName: `Reimbursed Savings for ${showBudeeCarousel.installment.name}`,
+                             amountPaid: showBudeeCarousel.amount,
+                             datePaid: getTodayIso(),
+                             accountId: sourceAccountId,
+                             expectedAmount: showBudeeCarousel.amount
+                          });
+                       }
+
+                          // 🟢 MAGIC FIX: Destroy the "Fronted" tag on the original transaction so it drops to Settled!
+                          if (showBudeeCarousel.frontedTxId) {
+                          await updateTransaction(showBudeeCarousel.frontedTxId, { notes: `Budget Timing: ${selectedTiming}` });
+                      }
+                      
+                      // 🟢 Also update the main installment progress bar so everything syncs beautifully
+                      if (onUpdateInstallment) {
+                          await onUpdateInstallment({ ...showBudeeCarousel.installment, paidAmount: (showBudeeCarousel.installment.paidAmount || 0) + showBudeeCarousel.amount });
+                      }
+                    
+                        
+                        await reloadTransactions();
+                        await reloadPaymentSchedules();
+                        submitBtn.textContent = 'Reimbursed! ✓';
+                        setTimeout(() => setShowBudeeCarousel(null), 1000);
+                      } catch (err) {
+                        alert('Transfer failed.');
+                        submitBtn.disabled = false; submitBtn.textContent = 'Reimburse Savings';
+                      }
+                  }} className="space-y-4 mt-auto">
+                    <div className="bg-blue-50 border-2 border-blue-400 p-3 rounded-xl shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]">
+                       {/* 🟢 Ensures amounts don't cause silent crashes */}
+                       <p className="text-xs font-medium text-blue-900 leading-relaxed">Transfer <strong>₱{Number(showBudeeCarousel.amount || 0).toLocaleString(undefined, {minimumFractionDigits: 2})}</strong> back to the account you borrowed from.</p>
+                    </div>
+                    <div>
+                      <label className="block text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">Reimburse From</label>
+                      <select required name="sourceAccountId" defaultValue={accounts.find(a => a.type === 'Debit' && a.id !== showBudeeCarousel.collectionAccountId)?.id || ''} className="w-full bg-gray-50 border-2 border-black rounded-xl px-2.5 py-3 outline-none font-bold text-xs">
+                        {accounts.filter(a => a.type === 'Debit' && a.id !== showBudeeCarousel.collectionAccountId).map(acc => <option key={acc.id} value={acc.id}>{acc.bank}</option>)}
+                      </select>
+                    </div>
+                    <div className="pt-2">
+                      <button type="submit" className="w-full bg-blue-600 text-white border-2 border-black py-4 rounded-xl font-black text-sm uppercase tracking-wider shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none transition-all">Reimburse Savings</button>
+                    </div>
+                  </form>
+                </div>
+              )}
+
 
             </div>
           </div>
