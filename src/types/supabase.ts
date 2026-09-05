@@ -83,6 +83,8 @@ export interface SupabaseInstallment {
   user_id: string | null; // uuid, references auth.users(id)
   friend_user_id?: string | null; // uuid, nullable - links loan to a real Budee friend
   principal_amount: number;
+  budee_billing_date?: number | null;
+  budee_days_to_pay?: number | null;
 }
 
 

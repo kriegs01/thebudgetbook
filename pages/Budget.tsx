@@ -1573,13 +1573,22 @@ const getFrozenCycleAmount = (account: Account): number => {
   useEffect(() => {
     const loadPaymentSchedules = async () => {
       try {
-        const { data, error } = await getPaymentSchedulesByPeriod(selectedMonth, selectedYear);
+        const currMonthIdx = MONTHS.indexOf(selectedMonth);
+        const prevDate = new Date(selectedYear, currMonthIdx - 1, 1);
+        const prevMonth = MONTHS[prevDate.getMonth()];
+        const prevYear = prevDate.getFullYear();
+
+        // 🟢 LOAD BOTH MONTHS: Grab current month and previous month simultaneously
+        const [currRes, prevRes] = await Promise.all([
+          getPaymentSchedulesByPeriod(selectedMonth, selectedYear),
+          getPaymentSchedulesByPeriod(prevMonth, prevYear)
+        ]);
         
-        if (error) {
-          console.error('[Budget] Failed to load payment schedules:', error);
-        } else if (data) {
-          setPaymentSchedules(data);
-        }
+        if (currRes.error) console.error('[Budget] Failed to load current schedules:', currRes.error);
+        if (prevRes.error) console.error('[Budget] Failed to load prev schedules:', prevRes.error);
+        
+        const combined = [...(currRes.data || []), ...(prevRes.data || [])];
+        setPaymentSchedules(combined);
       } catch (error) {
         console.error('[Budget] Error loading payment schedules:', error);
       }
@@ -1587,6 +1596,7 @@ const getFrozenCycleAmount = (account: Account): number => {
     
     loadPaymentSchedules();
   }, [selectedMonth, selectedYear]);
+
 
   const [autoSaveStatus, setAutoSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const autoSaveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -1982,14 +1992,32 @@ const getFrozenCycleAmount = (account: Account): number => {
     month?: string,
     year?: number
   ): SupabaseMonthlyPaymentSchedule | undefined => {
+    let targetMonth = month;
+    let targetYear = year;
+
+    // 🟢 SPAYLATER INTERCEPTOR: If cash flow crosses a month, look back 1 month for the Statement!
+    if (sourceType === 'installment' && month && year) {
+      const inst = installments?.find(i => i.id === sourceId);
+      if (inst && inst.budee_billing_date && inst.budee_days_to_pay) {
+        if (inst.budee_billing_date + inst.budee_days_to_pay > 30) {
+          const currMonthIdx = MONTHS.indexOf(month);
+          // Look back exactly one month to find the original generated statement
+          const prevDate = new Date(year, currMonthIdx - 1, 1);
+          targetMonth = MONTHS[prevDate.getMonth()];
+          targetYear = prevDate.getFullYear();
+        }
+      }
+    }
+
     return paymentSchedules.find(
       schedule =>
         schedule.source_type === sourceType &&
         schedule.source_id === sourceId &&
-        (month === undefined || schedule.month === month) &&
-        (year === undefined || schedule.year === year)
+        (targetMonth === undefined || schedule.month === targetMonth) &&
+        (targetYear === undefined || schedule.year === targetYear)
     );
-  }, [paymentSchedules]);
+  }, [paymentSchedules, installments]);
+
   
   const checkIfPaidBySchedule = useCallback((
     sourceType: 'biller' | 'installment',
@@ -2116,16 +2144,27 @@ const getFrozenCycleAmount = (account: Account): number => {
 
   const reloadPaymentSchedules = useCallback(async () => {
     try {
-      const { data, error } = await getPaymentSchedulesByPeriod(selectedMonth, selectedYear);
-      if (error) {
-        console.error('[Budget] Failed to reload payment schedules:', error);
-      } else if (data) {
-        setPaymentSchedules(data);
-      }
+      const currMonthIdx = MONTHS.indexOf(selectedMonth);
+      const prevDate = new Date(selectedYear, currMonthIdx - 1, 1);
+      const prevMonth = MONTHS[prevDate.getMonth()];
+      const prevYear = prevDate.getFullYear();
+
+      // 🟢 LOAD BOTH MONTHS: Grab current month and previous month simultaneously
+      const [currRes, prevRes] = await Promise.all([
+        getPaymentSchedulesByPeriod(selectedMonth, selectedYear),
+        getPaymentSchedulesByPeriod(prevMonth, prevYear)
+      ]);
+      
+      if (currRes.error) console.error('[Budget] Failed to reload current schedules:', currRes.error);
+      if (prevRes.error) console.error('[Budget] Failed to reload prev schedules:', prevRes.error);
+      
+      const combined = [...(currRes.data || []), ...(prevRes.data || [])];
+      setPaymentSchedules(combined);
     } catch (error) {
       console.error('[Budget] Error reloading payment schedules:', error);
     }
   }, [selectedMonth, selectedYear]);
+
 
   const openSchedulePaymentsModal = async (scheduleId: string, label: string) => {
     setLoadingScheduleTx(true);
@@ -3195,6 +3234,34 @@ const getFrozenCycleAmount = (account: Account): number => {
       return String(due).toLowerCase().includes('n') ? `${d}${suffix} Next Mo` : `${d}${suffix}`;
     };
 
+            // 🟢 HELPER: Calculates visual due date for Budee (30-day math)
+    const getInstallmentDueDay = (inst: any) => {
+      if (inst.budee_billing_date && inst.budee_days_to_pay !== undefined && inst.budee_days_to_pay !== null) {
+        const calcDate = new Date(2024, 3, parseInt(inst.budee_billing_date, 10) || 1);
+        calcDate.setDate(calcDate.getDate() + (parseInt(inst.budee_days_to_pay, 10) || 0));
+        return String(calcDate.getDate());
+      }
+      return inst.dueDate || inst.due_date || '1';
+    };
+
+    // 🟢 HELPER: Calculates visual due date for Credit Cards (30-day math)
+    const getCreditDueDay = (acc: any) => {
+      const stmtRaw = acc.billingDate || acc.billing_date || acc.statementDate || acc.statement_date;
+      const dueRaw = acc.dueDate || acc.due_date;
+      
+      if (stmtRaw && dueRaw) {
+        const stmtDay = getSafeDay(stmtRaw);
+        const graceDays = getSafeDay(dueRaw);
+        
+        const calcDate = new Date(2024, 3, stmtDay);
+        calcDate.setDate(calcDate.getDate() + graceDays);
+        return String(calcDate.getDate());
+      }
+      return String(getSafeDay(dueRaw || stmtRaw || '15'));
+    };
+
+    
+
     const isInstActiveForTimeline = (inst: any) => {
       const isBudee = !!(inst.funding_friend_id || inst.debtor_friend_id || inst.friend_user_id);
       if (inst.isArchived && (!isBudee || !shouldShowInstallment(inst, selectedMonth, selectedYear))) return false;
@@ -3267,29 +3334,33 @@ const getFrozenCycleAmount = (account: Account): number => {
         linkedInsts.forEach(inst => {
           const isBudee = !!(inst.funding_friend_id || inst.debtor_friend_id || (inst as any).friend_user_id);
           
-          // 🟢 FRONTING MATH
           let frontedInfo = getFrontedData(inst.name);
           const schedule = getPaymentSchedule('installment', inst.id, selectedMonth, selectedYear);
           const isSchedulePaid = schedule ? schedule.status === 'paid' : false;
-          if (frontedInfo && isSchedulePaid) frontedInfo = null; // Clears blue state once reimbursed!
           
           let subIsPaid = false;
           if (schedule) subIsPaid = isSchedulePaid;
           else subIsPaid = checkIfPaidByTransaction(inst.name, inst.monthlyAmount || inst.amount, selectedMonth, selectedYear, selectedTiming);
-          if (frontedInfo) subIsPaid = false; // Forces it to stay in Upcoming
+          if (frontedInfo) subIsPaid = false;
 
           subItems.push({
             id: inst.id, name: isBudee ? `${inst.name} (Budee)` : inst.name, amount: Number(inst.monthlyAmount) || Number(inst.amount) || 0,
-            type: 'installment', dueDate: getSafeDay(inst.dueDate || inst.due_date), displayDueDate: getDisplayDate(inst.dueDate || inst.due_date),
-            isPaid: subIsPaid, isIncluded: !excludedInstallmentIds.has(inst.id), rawItem: inst, frontedInfo // 🟢 Inject fronted state!
+            type: 'installment', 
+            // 🟢 FIX: Do NOT use getCreditDueDay. Use the raw or Budee date.
+            dueDate: getSafeDay(getInstallmentDueDay(inst)), 
+            displayDueDate: getDisplayDate(getInstallmentDueDay(inst)),
+            isPaid: subIsPaid, isIncluded: !excludedInstallmentIds.has(inst.id), rawItem: inst, frontedInfo 
           });
         });
 
         amount = linkedInsts.reduce((s, i) => s + (Number(i.monthlyAmount) || Number(i.amount) || 0), 0);
         isPaid = subItems.length > 0 && subItems.every(s => s.isPaid);
-        rawDue = String(getSafeDay(acc.dueDate || acc.billingDate || '15'));
+        // 🟢 FIX: The Master Bundle Card should just adopt the date of its first active installment
+        rawDue = subItems.length > 0 ? String(subItems[0].dueDate) : '15';
         
       } else {
+        // ... (Keep the existing standard credit card logic below this)
+
         isPaid = getCreditPaymentStatus(acc) === 'paid';
         const buckets = generateCreditBuckets(acc, transactions || [], installments || [], selectedYear, selectedMonth);
         const targetBucket = getBucketForMonth(buckets, selectedMonth, selectedYear);
@@ -3307,7 +3378,6 @@ const getFrozenCycleAmount = (account: Account): number => {
           let frontedInfo = getFrontedData(inst.name);
           const schedule = getPaymentSchedule('installment', inst.id, selectedMonth, selectedYear);
           const isSchedulePaid = schedule ? schedule.status === 'paid' : false;
-          if (frontedInfo && isSchedulePaid) frontedInfo = null; // Clears blue state once reimbursed!
           
           let subIsPaid = false;
           if (schedule) subIsPaid = isSchedulePaid;
@@ -3322,7 +3392,8 @@ const getFrozenCycleAmount = (account: Account): number => {
         });
 
         amount = baseAmount + linkedInsts.reduce((s, i) => s + (Number(i.monthlyAmount) || Number(i.amount) || 0), 0);
-        rawDue = String(getSafeDay(acc.dueDate || acc.billingDate || '15')); // simplified for brevity
+         // 🟢 APPLY CREDIT MATH
+         rawDue = getCreditDueDay(acc);
       }
 
       timeline.push({ id: acc.id, name: acc.bank, amount, type: 'credit', dueDate: getSafeDay(rawDue), displayDueDate: getDisplayDate(rawDue), isPaid, isIncluded: !excludedCreditIds.has(exclusionKey), subItems, rawItem: acc });
@@ -3335,14 +3406,13 @@ const getFrozenCycleAmount = (account: Account): number => {
     });
 
     orphanedInst.forEach(inst => {
-      const rawDue = inst.dueDate || inst.due_date || '1';
+      const rawDue = getInstallmentDueDay(inst); // 🟢 Uses the new visual math!
       const isBudee = !!(inst.funding_friend_id || inst.debtor_friend_id || (inst as any).friend_user_id);
       
       // 🟢 FRONTING MATH
       let frontedInfo = getFrontedData(inst.name);
       const schedule = getPaymentSchedule('installment', inst.id, selectedMonth, selectedYear);
       const isSchedulePaid = schedule ? schedule.status === 'paid' : false;
-      if (frontedInfo && isSchedulePaid) frontedInfo = null;
       
       let isPaid = false;
       if (schedule) isPaid = isSchedulePaid;
@@ -3906,12 +3976,16 @@ const totalSpend = grandTotal;
         });
       } else {
         const isPartial = instSchedule && checkIfPartialBySchedule('installment', inst.id);
+        // 🟢 FIX: Use the actual schedule month for the receipt name!
+        const labelMonth = instSchedule ? instSchedule.month : selectedMonth;
+        
         setTransactionFormData({ 
-          id: '', name: `${inst.name} - ${selectedMonth}`, date: getTodayIso(), 
+          id: '', name: `${inst.name} - ${labelMonth}`, date: getTodayIso(), 
           amount: isPartial && instSchedule ? Math.max(0, instSchedule.expected_amount - instSchedule.amount_paid).toFixed(2) : String(inst.monthlyAmount), 
           accountId: inst.accountId || accounts[0]?.id || '', paymentScheduleId: instSchedule?.id || '', transactionType: 'payment' 
         });
         setShowTransactionModal(true);
+
       }
     }
   };
@@ -5783,13 +5857,16 @@ const totalSpend = grandTotal;
                       const amount = parseFloat(formData.get('amount') as string);
                       const date = formData.get('date') as string;
                       const sourceAccountId = formData.get('sourceAccountId') as string;
-                      const isFronted = formData.get('isFronted') === 'on'; // 🟢 Reads the toggle!
+                      const isFronted = formData.get('isFronted') === 'on'; 
                       const submitBtn = form.querySelector('button[type="submit"]') as HTMLButtonElement;
 
                       try {
                         submitBtn.disabled = true; submitBtn.textContent = 'Processing...';
 
-                        // 🟢 Tag the transaction so the timeline engine knows it was fronted
+                        // 🟢 FIX 1: Grab the actual schedule month for the name
+                        const sched = paymentSchedules.find(s => s.id === showBudeeCarousel.scheduleId);
+                        const actualMonth = sched ? sched.month : selectedMonth;
+
                         const notesTag = isFronted ? `FRONTED_FROM_SAVINGS|${sourceAccountId}` : `Budget Timing: ${selectedTiming}`;
 
                         const { success, error, transaction } = await processBudeeTransaction({
@@ -5801,7 +5878,8 @@ const totalSpend = grandTotal;
                           amount: Math.abs(amount),
                           date: combineDateWithCurrentTime(date),
                           transactionType: 'payment',
-                          description: `${showBudeeCarousel.installment.name} - ${selectedMonth}`
+                          // 🟢 FIX 1: Apply the correct month here
+                          description: `${showBudeeCarousel.installment.name} - ${actualMonth}`
                         });
 
                         if (!success) throw error;
@@ -5809,13 +5887,14 @@ const totalSpend = grandTotal;
                         if (transaction?.id) {
                            await updateTransaction(transaction.id, { notes: notesTag });
                            
-                           // 🟢 THE MAGIC: If fronted, we DO NOT mark the schedule as paid. 
-                           // This forces the timeline engine to keep it in the "Upcoming" section!
-                           if (!isFronted) {
-                              await recordPaymentViaTransaction(showBudeeCarousel.scheduleId, {
-                                transactionName: transaction.name, amountPaid: amount, datePaid: date, accountId: sourceAccountId, expectedAmount: showBudeeCarousel.amount
-                              });
-                              if (onUpdateInstallment) await onUpdateInstallment({ ...showBudeeCarousel.installment, paidAmount: (showBudeeCarousel.installment.paidAmount || 0) + amount });
+                           // 🟢 FIX 2: Removed the `if (!isFronted)` wrapper!
+                           // Now it ALWAYS updates the schedule and marks it paid in the database.
+                           await recordPaymentViaTransaction(showBudeeCarousel.scheduleId, {
+                             transactionName: transaction.name, amountPaid: amount, datePaid: date, accountId: sourceAccountId, expectedAmount: showBudeeCarousel.amount
+                           });
+                           
+                           if (onUpdateInstallment) {
+                             await onUpdateInstallment({ ...showBudeeCarousel.installment, paidAmount: (showBudeeCarousel.installment.paidAmount || 0) + amount });
                            }
                         }
                         
@@ -5831,6 +5910,7 @@ const totalSpend = grandTotal;
                     }}
                     className="space-y-4 mt-auto"
                   >
+
                     {/* 🟢 FRONTING TOGGLE */}
                     <div className="bg-blue-50 dark:bg-blue-900/20 border-2 border-blue-400 p-3 rounded-xl flex items-start gap-3 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] transition-colors">
                        <input type="checkbox" name="isFronted" id="isFronted" className="mt-1 w-4 h-4 rounded border-black accent-blue-600 cursor-pointer" />

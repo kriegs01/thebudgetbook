@@ -172,8 +172,9 @@ const Installments: React.FC<InstallmentsProps> = ({
     fundingFriendId: '',
     debtorFriendId: '',
     expectedAccountId: '',
-    budeeDueDay: '',       // 🟢 NEW
-    budeeMonthOffset: '0', // 🟢 NEW
+    budeeBillingDate: '',
+    budeeDaysToPay: '',
+
 });
 
 const selectableContacts: ContactOption[] = useMemo(() => {
@@ -202,9 +203,8 @@ const [editFormData, setEditFormData] = useState({
   fundingFriendId: '',
   debtorFriendId: '',
   expectedAccountId: '',
-  budeeDueDay: '',       // 🟢 NEW
-  budeeMonthOffset: '0', // 🟢 NEW
-  
+  budeeBillingDate: '',
+  budeeDaysToPay: '',
 });
 
 // 🟢 NEW: Proxy Pay & IOU Toggle States
@@ -414,9 +414,10 @@ const [paymentTab, setPaymentTab] = useState<'my_account' | 'budee'>('my_account
           funding_friend_id: isProxyPay ? formData.fundingFriendId : null,
           debtor_friend_id: isIOU ? formData.debtorFriendId : null,
           expected_account_id: isIOU ? formData.expectedAccountId : null,
-          // 🟢 NEW: Virtual Billing Schedule
-          budee_due_day: isProxyPay && formData.budeeDueDay ? parseInt(formData.budeeDueDay) : null,
-          budee_month_offset: isProxyPay ? parseInt(formData.budeeMonthOffset) : 0,
+                  // 🟢 NEW: Virtual Grace Period & Billing Cycle
+        budee_billing_date: isProxyPay && formData.budeeBillingDate ? parseInt(formData.budeeBillingDate) : null,
+        budee_days_to_pay: isProxyPay && formData.budeeDaysToPay ? parseInt(formData.budeeDaysToPay) : null,
+
         });
 
 
@@ -488,6 +489,10 @@ const [paymentTab, setPaymentTab] = useState<'my_account' | 'budee'>('my_account
       funding_friend_id: paymentTab === 'budee' ? editFormData.fundingFriendId : null,
       debtor_friend_id: (paymentTab === 'my_account' && isIOU) ? editFormData.debtorFriendId : null,
       expected_account_id: (paymentTab === 'my_account' && isIOU) ? editFormData.expectedAccountId : null,
+      // 🟢 NEW: Virtual Grace Period & Billing Cycle
+      budee_billing_date: paymentTab === 'budee' && editFormData.budeeBillingDate ? parseInt(editFormData.budeeBillingDate) : null,
+      budee_days_to_pay: paymentTab === 'budee' && editFormData.budeeDaysToPay ? parseInt(editFormData.budeeDaysToPay) : null,
+      
     };
 
 
@@ -656,8 +661,11 @@ const [paymentTab, setPaymentTab] = useState<'my_account' | 'budee'>('my_account
       // 🟢 Map using the safe fallback variables
       fundingFriendId: activeFundingFriend,
       debtorFriendId: activeDebtorFriend,
-      expectedAccountId: item.expected_account_id || item.expectedAccountId || ''
+      expectedAccountId: item.expected_account_id || item.expectedAccountId || '',
+      budeeBillingDate: item.budee_billing_date ? String(item.budee_billing_date) : '',
+      budeeDaysToPay: item.budee_days_to_pay ? String(item.budee_days_to_pay) : '',
     });
+
 
     setOpenMenuId(null);
   };
@@ -1445,6 +1453,38 @@ const [paymentTab, setPaymentTab] = useState<'my_account' | 'budee'>('my_account
                             ))}
                           </select>
                           <p className="text-[9px] text-gray-400 mt-3 font-medium leading-tight">This will route the entire installment debt directly to this friend's profile instead of deducting from your bank account.</p>
+                                                                                                {/* 🟢 NEW: Virtual Billing UI (Add Modal) */}
+                        <div className="pt-4 mt-4 border-t-2 border-dashed border-gray-200 dark:border-gray-700">
+                          <label className="block text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-3 transition-colors">Virtual Billing Cycle</label>
+                          <div className="grid grid-cols-2 gap-3">
+                            <div>
+                              <label className="block text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">Billing Date</label>
+                              <input 
+                                type="number" 
+                                min="1" max="31" 
+                                placeholder="e.g. 20"
+                                value={formData.budeeBillingDate}
+                                onChange={e => setFormData({...formData, budeeBillingDate: e.target.value})}
+                                className="w-full bg-white dark:bg-gray-800 border-2 border-black rounded-2xl p-3 outline-none focus:ring-2 focus:ring-indigo-500 font-bold transition-colors shadow-[2px_2px_0px_rgba(0,0,0,0.12)] dark:text-gray-100"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">Days to Pay</label>
+                              <input 
+                                type="number" 
+                                min="0" max="90" 
+                                placeholder="e.g. 15"
+                                value={formData.budeeDaysToPay}
+                                onChange={e => setFormData({...formData, budeeDaysToPay: e.target.value})}
+                                className="w-full bg-white dark:bg-gray-800 border-2 border-black rounded-2xl p-3 outline-none focus:ring-2 focus:ring-indigo-500 font-bold transition-colors shadow-[2px_2px_0px_rgba(0,0,0,0.12)] dark:text-gray-100"
+                              />
+                            </div>
+                          </div>
+                          <p className="text-[9px] text-gray-400 mt-2 font-medium leading-tight">Works like a credit card: The <strong>Billing Date</strong> generates the schedule, and <strong>Days to Pay</strong> maps the cash flow to the correct Budget tab.</p>
+                        </div>
+
+
+
                         </div>
 
                     </div>
@@ -1857,6 +1897,39 @@ const [paymentTab, setPaymentTab] = useState<'my_account' | 'budee'>('my_account
                           ))}
                         </select>
                         <p className="text-[9px] text-gray-400 mt-3 font-medium leading-tight">This will route the entire installment debt directly to this friend's profile instead of deducting from your bank account.</p>
+                      
+                                                                                             {/* 🟢 NEW: Virtual Billing UI (Edit Modal) */}
+                        <div className="pt-4 mt-4 border-t-2 border-dashed border-gray-200 dark:border-gray-700">
+                          <label className="block text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-3 transition-colors">Virtual Billing Cycle</label>
+                          <div className="grid grid-cols-2 gap-3">
+                            <div>
+                              <label className="block text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">Billing Date</label>
+                              <input 
+                                type="number" 
+                                min="1" max="31" 
+                                placeholder="e.g. 20"
+                                value={editFormData.budeeBillingDate}
+                                onChange={e => setEditFormData({...editFormData, budeeBillingDate: e.target.value})}
+                                className="w-full bg-white dark:bg-gray-800 border-2 border-black rounded-2xl p-3 outline-none focus:ring-2 focus:ring-indigo-500 font-bold transition-colors shadow-[2px_2px_0px_rgba(0,0,0,0.12)] dark:text-gray-100"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">Days to Pay</label>
+                              <input 
+                                type="number" 
+                                min="0" max="90" 
+                                placeholder="e.g. 15"
+                                value={editFormData.budeeDaysToPay}
+                                onChange={e => setEditFormData({...editFormData, budeeDaysToPay: e.target.value})}
+                                className="w-full bg-white dark:bg-gray-800 border-2 border-black rounded-2xl p-3 outline-none focus:ring-2 focus:ring-indigo-500 font-bold transition-colors shadow-[2px_2px_0px_rgba(0,0,0,0.12)] dark:text-gray-100"
+                              />
+                            </div>
+                          </div>
+                          <p className="text-[9px] text-gray-400 mt-2 font-medium leading-tight">Works like a credit card: The <strong>Billing Date</strong> generates the schedule, and <strong>Days to Pay</strong> maps the cash flow to the correct Budget tab.</p>
+                        </div>
+
+
+                      
                       </div>
                     </div>
                   )}

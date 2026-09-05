@@ -102,6 +102,8 @@ export interface Installment {
   principalAmount?: number;
   budee_due_day?: number | null;
   budee_month_offset?: number;
+  budee_billing_date?: number | null;
+  budee_days_to_pay?: number | null;
 
 }
 

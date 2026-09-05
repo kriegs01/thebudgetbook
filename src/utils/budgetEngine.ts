@@ -73,7 +73,7 @@ export const determineItemPeriod = (item: any, currentPeriods: PayPeriod[], mont
     let dayNum = 1;
     let forceNextMonth = false;
 
-    // 1. SPECIAL CASE: Credit Cards (Statement Date + Grace Period)
+            // 1. SPECIAL CASE: Credit Cards (Statement Date + Grace Period)
     if (item.type === 'Credit' || item.classification === 'Credit Card') {
       const stmtRaw = item.billingDate || item.billing_date || item.statementDate || item.statement_date;
       const dueRaw = item.dueDate || item.due_date;
@@ -82,20 +82,33 @@ export const determineItemPeriod = (item: any, currentPeriods: PayPeriod[], mont
         const stmtDay = extractDay(stmtRaw);
         const graceDays = extractDay(dueRaw);
         
-        const calcDate = new Date(2024, 0, stmtDay); 
+        // 🟢 FIX: Use a 30-day month (April = index 3) for standard banking math
+        const calcDate = new Date(2024, 3, stmtDay); 
         calcDate.setDate(calcDate.getDate() + graceDays); 
         dayNum = calcDate.getDate();
-        if (calcDate.getMonth() !== 0) forceNextMonth = true;
+        if (calcDate.getMonth() !== 3) forceNextMonth = true;
       } else {
         dayNum = extractDay(dueRaw || 1);
       }
     } 
-    // 2. STANDARD CASE: Billers, Installments, etc.
-    else {
-      const rawDue = item.dueDate || item.dueDay || item.billingDate || item.statementDate || item.due_date || 1;
-      if (String(rawDue).toLowerCase().includes('next')) forceNextMonth = true;
-      dayNum = extractDay(rawDue);
+    // 🟢 NEW: SPECIAL CASE: Budee Virtual Billing (Statement Date + Grace Period)
+    else if (item.budee_billing_date && item.budee_days_to_pay !== undefined && item.budee_days_to_pay !== null) {
+      const stmtDay = extractDay(item.budee_billing_date);
+      const graceDays = extractDay(item.budee_days_to_pay);
+      
+      // 🟢 FIX: Use a 30-day month (April = index 3) for standard banking math
+      const calcDate = new Date(2024, 3, stmtDay); 
+      calcDate.setDate(calcDate.getDate() + graceDays); 
+      dayNum = calcDate.getDate();
     }
+
+        // 2. STANDARD CASE: Billers, Installments, etc.
+        else {
+          const rawDue = item.dueDate || item.dueDay || item.billingDate || item.statementDate || item.due_date || 1;
+          if (String(rawDue).toLowerCase().includes('next')) forceNextMonth = true;
+          dayNum = extractDay(rawDue);
+        }
+    
 
     if (forceNextMonth) return currentPeriods.length;
     dayNum = Math.max(1, Math.min(31, dayNum));

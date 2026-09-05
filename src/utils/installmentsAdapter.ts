@@ -41,6 +41,10 @@ export const supabaseInstallmentToFrontend = (supabaseInstallment: SupabaseInsta
     funding_friend_id: supabaseInstallment.funding_friend_id || '',
     debtor_friend_id: supabaseInstallment.debtor_friend_id || '',
     expected_account_id: supabaseInstallment.expected_account_id || '',
+
+    // 🟢 NEW: Add Virtual Billing Cycle fields
+    budee_billing_date: supabaseInstallment.budee_billing_date,
+    budee_days_to_pay: supabaseInstallment.budee_days_to_pay,
   };
 };
 
@@ -76,6 +80,10 @@ export const frontendInstallmentToSupabase = (installment: Installment): Omit<Su
       funding_friend_id: installment.funding_friend_id && installment.funding_friend_id.trim() !== '' ? installment.funding_friend_id : null,
       debtor_friend_id: installment.debtor_friend_id && installment.debtor_friend_id.trim() !== '' ? installment.debtor_friend_id : null,
       expected_account_id: installment.expected_account_id && installment.expected_account_id.trim() !== '' ? installment.expected_account_id : null,
+
+      // 🟢 NEW: Add Virtual Billing Cycle fields
+      budee_billing_date: installment.budee_billing_date || null,
+      budee_days_to_pay: installment.budee_days_to_pay || null,
     };
   } catch (err) {
     console.error("CRASH in frontendInstallmentToSupabase with object:", installment, err);

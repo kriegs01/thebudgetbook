@@ -95,8 +95,9 @@ export const generateInstallmentPaymentSchedules = (
   }
   const termMonths = parseInt(termMatch[1], 10);
 
-  // Generate schedule for each month in the term
+     // Generate schedule for each month in the term
   for (let i = 0; i < termMonths; i++) {
+    // Strictly generate based on the start date, no shifting!
     const scheduleDate = new Date(startYear, startMonth - 1 + i, 1);
     const month = MONTHS[scheduleDate.getMonth()];
     const year = scheduleDate.getFullYear();
@@ -106,7 +107,7 @@ export const generateInstallmentPaymentSchedules = (
       source_id: installment.id,
       month: month,
       year: year,
-      payment_number: i + 1, // Payment sequence number (1, 2, 3, ...)
+      payment_number: i + 1,
       expected_amount: installment.monthlyAmount,
       amount_paid: 0,
       receipt: null,
@@ -115,6 +116,7 @@ export const generateInstallmentPaymentSchedules = (
       status: 'pending',
     });
   }
+
 
   return schedules;
 };
