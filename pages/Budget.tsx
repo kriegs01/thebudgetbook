@@ -1632,8 +1632,10 @@ const getFrozenCycleAmount = (account: Account): number => {
     amount: '',
     receipt: '',
     datePaid: getTodayIso(),
-    accountId: accounts[0]?.id || ''
+    accountId: accounts[0]?.id || '',
+    isFronted: false // 🟢 Added this!
   });
+
   const [payReceiptFile, setPayReceiptFile] = useState<File | null>(null);
 
   const [showTransactionModal, setShowTransactionModal] = useState(false);
@@ -2897,7 +2899,8 @@ const getFrozenCycleAmount = (account: Account): number => {
           date: combineDateWithCurrentTime(payFormData.datePaid),
           amount: finalAmount,
           payment_method_id: payFormData.accountId,
-          notes: `Budget Timing: ${selectedTiming}`
+          notes: payFormData.isFronted ? `FRONTED_FROM_SAVINGS|${payFormData.accountId}` : `Budget Timing: ${selectedTiming}`
+
         };
         const result = await updateTransaction(payFormData.transactionId, transaction);
         transactionData = result.data;
@@ -2916,7 +2919,8 @@ const getFrozenCycleAmount = (account: Account): number => {
             date: combineDateWithCurrentTime(payFormData.datePaid),
             amount: finalAmount,
             paymentMethodId: payFormData.accountId,
-            notes: `Budget Timing: ${selectedTiming}`,
+            notes: payFormData.isFronted ? `FRONTED_FROM_SAVINGS|${payFormData.accountId}` : `Budget Timing: ${selectedTiming}`,
+
             transaction_type: payTransactionType
           } as any
         );
@@ -2930,7 +2934,8 @@ const getFrozenCycleAmount = (account: Account): number => {
           date: combineDateWithCurrentTime(payFormData.datePaid),
           amount: finalAmount,
           payment_method_id: payFormData.accountId,
-          notes: `Budget Timing: ${selectedTiming}`
+          notes: payFormData.isFronted ? `FRONTED_FROM_SAVINGS|${payFormData.accountId}` : `Budget Timing: ${selectedTiming}`
+
         };
         const result = await createTransaction({ ...transaction, transaction_type: payTransactionType } as any);
         transactionData = result.data;
@@ -3283,26 +3288,39 @@ const getFrozenCycleAmount = (account: Account): number => {
 
     const timeline: TimelineNode[] = [];
 
-    // Extract Standard Bills & Expenses
-    Object.keys(processedBudgetMap[activePeriodIndex] || {}).forEach(catName => {
-      const items = processedBudgetMap[activePeriodIndex][catName] || [];
-      items.forEach(item => {
-        const val = item.amountsByPeriod?.[activePeriodIndex] !== undefined ? item.amountsByPeriod[activePeriodIndex] : item.amount;
-        const amount = parseFloat(val) || 0;
-        if (amount <= 0 && catName !== 'Fixed') return;
-
-        const isBillerItem = item.isBiller || billers.some(b => b.id === item.id);
-        const linkedBiller = isBillerItem ? billers.find(b => b.id === item.id) : null;
-        const rawDue = linkedBiller?.dueDate || item.dueDay || '1';
-
-        timeline.push({
-          id: item.id, name: item.name, amount, type: isBillerItem ? 'bill' : 'expense',
-          dueDate: getSafeDay(rawDue), displayDueDate: getDisplayDate(rawDue),
-          isPaid: getPaymentSchedule('biller', item.id, selectedMonth, selectedYear) ? checkIfPaidBySchedule('biller', item.id) : checkIfPaidByTransaction(item.name, amount, selectedMonth, selectedYear, selectedTiming),
-          isIncluded: item.included, categoryName: catName, rawItem: item
+        // Extract Standard Bills & Expenses
+        Object.keys(processedBudgetMap[activePeriodIndex] || {}).forEach(catName => {
+          const items = processedBudgetMap[activePeriodIndex][catName] || [];
+          items.forEach(item => {
+            const val = item.amountsByPeriod?.[activePeriodIndex] !== undefined ? item.amountsByPeriod[activePeriodIndex] : item.amount;
+            const amount = parseFloat(val) || 0;
+            if (amount <= 0 && catName !== 'Fixed') return;
+    
+            const isBillerItem = item.isBiller || billers.some(b => b.id === item.id);
+            const linkedBiller = isBillerItem ? billers.find(b => b.id === item.id) : null;
+            const rawDue = linkedBiller?.dueDate || item.dueDay || '1';
+    
+            // 🟢 FRONTING MATH FOR BILLERS
+            let frontedInfo = getFrontedData(item.name);
+            const schedule = getPaymentSchedule('biller', item.id, selectedMonth, selectedYear);
+            let isPaid = false;
+            
+            if (schedule) {
+              isPaid = checkIfPaidBySchedule('biller', item.id);
+            } else {
+              isPaid = checkIfPaidByTransaction(item.name, amount, selectedMonth, selectedYear, selectedTiming);
+            }
+            
+            if (frontedInfo) isPaid = false; // Force it to stay active!
+    
+            timeline.push({
+              id: item.id, name: item.name, amount, type: isBillerItem ? 'bill' : 'expense',
+              dueDate: getSafeDay(rawDue), displayDueDate: getDisplayDate(rawDue),
+              isPaid, isIncluded: item.included, categoryName: catName, rawItem: item, frontedInfo // 🟢 Inject fronted state
+            });
+          });
         });
-      });
-    });
+    
 
     const activeCredit = creditBudgetAccounts.filter(acc => {
       if (acc.subtype === 'Loan_Bundle') {
@@ -3394,10 +3412,29 @@ const getFrozenCycleAmount = (account: Account): number => {
         amount = baseAmount + linkedInsts.reduce((s, i) => s + (Number(i.monthlyAmount) || Number(i.amount) || 0), 0);
          // 🟢 APPLY CREDIT MATH
          rawDue = getCreditDueDay(acc);
-      }
+        }
 
-      timeline.push({ id: acc.id, name: acc.bank, amount, type: 'credit', dueDate: getSafeDay(rawDue), displayDueDate: getDisplayDate(rawDue), isPaid, isIncluded: !excludedCreditIds.has(exclusionKey), subItems, rawItem: acc });
-    });
+        // 🟢 BUBBLE UP: Check if ANY sub-item was fronted from savings
+        const frontedSubItem = subItems.find(sub => !!sub.frontedInfo);
+        if (frontedSubItem) {
+           isPaid = false; // Force the main card to stay in the 'Upcoming' section
+        }
+  
+        timeline.push({ 
+          id: acc.id, 
+          name: acc.bank, 
+          amount, 
+          type: 'credit', 
+          dueDate: getSafeDay(rawDue), 
+          displayDueDate: getDisplayDate(rawDue), 
+          isPaid, 
+          isIncluded: !excludedCreditIds.has(exclusionKey), 
+          subItems, 
+          rawItem: acc,
+          frontedInfo: frontedSubItem?.frontedInfo // 🟢 Inject state so the main card turns blue!
+        });
+      });
+  
 
     const orphanedInst = (installments || []).filter(inst => {
       const linkedId = inst.accountId || inst.account_id || inst.linkedAccountId || inst.linked_account_id;
@@ -3888,10 +3925,24 @@ const totalSpend = grandTotal;
 
       // ⚡ UNIVERSAL PAY ROUTER
   const handleTimelinePay = (item: TimelineNode) => {
-    // 1. STANDARD BILLERS
-    if (item.type === 'bill') {
-      const linkedBiller = billers.find(b => b.id === item.id);
-      const paymentSchedule = getPaymentSchedule('biller', item.id, selectedMonth, selectedYear);
+        // 1. STANDARD BILLERS
+        if (item.type === 'bill') {
+          // 🟢 Intercept fronted bills to launch the Reimbursement flow
+          if (item.frontedInfo) {
+            setShowBudeeCarousel({
+               installment: item.rawItem,
+               scheduleId: getPaymentSchedule('biller', item.id, selectedMonth, selectedYear)?.id || '',
+               budeeName: 'Your Savings', budeeId: 'self', amount: Number(item.amount) || 0,
+               direction: 'reimburse', collectionAccountId: item.frontedInfo.accountId,
+               frontedTxId: item.frontedInfo.txId
+            });
+            return; 
+          }
+    
+          const linkedBiller = billers.find(b => b.id === item.id);
+          const paymentSchedule = getPaymentSchedule('biller', item.id, selectedMonth, selectedYear);
+          // ... keep the rest of this block exactly as it is
+    
       if (linkedBiller && paymentSchedule) {
         const isPartial = checkIfPartialBySchedule('biller', item.id);
         const scheduleForModal = {
@@ -3919,17 +3970,19 @@ const totalSpend = grandTotal;
       });
       setShowTransactionModal(true);
     } 
-    // 3. CREDIT CARDS & LOAN BUNDLES
-    else if (item.type === 'credit') {
-      const acc = item.rawItem as Account;
-      const carouselItems: any[] = [];
-      if (item.subItems) {
-        item.subItems.forEach(sub => {
-          if (sub.amount > 0) carouselItems.push({ id: sub.id, name: sub.name, amount: sub.amount, type: sub.id.includes('-base') ? 'base' : 'installment' });
-        });
-      }
-      setShowCreditPayModal({ accountId: acc.id, bank: acc.bank, items: carouselItems });
-    } 
+        // 3. CREDIT CARDS & LOAN BUNDLES
+        else if (item.type === 'credit') {
+          const acc = item.rawItem as Account;
+          const carouselItems: any[] = [];
+          if (item.subItems) {
+            item.subItems.forEach(sub => {
+              // 🟢 FIX: Pass the fronted state into the carousel items!
+              if (sub.amount > 0) carouselItems.push({ id: sub.id, name: sub.name, amount: sub.amount, type: sub.id.includes('-base') ? 'base' : 'installment', frontedInfo: sub.frontedInfo });
+            });
+          }
+          setShowCreditPayModal({ accountId: acc.id, bank: acc.bank, items: carouselItems });
+        } 
+    
     // 4. INSTALLMENTS & BUDEE
     else if (item.type === 'installment') {
       
@@ -5065,6 +5118,23 @@ const totalSpend = grandTotal;
                   <input required type="number" step="0.01" value={payFormData.amount} onChange={(e) => setPayFormData({...payFormData, amount: e.target.value})} className="w-full bg-gray-50 dark:bg-gray-800 border-2 border-black rounded-xl p-2.5 pl-7 outline-none text-base font-black focus:ring-2 focus:ring-indigo-500 transition-all dark:text-gray-100" />
                 </div>
               </div>
+
+              {/* 🟢 FRONTING TOGGLE */}
+              <div className="bg-blue-50 dark:bg-blue-900/20 border-2 border-blue-400 p-3 rounded-xl flex items-start gap-3 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] transition-colors mb-4">
+                 <input 
+                   type="checkbox" 
+                   name="isFronted" 
+                   id="isBillerFronted" 
+                   className="mt-1 w-4 h-4 rounded border-black accent-blue-600 cursor-pointer" 
+                   onChange={(e) => setPayFormData({...payFormData, isFronted: e.target.checked})} 
+                 />
+                 <div>
+                    <label htmlFor="isBillerFronted" className="text-xs font-black text-blue-900 dark:text-blue-300 cursor-pointer block">Borrow from Savings</label>
+                    <p className="text-[10px] text-blue-700 dark:text-blue-400 leading-tight mt-0.5">Pay this bill now, but keep it on your timeline to reimburse yourself later.</p>
+                 </div>
+              </div>
+
+
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">Date Paid</label>
@@ -5601,176 +5671,346 @@ const totalSpend = grandTotal;
                 });
               }}
             >
-              {showCreditPayModal.items.map((item, index) => (
+                                      {showCreditPayModal && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/80 backdrop-blur-md animate-in fade-in">
+          
+          {/* Close Button floating top right */}
+          <button 
+            onClick={() => setShowCreditPayModal(null)} 
+            className="absolute top-6 right-6 p-2 bg-white/20 hover:bg-white/40 backdrop-blur-sm rounded-full text-white border-2 border-white/20 transition-colors z-[210]"
+          >
+            <X className="w-6 h-6"/>
+          </button>
+
+          <div className="w-full relative flex flex-col items-center">
+            
+            {/* 🟢 Floating Navigation Arrows */}
+            {showCreditPayModal.items.length > 1 && (
+              <>
+                <button 
+                  type="button"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    const container = document.getElementById('payment-carousel');
+                    if (container && container.firstElementChild) {
+                      const cardWidth = container.firstElementChild.clientWidth;
+                      const gap = window.innerWidth >= 640 ? 24 : 16;
+                      container.scrollTo({ left: container.scrollLeft - (cardWidth + gap), behavior: 'smooth' });
+                    }
+                  }}
+                  className="absolute left-2 sm:left-1/2 sm:-ml-[15rem] top-1/2 -translate-y-1/2 p-2 sm:p-3 bg-white/90 dark:bg-gray-800/90 hover:bg-white dark:hover:bg-gray-800 backdrop-blur-md border-2 border-black rounded-full shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:translate-x-[1px] hover:translate-y-[1px] hover:shadow-none transition-all z-[210] text-black dark:text-white"
+                  aria-label="Previous"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="m15 18-6-6 6-6"/></svg>
+                </button>
+                
+                <button 
+                  type="button"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    const container = document.getElementById('payment-carousel');
+                    if (container && container.firstElementChild) {
+                      const cardWidth = container.firstElementChild.clientWidth;
+                      const gap = window.innerWidth >= 640 ? 24 : 16;
+                      container.scrollTo({ left: container.scrollLeft + (cardWidth + gap), behavior: 'smooth' });
+                    }
+                  }}
+                  className="absolute right-2 sm:right-1/2 sm:-mr-[15rem] top-1/2 -translate-y-1/2 p-2 sm:p-3 bg-white/90 dark:bg-gray-800/90 hover:bg-white dark:hover:bg-gray-800 backdrop-blur-md border-2 border-black rounded-full shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:translate-x-[1px] hover:translate-y-[1px] hover:shadow-none transition-all z-[210] text-black dark:text-white"
+                  aria-label="Next"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="m9 18 6-6-6-6"/></svg>
+                </button>
+              </>
+            )}
+
+            {/* Swipeable Snap Container */}
+            <div 
+              id="payment-carousel"
+              className="flex overflow-x-auto snap-x snap-mandatory w-full py-8 px-[7.5vw] sm:px-[calc(50vw-12rem)] gap-4 sm:gap-6" 
+              style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+              onScroll={(e) => {
+                const container = e.currentTarget;
+                const containerCenter = container.scrollLeft + container.clientWidth / 2;
+                Array.from(container.children).forEach((card) => {
+                  const htmlCard = card as HTMLElement;
+                  const distance = Math.abs(containerCenter - (htmlCard.offsetLeft + htmlCard.clientWidth / 2));
+                  if (distance < htmlCard.clientWidth / 2) {
+                    htmlCard.style.transform = 'scale(1)'; htmlCard.style.opacity = '1';
+                  } else {
+                    htmlCard.style.transform = 'scale(0.9)'; htmlCard.style.opacity = '0.5';
+                  }
+                });
+              }}
+            >
+                   {showCreditPayModal && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/80 backdrop-blur-md animate-in fade-in">
+          
+          {/* Close Button floating top right */}
+          <button 
+            onClick={() => setShowCreditPayModal(null)} 
+            className="absolute top-6 right-6 p-2 bg-white/20 hover:bg-white/40 backdrop-blur-sm rounded-full text-white border-2 border-white/20 transition-colors z-[210]"
+          >
+            <X className="w-6 h-6"/>
+          </button>
+
+          <div className="w-full relative flex flex-col items-center">
+            
+            {/* 🟢 Floating Navigation Arrows */}
+            {showCreditPayModal.items.length > 1 && (
+              <>
+                <button 
+                  type="button"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    const container = document.getElementById('payment-carousel');
+                    if (container && container.firstElementChild) {
+                      const cardWidth = container.firstElementChild.clientWidth;
+                      const gap = window.innerWidth >= 640 ? 24 : 16;
+                      container.scrollTo({ left: container.scrollLeft - (cardWidth + gap), behavior: 'smooth' });
+                    }
+                  }}
+                  className="absolute left-2 sm:left-1/2 sm:-ml-[15rem] top-1/2 -translate-y-1/2 p-2 sm:p-3 bg-white/90 dark:bg-gray-800/90 hover:bg-white dark:hover:bg-gray-800 backdrop-blur-md border-2 border-black rounded-full shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:translate-x-[1px] hover:translate-y-[1px] hover:shadow-none transition-all z-[210] text-black dark:text-white"
+                  aria-label="Previous"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="m15 18-6-6 6-6"/></svg>
+                </button>
+                
+                <button 
+                  type="button"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    const container = document.getElementById('payment-carousel');
+                    if (container && container.firstElementChild) {
+                      const cardWidth = container.firstElementChild.clientWidth;
+                      const gap = window.innerWidth >= 640 ? 24 : 16;
+                      container.scrollTo({ left: container.scrollLeft + (cardWidth + gap), behavior: 'smooth' });
+                    }
+                  }}
+                  className="absolute right-2 sm:right-1/2 sm:-mr-[15rem] top-1/2 -translate-y-1/2 p-2 sm:p-3 bg-white/90 dark:bg-gray-800/90 hover:bg-white dark:hover:bg-gray-800 backdrop-blur-md border-2 border-black rounded-full shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:translate-x-[1px] hover:translate-y-[1px] hover:shadow-none transition-all z-[210] text-black dark:text-white"
+                  aria-label="Next"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="m9 18 6-6-6-6"/></svg>
+                </button>
+              </>
+            )}
+
+            {/* Swipeable Snap Container */}
+            <div 
+              id="payment-carousel"
+              className="flex overflow-x-auto snap-x snap-mandatory w-full py-8 px-[7.5vw] sm:px-[calc(50vw-12rem)] gap-4 sm:gap-6" 
+              style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+              onScroll={(e) => {
+                const container = e.currentTarget;
+                const containerCenter = container.scrollLeft + container.clientWidth / 2;
+                Array.from(container.children).forEach((card) => {
+                  const htmlCard = card as HTMLElement;
+                  const distance = Math.abs(containerCenter - (htmlCard.offsetLeft + htmlCard.clientWidth / 2));
+                  if (distance < htmlCard.clientWidth / 2) {
+                    htmlCard.style.transform = 'scale(1)'; htmlCard.style.opacity = '1';
+                  } else {
+                    htmlCard.style.transform = 'scale(0.9)'; htmlCard.style.opacity = '0.5';
+                  }
+                });
+              }}
+            >
+              {showCreditPayModal.items.map((item, index) => {
+                const isItemFronted = !!item.frontedInfo;
+
+                return (
                 <div 
                   key={item.id} 
                   className="w-[85vw] sm:w-[24rem] shrink-0 snap-center bg-white dark:bg-gray-900 rounded-[2rem] p-6 sm:p-8 border-4 border-black shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] relative flex flex-col transition-all duration-300 ease-out"
-                  style={{ 
-                    transform: index === 0 ? 'scale(1)' : 'scale(0.9)', // Init first card as large
-                    opacity: index === 0 ? 1 : 0.5                      // Init first card as opaque
-                  }}
+                  style={{ transform: index === 0 ? 'scale(1)' : 'scale(0.9)', opacity: index === 0 ? 1 : 0.5 }}
                 >
                   
-                  {/* Card Header */}
                   <div className="mb-6">
-                    <span className="text-[10px] font-black uppercase tracking-widest text-purple-600 bg-purple-100 border-2 border-black px-3 py-1 rounded-lg mb-3 inline-block shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]">
-                      {index + 1} of {showCreditPayModal.items.length}
-                    </span>
-                    <h2 className="text-xl font-black text-gray-900 dark:text-gray-100 leading-tight mb-1">{item.name}</h2>
-                    <p className="text-gray-500 dark:text-gray-400 text-xs font-bold uppercase tracking-widest">{showCreditPayModal.bank}</p>
+                    {isItemFronted ? (
+                      <span className="text-[10px] font-black uppercase tracking-widest text-blue-600 bg-blue-100 border-2 border-black px-3 py-1 rounded-lg mb-3 inline-block shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]">
+                        Reimburse
+                      </span>
+                    ) : (
+                      <span className="text-[10px] font-black uppercase tracking-widest text-purple-600 bg-purple-100 border-2 border-black px-3 py-1 rounded-lg mb-3 inline-block shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]">
+                        {index + 1} of {showCreditPayModal.items.length}
+                      </span>
+                    )}
+                    <h2 className="text-xl font-black text-gray-900 dark:text-gray-100 leading-tight mb-1">{isItemFronted ? 'Pay Back Savings' : item.name}</h2>
+                    <p className="text-gray-500 dark:text-gray-400 text-xs font-bold uppercase tracking-widest">{isItemFronted ? `For ${item.name} (${showCreditPayModal.bank})` : showCreditPayModal.bank}</p>
                   </div>
 
-                  <form 
-                    onSubmit={async (e) => {
-                      e.preventDefault();
-                      const form = e.currentTarget;
-                      const formData = new FormData(form);
-                      const amount = parseFloat(formData.get('amount') as string);
-                      const date = formData.get('date') as string;
-                      const sourceAccountId = formData.get('sourceAccountId') as string;
-                      const receiptFile = formData.get('receipt') as File;
-                      const submitBtn = form.querySelector('button[type="submit"]') as HTMLButtonElement;
+                  {isItemFronted ? (
+                    // 🟢 THE REIMBURSEMENT FORM
+                    <form 
+                      onSubmit={async (e) => {
+                        e.preventDefault();
+                        const form = e.currentTarget;
+                        const sourceAccountId = (form.elements.namedItem('sourceAccountId') as HTMLSelectElement).value;
+                        const submitBtn = form.querySelector('button[type="submit"]') as HTMLButtonElement;
 
-                      try {
-                        submitBtn.disabled = true;
-                        submitBtn.textContent = 'Processing...';
+                        try {
+                          submitBtn.disabled = true;
+                          submitBtn.textContent = 'Transferring...';
 
-                        // 🟢 FIX: Fetch the schedule ID FIRST so we can stamp it on the transactions!
-                        let targetScheduleId: string | null = null;
-                        if (item.type === 'installment') {
-                          const schedule = getPaymentSchedule('installment', item.id, selectedMonth, selectedYear);
-                          if (schedule) targetScheduleId = schedule.id;
-                        }
+                          await createTransfer(sourceAccountId, item.frontedInfo.accountId, item.amount, combineDateWithCurrentTime(getTodayIso()), 0);
 
-                        // 1. Debit out of checking
-                        const { data: debitTx, error: debitError } = await createTransaction({
-                          name: `${showCreditPayModal.bank} Payment - ${item.name}`,
-                          amount: Math.abs(amount),
-                          date: combineDateWithCurrentTime(date),
-                          payment_method_id: sourceAccountId,
-                          transaction_type: 'payment',
-                          payment_schedule_id: targetScheduleId, // 🟢 Links to the Installments Page!
-                          notes: `Budget Timing: ${selectedTiming}`
-                        } as any);
-
-                        if (debitError) throw debitError;
-
-                        // 2. Pay into credit card
-                        const { data: creditTx, error: creditError } = await createTransaction({
-                          name: `${showCreditPayModal.bank} Payment - ${item.name}`,
-                          amount: -Math.abs(amount),
-                          date: combineDateWithCurrentTime(date),
-                          payment_method_id: showCreditPayModal.accountId,
-                          transaction_type: 'credit_payment',
-                          related_transaction_id: debitTx?.id,
-                          // 🟢 FIX: Removed payment_schedule_id so it doesn't double-log in the modal
-                          notes: `Budget Timing: ${selectedTiming}`
-                        } as any);
-                        
-
-                        if (creditError) {
-                          await recordCreditPayment(showCreditPayModal.accountId, amount, `${showCreditPayModal.bank} Payment - ${item.name}`, date);
-                        }
-
-                        // 3. Upload Receipt (Optional)
-                        if (receiptFile && receiptFile.size > 0 && debitTx?.id) {
-                          const { path } = await uploadTransactionReceipt(debitTx.id, receiptFile);
-                          if (path) {
-                            await updateTransaction(debitTx.id, { receipt_url: path });
-                            if (creditTx?.id) await updateTransaction(creditTx.id, { receipt_url: path });
-                          }
-                        }
-                        
-                        // 4. SYNC THE INSTALLMENT SCHEDULE
-                        if (item.type === 'installment' && targetScheduleId) {
-                          try {
-                            await recordPaymentViaTransaction(targetScheduleId, {
-                              transactionName: debitTx?.name || `${showCreditPayModal.bank} Payment - ${item.name}`,
-                              amountPaid: Math.abs(amount),
-                              datePaid: date,
-                              accountId: sourceAccountId,
-                              expectedAmount: Math.abs(amount)
-                            });
-                          } catch (schedErr) {
-                            console.error("Failed to sync schedule:", schedErr);
+                          if (item.frontedInfo.txId) {
+                            await updateTransaction(item.frontedInfo.txId, { notes: `Budget Timing: ${selectedTiming}` });
                           }
 
-                          // Update the master installment progress bar
-                          const targetInstallment = installments?.find(i => i.id === item.id);
-                          if (targetInstallment && onUpdateInstallment) {
-                            await onUpdateInstallment({
-                              ...targetInstallment,
-                              paidAmount: (targetInstallment.paidAmount || 0) + Math.abs(amount)
-                            });
-                          }
+                          await reloadTransactions();
+                          await reloadPaymentSchedules(); 
+                          if (onTransactionCreated) onTransactionCreated();
+                          
+                          submitBtn.className = "w-full bg-gray-200 text-gray-500 border-2 border-black py-4 rounded-xl font-black text-sm uppercase tracking-wider transition-all";
+                          submitBtn.textContent = 'Reimbursed! ✓';
+                          setTimeout(() => setShowCreditPayModal(null), 1000);
+                        } catch (err: any) {
+                          alert(`Reimbursement failed: ${err.message || 'Server error.'}`);
+                          submitBtn.disabled = false; submitBtn.textContent = 'Reimburse Savings';
                         }
-                        
-                        await reloadTransactions();
-                        await reloadPaymentSchedules(); 
-                        if (onTransactionCreated) onTransactionCreated();
-                        
-                        // Change button to success state!
-                        submitBtn.className = "w-full bg-gray-200 text-gray-500 border-2 border-black py-4 rounded-xl font-black text-sm uppercase tracking-wider transition-all";
-                        submitBtn.textContent = 'Paid! ✓';
-
-                        setTimeout(() => setShowCreditPayModal(null), 1000);
-                        
-                      } catch (err: any) {
-                        console.error("Payment Error:", err);
-                        alert(`Payment failed: ${err.message || 'Server rejected the transaction.'}`);
-                        submitBtn.disabled = false;
-                        submitBtn.textContent = 'Submit Payment';
-                      }
-
-                    }}
-                    className="space-y-4 mt-auto"
-                  >
-                    <div>
-                      <label className="block text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">Amount</label>
-                      <div className="relative">
-                        <span className="absolute left-3 top-1/2 -translate-y-1/2 font-bold text-gray-400">₱</span>
-                        <input required name="amount" type="number" step="0.01" defaultValue={item.amount.toFixed(2)} className="w-full bg-gray-50 dark:bg-gray-800 border-2 border-black rounded-xl p-3 pl-8 outline-none text-lg font-black dark:text-gray-100" />
+                      }}
+                      className="space-y-4 mt-auto"
+                    >
+                      <div className="bg-blue-50 border-2 border-blue-400 p-3 rounded-xl shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]">
+                         <p className="text-xs font-medium text-blue-900 leading-relaxed">Transfer <strong>₱{Number(item.amount || 0).toLocaleString(undefined, {minimumFractionDigits: 2})}</strong> back to the account you borrowed from.</p>
                       </div>
-                    </div>
-                    
-                    <div className="grid grid-cols-2 gap-3">
                       <div>
-                        <label className="block text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">Source Account</label>
-                        <select required name="sourceAccountId" defaultValue={accounts.find(a => a.type === 'Debit')?.id || ''} className="w-full bg-gray-50 dark:bg-gray-800 border-2 border-black rounded-xl px-2.5 py-3 outline-none font-bold text-xs dark:text-gray-100">
-                          {accounts.filter(a => a.type === 'Debit').map(acc => (
-                            <option key={acc.id} value={acc.id}>{acc.bank}</option>
-                          ))}
+                        <label className="block text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">Reimburse From</label>
+                        <select required name="sourceAccountId" defaultValue={accounts.find(a => a.type === 'Debit' && a.id !== item.frontedInfo.accountId)?.id || ''} className="w-full bg-gray-50 border-2 border-black rounded-xl px-2.5 py-3 outline-none font-bold text-xs">
+                          {accounts.filter(a => a.type === 'Debit' && a.id !== item.frontedInfo.accountId).map(acc => <option key={acc.id} value={acc.id}>{acc.bank}</option>)}
                         </select>
                       </div>
+                      <div className="pt-2">
+                        <button type="submit" className="w-full bg-blue-600 text-white border-2 border-black py-4 rounded-xl font-black text-sm uppercase tracking-wider shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none transition-all">Reimburse Savings</button>
+                      </div>
+                    </form>
+                  ) : (
+                    // ⚪ THE STANDARD PAYMENT FORM
+                    <form 
+                      onSubmit={async (e) => {
+                        e.preventDefault();
+                        const form = e.currentTarget;
+                        const formData = new FormData(form);
+                        const amount = parseFloat(formData.get('amount') as string);
+                        const date = formData.get('date') as string;
+                        const sourceAccountId = formData.get('sourceAccountId') as string;
+                        const receiptFile = formData.get('receipt') as File;
+                        const isFronted = formData.get('isFronted') === 'on';
+                        const submitBtn = form.querySelector('button[type="submit"]') as HTMLButtonElement;
+
+                        try {
+                          submitBtn.disabled = true; submitBtn.textContent = 'Processing...';
+
+                          let targetScheduleId: string | null = null;
+                          if (item.type === 'installment') {
+                            const schedule = getPaymentSchedule('installment', item.id, selectedMonth, selectedYear);
+                            if (schedule) targetScheduleId = schedule.id;
+                          }
+
+                          const notesTag = isFronted ? `FRONTED_FROM_SAVINGS|${sourceAccountId}` : `Budget Timing: ${selectedTiming}`;
+
+                          const { data: debitTx, error: debitError } = await createTransaction({
+                            name: `${showCreditPayModal.bank} Payment - ${item.name}`, amount: Math.abs(amount), date: combineDateWithCurrentTime(date),
+                            payment_method_id: sourceAccountId, transaction_type: 'payment', payment_schedule_id: targetScheduleId, notes: notesTag
+                          } as any);
+
+                          if (debitError) throw debitError;
+
+                          const { data: creditTx, error: creditError } = await createTransaction({
+                            name: `${showCreditPayModal.bank} Payment - ${item.name}`, amount: -Math.abs(amount), date: combineDateWithCurrentTime(date),
+                            payment_method_id: showCreditPayModal.accountId, transaction_type: 'credit_payment', related_transaction_id: debitTx?.id, notes: `Budget Timing: ${selectedTiming}`
+                          } as any);
+                          
+                          if (creditError) await recordCreditPayment(showCreditPayModal.accountId, amount, `${showCreditPayModal.bank} Payment - ${item.name}`, date);
+
+                          if (receiptFile && receiptFile.size > 0 && debitTx?.id) {
+                            const { path } = await uploadTransactionReceipt(debitTx.id, receiptFile);
+                            if (path) {
+                              await updateTransaction(debitTx.id, { receipt_url: path });
+                              if (creditTx?.id) await updateTransaction(creditTx.id, { receipt_url: path });
+                            }
+                          }
+                          
+                          if (item.type === 'installment' && targetScheduleId) {
+                            try {
+                              await recordPaymentViaTransaction(targetScheduleId, {
+                                transactionName: debitTx?.name || `${showCreditPayModal.bank} Payment - ${item.name}`, amountPaid: Math.abs(amount), datePaid: date, accountId: sourceAccountId, expectedAmount: Math.abs(amount)
+                              });
+                            } catch (schedErr) {}
+
+                            const targetInstallment = installments?.find(i => i.id === item.id);
+                            if (targetInstallment && onUpdateInstallment) await onUpdateInstallment({ ...targetInstallment, paidAmount: (targetInstallment.paidAmount || 0) + Math.abs(amount) });
+                          }
+                          
+                          await reloadTransactions();
+                          await reloadPaymentSchedules(); 
+                          if (onTransactionCreated) onTransactionCreated();
+                          
+                          submitBtn.className = "w-full bg-gray-200 text-gray-500 border-2 border-black py-4 rounded-xl font-black text-sm uppercase tracking-wider transition-all";
+                          submitBtn.textContent = 'Paid! ✓';
+                          setTimeout(() => setShowCreditPayModal(null), 1000);
+                        } catch (err: any) {
+                          alert(`Payment failed: ${err.message || 'Server rejected the transaction.'}`);
+                          submitBtn.disabled = false; submitBtn.textContent = 'Submit Payment';
+                        }
+                      }}
+                      className="space-y-4 mt-auto"
+                    >
+                      {/* 🟢 FRONTING TOGGLE */}
+                      <div className="bg-blue-50 dark:bg-blue-900/20 border-2 border-blue-400 p-3 rounded-xl flex items-start gap-3 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] transition-colors mb-2">
+                         <input type="checkbox" name="isFronted" id={`isFronted-${item.id}`} className="mt-1 w-4 h-4 rounded border-black accent-blue-600 cursor-pointer" />
+                         <div>
+                            <label htmlFor={`isFronted-${item.id}`} className="text-xs font-black text-blue-900 dark:text-blue-300 cursor-pointer block">Borrow from Savings</label>
+                            <p className="text-[10px] text-blue-700 dark:text-blue-400 leading-tight mt-0.5">Pay this card now, but keep it on your timeline to remind you to reimburse yourself.</p>
+                         </div>
+                      </div>
 
                       <div>
-                        <label className="block text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">Date</label>
-                        <input required name="date" type="date" defaultValue={getTodayIso()} className="w-full bg-gray-50 dark:bg-gray-800 border-2 border-black rounded-xl px-2.5 py-3 outline-none font-bold text-xs dark:text-gray-100" />
-                      </div>
-                    </div>
-
-                    <div>
-                      <label className="block text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">Receipt (Optional)</label>
-                      <div className="relative">
-                        <input name="receipt" type="file" accept="image/*" className="absolute inset-0 opacity-0 cursor-pointer" onChange={(e) => {
-                          const fileName = e.target.files?.[0]?.name || 'Upload receipt';
-                          e.target.nextElementSibling!.querySelector('span')!.textContent = fileName;
-                        }}/>
-                        <div className="w-full bg-white dark:bg-gray-800 border-2 border-dashed border-black rounded-xl p-3 text-center text-xs text-gray-500 flex items-center justify-center gap-2">
-                          <Upload className="w-4 h-4 text-indigo-400" />
-                          <span className="font-bold truncate">Upload receipt</span>
+                        <label className="block text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">Amount</label>
+                        <div className="relative">
+                          <span className="absolute left-3 top-1/2 -translate-y-1/2 font-bold text-gray-400">₱</span>
+                          <input required name="amount" type="number" step="0.01" defaultValue={item.amount.toFixed(2)} className="w-full bg-gray-50 dark:bg-gray-800 border-2 border-black rounded-xl p-3 pl-8 outline-none text-lg font-black dark:text-gray-100" />
                         </div>
                       </div>
-                    </div>
+                      
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <label className="block text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">Source Account</label>
+                          <select required name="sourceAccountId" defaultValue={accounts.find(a => a.type === 'Debit')?.id || ''} className="w-full bg-gray-50 dark:bg-gray-800 border-2 border-black rounded-xl px-2.5 py-3 outline-none font-bold text-xs dark:text-gray-100">
+                            {accounts.filter(a => a.type === 'Debit').map(acc => <option key={acc.id} value={acc.id}>{acc.bank}</option>)}
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">Date</label>
+                          <input required name="date" type="date" defaultValue={getTodayIso()} className="w-full bg-gray-50 dark:bg-gray-800 border-2 border-black rounded-xl px-2.5 py-3 outline-none font-bold text-xs dark:text-gray-100" />
+                        </div>
+                      </div>
 
-                    <div className="pt-2">
-                      <button type="submit" className="w-full bg-green-500 text-white border-2 border-black py-4 rounded-xl font-black text-sm uppercase tracking-wider shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[2px] hover:translate-y-[2px] transition-all">
-                        Submit Payment
-                      </button>
-                    </div>
-                  </form>
+                      <div>
+                        <label className="block text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">Receipt (Optional)</label>
+                        <div className="relative">
+                          <input name="receipt" type="file" accept="image/*" className="absolute inset-0 opacity-0 cursor-pointer" onChange={(e) => {
+                            const fileName = e.target.files?.[0]?.name || 'Upload receipt';
+                            e.target.nextElementSibling!.querySelector('span')!.textContent = fileName;
+                          }}/>
+                          <div className="w-full bg-white dark:bg-gray-800 border-2 border-dashed border-black rounded-xl p-3 text-center text-xs text-gray-500 flex items-center justify-center gap-2">
+                            <Upload className="w-4 h-4 text-indigo-400" />
+                            <span className="font-bold truncate">Upload receipt</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="pt-2">
+                        <button type="submit" className="w-full bg-green-500 text-white border-2 border-black py-4 rounded-xl font-black text-sm uppercase tracking-wider shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[2px] hover:translate-y-[2px] transition-all">Submit Payment</button>
+                      </div>
+                    </form>
+                  )}
                 </div>
-              ))}
+                );
+              })}
             </div>
 
             {/* Swipe Indicators */}
@@ -5783,6 +6023,8 @@ const totalSpend = grandTotal;
           </div>
         </div>
       )}
+
+
 
 
       {/* ========================================= */}
