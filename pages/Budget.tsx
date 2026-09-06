@@ -3410,30 +3410,17 @@ const getFrozenCycleAmount = (account: Account): number => {
         });
 
         amount = baseAmount + linkedInsts.reduce((s, i) => s + (Number(i.monthlyAmount) || Number(i.amount) || 0), 0);
-         // 🟢 APPLY CREDIT MATH
-         rawDue = getCreditDueDay(acc);
-        }
+        // 🟢 APPLY CREDIT MATH
+        rawDue = getCreditDueDay(acc);
+     }
 
-        // 🟢 BUBBLE UP: Check if ANY sub-item was fronted from savings
-        const frontedSubItem = subItems.find(sub => !!sub.frontedInfo);
-        if (frontedSubItem) {
-           isPaid = false; // Force the main card to stay in the 'Upcoming' section
-        }
-  
-        timeline.push({ 
-          id: acc.id, 
-          name: acc.bank, 
-          amount, 
-          type: 'credit', 
-          dueDate: getSafeDay(rawDue), 
-          displayDueDate: getDisplayDate(rawDue), 
-          isPaid, 
-          isIncluded: !excludedCreditIds.has(exclusionKey), 
-          subItems, 
-          rawItem: acc,
-          frontedInfo: frontedSubItem?.frontedInfo // 🟢 Inject state so the main card turns blue!
-        });
-      });
+     // 🟢 BUBBLE UP: Check if ANY sub-item was fronted from savings
+     const frontedSubItem = subItems.find(sub => !!sub.frontedInfo);
+     if (frontedSubItem) isPaid = false; 
+
+     timeline.push({ id: acc.id, name: acc.bank, amount, type: 'credit', dueDate: getSafeDay(rawDue), displayDueDate: getDisplayDate(rawDue), isPaid, isIncluded: !excludedCreditIds.has(exclusionKey), subItems, rawItem: acc, frontedInfo: frontedSubItem?.frontedInfo });
+   });
+
   
 
     const orphanedInst = (installments || []).filter(inst => {
@@ -5598,9 +5585,11 @@ const totalSpend = grandTotal;
           </button>
 
           <div className="w-full relative flex flex-col items-center">
+            
+            {/* 🟢 NEW: Floating Navigation Arrows */}
             {showCreditPayModal.items.length > 1 && (
               <>
-                <button
+                <button 
                   type="button"
                   onClick={(e) => {
                     e.preventDefault();
@@ -5638,7 +5627,8 @@ const totalSpend = grandTotal;
               </>
             )}
 
-            <div
+            {/* Swipeable Snap Container with Spotlight Scroll Event */}
+            <div 
               id="payment-carousel"
               className="flex overflow-x-auto snap-x snap-mandatory w-full py-8 px-[7.5vw] sm:px-[calc(50vw-12rem)] gap-4 sm:gap-6"
               style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
@@ -5665,38 +5655,50 @@ const totalSpend = grandTotal;
                 const isItemFronted = !!item.frontedInfo;
 
                 return (
-                  <div
-                    key={item.id}
-                    className="w-[85vw] sm:w-[24rem] shrink-0 snap-center bg-white dark:bg-gray-900 rounded-[2rem] p-6 sm:p-8 border-4 border-black shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] relative flex flex-col transition-all duration-300 ease-out"
-                    style={{ transform: index === 0 ? 'scale(1)' : 'scale(0.9)', opacity: index === 0 ? 1 : 0.5 }}
-                  >
-                    <div className="mb-6">
-                      {isItemFronted ? (
-                        <span className="text-[10px] font-black uppercase tracking-widest text-blue-600 bg-blue-100 border-2 border-black px-3 py-1 rounded-lg mb-3 inline-block shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]">
-                          Reimburse
-                        </span>
-                      ) : (
-                        <span className="text-[10px] font-black uppercase tracking-widest text-purple-600 bg-purple-100 border-2 border-black px-3 py-1 rounded-lg mb-3 inline-block shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]">
-                          {index + 1} of {showCreditPayModal.items.length}
-                        </span>
-                      )}
-                      <h2 className="text-xl font-black text-gray-900 dark:text-gray-100 leading-tight mb-1">{isItemFronted ? 'Pay Back Savings' : item.name}</h2>
-                      <p className="text-gray-500 dark:text-gray-400 text-xs font-bold uppercase tracking-widest">{isItemFronted ? `For ${item.name} (${showCreditPayModal.bank})` : showCreditPayModal.bank}</p>
-                    </div>
-
+                <div 
+                  key={item.id} 
+                  className="w-[85vw] sm:w-[24rem] shrink-0 snap-center bg-white dark:bg-gray-900 rounded-[2rem] p-6 sm:p-8 border-4 border-black shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] relative flex flex-col transition-all duration-300 ease-out"
+                  style={{ 
+                    transform: index === 0 ? 'scale(1)' : 'scale(0.9)', 
+                    opacity: index === 0 ? 1 : 0.5                      
+                  }}
+                >
+                  
+                  {/* Card Header */}
+                  <div className="mb-6">
                     {isItemFronted ? (
-                      <form
-                        onSubmit={async (e) => {
-                          e.preventDefault();
-                          const form = e.currentTarget;
-                          const sourceAccountId = (form.elements.namedItem('sourceAccountId') as HTMLSelectElement).value;
-                          const submitBtn = form.querySelector('button[type="submit"]') as HTMLButtonElement;
+                      <span className="text-[10px] font-black uppercase tracking-widest text-blue-600 bg-blue-100 border-2 border-black px-3 py-1 rounded-lg mb-3 inline-block shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]">
+                        Reimburse
+                      </span>
+                    ) : (
+                      <span className="text-[10px] font-black uppercase tracking-widest text-purple-600 bg-purple-100 border-2 border-black px-3 py-1 rounded-lg mb-3 inline-block shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]">
+                        {index + 1} of {showCreditPayModal.items.length}
+                      </span>
+                    )}
+                    <h2 className="text-xl font-black text-gray-900 dark:text-gray-100 leading-tight mb-1">{isItemFronted ? 'Pay Back Savings' : item.name}</h2>
+                    <p className="text-gray-500 dark:text-gray-400 text-xs font-bold uppercase tracking-widest">{isItemFronted ? `For ${item.name} (${showCreditPayModal.bank})` : showCreditPayModal.bank}</p>
+                  </div>
+
+                  {isItemFronted ? (
+                    // 🟢 REIMBURSEMENT FORM
+                    <form 
+                      onSubmit={async (e) => {
+                        e.preventDefault();
+                        const form = e.currentTarget;
+                        const sourceAccountId = (form.elements.namedItem('sourceAccountId') as HTMLSelectElement).value;
+                        const submitBtn = form.querySelector('button[type="submit"]') as HTMLButtonElement;
 
                           try {
                             submitBtn.disabled = true;
                             submitBtn.textContent = 'Transferring...';
 
-                            await createTransfer(sourceAccountId, item.frontedInfo.accountId, item.amount, combineDateWithCurrentTime(getTodayIso()), 0);
+                          await createTransfer(
+                            sourceAccountId,
+                            item.frontedInfo.accountId,
+                            item.amount,
+                            combineDateWithCurrentTime(getTodayIso()),
+                            0
+                          );
 
                             if (item.frontedInfo.txId) {
                               await updateTransaction(item.frontedInfo.txId, { notes: `Budget Timing: ${selectedTiming}` });
@@ -5745,6 +5747,7 @@ const totalSpend = grandTotal;
 
                           try {
                             submitBtn.disabled = true;
+                         
                             submitBtn.textContent = 'Processing...';
 
                             let targetScheduleId: string | null = null;
@@ -5757,27 +5760,39 @@ const totalSpend = grandTotal;
 
                             const { data: debitTx, error: debitError } = await createTransaction({
                               name: `${showCreditPayModal.bank} Payment - ${item.name}`,
+                           
                               amount: Math.abs(amount),
+                           
                               date: combineDateWithCurrentTime(date),
                               payment_method_id: sourceAccountId,
+                           
                               transaction_type: 'payment',
-                              payment_schedule_id: targetScheduleId,
-                              notes: notesTag
+                           
+                              payment_schedule_id: targetScheduleId, 
+                           
+                              notes: notesTag 
                             } as any);
 
                             if (debitError) throw debitError;
 
                             const { data: creditTx, error: creditError } = await createTransaction({
                               name: `${showCreditPayModal.bank} Payment - ${item.name}`,
+                           
                               amount: -Math.abs(amount),
+                           
                               date: combineDateWithCurrentTime(date),
                               payment_method_id: showCreditPayModal.accountId,
+                           
                               transaction_type: 'credit_payment',
+                           
                               related_transaction_id: debitTx?.id,
+                           
                               notes: `Budget Timing: ${selectedTiming}`
                             } as any);
 
-                            if (creditError) await recordCreditPayment(showCreditPayModal.accountId, amount, `${showCreditPayModal.bank} Payment - ${item.name}`, date);
+                            if (creditError) {
+                            await recordCreditPayment(showCreditPayModal.accountId, amount, `${showCreditPayModal.bank} Payment - ${item.name}`, date);
+                          }
 
                             if (receiptFile && receiptFile.size > 0 && debitTx?.id) {
                               const { path } = await uploadTransactionReceipt(debitTx.id, receiptFile);
@@ -5791,60 +5806,74 @@ const totalSpend = grandTotal;
                               try {
                                 await recordPaymentViaTransaction(targetScheduleId, {
                                   transactionName: debitTx?.name || `${showCreditPayModal.bank} Payment - ${item.name}`,
+                               
                                   amountPaid: Math.abs(amount),
+                               
                                   datePaid: date,
+                               
                                   accountId: sourceAccountId,
+                               
                                   expectedAmount: Math.abs(amount)
                                 });
                               } catch (schedErr) {}
 
-                              const targetInstallment = installments?.find(i => i.id === item.id);
-                              if (targetInstallment && onUpdateInstallment) await onUpdateInstallment({ ...targetInstallment, paidAmount: (targetInstallment.paidAmount || 0) + Math.abs(amount) });
+                            const targetInstallment = installments?.find(i => i.id === item.id);
+                            if (targetInstallment && onUpdateInstallment) {
+                              await onUpdateInstallment({
+                                ...targetInstallment,
+                                paidAmount: (targetInstallment.paidAmount || 0) + Math.abs(amount)
+                              });
                             }
-
-                            await reloadTransactions();
-                            await reloadPaymentSchedules();
-                            if (onTransactionCreated) onTransactionCreated();
-
-                            submitBtn.className = 'w-full bg-gray-200 text-gray-500 border-2 border-black py-4 rounded-xl font-black text-sm uppercase tracking-wider transition-all';
-                            submitBtn.textContent = 'Paid! ✓';
-                            setTimeout(() => setShowCreditPayModal(null), 1000);
-                          } catch (err: any) {
-                            alert(`Payment failed: ${err.message || 'Server rejected the transaction.'}`);
-                            submitBtn.disabled = false;
-                            submitBtn.textContent = 'Submit Payment';
                           }
-                        }}
-                        className="space-y-4 mt-auto"
-                      >
-                        <div className="bg-blue-50 dark:bg-blue-900/20 border-2 border-blue-400 p-3 rounded-xl flex items-start gap-3 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] transition-colors mb-2">
-                          <input type="checkbox" name="isFronted" id={`isFronted-${item.id}`} className="mt-1 w-4 h-4 rounded border-black accent-blue-600 cursor-pointer" />
-                          <div>
+                          
+                          await reloadTransactions();
+                          await reloadPaymentSchedules(); 
+                          if (onTransactionCreated) onTransactionCreated();
+                          
+                          submitBtn.className = "w-full bg-gray-200 text-gray-500 border-2 border-black py-4 rounded-xl font-black text-sm uppercase tracking-wider transition-all";
+                          submitBtn.textContent = 'Paid! ✓';
+
+                          setTimeout(() => setShowCreditPayModal(null), 1000);
+                          
+                        } catch (err: any) {
+                          alert(`Payment failed: ${err.message || 'Server rejected the transaction.'}`);
+                          submitBtn.disabled = false;
+                          submitBtn.textContent = 'Submit Payment';
+                        }
+                      }}
+                      className="space-y-4 mt-auto"
+                    >
+                      <div className="bg-blue-50 dark:bg-blue-900/20 border-2 border-blue-400 p-3 rounded-xl flex items-start gap-3 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] transition-colors mb-2">
+                         <input type="checkbox" name="isFronted" id={`isFronted-${item.id}`} className="mt-1 w-4 h-4 rounded border-black accent-blue-600 cursor-pointer" />
+                         <div>
                             <label htmlFor={`isFronted-${item.id}`} className="text-xs font-black text-blue-900 dark:text-blue-300 cursor-pointer block">Borrow from Savings</label>
                             <p className="text-[10px] text-blue-700 dark:text-blue-400 leading-tight mt-0.5">Pay this card now, but keep it on your timeline to remind you to reimburse yourself.</p>
                           </div>
                         </div>
 
+                      <div>
+                        <label className="block text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">Amount</label>
+                        <div className="relative">
+                          <span className="absolute left-3 top-1/2 -translate-y-1/2 font-bold text-gray-400">₱</span>
+                          <input required name="amount" type="number" step="0.01" defaultValue={item.amount.toFixed(2)} className="w-full bg-gray-50 dark:bg-gray-800 border-2 border-black rounded-xl p-3 pl-8 outline-none text-lg font-black dark:text-gray-100" />
+                        </div>
+                      </div>
+                      
+                      <div className="grid grid-cols-2 gap-3">
                         <div>
-                          <label className="block text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">Amount</label>
-                          <div className="relative">
-                            <span className="absolute left-3 top-1/2 -translate-y-1/2 font-bold text-gray-400">₱</span>
-                            <input required name="amount" type="number" step="0.01" defaultValue={item.amount.toFixed(2)} className="w-full bg-gray-50 dark:bg-gray-800 border-2 border-black rounded-xl p-3 pl-8 outline-none text-lg font-black dark:text-gray-100" />
-                          </div>
+                          <label className="block text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">Source Account</label>
+                          <select required name="sourceAccountId" defaultValue={accounts.find(a => a.type === 'Debit')?.id || ''} className="w-full bg-gray-50 dark:bg-gray-800 border-2 border-black rounded-xl px-2.5 py-3 outline-none font-bold text-xs dark:text-gray-100">
+                            {accounts.filter(a => a.type === 'Debit').map(acc => (
+                              <option key={acc.id} value={acc.id}>{acc.bank}</option>
+                            ))}
+                          </select>
                         </div>
 
-                        <div className="grid grid-cols-2 gap-3">
-                          <div>
-                            <label className="block text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">Source Account</label>
-                            <select required name="sourceAccountId" defaultValue={accounts.find(a => a.type === 'Debit')?.id || ''} className="w-full bg-gray-50 dark:bg-gray-800 border-2 border-black rounded-xl px-2.5 py-3 outline-none font-bold text-xs dark:text-gray-100">
-                              {accounts.filter(a => a.type === 'Debit').map(acc => <option key={acc.id} value={acc.id}>{acc.bank}</option>)}
-                            </select>
-                          </div>
-                          <div>
-                            <label className="block text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">Date</label>
-                            <input required name="date" type="date" defaultValue={getTodayIso()} className="w-full bg-gray-50 dark:bg-gray-800 border-2 border-black rounded-xl px-2.5 py-3 outline-none font-bold text-xs dark:text-gray-100" />
-                          </div>
+                        <div>
+                          <label className="block text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">Date</label>
+                          <input required name="date" type="date" defaultValue={getTodayIso()} className="w-full bg-gray-50 dark:bg-gray-800 border-2 border-black rounded-xl px-2.5 py-3 outline-none font-bold text-xs dark:text-gray-100" />
                         </div>
+                      </div>
 
                         <div>
                           <label className="block text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">Receipt (Optional)</label>
@@ -5861,7 +5890,9 @@ const totalSpend = grandTotal;
                         </div>
 
                         <div className="pt-2">
-                          <button type="submit" className="w-full bg-green-500 text-white border-2 border-black py-4 rounded-xl font-black text-sm uppercase tracking-wider shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[2px] hover:translate-y-[2px] transition-all">Submit Payment</button>
+                          <button type="submit" className="w-full bg-green-500 text-white border-2 border-black py-4 rounded-xl font-black text-sm uppercase tracking-wider shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[2px] hover:translate-y-[2px] transition-all">
+                          Submit Payment
+                        </button>
                         </div>
                       </form>
                     )}
@@ -5878,6 +5909,9 @@ const totalSpend = grandTotal;
           </div>
         </div>
       )}
+
+
+
 
       {/* ========================================= */}
       {/* 🟢 BUDEE 2-STEP COLLECT CAROUSEL          */}
