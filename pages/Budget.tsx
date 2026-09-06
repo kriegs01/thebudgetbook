@@ -3410,30 +3410,17 @@ const getFrozenCycleAmount = (account: Account): number => {
         });
 
         amount = baseAmount + linkedInsts.reduce((s, i) => s + (Number(i.monthlyAmount) || Number(i.amount) || 0), 0);
-         // 🟢 APPLY CREDIT MATH
-         rawDue = getCreditDueDay(acc);
-        }
+        // 🟢 APPLY CREDIT MATH
+        rawDue = getCreditDueDay(acc);
+     }
 
-        // 🟢 BUBBLE UP: Check if ANY sub-item was fronted from savings
-        const frontedSubItem = subItems.find(sub => !!sub.frontedInfo);
-        if (frontedSubItem) {
-           isPaid = false; // Force the main card to stay in the 'Upcoming' section
-        }
-  
-        timeline.push({ 
-          id: acc.id, 
-          name: acc.bank, 
-          amount, 
-          type: 'credit', 
-          dueDate: getSafeDay(rawDue), 
-          displayDueDate: getDisplayDate(rawDue), 
-          isPaid, 
-          isIncluded: !excludedCreditIds.has(exclusionKey), 
-          subItems, 
-          rawItem: acc,
-          frontedInfo: frontedSubItem?.frontedInfo // 🟢 Inject state so the main card turns blue!
-        });
-      });
+     // 🟢 BUBBLE UP: Check if ANY sub-item was fronted from savings
+     const frontedSubItem = subItems.find(sub => !!sub.frontedInfo);
+     if (frontedSubItem) isPaid = false; 
+
+     timeline.push({ id: acc.id, name: acc.bank, amount, type: 'credit', dueDate: getSafeDay(rawDue), displayDueDate: getDisplayDate(rawDue), isPaid, isIncluded: !excludedCreditIds.has(exclusionKey), subItems, rawItem: acc, frontedInfo: frontedSubItem?.frontedInfo });
+   });
+
   
 
     const orphanedInst = (installments || []).filter(inst => {
@@ -5601,10 +5588,10 @@ const totalSpend = grandTotal;
 
           <div className="w-full relative flex flex-col items-center">
             
-                        {/* 🟢 NEW: Floating Navigation Arrows */}
-                        {showCreditPayModal.items.length > 1 && (
+            {/* 🟢 NEW: Floating Navigation Arrows */}
+            {showCreditPayModal.items.length > 1 && (
               <>
-                                <button 
+                <button 
                   type="button"
                   onClick={(e) => {
                     e.preventDefault();
@@ -5613,7 +5600,6 @@ const totalSpend = grandTotal;
                     if (container && container.firstElementChild) {
                       const cardWidth = container.firstElementChild.clientWidth;
                       const gap = window.innerWidth >= 640 ? 24 : 16;
-                      // Use an absolute scrollTo instead of scrollBy to override browser snap panic
                       container.scrollTo({ left: container.scrollLeft - (cardWidth + gap), behavior: 'smooth' });
                     }
                   }}
@@ -5640,10 +5626,8 @@ const totalSpend = grandTotal;
                 >
                   <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="m9 18 6-6-6-6"/></svg>
                 </button>
-
               </>
             )}
-
 
             {/* Swipeable Snap Container with Spotlight Scroll Event */}
             <div 
@@ -5659,160 +5643,12 @@ const totalSpend = grandTotal;
                   const cardCenter = htmlCard.offsetLeft + htmlCard.clientWidth / 2;
                   const distance = Math.abs(containerCenter - cardCenter);
                   
-                  // If the card is in the center spotlight, enlarge it and make it opaque
                   if (distance < htmlCard.clientWidth / 2) {
                     htmlCard.style.transform = 'scale(1)';
                     htmlCard.style.opacity = '1';
                   } else {
-                    // If it is pushed to the side, shrink it and fade it slightly
                     htmlCard.style.transform = 'scale(0.9)';
                     htmlCard.style.opacity = '0.5';
-                  }
-                });
-              }}
-            >
-                                      {showCreditPayModal && (
-        <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/80 backdrop-blur-md animate-in fade-in">
-          
-          {/* Close Button floating top right */}
-          <button 
-            onClick={() => setShowCreditPayModal(null)} 
-            className="absolute top-6 right-6 p-2 bg-white/20 hover:bg-white/40 backdrop-blur-sm rounded-full text-white border-2 border-white/20 transition-colors z-[210]"
-          >
-            <X className="w-6 h-6"/>
-          </button>
-
-          <div className="w-full relative flex flex-col items-center">
-            
-            {/* 🟢 Floating Navigation Arrows */}
-            {showCreditPayModal.items.length > 1 && (
-              <>
-                <button 
-                  type="button"
-                  onClick={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    const container = document.getElementById('payment-carousel');
-                    if (container && container.firstElementChild) {
-                      const cardWidth = container.firstElementChild.clientWidth;
-                      const gap = window.innerWidth >= 640 ? 24 : 16;
-                      container.scrollTo({ left: container.scrollLeft - (cardWidth + gap), behavior: 'smooth' });
-                    }
-                  }}
-                  className="absolute left-2 sm:left-1/2 sm:-ml-[15rem] top-1/2 -translate-y-1/2 p-2 sm:p-3 bg-white/90 dark:bg-gray-800/90 hover:bg-white dark:hover:bg-gray-800 backdrop-blur-md border-2 border-black rounded-full shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:translate-x-[1px] hover:translate-y-[1px] hover:shadow-none transition-all z-[210] text-black dark:text-white"
-                  aria-label="Previous"
-                >
-                  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="m15 18-6-6 6-6"/></svg>
-                </button>
-                
-                <button 
-                  type="button"
-                  onClick={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    const container = document.getElementById('payment-carousel');
-                    if (container && container.firstElementChild) {
-                      const cardWidth = container.firstElementChild.clientWidth;
-                      const gap = window.innerWidth >= 640 ? 24 : 16;
-                      container.scrollTo({ left: container.scrollLeft + (cardWidth + gap), behavior: 'smooth' });
-                    }
-                  }}
-                  className="absolute right-2 sm:right-1/2 sm:-mr-[15rem] top-1/2 -translate-y-1/2 p-2 sm:p-3 bg-white/90 dark:bg-gray-800/90 hover:bg-white dark:hover:bg-gray-800 backdrop-blur-md border-2 border-black rounded-full shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:translate-x-[1px] hover:translate-y-[1px] hover:shadow-none transition-all z-[210] text-black dark:text-white"
-                  aria-label="Next"
-                >
-                  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="m9 18 6-6-6-6"/></svg>
-                </button>
-              </>
-            )}
-
-            {/* Swipeable Snap Container */}
-            <div 
-              id="payment-carousel"
-              className="flex overflow-x-auto snap-x snap-mandatory w-full py-8 px-[7.5vw] sm:px-[calc(50vw-12rem)] gap-4 sm:gap-6" 
-              style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
-              onScroll={(e) => {
-                const container = e.currentTarget;
-                const containerCenter = container.scrollLeft + container.clientWidth / 2;
-                Array.from(container.children).forEach((card) => {
-                  const htmlCard = card as HTMLElement;
-                  const distance = Math.abs(containerCenter - (htmlCard.offsetLeft + htmlCard.clientWidth / 2));
-                  if (distance < htmlCard.clientWidth / 2) {
-                    htmlCard.style.transform = 'scale(1)'; htmlCard.style.opacity = '1';
-                  } else {
-                    htmlCard.style.transform = 'scale(0.9)'; htmlCard.style.opacity = '0.5';
-                  }
-                });
-              }}
-            >
-                   {showCreditPayModal && (
-        <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/80 backdrop-blur-md animate-in fade-in">
-          
-          {/* Close Button floating top right */}
-          <button 
-            onClick={() => setShowCreditPayModal(null)} 
-            className="absolute top-6 right-6 p-2 bg-white/20 hover:bg-white/40 backdrop-blur-sm rounded-full text-white border-2 border-white/20 transition-colors z-[210]"
-          >
-            <X className="w-6 h-6"/>
-          </button>
-
-          <div className="w-full relative flex flex-col items-center">
-            
-            {/* 🟢 Floating Navigation Arrows */}
-            {showCreditPayModal.items.length > 1 && (
-              <>
-                <button 
-                  type="button"
-                  onClick={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    const container = document.getElementById('payment-carousel');
-                    if (container && container.firstElementChild) {
-                      const cardWidth = container.firstElementChild.clientWidth;
-                      const gap = window.innerWidth >= 640 ? 24 : 16;
-                      container.scrollTo({ left: container.scrollLeft - (cardWidth + gap), behavior: 'smooth' });
-                    }
-                  }}
-                  className="absolute left-2 sm:left-1/2 sm:-ml-[15rem] top-1/2 -translate-y-1/2 p-2 sm:p-3 bg-white/90 dark:bg-gray-800/90 hover:bg-white dark:hover:bg-gray-800 backdrop-blur-md border-2 border-black rounded-full shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:translate-x-[1px] hover:translate-y-[1px] hover:shadow-none transition-all z-[210] text-black dark:text-white"
-                  aria-label="Previous"
-                >
-                  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="m15 18-6-6 6-6"/></svg>
-                </button>
-                
-                <button 
-                  type="button"
-                  onClick={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    const container = document.getElementById('payment-carousel');
-                    if (container && container.firstElementChild) {
-                      const cardWidth = container.firstElementChild.clientWidth;
-                      const gap = window.innerWidth >= 640 ? 24 : 16;
-                      container.scrollTo({ left: container.scrollLeft + (cardWidth + gap), behavior: 'smooth' });
-                    }
-                  }}
-                  className="absolute right-2 sm:right-1/2 sm:-mr-[15rem] top-1/2 -translate-y-1/2 p-2 sm:p-3 bg-white/90 dark:bg-gray-800/90 hover:bg-white dark:hover:bg-gray-800 backdrop-blur-md border-2 border-black rounded-full shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:translate-x-[1px] hover:translate-y-[1px] hover:shadow-none transition-all z-[210] text-black dark:text-white"
-                  aria-label="Next"
-                >
-                  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="m9 18 6-6-6-6"/></svg>
-                </button>
-              </>
-            )}
-
-            {/* Swipeable Snap Container */}
-            <div 
-              id="payment-carousel"
-              className="flex overflow-x-auto snap-x snap-mandatory w-full py-8 px-[7.5vw] sm:px-[calc(50vw-12rem)] gap-4 sm:gap-6" 
-              style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
-              onScroll={(e) => {
-                const container = e.currentTarget;
-                const containerCenter = container.scrollLeft + container.clientWidth / 2;
-                Array.from(container.children).forEach((card) => {
-                  const htmlCard = card as HTMLElement;
-                  const distance = Math.abs(containerCenter - (htmlCard.offsetLeft + htmlCard.clientWidth / 2));
-                  if (distance < htmlCard.clientWidth / 2) {
-                    htmlCard.style.transform = 'scale(1)'; htmlCard.style.opacity = '1';
-                  } else {
-                    htmlCard.style.transform = 'scale(0.9)'; htmlCard.style.opacity = '0.5';
                   }
                 });
               }}
@@ -5824,9 +5660,13 @@ const totalSpend = grandTotal;
                 <div 
                   key={item.id} 
                   className="w-[85vw] sm:w-[24rem] shrink-0 snap-center bg-white dark:bg-gray-900 rounded-[2rem] p-6 sm:p-8 border-4 border-black shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] relative flex flex-col transition-all duration-300 ease-out"
-                  style={{ transform: index === 0 ? 'scale(1)' : 'scale(0.9)', opacity: index === 0 ? 1 : 0.5 }}
+                  style={{ 
+                    transform: index === 0 ? 'scale(1)' : 'scale(0.9)', 
+                    opacity: index === 0 ? 1 : 0.5                      
+                  }}
                 >
                   
+                  {/* Card Header */}
                   <div className="mb-6">
                     {isItemFronted ? (
                       <span className="text-[10px] font-black uppercase tracking-widest text-blue-600 bg-blue-100 border-2 border-black px-3 py-1 rounded-lg mb-3 inline-block shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]">
@@ -5842,7 +5682,7 @@ const totalSpend = grandTotal;
                   </div>
 
                   {isItemFronted ? (
-                    // 🟢 THE REIMBURSEMENT FORM
+                    // 🟢 REIMBURSEMENT FORM
                     <form 
                       onSubmit={async (e) => {
                         e.preventDefault();
@@ -5854,7 +5694,13 @@ const totalSpend = grandTotal;
                           submitBtn.disabled = true;
                           submitBtn.textContent = 'Transferring...';
 
-                          await createTransfer(sourceAccountId, item.frontedInfo.accountId, item.amount, combineDateWithCurrentTime(getTodayIso()), 0);
+                          await createTransfer(
+                            sourceAccountId,
+                            item.frontedInfo.accountId,
+                            item.amount,
+                            combineDateWithCurrentTime(getTodayIso()),
+                            0
+                          );
 
                           if (item.frontedInfo.txId) {
                             await updateTransaction(item.frontedInfo.txId, { notes: `Budget Timing: ${selectedTiming}` });
@@ -5866,10 +5712,12 @@ const totalSpend = grandTotal;
                           
                           submitBtn.className = "w-full bg-gray-200 text-gray-500 border-2 border-black py-4 rounded-xl font-black text-sm uppercase tracking-wider transition-all";
                           submitBtn.textContent = 'Reimbursed! ✓';
+
                           setTimeout(() => setShowCreditPayModal(null), 1000);
                         } catch (err: any) {
                           alert(`Reimbursement failed: ${err.message || 'Server error.'}`);
-                          submitBtn.disabled = false; submitBtn.textContent = 'Reimburse Savings';
+                          submitBtn.disabled = false;
+                          submitBtn.textContent = 'Reimburse Savings';
                         }
                       }}
                       className="space-y-4 mt-auto"
@@ -5888,7 +5736,7 @@ const totalSpend = grandTotal;
                       </div>
                     </form>
                   ) : (
-                    // ⚪ THE STANDARD PAYMENT FORM
+                    // ⚪ STANDARD PAYMENT FORM
                     <form 
                       onSubmit={async (e) => {
                         e.preventDefault();
@@ -5902,7 +5750,8 @@ const totalSpend = grandTotal;
                         const submitBtn = form.querySelector('button[type="submit"]') as HTMLButtonElement;
 
                         try {
-                          submitBtn.disabled = true; submitBtn.textContent = 'Processing...';
+                          submitBtn.disabled = true;
+                          submitBtn.textContent = 'Processing...';
 
                           let targetScheduleId: string | null = null;
                           if (item.type === 'installment') {
@@ -5913,18 +5762,30 @@ const totalSpend = grandTotal;
                           const notesTag = isFronted ? `FRONTED_FROM_SAVINGS|${sourceAccountId}` : `Budget Timing: ${selectedTiming}`;
 
                           const { data: debitTx, error: debitError } = await createTransaction({
-                            name: `${showCreditPayModal.bank} Payment - ${item.name}`, amount: Math.abs(amount), date: combineDateWithCurrentTime(date),
-                            payment_method_id: sourceAccountId, transaction_type: 'payment', payment_schedule_id: targetScheduleId, notes: notesTag
+                            name: `${showCreditPayModal.bank} Payment - ${item.name}`,
+                            amount: Math.abs(amount),
+                            date: combineDateWithCurrentTime(date),
+                            payment_method_id: sourceAccountId,
+                            transaction_type: 'payment',
+                            payment_schedule_id: targetScheduleId, 
+                            notes: notesTag 
                           } as any);
 
                           if (debitError) throw debitError;
 
                           const { data: creditTx, error: creditError } = await createTransaction({
-                            name: `${showCreditPayModal.bank} Payment - ${item.name}`, amount: -Math.abs(amount), date: combineDateWithCurrentTime(date),
-                            payment_method_id: showCreditPayModal.accountId, transaction_type: 'credit_payment', related_transaction_id: debitTx?.id, notes: `Budget Timing: ${selectedTiming}`
+                            name: `${showCreditPayModal.bank} Payment - ${item.name}`,
+                            amount: -Math.abs(amount),
+                            date: combineDateWithCurrentTime(date),
+                            payment_method_id: showCreditPayModal.accountId,
+                            transaction_type: 'credit_payment',
+                            related_transaction_id: debitTx?.id,
+                            notes: `Budget Timing: ${selectedTiming}`
                           } as any);
                           
-                          if (creditError) await recordCreditPayment(showCreditPayModal.accountId, amount, `${showCreditPayModal.bank} Payment - ${item.name}`, date);
+                          if (creditError) {
+                            await recordCreditPayment(showCreditPayModal.accountId, amount, `${showCreditPayModal.bank} Payment - ${item.name}`, date);
+                          }
 
                           if (receiptFile && receiptFile.size > 0 && debitTx?.id) {
                             const { path } = await uploadTransactionReceipt(debitTx.id, receiptFile);
@@ -5937,12 +5798,21 @@ const totalSpend = grandTotal;
                           if (item.type === 'installment' && targetScheduleId) {
                             try {
                               await recordPaymentViaTransaction(targetScheduleId, {
-                                transactionName: debitTx?.name || `${showCreditPayModal.bank} Payment - ${item.name}`, amountPaid: Math.abs(amount), datePaid: date, accountId: sourceAccountId, expectedAmount: Math.abs(amount)
+                                transactionName: debitTx?.name || `${showCreditPayModal.bank} Payment - ${item.name}`,
+                                amountPaid: Math.abs(amount),
+                                datePaid: date,
+                                accountId: sourceAccountId,
+                                expectedAmount: Math.abs(amount)
                               });
                             } catch (schedErr) {}
 
                             const targetInstallment = installments?.find(i => i.id === item.id);
-                            if (targetInstallment && onUpdateInstallment) await onUpdateInstallment({ ...targetInstallment, paidAmount: (targetInstallment.paidAmount || 0) + Math.abs(amount) });
+                            if (targetInstallment && onUpdateInstallment) {
+                              await onUpdateInstallment({
+                                ...targetInstallment,
+                                paidAmount: (targetInstallment.paidAmount || 0) + Math.abs(amount)
+                              });
+                            }
                           }
                           
                           await reloadTransactions();
@@ -5951,15 +5821,17 @@ const totalSpend = grandTotal;
                           
                           submitBtn.className = "w-full bg-gray-200 text-gray-500 border-2 border-black py-4 rounded-xl font-black text-sm uppercase tracking-wider transition-all";
                           submitBtn.textContent = 'Paid! ✓';
+
                           setTimeout(() => setShowCreditPayModal(null), 1000);
+                          
                         } catch (err: any) {
                           alert(`Payment failed: ${err.message || 'Server rejected the transaction.'}`);
-                          submitBtn.disabled = false; submitBtn.textContent = 'Submit Payment';
+                          submitBtn.disabled = false;
+                          submitBtn.textContent = 'Submit Payment';
                         }
                       }}
                       className="space-y-4 mt-auto"
                     >
-                      {/* 🟢 FRONTING TOGGLE */}
                       <div className="bg-blue-50 dark:bg-blue-900/20 border-2 border-blue-400 p-3 rounded-xl flex items-start gap-3 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] transition-colors mb-2">
                          <input type="checkbox" name="isFronted" id={`isFronted-${item.id}`} className="mt-1 w-4 h-4 rounded border-black accent-blue-600 cursor-pointer" />
                          <div>
@@ -5980,9 +5852,12 @@ const totalSpend = grandTotal;
                         <div>
                           <label className="block text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">Source Account</label>
                           <select required name="sourceAccountId" defaultValue={accounts.find(a => a.type === 'Debit')?.id || ''} className="w-full bg-gray-50 dark:bg-gray-800 border-2 border-black rounded-xl px-2.5 py-3 outline-none font-bold text-xs dark:text-gray-100">
-                            {accounts.filter(a => a.type === 'Debit').map(acc => <option key={acc.id} value={acc.id}>{acc.bank}</option>)}
+                            {accounts.filter(a => a.type === 'Debit').map(acc => (
+                              <option key={acc.id} value={acc.id}>{acc.bank}</option>
+                            ))}
                           </select>
                         </div>
+
                         <div>
                           <label className="block text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">Date</label>
                           <input required name="date" type="date" defaultValue={getTodayIso()} className="w-full bg-gray-50 dark:bg-gray-800 border-2 border-black rounded-xl px-2.5 py-3 outline-none font-bold text-xs dark:text-gray-100" />
@@ -6004,7 +5879,9 @@ const totalSpend = grandTotal;
                       </div>
 
                       <div className="pt-2">
-                        <button type="submit" className="w-full bg-green-500 text-white border-2 border-black py-4 rounded-xl font-black text-sm uppercase tracking-wider shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[2px] hover:translate-y-[2px] transition-all">Submit Payment</button>
+                        <button type="submit" className="w-full bg-green-500 text-white border-2 border-black py-4 rounded-xl font-black text-sm uppercase tracking-wider shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[2px] hover:translate-y-[2px] transition-all">
+                          Submit Payment
+                        </button>
                       </div>
                     </form>
                   )}
@@ -6023,6 +5900,7 @@ const totalSpend = grandTotal;
           </div>
         </div>
       )}
+
 
 
 
