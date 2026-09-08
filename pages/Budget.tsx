@@ -1720,8 +1720,9 @@ const getFrozenCycleAmount = (account: Account): number => {
         .filter(inst => {
           if (inst.isArchived || excludedInstallmentIds.has(inst.id)) return false;
           
-                    // 🔴 NEW: Exclude "To Collect" from the Slicer tray
-                    if (inst.debtor_friend_id) return false;
+                                        // 🔴 NEW: Exclude "To Collect" from the Slicer tray (where you are the lender)
+                    if (!inst.funding_friend_id && (inst.debtor_friend_id || (inst as any).friend_user_id)) return false;
+
   
                     const targetPeriod = determineItemPeriod(inst, currentPeriods, selectedMonth, selectedYear);
                     
@@ -2214,7 +2215,9 @@ const getFrozenCycleAmount = (account: Account): number => {
 
       const instTotal = (installments || []).filter(inst => {
         if (inst.isArchived || excludedInstallmentIds.has(inst.id)) return false;
-        if (inst.debtor_friend_id) return false;
+                // Guard against saving receivables into the total expense payload
+        if (!inst.funding_friend_id && (inst.debtor_friend_id || (inst as any).friend_user_id)) return false;
+
         const linkedId = inst.accountId || inst.account_id || inst.linkedAccountId || inst.linked_account_id;
         const isSwallowedByCreditAccount = creditBudgetAccounts.some(acc => acc.id === linkedId);
         const isBudee = !!(inst.funding_friend_id || inst.debtor_friend_id || (inst as any).friend_user_id);
@@ -2529,7 +2532,8 @@ const getFrozenCycleAmount = (account: Account): number => {
 
       const instTotal = (installments || []).filter(inst => {
         if (inst.isArchived || excludedInstallmentIds.has(inst.id)) return false;
-        if (inst.debtor_friend_id) return false;
+                // Guard against saving receivables into the total expense payload
+        if (!inst.funding_friend_id && (inst.debtor_friend_id || (inst as any).friend_user_id)) return false;
         const linkedId = inst.accountId || inst.account_id || inst.linkedAccountId || inst.linked_account_id;
         const isSwallowedByCreditAccount = creditBudgetAccounts.some(acc => acc.id === linkedId);
         const isBudee = !!(inst.funding_friend_id || inst.debtor_friend_id || (inst as any).friend_user_id);
@@ -3423,11 +3427,16 @@ const getFrozenCycleAmount = (account: Account): number => {
 
   
 
-    const orphanedInst = (installments || []).filter(inst => {
+        const orphanedInst = (installments || []).filter(inst => {
       const linkedId = inst.accountId || inst.account_id || inst.linkedAccountId || inst.linked_account_id;
       if (creditBudgetAccounts.some(acc => acc.id === linkedId)) return false; 
+      
+      // Guard: Exclude receivables (where you are the lender) from the "To Pay" timeline
+      if (!inst.funding_friend_id && (inst.debtor_friend_id || (inst as any).friend_user_id)) return false;
+      
       return isInstActiveForTimeline(inst);
     });
+
 
     orphanedInst.forEach(inst => {
       const rawDue = getInstallmentDueDay(inst); // 🟢 Uses the new visual math!
@@ -3708,7 +3717,9 @@ const getFrozenCycleAmount = (account: Account): number => {
         installmentsTotal = (installments || [])
           .filter(inst => {
             if (inst.isArchived || excludedInstallmentIds.has(inst.id)) return false;
-            if (cat.name === 'Budee' && inst.debtor_friend_id) return false;
+            // 🟢 NEW (Accurate):
+// If you don't owe them (funding_friend_id is empty), it is NOT your expense!
+if (cat.name === 'Budee' && !inst.funding_friend_id) return false;
 
             const isBudee = !!(inst.funding_friend_id || inst.debtor_friend_id || (inst as any).friend_user_id);
             if (cat.name === 'Loans' && isBudee) return false;

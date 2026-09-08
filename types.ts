@@ -82,7 +82,14 @@ export interface Biller {
   schedules: PaymentSchedule[];
   linkedAccountId?: string; // ENHANCEMENT: Links Loans-category billers to credit accounts for dynamic amount calculation
   scheduledIncreases?: BillerAmountIncrease[]; // Scheduled future amount changes (Fixed/Utilities/Subscriptions only)
+  
+  // 🟢 NEW: Dynamic & Shared Biller Properties
+  is_dynamic?: boolean;
+  shared_budee_id?: string | null;
+  split_type?: 'percentage' | 'exact_amount' | null;
+  split_value?: number | null;
 }
+
 
 export interface Installment {
   id: string;

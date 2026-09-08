@@ -435,7 +435,6 @@ const [paymentTab, setPaymentTab] = useState<'my_account' | 'budee'>('my_account
         billerId: '', 
         due_date: '', 
         linkedAccountId: '' ,
-        linkedAccountId: '',
         fundingFriendId: '',
         debtorFriendId: '',
         expectedAccountId: ''

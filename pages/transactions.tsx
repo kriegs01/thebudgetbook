@@ -641,10 +641,7 @@ function TransactionsPage({ transactions, loading = false, onTransactionDeleted,
       beneficiaryId: (tx as any).beneficiary_id || 'me'  // 🟢 Pre-fill existing data
     });
     
-    // 🟢 Auto-expand advanced options if this transaction has an IOU context
-    setShowAdvancedOptions(!!((tx as any).payer_id || (tx as any).beneficiary_id));
-    
-        // 🟢 Auto-configure tabs based on existing transaction data
+    // 🟢 Auto-configure tabs based on existing transaction data
         const hasPayer = (tx as any).payer_id && (tx as any).payer_id !== 'me';
         const hasBeneficiary = (tx as any).beneficiary_id && (tx as any).beneficiary_id !== 'me';
         

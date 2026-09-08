@@ -86,7 +86,7 @@ const calculateStatus = (deactivationDate?: { month: string; year: string }): 'a
   return 'active';
 };
 
-const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, accounts, categories, onUpdate, onDelete, onPayBiller, loading = false, error = null }) => {
+const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, accounts, categories, onUpdate, onDelete, onPayBiller, loading = false, error = null, people = [] }) => {
   const { getAccentClasses } = useTheme();
   const [showAddModal, setShowAddModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState<Biller | null>(null);
@@ -108,8 +108,10 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
   const [loadingSchedules, setLoadingSchedules] = useState(false);
   const [editBillerSchedules, setEditBillerSchedules] = useState<SupabaseMonthlyPaymentSchedule[]>([]);
   const [confirmModal, setConfirmModal] = useState<{ show: boolean; title: string; message: string; onConfirm: () => void; }>({ show: false, title: '', message: '', onConfirm: () => {}, });
-  const [addFormData, setAddFormData] = useState({ name: '', category: categories[0]?.name || '', dueDate: '', expectedAmount: '', actMonth: MONTHS[(new Date().getMonth() + 1) % 12], actDay: '', actYear: new Date().getFullYear().toString(), deactMonth: '', deactYear: '', linkedAccountId: '' });
-  const [editFormData, setEditFormData] = useState({ name: '', category: '', dueDate: '', expectedAmount: '', actMonth: '', actDay: '', actYear: '', deactMonth: '', deactYear: '', linkedAccountId: '', reactMonth: '', reactYear: '' });
+  const [addFormData, setAddFormData] = useState({ name: '', category: categories[0]?.name || '', dueDate: '', expectedAmount: '', actMonth: MONTHS[(new Date().getMonth() + 1) % 12], actDay: '', actYear: new Date().getFullYear().toString(), deactMonth: '', deactYear: '', linkedAccountId: '', is_dynamic: false, shared_budee_id: '', split_type: 'percentage', split_value: '' });
+  
+  const [editFormData, setEditFormData] = useState({ name: '', category: '', dueDate: '', expectedAmount: '', actMonth: '', actDay: '', actYear: '', deactMonth: '', deactYear: '', linkedAccountId: '', reactMonth: '', reactYear: '', is_dynamic: false, shared_budee_id: '', split_type: 'percentage', split_value: '' });
+
   const [payFormData, setPayFormData] = useState({ amount: '', receipt: '', datePaid: getTodayIso(), accountId: accounts[0]?.id || '' });
   const [payReceiptFile, setPayReceiptFile] = useState<File | null>(null);
   type BillerScheduleTx = { id: string; name: string; amount: number; date: string; paymentMethodId: string; receiptUrl?: string | null };
@@ -280,6 +282,13 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
         status: status,
         schedules: MONTHS.map(month => ({ id: generateScheduleId(month, '2026'), month, year: '2026', expectedAmount: expected })),
         linkedAccountId: addFormData.linkedAccountId || undefined,
+        
+        // 🟢 NEW: Dynamic & Shared settings
+        is_dynamic: addFormData.is_dynamic,
+        shared_budee_id: addFormData.shared_budee_id || null,
+        split_type: addFormData.shared_budee_id ? (addFormData.split_type as any) : null,
+        split_value: addFormData.shared_budee_id ? parseFloat(addFormData.split_value) : null,
+
         scheduledIncreases: categorySupportsScheduledIncreases(addFormData.category)
           ? addScheduledIncreases
               .filter(inc => parseFloat(inc.amount) > 0 && inc.effectiveMonth && inc.effectiveYear)
@@ -287,6 +296,7 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
               .sort((a, b) => a.effectiveDate.localeCompare(b.effectiveDate))
           : [],
       };
+
       await onAdd(newBiller);
       setShowAddModal(false);
             // 🟢 BUG FIX: Always reset to the first ACTIVE category, not just the first in the database
@@ -348,7 +358,7 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
         status = calculateStatus(deactivationDate);
       }
       const applyUpdate = async () => {
-        await onUpdate({
+                await onUpdate({
           ...showEditModal,
           name: editFormData.name,
           category: editFormData.category,
@@ -359,6 +369,13 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
           deactivationDate: deactivationDate,
           status: status,
           linkedAccountId: editFormData.linkedAccountId || undefined,
+          
+          // 🟢 NEW: Dynamic & Shared settings
+          is_dynamic: editFormData.is_dynamic,
+          shared_budee_id: editFormData.shared_budee_id || null,
+          split_type: editFormData.shared_budee_id ? (editFormData.split_type as any) : null,
+          split_value: editFormData.shared_budee_id ? parseFloat(editFormData.split_value) : null,
+
           scheduledIncreases: categorySupportsScheduledIncreases(editFormData.category)
             ? editScheduledIncreases
                 .filter(inc => parseFloat(inc.amount) > 0 && inc.effectiveMonth && inc.effectiveYear)
@@ -366,6 +383,7 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
                 .sort((a, b) => a.effectiveDate.localeCompare(b.effectiveDate))
             : [],
         });
+
         setShowEditModal(null);
         setEditScheduledIncreases([]);
         setShowEditScheduledSection(false);
@@ -456,7 +474,14 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
     nextMonthDate.setMonth(nextMonthDate.getMonth() + 1);
     const defaultReactMonth = MONTHS[nextMonthDate.getMonth()];
     const defaultReactYear = nextMonthDate.getFullYear().toString();
-    setEditFormData({ name: biller.name, category: biller.category, dueDate: biller.dueDate, expectedAmount: biller.expectedAmount.toFixed(2), actMonth: biller.activationDate.month, actDay: biller.activationDate.day || '', actYear: biller.activationDate.year, deactMonth: biller.deactivationDate?.month || '', deactYear: biller.deactivationDate?.year || '', linkedAccountId: biller.linkedAccountId || '', reactMonth: defaultReactMonth, reactYear: defaultReactYear });
+    setEditFormData({ 
+      name: biller.name, category: biller.category, dueDate: biller.dueDate, expectedAmount: biller.expectedAmount.toFixed(2), actMonth: biller.activationDate.month, actDay: biller.activationDate.day || '', actYear: biller.activationDate.year, deactMonth: biller.deactivationDate?.month || '', deactYear: biller.deactivationDate?.year || '', linkedAccountId: biller.linkedAccountId || '', reactMonth: defaultReactMonth, reactYear: defaultReactYear,
+      // 🟢 NEW: Load existing dynamic data
+      is_dynamic: biller.is_dynamic || false,
+      shared_budee_id: biller.shared_budee_id || '',
+      split_type: biller.split_type || 'percentage',
+      split_value: biller.split_value ? String(biller.split_value) : ''
+    });
     setEditScheduledIncreases((biller.scheduledIncreases ?? []).map(inc => {
       const [yearStr, monthStr] = inc.effectiveDate.split('-');
       const monthIdx = parseInt(monthStr, 10) - 1;
@@ -547,7 +572,7 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
     const hasLinkedAccount = shouldUseLinkedAccount(biller);
     const linkedAccount = hasLinkedAccount ? getLinkedAccount(biller, accounts) : null;
     return (
-      <div key={biller.id} className="relative bg-white dark:bg-gray-800 border-[3px] border-black rounded-2xl p-6 flex flex-col h-full group transition-all duration-300 shadow-[4px_4px_0px_#000] overflow-hidden">
+      <div key={biller.id} className="relative bg-white dark:bg-gray-800 border-[3px] border-black rounded-2xl p-6 flex flex-col h-full group transition-all duration-300 shadow-[4px_4px_0px_#000]">
         <div className="flex items-start justify-between gap-4">
           <div className="flex-1 min-w-0">
             <h3 onClick={() => setDetailedBillerId(biller.id)} className={`font-titan text-xl tracking-tighter truncate transition-all cursor-pointer ${getAccentClasses('text')} [text-shadow:-1px_-1px_0_#000,1px_-1px_0_#000,-1px_1px_0_#000,1px_1px_0_#000] drop-shadow-[2px_2px_0px_#000] hover:drop-shadow-none hover:translate-x-[1px] hover:translate-y-[1px] active:translate-x-[2px] active:translate-y-[2px]`}>{biller.name}</h3>
@@ -780,6 +805,53 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
                       <p className="text-xs text-gray-500 mt-2">If linked, due day and amount can be calculated automatically.</p>
                     </div>
                   )}
+
+                  {/* 🟢 DYNAMIC & SHARED SETTINGS */}
+                  <div className="p-5 bg-gray-50 dark:bg-gray-800/50 border-2 border-gray-200 dark:border-gray-700 rounded-xl space-y-5">
+                    <h3 className="text-[10px] font-black uppercase tracking-widest text-gray-400 border-b-2 border-gray-200 dark:border-gray-700 pb-2">Advanced Settings</h3>
+                    
+                    {/* Dynamic Utility Toggle */}
+                    <div className="flex items-start gap-3">
+                      <input type="checkbox" id="is_dynamic_add" checked={addFormData.is_dynamic} onChange={e => setAddFormData(f => ({ ...f, is_dynamic: e.target.checked }))} className="mt-0.5 w-4 h-4 rounded border-2 border-black accent-indigo-600 cursor-pointer" />
+                      <div>
+                        <label htmlFor="is_dynamic_add" className="text-xs font-bold text-gray-700 dark:text-gray-300 cursor-pointer block">Usage-Based Utility</label>
+                        <p className="text-[10px] font-medium text-gray-500 mt-1 leading-relaxed">Check this if the bill amount fluctuates every month (e.g. Electricity, Water). It will ask you for the new amount when the month begins.</p>
+                      </div>
+                    </div>
+
+                    {/* Split with Budee */}
+                    <div className="pt-2">
+                      <label className="block text-[10px] font-black uppercase tracking-widest text-gray-500 dark:text-gray-400 mb-2">Split with Budee (Optional)</label>
+                      <select value={addFormData.shared_budee_id} onChange={e => setAddFormData(f => ({ ...f, shared_budee_id: e.target.value }))} className="w-full bg-white dark:bg-gray-800 border-2 border-gray-300 dark:border-gray-600 rounded-lg p-3 text-xs font-bold focus:ring-2 focus:ring-indigo-500 outline-none">
+                        <option value="">None</option>
+                        {people.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                      </select>
+                    </div>
+
+                    {/* Split Configuration */}
+                    {addFormData.shared_budee_id && (
+                      <div className="grid grid-cols-2 gap-3 pt-2 bg-indigo-50 dark:bg-indigo-900/10 p-3 rounded-lg border-2 border-indigo-100 dark:border-indigo-900/30">
+                        <div>
+                           <label className="block text-[9px] font-black uppercase tracking-widest text-indigo-700 dark:text-indigo-400 mb-1">Split Type</label>
+                           <select value={addFormData.split_type} onChange={e => setAddFormData(f => ({ ...f, split_type: e.target.value }))} className="w-full bg-white dark:bg-gray-800 border-2 border-indigo-200 dark:border-indigo-800/50 rounded-lg p-2.5 text-xs font-bold outline-none">
+                             <option value="percentage">Percentage (%)</option>
+                             <option value="exact_amount">Exact Amount (₱)</option>
+                           </select>
+                        </div>
+                        <div>
+                           <label className="block text-[9px] font-black uppercase tracking-widest text-indigo-700 dark:text-indigo-400 mb-1">Budee's Share</label>
+                           <div className="relative">
+                             {addFormData.split_type === 'exact_amount' && <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400 font-bold text-xs">₱</span>}
+                             <input type="number" step={addFormData.split_type === 'percentage' ? "1" : "0.01"} value={addFormData.split_value} onChange={e => setAddFormData(f => ({ ...f, split_value: e.target.value }))} placeholder={addFormData.split_type === 'percentage' ? "e.g. 50" : "e.g. 1500"} className={`w-full bg-white dark:bg-gray-800 border-2 border-indigo-200 dark:border-indigo-800/50 rounded-lg p-2.5 text-xs font-bold outline-none ${addFormData.split_type === 'exact_amount' ? 'pl-6' : ''}`} />
+                             {addFormData.split_type === 'percentage' && <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 font-bold text-xs">%</span>}
+                           </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+
+
                   {categorySupportsScheduledIncreases(addFormData.category) && (
                     <div className="space-y-3 pt-2">
                       <button type="button" onClick={() => setShowAddScheduledSection(!showAddScheduledSection)} className="text-sm font-bold text-indigo-600 dark:text-indigo-400 flex items-center gap-2">{showAddScheduledSection ? <ChevronDown size={16}/> : <ChevronRight size={16}/>} Scheduled Rate Increases</button>
@@ -864,6 +936,53 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
                       <p className="text-xs text-gray-500 mt-2">If linked, due day and amount can be calculated automatically.</p>
                     </div>
                   )}
+
+                                    {/* 🟢 DYNAMIC & SHARED SETTINGS (EDIT MODAL) */}
+                  <div className="p-5 bg-gray-50 dark:bg-gray-800/50 border-2 border-gray-200 dark:border-gray-700 rounded-xl space-y-5">
+                    <h3 className="text-[10px] font-black uppercase tracking-widest text-gray-400 border-b-2 border-gray-200 dark:border-gray-700 pb-2">Advanced Settings</h3>
+                    
+                    {/* Dynamic Utility Toggle */}
+                    <div className="flex items-start gap-3">
+                      <input type="checkbox" id="is_dynamic_edit" checked={editFormData.is_dynamic} onChange={e => setEditFormData(f => ({ ...f, is_dynamic: e.target.checked }))} className="mt-0.5 w-4 h-4 rounded border-2 border-black accent-indigo-600 cursor-pointer" />
+                      <div>
+                        <label htmlFor="is_dynamic_edit" className="text-xs font-bold text-gray-700 dark:text-gray-300 cursor-pointer block">Usage-Based Utility</label>
+                        <p className="text-[10px] font-medium text-gray-500 mt-1 leading-relaxed">Check this if the bill amount fluctuates every month.</p>
+                      </div>
+                    </div>
+
+                    {/* Split with Budee */}
+                    <div className="pt-2">
+                      <label className="block text-[10px] font-black uppercase tracking-widest text-gray-500 dark:text-gray-400 mb-2">Split with Budee (Optional)</label>
+                      <select value={editFormData.shared_budee_id} onChange={e => setEditFormData(f => ({ ...f, shared_budee_id: e.target.value }))} className="w-full bg-white dark:bg-gray-800 border-2 border-gray-300 dark:border-gray-600 rounded-lg p-3 text-xs font-bold focus:ring-2 focus:ring-indigo-500 outline-none">
+                        <option value="">None</option>
+                        {people.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                      </select>
+                    </div>
+
+                    {/* Split Configuration */}
+                    {editFormData.shared_budee_id && (
+                      <div className="grid grid-cols-2 gap-3 pt-2 bg-indigo-50 dark:bg-indigo-900/10 p-3 rounded-lg border-2 border-indigo-100 dark:border-indigo-900/30">
+                        <div>
+                           <label className="block text-[9px] font-black uppercase tracking-widest text-indigo-700 dark:text-indigo-400 mb-1">Split Type</label>
+                           <select value={editFormData.split_type} onChange={e => setEditFormData(f => ({ ...f, split_type: e.target.value }))} className="w-full bg-white dark:bg-gray-800 border-2 border-indigo-200 dark:border-indigo-800/50 rounded-lg p-2.5 text-xs font-bold outline-none">
+                             <option value="percentage">Percentage (%)</option>
+                             <option value="exact_amount">Exact Amount (₱)</option>
+                           </select>
+                        </div>
+                        <div>
+                           <label className="block text-[9px] font-black uppercase tracking-widest text-indigo-700 dark:text-indigo-400 mb-1">Budee's Share</label>
+                           <div className="relative">
+                             {editFormData.split_type === 'exact_amount' && <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400 font-bold text-xs">₱</span>}
+                             <input type="number" step={editFormData.split_type === 'percentage' ? "1" : "0.01"} value={editFormData.split_value} onChange={e => setEditFormData(f => ({ ...f, split_value: e.target.value }))} placeholder={editFormData.split_type === 'percentage' ? "e.g. 50" : "e.g. 1500"} className={`w-full bg-white dark:bg-gray-800 border-2 border-indigo-200 dark:border-indigo-800/50 rounded-lg p-2.5 text-xs font-bold outline-none ${editFormData.split_type === 'exact_amount' ? 'pl-6' : ''}`} />
+                             {editFormData.split_type === 'percentage' && <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 font-bold text-xs">%</span>}
+                           </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+
+
                   {categorySupportsScheduledIncreases(editFormData.category) && (
                     <div className="space-y-3 pt-2">
                       <button type="button" onClick={() => setShowEditScheduledSection(!showEditScheduledSection)} className="text-sm font-bold text-indigo-600 dark:text-indigo-400 flex items-center gap-2">{showEditScheduledSection ? <ChevronDown size={16}/> : <ChevronRight size={16}/>} Scheduled Rate Increases</button>

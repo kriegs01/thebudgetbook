@@ -50,6 +50,10 @@ export const supabaseBillerToFrontend = (supabaseBiller: SupabaseBiller): Biller
       effectiveDate: inc.effectiveDate,
       amount: inc.amount,
     })),
+    is_dynamic: supabaseBiller.is_dynamic,
+    shared_budee_id: supabaseBiller.shared_budee_id,
+    split_type: supabaseBiller.split_type,
+    split_value: supabaseBiller.split_value
   };
 };
 
@@ -72,8 +76,13 @@ export const frontendBillerToSupabase = (biller: Biller): Omit<SupabaseBiller, '
       effectiveDate: inc.effectiveDate,
       amount: inc.amount,
     })),
+    is_dynamic: biller.is_dynamic || false,
+    shared_budee_id: biller.shared_budee_id || null,
+    split_type: biller.split_type || null,
+    split_value: biller.split_value || null
   };
 };
+
 
 /**
  * Convert array of Supabase billers to frontend Billers
