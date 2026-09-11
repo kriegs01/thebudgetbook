@@ -31,6 +31,8 @@ import { processBudeeTransaction } from '../src/services/budeeService';
 import { determineItemPeriod } from '../src/utils/budgetEngine';
 import { processCreditAccount } from '../src/utils/statementAggregator';
 import { generateCreditBuckets, getBucketForMonth } from '../src/utils/bucketEngine';
+import { getCreditStatementTotal } from '../src//utils/creditEngines/creditEngineRouter';
+import { SyncIndicator, SyncStatus } from '../src/components/SyncIndicator';
 
 
 interface BudgetProps {
@@ -465,7 +467,8 @@ const [summaryBreakdownModal, setSummaryBreakdownModal] = useState<{
     name: string, 
     amount: number, 
     type: string, 
-    subItems?: { id: string, name: string, amount: number, type: string }[] 
+    subItems?: { id: string, name: string, amount: number, type: string }[],
+    reimbursableItems?: { id: string, name: string, amount: number, type: string }[]
   }[] 
 } | null>(null);
 
@@ -483,6 +486,11 @@ const sortedSetups = React.useMemo(() => {
     return MONTHS.indexOf(a.month) - MONTHS.indexOf(b.month);
   });
 }, [savedSetups]);
+
+const budgetInstallments = React.useMemo(
+  () => (installments || []).filter(installment => installment.status !== 'pending'),
+  [installments]
+);
 
 {/* TO: Expand the filter to include Loans and Liabilities */}
 const creditBudgetAccounts = React.useMemo(() => {
@@ -1258,35 +1266,35 @@ const balance = accountTxs.reduce((sum, tx) => {
         // Powered by the new Bucket Waterfall Engine
 const getFrozenCycleAmount = (account: Account): number => {
   try {
-    // Unscheduled manual liabilities still use live balance
+    // 🔴 NEW: ROUTE TO ENGINE IF SPECIFIED
+    if (account.provider_config?.type) {
+      // Create the target statement ID (e.g., "2026-08") based on the active Budget view
+      const monthIdx = MONTHS.indexOf(selectedMonth) + 1;
+      const targetStatementId = `${selectedYear}-${String(monthIdx).padStart(2, '0')}`;
+      
+      return getCreditStatementTotal(account, transactions, budgetInstallments, targetStatementId);
+    }
+
+    // ⚪ LEGACY FALLBACK: Standard Math for EastWest, UnionBank, etc.
     if (!account.billingDate && account.subtype !== 'Loan_Bundle' && account.classification !== 'Loan') {
       const liveBal = calculateCurrentBalance(account);
       return liveBal > 0 ? liveBal : Math.abs(account.openingBalance || 0);
     }
 
-    // Generate the chronological buckets and grab the current month
-    const buckets = generateCreditBuckets(account, transactions || [], installments || [], selectedYear, selectedMonth);
+    const buckets = generateCreditBuckets(account, transactions || [], budgetInstallments, selectedYear, selectedMonth);
     const targetBucket = getBucketForMonth(buckets, selectedMonth, selectedYear);
 
     if (targetBucket && targetBucket.personalBreakdown) {
-      // Return ONLY your personal total (Rollover + Swipes + Personal Installments). 
-      // Budee is naturally excluded!
-      const pb = targetBucket.personalBreakdown;
-      const personalTotal = (pb.unpaidRollover || 0) + (pb.newSwipesTotal || 0) + (pb.activeInstallments || []).reduce((s: any, i: any) => s + (Number(i.monthlyAmount) || Number(i.amount) || 0), 0);
-
-      // 🟢 FIX 1: Trust the Bucket Engine! Return the exact total, even if it is 0.
-      return personalTotal;
+      return targetBucket.personalEndingBalance;
     }
 
-    // 🟢 FIX 2: If there is no bucket for this month, no bill is due yet.
-    // Do NOT fall back to the lifetime historical account balance!
     return 0;
-    
   } catch (err) {
     console.error("Critical Math Error in getFrozenCycleAmount:", err);
     return 0;
   }
 };
+
 
     
 
@@ -1598,7 +1606,7 @@ const getFrozenCycleAmount = (account: Account): number => {
   }, [selectedMonth, selectedYear]);
 
 
-  const [autoSaveStatus, setAutoSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+  const [saveStatus, setSaveStatus] = useState<SyncStatus>('idle');
   const autoSaveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const lastSavedDataRef = useRef<string>('');
 
@@ -2330,7 +2338,7 @@ const getFrozenCycleAmount = (account: Account): number => {
         }
     
         try {
-          setAutoSaveStatus('saving');
+          setSaveStatus('syncing');
     
                       // 🟢 BUG FIX: Priority Targeting! Guarantee we grab the Unified Master File first.
           const unifiedExisting = savedSetups.find(s => s.month === selectedMonth && (s.timing === 'unified' || s.data?._periodTotals));
@@ -2349,8 +2357,8 @@ const getFrozenCycleAmount = (account: Account): number => {
     
         
         if (error) {
-          setAutoSaveStatus('error');
-          setTimeout(() => setAutoSaveStatus('idle'), AUTO_SAVE_STATUS_TIMEOUT_MS);
+          setSaveStatus('error');
+          setTimeout(() => setSaveStatus('idle'), AUTO_SAVE_STATUS_TIMEOUT_MS);
           return;
         }
       } else {
@@ -2364,8 +2372,8 @@ const getFrozenCycleAmount = (account: Account): number => {
         const { error } = await createBudgetSetupFrontend(newSetup);
         
         if (error) {
-          setAutoSaveStatus('error');
-          setTimeout(() => setAutoSaveStatus('idle'), AUTO_SAVE_STATUS_TIMEOUT_MS);
+          setSaveStatus('error');
+          setTimeout(() => setSaveStatus('idle'), AUTO_SAVE_STATUS_TIMEOUT_MS);
           return;
         }
       }
@@ -2375,12 +2383,12 @@ const getFrozenCycleAmount = (account: Account): number => {
         await onReloadSetups();
       }
       
-      setAutoSaveStatus('saved');
-      setTimeout(() => setAutoSaveStatus('idle'), 2000);
+      setSaveStatus('saved');
+      setTimeout(() => setSaveStatus('idle'), 2000);
     } catch (error) {
       console.error('[Budget] Error in auto-save:', error);
-      setAutoSaveStatus('error');
-      setTimeout(() => setAutoSaveStatus('idle'), AUTO_SAVE_STATUS_TIMEOUT_MS);
+      setSaveStatus('error');
+      setTimeout(() => setSaveStatus('idle'), AUTO_SAVE_STATUS_TIMEOUT_MS);
     }
   }, [view, setupData, projectedSalary, actualSalary, selectedMonth, selectedTiming, savedSetups, excludedInstallmentIds, excludedWalletIds, excludedCreditIds, wallets, getStashAggregates, onReloadSetups, installments, getPaymentSchedule, shouldShowInstallment, transactions, creditBudgetAccounts, currentPeriods, billers, processedBudgetMap]);
 
@@ -3272,6 +3280,7 @@ const getFrozenCycleAmount = (account: Account): number => {
     
 
     const isInstActiveForTimeline = (inst: any) => {
+      if (inst.status === 'pending') return false;
       const isBudee = !!(inst.funding_friend_id || inst.debtor_friend_id || inst.friend_user_id);
       if (inst.isArchived && (!isBudee || !shouldShowInstallment(inst, selectedMonth, selectedYear))) return false;
       return determineItemPeriod(inst, currentPeriods, selectedMonth, selectedYear) === activePeriodIndex;
@@ -3345,7 +3354,7 @@ const getFrozenCycleAmount = (account: Account): number => {
       const exclusionKey = `${acc.id}-${activePeriodIndex}`;
       let amount = 0; let isPaid = false; const subItems: TimelineNode[] = [];
 
-      const linkedInsts = (installments || []).filter(inst => {
+      const linkedInsts = budgetInstallments.filter(inst => {
         const linkedId = inst.accountId || inst.account_id || inst.linkedAccountId || inst.linked_account_id;
         return linkedId === acc.id && isInstActiveForTimeline(inst);
       });
@@ -3384,36 +3393,23 @@ const getFrozenCycleAmount = (account: Account): number => {
         // ... (Keep the existing standard credit card logic below this)
 
         isPaid = getCreditPaymentStatus(acc) === 'paid';
-        const buckets = generateCreditBuckets(acc, transactions || [], installments || [], selectedYear, selectedMonth);
+        const buckets = generateCreditBuckets(acc, transactions || [], budgetInstallments, selectedYear, selectedMonth);
         const targetBucket = getBucketForMonth(buckets, selectedMonth, selectedYear);
+        const personalBreakdown = targetBucket?.personalBreakdown;
 
         let baseAmount = 0;
-        if (targetBucket && targetBucket.personalBreakdown) {
-          baseAmount = (targetBucket.personalBreakdown.unpaidRollover || 0) + (targetBucket.personalBreakdown.newSwipesTotal || 0);
+        if (personalBreakdown) {
+          baseAmount = (personalBreakdown.unpaidRollover || 0) + (personalBreakdown.newSwipesTotal || 0);
           if (baseAmount > 0) subItems.push({ id: `${acc.id}-base`, name: 'Previous Balance + New Charges', amount: baseAmount, type: 'expense', dueDate: 0, displayDueDate: '', isPaid, isIncluded: true, rawItem: null });
         }
 
-        linkedInsts.forEach(inst => {
-          const isBudee = !!(inst.funding_friend_id || inst.debtor_friend_id || (inst as any).friend_user_id);
-          
-          // 🟢 FRONTING MATH
-          let frontedInfo = getFrontedData(inst.name);
-          const schedule = getPaymentSchedule('installment', inst.id, selectedMonth, selectedYear);
-          const isSchedulePaid = schedule ? schedule.status === 'paid' : false;
-          
-          let subIsPaid = false;
-          if (schedule) subIsPaid = isSchedulePaid;
-          else subIsPaid = checkIfPaidByTransaction(inst.name, inst.monthlyAmount || inst.amount, selectedMonth, selectedYear, selectedTiming);
-          if (frontedInfo) subIsPaid = false; // Forces it to stay in Upcoming
-
-          subItems.push({
-            id: inst.id, name: isBudee ? `${inst.name} (Budee)` : inst.name, amount: Number(inst.monthlyAmount) || Number(inst.amount) || 0,
-            type: 'installment', dueDate: getSafeDay(inst.dueDate || inst.due_date), displayDueDate: getDisplayDate(inst.dueDate || inst.due_date),
-            isPaid: subIsPaid, isIncluded: !excludedInstallmentIds.has(inst.id), rawItem: inst, frontedInfo // 🟢 Inject fronted state!
-          });
+        (personalBreakdown?.activeInstallments || []).forEach((inst: any) => {
+          if (!excludedInstallmentIds.has(inst.id)) {
+            subItems.push({ id: inst.id, name: inst.name, amount: Number(inst.monthlyAmount) || Number(inst.amount) || 0, type: 'Installment' });
+          }
         });
 
-        amount = baseAmount + linkedInsts.reduce((s, i) => s + (Number(i.monthlyAmount) || Number(i.amount) || 0), 0);
+        amount = targetBucket?.personalEndingBalance || 0;
         // 🟢 APPLY CREDIT MATH
         rawDue = getCreditDueDay(acc);
      }
@@ -3427,7 +3423,7 @@ const getFrozenCycleAmount = (account: Account): number => {
 
   
 
-        const orphanedInst = (installments || []).filter(inst => {
+        const orphanedInst = budgetInstallments.filter(inst => {
       const linkedId = inst.accountId || inst.account_id || inst.linkedAccountId || inst.linked_account_id;
       if (creditBudgetAccounts.some(acc => acc.id === linkedId)) return false; 
       
@@ -3460,7 +3456,7 @@ const getFrozenCycleAmount = (account: Account): number => {
     });
 
     return timeline.sort((a, b) => a.dueDate - b.dueDate);
-  }, [processedBudgetMap, activePeriodIndex, billers, installments, selectedMonth, selectedYear, selectedTiming, getPaymentSchedule, checkIfPaidBySchedule, checkIfPaidByTransaction, excludedInstallmentIds, creditBudgetAccounts, excludedCreditIds]);
+  }, [processedBudgetMap, activePeriodIndex, billers, budgetInstallments, selectedMonth, selectedYear, selectedTiming, getPaymentSchedule, checkIfPaidBySchedule, checkIfPaidByTransaction, excludedInstallmentIds, creditBudgetAccounts, excludedCreditIds]);
 
 
   
@@ -3682,7 +3678,7 @@ const getFrozenCycleAmount = (account: Account): number => {
     })
     .map((cat) => {
       const periodItems = processedBudgetMap[activePeriodIndex]?.[cat.name] || [];
-      const breakdown: { id: string, name: string, amount: number, type: string }[] = [];
+      const breakdown: { id: string, name: string, amount: number, type: string, reimbursableItems?: { id: string, name: string, amount: number, type: string }[] }[] = [];
 
       const itemsTotal = periodItems.reduce((sum, item) => {
         if (!item.included) return sum; 
@@ -3714,7 +3710,7 @@ const getFrozenCycleAmount = (account: Account): number => {
 
       let installmentsTotal = 0;
       if (cat.name === 'Loans' || cat.name === 'Budee') {
-        installmentsTotal = (installments || [])
+        installmentsTotal = budgetInstallments
           .filter(inst => {
             if (inst.isArchived || excludedInstallmentIds.has(inst.id)) return false;
             // 🟢 NEW (Accurate):
@@ -3768,7 +3764,7 @@ if (cat.name === 'Budee' && !inst.funding_friend_id) return false;
           const subItems: { id: string, name: string, amount: number, type: string }[] = [];
           
           if (account.subtype === 'Loan_Bundle') {
-            const bundleInsts = (installments || []).filter(inst => {
+            const bundleInsts = budgetInstallments.filter(inst => {
               if (inst.isArchived || excludedInstallmentIds.has(inst.id)) return false;
               const isBudee = !!(inst.funding_friend_id || inst.debtor_friend_id || (inst as any).friend_user_id);
               if (isBudee) return false;
@@ -3790,8 +3786,14 @@ if (cat.name === 'Budee' && !inst.funding_friend_id) return false;
           } else {
             accountAmt = getFrozenCycleAmount(account);
             
-            const buckets = generateCreditBuckets(account, transactions || [], installments || [], selectedYear, selectedMonth);
+            const buckets = generateCreditBuckets(account, transactions || [], budgetInstallments, selectedYear, selectedMonth);
             const targetBucket = getBucketForMonth(buckets, selectedMonth, selectedYear);
+            const reimbursableItems = (targetBucket?.budeeBreakdown || []).map(item => ({
+              id: item.id,
+              name: item.name,
+              amount: item.amount,
+              type: item.isReceivable ? 'Owed to Me' : 'Budee Expense'
+            }));
 
             if (targetBucket && targetBucket.personalBreakdown) {
               const pb = targetBucket.personalBreakdown;
@@ -3815,7 +3817,8 @@ if (cat.name === 'Budee' && !inst.funding_friend_id) return false;
                name: account.bank, 
                amount: accountAmt, 
                type: account.subtype === 'Loan_Bundle' ? 'Loan Bundle' : 'Credit Account',
-               subItems: subItems.length > 0 ? subItems : undefined // 🟢 Attach them if they exist!
+               subItems: subItems.length > 0 ? subItems : undefined,
+               reimbursableItems: reimbursableItems.length > 0 ? reimbursableItems : undefined
              });
              return sum + accountAmt;
           }
@@ -4085,13 +4088,7 @@ const totalSpend = grandTotal;
           }
           actions={isMobile ? null : (
             <div className="flex items-center gap-3 flex-wrap justify-end">
-              {!isReadOnly && autoSaveStatus !== 'idle' && ( 
-                <div className="flex items-center space-x-2 text-xs font-bold mr-2"> 
-                  {autoSaveStatus === 'saving' && (<><div className="w-4 h-4 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin"></div><span className="text-black/50 dark:text-white/50">Saving...</span></>)} 
-                  {autoSaveStatus === 'saved' && <Check className="w-4 h-4 text-green-600" />} 
-                  {autoSaveStatus === 'error' && (<><AlertTriangle className="w-4 h-4 text-red-600" /><span className="text-red-600">Error</span></>)} 
-                </div> 
-              )}
+              {!isReadOnly && <SyncIndicator status={saveStatus} />}
               {currentSetup && isReadOnly && (<PinProtectedAction featureId="budget_modifications" onVerified={() => handleReopenSetup(currentSetup)} actionLabel="Reopen Budget"><button onClick={(e) => e.preventDefault()} disabled={archiveSubmitting} className="flex items-center gap-2 bg-indigo-50 text-indigo-700 px-5 py-3 rounded-xl font-bold text-sm border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[1px] hover:translate-y-[1px] transition-all disabled:opacity-50"><RotateCcw className="w-4 h-4" /><span className="hidden sm:inline">Reopen</span></button></PinProtectedAction>)}
               {currentSetup && !isReadOnly && (<PinProtectedAction featureId="budget_modifications" onVerified={() => handleArchiveSetup(currentSetup)} actionLabel="Close Budget"><button onClick={(e) => e.preventDefault()} disabled={archiveSubmitting} className="flex items-center gap-2 bg-amber-50 text-amber-700 px-5 py-3 rounded-xl font-bold text-sm border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[1px] hover:translate-y-[1px] transition-all disabled:opacity-50"><Archive className="w-4 h-4" /><span className="hidden sm:inline">Close</span></button></PinProtectedAction>)}
               {!isReadOnly && (
@@ -6687,6 +6684,26 @@ const totalSpend = grandTotal;
                               </span>
                             </div>
                           ))}
+                          {item.reimbursableItems && item.reimbursableItems.length > 0 && (
+                            <div className="mt-3 pt-3 border-t-2 border-dashed border-blue-200 dark:border-blue-800">
+                              <p className="text-[10px] font-black uppercase tracking-widest text-blue-700 dark:text-blue-300 mb-2">
+                                Reimbursable (Owed to Me)
+                              </p>
+                              <div className="space-y-2">
+                                {item.reimbursableItems.map(reimbursable => (
+                                  <div key={reimbursable.id} className="flex justify-between items-center pl-2 pr-1">
+                                    <div className="flex items-center gap-2 min-w-0 pr-3">
+                                      <span className="w-1.5 h-1.5 rounded-full shrink-0 bg-blue-500" />
+                                      <span className="text-xs font-bold text-blue-700 dark:text-blue-300 truncate">{reimbursable.name}</span>
+                                    </div>
+                                    <span className="text-xs font-black text-blue-800 dark:text-blue-200 shrink-0">
+                                      {formatCurrency(reimbursable.amount)}
+                                    </span>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
                         </div>
                       </div>
                     </div>

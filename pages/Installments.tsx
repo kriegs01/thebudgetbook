@@ -11,6 +11,8 @@ import type { SupabaseMonthlyPaymentSchedule, SupabaseTransaction } from '../src
 import { supabase } from '../src/utils/supabaseClient';
 import { useTheme } from '../src/contexts/ThemeContext';
 import { PageHeader } from '../src/components/PageHeader';
+import { Link } from 'react-router-dom';
+import { ClockIcon } from '@/components/ui/clock';
 
 type ContactOption = {
   id: string;
@@ -843,9 +845,27 @@ const [paymentTab, setPaymentTab] = useState<'my_account' | 'budee'>('my_account
 
     const archived = isItemArchived(item);
     const archStatus = getItemArchiveStatus(item);
+    const isPending = item.status === 'pending';
+    const statementAccountId = item.accountId;
 
     return (
       <div key={item.id} className={`bg-white dark:bg-gray-900 p-6 rounded-3xl border-[3px] border-black shadow-[4px_4px_0px_rgba(0,0,0,1)] transition-all group relative overflow-hidden`}>
+        {isPending && (
+          <div className="absolute inset-0 z-20 flex flex-col items-center justify-center rounded-[inherit] bg-yellow-400/40 backdrop-blur-sm">
+            <div className="flex flex-col items-center rounded-2xl border-4 border-black bg-white/95 p-6 text-center shadow-[8px_8px_0px_0px_rgba(0,0,0,1)]">
+              <ClockIcon className="mb-3 h-10 w-10 text-yellow-600" />
+              <p className="mb-4 text-sm font-black uppercase tracking-widest text-black">
+                Still deciding.<br />Please finalize
+              </p>
+              <Link
+                to={`/accounts/statement?account=${statementAccountId || ''}`}
+                className="rounded-xl border-2 border-black bg-yellow-400 px-4 py-3 text-xs font-black uppercase tracking-widest text-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] transition-all hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none"
+              >
+                Go to Statement
+              </Link>
+            </div>
+          </div>
+        )}
         <div className="flex justify-between items-start mb-4">
           <div className="flex-1">
             <div className="flex items-center gap-2 mb-1">

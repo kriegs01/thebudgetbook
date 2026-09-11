@@ -62,7 +62,7 @@ export const TransactionList: React.FC<TransactionListProps> = ({
                         className="rounded h-5 w-5 mt-0.5"
                       />
                     )}
-                    <div className="flex items-center gap-2 min-w-0">
+                    <div className="flex min-w-0 flex-1 items-center gap-2">
                     <p className="text-sm font-bold text-gray-900 dark:text-gray-100 truncate">{tx.name}</p>
                     {tx.transaction_type === 'income' && (
                       <span className="inline-flex items-center bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 border border-emerald-300 dark:border-emerald-700 px-1.5 py-0.5 rounded-md text-[8px] font-black uppercase tracking-widest shrink-0">
@@ -71,10 +71,10 @@ export const TransactionList: React.FC<TransactionListProps> = ({
                     )}
                   </div>
                   </div>
-                  <p className={`text-xl font-black mt-2 ${tx.amount > 0 ? 'text-red-600 dark:text-red-400' : 'text-green-600 dark:text-green-400'}`}>{formatCurrency(-tx.amount)}</p>
+                  <p className={`shrink-0 text-xl font-black mt-2 ${tx.amount > 0 ? 'text-red-600 dark:text-red-400' : 'text-green-600 dark:text-green-400'}`}>{formatCurrency(-tx.amount)}</p>
                 </div>
-                <div className="flex flex-col items-end flex-shrink-0">
-                  <div className="flex items-center justify-center gap-1">
+                <div className="flex flex-none shrink-0 flex-col items-end">
+                  <div className="flex shrink-0 items-center justify-center gap-1">
                     {/* 🟢 NEW: Stash Button Logic */}
                      {/* 🟢 NEW: Smarter Stash Button Logic */}
                      {((tx.transaction_type === 'cash_in' || 
@@ -85,9 +85,9 @@ export const TransactionList: React.FC<TransactionListProps> = ({
                         onClick={() => onStash(tx)}
                         title="Stash Funds"
                         aria-label="Stash transaction funds"
-                        className={`w-8 h-8 flex items-center justify-center bg-yellow-100 dark:bg-yellow-900/30 rounded-lg border-2 border-black transition-colors text-yellow-700 dark:text-yellow-400 hover:bg-yellow-200`}
+                        className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border-2 border-black bg-yellow-100 text-yellow-700 transition-colors hover:bg-yellow-200 dark:bg-yellow-900/30 dark:text-yellow-400"
                       >
-                        <Lock className="w-4 h-4" />
+                        <Lock className="h-4 w-4 shrink-0" />
                       </button>
                     )}
                     {/* Existing Info and Pencil Buttons */}
@@ -95,15 +95,15 @@ export const TransactionList: React.FC<TransactionListProps> = ({
                       onClick={() => onViewDetails(tx)}
                       title="View details"
                       aria-label="View transaction details"
-                      className={`w-8 h-8 flex items-center justify-center bg-gray-100 dark:bg-gray-700 rounded-lg border-2 border-black transition-colors text-gray-600 dark:text-gray-300 ${getAccentClasses('hoverLight')}`}>
-                      <Info className="w-4 h-4" />
+                      className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border-2 border-black bg-gray-100 text-gray-600 transition-colors dark:bg-gray-700 dark:text-gray-300 ${getAccentClasses('hoverLight')}`}>
+                      <Info className="h-4 w-4 shrink-0" />
                     </button>
                     <button
                       onClick={() => onEdit(tx)}
                       title="Edit transaction"
                       aria-label="Edit transaction"
-                      className={`w-8 h-8 flex items-center justify-center bg-gray-100 dark:bg-gray-700 rounded-lg border-2 border-black transition-colors text-gray-600 dark:text-gray-300 ${getAccentClasses('hoverLight')}`}>
-                      <Pencil className="w-4 h-4" />
+                      className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border-2 border-black bg-gray-100 text-gray-600 transition-colors dark:bg-gray-700 dark:text-gray-300 ${getAccentClasses('hoverLight')}`}>
+                      <Pencil className="h-4 w-4 shrink-0" />
                     </button>
                   </div>
                 </div>

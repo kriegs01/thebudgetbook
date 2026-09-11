@@ -82,7 +82,11 @@ export interface SupabaseInstallment {
   timing: string | null; // PROTOTYPE: '1/2' or '2/2' - payment timing within month
   user_id: string | null; // uuid, references auth.users(id)
   friend_user_id?: string | null; // uuid, nullable - links loan to a real Budee friend
+  funding_friend_id?: string | null;
+  debtor_friend_id?: string | null;
+  expected_account_id?: string | null;
   principal_amount: number;
+  status?: string | null;
   budee_billing_date?: number | null;
   budee_days_to_pay?: number | null;
 }
@@ -111,6 +115,13 @@ export interface SupabaseTransaction {
   user_id: string | null; // uuid, references auth.users(id)
   wallet_id: string | null; // uuid, nullable - links stash top-up transactions to a wallet
   friend_user_id?: string | null; // uuid, nullable - links transaction to a real Budee friend
+  funding_friend_id?: string | null;
+  debtor_friend_id?: string | null;
+  expected_account_id?: string | null;
+  conversion_group_id?: string | null;
+  conversion_status?: 'none' | 'pending' | 'approved' | 'rejected' | null;
+  order_status?: 'pending_delivery' | 'completed' | 'return_pending' | 'returned' | null;
+  completed_date?: string | null;
 }
 
 export interface SupabaseBudgetSetup {

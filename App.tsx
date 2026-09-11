@@ -452,7 +452,7 @@ const MainApp: React.FC = () => {
     await refetchRequests();
   };
 
-  const { data: txData, isLoading: transactionsLoading } = useTransactions();
+  const { data: txData, isLoading: transactionsLoading, refetch: refetchTransactions } = useTransactions();
   const rawTransactions = txData?.raw || [];
   // Ensure newly added database fields (like person_name) that might be stripped 
   // by the hook's formatting are preserved and passed down to the UI components.
@@ -1949,7 +1949,9 @@ useEffect(() => {
                 />
               } />
               <Route path="/accounts/view" element={<AccountFilteredTransactions accounts={accounts} onTransactionCreated={reloadAccounts} installments={installments} />} />
-              <Route path="/accounts/statement" element={<StatementPage accounts={accounts} installments={installments} transactions={rawTransactions}/>} />
+              <Route path="/accounts/statement" element={<StatementPage accounts={accounts} installments={installments} transactions={rawTransactions} onRefreshData={async () => {
+                await Promise.all([refetchTransactions(), reloadInstallments()]);
+              }} />} />
               <Route path="/wallets" element={<WalletsPage accounts={accounts} />} />
               <Route path="/wallets/view" element={<WalletView accounts={accounts} />} />
               <Route path="/settings" element={

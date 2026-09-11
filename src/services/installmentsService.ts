@@ -189,12 +189,29 @@ export const updateInstallment = async (id: string, updates: UpdateInstallmentIn
  */
 export const deleteInstallment = async (id: string) => {
   try {
-    const { error } = await supabase
+    const { data: installment, error: lookupError } = await supabase
+      .from(getTableName('installments'))
+      .select('conversion_group_id')
+      .eq('id', id)
+      .maybeSingle();
+
+    if (lookupError) throw lookupError;
+
+    if (installment?.conversion_group_id) {
+      const { error: txError } = await supabase
+        .from(getTableName('transactions'))
+        .update({ conversion_group_id: null, conversion_status: null })
+        .eq('conversion_group_id', installment.conversion_group_id);
+
+      if (txError) throw txError;
+    }
+
+    const { error: installmentError } = await supabase
       .from(getTableName('installments'))
       .delete()
       .eq('id', id);
 
-    if (error) throw error;
+    if (installmentError) throw installmentError;
     return { error: null };
   } catch (error) {
     console.error('Error deleting installment:', error);

@@ -9,7 +9,19 @@
 	"build": {
         "context": ".",
         "dockerfile": "Dockerfile"
-    }
+    },
+	"features": {
+		"ghcr.io/devcontainers/features/node:1": {
+			"version": "22"
+		}
+	},
+	"forwardPorts": [3000],
+	"portsAttributes": {
+		"3000": {
+			"label": "Budee development server",
+			"onAutoForward": "openBrowser"
+		}
+	}
 	// Features add additional features to your environment. See https://containers.dev/features
 	// Beware: features are not supported on all platforms and may have unintended side-effects.
 	// "features": {

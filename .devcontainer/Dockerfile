@@ -1,5 +1,5 @@
 FROM mcr.microsoft.com/devcontainers/base:2.0.4-noble
 
-# use this Dockerfile to install additional tools you might need, e.g.
-# RUN apt-get update && export DEBIAN_FRONTEND=noninteractive \
-#     && apt-get -y install --no-install-recommends <your-package-list-here>
+RUN set -eux; apt-get update; apt-get install -y --no-install-recommends nodejs npm; apt-get clean; rm -rf /var/lib/apt/lists/*
+
+# Additional packages can be installed in the RUN instruction above.

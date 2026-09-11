@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { ArrowLeft, Calendar, CreditCard, ChevronDown, Info } from 'lucide-react';
+import { ArrowLeft, Calendar, CreditCard, ChevronDown, Info, ChevronUp, Box, ShoppingBag } from 'lucide-react';
 import { useSearchParams, Link } from 'react-router-dom';
 import { Account, Installment } from '../../types';
 import { getTransactionsByPaymentSchedule } from '../../src/services/transactionsService';
@@ -8,6 +8,9 @@ import useMediaQuery from '../../src/hooks/useMediaQuery';
 import { useTheme } from '../../src/contexts/ThemeContext';
 import { PageHeader } from '../../src/components/PageHeader';
 import { getPaymentSchedulesBySource } from '../../src/services/paymentSchedulesService';
+import { groupBNPLTransactions } from '../../src/utils/creditEngines/transactionGrouper';
+import { MultiBNPLConversionModal } from '../../src/components/BNPLConversionModal';
+import { useQueryClient } from '@tanstack/react-query';
 
 const formatCurrency = (val: number) =>
   new Intl.NumberFormat('en-PH', {
@@ -23,9 +26,12 @@ interface StatementPageProps {
   accounts: Account[];
   installments: Installment[];
   transactions?: any[];
+  onRefreshData?: () => Promise<void>;
 }
 
-const StatementPage: React.FC<StatementPageProps> = ({ accounts, installments = [], transactions = [] }) => {
+const StatementPage: React.FC<StatementPageProps> = ({ accounts, installments = [], transactions = [], onRefreshData }) => {
+   const queryClient = useQueryClient();
+
   const { getAccentClasses } = useTheme();
   const isMobile = useMediaQuery('(max-width: 767px)');
   const [searchParams] = useSearchParams();
@@ -37,6 +43,19 @@ const StatementPage: React.FC<StatementPageProps> = ({ accounts, installments = 
 
   const [expandedInstallments, setExpandedInstallments] = useState<Record<string, boolean>>({});
   const [dbPaidAmounts, setDbPaidAmounts] = useState<Map<string, number>>(new Map());
+  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
+
+const [showMultiBNPLModal, setShowMultiBNPLModal] = useState(false);
+const [showReviewModal, setShowReviewModal] = useState(false);
+
+
+  const toggleGroup = (groupId: string) => {
+    setExpandedGroups(prev => {
+      const next = new Set(prev);
+      if (next.has(groupId)) next.delete(groupId); else next.add(groupId);
+      return next;
+    });
+  };
 
   // 🟢 Fetch actual paid schedules for all installments
   useEffect(() => {
@@ -369,33 +388,59 @@ const StatementPage: React.FC<StatementPageProps> = ({ accounts, installments = 
   const totalPayments = selectedCycle?.paymentsTotal ?? 0;
   const statementBalance = selectedCycle?.endingBalance ?? 0;
 
-    // 🟢 Extract and sort transactions chronologically (Oldest to Newest)
-    const currentTxs = selectedCycle ? [
-      // 1. The Rollover Balance is ALWAYS first (Beginning of cycle), but only if > 0
-      ...(selectedCycle.personalBreakdown.unpaidRollover > 0 ? [{
-        id: 'rollover-item',
-        name: 'Previous Statement Balance',
-        date: selectedCycle.cycleStart.toISOString(),
-        amount: selectedCycle.personalBreakdown.unpaidRollover,
-        transaction_type: 'rollover'
-      }] : []),
+  // 🟢 Extract and sort transactions chronologically (Oldest to Newest)
+  const currentTxs = selectedCycle ? [
+    // 1. The Rollover Balance is ALWAYS first (Beginning of cycle), but only if > 0
+    ...(selectedCycle.personalBreakdown.unpaidRollover > 0 ? [{
+      id: 'rollover-item',
+      name: 'Previous Statement Balance',
+      date: selectedCycle.cycleStart.toISOString(),
+      amount: selectedCycle.personalBreakdown.unpaidRollover,
+      transaction_type: 'rollover'
+    }] : []),
+    
+    // 2. Combine all other items and sort them by date
+    ...[
+      ...selectedCycle.personalBreakdown.swipes,
+      // THE FAILSAFE: Explicitly block future installments from past cycles
+      ...selectedCycle.personalBreakdown.activeInstallments
+        .filter((inst: any) => {
+          if (!inst.start_date) return true;
+
+          const instStart = new Date(inst.start_date);
+          instStart.setHours(0, 0, 0, 0);
+
+          // Calculate a safe cycle end boundary (Cycle Start + ~31 days)
+          const safeCycleEnd = new Date(selectedCycle.cycleStart);
+          safeCycleEnd.setDate(safeCycleEnd.getDate() + 31);
+          safeCycleEnd.setHours(23, 59, 59, 999);
+
+          // If the installment starts after this cycle's maximum possible end date, drop it.
+          return instStart <= safeCycleEnd;
+        })
+        .map((i: any) => ({ ...i, transaction_type: 'installment' })),
+      ...selectedCycle.budeeBreakdown.map(b => ({ ...b, name: `Budee: ${b.name}`, transaction_type: 'budee' })),
+      ...selectedCycle.payments.map(p => ({ ...p, amount: -p.amount, transaction_type: 'payment' }))
+    ].sort((a, b) => {
+      // If an item has no specific date (like fixed monthly installments), 
+      // we default it to the very start of the cycle right after the rollover!
+      const dateA = a.date ? new Date(a.date).getTime() : selectedCycle.cycleStart.getTime();
+      const dateB = b.date ? new Date(b.date).getTime() : selectedCycle.cycleStart.getTime();
       
-      // 2. Combine all other items and sort them by date
-      ...[
-        ...selectedCycle.personalBreakdown.swipes,
-        ...selectedCycle.personalBreakdown.activeInstallments.map(i => ({ ...i, transaction_type: 'installment' })),
-        ...selectedCycle.budeeBreakdown.map(b => ({ ...b, name: `Budee: ${b.name}`, transaction_type: 'budee' })),
-        ...selectedCycle.payments.map(p => ({ ...p, amount: -p.amount, transaction_type: 'payment' }))
-      ].sort((a, b) => {
-        // If an item has no specific date (like fixed monthly installments), 
-        // we default it to the very start of the cycle right after the rollover!
-        const dateA = a.date ? new Date(a.date).getTime() : selectedCycle.cycleStart.getTime();
-        const dateB = b.date ? new Date(b.date).getTime() : selectedCycle.cycleStart.getTime();
-        
-        return dateA - dateB; // Sort ascending (Oldest first)
-      })
-    ] : [];
-  
+      return dateA - dateB; // Sort ascending (Oldest first)
+    })
+  ] : [];
+
+  const groupedCurrentTxs = groupBNPLTransactions(currentTxs as any, installments).filter((item) => {
+    if (!item.isGroup) {
+      const tx = item.transactions[0];
+      return !(tx?.conversion_status === 'approved' && tx?.conversion_group_id);
+    }
+    return true;
+  });
+  const visibleMobileTxs = currentTxs.filter(tx => !(tx.conversion_status === 'approved' && tx.conversion_group_id));
+  const pendingConversions = currentTxs.filter(tx => tx.conversion_status === 'pending');
+  const visibleStatementCount = groupedCurrentTxs.length;
 
   return (
     <div className={`min-h-screen bg-gray-50 dark:bg-gray-950 transition-colors ${isMobile ? 'overflow-x-hidden px-4 pb-8 pt-6' : 'p-8'}`}>
@@ -496,31 +541,97 @@ const StatementPage: React.FC<StatementPageProps> = ({ accounts, installments = 
             </div>
 
             <div className="overflow-hidden rounded-[1.8rem] border-[4px] border-black bg-white shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] transition-colors dark:bg-gray-900">
-              <div className="flex items-center justify-between border-b-[4px] border-black px-6 py-4 transition-colors">
-                <h2 className="text-sm font-black uppercase tracking-widest text-gray-600 transition-colors dark:text-gray-400">Transactions</h2>
-                <div className="text-sm text-gray-500 transition-colors dark:text-gray-400">{currentTxs.length} items</div>
+              <div className="mb-4 flex flex-row items-start justify-between gap-4 border-b-[4px] border-black px-6 py-4 transition-colors">
+                <div className="flex min-w-0 flex-col gap-1 sm:flex-row sm:items-center sm:gap-3">
+                  <h2 className="truncate text-sm font-black uppercase tracking-widest text-gray-600 transition-colors dark:text-gray-400">Transactions</h2>
+                  <span className="shrink-0 text-xs font-bold text-gray-400">{visibleStatementCount} items</span>
+                </div>
+
+                <div className="flex shrink-0 flex-col items-end gap-2">
+                  <button
+                    onClick={() => setShowMultiBNPLModal(true)}
+                    className="whitespace-nowrap rounded-lg border-2 border-black bg-indigo-100 px-3 py-1 text-[10px] font-black uppercase tracking-widest text-indigo-700 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] transition-all hover:translate-x-[1px] hover:translate-y-[1px] hover:shadow-none"
+                  >
+                    Convert to BNPL
+                  </button>
+                  {pendingConversions.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => setShowReviewModal(true)}
+                      className="whitespace-nowrap rounded-lg border-2 border-black bg-amber-100 px-3 py-1 text-[10px] font-black uppercase tracking-widest text-amber-700 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] transition-all hover:translate-x-[1px] hover:translate-y-[1px] hover:shadow-none animate-pulse"
+                    >
+                      Review Pending ({pendingConversions.length})
+                    </button>
+                  )}
+                </div>
               </div>
+
               <div className="p-4">
                 {isMobile ? (
                   <div className="space-y-3">
-                    {currentTxs.map(tx => (
-                      <div key={tx.id} className="rounded-[1.4rem] border-[3px] border-black bg-[#fff8ea] p-4 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] transition-colors dark:bg-gray-800">
-                        <div className="flex items-start justify-between gap-3">
-                          <div className="min-w-0">
-                            <p className="text-sm font-black text-gray-900 dark:text-gray-100">{tx.name}</p>
-                            {tx.date && (
-                              <p className="mt-1 text-xs font-bold text-gray-500 dark:text-gray-400">
-                                {new Date(tx.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                    {groupedCurrentTxs.map(item => {
+                      if (!item.isGroup) {
+                        const tx = item.transactions[0];
+                        return (
+                          <div key={tx.id} className="rounded-[1.4rem] border-[3px] border-black bg-[#fff8ea] p-4 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] transition-colors dark:bg-gray-800">
+                            <div className="flex items-start justify-between gap-3">
+                              <div className="min-w-0 flex-1">
+                                <p className="truncate text-sm font-black text-gray-900 dark:text-gray-100">{tx.name}</p>
+                                {(tx.status === 'pending' || tx.conversion_status === 'pending') && (
+                                  <div className="mt-1 text-[10px] font-semibold text-amber-500 sm:text-xs">Pending Conversion Approval</div>
+                                )}
+                                {tx.date && (
+                                  <p className="mt-1 truncate text-xs font-bold text-gray-500 dark:text-gray-400">
+                                    {new Date(tx.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                                  </p>
+                                )}
+                              </div>
+                              <p className={`shrink-0 text-right text-sm font-black transition-colors ${tx.amount > 0 ? 'text-gray-900 dark:text-gray-100' : 'text-green-600 dark:text-green-400'}`}>
+                                {formatCurrency(tx.amount)}
                               </p>
-                            )}
+                            </div>
                           </div>
-                          <p className={`text-right text-sm font-black transition-colors ${tx.amount > 0 ? 'text-gray-900 dark:text-gray-100' : 'text-green-600 dark:text-green-400'}`}>
-                            {formatCurrency(tx.amount)}
-                          </p>
+                        );
+                      }
+
+                      const isExpanded = expandedGroups.has(item.id);
+                      return (
+                        <div key={item.id} className="rounded-[1.4rem] border-[3px] border-blue-900 bg-blue-50 p-4 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] transition-colors dark:border-blue-800 dark:bg-blue-900/20">
+                          <div className="flex cursor-pointer items-start justify-between gap-3" onClick={() => toggleGroup(item.id)}>
+                            <div className="flex min-w-0 flex-1 items-center gap-2">
+                              <ShoppingBag className="h-5 w-5 shrink-0 text-blue-600 dark:text-blue-400" />
+                              <div className="min-w-0">
+                                <p className="truncate text-sm font-black text-blue-900 dark:text-blue-100">{item.parentInstallment?.name || 'BNPL Converted'}</p>
+                                <p className="mt-1 truncate text-xs font-bold text-blue-700 dark:text-blue-400">
+                                  {new Date(item.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                                </p>
+                              </div>
+                            </div>
+                            <div className="mt-1 flex shrink-0 items-center gap-2">
+                              <p className="shrink-0 text-right text-sm font-black text-blue-900 dark:text-blue-100">{formatCurrency(item.totalAmount)}</p>
+                              {isExpanded ? <ChevronUp className="h-5 w-5 shrink-0 text-blue-600" /> : <ChevronDown className="h-5 w-5 shrink-0 text-blue-600" />}
+                            </div>
+                          </div>
+
+                          {isExpanded && (
+                            <div className="mt-4 space-y-2 border-t-2 border-dashed border-blue-200 pt-3 dark:border-blue-800">
+                              {item.transactions.map(subTx => (
+                                <div key={subTx.id} className="flex items-start justify-between gap-3 text-xs">
+                                  <div className="min-w-0 flex-1 text-gray-600 dark:text-gray-400">
+                                    <p className="truncate">↳ {subTx.name}</p>
+                                    {(subTx.status === 'pending' || subTx.conversion_status === 'pending') && (
+                                      <p className="mt-0.5 text-[10px] text-amber-500">Pending Approval</p>
+                                    )}
+                                  </div>
+                                  <div className="shrink-0 font-medium text-gray-600 dark:text-gray-400">{formatCurrency(subTx.amount)}</div>
+                                </div>
+                              ))}
+                            </div>
+                          )}
                         </div>
-                      </div>
-                    ))}
-                    {currentTxs.length === 0 && (
+                      );
+                    })}
+                    {groupedCurrentTxs.length === 0 && (
                       <div className="rounded-[1.4rem] border-[3px] border-dashed border-black bg-white p-6 text-center dark:bg-gray-800">
                         <p className="text-sm font-bold text-gray-500 dark:text-gray-400">No transactions in this billing cycle.</p>
                       </div>
@@ -537,42 +648,146 @@ const StatementPage: React.FC<StatementPageProps> = ({ accounts, installments = 
                         </tr>
                       </thead>
                       <tbody>
-                        {currentTxs.map(tx => (
-                          <tr key={tx.id} className="border-t border-gray-100 transition-colors dark:border-gray-800">
-                            <td className="px-4 py-3">
-                              <div className="text-sm font-medium text-gray-900 transition-colors dark:text-gray-100">{tx.name}</div>
-                            </td>
-                            <td className="px-4 py-3">
-                              <div className="text-sm text-gray-500 transition-colors dark:text-gray-400">
-                                {tx.date ? new Date(tx.date).toLocaleDateString('en-US', {
-                                  month: 'short',
-                                  day: 'numeric',
-                                  year: 'numeric'
-                                }) : 'N/A'}
-                              </div>
-                            </td>
-                            <td className="px-4 py-3 text-right">
-                            <div className={`text-sm font-semibold transition-colors ${tx.amount > 0 ? 'text-gray-900 dark:text-gray-100' : 'text-green-600 dark:text-green-400'}`}>
-                              {formatCurrency(tx.amount)}
-                            </div>
-                            </td>
-                          </tr>
-                        ))}
-                        {currentTxs.length === 0 && (
-                          <tr>
-                            <td colSpan={3} className="px-4 py-6 text-center text-gray-400 transition-colors dark:text-gray-500">
-                              No transactions in this billing cycle.
-                            </td>
-                          </tr>
-                        )}
-                      </tbody>
+  {groupedCurrentTxs.map((item) => {
+    
+    // STANDARD TRANSACTION
+    if (!item.isGroup) {
+      const tx = item.transactions[0];
+      return (
+        <tr key={tx.id} className="border-t border-gray-100 transition-colors dark:border-gray-800">
+          <td className="px-4 py-3">
+            <div className="text-sm font-medium text-gray-900 transition-colors dark:text-gray-100">{tx.name}</div>
+            {(tx.status === 'pending' || tx.conversion_status === 'pending') && (
+              <div className="mt-1 text-[10px] font-semibold text-amber-500 sm:text-xs">Pending Conversion Approval</div>
+            )}
+          </td>
+          <td className="px-4 py-3">
+            <div className="text-sm text-gray-500 transition-colors dark:text-gray-400">
+              {tx.date ? new Date(tx.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'N/A'}
+            </div>
+          </td>
+          <td className="px-4 py-3 text-right">
+            <div className={`text-sm font-semibold transition-colors ${tx.amount > 0 ? 'text-gray-900 dark:text-gray-100' : 'text-green-600 dark:text-green-400'}`}>
+              {formatCurrency(tx.amount)}
+            </div>
+          </td>
+        </tr>
+      );
+    }
+
+    // BNPL ACCORDION
+    const isExpanded = expandedGroups.has(item.id);
+    return (
+      <React.Fragment key={item.id}>
+        <tr 
+          onClick={() => toggleGroup(item.id)}
+          className="border-t border-blue-200 bg-blue-50/50 hover:bg-blue-100/50 cursor-pointer transition-colors dark:border-blue-900 dark:bg-blue-900/10 dark:hover:bg-blue-900/20"
+        >
+          <td className="px-4 py-3">
+            <div className="flex min-w-0 flex-1 items-center gap-2">
+              <ShoppingBag className="h-4 w-4 shrink-0 text-blue-600 dark:text-blue-400" />
+              <div className="min-w-0 truncate text-sm font-bold text-blue-900 dark:text-blue-100">{item.parentInstallment?.name || 'BNPL Converted'}</div>
+            </div>
+          </td>
+          <td className="px-4 py-3">
+            <div className="text-sm text-blue-600 dark:text-blue-400">
+              {new Date(item.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+            </div>
+          </td>
+          <td className="px-4 py-3 text-right">
+            <div className="ml-2 flex flex-none shrink-0 items-center justify-end gap-3">
+              <div className="shrink-0 text-sm font-black text-blue-900 dark:text-blue-100">
+                {formatCurrency(item.totalAmount)}
+              </div>
+              {isExpanded ? <ChevronUp className="h-4 w-4 shrink-0 text-blue-600" /> : <ChevronDown className="h-4 w-4 shrink-0 text-blue-600" />}
+            </div>
+          </td>
+        </tr>
+        
+        {/* EXPANDED RECEIPTS */}
+        {isExpanded && item.transactions.map(subTx => (
+          <tr key={subTx.id} className="bg-gray-50/50 dark:bg-gray-800/30">
+            <td className="px-4 py-2 pl-10 border-l-2 border-blue-200 dark:border-blue-800">
+              <div className="text-xs text-gray-600 dark:text-gray-400">↳ {subTx.name}</div>
+              {(subTx.status === 'pending' || subTx.conversion_status === 'pending') && (
+                <div className="mt-1 text-[10px] font-semibold text-amber-500 sm:text-xs">Pending Conversion Approval</div>
+              )}
+            </td>
+            <td className="px-4 py-2 text-xs text-gray-500">
+              {subTx.date ? new Date(subTx.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : 'N/A'}
+            </td>
+            <td className="px-4 py-2 text-right text-xs text-gray-600 dark:text-gray-400">
+              {formatCurrency(subTx.amount)}
+            </td>
+          </tr>
+        ))}
+      </React.Fragment>
+    );
+  })}
+  {groupedCurrentTxs.length === 0 && (
+    <tr>
+      <td colSpan={3} className="px-4 py-6 text-center text-gray-400 transition-colors dark:text-gray-500">
+        No transactions in this billing cycle.
+      </td>
+    </tr>
+  )}
+</tbody>
+
                     </table>
                   </div>
                 )}
               </div>
             </div>
-          </>
+                    </>
         )}
+
+       {/* Mount the Modal here */}
+{showMultiBNPLModal && (
+  <MultiBNPLConversionModal
+    availableTransactions={currentTxs.filter(tx => {
+      const isPositive = tx.amount > 0;
+      const isValidType = !['credit_payment', 'rollover', 'installment', 'budee'].includes(tx.transaction_type);
+      const isNotPending = tx.conversion_status !== 'pending';
+      const isNotApproved = tx.conversion_status !== 'approved';
+      const isAvailable = isPositive && isValidType && isNotPending && isNotApproved;
+
+      if (!isAvailable && isPositive && isValidType) {
+        console.log('\u{1F6A8} REJECTED BY MODAL:', tx.name, {
+          status: tx.conversion_status,
+          group: tx.conversion_group_id
+        });
+      }
+
+      return isAvailable;
+    })}
+    onClose={() => setShowMultiBNPLModal(false)}
+    onSuccess={async () => {
+      if (onRefreshData) await onRefreshData();
+      else await queryClient.invalidateQueries({ queryKey: ['transactions'] });
+      setShowMultiBNPLModal(false);
+    }}
+    account={account}
+  />
+)}
+{showReviewModal && (
+  <MultiBNPLConversionModal
+    installments={installments}
+    mode="review"
+    availableTransactions={currentTxs.filter(tx => tx.conversion_status === 'pending')}
+    onClose={() => setShowReviewModal(false)}
+    onSuccess={async () => {
+      if (onRefreshData) await onRefreshData();
+      else await queryClient.invalidateQueries({ queryKey: ['transactions'] });
+      setShowReviewModal(false);
+    }}
+    account={account}
+  />
+)}
+
+
+
+
+
       </div>
     </div>
   );

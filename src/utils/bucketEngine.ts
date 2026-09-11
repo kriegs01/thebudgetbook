@@ -5,6 +5,10 @@ export interface BucketItem {
   name: string;
   amount: number;
   date?: string;
+  conversion_group_id?: string | null;
+  conversionGroupId?: string | null;
+  conversion_status?: string | null;
+  conversionStatus?: string | null;
   isBudee?: boolean;
   budeeId?: string;
   isReceivable?: boolean;
@@ -23,6 +27,8 @@ export interface CreditBucket {
   paymentsTotal: number;
   newChargesTotal: number;
   endingBalance: number;
+  personalEndingBalance: number;
+  budeeEndingBalance: number;
 
   personalBreakdown: {
     unpaidRollover: number;
@@ -37,6 +43,11 @@ export interface CreditBucket {
 
 const getPaymentMethodId = (tx: any) => tx.payment_method_id || tx.paymentMethodId;
 const getTransactionType = (tx: any) => tx.transaction_type || tx.transactionType;
+const getConversionGroupId = (item: any) => item.conversion_group_id || item.conversionGroupId;
+const isApprovedConversion = (item: any) => Boolean(
+  getConversionGroupId(item) &&
+  (item.conversion_status || item.conversionStatus) === 'approved'
+);
 
 // 🟢 NEW: Bulletproof Date Parser for iPad/Safari (WebKit)
 // Replaces the space with a 'T' to satisfy strict ISO 8601 requirements
@@ -160,6 +171,7 @@ export const generateCreditBuckets = (
     let currentYear = startDate.getFullYear();
     let currentMonthIdx = startDate.getMonth();
     let currentStartingBalance = Math.abs(Number(account.openingBalance) || 0);
+    let currentPersonalStartingBalance = currentStartingBalance;
 
     const targetMonthIdx = MONTHS.indexOf(upToMonthName);
     const targetAbsMonth = upToYear * 12 + targetMonthIdx;
@@ -239,18 +251,24 @@ export const generateCreditBuckets = (
       
       
       const activeInst = (installments || []).filter(inst => {
-        // 🟢 THE FIX: We completely removed the `isArchived` check!
-        // Historical ledgers MUST retain archived charges so your ghost payments can offset them to zero.
-        
+        if (inst.status === 'pending') return false;
         const linkedId = inst.accountId || inst.account_id || inst.linkedAccountId || inst.linked_account_id;
         if (linkedId !== account.id) return false;
 
-        // Safely parse the start date (handles both camelCase and snake_case)
-        const rawStartDate = inst.startDate || inst.start_date || (inst as any).activationDate || (inst as any).activation_date;
+        // An installment cannot exist in a statement that closed before it started.
+        const rawStartDate = inst.startDateExact || inst.start_date || inst.startDate || (inst as any).activationDate || (inst as any).activation_date;
         if (!rawStartDate) return true; 
-        
-        const [startYr, startMo] = String(rawStartDate).split('-').map(Number);
-        if (isNaN(startYr) || isNaN(startMo)) return true;
+
+        const installmentStartDate = parseSafeDate(String(rawStartDate));
+        if (!installmentStartDate) return false;
+        installmentStartDate.setHours(12, 0, 0, 0);
+
+        const cycleEndBoundary = new Date(cycleEnd);
+        cycleEndBoundary.setHours(23, 59, 59, 999);
+        if (installmentStartDate > cycleEndBoundary) return false;
+
+        const startYr = installmentStartDate.getFullYear();
+        const startMo = installmentStartDate.getMonth() + 1;
 
         const startAbs = startYr * 12 + (startMo - 1);
         const cycleAbs = cycleEnd.getFullYear() * 12 + cycleEnd.getMonth();
@@ -292,7 +310,12 @@ export const generateCreditBuckets = (
           });
         } else {
           personalNewChargesTotal += amt;
-          personalActiveInstallments.push({ id: inst.id, name: inst.name, amount: amt });
+          personalActiveInstallments.push({
+            ...inst,
+            id: inst.id,
+            name: inst.name,
+            amount: amt,
+          });
         }
       });
 
@@ -303,9 +326,12 @@ export const generateCreditBuckets = (
         const amt = Math.max(0, Number(tx.amount)) || 0;
         const budeeId = tx.debtor_friend_id || tx.funding_friend_id || (tx as any).friend_user_id;
         
+        const isConverted = isApprovedConversion(tx);
+
         if (budeeId) {
-          budeeNewChargesTotal += amt;
+          if (!isConverted) budeeNewChargesTotal += amt;
           budeeBreakdown.push({ 
+            ...tx,
             id: tx.id, 
             name: tx.name || 'Swipe', 
             amount: amt, 
@@ -314,8 +340,14 @@ export const generateCreditBuckets = (
             budeeId 
           });
         } else {
-          personalNewChargesTotal += amt;
-          personalSwipes.push({ id: tx.id, name: tx.name || 'Swipe', amount: amt, date: tx.date });
+          if (!isConverted) personalNewChargesTotal += amt;
+          personalSwipes.push({
+            ...tx,
+            id: tx.id,
+            name: tx.name || 'Swipe',
+            amount: amt,
+            date: tx.date,
+          });
         }
       });
 
@@ -336,13 +368,16 @@ export const generateCreditBuckets = (
       
             if (isFutureBucket) {
                currentStartingBalance = 0;
+              currentPersonalStartingBalance = 0;
             }
             
             // 🟢 THE FIX 3: Pure Ledger Math (Previous + New - Payments)
+            const personalEndingBalance = Math.max(0, currentPersonalStartingBalance + personalNewChargesTotal - paymentsTotal);
+            const budeeEndingBalance = Math.max(0, budeeNewChargesTotal);
             const endingBalance = currentStartingBalance + totalNewCharges - paymentsTotal;
             
             // Display purposes for the UI
-            const unpaidRollover = Math.max(0, currentStartingBalance);
+            const unpaidRollover = currentPersonalStartingBalance;
       
 
 
@@ -357,9 +392,14 @@ export const generateCreditBuckets = (
         paymentsTotal,
         newChargesTotal: totalNewCharges,
         endingBalance,
+        personalEndingBalance,
+        budeeEndingBalance,
         personalBreakdown: {
           unpaidRollover,
-          newSwipesTotal: personalSwipes.reduce((sum, tx) => sum + tx.amount, 0),
+          newSwipesTotal: personalSwipes.reduce(
+            (sum, tx) => sum + (isApprovedConversion(tx) ? 0 : tx.amount),
+            0
+          ),
           activeInstallments: personalActiveInstallments,
           swipes: personalSwipes
         },
@@ -368,6 +408,7 @@ export const generateCreditBuckets = (
       });
 
       currentStartingBalance = endingBalance;
+      currentPersonalStartingBalance = personalEndingBalance;
 
       currentMonthIdx++;
       if (currentMonthIdx > 11) {

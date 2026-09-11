@@ -100,19 +100,28 @@ export interface Installment {
   paidAmount: number;
   accountId: string;
   startDate?: string; // Format: YYYY-MM
+  startDateExact?: string;
   billerId?: string; // Link to Biller for Loans category
   timing?: '1/2' | '2/2'; // PROTOTYPE: Payment timing within the month
   due_date?: string | null;
   is_migrated?: boolean;
   // 🟢 NEW: Links this installment to a specific Credit Card statement
   linkedAccountId?: string;
+  funding_friend_id?: string | null;
+  debtor_friend_id?: string | null;
+  friend_user_id?: string | null;
+  expected_account_id?: string | null;
   principalAmount?: number;
   budee_due_day?: number | null;
   budee_month_offset?: number;
   budee_billing_date?: number | null;
   budee_days_to_pay?: number | null;
-
+  // 🟢 NEW: BNPL & Decoupled Order Tags
+  conversion_group_id?: string | null;
+  statement_id?: string | null;
+  status?: string;
 }
+
 
 export interface SavingsJar {
   id: string;
@@ -137,10 +146,20 @@ export interface Transaction {
   isreconciled?: boolean;
   payer_id?: string | null;
   beneficiary_id?: string | null;
+  funding_friend_id?: string | null;
+  debtor_friend_id?: string | null;
+  friend_user_id?: string | null;
+  expected_account_id?: string | null;
   iou_status?: 'none' | 'pending' | 'settled';
   split_details?: Record<string, number> | null;
   statement_ref?: string | null; 
+  // 🟢 NEW: BNPL & Decoupled Order Tags
+  conversion_group_id?: string | null;
+  conversion_status?: 'none' | 'pending' | 'approved' | 'rejected';
+  order_status?: 'pending_delivery' | 'completed' | 'return_pending' | 'returned';
+  completed_date?: string | null;
 }
+
 
 
 

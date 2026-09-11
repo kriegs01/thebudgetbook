@@ -31,11 +31,14 @@ export const supabaseInstallmentToFrontend = (supabaseInstallment: SupabaseInsta
     
     // 🟢 Use the formatted date variable you already calculated
     startDate: startDateFormatted || '',
+    startDateExact: supabaseInstallment.start_date || undefined,
     
     timing: supabaseInstallment.timing,
     due_date: supabaseInstallment.due_date,
     isMigrated: supabaseInstallment.is_migrated,
     isArchived: supabaseInstallment.is_archived,
+    conversion_group_id: supabaseInstallment.conversion_group_id || null,
+    status: supabaseInstallment.status || undefined,
     
     // 🟢 Safely map the Budee/IOU fields
     funding_friend_id: supabaseInstallment.funding_friend_id || '',

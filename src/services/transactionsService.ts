@@ -191,7 +191,7 @@ export const getAllTransactions = async () => {
 
     const { data, error } = await supabase
       .from(getTableName('transactions'))
-      .select('*')
+      .select('*, conversion_status, conversion_group_id, order_status, completed_date')
       .eq('user_id', user.id)
       .order('date', { ascending: false })
       .order('id', { ascending: false }); // Secondary sort for deterministic ordering

@@ -14,6 +14,10 @@ const formatTransaction = (supabaseTransaction: SupabaseTransaction): Transactio
   transaction_type: supabaseTransaction.transaction_type ?? null,
   borrower_name: supabaseTransaction.borrower_name ?? null,
   receiptUrl: supabaseTransaction.receipt_url ?? null,
+  conversion_group_id: supabaseTransaction.conversion_group_id ?? null,
+  conversion_status: supabaseTransaction.conversion_status ?? 'none',
+  order_status: supabaseTransaction.order_status ?? null,
+  completed_date: supabaseTransaction.completed_date ?? null,
 });
 
 export function useTransactions() {
