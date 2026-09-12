@@ -5,7 +5,7 @@ import {
   WalletCards, Plus, MoreHorizontal, Receipt, Wallet, FileText, CreditCard, Tag, ToolCase 
 } from 'lucide-react';
 
-import { BrowserRouter, Routes, Route, NavLink, useLocation, Navigate, Outlet } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, NavLink, useLocation, useNavigate, Navigate, Outlet } from 'react-router-dom';
 import { FloatingHUD } from './FloatingHUD';
 import { QueryClient, QueryClientProvider, useQueryClient } from '@tanstack/react-query';
 import { NAV_ITEMS, INITIAL_BUDGET, DEFAULT_SETUP, INITIAL_CATEGORIES } from './constants';
@@ -36,6 +36,7 @@ import { TestModeBanner } from './src/components/TestModeBanner';
 import Dashboard from './pages/Dashboard';
 import Budget from './pages/Budget';
 import TransactionsPage from './pages/transactions';
+import Orders from './pages/Orders';
 import Billers from './pages/Billers';
 import Installments from './pages/Installments';
 import Accounts from './pages/Accounts';
@@ -223,6 +224,7 @@ const MainApp: React.FC = () => {
   const { user, userProfile, signOut } = useAuth();
   const queryClient = useQueryClient();
   const location = useLocation();
+  const navigate = useNavigate();
   const isDashboard = location.pathname === '/';
   const [isScrolled, setIsScrolled] = useState(false);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
@@ -1982,6 +1984,7 @@ useEffect(() => {
                   onTransactionCreated={handleTransactionCreated}
                 />
               } />
+              <Route path="/orders" element={<Orders />} />
               <Route path="/supabase-demo" element={
                 <SupabaseDemo />
               } />
@@ -2076,7 +2079,17 @@ useEffect(() => {
  <div className="fixed bottom-0 left-0 w-full h-32 pointer-events-none z-[90] bg-gradient-to-t from-gray-100 dark:from-gray-950 via-gray-100/80 dark:via-gray-950/80 to-transparent" />
 
           {/* 1. Floating Nav Bar */}
-          <div id="global-nav-bar" className="fixed bottom-6 left-0 right-0 z-[100] flex items-center justify-center pointer-events-none">
+          <div id="global-nav-bar" className="fixed bottom-6 left-0 w-full px-4 z-[100] flex items-center justify-center gap-3 pointer-events-none">
+            {['/accounts/view', '/accounts/statement'].includes(location.pathname) && (
+              <button
+                type="button"
+                onClick={() => navigate(-1)}
+                aria-label="Go back"
+                className="pointer-events-auto flex h-14 w-14 shrink-0 items-center justify-center rounded-full border-[3px] border-black bg-white text-black shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] transition-transform active:scale-95 dark:bg-gray-900 dark:text-white"
+              >
+                <ChevronLeft className="h-6 w-6" />
+              </button>
+            )}
             <nav className={`pointer-events-auto flex items-center bg-white dark:bg-gray-900 border-[3px] border-black rounded-full px-4 py-2.5 shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] transition-all duration-300 ${
               ['/accounts', '/transactions', '/budget', '/billers', '/installments'].includes(location.pathname) ? 'animate-mitosis' : 'gap-2'
             }`}>

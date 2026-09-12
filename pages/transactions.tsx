@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { Plus, Info, Eye, ZoomIn, ZoomOut, Download, X, ArrowLeft, Pencil, Trash2, CheckSquare, Square, ChevronDown, Filter, AlertTriangle, ArrowUpFromLine, ArrowDownToLine, ArrowLeftRight, Landmark, CreditCard, FileText, User, UserPlus, Hand, Lock } from 'lucide-react';
+import { Plus, Info, Eye, ZoomIn, ZoomOut, Download, X, ArrowLeft, Pencil, Trash2, CheckSquare, Square, ChevronDown, ChevronRight, Filter, AlertTriangle, ArrowUpFromLine, ArrowDownToLine, ArrowLeftRight, Landmark, CreditCard, FileText, User, UserPlus, Hand, Lock, Package } from 'lucide-react';
 import { PinProtectedAction } from '../src/components/PinProtectedAction';
 import { useAuth } from '../src/contexts/AuthContext';
 import { createTransaction, updateTransaction, deleteTransactionAndRevertSchedule, uploadTransactionReceipt, getReceiptSignedUrl, batchDeleteTransactions, createTransfer } from '../src/services/transactionsService';
@@ -14,7 +14,7 @@ import { useTheme } from '../src/contexts/ThemeContext';
 import useMediaQuery from '../src/hooks/useMediaQuery';
 import { TransactionList } from '../src/components/TransactionList';
 import type { Transaction, Account } from '../types';
-import { useLocation, useNavigate } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 
 
 
@@ -281,7 +281,7 @@ function TransactionsPage({ transactions, loading = false, onTransactionDeleted,
   
 
   // 🟢 UPDATED: Added payerId and beneficiaryId to the form state
-  const [form, setForm] = useState({
+    const [form, setForm] = useState({
     name: '',
     date: todayIso(),
     amount: '',
@@ -292,8 +292,13 @@ function TransactionsPage({ transactions, loading = false, onTransactionDeleted,
     borrowerName: '',
     personName: '',
     payerId: 'me',
-    beneficiaryId: 'me'
+    beneficiaryId: 'me',
+    // 🟢 ADD THESE LOGISTICS STATES
+    isPhysicalOrder: false,
+    trackingNumber: '',
+    courier: 'SPX'
   });
+
 
 
   // 🟢 Global Mitosis FAB listener to toggle the pull-up tray
@@ -584,7 +589,10 @@ function TransactionsPage({ transactions, loading = false, onTransactionDeleted,
       borrowerName: '',
       personName: '',
       payerId: 'me',       // 🟢 Reset to default
-      beneficiaryId: 'me'  // 🟢 Reset to default
+      beneficiaryId: 'me',
+      isPhysicalOrder: false,
+      trackingNumber: '',
+      courier: 'SPX'  // 🟢 Reset to default
     });
     setReceiptFile(null);
     setPaymentTab('my_account'); // 🟢 Replaces setShowAdvancedOptions(false)
@@ -618,7 +626,10 @@ function TransactionsPage({ transactions, loading = false, onTransactionDeleted,
       borrowerName: '', 
       personName: '',
       payerId: 'me',       // 🟢 Reset to default
-      beneficiaryId: 'me'  // 🟢 Reset to default
+      beneficiaryId: 'me',
+      isPhysicalOrder: false,
+      trackingNumber: '',
+      courier: 'SPX'
     });
   };
 
@@ -708,7 +719,7 @@ function TransactionsPage({ transactions, loading = false, onTransactionDeleted,
     await guardTransactionsOverdraft(outflowAmount, async () => {
       try {
         if (editingTxId) {
-          const updates = {
+                    const updates = {
             name: txName,
             date: combineDateWithCurrentTime(form.date),
             amount: finalAmount,
@@ -718,8 +729,13 @@ function TransactionsPage({ transactions, loading = false, onTransactionDeleted,
             person_name: (form.transactionType === 'transfer' && transferTab === 'friends') ? form.personName || null : null,
             payer_id: payloadPayerId,
             beneficiary_id: payloadBeneficiaryId,
-            iou_status: payloadIouStatus
+            iou_status: payloadIouStatus,
+            // 🟢 Add these 3 logistics lines
+            order_status: form.isPhysicalOrder ? 'pending_delivery' : null,
+            tracking_number: form.isPhysicalOrder ? form.trackingNumber : null,
+            courier: form.isPhysicalOrder ? form.courier : null
           };
+
           
 
           const { error } = await updateTransaction(editingTxId, updates);
@@ -739,15 +755,20 @@ function TransactionsPage({ transactions, loading = false, onTransactionDeleted,
             }
           }
         } else {
-          const transaction = {
+                    const transaction = {
             name: txName,
             date: combineDateWithCurrentTime(form.date),
             amount: finalAmount,
             payment_method_id: form.paymentMethodId,
             transaction_type: form.transactionType,
             borrower_name: form.transactionType === 'loan' ? form.borrowerName || null : null,
-            person_name: (form.transactionType === 'transfer' && transferTab === 'friends') ? form.personName || null : null
+            person_name: (form.transactionType === 'transfer' && transferTab === 'friends') ? form.personName || null : null,
+            // 🟢 Add these 3 logistics lines
+            order_status: form.isPhysicalOrder ? 'pending_delivery' : null,
+            tracking_number: form.isPhysicalOrder ? form.trackingNumber : null,
+            courier: form.isPhysicalOrder ? form.courier : null
           };
+
 
           const { data, error } = await createTransaction(transaction as any);
 
@@ -1029,6 +1050,29 @@ function TransactionsPage({ transactions, loading = false, onTransactionDeleted,
               <p className="text-xs text-indigo-300 mt-1">Based on current filter · {filteredTransactions.length} transaction{filteredTransactions.length !== 1 ? 's' : ''}</p>
             </div>
           </div>
+
+          {/* LOGISTICS ENTRY POINT */}
+<Link 
+  to="/orders" 
+  className="w-full bg-orange-100 dark:bg-orange-900/20 border-[3px] border-black rounded-2xl p-4 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] active:translate-x-[2px] active:translate-y-[2px] active:shadow-none transition-all flex items-center justify-between mb-6 group"
+>
+  <div className="flex items-center gap-3 sm:gap-4">
+    <div className="w-10 h-10 sm:w-12 sm:h-12 bg-orange-300 dark:bg-orange-600 rounded-xl border-2 border-black flex items-center justify-center shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] group-hover:scale-105 transition-transform">
+      <Package className="w-5 h-5 sm:w-6 sm:h-6 text-black dark:text-white" />
+    </div>
+    <div>
+      <h3 className="font-black text-gray-900 dark:text-white uppercase tracking-tight text-sm sm:text-base">Track Parcels</h3>
+      <p className="text-[10px] sm:text-xs font-bold text-gray-600 dark:text-gray-400">Manage pending deliveries & returns</p>
+    </div>
+  </div>
+  <div className="flex items-center gap-2">
+    <span className="bg-black text-white text-[9px] sm:text-[10px] font-black uppercase tracking-widest px-2 py-1 rounded-md">
+      In Transit
+    </span>
+    <ChevronRight className="w-5 h-5 text-gray-400" />
+  </div>
+</Link>
+
 
           <div className="bg-white dark:bg-gray-900 border-4 border-black rounded-2xl shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] overflow-hidden transition-colors w-full max-w-full">
             <div className="px-6 py-4 border-b-4 border-black flex items-center justify-between transition-colors">
@@ -1480,6 +1524,67 @@ function TransactionsPage({ transactions, loading = false, onTransactionDeleted,
                     </div>
                   )}
 
+                  {/* 🟢 PHYSICAL PARCEL TOGGLE */}
+                  {form.transactionType === 'payment' && (
+                    <div className="flex flex-col gap-3 mt-4">
+                      <button
+                        type="button"
+                        onClick={() => setForm(f => ({ ...f, isPhysicalOrder: !f.isPhysicalOrder }))}
+                        className={`flex items-center justify-between p-4 rounded-2xl border-[3px] border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] active:translate-x-[2px] active:translate-y-[2px] active:shadow-none transition-all ${
+                          form.isPhysicalOrder ? 'bg-orange-300 dark:bg-orange-600' : 'bg-white dark:bg-gray-800'
+                        }`}
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className={`w-8 h-8 rounded-lg border-2 border-black flex items-center justify-center ${form.isPhysicalOrder ? 'bg-black text-white' : 'bg-gray-100 dark:bg-gray-700 text-gray-500'}`}>
+                            <Package className="w-4 h-4" />
+                          </div>
+                          <div className="text-left">
+                            <h4 className={`font-black uppercase tracking-tight text-sm ${form.isPhysicalOrder ? 'text-black dark:text-white' : 'text-gray-700 dark:text-gray-300'}`}>
+                              Physical Parcel
+                            </h4>
+                            <p className={`text-[10px] font-bold uppercase tracking-widest ${form.isPhysicalOrder ? 'text-black/70 dark:text-white/70' : 'text-gray-500'}`}>
+                              Route to Logistics Tracker
+                            </p>
+                          </div>
+                        </div>
+                        
+                        {/* Custom Toggle Switch UI */}
+                        <div className={`w-12 h-6 rounded-full border-[3px] border-black relative transition-colors ${form.isPhysicalOrder ? 'bg-white' : 'bg-gray-300 dark:bg-gray-600'}`}>
+                          <div className={`absolute top-[2px] w-4 h-4 rounded-full border-2 border-black bg-black transition-all ${form.isPhysicalOrder ? 'left-[22px]' : 'left-[2px]'}`} />
+                        </div>
+                      </button>
+
+                      {/* EXPANDING DETAILS SECTION */}
+                      {form.isPhysicalOrder && (
+                        <div className="p-4 bg-orange-50 dark:bg-orange-900/20 border-[3px] border-black border-dashed rounded-2xl flex flex-col gap-4 animate-in slide-in-from-top-2">
+                          <div>
+                            <label className="block text-[10px] font-black text-gray-500 uppercase tracking-widest mb-2">Courier (Optional)</label>
+                            <select 
+                              value={form.courier}
+                              onChange={(e) => setForm(f => ({ ...f, courier: e.target.value }))}
+                              className={`w-full rounded-xl border-[3px] border-black bg-white dark:bg-gray-800 px-4 py-3 text-sm font-black text-gray-900 dark:text-white outline-none shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]`}
+                            >
+                              <option value="SPX">Shopee Xpress (SPX)</option>
+                              <option value="J&T">J&T Express</option>
+                              <option value="Flash">Flash Express</option>
+                              <option value="NinjaVan">Ninja Van</option>
+                              <option value="LBC">LBC</option>
+                            </select>
+                          </div>
+                          <div>
+                            <label className="block text-[10px] font-black text-gray-500 uppercase tracking-widest mb-2">Tracking Number (Optional)</label>
+                            <input 
+                              type="text" 
+                              placeholder="e.g. SPX0123456789"
+                              value={form.trackingNumber}
+                              onChange={(e) => setForm(f => ({ ...f, trackingNumber: e.target.value }))}
+                              className={`w-full rounded-xl border-[3px] border-black bg-white dark:bg-gray-800 px-4 py-3 text-sm font-black text-gray-900 dark:text-white outline-none shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] placeholder-gray-400`}
+                            />
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
 
 
                   {form.transactionType === 'payment' && (

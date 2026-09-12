@@ -3762,6 +3762,7 @@ if (cat.name === 'Budee' && !inst.funding_friend_id) return false;
           let accountAmt = 0;
           // 🟢 Prepare to catch subItems!
           const subItems: { id: string, name: string, amount: number, type: string }[] = [];
+          let reimbursableItems: { id: string, name: string, amount: number, type: string }[] = [];
           
           if (account.subtype === 'Loan_Bundle') {
             const bundleInsts = budgetInstallments.filter(inst => {
@@ -3788,7 +3789,7 @@ if (cat.name === 'Budee' && !inst.funding_friend_id) return false;
             
             const buckets = generateCreditBuckets(account, transactions || [], budgetInstallments, selectedYear, selectedMonth);
             const targetBucket = getBucketForMonth(buckets, selectedMonth, selectedYear);
-            const reimbursableItems = (targetBucket?.budeeBreakdown || []).map(item => ({
+            reimbursableItems = (targetBucket?.budeeBreakdown || []).map(item => ({
               id: item.id,
               name: item.name,
               amount: item.amount,
@@ -3818,7 +3819,7 @@ if (cat.name === 'Budee' && !inst.funding_friend_id) return false;
                amount: accountAmt, 
                type: account.subtype === 'Loan_Bundle' ? 'Loan Bundle' : 'Credit Account',
                subItems: subItems.length > 0 ? subItems : undefined,
-               reimbursableItems: reimbursableItems.length > 0 ? reimbursableItems : undefined
+               reimbursableItems: reimbursableItems?.length > 0 ? reimbursableItems : undefined
              });
              return sum + accountAmt;
           }
@@ -6684,13 +6685,13 @@ const totalSpend = grandTotal;
                               </span>
                             </div>
                           ))}
-                          {item.reimbursableItems && item.reimbursableItems.length > 0 && (
+                          {item.reimbursableItems?.length > 0 && (
                             <div className="mt-3 pt-3 border-t-2 border-dashed border-blue-200 dark:border-blue-800">
                               <p className="text-[10px] font-black uppercase tracking-widest text-blue-700 dark:text-blue-300 mb-2">
                                 Reimbursable (Owed to Me)
                               </p>
                               <div className="space-y-2">
-                                {item.reimbursableItems.map(reimbursable => (
+                                {item.reimbursableItems?.map(reimbursable => (
                                   <div key={reimbursable.id} className="flex justify-between items-center pl-2 pr-1">
                                     <div className="flex items-center gap-2 min-w-0 pr-3">
                                       <span className="w-1.5 h-1.5 rounded-full shrink-0 bg-blue-500" />

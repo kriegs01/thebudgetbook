@@ -16,7 +16,8 @@ import {
   X,
   ChevronLeft,
   ChevronRight,
-  ShieldCheck
+  ShieldCheck,
+  PackageOpen
 } from 'lucide-react';
 import { getDueDayForDisplay, ordinalSuffix } from '../src/utils/billingCycles';
 import { useTheme } from '../src/contexts/ThemeContext';
@@ -632,17 +633,6 @@ if (acc.hasVaultEnabled && acc.vaultId) {
           }
         />
 
-         {/* 🧃 COMPACT JUICEBOX BUTTON */}
-         <div className="mb-4 flex justify-end">
-          <button 
-            onClick={() => setShowJuiceModal(true)} 
-            className="flex items-center gap-2 bg-yellow-400 text-black px-4 py-2 sm:px-6 sm:py-3 rounded-xl border-[3px] border-black font-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] transition-all uppercase text-[10px] sm:text-xs"
-          >
-            <span>🧃</span> Squeeze Statement
-          </button>
-        </div>
-
-
         {debitAccounts.length === 0 && creditAccounts.length === 0 && (
           <div className="rounded-[2rem] border-[4px] border-dashed border-black bg-yellow-100 px-8 py-12 text-center shadow-[8px_8px_0px_0px_rgba(0,0,0,1)]">
             <div className={`mx-auto mb-2 inline-flex h-20 w-20 items-center justify-center rounded-[2rem] border-[4px] border-black ${getAccentClasses('bg')} text-white shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]`}><WalletCards className="w-10 h-10" /></div>
@@ -653,28 +643,35 @@ if (acc.hasVaultEnabled && acc.vaultId) {
         )}
 
         {(debitAccounts.length > 0 || creditAccounts.length > 0) && (
-          // 🟢 2. Added a negative top margin (-mt-2 sm:-mt-6) to pull the tabs into the header's airspace
           <section className="-mt-2 sm:-mt-6">
-            <div className="flex gap-3 mb-2 pb-4 border-b-[4px] border-black overflow-x-auto hide-scrollbar">
+            <div className="mb-6 flex w-full overflow-hidden rounded-xl border-[3px] border-black bg-white text-xs font-black uppercase tracking-wider shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] transition-colors dark:bg-gray-900 sm:text-sm">
               <button 
                 onClick={() => setActiveTab('Debit')} 
-                className={`flex items-center justify-center gap-2 flex-1 min-w-[150px] py-4 px-4 text-xs sm:text-sm font-black uppercase tracking-widest rounded-2xl border-[4px] border-black transition-all ${
+                className={`flex-1 py-3 transition-colors sm:py-4 ${
                   activeTab === 'Debit' 
-                    ? 'bg-black text-white shadow-none translate-y-1' 
-                    : 'bg-white text-gray-500 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:translate-y-[2px] hover:text-black dark:bg-gray-800'
+                    ? 'bg-indigo-200 text-indigo-900 dark:bg-indigo-600 dark:text-white' 
+                    : 'bg-white text-gray-500 hover:bg-gray-100 dark:bg-gray-800 dark:text-gray-400 dark:hover:bg-gray-700'
                 }`}
               >
-                Debit & Assets <span className="bg-white/20 text-current px-2 py-0.5 rounded-md text-[10px]">{debitAccounts.length}</span>
+                Debit
               </button>
               <button 
                 onClick={() => setActiveTab('Credit')} 
-                className={`flex items-center justify-center gap-2 flex-1 min-w-[150px] py-4 px-4 text-xs sm:text-sm font-black uppercase tracking-widest rounded-2xl border-[4px] border-black transition-all ${
+                className={`flex-1 border-l-[3px] border-black py-3 transition-colors sm:py-4 ${
                   activeTab === 'Credit' 
-                    ? 'bg-black text-white shadow-none translate-y-1' 
-                    : 'bg-white text-gray-500 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:translate-y-[2px] hover:text-black dark:bg-gray-800'
+                    ? 'bg-indigo-200 text-indigo-900 dark:bg-indigo-600 dark:text-white' 
+                    : 'bg-white text-gray-500 hover:bg-gray-100 dark:bg-gray-800 dark:text-gray-400 dark:hover:bg-gray-700'
                 }`}
               >
-                Credit & Liabilities <span className="bg-white/20 text-current px-2 py-0.5 rounded-md text-[10px]">{creditAccounts.length}</span>
+                Credit
+              </button>
+              <button
+                onClick={() => setShowJuiceModal(true)}
+                className="flex-1 py-3 border-l-[3px] border-black bg-[#F4F3EF] dark:bg-gray-800 text-gray-700 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700 flex items-center justify-center gap-1.5 transition-colors"
+                title="Squeeze Statement"
+              >
+                <PackageOpen className="w-4 h-4" />
+                <span className="hidden sm:inline">Squeeze</span>
               </button>
             </div>
 

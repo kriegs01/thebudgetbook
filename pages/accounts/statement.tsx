@@ -443,7 +443,7 @@ const [showReviewModal, setShowReviewModal] = useState(false);
   const visibleStatementCount = groupedCurrentTxs.length;
 
   return (
-    <div className={`min-h-screen bg-gray-50 dark:bg-gray-950 transition-colors ${isMobile ? 'overflow-x-hidden px-4 pb-8 pt-6' : 'p-8'}`}>
+    <div className={`min-h-screen bg-gray-50 dark:bg-gray-950 transition-colors ${isMobile ? 'overflow-x-hidden px-2 pb-8 pt-6' : 'p-8'}`}>
       <div className="mx-auto max-w-6xl">
         <PageHeader
           title={account.bank}
@@ -460,12 +460,7 @@ const [showReviewModal, setShowReviewModal] = useState(false);
           ) : undefined}
         />
 
-        <div className={`${isMobile ? 'mb-5 flex items-start gap-3' : 'mb-6'}`}>
-          {isMobile && (
-            <Link to="/accounts" className="inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border-[3px] border-black bg-white text-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] transition-all hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none dark:bg-gray-900 dark:text-white">
-              <ArrowLeft className="w-5 h-5" />
-            </Link>
-          )}
+        <div className={`${isMobile ? 'mb-5' : 'mb-6'}`}>
           <div className="min-w-0 flex-1 rounded-[1.8rem] border-[4px] border-black bg-white p-4 shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] transition-colors dark:bg-gray-900">
             <div className={`flex items-center gap-3 ${isMobile ? 'justify-center' : 'justify-between'}`}>
               <div className="flex items-center gap-3">

@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useMemo, useRef } from 'react';
-import { ArrowLeft, Info, Eye, ZoomIn, ZoomOut, Download, X, Pencil, BanknoteArrowDown, Trash2, ArrowUpFromLine, ArrowDownToLine, Banknote, CheckSquare, Square, Filter, ChevronDown, ChevronUp, CreditCard, AlertTriangle, Send, User, Landmark, WalletCards, ShieldCheck, Lock } from 'lucide-react';
+import { ArrowLeft, Info, Eye, ZoomIn, ZoomOut, Download, X, Pencil, BanknoteArrowDown, Trash2, ArrowUpFromLine, ArrowDownToLine, Banknote, CheckSquare, Square, Filter, ChevronDown, ChevronUp, MoreHorizontal, CreditCard, AlertTriangle, Send, User, Landmark, WalletCards, ShieldCheck, Lock } from 'lucide-react';
 import { useSearchParams, Link } from 'react-router-dom';
 import { Account } from '../../types';
 import { getTransactionsByPaymentMethod, createTransaction, updateTransactionAndSyncSchedule, createTransfer, getLoanTransactionsWithPayments, getReceiptSignedUrl, deleteTransactionAndRevertSchedule, batchDeleteTransactions, getTransactionById } from '../../src/services/transactionsService';
@@ -73,6 +73,7 @@ const AccountFilteredTransactions: React.FC<AccountFilteredTransactionsProps> = 
   const [searchParams] = useSearchParams();
   const accountId = searchParams.get("account") || searchParams.get("id");
   const [account, setAccount] = useState<Account | null>(null);
+  const [expandedTxId, setExpandedTxId] = useState<string | null>(null);
 
 // 🟢 Rollover Prompt State for Budget Page
 const [rolloverPrompt, setRolloverPrompt] = useState<{
@@ -994,11 +995,11 @@ const [stashForm, setStashForm] = useState({ amount: '', date: getTodayIso() });
   const retroCloseButton = "absolute right-5 top-5 inline-flex h-11 w-11 items-center justify-center rounded-2xl border-[3px] border-black bg-white text-gray-700 shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] transition-all hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none dark:bg-gray-800 dark:text-gray-100";
   const mobileSquircleActionButton = "inline-flex h-[clamp(2.75rem,12vw,3.15rem)] w-[clamp(2.75rem,12vw,3.15rem)] shrink-0 items-center justify-center rounded-[1.15rem] border-[3px] border-black text-white shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] transition-all hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none";
   const mobileActionIconClass = "h-[clamp(0.95rem,4vw,1.15rem)] w-[clamp(0.95rem,4vw,1.15rem)]";
-  const mobileCardIconButton = "inline-flex h-11 w-11 items-center justify-center rounded-[1.1rem] border-[3px] border-black bg-white text-gray-800 shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] transition-all hover:translate-x-[1px] hover:translate-y-[1px] hover:shadow-none dark:bg-gray-900 dark:text-gray-100";
+  const mobileCardIconButton = "inline-flex h-9 w-9 items-center justify-center rounded-xl border-2 border-black bg-white text-gray-800 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] transition-all hover:translate-x-[1px] hover:translate-y-[1px] hover:shadow-none dark:bg-gray-900 dark:text-gray-100";
 
   return (
-    <div className={`min-h-screen bg-gray-100 dark:bg-gray-950 transition-colors ${isMobile ? 'px-4 pb-8 pt-6' : 'p-8'}`}>
-      <div className="mx-auto max-w-5xl">
+    <div className={`min-h-screen bg-gray-100 dark:bg-gray-950 transition-colors ${isMobile ? 'px-2 pb-8 pt-6' : 'p-8'}`}>
+      <div className="mx-auto max-w-6xl">
         <PageHeader
           title={account ? account.bank : 'Account'}
           subtitle={account ? `${account.type} · ${account.classification}` : `Account ${accountId}`}
@@ -1022,12 +1023,7 @@ const [stashForm, setStashForm] = useState({ amount: '', date: getTodayIso() });
         )}
 
         {/* ── Filter Bar ──────────────────────────────────────────────────── */}
-        <div className={`${isMobile ? 'mb-5 flex items-start gap-3' : 'mb-5'}`}>
-          {isMobile && (
-            <Link to="/accounts" className="inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border-[3px] border-black bg-white text-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] transition-all hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none dark:bg-gray-900 dark:text-white">
-              <ArrowLeft className="w-5 h-5" />
-            </Link>
-          )}
+        <div className={`${isMobile ? 'mb-5' : 'mb-5'}`}>
         <div className="min-w-0 flex-1 rounded-[1.8rem] border-[4px] border-black bg-white p-4 shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] transition-colors dark:bg-gray-900">
           <button
             type="button"
@@ -1318,6 +1314,7 @@ const [stashForm, setStashForm] = useState({ amount: '', date: getTodayIso() });
               <div className="space-y-3">
                 {filteredTransactions.map(tx => {
                   const loanTx = loanTransactions.find(l => l.id === tx.id);
+                  const isPendingCollection = account?.type === 'Debit' && tx.transaction_type === 'loan' && loanTx && (loanTx.remainingBalance ?? 0) > 0;
                   return (
                     <div
                       key={tx.id}
@@ -1355,22 +1352,39 @@ const [stashForm, setStashForm] = useState({ amount: '', date: getTodayIso() });
                           Select transaction
                         </label>
                       )}
-                      <div className="flex flex-wrap justify-end gap-2">
-                        <button onClick={() => setSelectedTx(tx)} title="View details" aria-label="View transaction details" className={mobileCardIconButton}>
-                          <Info className="h-4 w-4" />
+                      <div className="relative flex justify-end">
+                        <button
+                          type="button"
+                          onClick={() => setExpandedTxId(expandedTxId === tx.id ? null : tx.id)}
+                          title="More transaction actions"
+                          aria-label="More transaction actions"
+                          aria-expanded={expandedTxId === tx.id}
+                          className={`${mobileCardIconButton} relative`}
+                        >
+                          <MoreHorizontal className="h-4 w-4" />
+                          {isPendingCollection && (
+                            <span className="absolute -right-0.5 -top-0.5 h-2.5 w-2.5 animate-pulse rounded-full border border-white bg-purple-500 shadow-sm dark:border-gray-900" />
+                          )}
                         </button>
-                        <button onClick={() => openEditTxModal(tx)} title="Edit transaction" aria-label="Edit transaction" className={mobileCardIconButton}>
-                          <Pencil className="h-4 w-4" />
-                        </button>
-                        <PinProtectedAction featureId="transaction_deletions" onVerified={() => handleDeleteTx(tx)} actionLabel="Delete Transaction">
-                          <button onClick={(e) => e.preventDefault()} title="Delete transaction" aria-label="Delete transaction" className="inline-flex h-11 w-11 items-center justify-center rounded-[1.1rem] border-[3px] border-black bg-red-500 text-white shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] transition-all hover:translate-x-[1px] hover:translate-y-[1px] hover:shadow-none">
-                            <Trash2 className="h-4 w-4" />
-                          </button>
-                        </PinProtectedAction>
-                        {account?.type === 'Debit' && tx.transaction_type === 'loan' && loanTx && (loanTx.remainingBalance ?? 0) > 0 && (
-                          <button onClick={() => openLoanPaymentModal(loanTx)} title="Receive loan payment" aria-label="Receive loan payment" className="inline-flex h-11 w-11 items-center justify-center rounded-[1.1rem] border-[3px] border-black bg-purple-500 text-white shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] transition-all hover:translate-x-[1px] hover:translate-y-[1px] hover:shadow-none">
-                            <BanknoteArrowDown className="h-4 w-4" />
-                          </button>
+                        {expandedTxId === tx.id && (
+                          <div className="absolute bottom-11 right-0 z-20 flex items-center gap-1 rounded-xl border-2 border-black bg-white p-1.5 shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] dark:bg-gray-900">
+                            <button type="button" onClick={() => { setSelectedTx(tx); setExpandedTxId(null); }} title="View details" aria-label="View transaction details" className={mobileCardIconButton}>
+                              <Info className="h-3.5 w-3.5" />
+                            </button>
+                            <button type="button" onClick={() => { openEditTxModal(tx); setExpandedTxId(null); }} title="Edit transaction" aria-label="Edit transaction" className={mobileCardIconButton}>
+                              <Pencil className="h-3.5 w-3.5" />
+                            </button>
+                            <PinProtectedAction featureId="transaction_deletions" onVerified={() => { handleDeleteTx(tx); setExpandedTxId(null); }} actionLabel="Delete Transaction">
+                              <button type="button" onClick={(e) => e.preventDefault()} title="Delete transaction" aria-label="Delete transaction" className="inline-flex h-9 w-9 items-center justify-center rounded-xl border-2 border-black bg-red-500 text-white shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] transition-all hover:translate-x-[1px] hover:translate-y-[1px] hover:shadow-none">
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </button>
+                            </PinProtectedAction>
+                            {isPendingCollection && loanTx && (
+                              <button type="button" onClick={() => { openLoanPaymentModal(loanTx); setExpandedTxId(null); }} title="Receive loan payment" aria-label="Receive loan payment" className="inline-flex h-9 w-9 items-center justify-center rounded-xl border-2 border-black bg-purple-500 text-white shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] transition-all hover:translate-x-[1px] hover:translate-y-[1px] hover:shadow-none">
+                                <BanknoteArrowDown className="h-3.5 w-3.5" />
+                              </button>
+                            )}
+                          </div>
                         )}
                       </div>
                     </div>
