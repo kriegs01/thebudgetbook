@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { 
   Menu, ChevronLeft, SlidersHorizontal, ArrowUp, ArrowDown, Eye, EyeOff, X, ChevronDown, 
   LogOut, Lock, Users, Bell, MessageCircle, AlertCircle, LayoutDashboard, PieChart, 
-  WalletCards, Plus, MoreHorizontal, Receipt, Wallet, FileText, CreditCard, Tag, ToolCase 
+  WalletCards, Plus, MoreHorizontal, Receipt, Wallet, FileText, CreditCard, Tag, ToolCase, ChartPie 
 } from 'lucide-react';
 
 import { BrowserRouter, Routes, Route, NavLink, useLocation, useNavigate, Navigate, Outlet } from 'react-router-dom';
@@ -234,6 +234,7 @@ const MainApp: React.FC = () => {
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
   const [showMigrationModal, setShowMigrationModal] = useState(false);//<=== MigrationModal declaration
   const [isToolboxOpen, setIsToolboxOpen] = useState(false);
+  const [isTrackersOpen, setIsTrackersOpen] = useState(false);
   const [isMigrating, setIsMigrating] = useState(false); // Add this flag
   const migrationAttempted = useRef(false); // Add this ref
   const [isMessagesOpen, setIsMessagesOpen] = useState(false);
@@ -1447,21 +1448,21 @@ useEffect(() => {
           }`}
         </style>
 
-        <div className="flex h-[100dvh] bg-gray-100 dark:bg-gray-950 w-full overflow-hidden fixed inset-0 transition-colors duration-200">
-				{isSidebarOpen && isMobile && (
+        <div className="flex h-[100dvh] bg-[#FCF6E8] dark:bg-gray-950 w-full overflow-hidden fixed inset-0 transition-colors duration-200">
+
+							
+                				{isSidebarOpen && isMobile && (
         <div
           className="fixed inset-0 bg-black/50 z-40 md:hidden"
           onClick={() => setIsSidebarOpen(false)}
         />
       )}
       
-        <aside className={`fixed inset-y-0 left-0 z-50 bg-gray-50 dark:bg-gray-900 transition-all duration-300 ease-in-out ${isSidebarOpen ? 'w-52' : 'hidden md:flex w-20'} overscroll-none ${
-          isScrolled ? 'border-r border-gray-200 dark:border-gray-800' : 'border-none'
-        }`}> 
-          <div className="flex flex-col h-full">
-            <div className={`flex items-center h-14 px-4 transition-all duration-300 ${isSidebarOpen ? 'justify-between' : 'justify-center'} ${
-              isScrolled ? `${getAccentClasses('bg')} border-b-4 border-black` : 'border-b border-gray-100 dark:border-gray-800'
-            }`}>
+        {/* 🟢 MASTER SIDEBAR WRAPPER */}
+        <div className={`fixed top-4 bottom-4 left-4 z-50 flex flex-col gap-3 transition-all duration-300 ease-in-out ${isSidebarOpen ? 'w-52' : 'hidden md:flex w-20'}`}>
+          
+          {/* 1. DETACHED LOGO PILL */}
+          <div className="shrink-0 flex items-center justify-between h-16 px-4 bg-[#FCF6E8] dark:bg-gray-900 border-[4px] border-black rounded-[1.5rem] shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] relative z-50">
               <div 
                 className="flex flex-row flex-nowrap items-center cursor-pointer active:scale-95 transition-transform"
                 onClick={() => !isSidebarOpen && setIsSidebarOpen(true)}
@@ -1484,40 +1485,230 @@ useEffect(() => {
               </div>
               
               {isSidebarOpen && (
-                <button onClick={() => setIsSidebarOpen(false)} className={`p-2 rounded-lg transition-colors ml-2 active:scale-95 ${isScrolled ? 'hover:bg-black/10 text-white' : 'hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-500 dark:text-gray-400'}`}>
-                  <ChevronLeft className="w-5 h-5" />
+                <button onClick={() => setIsSidebarOpen(false)} className="p-1.5 rounded-xl transition-colors ml-2 active:scale-95 bg-gray-200 dark:bg-gray-800 hover:bg-gray-300 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300">
+                  <ChevronLeft className="w-4 h-4" />
                 </button>
               )}
+          </div>
+
+          {/* 2. DETACHED NAVIGATION DRAWER */}
+          <aside className="flex-1 flex flex-col bg-[#FCF6E8] dark:bg-gray-900 border-[4px] border-black rounded-[1.5rem] shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] overscroll-none relative overflow-visible">  
+            
+            {/* 🟢 TOP SECTION: User, Alerts, People */}
+            <div className="p-2.5 space-y-1 border-b-[4px] border-black bg-transparent dark:bg-gray-800 rounded-t-[1.2rem] z-50">
+              
+              {/* Profile Dropdown */}
+              <div className="relative">
+                <button 
+                  onClick={() => setIsUserMenuOpen(!isUserMenuOpen)}
+                  className="w-full flex items-center p-2 rounded-xl transition-colors hover:bg-gray-200 dark:hover:bg-gray-700 group"
+                >
+                  <div className={`shrink-0 w-9 h-9 rounded-xl border-2 border-black ${getAccentClasses('bg')} flex items-center justify-center text-white font-black text-sm transition-transform group-hover:scale-110 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]`}>
+                    {userProfile ? `${userProfile.first_name.charAt(0)}${userProfile.last_name.charAt(0)}`.toUpperCase() : user?.email?.charAt(0).toUpperCase() || 'U'}
+                  </div>
+                  {isSidebarOpen && (
+                    <div className="ml-2.5 flex-1 flex justify-between items-center min-w-0">
+                      <span className="font-bold text-sm text-gray-900 dark:text-white truncate">
+                        {userProfile ? userProfile.first_name : (user?.email?.split('@')[0] || 'User')}
+                      </span>
+                      <ChevronDown className={`w-4 h-4 shrink-0 text-gray-500 transition-transform ${isUserMenuOpen ? 'rotate-180' : ''}`} />
+                    </div>
+                  )}
+                </button>
+
+                {/* USER MENU MODAL */}
+                {isUserMenuOpen && (
+                  <>
+                    <div className="fixed inset-0 z-[40]" onClick={() => setIsUserMenuOpen(false)}></div>
+                    <div className="absolute left-full top-0 ml-4 w-56 bg-white dark:bg-gray-900 rounded-[1.5rem] border-[4px] border-black shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] py-2 z-[50] animate-in slide-in-from-left-2">
+                      <div className="px-4 py-3 border-b-[3px] border-black mb-2">
+                        <p className="text-sm font-black text-gray-900 dark:text-gray-100 uppercase tracking-tight truncate">
+                          {userProfile ? `${userProfile.first_name} ${userProfile.last_name}` : 'User'}
+                        </p>
+                        <p className="text-[10px] font-bold text-gray-500 dark:text-gray-400 truncate">{user?.email}</p>
+                      </div>
+                      {isPinEnabled() && (
+                        <button onClick={() => { setIsUserMenuOpen(false); triggerStandbyLock(); }} className="w-full flex items-center space-x-3 py-2.5 px-4 text-sm font-black text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors uppercase tracking-widest">
+                          <Lock className="w-4 h-4" /><span>Lock App</span>
+                        </button>
+                      )}
+                      <button onClick={async () => { try { setIsUserMenuOpen(false); await signOut(); } catch (error) { console.error('Logout error:', error); } }} className="w-full flex items-center space-x-3 py-2.5 px-4 text-sm font-black text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors uppercase tracking-widest">
+                        <LogOut className="w-4 h-4" /><span>Logout</span>
+                      </button>
+                    </div>
+                  </>
+                )}
+              </div>
+
+              {/* Messages */}
+              <div className="relative">
+                <button 
+                  onClick={() => setIsMessagesOpen(!isMessagesOpen)}
+                  className="w-full flex items-center p-2 rounded-xl transition-colors hover:bg-gray-200 dark:hover:bg-gray-700 group"
+                >
+                  <div className={`shrink-0 w-9 h-9 rounded-xl border-2 border-black bg-white dark:bg-gray-800 flex items-center justify-center transition-transform group-hover:scale-110 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] ${unreadMessagesCount > 0 && !isMessagesOpen ? 'animate-ring' : ''}`}>
+                    <MessageCircle className="w-5 h-5 text-gray-900 dark:text-gray-100" />
+                    {unreadMessagesCount > 0 && !isMessagesOpen && (
+                      <span className="absolute -top-1 -right-1 flex items-center justify-center min-w-[18px] h-[18px] px-1 bg-yellow-300 text-black text-[9px] font-black border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] z-10">
+                        {unreadMessagesCount > 99 ? '99+' : unreadMessagesCount}
+                      </span>
+                    )}
+                  </div>
+                  {isSidebarOpen && <span className="ml-2.5 font-bold text-sm text-gray-700 dark:text-gray-300 group-hover:text-gray-900 dark:group-hover:text-white transition-colors">Messages</span>}
+                </button>
+              </div>
+
+              {/* Notifications */}
+              <div className="relative">
+                <button 
+                  onClick={() => setIsNotificationsOpen(!isNotificationsOpen)}
+                  className="w-full flex items-center p-2 rounded-xl transition-colors hover:bg-gray-200 dark:hover:bg-gray-700 group"
+                >
+                  <div className="shrink-0 w-9 h-9 rounded-xl border-2 border-black bg-white dark:bg-gray-800 flex items-center justify-center transition-transform group-hover:scale-110 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]">
+                    <Bell className="w-5 h-5 text-gray-900 dark:text-gray-100" />
+                    {((pendingRequests?.length || 0) + (pendingTransactions?.length || 0)) > 0 && (
+                      <span className="absolute -top-1 -right-1 w-3 h-3 bg-yellow-300 border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] z-10"></span>
+                    )}
+                  </div>
+                  {isSidebarOpen && <span className="ml-2.5 font-bold text-sm text-gray-700 dark:text-gray-300 group-hover:text-gray-900 dark:group-hover:text-white transition-colors">Notifications</span>}
+                </button>
+
+                {/* NOTIFICATIONS MODAL */}
+                {isNotificationsOpen && (
+                  <>
+                    <div className="fixed inset-0 z-[40]" onClick={() => setIsNotificationsOpen(false)}></div>
+                    <div className="absolute left-full top-0 ml-4 w-80 bg-white dark:bg-gray-900 rounded-[1.5rem] border-[4px] border-black shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] py-2 z-[50] animate-in slide-in-from-left-2">
+                      <div className="px-4 py-3 border-b-[3px] border-black flex justify-between items-center">
+                        <h3 className="text-sm font-black text-gray-900 dark:text-gray-100 uppercase tracking-widest">Notifications</h3>
+                        {((pendingRequests?.length || 0) + (pendingTransactions?.length || 0)) > 0 && (
+                          <span className={`${getAccentClasses('lightBg')} text-[10px] font-bold px-2 py-0.5 rounded-full border-2 border-black`}>
+                            {(pendingRequests?.length || 0) + (pendingTransactions?.length || 0)} New
+                          </span>
+                        )}
+                      </div>
+                      <div className="max-h-[60vh] overflow-y-auto">
+                        {((pendingRequests?.length || 0) + (pendingTransactions?.length || 0)) > 0 ? (
+                          <>
+                            {pendingRequests.map(req => (
+                            <div key={req.id} className="p-4 border-b-2 border-gray-100 dark:border-gray-800 last:border-0 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
+                              <div className="flex items-center gap-3 mb-3">
+                                <div className="w-10 h-10 rounded-full bg-indigo-100 dark:bg-indigo-900/50 text-indigo-600 dark:text-indigo-400 font-black flex items-center justify-center uppercase shrink-0 border-2 border-black">
+                                  {(req.sender_profile?.first_name?.charAt(0) || '') + (req.sender_profile?.last_name?.charAt(0) || '') || '?'}
+                                </div>
+                                <div>
+                                  <p className="text-sm font-bold text-gray-900 dark:text-gray-100">{req.sender_profile?.first_name} {req.sender_profile?.last_name}</p>
+                                  <p className="text-xs text-gray-500 font-medium">sent a Connect Request</p>
+                                </div>
+                              </div>
+                              <div className="flex gap-2">
+                                <button onClick={() => handleAcceptRequest(req.id)} className={`flex-1 text-white py-2 rounded-xl text-xs font-black uppercase tracking-widest border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:translate-x-[1px] hover:translate-y-[1px] hover:shadow-none transition-all ${getAccentClasses('bg')}`}>Accept</button>
+                                <button onClick={() => handleDeclineRequest(req.id)} className="flex-1 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 py-2 rounded-xl text-xs font-black uppercase tracking-widest border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:translate-x-[1px] hover:translate-y-[1px] hover:shadow-none transition-all">Decline</button>
+                              </div>
+                            </div>
+                            ))}
+                            {pendingTransactions.map(tx => {
+                              const senderName = tx.sender_profile ? `${tx.sender_profile.first_name} ${tx.sender_profile.last_name}` : 'A Budee';
+                              const formatCurrency = (val: number) => new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP', minimumFractionDigits: 2 }).format(val);
+                              const needsAccount = !userProfile?.settings?.defaultReceiveAccountId;
+                              return (
+                                <div key={tx.id} className="p-4 border-b-2 border-gray-100 dark:border-gray-800 last:border-0 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
+                                  <div className="flex items-center gap-3 mb-3">
+                                    <div className="w-10 h-10 rounded-full bg-green-100 dark:bg-green-900/50 text-green-600 dark:text-green-400 font-black flex items-center justify-center uppercase shrink-0 border-2 border-black">
+                                      {tx.sender_profile?.first_name?.charAt(0) || 'B'}{tx.sender_profile?.last_name?.charAt(0) || ''}
+                                    </div>
+                                    <div>
+                                      <p className="text-sm font-bold text-gray-900 dark:text-gray-100">{senderName}</p>
+                                      <p className="text-xs text-gray-500 font-medium">sent you {formatCurrency(tx.amount)}</p>
+                                    </div>
+                                  </div>
+                                  {needsAccount && (
+                                    <div className="mb-3">
+                                      <select 
+                                        className="w-full text-xs p-2 rounded-xl bg-gray-50 dark:bg-gray-800 border-2 border-black outline-none font-bold text-gray-700 dark:text-gray-300"
+                                        value={txAccountSelections[tx.id] || ''}
+                                        onChange={e => setTxAccountSelections(prev => ({...prev, [tx.id]: e.target.value}))}
+                                      >
+                                        <option value="">Select deposit account...</option>
+                                        {accounts.filter(a => a.type === 'Debit').map(a => (
+                                          <option key={a.id} value={a.id}>{a.bank}</option>
+                                        ))}
+                                      </select>
+                                    </div>
+                                  )}
+                                  <div className="flex gap-2">
+                                    <button onClick={() => handleResolveTransaction(tx.id, 'accept')} disabled={resolvingIds.has(tx.id)} className="flex-1 bg-green-400 text-black py-2 rounded-xl text-xs font-black uppercase tracking-widest border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:translate-x-[1px] hover:translate-y-[1px] hover:shadow-none transition-all disabled:opacity-50">
+                                      {resolvingIds.has(tx.id) ? '...' : 'Accept'}
+                                    </button>
+                                    <button onClick={() => handleResolveTransaction(tx.id, 'decline')} disabled={resolvingIds.has(tx.id)} className="flex-1 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 py-2 rounded-xl text-xs font-black uppercase tracking-widest border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:translate-x-[1px] hover:translate-y-[1px] hover:shadow-none transition-all disabled:opacity-50">
+                                      {resolvingIds.has(tx.id) ? '...' : 'Decline'}
+                                    </button>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </>
+                        ) : (
+                          <div className="p-8 flex flex-col items-center justify-center text-center">
+                            <div className="w-12 h-12 bg-white dark:bg-gray-800 border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] rounded-full flex items-center justify-center mb-3">
+                              <Bell className="w-6 h-6 text-gray-300 dark:text-gray-600" />
+                            </div>
+                            <p className="text-sm font-black text-gray-900 dark:text-gray-100 uppercase tracking-widest mb-1">All caught up!</p>
+                            <p className="text-xs font-medium text-gray-500">No new notifications.</p>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </>
+                )}
+              </div>
+
+              {/* People Nav Item (Moved to top group) */}
+              {(() => {
+                const item = effectiveNavItems.find(n => n.id === 'people');
+                const pref = navPreferences.find(p => p.id === 'people');
+                if (!item || (pref && !pref.visible)) return null;
+                return (
+                  <NavLink
+                    to={item.path}
+                    onClick={() => { if (isMobile) setIsSidebarOpen(false); }}
+                    className={({ isActive }) => `w-full flex items-center p-2 rounded-xl transition-colors group ${isActive ? 'bg-black/5 dark:bg-white/5' : 'hover:bg-gray-200 dark:hover:bg-gray-700'}`}
+                  >
+                    {({ isActive }) => (
+                      <>
+                        <div className={`shrink-0 w-9 h-9 rounded-xl border-2 border-black flex items-center justify-center transition-transform group-hover:scale-110 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] ${isActive ? `${getAccentClasses('bg')} text-white` : 'bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100'}`}>
+                          {item.icon}
+                        </div>
+                        {isSidebarOpen && <span className={`ml-2.5 font-bold text-sm transition-colors ${isActive ? 'text-gray-900 dark:text-white' : 'text-gray-700 dark:text-gray-300 group-hover:text-gray-900 dark:group-hover:text-white'}`}>{item.label}</span>}
+                      </>
+                    )}
+                  </NavLink>
+                );
+              })()}
+
             </div>
+
+                        {/* 🟢 MAIN NAVIGATION */}
             <nav className="flex-1 px-2.5 py-3 space-y-1 overflow-y-auto">
-            {navPreferences.filter(pref => pref.visible).map((pref) => {
+              
+              {/* CORE DASHBOARD GROUP */}
+              {navPreferences.filter(pref => pref.visible).map((pref) => {
                 const item = effectiveNavItems.find(n => n.id === pref.id);
                 if (!item) return null;
+                
+                // Skip items that belong in Trackers, People, or Settings
+                if (['/billers', '/installments', '/wallets', '/people', '/settings'].includes(item.path)) return null;
+
                 return (
                   <NavLink
                     key={item.id}
                     to={item.path}
-                    onClick={() => {
-                      if (isMobile) {
-                        setIsSidebarOpen(false);
-                      }
-                    }}
-                    className={({ isActive }) =>
-                      `w-full flex items-center p-2 rounded-xl transition-colors group ${
-                        isActive ? 'bg-black/5 dark:bg-white/5' : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800/50'
-                      }`
-                    }
+                    onClick={() => { if (isMobile) setIsSidebarOpen(false); }}
+                    className={({ isActive }) => `w-full flex items-center p-2 rounded-xl transition-colors group ${isActive ? 'bg-black/5 dark:bg-white/5' : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800/50'}`}
                     end={item.path === '/'}
                   >
                     {({ isActive }) => (
                       <>
-                        <div className={`shrink-0 w-9 h-9 rounded-xl flex items-center justify-center border-2 border-black transition-all duration-200 z-10 relative ${
-                          isSidebarOpen ? '' : 'mx-auto'
-                        } ${
-                          isActive 
-                            ? `${getAccentClasses('bg')} text-white shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] -rotate-3` 
-                            : 'bg-white dark:bg-gray-800 text-gray-400 dark:text-gray-500 shadow-none'
-                        } group-hover:rotate-0 group-hover:scale-110 group-hover:shadow-[3px_3px_0px_0px_rgba(0,0,0,1)]`}>
+                        <div className={`shrink-0 w-9 h-9 rounded-xl flex items-center justify-center border-2 border-black transition-all duration-200 z-10 relative ${isSidebarOpen ? '' : 'mx-auto'} ${isActive ? `${getAccentClasses('bg')} text-white shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] -rotate-3` : 'bg-white dark:bg-gray-800 text-gray-400 dark:text-gray-500 shadow-none'} group-hover:rotate-0 group-hover:scale-110 group-hover:shadow-[3px_3px_0px_0px_rgba(0,0,0,1)]`}>
                           {item.icon}
                         </div>
                         {isSidebarOpen && <span className={`ml-2.5 font-bold text-sm transition-colors ${isActive ? 'text-gray-900 dark:text-white' : 'text-gray-600 dark:text-gray-400'}`}>{item.label}</span>}
@@ -1527,58 +1718,84 @@ useEffect(() => {
                 );
               })}
 
+              {/* 🟢 TRACKERS ACCORDION */}
+              <div className="pt-2 mt-2 border-t border-gray-200/50 dark:border-gray-800/50">
+                <button
+                  onClick={() => {
+                    setIsTrackersOpen(!isTrackersOpen);
+                    if (!isSidebarOpen) setIsSidebarOpen(true);
+                  }}
+                  className={`w-full flex items-center justify-between p-2 rounded-xl transition-colors group ${isTrackersOpen ? 'bg-black/5 dark:bg-white/5' : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800/50'}`}
+                >
+                  <div className="flex items-center">
+                    <div className={`shrink-0 w-9 h-9 rounded-xl flex items-center justify-center border-2 border-black transition-all duration-200 z-10 relative ${isSidebarOpen ? '' : 'mx-auto'} ${isTrackersOpen ? `${getAccentClasses('bg')} text-white shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] -rotate-3` : 'bg-white dark:bg-gray-800 text-gray-400 dark:text-gray-500 shadow-none'} group-hover:rotate-0 group-hover:scale-110 group-hover:shadow-[3px_3px_0px_0px_rgba(0,0,0,1)]`}>
+                      <ChartPie className="w-5 h-5" />
+                    </div>
+                    {isSidebarOpen && <span className={`ml-2.5 font-bold text-sm transition-colors ${isTrackersOpen ? 'text-gray-900 dark:text-white' : 'text-gray-600 dark:text-gray-400'}`}>Budget Items</span>}
+                  </div>
+                  {isSidebarOpen && <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform ${isTrackersOpen ? 'rotate-180' : ''}`} />}
+                </button>
+                
+                <div className={`overflow-hidden transition-all duration-300 ${isTrackersOpen && isSidebarOpen ? 'max-h-48 opacity-100 mt-1' : 'max-h-0 opacity-0'}`}>
+                  <div className="space-y-1">
+                    {navPreferences.filter(pref => pref.visible).map((pref) => {
+                      const item = effectiveNavItems.find(n => n.id === pref.id);
+                      if (!item) return null;
+                      
+                      // ONLY show specific Tracker paths here
+                      if (!['/billers', '/installments', '/wallets'].includes(item.path)) return null;
+                      
+                      return (
+                        <NavLink
+                          key={item.id}
+                          to={item.path}
+                          onClick={() => { if (isMobile) setIsSidebarOpen(false); }}
+                          className={({ isActive }) => `w-full flex items-center p-2 rounded-xl transition-colors group ${isActive ? 'bg-black/5 dark:bg-white/5' : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800/50'}`}
+                        >
+                          {({ isActive }) => (
+                            <>
+                              <div className={`shrink-0 w-7 h-7 rounded-lg flex items-center justify-center border-2 border-black transition-all duration-200 z-10 relative ${isActive ? `${getAccentClasses('bg')} text-white shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] -rotate-3` : 'bg-white dark:bg-gray-800 text-gray-400 dark:text-gray-500 shadow-none'} group-hover:rotate-0 group-hover:scale-110 group-hover:shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]`}>
+                                {item.icon}
+                              </div>
+                              <span className={`ml-2.5 font-bold text-sm transition-colors ${isActive ? 'text-gray-900 dark:text-white' : 'text-gray-600 dark:text-gray-400'}`}>{item.label}</span>
+                            </>
+                          )}
+                        </NavLink>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
               
               {/* 🟢 TOOLBOX COLLAPSIBLE */}
               <div className="pt-2 mt-2 border-t border-gray-200/50 dark:border-gray-800/50">
                 <button
                   onClick={() => {
                     setIsToolboxOpen(!isToolboxOpen);
-                    if (!isSidebarOpen) setIsSidebarOpen(true); // Auto-expand sidebar if clicking icon
+                    if (!isSidebarOpen) setIsSidebarOpen(true);
                   }}
-                  className={`w-full flex items-center justify-between p-2 rounded-xl transition-colors group ${
-                    isToolboxOpen ? 'bg-black/5 dark:bg-white/5' : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800/50'
-                  }`}
+                  className={`w-full flex items-center justify-between p-2 rounded-xl transition-colors group ${isToolboxOpen ? 'bg-black/5 dark:bg-white/5' : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800/50'}`}
                 >
-                                                     <div className="flex items-center">
-                    <div className={`shrink-0 w-9 h-9 rounded-xl flex items-center justify-center border-2 border-black transition-all duration-200 z-10 relative ${
-                      isSidebarOpen ? '' : 'mx-auto'
-                    } ${
-                      isToolboxOpen 
-                        ? `${getAccentClasses('bg')} text-white shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] -rotate-3` 
-                        : 'bg-white dark:bg-gray-800 text-gray-400 dark:text-gray-500 shadow-none'
-                    } group-hover:rotate-0 group-hover:scale-110 group-hover:shadow-[3px_3px_0px_0px_rgba(0,0,0,1)]`}>
+                  <div className="flex items-center">
+                    <div className={`shrink-0 w-9 h-9 rounded-xl flex items-center justify-center border-2 border-black transition-all duration-200 z-10 relative ${isSidebarOpen ? '' : 'mx-auto'} ${isToolboxOpen ? `${getAccentClasses('bg')} text-white shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] -rotate-3` : 'bg-white dark:bg-gray-800 text-gray-400 dark:text-gray-500 shadow-none'} group-hover:rotate-0 group-hover:scale-110 group-hover:shadow-[3px_3px_0px_0px_rgba(0,0,0,1)]`}>
                       <ToolCase className="w-5 h-5" />
                     </div>
                     {isSidebarOpen && <span className={`ml-2.5 font-bold text-sm transition-colors ${isToolboxOpen ? 'text-gray-900 dark:text-white' : 'text-gray-600 dark:text-gray-400'}`}>Toolbox</span>}
                   </div>
 
-
-                  {isSidebarOpen && (
-                    <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform ${isToolboxOpen ? 'rotate-180' : ''}`} />
-                  )}
+                  {isSidebarOpen && <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform ${isToolboxOpen ? 'rotate-180' : ''}`} />}
                 </button>
                 
-                {/* Nested PriceTag Item */}
                 <div className={`overflow-hidden transition-all duration-300 ${isToolboxOpen && isSidebarOpen ? 'max-h-40 opacity-100 mt-1' : 'max-h-0 opacity-0'}`}>
-                  <div className="ml-11">
+                  <div>
                     <NavLink
                       to="/scanner"
-                      onClick={() => {
-                        if (isMobile) setIsSidebarOpen(false);
-                      }}
-                      className={({ isActive }) =>
-                        `w-full flex items-center p-2 rounded-xl transition-colors group ${
-                          isActive ? 'bg-black/5 dark:bg-white/5' : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800/50'
-                        }`
-                      }
+                      onClick={() => { if (isMobile) setIsSidebarOpen(false); }}
+                      className={({ isActive }) => `w-full flex items-center p-2 rounded-xl transition-colors group ${isActive ? 'bg-black/5 dark:bg-white/5' : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800/50'}`}
                     >
                       {({ isActive }) => (
                         <>
-                          <div className={`shrink-0 w-7 h-7 rounded-lg flex items-center justify-center border-2 border-black transition-all duration-200 z-10 relative ${
-                            isActive 
-                              ? `${getAccentClasses('bg')} text-white shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] -rotate-3` 
-                              : 'bg-white dark:bg-gray-800 text-gray-400 dark:text-gray-500 shadow-none'
-                          } group-hover:rotate-0 group-hover:scale-110 group-hover:shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]`}>
+                          <div className={`shrink-0 w-7 h-7 rounded-lg flex items-center justify-center border-2 border-black transition-all duration-200 z-10 relative ${isActive ? `${getAccentClasses('bg')} text-white shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] -rotate-3` : 'bg-white dark:bg-gray-800 text-gray-400 dark:text-gray-500 shadow-none'} group-hover:rotate-0 group-hover:scale-110 group-hover:shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]`}>
                             <Tag className="w-4 h-4" />
                           </div>
                           <span className={`ml-2.5 font-bold text-sm transition-colors ${isActive ? 'text-gray-900 dark:text-white' : 'text-gray-600 dark:text-gray-400'}`}>PriceTag</span>
@@ -1588,73 +1805,69 @@ useEffect(() => {
                   </div>
                 </div>
               </div>
-
-
             </nav>
-            {isSidebarOpen && (
-              <div className="flex justify-center px-4 mb-4 mt-2">
-                <button 
-                  onClick={() => { setTempNavPrefs(navPreferences); setShowNavEditModal(true); }} 
-                  className="bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-500 dark:text-gray-400 px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest transition-colors"
-                  title="Customize Menu"
-                >
-                  Edit Menu
-                </button>
-              </div>
-            )}
-                    <div className="p-3 border-t border-gray-100 dark:border-gray-800 transition-colors flex flex-col gap-1">
-            
-            
 
-            <NavLink
-              to="/settings"
 
-              onClick={() => {
-                if (isMobile) {
-                  setIsSidebarOpen(false);
-                }
-              }}
-              className={({ isActive }) =>
-                `w-full flex items-center p-2 rounded-xl transition-colors group ${
-                  isActive ? 'bg-black/5 dark:bg-white/5' : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800/50'
-                }`
-              }
-            >
-              {({ isActive }) => (
-                <>
-                  <div className={`shrink-0 w-9 h-9 rounded-xl flex items-center justify-center border-2 border-black transition-all duration-200 z-10 relative ${
-                    isSidebarOpen ? '' : 'mx-auto'
-                  } ${
-                    isActive 
-                      ? `${getAccentClasses('bg')} text-white shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] -rotate-3` 
-                      : 'bg-white dark:bg-gray-800 text-gray-400 dark:text-gray-500 shadow-none'
-                  } group-hover:rotate-0 group-hover:scale-110 group-hover:shadow-[3px_3px_0px_0px_rgba(0,0,0,1)]`}>
-                    <SlidersHorizontal className="w-5 h-5" />
-                  </div>
-                  {isSidebarOpen && <span className={`ml-2.5 font-bold text-sm transition-colors ${isActive ? 'text-gray-900 dark:text-white' : 'text-gray-600 dark:text-gray-400'}`}>Settings</span>}
-                </>
+                        {/* 🟢 BOTTOM SECTION: Settings & Edit Menu */}
+            <div className="p-2.5 space-y-2 border-t-[4px] border-black bg-transparent dark:bg-gray-800 rounded-b-[1.2rem] shrink-0">
+              
+              {/* Settings Nav Item (Hardcoded to bypass the Edit Menu filter) */}
+              <NavLink
+                to="/settings"
+                onClick={() => { if (isMobile) setIsSidebarOpen(false); }}
+                className={({ isActive }) => `w-full flex items-center p-2 rounded-xl transition-colors group ${isActive ? 'bg-black/5 dark:bg-white/5' : 'hover:bg-gray-200 dark:hover:bg-gray-700'}`}
+              >
+                {({ isActive }) => (
+                  <>
+                    <div className={`shrink-0 w-9 h-9 rounded-xl border-2 border-black flex items-center justify-center transition-transform group-hover:scale-110 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] ${isSidebarOpen ? '' : 'mx-auto'} ${isActive ? `${getAccentClasses('bg')} text-white` : 'bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100'}`}>
+                      <SlidersHorizontal className="w-5 h-5" />
+                    </div>
+                    {isSidebarOpen && <span className={`ml-2.5 font-bold text-sm transition-colors ${isActive ? 'text-gray-900 dark:text-white' : 'text-gray-700 dark:text-gray-300 group-hover:text-gray-900 dark:group-hover:text-white'}`}>Settings</span>}
+                  </>
+                )}
+              </NavLink>
+
+              {/* Edit Menu */}
+              {isSidebarOpen && (
+                <div className="flex justify-center px-2 pt-1 pb-1">
+                  <button 
+                    onClick={() => { setTempNavPrefs(navPreferences); setShowNavEditModal(true); }} 
+                    className="w-full bg-white dark:bg-gray-900 hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-400 border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] active:translate-x-[1px] active:translate-y-[1px] active:shadow-none px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all"
+                  >
+                    Edit Menu
+                  </button>
+                </div>
               )}
-            </NavLink>
-          </div>
-          </div>
-        </aside>
-        <main className={`flex-1 bg-gray-100 dark:bg-gray-950 transition-all duration-300 ease-in-out ${isSidebarOpen ? 'md:ml-52' : 'md:ml-20'} h-full flex flex-col overflow-hidden`}> 
+            </div>
+
+
+          </aside>
+        </div>
+
+
+
+                {/* 🟢 ADJUSTED MARGIN TO ACCOMMODATE THE FLOATING SIDEBAR'S SHADOW */}
+        <main className={`flex-1 bg-transparent dark:bg-gray-950 transition-all duration-300 ease-in-out ${isSidebarOpen ? 'md:ml-[16rem]' : 'md:ml-[8rem]'} h-full flex flex-col overflow-hidden`}> 
+ 
+ 
         
         <TestModeBanner sidebarOpen={isSidebarOpen} />
 
         {/* Top Navigation Bar - Reactive for Dashboard, Static for others */}
-{/* CHANGED: 'justify-between' to 'justify-end' */}
-<header className={`fixed top-0 right-0 left-0 h-14 px-4 md:px-8 flex items-center justify-end transition-all duration-300 z-30 ${
-  isSidebarOpen && !isMobile ? 'md:ml-52' : isMobile ? '' : 'md:ml-20'
-} ${
-  isScrolled ? `${getAccentClasses('bg')} shadow-lg border-b-4 border-black` : 'bg-transparent border-transparent'
-}`}>
+        
+        {/*COMMENTING THIS OUT FOR FUTURE REFERENCE
+        <header className={`fixed top-0 right-0 left-0 h-14 px-4 md:px-8 flex items-center justify-end transition-all duration-300 z-30 ${
+          isSidebarOpen && !isMobile ? 'md:ml-[16rem]' : isMobile ? '' : 'md:ml-[8rem]'
+        } ${
+          isScrolled ? `${getAccentClasses('bg')} shadow-lg border-b-4 border-black` : 'bg-transparent border-transparent'
+        }`}>
+
   
-  {/* REMOVED: <div className="flex-1 md:hidden" /> */}
+ 
 
   <div className="flex items-center space-x-2 md:space-x-4">
 
-            {/* Messages */}
+            {/* Messages 
             <div className="relative">
               <button 
                 onClick={() => setIsMessagesOpen(!isMessagesOpen)}
@@ -1668,7 +1881,8 @@ useEffect(() => {
                 )}
               </button>
             </div>
-            {/* Notifications */}
+
+            {/* Notifications 
             <div className="relative">
               <button 
                 onClick={() => setIsNotificationsOpen(!isNotificationsOpen)}
@@ -1767,7 +1981,7 @@ useEffect(() => {
               )}
             </div>
 
-            {/* Profile Dropdown */}
+            {/* Profile Dropdown 
             <div className="relative ml-2 border-l border-gray-200 dark:border-gray-700 pl-4">
               <button 
                 onClick={() => setIsUserMenuOpen(!isUserMenuOpen)}
@@ -1785,7 +1999,7 @@ useEffect(() => {
                 <ChevronDown className={`w-4 h-4 text-black transition-transform ${isUserMenuOpen ? 'rotate-180' : ''}`} />
               </button>
 
-              {/* Dropdown Menu */}
+              {/* Dropdown Menu
               {isUserMenuOpen && (
                 <>
                   <div className="fixed inset-0 z-[40]" onClick={() => setIsUserMenuOpen(false)}></div>
@@ -1825,7 +2039,7 @@ useEffect(() => {
             </div>
           </div>
         </header>
-
+*/}
         <div 
           ref={scrollContainerRef}
           className="w-full flex-1 overflow-auto pt-0 px-4 pb-4 md:px-8 md:pb-6" 

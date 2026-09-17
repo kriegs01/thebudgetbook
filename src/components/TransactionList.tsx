@@ -91,20 +91,20 @@ export const TransactionList: React.FC<TransactionListProps> = ({
                       </button>
                     )}
                     {/* Existing Info and Pencil Buttons */}
-                    <button
-                      onClick={() => onViewDetails(tx)}
-                      title="View details"
-                      aria-label="View transaction details"
-                      className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border-2 border-black bg-gray-100 text-gray-600 transition-colors dark:bg-gray-700 dark:text-gray-300 ${getAccentClasses('hoverLight')}`}>
-                      <Info className="h-4 w-4 shrink-0" />
-                    </button>
-                    <button
-                      onClick={() => onEdit(tx)}
-                      title="Edit transaction"
-                      aria-label="Edit transaction"
-                      className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border-2 border-black bg-gray-100 text-gray-600 transition-colors dark:bg-gray-700 dark:text-gray-300 ${getAccentClasses('hoverLight')}`}>
-                      <Pencil className="h-4 w-4 shrink-0" />
-                    </button>
+                    <button
+                      onClick={() => onViewDetails(tx)}
+                      title="View details"
+                      aria-label="View transaction details"
+                      className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border-2 border-black bg-white text-gray-600 transition-all hover:bg-amber-100 hover:text-amber-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-amber-900/30">
+                      <Info className="h-4 w-4 shrink-0" />
+                    </button>
+                    <button
+                      onClick={() => onEdit(tx)}
+                      title="Edit transaction"
+                      aria-label="Edit transaction"
+                      className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border-2 border-black bg-white text-gray-600 transition-all hover:bg-amber-100 hover:text-amber-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-amber-900/30">
+                      <Pencil className="h-4 w-4 shrink-0" />
+                    </button>
                   </div>
                 </div>
 
@@ -203,20 +203,20 @@ export const TransactionList: React.FC<TransactionListProps> = ({
                       </button>
                     )}
                     {/* Existing Action Buttons */}
-                    <button
-                      onClick={() => onViewDetails(tx)}
-                      title="View details"
-                      aria-label="View transaction details"
-                      className={`p-1.5 rounded-full transition-all text-gray-400 dark:text-gray-500 ${getAccentClasses('hoverLight')}`}>
-                      <Info className="w-4 h-4" />
-                    </button>
-                    <button
-                      onClick={() => onEdit(tx)}
-                      title="Edit transaction"
-                      aria-label="Edit transaction"
-                      className={`p-1.5 rounded-full transition-all text-gray-400 dark:text-gray-500 ${getAccentClasses('hoverLight')}`}>
-                      <Pencil className="w-4 h-4" />
-                    </button>
+                    <button
+                      onClick={() => onViewDetails(tx)}
+                      title="View details"
+                      aria-label="View transaction details"
+                      className="p-1.5 rounded-full transition-all text-gray-400 dark:text-gray-500 hover:text-amber-600 hover:bg-amber-100 dark:hover:bg-amber-900/30">
+                      <Info className="w-4 h-4" />
+                    </button>
+                    <button
+                      onClick={() => onEdit(tx)}
+                      title="Edit transaction"
+                      aria-label="Edit transaction"
+                      className="p-1.5 rounded-full transition-all text-gray-400 dark:text-gray-500 hover:text-amber-600 hover:bg-amber-100 dark:hover:bg-amber-900/30">
+                      <Pencil className="w-4 h-4" />
+                    </button>
                     <PinProtectedAction
                       featureId="transaction_deletions"
                       onVerified={() => onDelete(tx.id, tx.name)}

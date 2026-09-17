@@ -599,8 +599,9 @@ function TransactionsPage({ transactions, loading = false, onTransactionDeleted,
     setIsIOU(false);
 
 
-    if (source === 'top') {
+        if (source === 'top') {
       setShowFabMenu(false);
+      setShowTypeModal(false); // 🟢 FIX 1: Explicitly close the Type Modal!
     }
     setFormSource(source);
     setShowForm(true);
@@ -1617,6 +1618,32 @@ function TransactionsPage({ transactions, loading = false, onTransactionDeleted,
           </div>
         )}
 
+        {showTypeModal && (
+          <div className="fixed inset-0 z-[999] flex items-center justify-center p-2 sm:p-4 bg-black/60 backdrop-blur-md animate-in fade-in">
+            <div className="w-full max-w-lg bg-white dark:bg-gray-900 border-4 border-black rounded-2xl shadow-2xl sm:shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] p-6 sm:p-10 relative transition-all animate-in zoom-in-95">
+              <button onClick={() => setShowTypeModal(false)} className="absolute top-6 right-6 text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors" aria-label="Close">
+                <X className="w-5 h-5" />
+              </button>
+              <h2 className="text-2xl font-black text-gray-900 dark:text-gray-100 mb-2 uppercase tracking-tight">Transaction Type</h2>
+              <p className="text-gray-500 dark:text-gray-400 text-sm mb-8 font-medium">Select the type of transaction you want to record</p>
+
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+                {TRANSACTION_TYPES.map(type => (
+                  <button
+                    key={type.id}
+                    onClick={() => openAddForm(type.id, 'top')}
+                    className={`flex flex-col items-center justify-center p-6 bg-white dark:bg-gray-800/50 rounded-2xl border-2 border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] transition-all group ${getAccentClasses('hoverLight')}`}>
+                    <div className={`mb-4 p-4 rounded-full shadow-sm transition-transform duration-300 border-2 border-black ${getAccentClasses('lightBg')}`}>
+                      {type.icon}
+                    </div>
+                    <span className="font-bold text-sm">{type.label}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+
         {showBatchConfirm && (
           <div className="fixed inset-0 z-[1000] flex items-center justify-center p-2 sm:p-4 bg-black/60 backdrop-blur-md">
             <div className="w-full max-w-sm bg-white dark:bg-gray-900 border-4 border-black rounded-2xl shadow-2xl sm:shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] p-6 md:p-8 transition-all flex flex-col max-h-[95vh]">
@@ -1817,31 +1844,7 @@ function TransactionsPage({ transactions, loading = false, onTransactionDeleted,
           </div>
         )}
 
-        {showTypeModal && (
-          <div className="fixed inset-0 z-[999] flex items-center justify-center p-2 sm:p-4 bg-black/60 backdrop-blur-md animate-in fade-in">
-            <div className="w-full max-w-lg bg-white dark:bg-gray-900 border-4 border-black rounded-2xl shadow-2xl sm:shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] p-6 sm:p-10 relative transition-all animate-in zoom-in-95">
-              <button onClick={() => setShowTypeModal(false)} className="absolute top-6 right-6 text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors" aria-label="Close">
-                <X className="w-5 h-5" />
-              </button>
-              <h2 className="text-2xl font-black text-gray-900 dark:text-gray-100 mb-2 uppercase tracking-tight">Transaction Type</h2>
-              <p className="text-gray-500 dark:text-gray-400 text-sm mb-8 font-medium">Select the type of transaction you want to record</p>
-
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
-                {TRANSACTION_TYPES.map(type => (
-                  <button
-                    key={type.id}
-                    onClick={() => openAddForm(type.id, 'top')}
-                    className={`flex flex-col items-center justify-center p-6 bg-white dark:bg-gray-800/50 rounded-2xl border-2 border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] transition-all group ${getAccentClasses('hoverLight')}`}>
-                    <div className={`mb-4 p-4 rounded-full shadow-sm transition-transform duration-300 border-2 border-black ${getAccentClasses('lightBg')}`}>
-                      {type.icon}
-                    </div>
-                    <span className="font-bold text-sm">{type.label}</span>
-                  </button>
-                ))}
-              </div>
-            </div>
-          </div>
-        )}
+        
 
                         {/* 🟢 Apple Music-Inspired Pull-Up Tray for Mobile */}
         {isMobile && (

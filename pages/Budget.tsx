@@ -1266,22 +1266,34 @@ const balance = accountTxs.reduce((sum, tx) => {
         // Powered by the new Bucket Waterfall Engine
 const getFrozenCycleAmount = (account: Account): number => {
   try {
-    // 🔴 NEW: ROUTE TO ENGINE IF SPECIFIED
+    const frozenTransactions = transactions.filter(tx => {
+      if (tx.payment_method_id !== account.id) return true;
+      
+      const txDate = new Date(tx.date);
+      const isThisMonth = txDate.getMonth() === MONTHS.indexOf(selectedMonth) && txDate.getFullYear() === selectedYear;
+      
+      // 🟢 THE REAL FIX: Payments are logged as negative amounts.
+      // Ignore ALL negative transactions for this month to permanently freeze the balance!
+      if (isThisMonth && tx.amount < 0) {
+         return false; 
+      }
+      return true;
+    });
+
     if (account.provider_config?.type) {
-      // Create the target statement ID (e.g., "2026-08") based on the active Budget view
       const monthIdx = MONTHS.indexOf(selectedMonth) + 1;
       const targetStatementId = `${selectedYear}-${String(monthIdx).padStart(2, '0')}`;
-      
-      return getCreditStatementTotal(account, transactions, budgetInstallments, targetStatementId);
+      return getCreditStatementTotal(account, frozenTransactions, budgetInstallments, targetStatementId);
     }
 
-    // ⚪ LEGACY FALLBACK: Standard Math for EastWest, UnionBank, etc.
     if (!account.billingDate && account.subtype !== 'Loan_Bundle' && account.classification !== 'Loan') {
-      const liveBal = calculateCurrentBalance(account);
-      return liveBal > 0 ? liveBal : Math.abs(account.openingBalance || 0);
+      const accountTxs = frozenTransactions.filter(tx => tx.payment_method_id === account.id);
+      const startingBalance = account.openingBalance || 0;
+      const targetBal = accountTxs.reduce((sum, tx) => sum + tx.amount, startingBalance);
+      return targetBal > 0 ? targetBal : Math.abs(account.openingBalance || 0);
     }
 
-    const buckets = generateCreditBuckets(account, transactions || [], budgetInstallments, selectedYear, selectedMonth);
+    const buckets = generateCreditBuckets(account, frozenTransactions, budgetInstallments, selectedYear, selectedMonth);
     const targetBucket = getBucketForMonth(buckets, selectedMonth, selectedYear);
 
     if (targetBucket && targetBucket.personalBreakdown) {
@@ -1294,6 +1306,8 @@ const getFrozenCycleAmount = (account: Account): number => {
     return 0;
   }
 };
+
+
 
 
     
@@ -1723,20 +1737,27 @@ const getFrozenCycleAmount = (account: Account): number => {
           : item.amount
       }));
 
-        // 2. INSTALLMENTS (Loans)
+                // 2. INSTALLMENTS (Loans)
         const installmentItems = (installments || [])
         .filter(inst => {
           if (inst.isArchived || excludedInstallmentIds.has(inst.id)) return false;
           
-                                        // 🔴 NEW: Exclude "To Collect" from the Slicer tray (where you are the lender)
-                    if (!inst.funding_friend_id && (inst.debtor_friend_id || (inst as any).friend_user_id)) return false;
+          // 🔴 NEW: Exclude "To Collect" from the Slicer tray (where you are the lender)
+          if (!inst.funding_friend_id && (inst.debtor_friend_id || (inst as any).friend_user_id)) return false;
 
-  
-                    const targetPeriod = determineItemPeriod(inst, currentPeriods, selectedMonth, selectedYear);
-                    
-                    if (targetPeriod !== activePeriodIndex) return false;
+          // 🟢 FIX: Prevent Double Counting! 
+          // Check if this installment is already swallowed by a Credit Card parent.
+          const linkedId = inst.accountId || inst.account_id || inst.linkedAccountId || inst.linked_account_id;
+          const isSwallowedByCreditAccount = creditBudgetAccounts.some(acc => acc.id === linkedId);
+          const isBudee = !!(inst.funding_friend_id || inst.debtor_friend_id || (inst as any).friend_user_id);
           
-  
+          // Normal installments are swallowed by the parent. Budee items stay independent!
+          if (!isBudee && isSwallowedByCreditAccount) return false;
+
+          const targetPeriod = determineItemPeriod(inst, currentPeriods, selectedMonth, selectedYear);
+          
+          if (targetPeriod !== activePeriodIndex) return false;
+          
           // INLINED: Find Payment Schedule safely
           const scheduleForMonth = paymentSchedules.find(
               s => s.source_type === 'installment' && 
@@ -1744,6 +1765,7 @@ const getFrozenCycleAmount = (account: Account): number => {
                    s.month === selectedMonth && 
                    s.year === selectedYear
           );
+
   
 
         // INLINED: Check if the date is active
@@ -3389,29 +3411,60 @@ const getFrozenCycleAmount = (account: Account): number => {
         // 🟢 FIX: The Master Bundle Card should just adopt the date of its first active installment
         rawDue = subItems.length > 0 ? String(subItems[0].dueDate) : '15';
         
-      } else {
-        // ... (Keep the existing standard credit card logic below this)
+                  } else {
+        // 🟢 MATCH THE HELPER: Drop negative transactions here too!
+        const frozenTxs = transactions.filter(tx => {
+          if (tx.payment_method_id !== acc.id) return true;
+          const txDate = new Date(tx.date);
+          const isThisMonth = txDate.getMonth() === MONTHS.indexOf(selectedMonth) && txDate.getFullYear() === selectedYear;
+          
+          if (isThisMonth && tx.amount < 0) return false;
+          
+          return true;
+        });
 
         isPaid = getCreditPaymentStatus(acc) === 'paid';
-        const buckets = generateCreditBuckets(acc, transactions || [], budgetInstallments, selectedYear, selectedMonth);
+        
+        const buckets = generateCreditBuckets(acc, frozenTxs, budgetInstallments, selectedYear, selectedMonth);
         const targetBucket = getBucketForMonth(buckets, selectedMonth, selectedYear);
         const personalBreakdown = targetBucket?.personalBreakdown;
 
-        let baseAmount = 0;
+                let baseAmount = 0;
         if (personalBreakdown) {
           baseAmount = (personalBreakdown.unpaidRollover || 0) + (personalBreakdown.newSwipesTotal || 0);
-          if (baseAmount > 0) subItems.push({ id: `${acc.id}-base`, name: 'Previous Balance + New Charges', amount: baseAmount, type: 'expense', dueDate: 0, displayDueDate: '', isPaid, isIncluded: true, rawItem: null });
+          if (baseAmount > 0) {
+             // 🟢 FIX 2A: Check if the base balance is paid and tag it!
+             const isBasePaid = checkIfPaidByTransaction('Previous Balance + New Charges', baseAmount, selectedMonth, selectedYear, selectedTiming);
+             subItems.push({ id: `${acc.id}-base`, name: 'Previous Balance + New Charges', amount: baseAmount, type: 'expense', dueDate: 0, displayDueDate: '', isPaid: isBasePaid, isIncluded: true, rawItem: null });
+          }
         }
 
         (personalBreakdown?.activeInstallments || []).forEach((inst: any) => {
           if (!excludedInstallmentIds.has(inst.id)) {
-            subItems.push({ id: inst.id, name: inst.name, amount: Number(inst.monthlyAmount) || Number(inst.amount) || 0, type: 'Installment' });
+            // 🟢 FIX 2B: Check if the specific installment is paid and tag it!
+            const schedule = getPaymentSchedule('installment', inst.id, selectedMonth, selectedYear);
+            let subIsPaid = false;
+            if (schedule) subIsPaid = schedule.status === 'paid';
+            else subIsPaid = checkIfPaidByTransaction(inst.name, inst.monthlyAmount || inst.amount, selectedMonth, selectedYear, selectedTiming);
+            
+            subItems.push({ id: inst.id, name: inst.name, amount: Number(inst.monthlyAmount) || Number(inst.amount) || 0, type: 'Installment', isPaid: subIsPaid });
           }
         });
 
-        amount = targetBucket?.personalEndingBalance || 0;
-        // 🟢 APPLY CREDIT MATH
+        amount = getFrozenCycleAmount(acc);
         rawDue = getCreditDueDay(acc);
+        
+        // 🟢 FIX 2C: The parent card is only marked "Settled" if ALL its sub-items are paid!
+        isPaid = subItems.length > 0 && subItems.every(sub => sub.isPaid);
+     }
+
+
+     // 🟢 THE BULLETPROOF FIX:
+     // If the math engine drops the parent to 0, but the sub-items still have a balance,
+     // force the parent to explicitly equal the sum of its children. This locks the target!
+     const subItemsTotal = subItems.reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
+     if (amount < subItemsTotal) {
+         amount = subItemsTotal;
      }
 
      // 🟢 BUBBLE UP: Check if ANY sub-item was fronted from savings
@@ -3420,6 +3473,7 @@ const getFrozenCycleAmount = (account: Account): number => {
 
      timeline.push({ id: acc.id, name: acc.bank, amount, type: 'credit', dueDate: getSafeDay(rawDue), displayDueDate: getDisplayDate(rawDue), isPaid, isIncluded: !excludedCreditIds.has(exclusionKey), subItems, rawItem: acc, frontedInfo: frontedSubItem?.frontedInfo });
    });
+
 
   
 
@@ -3796,7 +3850,7 @@ if (cat.name === 'Budee' && !inst.funding_friend_id) return false;
               type: item.isReceivable ? 'Owed to Me' : 'Budee Expense'
             }));
 
-            if (targetBucket && targetBucket.personalBreakdown) {
+                        if (targetBucket && targetBucket.personalBreakdown) {
               const pb = targetBucket.personalBreakdown;
               const baseAmount = (pb.unpaidRollover || 0) + (pb.newSwipesTotal || 0);
 
@@ -3810,6 +3864,12 @@ if (cat.name === 'Budee' && !inst.funding_friend_id) return false;
                 }
               });
             }
+          }
+
+          // 🟢 FIX 1: Apply the bulletproof math override to the Category Summary too!
+          const subItemsTotal = subItems.reduce((s, i) => s + (Number(i.amount) || 0), 0);
+          if (accountAmt < subItemsTotal) {
+             accountAmt = subItemsTotal;
           }
 
           if (accountAmt >= 0.01) {
@@ -3826,6 +3886,7 @@ if (cat.name === 'Budee' && !inst.funding_friend_id) return false;
           return sum;
         }, 0);
       }
+
 
 
       return { 
@@ -3972,18 +4033,21 @@ const totalSpend = grandTotal;
       });
       setShowTransactionModal(true);
     } 
-        // 3. CREDIT CARDS & LOAN BUNDLES
+                // 3. CREDIT CARDS & LOAN BUNDLES
         else if (item.type === 'credit') {
           const acc = item.rawItem as Account;
           const carouselItems: any[] = [];
           if (item.subItems) {
             item.subItems.forEach(sub => {
-              // 🟢 FIX: Pass the fronted state into the carousel items!
-              if (sub.amount > 0) carouselItems.push({ id: sub.id, name: sub.name, amount: sub.amount, type: sub.id.includes('-base') ? 'base' : 'installment', frontedInfo: sub.frontedInfo });
+              // 🟢 FIX 3: Only push UNPAID items into the payment carousel!
+              if (sub.amount > 0 && !sub.isPaid) { 
+                carouselItems.push({ id: sub.id, name: sub.name, amount: sub.amount, type: sub.id.includes('-base') ? 'base' : 'installment', frontedInfo: sub.frontedInfo });
+              }
             });
           }
           setShowCreditPayModal({ accountId: acc.id, bank: acc.bank, items: carouselItems });
         } 
+
     
     // 4. INSTALLMENTS & BUDEE
     else if (item.type === 'installment') {

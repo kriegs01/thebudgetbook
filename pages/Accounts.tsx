@@ -766,7 +766,7 @@ if (acc.hasVaultEnabled && acc.vaultId) {
             {/* 🟢 Mobile: Horizontal Snap Scroll | Desktop: Side-by-Side Grid */}
             <div className="flex md:grid md:grid-cols-2 gap-4 sm:gap-6 overflow-x-auto md:overflow-visible snap-x snap-mandatory pb-4 pt-1 px-1 md:pb-0" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
               
-              {/* Revolving Card */}
+                            {/* Revolving Card */}
               <div className="w-[90%] md:w-auto shrink-0 snap-center bg-white dark:bg-gray-800 border-[3px] border-black rounded-2xl p-5 flex flex-col justify-between shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]">
                 <div>
                   <h3 className="text-lg sm:text-xl font-black uppercase text-purple-700 dark:text-purple-400 mb-2">Revolving Credit</h3>
@@ -780,7 +780,8 @@ if (acc.hasVaultEnabled && acc.vaultId) {
                 </div>
                 <button 
                   onClick={() => {
-                    setFormData(prev => ({ ...prev, type: 'Credit', subtype: 'Revolving', classification: 'Credit Card' }));
+                    // 🟢 FIX: Set classification to 'Loan' to perfectly match precedent accounts!
+                    setFormData(prev => ({ ...prev, type: 'Credit', subtype: 'Revolving', classification: 'Loan' }));
                     setShowCreditTypeModal(false);
                     setIsFlipped(true);
                     setShowModal(true);
@@ -790,6 +791,7 @@ if (acc.hasVaultEnabled && acc.vaultId) {
                   Select Revolving
                 </button>
               </div>
+
 
               {/* Loan Bundle Card */}
               <div className="w-[90%] md:w-auto shrink-0 snap-center bg-white dark:bg-gray-800 border-[3px] border-black rounded-2xl p-5 flex flex-col justify-between shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]">
