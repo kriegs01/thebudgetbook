@@ -296,7 +296,8 @@ function TransactionsPage({ transactions, loading = false, onTransactionDeleted,
     // 🟢 ADD THESE LOGISTICS STATES
     isPhysicalOrder: false,
     trackingNumber: '',
-    courier: 'SPX'
+    courier: 'SPX',
+    isFronted: false
   });
 
 
@@ -592,7 +593,8 @@ function TransactionsPage({ transactions, loading = false, onTransactionDeleted,
       beneficiaryId: 'me',
       isPhysicalOrder: false,
       trackingNumber: '',
-      courier: 'SPX'  // 🟢 Reset to default
+      courier: 'SPX',  // 🟢 Reset to default
+      isFronted: false
     });
     setReceiptFile(null);
     setPaymentTab('my_account'); // 🟢 Replaces setShowAdvancedOptions(false)
@@ -630,7 +632,8 @@ function TransactionsPage({ transactions, loading = false, onTransactionDeleted,
       beneficiaryId: 'me',
       isPhysicalOrder: false,
       trackingNumber: '',
-      courier: 'SPX'
+      courier: 'SPX',
+      isFronted: false
     });
   };
 
@@ -650,7 +653,8 @@ function TransactionsPage({ transactions, loading = false, onTransactionDeleted,
       borrowerName: tx.borrower_name || '',
       personName: (tx as any).person_name || '',
       payerId: (tx as any).payer_id || 'me',             // 🟢 Pre-fill existing data
-      beneficiaryId: (tx as any).beneficiary_id || 'me'  // 🟢 Pre-fill existing data
+      beneficiaryId: (tx as any).beneficiary_id || 'me',  // 🟢 Pre-fill existing data
+      isFronted: !!(tx as any).notes?.includes('FRONTED_FROM_SAVINGS')
     });
     
     // 🟢 Auto-configure tabs based on existing transaction data
@@ -702,10 +706,24 @@ function TransactionsPage({ transactions, loading = false, onTransactionDeleted,
 
     if (!txName || !form.date || !form.amount || !form.paymentMethodId) return;
 
-    // 🟢 NEW: Format the IOU relational data
-    const payloadPayerId = form.payerId === 'me' ? null : form.payerId;
-    const payloadBeneficiaryId = form.beneficiaryId === 'me' ? null : form.beneficiaryId;
-    const payloadIouStatus = (payloadPayerId || payloadBeneficiaryId) ? 'pending' : 'none';
+    // 🟢 NEW: Format the IOU relational data
+    const payloadPayerId = form.payerId === 'me' ? null : form.payerId;
+    const payloadBeneficiaryId = form.beneficiaryId === 'me' ? null : form.beneficiaryId;
+    const payloadIouStatus = (payloadPayerId || payloadBeneficiaryId) ? 'pending' : 'none';
+
+
+    // 🟢 BUILD THE REIMBURSEMENT TAG
+    let resolvedNotes = editingTxId && editingTransaction ? ((editingTransaction as any).notes || '') : '';
+    if (form.isFronted) {
+      if (resolvedNotes.includes('FRONTED_FROM_SAVINGS')) {
+          resolvedNotes = resolvedNotes.replace(/FRONTED_FROM_SAVINGS\|[a-zA-Z0-9-]+/, `FRONTED_FROM_SAVINGS|${form.paymentMethodId}`);
+      } else {
+          resolvedNotes = resolvedNotes ? `${resolvedNotes} FRONTED_FROM_SAVINGS|${form.paymentMethodId}` : `FRONTED_FROM_SAVINGS|${form.paymentMethodId}`;
+      }
+    } else {
+      resolvedNotes = resolvedNotes.replace(/FRONTED_FROM_SAVINGS\|[a-zA-Z0-9-]+/, '').trim();
+    }
+    const finalNotes = resolvedNotes === '' ? null : resolvedNotes;
 
 
     let finalAmount = parseFloat(form.amount);
@@ -734,7 +752,10 @@ function TransactionsPage({ transactions, loading = false, onTransactionDeleted,
             // 🟢 Add these 3 logistics lines
             order_status: form.isPhysicalOrder ? 'pending_delivery' : null,
             tracking_number: form.isPhysicalOrder ? form.trackingNumber : null,
-            courier: form.isPhysicalOrder ? form.courier : null
+            courier: form.isPhysicalOrder ? form.courier : null,
+            notes: finalNotes,
+         
+
           };
 
           
@@ -767,7 +788,8 @@ function TransactionsPage({ transactions, loading = false, onTransactionDeleted,
             // 🟢 Add these 3 logistics lines
             order_status: form.isPhysicalOrder ? 'pending_delivery' : null,
             tracking_number: form.isPhysicalOrder ? form.trackingNumber : null,
-            courier: form.isPhysicalOrder ? form.courier : null
+            courier: form.isPhysicalOrder ? form.courier : null,
+            notes: finalNotes,
           };
 
 
@@ -936,7 +958,7 @@ function TransactionsPage({ transactions, loading = false, onTransactionDeleted,
 
   return (
     <>
-      <div className={`min-h-screen bg-gray-50 dark:bg-gray-950 transition-colors duration-200 overflow-x-hidden ${isMobile ? 'pt-6' : 'pt-6'}`}>
+      <div className={`min-h-screen bg-transparent dark:bg-gray-950 transition-colors duration-200 overflow-x-hidden ${isMobile ? 'pt-6' : 'pt-6'}`}>
       <div className="space-y-3 lg:space-y-8 animate-in fade-in duration-500 w-full max-w-7xl mx-auto pt-2 lg:pt-10">
   <div ref={headerRef}> 
     <PageHeader
@@ -957,7 +979,7 @@ function TransactionsPage({ transactions, loading = false, onTransactionDeleted,
   </div>
 
             {/* 🟢 Added -mt-6 to pull the filters box upward against the header! */}
-              <div className="!-mt-6 bg-white dark:bg-gray-900 border-4 border-black rounded-2xl shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] mb-2 relative z-10">
+              <div className="!-mt-6 bg-[#FCF6E8] dark:bg-gray-900 border-4 border-black rounded-2xl shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] mb-2 relative z-10">
                 <button
                   className="p-4 flex justify-between items-center w-full disabled:cursor-auto"
                   onClick={() => setIsFiltersOpen(p => !p)}
@@ -1075,7 +1097,7 @@ function TransactionsPage({ transactions, loading = false, onTransactionDeleted,
 </Link>
 
 
-          <div className="bg-white dark:bg-gray-900 border-4 border-black rounded-2xl shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] overflow-hidden transition-colors w-full max-w-full">
+          <div className="bg-[#FCF6E8] dark:bg-gray-900 border-4 border-black rounded-2xl shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] overflow-hidden transition-colors w-full max-w-full">
             <div className="px-6 py-4 border-b-4 border-black flex items-center justify-between transition-colors">
               <h2 className="text-sm font-bold uppercase text-gray-600 dark:text-gray-400 tracking-widest">All transactions</h2>
               <div className="flex items-center gap-2">
@@ -1524,6 +1546,37 @@ function TransactionsPage({ transactions, loading = false, onTransactionDeleted,
                       </div>
                     </div>
                   )}
+
+                                    {/* 🟢 BORROW FROM SAVINGS TOGGLE */}
+                  {form.transactionType === 'payment' && (
+                    <button
+                      type="button"
+                      onClick={() => setForm(f => ({ ...f, isFronted: !f.isFronted }))}
+                      className={`mt-4 w-full flex items-center justify-between p-4 rounded-2xl border-[3px] border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] active:translate-x-[2px] active:translate-y-[2px] active:shadow-none transition-all ${
+                        form.isFronted ? 'bg-blue-300 dark:bg-blue-600' : 'bg-white dark:bg-gray-800'
+                      }`}
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className={`w-8 h-8 rounded-lg border-2 border-black flex items-center justify-center ${form.isFronted ? 'bg-black text-white' : 'bg-gray-100 dark:bg-gray-700 text-gray-500'}`}>
+                          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M2 12h4l3-9 5 18 3-9h5"/></svg>
+                        </div>
+                        <div className="text-left">
+                          <h4 className={`font-black uppercase tracking-tight text-sm ${form.isFronted ? 'text-black dark:text-white' : 'text-gray-700 dark:text-gray-300'}`}>
+                            Borrow from Savings
+                          </h4>
+                          <p className={`text-[10px] font-bold uppercase tracking-widest ${form.isFronted ? 'text-black/70 dark:text-white/70' : 'text-gray-500'}`}>
+                            Tag for Payday Reimbursement
+                          </p>
+                        </div>
+                      </div>
+                      
+                      {/* Custom Toggle Switch UI */}
+                      <div className={`w-12 h-6 rounded-full border-[3px] border-black relative transition-colors ${form.isFronted ? 'bg-white' : 'bg-gray-300 dark:bg-gray-600'}`}>
+                        <div className={`absolute top-[2px] w-4 h-4 rounded-full border-2 border-black bg-black transition-all ${form.isFronted ? 'left-[22px]' : 'left-[2px]'}`} />
+                      </div>
+                    </button>
+                  )}
+
 
                   {/* 🟢 PHYSICAL PARCEL TOGGLE */}
                   {form.transactionType === 'payment' && (

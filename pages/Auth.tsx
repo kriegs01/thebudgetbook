@@ -5,7 +5,7 @@ import { useAuth } from '../src/contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { Logo } from '../src/components/Logo'; // Import the logo
 
-const PasswordShapes = ({ password }) => {
+const PasswordShapes = ({ password, selectionStart = 0, selectionEnd = 0 }) => {
   const colors = ['#4ECDC4', '#FF6B6B', '#FBBF24']; // Teal, Magenta, Yellow
   const shapes = [
     // Circle
@@ -23,11 +23,18 @@ const PasswordShapes = ({ password }) => {
   ];
 
   return (
-    <div className="flex items-center space-x-1" aria-hidden="true">
+    <div className="flex items-center" aria-hidden="true">
       {password.split('').map((_, index) => {
+        // Check if this specific character falls within the user's selection
+        const isSelected = index >= selectionStart && index < selectionEnd;
         const Shape = React.cloneElement(shapes[index % shapes.length], { key: index });
+        
         return (
-          <span key={index} style={{ color: colors[index % colors.length] }}>
+          <span 
+            key={index} 
+            className={`px-[2px] py-1 ${isSelected ? 'bg-[#b4d5fe] dark:bg-blue-500/50' : ''}`} 
+            style={{ color: colors[index % colors.length] }}
+          >
             {Shape}
           </span>
         );
@@ -37,25 +44,72 @@ const PasswordShapes = ({ password }) => {
 };
 
 
-const AuthInput = ({ id, type, value, onChange, placeholder, icon: Icon, disabled }: any) => (
-  <div className="relative">
-    {type === 'password' && value && (
-      <div className="absolute top-1/2 left-4 -translate-y-1/2 z-10 pointer-events-none">
-        <PasswordShapes password={value} />
-      </div>
-    )}
-    <input
-      id={id}
-      type={type}
-      value={value}
-      onChange={onChange}
-      placeholder={placeholder}
-      disabled={disabled}
-      className={`w-full px-4 py-3 text-gray-800 bg-gray-100 border-2 border-gray-900 rounded-lg shadow-[3px_3px_0px_#000] focus:outline-none focus:ring-2 focus:ring-yellow-400 focus:bg-white transition-all ${type === 'password' && value ? 'text-transparent caret-transparent' : ''}`}
-    />
-    {Icon && <Icon className="absolute top-1/2 right-4 -translate-y-1/2 w-5 h-5 text-gray-500" />}
-  </div>
-);
+
+const AuthInput = ({ id, type, value, onChange, placeholder, icon: Icon, disabled }: any) => {
+  const isPasswordFilled = type === 'password' && value;
+  const [selection, setSelection] = useState({ start: 0, end: 0 });
+
+  const handleSelect = (e: any) => {
+    if (type === 'password') {
+      try {
+        setSelection({
+          start: e.target.selectionStart || 0,
+          end: e.target.selectionEnd || 0
+        });
+      } catch (err) {
+        // Failsafe for older browsers that block selection tracking on password fields
+      }
+    }
+  };
+
+  return (
+    <div 
+      className={`relative flex items-center w-full border-2 border-gray-900 rounded-lg shadow-[3px_3px_0px_#000] transition-all focus-within:ring-2 focus-within:ring-yellow-400 focus-within:bg-white ${
+        value ? 'bg-white' : 'bg-gray-100'
+      }`}
+    >
+      {/* 1. Custom Password Shapes Container */}
+      {isPasswordFilled && (
+        <div className="absolute left-[14px] right-12 flex items-center overflow-hidden pointer-events-none z-10">
+          <PasswordShapes 
+            password={value} 
+            selectionStart={selection.start} 
+            selectionEnd={selection.end} 
+          />
+        </div>
+      )}
+
+      {/* 2. The Actual Input (Invisible but interactive) */}
+      <input
+        id={id}
+        type={type}
+        value={value}
+        onChange={(e) => {
+          onChange(e);
+          handleSelect(e); // Update selection immediately if they delete while highlighted
+        }}
+        onSelect={handleSelect}
+        onKeyUp={handleSelect}
+        onMouseUp={handleSelect}
+        onMouseLeave={handleSelect}
+        onBlur={() => setSelection({ start: 0, end: 0 })} // Clear highlight on click away
+        placeholder={placeholder}
+        disabled={disabled}
+        className={`w-full px-4 py-3 bg-transparent focus:outline-none z-20 ${
+          isPasswordFilled ? 'opacity-0' : 'text-gray-800'
+        }`}
+      />
+
+      {/* 3. Icon */}
+      {Icon && (
+        <Icon className="absolute right-4 w-5 h-5 text-gray-500 pointer-events-none z-10" />
+      )}
+    </div>
+  );
+};
+
+
+
 
 const Auth: React.FC = () => {
   const [mode, setMode] = useState<'login' | 'signup' | 'reset'>('login');
@@ -154,16 +208,19 @@ const Auth: React.FC = () => {
       `}</style>
       
       <div className="max-w-sm w-full">
-        {/* Updated Logo Section */}
-        <div className="mb-8 flex flex-col items-center justify-center">
-            <div className="flex items-center justify-center">
-                <img src="/iconapp.png" alt="Budee Mascot" className="h-20 w-20 drop-shadow-lg transform rotate-[15deg] -mr-4 z-10" />
-                <Logo className="text-6xl" />
-            </div>
-          <p className="text-gray-600 mt-4">
-            {mode === 'login' ? 'Welcome back, bud!' : mode === 'signup' ? "Let's get you started!" : "Let’s get you back in!"}
-          </p>
-        </div>
+        {/* Updated Logo Section */}
+        <div className="mb-8 flex flex-col items-center justify-center">
+            <div className="flex items-center justify-center">
+                {/* Bumped mascot from h-20/w-20 to h-24/w-24, adjusted margin to -mr-5 for overlap */}
+                <img src="/iconapp.png" alt="Budee Mascot" className="h-24 w-24 drop-shadow-lg transform rotate-[15deg] -mr-5 z-10" />
+                {/* Bumped text size from 6xl to 7xl */}
+                <Logo className="text-7xl" />
+            </div>
+          {/* Added font-titan, increased text size to text-xl, and darkened to gray-800 for better contrast */}
+          <p className="font-titan text-xl text-gray-800 mt-4 tracking-wide">
+            {mode === 'login' ? 'Welcome back, bud!' : mode === 'signup' ? "Let's get you started!" : "Let’s get you back in!"}
+          </p>
+        </div>
 
         <div className="bg-white border-[3px] border-black rounded-2xl shadow-[8px_8px_0px_#000] p-8">
           {mode === 'reset' && (

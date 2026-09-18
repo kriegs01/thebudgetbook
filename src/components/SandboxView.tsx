@@ -1,7 +1,7 @@
 // src/components/SandboxView.tsx
 import React, { useState, useRef } from 'react';
 import { useSandbox } from '../components/useSandbox';
-import { Plus, Trash2, Calendar, WalletCards, CalendarDays, ChevronLeft, ChevronRight, CreditCard, Sparkles } from 'lucide-react';
+import { Plus, Trash2, Calendar, WalletCards, CalendarDays, ChevronLeft, ChevronRight, CreditCard, Sparkles, Columns3 } from 'lucide-react';
 import { PageHeader } from './PageHeader';
 import { useTheme } from '../contexts/ThemeContext';
 import { calculateBillingCycles } from '../utils/billingCycles';
@@ -523,7 +523,7 @@ export const SandboxView: React.FC<SandboxViewProps> = ({
 
 
             <div className="flex flex-wrap items-center gap-2">
-              <WalletCards className="w-5 h-5 text-indigo-500" />
+              <Columns3 className="w-5 h-5 text-indigo-500" />
               <select 
                 value={forecastInterval}
                 onChange={(e) => setForecastInterval(e.target.value as 'monthly' | 'paycheck')}

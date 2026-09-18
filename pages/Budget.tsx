@@ -3308,18 +3308,24 @@ const getFrozenCycleAmount = (account: Account): number => {
       return determineItemPeriod(inst, currentPeriods, selectedMonth, selectedYear) === activePeriodIndex;
     };
 
-    // 🟢 SCANS FOR THE TOGGLE'S TAG!
+        // 🟢 SCANS FOR THE TOGGLE'S TAG!
     const getFrontedData = (itemName: string) => {
-      const monthIdx = MONTHS.indexOf(selectedMonth);
-      const tx = transactions.find(t => 
-        t.notes?.includes('FRONTED_FROM_SAVINGS') &&
-        new Date(t.date).getMonth() === monthIdx &&
-        new Date(t.date).getFullYear() === selectedYear &&
-        (t.name.toLowerCase().includes(itemName.toLowerCase()) || itemName.toLowerCase().includes(t.name.toLowerCase()))
-      );
+      const tx = transactions.find(t => {
+        if (!t.notes?.includes('FRONTED_FROM_SAVINGS')) return false;
+        
+        const nameMatch = t.name.toLowerCase().includes(itemName.toLowerCase()) || itemName.toLowerCase().includes(t.name.toLowerCase());
+        
+        const txDate = new Date(t.date);
+        const dateMatch = txDate.getMonth() === MONTHS.indexOf(selectedMonth) && txDate.getFullYear() === selectedYear;
+        // 🟢 Fallback: Check if the transaction name explicitly mentions the budget month
+        const labelMatch = t.name.toLowerCase().includes(selectedMonth.toLowerCase());
+        
+        return nameMatch && (dateMatch || labelMatch);
+      });
       if (tx) return { txId: tx.id, accountId: tx.notes.split('|')[1] || '' };
       return null;
     };
+
 
     const timeline: TimelineNode[] = [];
 
@@ -3430,26 +3436,32 @@ const getFrozenCycleAmount = (account: Account): number => {
         const personalBreakdown = targetBucket?.personalBreakdown;
 
                 let baseAmount = 0;
-        if (personalBreakdown) {
+                if (personalBreakdown) {
           baseAmount = (personalBreakdown.unpaidRollover || 0) + (personalBreakdown.newSwipesTotal || 0);
           if (baseAmount > 0) {
-             // 🟢 FIX 2A: Check if the base balance is paid and tag it!
-             const isBasePaid = checkIfPaidByTransaction('Previous Balance + New Charges', baseAmount, selectedMonth, selectedYear, selectedTiming);
-             subItems.push({ id: `${acc.id}-base`, name: 'Previous Balance + New Charges', amount: baseAmount, type: 'expense', dueDate: 0, displayDueDate: '', isPaid: isBasePaid, isIncluded: true, rawItem: null });
+             const baseName = 'Previous Balance + New Charges';
+             let frontedInfo = getFrontedData(baseName);
+             let isBasePaid = checkIfPaidByTransaction(baseName, baseAmount, selectedMonth, selectedYear, selectedTiming);
+             if (frontedInfo) isBasePaid = false; // 🟢 Force it to stay active!
+
+             subItems.push({ id: `${acc.id}-base`, name: baseName, amount: baseAmount, type: 'expense', dueDate: 0, displayDueDate: '', isPaid: isBasePaid, isIncluded: true, rawItem: null, frontedInfo });
           }
         }
 
         (personalBreakdown?.activeInstallments || []).forEach((inst: any) => {
           if (!excludedInstallmentIds.has(inst.id)) {
-            // 🟢 FIX 2B: Check if the specific installment is paid and tag it!
+            let frontedInfo = getFrontedData(inst.name);
             const schedule = getPaymentSchedule('installment', inst.id, selectedMonth, selectedYear);
             let subIsPaid = false;
             if (schedule) subIsPaid = schedule.status === 'paid';
             else subIsPaid = checkIfPaidByTransaction(inst.name, inst.monthlyAmount || inst.amount, selectedMonth, selectedYear, selectedTiming);
             
-            subItems.push({ id: inst.id, name: inst.name, amount: Number(inst.monthlyAmount) || Number(inst.amount) || 0, type: 'Installment', isPaid: subIsPaid });
+            if (frontedInfo) subIsPaid = false; // 🟢 Force it to stay active!
+
+            subItems.push({ id: inst.id, name: inst.name, amount: Number(inst.monthlyAmount) || Number(inst.amount) || 0, type: 'Installment', isPaid: subIsPaid, frontedInfo });
           }
         });
+
 
         amount = getFrozenCycleAmount(acc);
         rawDue = getCreditDueDay(acc);
@@ -4144,7 +4156,7 @@ const totalSpend = grandTotal;
     <div className={`space-y-8 animate-in slide-in-from-right-4 duration-500 pb-20 w-full ${isMobile ? 'p-2' : 'p-4 md:p-8'} relative`}>
       <div className="flex flex-col space-y-6">
         <PageHeader 
-          title="Budget Setup"
+          title="Budget Plan"
           subtitle={isReadOnly ? 'Archived – Read Only' : 'Your Money-Pie for the month'}
           icon={
             <div className={`w-14 h-14 rounded-2xl flex items-center justify-center text-white border-[3px] border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] -rotate-3 transition-all hover:rotate-0 hover:scale-110 z-10 relative ${getAccentClasses('bg')}`}>

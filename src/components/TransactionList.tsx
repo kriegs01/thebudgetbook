@@ -155,7 +155,7 @@ export const TransactionList: React.FC<TransactionListProps> = ({
               <tr
                 key={tx.id}
                 className={`border-t border-gray-100 dark:border-gray-800 group transition-colors ${
-                  isSelectMode && selectedIds.has(tx.id) ? `${getAccentClasses('lightBg')} dark:opacity-80` : 'hover:bg-gray-50 dark:hover:bg-gray-800/50'
+                  isSelectMode && selectedIds.has(tx.id) ? `${getAccentClasses('lightBg')} dark:opacity-80` : 'hover:bg-amber-500/10 dark:hover:bg-gray-800/50'
                 }`}
               >
                 {isSelectMode && (
