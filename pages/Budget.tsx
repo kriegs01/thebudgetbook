@@ -305,15 +305,25 @@ const TimelineCard = ({
   // 🟢 Detect if this card is in "Reimbursement Mode"
   const isFronted = !!item.frontedInfo;
 
-  return (
-    <div className={`p-4 rounded-xl border-2 flex flex-col transition-all shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] ${
-      !item.isIncluded ? 'opacity-50 bg-gray-50 dark:bg-gray-800/30 border-black' : 
-      isFronted ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-600 shadow-[4px_4px_0px_0px_rgba(37,99,235,1)]' : 
-      isSettled ? 'bg-gray-50 dark:bg-gray-800/50 opacity-75 shadow-none hover:opacity-100 border-black' : 'bg-white dark:bg-gray-800 border-black'
-    }`}>
+    return (
+    <div className="relative w-full">
       
+            {/* 🟢 CALENDAR BADGE OVER THE TIMELINE */}
+      <div className={`absolute top-4 -left-[45px] z-10 flex flex-col items-center justify-center w-10 bg-white dark:bg-gray-800 border-2 border-black rounded-lg overflow-hidden shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] transition-opacity ${isSettled ? 'opacity-60 grayscale' : 'opacity-100'}`}>
+        <span className={`w-full text-white text-[9px] font-black uppercase text-center py-0.5 tracking-widest border-b-2 border-black ${isSettled ? 'bg-gray-500' : 'bg-red-500'}`}>Due</span>
+        <span className={`text-[14px] leading-tight font-black py-1 ${isSettled ? 'text-gray-500' : 'text-gray-900 dark:text-gray-100'}`}>{item.dueDate}</span>
+      </div>
+
+
       {/* MAIN CARD CONTENT */}
-      <div className="flex justify-between items-start gap-4">
+      <div className={`p-4 rounded-xl border-2 flex flex-col transition-all shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] ${
+        !item.isIncluded ? 'opacity-50 bg-gray-50 dark:bg-gray-800/30 border-black' : 
+        isFronted ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-600 shadow-[4px_4px_0px_0px_rgba(37,99,235,1)]' : 
+        isSettled ? 'bg-gray-50 dark:bg-gray-800/50 opacity-75 shadow-none hover:opacity-100 border-black' : 'bg-white dark:bg-gray-800 border-black'
+      }`}>
+        
+        <div className="flex justify-between items-start gap-4">
+
         
         {/* LEFT COLUMN: Title & Info */}
         <div className="flex flex-col gap-1.5 md:gap-2 min-w-0 flex-1">
@@ -416,10 +426,12 @@ const TimelineCard = ({
             </div>
           )})}
         </div>
-      )}
+              )}
+      </div>
     </div>
   );
 };
+
 
 
 
@@ -637,50 +649,11 @@ const [activePeriodIndex, setActivePeriodIndex] = useState<number>(1);
 
   const [transactions, setTransactions] = useState<SupabaseTransaction[]>([]);
 
-  // 🟢 PAYCHECK-TO-PAYCHECK EXPENSE LEDGER (Safely placed at the top!)
-  const [expandedLedgerIds, setExpandedLedgerIds] = useState<Set<string>>(new Set());
+ 
 
-  const paycheckLedger = React.useMemo(() => {
-    if (!transactions || transactions.length === 0) return [];
 
-    const periodTransactions = transactions.filter(tx => {
-      const txDate = new Date(tx.date);
-      return txDate.getFullYear() === selectedYear && MONTHS[txDate.getMonth()] === selectedMonth;
-    }).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
 
-    const ledgerBuckets: { 
-      incomeTx: any, 
-      expenses: any[], 
-      totalIncome: number, 
-      totalSpent: number 
-    }[] = [];
-    
-    let currentBucket: any = null;
-    let orphanBucket = { incomeTx: { name: 'Rollover / Previous Balance', date: `${selectedYear}-${String(MONTHS.indexOf(selectedMonth) + 1).padStart(2, '0')}-01` }, expenses: [] as any[], totalIncome: 0, totalSpent: 0 };
 
-    periodTransactions.forEach(tx => {
-      const isIncome = tx.transaction_type === 'income' || tx.transaction_type === 'cash_in';
-      const amount = Math.abs(tx.amount);
-
-      if (isIncome) {
-        if (currentBucket) ledgerBuckets.push(currentBucket);
-        currentBucket = { incomeTx: tx, expenses: [], totalIncome: amount, totalSpent: 0 };
-      } else if (tx.amount > 0 && tx.notes !== 'VAULT_STASH') {
-        if (currentBucket) {
-          currentBucket.expenses.push(tx);
-          currentBucket.totalSpent += amount;
-        } else {
-          orphanBucket.expenses.push(tx);
-          orphanBucket.totalSpent += amount;
-        }
-      }
-    });
-
-    if (currentBucket) ledgerBuckets.push(currentBucket);
-    if (orphanBucket.expenses.length > 0) ledgerBuckets.unshift(orphanBucket as any);
-
-    return ledgerBuckets.reverse();
-  }, [transactions, selectedMonth, selectedYear]);
 
   
   const [wallets, setWallets] = useState<Wallet[]>([]);
@@ -736,7 +709,115 @@ const [activePeriodIndex, setActivePeriodIndex] = useState<number>(1);
   const [payRules, setPayRules] = useState<PayScheduleRule[]>([]);
   const [currentPeriods, setCurrentPeriods] = useState<PayPeriod[]>([]);
 
+       // 🟢 PAYCHECK-TO-PAYCHECK EXPENSE LEDGER (Moved below currentPeriods)
+  const [expandedLedgerIds, setExpandedLedgerIds] = useState<Set<string>>(new Set());
+
+      const dailyLedger = React.useMemo(() => {
+    if (!transactions || transactions.length === 0) return [];
+
+    const currentMonthIdx = MONTHS.indexOf(selectedMonth);
+
+    // 🟢 NEW: Default the boundaries to span the ENTIRE selected month!
+    let startBoundary = new Date(selectedYear, currentMonthIdx, 1);
+    startBoundary.setHours(0, 0, 0, 0);
+    
+    let endBoundary = new Date(selectedYear, currentMonthIdx + 1, 0); // Last day of the month
+    endBoundary.setHours(23, 59, 59, 999);
+
+    // Helper to find the specific income drop for any given tab
+    const getIncomeForTab = (tabIndex: number) => {
+      const pName = ['First', 'Second', 'Third', 'Fourth', 'Fifth'][tabIndex - 1] 
+        ? `${['First', 'Second', 'Third', 'Fourth', 'Fifth'][tabIndex - 1]} Paycheck` 
+        : `Paycheck ${tabIndex}`;
+      const targetLabel = `Income - ${selectedMonth} (${pName})`;
+      const legacyLabel = tabIndex === 1 ? '1/2' : '2/2';
+      
+      const tabBoundaryStart = new Date(currentPeriods[tabIndex - 1]?.startDate || startBoundary);
+      tabBoundaryStart.setHours(0,0,0,0);
+      const tabBoundaryEnd = new Date(currentPeriods[tabIndex - 1]?.endDate || endBoundary);
+      tabBoundaryEnd.setHours(23,59,59,999);
+
+      return transactions.filter(tx => {
+        const txDate = new Date(tx.date);
+        if (txDate.getFullYear() !== selectedYear || txDate.getMonth() !== currentMonthIdx) return false;
+
+        const isTaggedIncome = tx.notes?.startsWith('Income -') || tx.notes?.startsWith('Income Record');
+        const nameLower = (tx.name || '').trim().toLowerCase();
         
+        const isPrimaryIncome = isTaggedIncome || nameLower === 'salary' || nameLower === 'income' || tx.transaction_type === 'income';
+
+        if (!isPrimaryIncome) return false;
+
+        if (isTaggedIncome) {
+          return tx.notes === targetLabel || tx.notes.includes(`- ${legacyLabel}`);
+        }
+        
+        return txDate >= tabBoundaryStart && txDate <= tabBoundaryEnd;
+      }).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+    };
+
+    // 1. Anchor the START date to the exact day the current income arrived
+    const currentTabIncomes = getIncomeForTab(activePeriodIndex);
+    if (currentTabIncomes.length > 0) {
+      startBoundary = new Date(currentTabIncomes[0].date);
+      startBoundary.setHours(0, 0, 0, 0); 
+    } else if (currentPeriods[activePeriodIndex - 1]) {
+      // Fallback if no income logged yet: use the scheduled start date
+      startBoundary = new Date(currentPeriods[activePeriodIndex - 1].startDate);
+      startBoundary.setHours(0, 0, 0, 0);
+    }
+
+    // 2. 🟢 THE FIX: Only cut the END date short if the NEXT income has actually arrived!
+    if (activePeriodIndex < currentPeriods.length) {
+      const nextTabIncomes = getIncomeForTab(activePeriodIndex + 1);
+      if (nextTabIncomes.length > 0) {
+        endBoundary = new Date(nextTabIncomes[0].date);
+        endBoundary.setHours(0, 0, 0, 0);
+        endBoundary = new Date(endBoundary.getTime() - 1); 
+      }
+      // If nextTabIncomes is empty, endBoundary stays at the end of the month!
+    }
+
+    // 3. Filter transactions strictly within these dynamic boundaries
+    const periodTransactions = transactions.filter(tx => {
+      const txDate = new Date(tx.date);
+      return txDate >= startBoundary && txDate <= endBoundary;
+    }).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
+    const groups: Record<string, { date: Date, dateStr: string, txs: any[], totalIncome: number, totalSpent: number }> = {};
+    
+    periodTransactions.forEach(tx => {
+      const isIncome = tx.transaction_type === 'income' || tx.transaction_type === 'cash_in';
+      const isExpense = !isIncome && tx.amount > 0 && tx.notes !== 'VAULT_STASH';
+      
+      if (isIncome || isExpense) {
+        const txDate = new Date(tx.date);
+        const dateStr = txDate.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+        
+        const linkedAccount = accounts.find(a => a.id === tx.payment_method_id);
+        const isCreditPurchase = isExpense && linkedAccount && (linkedAccount.type === 'Credit' || linkedAccount.classification === 'Credit Card');
+        
+        const processedTx = { ...tx, isCreditPurchase };
+
+        if (!groups[dateStr]) {
+          groups[dateStr] = { date: txDate, dateStr, txs: [], totalIncome: 0, totalSpent: 0 };
+        }
+        
+        groups[dateStr].txs.push(processedTx);
+        
+        if (isIncome) {
+          groups[dateStr].totalIncome += Math.abs(tx.amount);
+        } else if (isExpense && !isCreditPurchase) { 
+          groups[dateStr].totalSpent += Math.abs(tx.amount);
+        }
+      }
+    });
+
+    return Object.values(groups).sort((a, b) => b.date.getTime() - a.date.getTime());
+  }, [transactions, activePeriodIndex, currentPeriods, accounts, selectedMonth, selectedYear]);
+
+
+   
     
   
         // 🟢 THE UNIFIED BUDGET ENGINE
@@ -915,7 +996,7 @@ const [activePeriodIndex, setActivePeriodIndex] = useState<number>(1);
 
           const existingItemIndex = merged[targetCat].findIndex(item => item.id === biller.id || item.name.toLowerCase() === biller.name.toLowerCase());
           
-          if (existingItemIndex === -1) {
+                    if (existingItemIndex === -1) {
             merged[targetCat].push({
               id: biller.id,
               name: biller.name,
@@ -925,9 +1006,28 @@ const [activePeriodIndex, setActivePeriodIndex] = useState<number>(1);
               timing: biller.timing,
               dueDay: biller.dueDate
             });
-          } else if (Number(merged[targetCat][existingItemIndex].amount) === 0) {
-            merged[targetCat][existingItemIndex].amount = String(resolvedAmount);
+          } else {
+            // 🟢 NEW: Always pull the live rate for Active budgets!
+            const isArchived = setupsForMonth.some(s => s.isArchived);
+            
+            // Protect historical integrity: Only auto-update if the budget is NOT archived
+            if (!isArchived) {
+              const existingItem = merged[targetCat][existingItemIndex];
+              
+              // 1. Update the legacy fallback amount
+              existingItem.amount = String(resolvedAmount);
+              
+              // 2. Update the Unified Multi-Tab Engine amount
+              if (existingItem.amountsByPeriod) {
+                // Find which paycheck tab this biller is currently assigned to
+                const stampedTab = parseInt(Object.keys(existingItem.amountsByPeriod)[0], 10);
+                if (!isNaN(stampedTab)) {
+                  existingItem.amountsByPeriod[stampedTab] = String(resolvedAmount);
+                }
+              }
+            }
           }
+
         }
       });
 
@@ -4915,8 +5015,7 @@ const totalSpend = grandTotal;
       <h3 className="text-xs font-black text-gray-400 uppercase tracking-widest pl-2">
         Upcoming Commitments
       </h3>
-      <div className="flex flex-col gap-3 pl-4 border-l-2 border-dashed border-gray-300 dark:border-gray-700">
-        {upcomingItems.map(item => (
+<div className="flex flex-col gap-3 pl-4 ml-6 border-l-2 border-dashed border-gray-300 dark:border-gray-700">        {upcomingItems.map(item => (
           <TimelineCard 
             key={item.id} 
             item={item} 
@@ -4954,8 +5053,7 @@ const totalSpend = grandTotal;
       <h3 className="text-xs font-black text-gray-400 uppercase tracking-widest pl-2">
         Settled & Spent
       </h3>
-      <div className="flex flex-col gap-3 pl-4 border-l-2 border-solid border-gray-200 dark:border-gray-800">
-        {settledItems.map(item => (
+<div className="flex flex-col gap-3 pl-4 ml-6 border-l-2 border-solid border-gray-200 dark:border-gray-800">        {settledItems.map(item => (
           <TimelineCard 
             key={item.id} 
             item={item} 
@@ -4988,19 +5086,18 @@ const totalSpend = grandTotal;
   )}
 </div>
 
-      {/* 🟢 PAYCHECK LEDGER ACCORDIONS */}
-      {paycheckLedger.length > 0 && (
+            {/* 🟢 DAILY CASH FLOW LEDGER ACCORDIONS */}
+      {dailyLedger.length > 0 && (
         <div className="mt-8 space-y-4">
           <h3 className="text-xs font-black text-gray-400 uppercase tracking-widest pl-2 flex items-center gap-2">
             <ArrowDownToLine className="w-3.5 h-3.5" />
-            Cash Flow Ledger
+            Daily Cash Flow Ledger
           </h3>
           
           <div className="flex flex-col gap-4 pl-4 border-l-2 border-solid border-gray-200 dark:border-gray-800">
-            {paycheckLedger.map((bucket, idx) => {
-              const bucketId = bucket.incomeTx.id || `orphan-${idx}`;
+            {dailyLedger.map((dayGroup) => {
+              const bucketId = `day-${dayGroup.dateStr}`;
               const isExpanded = expandedLedgerIds.has(bucketId);
-              const remainingAmount = bucket.totalIncome - bucket.totalSpent;
 
               return (
                 <div key={bucketId} className="bg-white dark:bg-gray-800 rounded-xl border-2 border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] overflow-hidden transition-all">
@@ -5014,65 +5111,69 @@ const totalSpend = grandTotal;
                         return next;
                       });
                     }}
-                    className="p-3 md:p-4 cursor-pointer hover:bg-green-50/50 dark:hover:bg-green-900/10 transition-colors flex justify-between items-center"
+                    className="p-3 md:p-4 cursor-pointer hover:bg-indigo-50/50 dark:hover:bg-indigo-900/10 transition-colors flex justify-between items-center"
                   >
                     <div className="flex-1 min-w-0 pr-4">
                       <div className="flex items-center gap-2">
                         <ChevronDown className={`w-4 h-4 shrink-0 text-gray-400 transition-transform duration-300 ${isExpanded ? 'rotate-180' : ''}`} />
-                        <h4 className="text-sm md:text-base font-black text-green-700 dark:text-green-400 truncate">
-                          {bucket.incomeTx.name}
+                        <h4 className="text-sm md:text-base font-black text-indigo-700 dark:text-indigo-400 uppercase tracking-widest">
+                          {dayGroup.dateStr}
                         </h4>
                       </div>
-                      <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest pl-6 mt-0.5">
-                        {new Date(bucket.incomeTx.date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
-                      </p>
                     </div>
                     
-                    <div className="text-right shrink-0">
-                      <span className="text-sm md:text-base font-black text-gray-900 dark:text-gray-100">
-                        +₱{bucket.totalIncome.toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                      </span>
-                      <p className={`text-[10px] font-black uppercase tracking-widest mt-0.5 ${remainingAmount >= 0 ? 'text-gray-400' : 'text-red-500'}`}>
-                        {remainingAmount >= 0 ? 'Remaining: ' : 'Overspent: '} 
-                        ₱{Math.abs(remainingAmount).toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                      </p>
+                    <div className="text-right shrink-0 flex gap-3">
+                      {dayGroup.totalIncome > 0 && (
+                        <span className="text-sm md:text-base font-black text-green-600 dark:text-green-400">
+                          +₱{dayGroup.totalIncome.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                        </span>
+                      )}
+                      {dayGroup.totalSpent > 0 && (
+                        <span className="text-sm md:text-base font-black text-gray-900 dark:text-gray-100">
+                          -₱{dayGroup.totalSpent.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                        </span>
+                      )}
                     </div>
                   </div>
 
-                  {/* EXPANDED EXPENSE LIST */}
+                                    {/* EXPANDED TRANSACTION LIST */}
                   <div className={`transition-all duration-300 ease-in-out overflow-hidden ${isExpanded ? 'max-h-[1000px] opacity-100 border-t-2 border-dashed border-black/10' : 'max-h-0 opacity-0 border-t-0'}`}>
                     <div className="bg-gray-50 dark:bg-gray-900/50 p-3 md:p-4 space-y-3">
-                      {bucket.expenses.length === 0 ? (
-                        <p className="text-center text-xs font-bold text-gray-400 italic py-2">No expenses logged yet.</p>
-                      ) : (
-                        bucket.expenses.map(tx => (
+                      {dayGroup.txs.map((tx: any) => {
+                        const isIncome = tx.transaction_type === 'income' || tx.transaction_type === 'cash_in';
+                        const amount = Math.abs(tx.amount);
+                        const isCredit = tx.isCreditPurchase; // 🟢 Get the flag
+                        
+                        // Prevent invisible vault stash logic from rendering in the UI
+                        if (!isIncome && tx.amount > 0 && tx.notes === 'VAULT_STASH') return null;
+                        
+                        return (
                           <div key={tx.id} className="flex justify-between items-center group">
                             <div className="flex items-center gap-3 min-w-0 pr-4">
-                              <span className="w-1.5 h-1.5 rounded-full shrink-0 bg-red-400"></span>
-                              <div className="min-w-0">
-                                <p className="text-xs font-bold text-gray-700 dark:text-gray-300 truncate">{tx.name}</p>
-                                <p className="text-[9px] font-bold text-gray-400">
-                                  {new Date(tx.date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
-                                </p>
+                              {/* Change bullet color for credit */}
+                              <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${isIncome ? 'bg-green-400' : isCredit ? 'bg-purple-400' : 'bg-red-400'} shadow-[1px_1px_0px_0px_rgba(0,0,0,0.5)]`}></span>
+                              <div className="min-w-0 flex items-center gap-2">
+                                <p className={`text-xs font-bold truncate ${isCredit ? 'text-gray-500 dark:text-gray-400' : 'text-gray-700 dark:text-gray-300'}`}>{tx.name}</p>
+                                
+                                {/* 🟢 THE CREDIT BADGE */}
+                                {isCredit && (
+                                  <span className="shrink-0 text-[8px] font-black uppercase tracking-widest text-purple-600 bg-purple-100 border border-purple-300 px-1.5 py-0.5 rounded shadow-[1px_1px_0px_0px_rgba(0,0,0,1)]">
+                                    Credit
+                                  </span>
+                                )}
                               </div>
                             </div>
-                            <span className="text-xs font-black text-gray-900 dark:text-gray-100 shrink-0">
-                              -₱{Math.abs(tx.amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                            
+                            {/* 🟢 Dim and strikethrough credit amounts to show they are excluded */}
+                            <span className={`text-xs font-black shrink-0 ${isIncome ? 'text-green-600 dark:text-green-400' : isCredit ? 'text-gray-400 dark:text-gray-500 line-through' : 'text-gray-900 dark:text-gray-100'}`}>
+                              {isIncome ? '+' : '-'}₱{amount.toLocaleString(undefined, { minimumFractionDigits: 2 })}
                             </span>
                           </div>
-                        ))
-                      )}
-                      
-                      {bucket.expenses.length > 0 && (
-                        <div className="pt-3 mt-3 border-t border-gray-200 dark:border-gray-700 flex justify-between items-center">
-                          <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Total Deductions</span>
-                          <span className="text-xs font-black text-red-600 dark:text-red-400">
-                            -₱{bucket.totalSpent.toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                          </span>
-                        </div>
-                      )}
+                        );
+                      })}
                     </div>
                   </div>
+
                   
                 </div>
               );
@@ -5080,6 +5181,7 @@ const totalSpend = grandTotal;
           </div>
         </div>
       )}
+
 
 
 
