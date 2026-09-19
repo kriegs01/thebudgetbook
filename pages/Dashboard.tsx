@@ -165,7 +165,15 @@ const Dashboard: React.FC<DashboardProps> = ({ accounts, budget, installments, t
 
   const totalDebt = creditAccounts.reduce((sum, acc) => sum + getTrueCreditDebt(acc), 0);
 
+  // 🟢 NEW: Dynamic text sizing to prevent truncation
+  const getDynamicTextSize = (amountStr: string) => {
+    const len = amountStr.length;
+    if (len >= 13) return 'text-xl sm:text-2xl lg:text-3xl';       // Over ₱1,000,000.00
+    if (len >= 10) return 'text-2xl sm:text-3xl lg:text-4xl';      // Over ₱10,000.00
+    return 'text-3xl sm:text-4xl lg:text-5xl';                     // Standard sizes
+  };
 
+  
  
 
   const formatCurrency = (val: number) => {
@@ -573,9 +581,10 @@ const Dashboard: React.FC<DashboardProps> = ({ accounts, budget, installments, t
                   +2.5%
                 </span>
               </div>
-              <p className="text-3xl sm:text-4xl lg:text-5xl font-black text-gray-900 dark:text-gray-100 tracking-tight truncate">
+              <p className={`font-black text-gray-900 dark:text-gray-100 tracking-tighter transition-all duration-200 ${getDynamicTextSize(formatCurrency(totalBalance))}`}>
                 {formatCurrency(totalBalance)}
               </p>
+
             </div>
           </div>
 
@@ -593,9 +602,10 @@ const Dashboard: React.FC<DashboardProps> = ({ accounts, budget, installments, t
                   +12%
                 </span>
               </div>
-              <p className="text-3xl sm:text-4xl lg:text-5xl font-black text-gray-900 dark:text-gray-100 tracking-tight truncate">
+              <p className={`font-black text-gray-900 dark:text-gray-100 tracking-tighter transition-all duration-200 ${getDynamicTextSize(formatCurrency(monthlySpending))}`}>
                 {formatCurrency(monthlySpending)}
               </p>
+
             </div>
           </div>
 
@@ -613,7 +623,7 @@ const Dashboard: React.FC<DashboardProps> = ({ accounts, budget, installments, t
                   -5%
                 </span>
               </div>
-              <p className="text-3xl sm:text-4xl lg:text-5xl font-black text-gray-900 dark:text-gray-100 tracking-tight truncate">
+              <p className={`font-black text-gray-900 dark:text-gray-100 tracking-tighter transition-all duration-200 ${getDynamicTextSize(formatCurrency(totalDebt))}`}>
                 {formatCurrency(totalDebt)}
               </p>
             </div>

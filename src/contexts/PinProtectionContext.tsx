@@ -660,7 +660,7 @@ export const PinProtectionProvider: React.FC<{ children: ReactNode }> = ({ child
     }
   };
 
-  return (
+    return (
     <PinProtectionContext.Provider
       value={{
         isPinEnabled,
@@ -690,14 +690,14 @@ export const PinProtectionProvider: React.FC<{ children: ReactNode }> = ({ child
 
       {/* App Standby Lock Screen Overlay */}
       {pinData.session.standby_locked && (
-         <div className="fixed inset-0 z-[9999] bg-[#FCF6E8] flex flex-col items-center justify-center p-4 animate-in fade-in duration-500">
+         <div className="fixed inset-0 z-[9999] bg-[#FCF6E8] dark:bg-gray-950 transition-colors duration-500 flex flex-col items-center justify-center p-4 animate-in fade-in">
           <style>{`
             @import url('https://fonts.googleapis.com/css2?family=Titan+One&display=swap');
             .font-brand { font-family: 'Titan One', cursive; }
           `}</style>
           
           <div className="text-center mb-8">
-            <div className="inline-block p-4 bg-white border-[3px] border-black rounded-full shadow-[8px_8px_0px_#000]">
+            <div className="inline-block p-4 bg-white dark:bg-gray-900 border-[3px] border-black rounded-full shadow-[8px_8px_0px_#000] transition-colors duration-500">
               <Lock className="w-12 h-12 text-[#FF6B6B]" />
             </div>
           </div>
@@ -705,35 +705,44 @@ export const PinProtectionProvider: React.FC<{ children: ReactNode }> = ({ child
           <h2 className="font-brand text-4xl text-[#FF6B6B] drop-shadow-[3px_3px_0px_#000] mb-2">
             App Locked
           </h2>
-          <p className="text-gray-600 mb-10 font-medium">
-            Hi, {firstName || 'there'}! Please enter your PIN to continue.
+          <p className="text-gray-600 dark:text-gray-400 mb-10 font-medium transition-colors duration-500">
+            Hi, {firstName ||'there'}! Please enter your PIN to continue.
           </p>
           
-          <form onSubmit={handleStandbySubmit} className="w-full max-w-xs space-y-6">
+                    <form onSubmit={handleStandbySubmit} className="w-full max-w-xs space-y-6">
             <div>
-              <div className="relative">
+              {/* Moved background, borders, and focus-within rings to the parent wrapper */}
+              <div className={`relative flex items-center justify-center w-full bg-white dark:bg-gray-900 border-[3px] border-black rounded-xl shadow-[4px_4px_0px_#000] transition-colors duration-300 focus-within:ring-2 focus-within:ring-yellow-400 ${standbyError ? 'border-red-500' : ''}`}>
+                
                 {standbyPin && (
                   <div className="absolute inset-0 z-10 flex items-center justify-center pointer-events-none">
                     <PasswordShapes password={standbyPin} />
                   </div>
                 )}
-              <input
-                type="password"
-                value={standbyPin}
-                onChange={(e) => { setStandbyPin(e.target.value); setStandbyError(false); }}
-                className={`w-full px-4 py-3 text-gray-800 bg-white border-2 border-gray-900 rounded-lg shadow-[3px_3px_0px_#000] focus:outline-none focus:ring-2 focus:ring-yellow-400 text-center text-3xl font-brand transition-all ${standbyError ? 'border-red-500' : ''} ${standbyPin ? 'text-transparent caret-transparent' : 'tracking-[0.5em]'}`}
-                placeholder="••••"
-                maxLength={6}
-                autoFocus
-              />
+                
+                {/* Input is now bg-transparent, and uses opacity-0 when typing to completely hide native dots */}
+                <input
+                  type="password"
+                  value={standbyPin}
+                  onChange={(e) => { setStandbyPin(e.target.value); setStandbyError(false); }}
+                  className={`w-full px-4 py-3 bg-transparent text-center text-3xl font-brand outline-none z-20 ${
+                    standbyPin ? 'opacity-0' : 'text-gray-800 dark:text-white tracking-[0.5em]'
+                  }`}
+                  placeholder="••••"
+                  maxLength={6}
+                  autoFocus
+                />
               </div>
+              
               {standbyError && <p className="text-red-500 text-sm font-bold mt-3 text-center uppercase tracking-widest">Incorrect PIN</p>}
               {isLockedOut() && <p className="text-red-500 text-sm font-bold mt-3 text-center uppercase tracking-widest">Too many attempts. Try again later.</p>}
             </div>
-            <button type="submit" disabled={isLockedOut() || standbyPin.length < 4} className="w-full bg-[#4ECDC4] text-white py-3 rounded-lg font-bold shadow-[4px_4px_0px_#000] transition-all hover:bg-[#45B7D1] active:shadow-none active:translate-x-1 active:translate-y-1 disabled:opacity-50">
+            
+            <button type="submit" disabled={isLockedOut() || standbyPin.length < 4} className="w-full bg-[#4ECDC4] text-black border-[3px] border-black py-3 rounded-xl font-black uppercase tracking-widest shadow-[4px_4px_0px_#000] transition-all hover:bg-[#45B7D1] active:shadow-none active:translate-x-1 active:translate-y-1 disabled:opacity-50">
               Unlock
             </button>
           </form>
+
         </div>
       )}
     </PinProtectionContext.Provider>

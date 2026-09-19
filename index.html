@@ -67,8 +67,21 @@
 }
 </script>
 <link rel="stylesheet" href="./index.css">
+
+    <script>
+      // Instantly apply the cached theme before the page renders
+      if (localStorage.getItem('theme') === 'dark') {
+        document.documentElement.classList.add('dark');
+      } else if (localStorage.getItem('theme') === 'light') {
+        document.documentElement.classList.remove('dark');
+      } else if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
+        // Fallback to system preference if no login cache exists
+        document.documentElement.classList.add('dark');
+      }
+    </script>
+
 </head>
-<body class="bg-gray-50 text-gray-900 dark:bg-gray-950 dark:text-gray-100 transition-colors duration-200">
+<body class="bg-[#FCF6E8] dark:bg-gray-950 transition-colors duration-500">
   <div id="root"></div>
   <script type="module" src="/index.tsx"></script>
   <script>
