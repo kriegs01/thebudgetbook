@@ -547,6 +547,52 @@ if (trulyNewTransactions.length > 0) {
     setPendingTransactions(prev => prev.map((item, i) => i === index ? { ...item, excluded: !item.excluded } : item));
   };
 
+    // 🟢 CALIBRATION MATH (Live vs Projected)
+  const currentLiveBalance = React.useMemo(() => {
+    if (!existingTransactions) return 0;
+    return existingTransactions
+      .filter(tx => tx.paymentMethodId === selectedAccountId || (tx as any).payment_method_id === selectedAccountId)
+      .reduce((sum, tx) => sum + (-tx.amount), 0); 
+      // Note: In DB, Income is negative & Expense is positive. -tx.amount converts it to a standard readable balance.
+  }, [existingTransactions, selectedAccountId]);
+
+  const netImportChange = React.useMemo(() => {
+    let change = 0;
+    pendingTransactions.forEach((tx, idx) => {
+      if (tx.excluded) return;
+
+      const stateKey = tx.id || idx;
+      let links = matchedLinks[stateKey] || [];
+      if (!Array.isArray(links)) links = [links];
+      
+      const existingIds = Array.isArray((tx as any).existingId) ? (tx as any).existingId : ((tx as any).existingId ? [(tx as any).existingId] : []);
+      const matchedObjIds = Array.isArray((tx as any).matchedIds) ? (tx as any).matchedIds : [];
+      const allAssociatedIds = [...links, ...existingIds, ...matchedObjIds];
+      
+      const hasLedgerLink = allAssociatedIds.some(link => typeof link === 'string' && link.length > 10);
+      
+      if (!hasLedgerLink && !tx.isDuplicate) {
+          // PDF parser amounts: positive = income, negative = expense
+          change += Number(tx.amount) || 0;
+      }
+    });
+    return change;
+  }, [pendingTransactions, matchedLinks]);
+
+  const projectedBalance = currentLiveBalance + netImportChange;
+
+  // 🟢 NEW: Calculate the date range of the imported statement
+  const statementRange = React.useMemo(() => {
+    const dates = pendingTransactions.map(tx => new Date(tx.date).getTime()).filter(t => !isNaN(t));
+    if (dates.length === 0) return null;
+    
+    return {
+      start: new Date(Math.min(...dates)).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+      end: new Date(Math.max(...dates)).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+    };
+  }, [pendingTransactions]);
+
+
   return (
     <>
       
@@ -676,283 +722,284 @@ if (trulyNewTransactions.length > 0) {
       )}
 
 
-      {showReviewModal && (
-        <div className="fixed inset-0 z-[1000] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md">
-          <div className="w-full max-w-2xl bg-white dark:bg-gray-900 border-4 border-black rounded-2xl shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] p-6 flex flex-col max-h-[85vh]">
+            {showReviewModal && (
+        // 🟢 Softened background from bg-black/60 to bg-gray-900/40 with a blur
+        <div className="fixed inset-0 z-[1000] flex items-center justify-center p-4 bg-gray-900/40 backdrop-blur-md">
+          {/* 🟢 Expanded modal width from max-w-2xl to max-w-6xl */}
+          <div className="w-full max-w-6xl bg-white dark:bg-gray-900 border-4 border-black rounded-2xl shadow-[8px_8px_0px_0px_rgba(0,0,0,0.5)] flex flex-col max-h-[90vh] overflow-hidden">
             
-          {/* 🟢 NEW: Select/Deselect All Button */}
-          <div className="mb-4 flex justify-end">
-            <button
-              type="button"
-              onClick={toggleAllExtracted}
-              className="flex items-center gap-2 rounded-xl border-[3px] border-black bg-white px-4 py-2 text-[10px] font-black uppercase tracking-widest text-gray-700 shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] transition-all hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none dark:bg-gray-800 dark:text-gray-300"
-            >
-               <span>☑️</span> Toggle All Selections
-            </button>
-          </div>
-
-
-            <div className="flex justify-between items-center border-b-4 border-black pb-4 mb-4">
+            {/* MODAL HEADER */}
+            <div className="flex justify-between items-center border-b-4 border-black p-5 bg-white dark:bg-gray-800 shrink-0">
               <div>
-                <h2 className="text-xl font-black uppercase">JuiceBox Review ({pendingTransactions.length} items)</h2>
-                <p className="text-xs text-gray-500 font-bold">Duplicates matching your existing ledger are auto-excluded.</p>
+                <h2 className="text-2xl font-black uppercase">JuiceBox Review</h2>
+                <p className="text-xs text-gray-500 font-bold tracking-wide mt-1">Review, link, and reconcile {pendingTransactions.length} items.</p>
               </div>
-              <button onClick={() => setShowReviewModal(false)} className="p-2 border-2 border-black rounded-lg hover:bg-gray-100">
+              <button onClick={() => setShowReviewModal(false)} className="p-2 border-2 border-black rounded-lg hover:bg-gray-100 transition-colors">
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            <div className="flex-1 overflow-y-auto space-y-3 pr-2">
-              {pendingTransactions.map((tx, idx) => {
-                // 🟢 FIXED: Unlock dropdowns for ALL non-duplicate transactions!
-                const isMatchable = !tx.isDuplicate; 
-
-                const formattedDate = new Date(tx.date).toLocaleDateString('en-US', { month: 'short', day: '2-digit' }).toUpperCase();
-
-                const txDateMs = new Date(tx.date).getTime();
-                const threeDaysMs = 3 * 24 * 60 * 60 * 1000;
-                const minDateMs = txDateMs - threeDaysMs;
-                const maxDateMs = txDateMs + threeDaysMs;
-                const txAbsAmount = Math.abs(tx.amount);
-
-                                  // 🟢 NEW: Figure out which items have been claimed by OTHER rows
-                                  const selectedElsewhere = new Set();
-                                  Object.entries(matchedLinks).forEach(([key, links]) => {
-                                    if (key !== String(tx.id || idx)) { 
-                                      links.forEach(link => selectedElsewhere.add(link));
-                                    }
-                                  });
-                 
-                                  // 🟢 ENHANCED: Suggested Sorting & Filtering Logic
-                                  const suggestedLedger = (existingTransactions || [])
-                                  .filter(ledgerTx => {
-                                    // 1. STRICT ACCOUNT FILTER
-                                    const isSameAccount = ledgerTx.paymentMethodId === selectedAccountId || (ledgerTx as any).payment_method_id === selectedAccountId;
-                                    if (!isSameAccount) return false;
-                 
-                                    // 2. DATE FILTER
-                                    const ledgerDateMs = new Date(ledgerTx.date).getTime();
-                                    if (ledgerDateMs < minDateMs || ledgerDateMs > maxDateMs) return false;
-                 
-                                    // 3. 🟢 CLAIM FILTER: Hide it if another row already selected it!
-                                    const idVal = `tx_${ledgerTx.id}`;
-                                    if (selectedElsewhere.has(idVal)) return false;
-                 
-                                    return true;
-                                  })
-                                  .sort((a, b) => {
-                                     const txDesc = `${tx.name} ${tx.raw_text}`.toLowerCase();
-                                     const aType = String(a.transaction_type || '').toLowerCase();
-                                     const bType = String(b.transaction_type || '').toLowerCase();
-                 
-                                     const aTypeMatch = aType && txDesc.includes(aType) ? 1 : 0;
-                                     const bTypeMatch = bType && txDesc.includes(bType) ? 1 : 0;
-                 
-                                     if (aTypeMatch !== bTypeMatch) {
-                                       return bTypeMatch - aTypeMatch; 
-                                     }
-                 
-                                     return Math.abs(Math.abs(a.amount) - txAbsAmount) - Math.abs(Math.abs(b.amount) - txAbsAmount);
-                                   });
-                 
-
-                const suggestedInstallments = (installments || [])
-                  .filter(inst => !inst.isArchived)
-                  .filter(inst => {
-                    const instDateMs = new Date(inst.dueDate).getTime();
-                    return instDateMs >= minDateMs && instDateMs <= maxDateMs;
-                  })
-                  .sort((a, b) => Math.abs(Math.abs(a.totalAmount) - txAbsAmount) - Math.abs(Math.abs(b.totalAmount) - txAbsAmount));
-
-                    // 1. Establish shared state key for THIS row
-    const stateKey = tx.id || idx;
-    
-    // 2. Pre-calculate the top-level calculator totals
-    const activeLinks = matchedLinks[stateKey] || [];
-    const hasSelection = activeLinks.length > 0;
-    
-    let totalSelected = 0;
-    activeLinks.forEach(linkId => {
-      if (typeof linkId === 'string' && linkId.startsWith('tx_')) {
-        const found = existingTransactions?.find(t => String(t.id) === linkId.replace('tx_', ''));
-        if (found?.amount) totalSelected += Math.abs(found.amount);
-      }
-      if (typeof linkId === 'string' && linkId.startsWith('inst_')) {
-        const found = installments?.find(i => String(i.id) === linkId.replace('inst_', ''));
-        if (found?.totalAmount) totalSelected += Math.abs(found.totalAmount);
-      }
-    });
-    
-    const targetAmount = Math.abs(Number(tx.amount) || 0);
-    const diff = targetAmount - totalSelected;
-    const isIncoming = tx.amount > 0;
-
-    return (
-      <div 
-        key={`row_${stateKey}`} 
-        className={`rounded-lg border p-3 flex flex-col gap-3 transition-colors ${
-          tx.excluded ? 'opacity-50 border-gray-800 bg-gray-900/50' : 'border-gray-700 bg-gray-800/80'
-        }`}
-      >
-        {/* 🟢 TOP ROW: Statement Details & Calculator */}
-        <div className="flex justify-between items-start">
-          
-          <div className="flex items-center gap-3">
-            <input 
-              type="checkbox" 
-              checked={!tx.excluded}
-              onChange={() => toggleRowExclusion(idx)}
-              className="rounded bg-gray-900 border-gray-600"
-            />
-            <span className="bg-white text-gray-900 text-[10px] font-black px-2 py-0.5 rounded tracking-wide uppercase">
-              {new Date(tx.date).toLocaleDateString('en-US', { month: 'short', day: '2-digit' })}
-            </span>
-            <span className="text-sm font-bold text-gray-100">{tx.name}</span>
-            {tx.isDuplicate && (
-              <span className="bg-blue-500/20 text-blue-400 border border-blue-500/30 text-[8px] uppercase tracking-widest px-1.5 py-0.5 rounded">
-                Duplicate
-              </span>
-            )}
-          </div>
-
-          <div className="flex flex-col items-end">
-            <span className={`text-sm font-bold ${isIncoming ? 'text-green-500' : 'text-red-500'}`}>
-              {isIncoming ? '+' : '-'}₱{targetAmount.toFixed(2)}
-            </span>
-            
-            {/* THE TOP-LEVEL CALCULATOR */}
-            {hasSelection && (
-              <div className="flex flex-col items-end text-[9px] font-bold uppercase tracking-wider mt-1">
-                <span className="text-gray-400">Selected: ₱{totalSelected.toFixed(2)}</span>
-                {Math.abs(diff) < 0.01 ? (
-                  <span className="text-green-500">✓ Exact Match</span>
-                ) : diff > 0 ? (
-                  <span className="text-amber-500">₱{diff.toFixed(2)} left</span>
-                ) : (
-                  <span className="text-red-500">Over by ₱{Math.abs(diff).toFixed(2)}</span>
-                )}
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* 🟢 BOTTOM ROW: Match & Link Dropdown */}
-        {!tx.isDuplicate && (
-          <div className="bg-gray-950/50 rounded-md p-2">
-            <div className="text-[9px] font-black uppercase tracking-widest text-gray-500 mb-2">Match & Link:</div>
-            
-            {hasSelection ? (
-               <div className="bg-gray-800 text-gray-300 text-[10px] font-bold px-2 py-1.5 rounded border border-gray-700">
-                 {activeLinks.length} Item(s) Linked
-               </div>
-            ) : (
-               <div className="bg-white text-gray-900 text-[10px] font-bold px-2 py-1.5 rounded italic">
-                 No items linked (Import as new)
-               </div>
-            )}
-
-            {/* SUGGESTED LEDGER LIST */}
-            {suggestedLedger.length > 0 && (
-              <div className="mt-3 bg-white rounded p-2">
-                <div className="text-[8px] text-gray-400 font-bold uppercase tracking-widest mb-2">
-                  Suggested Matches (±3 Days):
+            {/* TWO-COLUMN LAYOUT */}
+            <div className="flex flex-col lg:flex-row flex-1 min-h-0 bg-gray-50 dark:bg-gray-950">
+              
+              {/* 🟢 LEFT SIDEBAR (Calibration & Summary) */}
+              <div className="w-full lg:w-[35%] p-5 flex flex-col gap-5 border-b-4 lg:border-b-0 lg:border-r-4 border-black overflow-y-auto bg-white dark:bg-gray-900 shrink-0">
+                
+                {/* Statement Date Range */}
+                <div className="bg-gray-100 dark:bg-gray-800 border-2 border-black rounded-xl p-4 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]">
+                  <h3 className="text-[10px] font-black uppercase tracking-widest text-gray-500 mb-2">Statement Period</h3>
+                  {statementRange ? (
+                    <div className="text-sm font-bold text-gray-900 dark:text-gray-100 flex flex-col gap-1">
+                      <span>{statementRange.start}</span>
+                      <span className="text-gray-400 text-xs text-center w-8">to</span>
+                      <span>{statementRange.end}</span>
+                    </div>
+                  ) : (
+                    <span className="text-sm text-gray-400">Unknown Range</span>
+                  )}
                 </div>
-                <div className="flex flex-col gap-1">
-                  {suggestedLedger.map(ledgerTx => {
-                    const idVal = `tx_${ledgerTx.id}`;
-                    const isChecked = activeLinks.includes(idVal);
-                    const isPendingIOU = (ledgerTx as any).iou_status === 'pending';
-                    
-                    let dateStr = '--/--/----';
-                    try {
-                      if (ledgerTx.date) {
-                        const d = new Date(ledgerTx.date);
-                        if (!isNaN(d.getTime())) {
-                          dateStr = d.toLocaleDateString('en-US', { month: 'numeric', day: 'numeric', year: 'numeric' });
-                        }
-                      }
-                    } catch (e) {}
 
-                    const badgeText = isPendingIOU ? 'Pending IOU' : (ledgerTx.transaction_type || 'Ledger');
-                    const badgeColor = isPendingIOU 
-                      ? 'bg-amber-200 text-amber-900 border-amber-400' 
-                      : 'bg-gray-800 text-gray-200 border-gray-700';
+                {/* Vertical Calibration Dashboard */}
+                <div className="bg-indigo-50 dark:bg-indigo-900/20 border-2 border-black rounded-xl p-5 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] flex flex-col gap-4">
+                  <div>
+                    <span className="text-[10px] font-black uppercase tracking-widest text-indigo-600 dark:text-indigo-400 block mb-1">Live Ledger Balance</span>
+                    <span className="text-2xl font-black text-gray-900 dark:text-white">
+                      ₱{currentLiveBalance.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                    </span>
+                  </div>
+                  
+                  <div className="border-t-2 border-dashed border-indigo-200 dark:border-indigo-800 pt-4">
+                    <span className="text-[10px] font-black uppercase tracking-widest text-gray-500 block mb-1">Net Import Change</span>
+                    <span className={`text-xl font-black ${netImportChange > 0 ? 'text-green-600 dark:text-green-400' : netImportChange < 0 ? 'text-red-600 dark:text-red-400' : 'text-gray-400'}`}>
+                      {netImportChange > 0 ? '+' : ''}{netImportChange.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                    </span>
+                  </div>
+                  
+                  <div className="border-t-2 border-dashed border-indigo-200 dark:border-indigo-800 pt-4">
+                    <span className="text-[10px] font-black uppercase tracking-widest text-indigo-600 dark:text-indigo-400 block mb-1">Projected Balance</span>
+                    <span className="text-3xl font-black text-gray-900 dark:text-white">
+                      ₱{projectedBalance.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* 🟢 RIGHT COLUMN (Transaction List & Actions) */}
+              <div className="w-full lg:w-[65%] flex flex-col min-h-0 bg-transparent">
+                
+                {/* List Header & Toggle All */}
+                <div className="p-4 flex justify-end shrink-0 border-b-2 border-black/10">
+                  <button
+                    type="button"
+                    onClick={toggleAllExtracted}
+                    className="flex items-center gap-2 rounded-xl border-[3px] border-black bg-white px-4 py-2 text-[10px] font-black uppercase tracking-widest text-gray-700 shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] transition-all hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none dark:bg-gray-800 dark:text-gray-300"
+                  >
+                     <span>☑️</span> Toggle All Selections
+                  </button>
+                </div>
+
+                {/* Scrollable Transaction List */}
+                <div className="flex-1 overflow-y-auto p-4 space-y-3">
+                  {pendingTransactions.map((tx, idx) => {
+                    const isMatchable = !tx.isDuplicate; 
+                    const formattedDate = new Date(tx.date).toLocaleDateString('en-US', { month: 'short', day: '2-digit' }).toUpperCase();
+                    const txDateMs = new Date(tx.date).getTime();
+                    const threeDaysMs = 3 * 24 * 60 * 60 * 1000;
+                    const minDateMs = txDateMs - threeDaysMs;
+                    const maxDateMs = txDateMs + threeDaysMs;
+                    const txAbsAmount = Math.abs(tx.amount);
+
+                    const selectedElsewhere = new Set();
+                    Object.entries(matchedLinks).forEach(([key, links]) => {
+                      if (key !== String(tx.id || idx)) { 
+                        links.forEach(link => selectedElsewhere.add(link));
+                      }
+                    });
+
+                    const suggestedLedger = (existingTransactions || [])
+                    .filter(ledgerTx => {
+                      const isSameAccount = ledgerTx.paymentMethodId === selectedAccountId || (ledgerTx as any).payment_method_id === selectedAccountId;
+                      if (!isSameAccount) return false;
+                      const ledgerDateMs = new Date(ledgerTx.date).getTime();
+                      if (ledgerDateMs < minDateMs || ledgerDateMs > maxDateMs) return false;
+                      const idVal = `tx_${ledgerTx.id}`;
+                      if (selectedElsewhere.has(idVal)) return false;
+                      return true;
+                    })
+                    .sort((a, b) => {
+                       const txDesc = `${tx.name} ${tx.raw_text}`.toLowerCase();
+                       const aType = String(a.transaction_type || '').toLowerCase();
+                       const bType = String(b.transaction_type || '').toLowerCase();
+                       const aTypeMatch = aType && txDesc.includes(aType) ? 1 : 0;
+                       const bTypeMatch = bType && txDesc.includes(bType) ? 1 : 0;
+                       if (aTypeMatch !== bTypeMatch) return bTypeMatch - aTypeMatch; 
+                       return Math.abs(Math.abs(a.amount) - txAbsAmount) - Math.abs(Math.abs(b.amount) - txAbsAmount);
+                     });
+
+                    const stateKey = tx.id || idx;
+                    const activeLinks = matchedLinks[stateKey] || [];
+                    const hasSelection = activeLinks.length > 0;
+                    
+                    let totalSelected = 0;
+                    activeLinks.forEach(linkId => {
+                      if (typeof linkId === 'string' && linkId.startsWith('tx_')) {
+                        const found = existingTransactions?.find(t => String(t.id) === linkId.replace('tx_', ''));
+                        if (found?.amount) totalSelected += Math.abs(found.amount);
+                      }
+                    });
+                    
+                    const targetAmount = Math.abs(Number(tx.amount) || 0);
+                    const diff = targetAmount - totalSelected;
+                    const isIncoming = tx.amount > 0;
 
                     return (
                       <div 
-                        key={`opt_${stateKey}_${ledgerTx.id}`}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setMatchedLinks(prev => {
-                            const current = prev[stateKey] || [];
-                            const next = current.includes(idVal)
-                              ? current.filter(id => id !== idVal)
-                              : [...current, idVal];
-                            return { ...prev, [stateKey]: next };
-                          });
-                        }}
-                        className={`flex items-center gap-2 text-[10px] font-bold cursor-pointer p-1.5 rounded transition-colors ${
-                          isPendingIOU 
-                            ? 'bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200' 
-                            : 'text-gray-700 hover:bg-gray-50 border border-transparent'
+                        key={`row_${stateKey}`} 
+                        className={`rounded-xl border-2 p-4 flex flex-col gap-3 transition-colors shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] ${
+                          tx.excluded ? 'opacity-50 border-gray-400 bg-gray-100 dark:bg-gray-800' : 'border-black bg-white dark:bg-gray-800'
                         }`}
                       >
-                        <input
-                          type="checkbox"
-                          checked={isChecked}
-                          onChange={() => {}}
-                          className={`rounded pointer-events-none ${isPendingIOU ? 'accent-amber-600' : ''}`}
-                        />
-                        
-                        <span className="truncate flex-1 min-w-[100px]">{ledgerTx.name}</span>
-                        
-                        <span className={`shrink-0 px-1.5 py-0.5 rounded text-[8px] uppercase tracking-widest border ${badgeColor}`}>
-                          {badgeText}
-                        </span>
-                        
-                        <span className="shrink-0 w-16 text-right text-gray-400 font-medium">{dateStr}</span>
-                        
-                        <span className="shrink-0 w-16 text-right">₱{Math.abs(ledgerTx.amount).toFixed(2)}</span>
+                        <div className="flex justify-between items-start">
+                          <div className="flex items-center gap-3">
+                            <input 
+                              type="checkbox" 
+                              checked={!tx.excluded}
+                              onChange={() => toggleRowExclusion(idx)}
+                              className="rounded w-4 h-4 bg-white border-2 border-black accent-indigo-600"
+                            />
+                            <span className="bg-gray-100 border border-gray-300 text-gray-900 text-[10px] font-black px-2 py-0.5 rounded tracking-wide uppercase dark:bg-gray-700 dark:border-gray-600 dark:text-gray-200">
+                              {formattedDate}
+                            </span>
+                            <span className="text-sm font-bold text-gray-900 dark:text-gray-100">{tx.name}</span>
+                            {tx.isDuplicate && (
+                              <span className="bg-blue-100 text-blue-700 border-2 border-blue-300 text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded-md dark:bg-blue-900/30 dark:text-blue-400 dark:border-blue-700">
+                                Duplicate
+                              </span>
+                            )}
+                          </div>
+
+                          <div className="flex flex-col items-end">
+                            <span className={`text-sm font-black ${isIncoming ? 'text-green-600 dark:text-green-400' : 'text-gray-900 dark:text-gray-100'}`}>
+                              {isIncoming ? '+' : '-'}₱{targetAmount.toFixed(2)}
+                            </span>
+                            
+                            {hasSelection && (
+                              <div className="flex flex-col items-end text-[9px] font-bold uppercase tracking-wider mt-1">
+                                <span className="text-gray-500">Selected: ₱{totalSelected.toFixed(2)}</span>
+                                {Math.abs(diff) < 0.01 ? (
+                                  <span className="text-green-600 dark:text-green-400">✓ Exact Match</span>
+                                ) : diff > 0 ? (
+                                  <span className="text-amber-600 dark:text-amber-400">₱{diff.toFixed(2)} left</span>
+                                ) : (
+                                  <span className="text-red-600 dark:text-red-400">Over by ₱{Math.abs(diff).toFixed(2)}</span>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+
+                        {!tx.isDuplicate && (
+                          <div className="bg-gray-50 dark:bg-gray-900/50 rounded-lg p-3 border border-gray-200 dark:border-gray-700 mt-2">
+                            <div className="text-[9px] font-black uppercase tracking-widest text-gray-500 mb-2">Match & Link to Ledger:</div>
+                            
+                            {hasSelection ? (
+                               <div className="bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 text-[10px] font-bold px-3 py-2 rounded-md border border-indigo-200 dark:border-indigo-800 inline-block">
+                                 {activeLinks.length} Item(s) Linked
+                               </div>
+                            ) : (
+                               <div className="bg-white dark:bg-gray-800 text-gray-500 text-[10px] font-bold px-3 py-2 rounded-md border border-gray-200 dark:border-gray-700 italic inline-block">
+                                 No items linked (Will import as new)
+                               </div>
+                            )}
+
+                            {suggestedLedger.length > 0 && (
+                              <div className="mt-3">
+                                <div className="text-[8px] text-gray-400 font-bold uppercase tracking-widest mb-2">
+                                  Suggested Matches (±3 Days):
+                                </div>
+                                <div className="flex flex-col gap-1.5">
+                                  {suggestedLedger.map(ledgerTx => {
+                                    const idVal = `tx_${ledgerTx.id}`;
+                                    const isChecked = activeLinks.includes(idVal);
+                                    const isPendingIOU = (ledgerTx as any).iou_status === 'pending';
+                                    
+                                    let dateStr = '--/--/----';
+                                    try {
+                                      if (ledgerTx.date) {
+                                        const d = new Date(ledgerTx.date);
+                                        if (!isNaN(d.getTime())) dateStr = d.toLocaleDateString('en-US', { month: 'numeric', day: 'numeric', year: 'numeric' });
+                                      }
+                                    } catch (e) {}
+
+                                    const badgeText = isPendingIOU ? 'Pending IOU' : (ledgerTx.transaction_type || 'Ledger');
+                                    const badgeColor = isPendingIOU 
+                                      ? 'bg-amber-100 text-amber-800 border-amber-300 dark:bg-amber-900/30 dark:text-amber-400 dark:border-amber-700' 
+                                      : 'bg-white text-gray-700 border-gray-300 dark:bg-gray-800 dark:text-gray-300 dark:border-gray-600';
+
+                                    return (
+                                      <div 
+                                        key={`opt_${stateKey}_${ledgerTx.id}`}
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          setMatchedLinks(prev => {
+                                            const current = prev[stateKey] || [];
+                                            const next = current.includes(idVal)
+                                              ? current.filter(id => id !== idVal)
+                                              : [...current, idVal];
+                                            return { ...prev, [stateKey]: next };
+                                          });
+                                        }}
+                                        className={`flex items-center gap-3 text-[10px] font-bold cursor-pointer p-2 rounded-lg transition-all border-2 ${
+                                          isChecked 
+                                            ? 'bg-indigo-50 border-indigo-500 shadow-[2px_2px_0px_0px_rgba(99,102,241,0.5)] dark:bg-indigo-900/30' 
+                                            : 'bg-white border-transparent hover:border-gray-300 shadow-sm dark:bg-gray-800'
+                                        }`}
+                                      >
+                                        <input type="checkbox" checked={isChecked} onChange={() => {}} className="rounded pointer-events-none accent-indigo-600 w-3 h-3" />
+                                        <span className="truncate flex-1 min-w-[100px] text-gray-900 dark:text-gray-100">{ledgerTx.name}</span>
+                                        <span className={`shrink-0 px-2 py-0.5 rounded text-[8px] uppercase tracking-widest border ${badgeColor}`}>
+                                          {badgeText}
+                                        </span>
+                                        <span className="shrink-0 w-16 text-right text-gray-400">{dateStr}</span>
+                                        <span className="shrink-0 w-16 text-right text-gray-900 dark:text-gray-100">₱{Math.abs(ledgerTx.amount).toFixed(2)}</span>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        )}
                       </div>
                     );
                   })}
                 </div>
+
+                {/* Action Buttons Footer */}
+                <div className="border-t-4 border-black p-5 bg-white dark:bg-gray-800 flex gap-4 shrink-0">
+                  <button 
+                    type="button"
+                    onClick={() => setShowReviewModal(false)} 
+                    className="flex-1 bg-gray-100 py-4 rounded-xl font-black text-xs uppercase tracking-widest border-[3px] border-black shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none transition-all dark:bg-gray-700 dark:text-white"
+                  >
+                    Cancel
+                  </button>
+                  <button 
+                    type="button"
+                    onClick={handleConfirmImport} 
+                    disabled={isImporting}
+                    className="flex-[2] bg-green-400 text-black py-4 rounded-xl font-black text-xs uppercase tracking-widest border-[3px] border-black shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[2px] hover:translate-y-[2px] transition-all disabled:opacity-50"
+                  >
+                    {isImporting ? 'Importing...' : `Import Selected (${pendingTransactions.filter(t => !t.excluded).length})`}
+                  </button>
+                </div>
               </div>
-            )}
-          </div>
-        )}
-      </div>
-    );
 
-
-                          
-                
-              })}
             </div>
-
-
-
-            <div className="border-t-4 border-black pt-4 mt-4 flex gap-3">
-              <button 
-                type="button"
-                onClick={() => setShowReviewModal(false)} 
-                className="flex-1 bg-gray-200 py-3 rounded-xl font-black text-xs uppercase border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]"
-              >
-                Cancel
-              </button>
-              <button 
-                type="button"
-                onClick={handleConfirmImport} 
-                disabled={isImporting}
-                className="flex-1 bg-green-400 text-black py-3 rounded-xl font-black text-xs uppercase border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[1px] disabled:opacity-50"
-              >
-                {isImporting ? 'Importing...' : `Import Selected (${pendingTransactions.filter(t => !t.excluded).length})`}
-              </button>
-            </div>
-
           </div>
         </div>
       )}
+
     </>
   );
 };
