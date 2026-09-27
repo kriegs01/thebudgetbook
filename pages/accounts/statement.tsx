@@ -107,19 +107,29 @@ const [showReviewModal, setShowReviewModal] = useState(false);
         
         setAccount(acc);
         
-                // 🟢 Generate chronological buckets using our unified waterfall engine
-                const now = new Date();
-        
-                // 🟢 FIX: Look one month ahead to always capture the current "running" (unbilled) cycle!
-                const targetDate = new Date(now.getFullYear(), now.getMonth() + 1, 1);
-        
-                const buckets = generateCreditBuckets(
-                  acc,
-                  transactions || [],
-                  installments || [],
-                  targetDate.getFullYear(),
-                  monthNames[targetDate.getMonth()]
-                );
+                        // 🟢 Generate chronological buckets using our unified waterfall engine
+        const now = new Date();
+
+        // Check if there are transactions beyond today to ensure future cycles are captured
+        const latestTxDate = (transactions || [])
+          .filter(t => (t.payment_method_id === acc.id || t.paymentMethodId === acc.id) && t.date)
+          .map(t => new Date(t.date).getTime())
+          .reduce((max, d) => Math.max(max, d), now.getTime());
+
+        const latestRefDate = new Date(Math.max(now.getTime(), latestTxDate));
+
+        // 🟢 FIX: Look 2 months ahead of the latest activity so the active unbilled cycle 
+        // (whose due date falls in the following month due to grace period) is always generated!
+        const targetDate = new Date(latestRefDate.getFullYear(), latestRefDate.getMonth() + 2, 1);
+
+        const buckets = generateCreditBuckets(
+          acc,
+          transactions || [],
+          installments || [],
+          targetDate.getFullYear(),
+          monthNames[targetDate.getMonth()]
+        );
+
         
                 // Reverse so newest statement is on top for the UI
                 const reversedBuckets = [...buckets].reverse();
@@ -154,7 +164,7 @@ const [showReviewModal, setShowReviewModal] = useState(false);
 
   if (!accountId || !account) {
     return (
-      <div className="min-h-screen bg-gray-50 dark:bg-gray-950 p-8 transition-colors">
+      <div className="min-h-screen bg-transparent dark:bg-transparent p-8 transition-colors">
         <div className="max-w-4xl mx-auto">
           <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800 p-8 text-center transition-colors">
             <p className="text-gray-500 dark:text-gray-400">Account not found or not a credit account.</p>
@@ -214,7 +224,7 @@ const [showReviewModal, setShowReviewModal] = useState(false);
     const totalRemaining = totalPayableAll - totalPaidAll;
 
     return (
-      <div className={`min-h-screen bg-gray-50 dark:bg-gray-950 transition-colors ${isMobile ? 'overflow-x-hidden px-4 pb-8 pt-6' : 'p-8'}`}>
+      <div className={`min-h-screen bg-transparent dark:bg-transparent transition-colors ${isMobile ? 'overflow-x-hidden px-4 pb-8 pt-6' : 'p-8'}`}>
         <div className="mx-auto max-w-4xl">
           <PageHeader
             title={account.bank}
@@ -355,7 +365,7 @@ const [showReviewModal, setShowReviewModal] = useState(false);
 
   if (!account.billingDate) {
     return (
-      <div className={`min-h-screen bg-gray-50 dark:bg-gray-950 transition-colors ${isMobile ? 'overflow-x-hidden px-4 pb-8 pt-6' : 'p-8'}`}>
+      <div className={`min-h-screen bg-transparent dark:bg-transparent transition-colors ${isMobile ? 'overflow-x-hidden px-4 pb-8 pt-6' : 'p-8'}`}>
         <div className="mx-auto max-w-5xl">
           <PageHeader
             title={account.bank}
@@ -443,7 +453,7 @@ const [showReviewModal, setShowReviewModal] = useState(false);
   const visibleStatementCount = groupedCurrentTxs.length;
 
   return (
-    <div className={`min-h-screen bg-gray-50 dark:bg-gray-950 transition-colors ${isMobile ? 'overflow-x-hidden px-2 pb-8 pt-6' : 'p-8'}`}>
+    <div className={`min-h-screen bg-transparent dark:bg-transparent transition-colors ${isMobile ? 'overflow-x-hidden px-2 pb-8 pt-6' : 'p-8'}`}>
       <div className="mx-auto max-w-6xl">
         <PageHeader
           title={account.bank}
