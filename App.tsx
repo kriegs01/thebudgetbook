@@ -1411,9 +1411,13 @@ useEffect(() => {
               <Logo className="text-6xl md:text-8xl text-gray-900 dark:text-white transition-colors duration-500" />
             </div>
           </div>
-          <p className="font-brand text-xl text-gray-600 dark:text-gray-400 tracking-wider animate-flicker transition-colors duration-500">
-            Getting your budget ready...
+          <p
+            style={{ fontFamily: "'Inter', sans-serif", fontWeight: 900 }}
+            className="text-sm md:text-base font-black uppercase text-gray-600 dark:text-gray-400 tracking-widest animate-flicker transition-colors duration-500"
+          >
+            GETTING YOUR BUDGET READY...
           </p>
+
         </div>
       </div>
     );
@@ -1465,46 +1469,31 @@ useEffect(() => {
 
 
           
-                              {/* 1. DETACHED LOGO PILL */}
+                                        {/* 1. DETACHED LOGO PILL */}
           <div 
             onClick={() => !isSidebarOpen && setIsSidebarOpen(true)}
-            className={`shrink-0 flex items-center h-16 bg-[#FCF6E8] dark:bg-gray-900 border-[4px] border-black rounded-[1.5rem] shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] cursor-pointer active:scale-95 transition-all z-50 ${isSidebarOpen ? 'px-3 md:px-4 justify-start' : 'justify-center'}`}
+            className="shrink-0 flex items-center justify-center h-16 bg-[#FCF6E8] dark:bg-gray-900 border-[4px] border-black rounded-[1.5rem] shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] cursor-pointer active:scale-95 transition-all z-50 px-3 md:px-4"
             title={!isSidebarOpen ? "Expand Menu" : ""}
           >
-            <img 
-              src="/iconapp.png" 
-              alt="Budee Mascot" 
-              className={`shrink-0 drop-shadow-md transition-all duration-300 ${
-                isSidebarOpen 
-                  ? 'w-10 h-10 md:w-11 md:h-11 -mr-2 rotate-[15deg] hover:scale-110 hover:rotate-12' 
-                  : 'w-8 h-8 hover:scale-110'
-              }`} 
-            />
-            {isSidebarOpen && (
-              <div className="mt-1 shrink min-w-0">
-                <Logo className="text-2xl md:text-3xl whitespace-nowrap" />
+            {!isSidebarOpen ? (
+              <img 
+                src="/iconapp.png" 
+                alt="Budee Mascot" 
+                className="w-10 h-10 shrink-0 drop-shadow-md transition-all duration-300 hover:scale-110" 
+              />
+            ) : (
+              <div className="mt-1 shrink min-w-0 flex items-center justify-center">
+                <Logo className="text-3xl md:text-4xl whitespace-nowrap" />
               </div>
             )}
           </div>
 
-
-
-                    {/* 2. DETACHED NAVIGATION DRAWER */}
-          <aside className="flex-1 hidden lg:flex flex-col bg-[#FCF6E8] dark:bg-gray-900 border-[4px] border-black rounded-[1.5rem] shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] overscroll-none relative overflow-visible">  
-            
-                        {/* 🟢 FLOATING COLLAPSE/EXPAND BUBBLE */}
-            <button 
-              onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-              className="absolute -top-7 left-1/2 -translate-x-1/2 z-[60] flex items-center justify-center w-9 h-9 bg-amber-400 border-[3px] border-black rounded-full shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:scale-110 hover:-translate-y-0.5 active:scale-95 transition-all cursor-pointer"
-            >
-              <ChevronLeft className={`w-5 h-5 text-black transition-transform duration-300 ${isSidebarOpen ? '-ml-0.5' : 'rotate-180 -mr-0.5'}`} />
-            </button>
-
+          {/* 2. DETACHED NAVIGATION DRAWER */}
+          <aside className="flex-1 min-h-0 hidden lg:flex flex-col bg-[#FCF6E8] dark:bg-gray-900 border-[4px] border-black rounded-[1.5rem] shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] overscroll-none relative overflow-visible">
 
             {/* 🟢 TOP SECTION: User, Alerts, People */}
-            {/* (Keep all your existing profile/alerts code here...) */}
+            <div className="shrink-0 p-2.5 space-y-1 border-b-[4px] border-black bg-transparent dark:bg-gray-800 rounded-t-[1.2rem] z-50">
 
-            <div className="p-2.5 space-y-1 border-b-[4px] border-black bg-transparent dark:bg-gray-800 rounded-t-[1.2rem] z-50">
               
               {/* Profile Dropdown */}
               <div className="relative">
@@ -1697,7 +1686,8 @@ useEffect(() => {
             </div>
 
                         {/* 🟢 MAIN NAVIGATION */}
-            <nav className="flex-1 px-2.5 py-3 space-y-1 overflow-y-auto">
+<nav className="flex-1 min-h-0 px-2.5 py-3 space-y-1 overflow-y-auto">
+
               
               {/* CORE DASHBOARD GROUP */}
               {navPreferences.filter(pref => pref.visible).map((pref) => {
@@ -1817,10 +1807,20 @@ useEffect(() => {
             </nav>
 
 
-                        {/* 🟢 BOTTOM SECTION: Settings & Edit Menu */}
-            <div className="p-2.5 space-y-2 border-t-[4px] border-black bg-transparent dark:bg-gray-800 rounded-b-[1.2rem] shrink-0">
-              
-              {/* Settings Nav Item (Hardcoded to bypass the Edit Menu filter) */}
+                                 {/* 🟢 BOTTOM SECTION: Settings & Edit Menu */}
+         <div className="relative p-2.5 pt-5 space-y-2 border-t-[4px] border-black bg-transparent dark:bg-gray-800 rounded-b-[1.2rem] shrink-0">
+
+{/* 🟢 FLOATING COLLAPSE/EXPAND BUBBLE ON DIVIDER LINE */}
+<button 
+  onClick={() => setIsSidebarOpen(!isSidebarOpen)}
+  className="absolute -top-5 left-1/2 -translate-x-1/2 z-[60] flex items-center justify-center w-9 h-9 bg-amber-400 border-[3px] border-black rounded-full shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:scale-110 hover:-translate-y-0.5 active:scale-95 transition-all cursor-pointer"
+  title={isSidebarOpen ? "Collapse Menu" : "Expand Menu"}
+>
+  <ChevronLeft className={`w-5 h-5 text-black transition-transform duration-300 ${isSidebarOpen ? '-ml-0.5' : 'rotate-180 -mr-0.5'}`} />
+</button>
+
+{/* Settings Nav Item (Hardcoded to bypass the Edit Menu filter) */}
+
               <NavLink
                 to="/settings"
                 onClick={() => { if (isMobile) setIsSidebarOpen(false); }}

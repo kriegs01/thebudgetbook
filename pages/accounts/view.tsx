@@ -998,7 +998,7 @@ const [stashForm, setStashForm] = useState({ amount: '', date: getTodayIso() });
   const mobileCardIconButton = "inline-flex h-9 w-9 items-center justify-center rounded-xl border-2 border-black bg-white text-gray-800 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] transition-all hover:translate-x-[1px] hover:translate-y-[1px] hover:shadow-none dark:bg-gray-900 dark:text-gray-100";
 
   return (
-    <div className={`min-h-screen bg-gray-100 dark:bg-gray-950 transition-colors ${isMobile ? 'px-2 pb-8 pt-6' : 'p-8'}`}>
+    <div className={`min-h-screen bg-transparent dark:transparent transition-colors ${isMobile ? 'px-2 pb-8 pt-6' : 'p-8'}`}>
       <div className="mx-auto max-w-6xl">
         <PageHeader
           title={account ? account.bank : 'Account'}

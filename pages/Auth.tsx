@@ -227,15 +227,17 @@ const Auth: React.FC = () => {
       `}</style>
       
       <div className="max-w-sm w-full">
-        <div className="mb-8 flex flex-col items-center justify-center animate-in fade-in zoom-in duration-500">
-          <div className="flex items-center justify-center">
-            <img src="/iconapp.png" alt="Budee Mascot" className="h-24 w-24 drop-shadow-lg transform rotate-[15deg] -mr-5 z-10" />
-            <Logo className="text-7xl dark:text-white transition-colors duration-500" />
-          </div>
-          <p className="font-titan text-xl text-gray-800 dark:text-gray-300 mt-4 tracking-wide transition-colors duration-500">
-            {mode === 'login' ? (loginStep === 1 ? 'Welcome back, bud!' : 'Almost there...') : mode === 'signup' ? "Let's get you started!" : "Let’s get you back in!"}
-          </p>
-        </div>
+        <div className="mb-8 flex flex-col items-center justify-center animate-in fade-in zoom-in duration-500">
+          <div className="flex items-center justify-center">
+            <Logo className="text-7xl dark:text-white transition-colors duration-500" />
+          </div>
+          <p
+            style={{ fontFamily: "'Inter', sans-serif", fontWeight: 900 }}
+            className="text-sm md:text-base font-black uppercase text-gray-800 dark:text-gray-300 mt-4 tracking-widest transition-colors duration-500"
+          >
+            {mode === 'login' ? (loginStep === 1 ? 'Welcome back, bud!' : 'Almost there...') : mode === 'signup' ? "Let's get you started!" : "Let’s get you back in!"}
+          </p>
+        </div>
 
         <div className="bg-white dark:bg-gray-900 border-[3px] border-black rounded-2xl shadow-[8px_8px_0px_#000] p-8 transition-colors duration-500">
           {mode === 'reset' && (
