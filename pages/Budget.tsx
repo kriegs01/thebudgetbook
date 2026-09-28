@@ -3269,19 +3269,23 @@ const getFrozenCycleAmount = (account: Account): number => {
     setProjectedSalaryByPeriod(inheritedProjectedByPeriod);
     setProjectedSalary(inheritedProjectedLegacy);
     
-    // Everything else gets strictly wiped
-    setActualSalaryByPeriod({});
-    setActualSalary('');
-    setExcludedInstallmentIds(new Set());
-    setExcludedWalletIds(new Set());
-    setExcludedCreditIds(new Set());
-  };
-
-
-
-
-
-  const handleLoadSetup = (setup: SavedBudgetSetup) => {
+        // Everything else gets strictly wiped
+        setActualSalaryByPeriod({});
+        setActualSalary('');
+        setExcludedInstallmentIds(new Set());
+        setExcludedWalletIds(new Set());
+        setExcludedCreditIds(new Set());
+      };
+    
+      // 🟢 Listen for the mobile floating bar "+" button
+      useEffect(() => {
+        const handleOpenAddBudget = () => handleOpenNew();
+        window.addEventListener('open_add_budget_modal', handleOpenAddBudget);
+        return () => window.removeEventListener('open_add_budget_modal', handleOpenAddBudget);
+      }, [savedSetups, billers, accounts, transactions, effectiveCategories]);
+    
+      const handleLoadSetup = (setup: SavedBudgetSetup) => {
+    
     if (typeof setup.data !== 'object' || setup.data === null || Array.isArray(setup.data)) {
       alert('Cannot load this setup: data structure is invalid');
       return;
@@ -3678,9 +3682,9 @@ const getFrozenCycleAmount = (account: Account): number => {
 
     return (
 // ... keep everything else underneath the exact same (the <div className="space-y-8... block)
-<div className="space-y-3 lg:space-y-8 animate-in fade-in duration-500 w-full max-w-7xl mx-auto pt-2 lg:pt-10">
+<div className="space-y-2 lg:space-y-8 animate-in fade-in duration-500 w-full max-w-7xl mx-auto pt-0 lg:pt-10 pb-28 lg:pb-10">
 
-            <PageHeader 
+<PageHeader 
               title="Budget"
               subtitle="Vibe check for the Month"
               icon={
@@ -3688,13 +3692,14 @@ const getFrozenCycleAmount = (account: Account): number => {
                   <WalletIcon className="w-7 h-7" />
                 </div>
               }
-              actions={
+              actions={!isMobile && (
                 <button type="button" onClick={handleOpenNew} className={`flex items-center gap-2 text-white px-5 py-3 rounded-xl font-bold text-sm border-[3px] border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] transition-all duration-200 hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none ${getAccentClasses('bg')}`}>
                   <Plus className="w-4 h-4" />
                   <span className="hidden sm:inline">Open New</span>
                 </button>
-              }
+              )}
             />
+
                       {/* Add this inside your header actions area! */}
                       <button 
   type="button" // 🟢 Add this to prevent any default form behavior

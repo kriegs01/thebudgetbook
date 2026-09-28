@@ -1858,11 +1858,10 @@ useEffect(() => {
 
 
 
-                 {/* 🟢 ADJUSTED MARGIN TO ACCOMMODATE THE FLOATING SIDEBAR'S SHADOW */}
-        <main className={`flex-1 w-full bg-transparent dark:bg-gray-950 transition-all duration-300 ease-in-out pb-32 lg:pb-0 portrait:!pb-32 ${isSidebarOpen ? 'lg:ml-[15.5rem]' : 'lg:ml-[6.5rem]'} portrait:!ml-0 h-full flex flex-col overflow-hidden`}> 
+                         {/* 🟢 ADJUSTED MARGIN TO ACCOMMODATE THE FLOATING SIDEBAR'S SHADOW */}
+        <main className={`flex-1 w-full bg-transparent dark:bg-gray-950 transition-all duration-300 ease-in-out ${isSidebarOpen ? 'lg:ml-[15.5rem]' : 'lg:ml-[6.5rem]'} portrait:!ml-0 h-full flex flex-col overflow-hidden`}>
 
- 
- 
+
         
         <TestModeBanner sidebarOpen={isSidebarOpen} />
 
@@ -2023,11 +2022,12 @@ useEffect(() => {
           </div>
         </header>
 
-                <div 
-          ref={scrollContainerRef}
-          className="w-full flex-1 overflow-auto pt-14 lg:pt-0 portrait:!pt-14 px-4 pb-4 md:px-8 md:pb-6" 
-          style={{ WebkitOverflowScrolling: 'touch' }}
-        >
+                  <div 
+          ref={scrollContainerRef}
+          className="w-full flex-1 overflow-auto pt-14 lg:pt-0 portrait:!pt-14 px-4 pb-32 lg:pb-6 portrait:!pb-32 md:px-8" 
+          style={{ WebkitOverflowScrolling: 'touch' }}
+        >
+
 
             <Routes>
               <Route path="/" element={<Dashboard accounts={accounts} budget={budgetItems} installments={installments} transactions={transactions} budgetSetups={budgetSetups} userProfile={userProfile} theme={theme} />} />
@@ -2272,8 +2272,10 @@ useEffect(() => {
 
                 {/* 🟢 MOBILE & PORTRAIT NAVIGATION: Floating Bar & More Tray */}
       <div className="block lg:hidden portrait:!block">
- {/* 🟢 BOTTOM BLUR BLANKET */}
- <div className="fixed bottom-0 left-0 w-full h-32 pointer-events-none z-[90] bg-gradient-to-t from-gray-100 dark:from-gray-950 via-gray-100/80 dark:via-gray-950/80 to-transparent" />
+  {/* 🟢 BOTTOM BLUR BLANKET */}
+<div className="fixed bottom-0 left-0 w-full h-20 pointer-events-none z-[90] bg-gradient-to-t from-[#FCF6E8] dark:from-gray-950 to-transparent" />
+
+
 
                     {/* 1. Floating Nav Bar */}
           <div id="global-nav-bar" className="fixed bottom-6 md:bottom-10 left-0 w-full px-4 z-[100] flex items-center justify-center gap-3 md:gap-5 pointer-events-none">

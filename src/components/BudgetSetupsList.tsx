@@ -86,28 +86,30 @@ export const BudgetSetupsList: React.FC<BudgetSetupsListProps> = ({
   };
 
   return (
-    <div className="w-full mb-8">
+    <div className="w-full mb-2 sm:mb-8">
       <h2 className="px-4 mb-4 text-sm font-black text-gray-400 uppercase tracking-widest hidden lg:block">{title}</h2>
       
       <div 
         ref={scrollContainerRef}
         onScroll={handleScroll}
-        className="flex overflow-x-auto snap-x snap-mandatory gap-6 pb-4 pt-2 px-4 scrollbar-hide"
+        className="flex items-start overflow-x-auto snap-x snap-mandatory gap-4 sm:gap-6 pb-3 pt-1 sm:pb-4 sm:pt-2 px-0 pr-2 sm:px-4 scrollbar-hide"
       >
         {sortedGroups.map((group) => {
           const mainSetup = group.setups[0];
 
           return (
-            <div key={group.key} className="snap-center shrink-0 w-[85vw] md:w-[400px] bg-white dark:bg-gray-900 border-4 border-black rounded-[2rem] p-6 shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] flex flex-col justify-between transition-colors">
+            <div key={group.key} className="snap-center shrink-0 w-full md:w-[400px] bg-white dark:bg-gray-900 border-4 border-black rounded-[1.75rem] sm:rounded-[2rem] p-5 sm:p-6 shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] flex flex-col justify-between transition-colors">
               <div>
-                <div className="flex justify-between items-center mb-6">
-                   <h3 className="text-2xl font-black text-gray-900 dark:text-gray-100 uppercase tracking-tight">
+                <div className="flex justify-between items-center mb-5 sm:mb-6">
+                   <h3 className="text-xl sm:text-2xl font-black text-gray-900 dark:text-gray-100 uppercase tracking-tight">
                      {group.month} {group.year}
                    </h3>
-                   {isArchived && <span className="bg-amber-100 text-amber-800 border-2 border-black text-[10px] font-black uppercase px-2 py-1 rounded-lg">Archived</span>}
+                   {isArchived && <span className="bg-amber-100 text-amber-800 border-2 border-black text-[10px] font-black uppercase px-2 py-0.5 sm:py-1 rounded-lg">Archived</span>}
                 </div>
 
-                <div className="space-y-6">
+                <div className="space-y-5 sm:space-y-6 max-h-[210px] sm:max-h-none overflow-y-auto pr-1">
+
+
                   {(() => {
                     // 1. Find the "Master" setup record to detect active periods
                     const masterSetup = group.setups.find(s => s.timing === 'unified') 
@@ -133,31 +135,24 @@ export const BudgetSetupsList: React.FC<BudgetSetupsListProps> = ({
                     // 3. Render progress bars using the EXACT record for that tab
                     return periodsToRender.map((periodIndex) => {
                       const legacyTimingVal = periodIndex === 1 ? '1/2' : '2/2';
+                      const hasUnifiedMath = !!(masterSetup.data && masterSetup.data._periodTotals);
+                      const specificSetup = hasUnifiedMath ? masterSetup : (group.setups.find(s => s.timing === legacyTimingVal) || masterSetup);
                       
-                      // 🟢 THE FIX: Prioritize the specific database record for THIS tab!
-                      // If Tab 1 was saved yesterday and Tab 2 was saved today, Tab 1's snapshot of Tab 2 is stale.
-                      // We must read Tab 2's data directly from Tab 2's record!
-                                            // 🟢 THE REAL FIX: If the master setup has unified math, completely ignore old '1/2' ghost files!
-                                            const hasUnifiedMath = !!(masterSetup.data && masterSetup.data._periodTotals);
-                                            const specificSetup = hasUnifiedMath ? masterSetup : (group.setups.find(s => s.timing === legacyTimingVal) || masterSetup);
-                                            
-                                            const actualStr = specificSetup.data?._actualSalaryByPeriod?.[periodIndex] || masterSetup.data?._actualSalaryByPeriod?.[periodIndex] || (periodIndex === 1 ? specificSetup.data?._actualSalary : undefined);
-                                            const projectedStr = specificSetup.data?._projectedSalaryByPeriod?.[periodIndex] || masterSetup.data?._projectedSalaryByPeriod?.[periodIndex] || (periodIndex === 1 ? specificSetup.data?._projectedSalary : undefined);
-                                            
-                                            const actualValue = actualStr && actualStr.trim() !== '' ? parseFloat(actualStr) : null;
-                                            const projectedValue = parseFloat(projectedStr || '0');
-                                            const incomeToUse = actualValue !== null && !isNaN(actualValue) ? actualValue : projectedValue;
+                      const actualStr = specificSetup.data?._actualSalaryByPeriod?.[periodIndex] || masterSetup.data?._actualSalaryByPeriod?.[periodIndex] || (periodIndex === 1 ? specificSetup.data?._actualSalary : undefined);
+                      const projectedStr = specificSetup.data?._projectedSalaryByPeriod?.[periodIndex] || masterSetup.data?._projectedSalaryByPeriod?.[periodIndex] || (periodIndex === 1 ? specificSetup.data?._projectedSalary : undefined);
                       
-                                            let spent = 0;
-                                            if (hasUnifiedMath) {
-                                              // 🟢 Force the card to strictly read the unified master record!
-                                              spent = masterSetup.data._periodTotals[periodIndex] || 0;
-                                            } else if (specificSetup.data && specificSetup.data._periodTotals && specificSetup.data._periodTotals[periodIndex] !== undefined) {
-                                              spent = specificSetup.data._periodTotals[periodIndex];
-                                            } else {
-                                              spent = specificSetup.totalAmount || 0;
-                                            }
-                      
+                      const actualValue = actualStr && actualStr.trim() !== '' ? parseFloat(actualStr) : null;
+                      const projectedValue = parseFloat(projectedStr || '0');
+                      const incomeToUse = actualValue !== null && !isNaN(actualValue) ? actualValue : projectedValue;
+
+                      let spent = 0;
+                      if (hasUnifiedMath) {
+                        spent = masterSetup.data._periodTotals[periodIndex] || 0;
+                      } else if (specificSetup.data && specificSetup.data._periodTotals && specificSetup.data._periodTotals[periodIndex] !== undefined) {
+                        spent = specificSetup.data._periodTotals[periodIndex];
+                      } else {
+                        spent = specificSetup.totalAmount || 0;
+                      }
 
                       const remaining = incomeToUse - spent;
                       const percentSpent = incomeToUse > 0 ? Math.min(100, (spent / incomeToUse) * 100) : 100;
@@ -167,9 +162,9 @@ export const BudgetSetupsList: React.FC<BudgetSetupsListProps> = ({
                       const timingLabel = labels[periodIndex - 1] ? `${labels[periodIndex - 1]} Paycheck` : `Paycheck ${periodIndex}`;
 
                       return (
-                        <div key={periodIndex} className="space-y-2">
+                        <div key={periodIndex} className="space-y-1 sm:space-y-2">
                           <div className="flex justify-between items-end">
-                            <span className="text-[11px] font-black uppercase tracking-wider text-gray-500 dark:text-gray-400">
+                            <span className="text-[10px] sm:text-[11px] font-black uppercase tracking-wider text-gray-500 dark:text-gray-400">
                               {timingLabel}
                             </span>
                             <span className={`text-xs font-black ${isOverBudget ? 'text-red-500' : 'text-green-600'}`}>
@@ -177,7 +172,7 @@ export const BudgetSetupsList: React.FC<BudgetSetupsListProps> = ({
                             </span>
                           </div>
 
-                          <div className={`h-5 w-full border-2 border-black rounded-xl overflow-hidden flex relative ${isOverBudget ? 'bg-red-100' : 'bg-green-400'}`}>
+                          <div className={`h-4 sm:h-5 w-full border-2 border-black rounded-xl overflow-hidden flex relative ${isOverBudget ? 'bg-red-100' : 'bg-green-400'}`}>
                             <div
                               className={`h-full border-r-2 border-black transition-all duration-500 ${isOverBudget ? 'bg-red-500' : 'bg-gray-800 dark:bg-gray-700'}`}
                               style={{ width: `${percentSpent}%` }}
@@ -195,10 +190,10 @@ export const BudgetSetupsList: React.FC<BudgetSetupsListProps> = ({
                 </div>
               </div>
 
-              <div className="mt-8 pt-6 border-t-2 border-dashed border-gray-200 dark:border-gray-800 flex gap-3">
+              <div className="mt-4 pt-3.5 sm:mt-8 sm:pt-6 border-t-2 border-dashed border-gray-200 dark:border-gray-800 flex gap-2.5 sm:gap-3">
                 <button
                   onClick={() => onLoadSetup(mainSetup)}
-                  className="flex-1 bg-indigo-600 text-white border-2 border-black py-3 rounded-xl font-black uppercase tracking-widest text-[10px] shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[1px] hover:translate-y-[1px] transition-all flex justify-center items-center gap-2"
+                  className="flex-1 bg-indigo-600 text-white border-2 border-black py-2.5 sm:py-3 rounded-xl font-black uppercase tracking-widest text-[10px] shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[1px] hover:translate-y-[1px] transition-all flex justify-center items-center gap-2"
                 >
                   <span>View</span>
                   <ArrowRight className="w-3.5 h-3.5" />
@@ -208,7 +203,7 @@ export const BudgetSetupsList: React.FC<BudgetSetupsListProps> = ({
                   <button
                     onClick={() => onArchiveSetup(group.setups)}
                     disabled={archiveSubmitting}
-                    className="w-12 flex justify-center items-center bg-amber-50 text-amber-700 border-2 border-black rounded-xl shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[1px] hover:translate-y-[1px] transition-all disabled:opacity-50"
+                    className="w-11 sm:w-12 flex justify-center items-center bg-amber-50 text-amber-700 border-2 border-black rounded-xl shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[1px] hover:translate-y-[1px] transition-all disabled:opacity-50"
                     title="Close Budget"
                   >
                     <Archive className="w-4 h-4" />
@@ -219,7 +214,7 @@ export const BudgetSetupsList: React.FC<BudgetSetupsListProps> = ({
                   <button
                     onClick={() => onReopenSetup(group.setups)}
                     disabled={archiveSubmitting}
-                    className="w-12 flex justify-center items-center bg-indigo-50 text-indigo-700 border-2 border-black rounded-xl shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[1px] hover:translate-y-[1px] transition-all disabled:opacity-50"
+                    className="w-11 sm:w-12 flex justify-center items-center bg-indigo-50 text-indigo-700 border-2 border-black rounded-xl shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[1px] hover:translate-y-[1px] transition-all disabled:opacity-50"
                     title="Reopen Budget"
                   >
                     <RotateCcw className="w-4 h-4" />
@@ -232,7 +227,7 @@ export const BudgetSetupsList: React.FC<BudgetSetupsListProps> = ({
                        e.stopPropagation();
                        onMoveToTrash(group.setups);
                     }}
-                    className="w-12 flex justify-center items-center bg-white dark:bg-gray-800 text-red-500 border-2 border-black rounded-xl shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:bg-red-50 hover:shadow-none hover:translate-x-[1px] hover:translate-y-[1px] transition-all"
+                    className="w-11 sm:w-12 flex justify-center items-center bg-white dark:bg-gray-800 text-red-500 border-2 border-black rounded-xl shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:bg-red-50 hover:shadow-none hover:translate-x-[1px] hover:translate-y-[1px] transition-all"
                     title="Move to Trash"
                   >
                     <Trash2 className="w-4 h-4" />
@@ -245,7 +240,7 @@ export const BudgetSetupsList: React.FC<BudgetSetupsListProps> = ({
       </div>
 
       {sortedGroups.length > 1 && (
-        <div className="flex items-center justify-center gap-6 mt-4">
+        <div className="flex items-center justify-center gap-6 mt-2 sm:mt-4">
           <button 
             onClick={() => scroll('left')}
             className={`p-2 bg-white dark:bg-gray-800 border-2 border-black rounded-full shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:translate-x-[1px] hover:translate-y-[1px] hover:shadow-none transition-all hidden md:block ${!canScrollLeft ? 'invisible' : ''}`}

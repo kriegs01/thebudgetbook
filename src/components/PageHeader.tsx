@@ -23,7 +23,8 @@ export const PageHeader: React.FC<PageHeaderProps> = ({ title, subtitle, icon, a
   }, [title, isMobile]);
 
   return (
-    <header className={`${isMobile ? 'pt-16' : 'pt-12'} flex flex-row items-center justify-between gap-6 mb-4`}>
+    <header className={`${isMobile ? 'pt-8' : 'pt-8'} flex flex-row items-center justify-between gap-6 mb-4`}>
+
       <div className="flex flex-1 items-center gap-6">
         <div className="flex-1">
           <div className="relative inline-block">

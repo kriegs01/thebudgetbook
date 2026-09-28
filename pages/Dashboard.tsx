@@ -538,13 +538,14 @@ const Dashboard: React.FC<DashboardProps> = ({ accounts, budget, installments, t
     }, []);
   
 
-  return (
-    <div className={`animate-in fade-in duration-500 max-w-7xl mx-auto w-full overflow-hidden ${isMobile ? 'pt-2' : 'pt-2'}`}>
-    {/* 🟢 Invisible Top Marker for Scroll Detection */}
-    <div ref={topSentinelRef} className="h-1 w-full pointer-events-none" />
-
-    {/* Greeting Header */}
-    <DashboardHeader name={userProfile?.first_name || 'Budee User'} />
+    return (
+      <div className="animate-in fade-in duration-500 max-w-7xl mx-auto w-full overflow-hidden pt-0">
+        {/* 🟢 Invisible Top Marker for Scroll Detection */}
+        <div ref={topSentinelRef} className="h-1 w-full pointer-events-none" />
+    
+        {/* Greeting Header */}
+        <DashboardHeader name={userProfile?.first_name || 'Budee User'} />
+    
 
 
       {/* Main Content Area */}

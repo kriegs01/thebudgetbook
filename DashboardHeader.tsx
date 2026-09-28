@@ -9,7 +9,7 @@ export const DashboardHeader: React.FC<DashboardHeaderProps> = ({ name }) => {
   const { getAccentClasses } = useTheme();
 
   return (
-    <header className="pt-12 mb-12 pr-24 md:pr-48">
+    <header className="pt-6 mb-12 pr-24 md:pr-48">
       {/* Sub-header Greeting */}
       <p className="text-xl font-bold italic mb-[-6px] ml-1 text-black/50 dark:text-gray-400 transition-colors duration-300">
         Hi, {name} !

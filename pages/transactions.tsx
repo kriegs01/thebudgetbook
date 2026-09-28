@@ -15,7 +15,7 @@ import useMediaQuery from '../src/hooks/useMediaQuery';
 import { TransactionList } from '../src/components/TransactionList';
 import type { Transaction, Account } from '../types';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-
+import { PageHeader } from '../src/components/PageHeader';
 
 
 const FILTER_MIN_DATE = '2025-01-01';
@@ -45,71 +45,7 @@ type ContactOption = {
   budeeProfile?: SupabaseUserProfile;
 };
 
-/** 
- * PageHeader component mirroring Dashboard style
- */
-const PageHeader: React.FC<{
-  title: string;
-  subtitle: string;
-  icon?: React.ReactNode;
-  actions?: React.ReactNode;
-  backButton?: React.ReactNode;
-}> = ({ title, subtitle, icon, actions, backButton }) => {
-  const { getAccentClasses } = useTheme();
-  const isMobile = useMediaQuery('(max-width: 767px)');
-  const titleContainerRef = useRef<HTMLDivElement>(null);
-  const [highlightWidth, setHighlightWidth] = useState(0);
 
-  useEffect(() => {
-    const calculateWidth = () => {
-      if (titleContainerRef.current) {
-        setHighlightWidth(titleContainerRef.current.offsetWidth);
-      }
-    };
-
-    calculateWidth();
-    // Recalculate on resize
-    window.addEventListener('resize', calculateWidth);
-    return () => window.removeEventListener('resize', calculateWidth);
-  }, [title]); // Rerun if title changes
-
-  return (
-    <header className={`${isMobile ? 'pt-10' : 'pt-12'} mb-12 flex flex-row items-center justify-between gap-6`}>
-      <div className="flex-1">
-        {/* Title container for positioning the highlight */}
-        <div className="relative inline-block">
-          <div ref={titleContainerRef} className="flex items-center gap-4">
-            {icon && <div className="z-10 shrink-0">{icon}</div>}
-            <h1 className={`font-titan text-[clamp(2rem,7.5vw,3.75rem)] normal-case tracking-tighter leading-none relative z-10 [text-shadow:-1px_-1px_0_#000,1px_-1px_0_#000,-1px_1px_0_#000,1px_1px_0_#000] drop-shadow-[3px_3px_0px_#000] ${icon ? getAccentClasses('text') : 'text-black dark:text-white'}`}>
-              {title}
-            </h1>
-          </div>
-          {/* Dynamic highlight */}
-          {highlightWidth > 0 && (
-            <div
-              className={`absolute bottom-1 left-0 h-5 ${getAccentClasses('bg')} opacity-40 -z-0 -rotate-1 transition-colors duration-300`}
-              style={{ width: `${highlightWidth}px` }}
-            />
-          )}
-        </div>
-
-        {/* Subtitle container */}
-        <div className="flex items-center gap-3 mt-1 ml-1">
-          {backButton ? (
-            <div className="mt-6">{backButton}</div>
-          ) : (
-            <p className="text-[clamp(1rem,3vw,1.25rem)] font-bold italic text-black/50 dark:text-gray-400 transition-colors duration-300">
-              {subtitle}
-            </p>
-          )}
-        </div>
-
-        <div className={`h-2 w-32 mt-2 bg-black dark:bg-white/20 transition-colors duration-300`} />
-      </div>
-      {actions && <div className="flex items-center justify-end gap-3">{actions}</div>}
-    </header>
-  );
-};
 
 const ContactDropdown = ({ value, onChange, contacts, placeholder }: { value: string, onChange: (val: string) => void, contacts: ContactOption[], placeholder: string }) => {
   const { getAccentClasses } = useTheme();
@@ -956,30 +892,33 @@ function TransactionsPage({ transactions, loading = false, onTransactionDeleted,
       ? accounts.find(a => filterPaymentMethods.has(a.id))?.bank ?? '1 selected'
       : `${filterPaymentMethods.size} selected`;
 
-  return (
-    <>
-      <div className={`min-h-screen bg-transparent dark:bg-gray-950 transition-colors duration-200 overflow-x-hidden ${isMobile ? 'pt-6' : 'pt-6'}`}>
-      <div className="space-y-3 lg:space-y-8 animate-in fade-in duration-500 w-full max-w-7xl mx-auto pt-2 lg:pt-10">
-  <div ref={headerRef}> 
-    <PageHeader
-      title="Transactions"
-      subtitle="Keep tabs on your funds"
-      icon={
-        <div className={`w-14 h-14 rounded-2xl flex items-center justify-center text-white border-[3px] border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] -rotate-3 transition-all hover:rotate-0 hover:scale-110 z-10 relative ${getAccentClasses('bg')}`}>
-          <FileText className="w-7 h-7" />
-        </div>
-      }
-      actions={!isMobile && (
-        <button onClick={() => setShowTypeModal(true)} className={`flex items-center gap-2 text-white px-5 py-3 rounded-xl font-bold transition-all text-sm border-[3px] border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[2px] hover:translate-y-[2px] ${getAccentClasses('bg')}`}>
-          <Plus className="w-4 h-4" />
-          <span>Add Transaction</span>
-        </button>
-      )} 
-    />
-  </div>
+      return (
+        <>
+          <div className="min-h-screen w-full bg-transparent dark:bg-gray-950 transition-colors duration-200 pr-2 sm:pr-0">
+            <div className="space-y-6 animate-in fade-in duration-500 w-full max-w-7xl mx-auto">
+    
+          <div ref={headerRef}>
+            <PageHeader
+              title="Transactions"
+              subtitle="Keep tabs on your funds"
+              icon={
+                <div className={`w-14 h-14 rounded-2xl flex items-center justify-center text-white border-[3px] border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] -rotate-3 transition-all hover:rotate-0 hover:scale-110 z-10 relative ${getAccentClasses('bg')}`}>
+                  <FileText className="w-7 h-7" />
+                </div>
+              }
+              actions={!isMobile && (
+                <button onClick={() => setShowTypeModal(true)} className={`flex items-center gap-2 text-white px-5 py-3 rounded-xl font-bold transition-all text-sm border-[3px] border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[2px] hover:translate-y-[2px] ${getAccentClasses('bg')}`}>
+                  <Plus className="w-4 h-4" />
+                  <span>Add Transaction</span>
+                </button>
+              )}
+            />
+          </div>
 
-            {/* 🟢 Added -mt-6 to pull the filters box upward against the header! */}
-              <div className="!-mt-6 bg-[#FCF6E8] dark:bg-gray-900 border-4 border-black rounded-2xl shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] mb-2 relative z-10">
+
+
+
+          <div className="bg-[#FCF6E8] dark:bg-gray-900 border-4 border-black rounded-2xl shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] mb-2 relative z-10">
                 <button
                   className="p-4 flex justify-between items-center w-full disabled:cursor-auto"
                   onClick={() => setIsFiltersOpen(p => !p)}
@@ -1068,9 +1007,9 @@ function TransactionsPage({ transactions, loading = false, onTransactionDeleted,
 
           <div className="mb-6 w-full">
             <div className={`${getAccentClasses('bg')} border-4 border-black rounded-2xl shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] p-5 text-white w-full`}>
-              <p className="text-xs font-black uppercase tracking-widest text-indigo-200 mb-1">Total Spend</p>
+              <p className="text-xs font-black uppercase tracking-widest text-white mb-1">Total Spend</p>
               <p className="text-3xl font-black">{formatCurrency(totalSpend)}</p>
-              <p className="text-xs text-indigo-300 mt-1">Based on current filter · {filteredTransactions.length} transaction{filteredTransactions.length !== 1 ? 's' : ''}</p>
+              <p className="text-xs text-white mt-1">Based on current filter · {filteredTransactions.length} transaction{filteredTransactions.length !== 1 ? 's' : ''}</p>
             </div>
           </div>
 
