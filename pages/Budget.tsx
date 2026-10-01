@@ -1053,7 +1053,7 @@ const [activePeriodIndex, setActivePeriodIndex] = useState<number>(1);
     const unifiedSetup = setupsForMonth.find(s => s.timing === 'unified' || s.data?._periodTotals);
 
     // 🟢 ANTI-BLEED FIX: If this is a brand new month, force a perfectly clean slate!
-    const hasLegacyFiles = savedSetups.some(s => s.month === selectedMonth && (s.timing === '1/2' || s.timing === '2/2'));
+    const hasLegacyFiles = setupsForMonth.some(s => s.timing === '1/2' || s.timing === '2/2');
     
     if (!unifiedSetup && !hasLegacyFiles) {
       let cleanSlate: any = {};
@@ -2462,10 +2462,15 @@ const getFrozenCycleAmount = (account: Account): number => {
         try {
           setSaveStatus('syncing');
     
-                      // 🟢 BUG FIX: Priority Targeting! Guarantee we grab the Unified Master File first.
-          const unifiedExisting = savedSetups.find(s => s.month === selectedMonth && (s.timing === 'unified' || s.data?._periodTotals));
-          const fallbackExisting = savedSetups.find(s => s.month === selectedMonth && s.timing === selectedTiming);
+                                // 🟢 Match BOTH month and year so January 2027 never collides with January 2026!
+          const isSameMonthAndYear = (s: SavedBudgetSetup) =>
+            s.month === selectedMonth &&
+            parseInt(s.data?._year || new Date().getFullYear().toString(), 10) === selectedYear;
+
+          const unifiedExisting = savedSetups.find(s => isSameMonthAndYear(s) && (s.timing === 'unified' || s.data?._periodTotals));
+          const fallbackExisting = savedSetups.find(s => isSameMonthAndYear(s) && s.timing === selectedTiming);
           const existingSetup = unifiedExisting || fallbackExisting;
+
     
           if (existingSetup) {
             const updatedSetup: SavedBudgetSetup = {
@@ -2512,7 +2517,7 @@ const getFrozenCycleAmount = (account: Account): number => {
       setSaveStatus('error');
       setTimeout(() => setSaveStatus('idle'), AUTO_SAVE_STATUS_TIMEOUT_MS);
     }
-  }, [view, setupData, projectedSalary, actualSalary, selectedMonth, selectedTiming, savedSetups, excludedInstallmentIds, excludedWalletIds, excludedCreditIds, wallets, getStashAggregates, onReloadSetups, installments, getPaymentSchedule, shouldShowInstallment, transactions, creditBudgetAccounts, currentPeriods, billers, processedBudgetMap]);
+  }, [view, setupData, projectedSalary, actualSalary, projectedSalaryByPeriod, actualSalaryByPeriod, selectedMonth, selectedYear, selectedTiming, savedSetups, excludedInstallmentIds, excludedWalletIds, excludedCreditIds, wallets, getStashAggregates, onReloadSetups, installments, getPaymentSchedule, shouldShowInstallment, transactions, creditBudgetAccounts, currentPeriods, billers, processedBudgetMap]);
 
   const triggerAutoSave = useCallback(() => {
     if (autoSaveTimeoutRef.current) {
@@ -2601,10 +2606,17 @@ const getFrozenCycleAmount = (account: Account): number => {
   const handleSaveSetup = async () => {
     
 
-        // 🟢 BUG FIX: Priority Targeting! Guarantee we grab the Unified Master File first.
-        const unifiedExisting = savedSetups.find(s => s.month === selectedMonth && (s.timing === 'unified' || s.data?._periodTotals));
-        const fallbackExisting = savedSetups.find(s => s.month === selectedMonth && s.timing === selectedTiming);
-        const existingSetup = unifiedExisting || fallbackExisting;
+        const isSameMonthAndYear = (s: SavedBudgetSetup) =>
+          s.month === selectedMonth &&
+          parseInt(s.data?._year || new Date().getFullYear().toString(), 10) === selectedYear;
+
+
+
+
+        const unifiedExisting = savedSetups.find(s => isSameMonthAndYear(s) && (s.timing === 'unified' || s.data?._periodTotals));
+        const fallbackExisting = savedSetups.find(s => isSameMonthAndYear(s) && s.timing === selectedTiming);
+        const existingSetup = unifiedExisting || fallbackExisting;
+
     
         
   
@@ -3300,10 +3312,12 @@ const getFrozenCycleAmount = (account: Account): number => {
     } else {
       setExcludedInstallmentIds(new Set());
     }
-    setSelectedMonth(setup.month);
-    setSelectedTiming(setup.timing as '1/2' | '2/2');
-    setActivePeriodIndex(setup.timing === '2/2' ? 2 : parseInt(setup.timing?.split('/')[0] || '1', 10));
-    setView('setup');
+    setSelectedMonth(setup.month);
+    setSelectedYear(parseInt(setup.data?._year || new Date().getFullYear().toString(), 10));
+    setSelectedTiming(setup.timing as '1/2' | '2/2');
+    setActivePeriodIndex(setup.timing === '2/2' ? 2 : parseInt(setup.timing?.split('/')[0] || '1', 10));
+    setView('setup');
+
   };
 
   const handleArchiveSetup = (setupData: SavedBudgetSetup | SavedBudgetSetup[]) => {

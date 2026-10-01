@@ -264,6 +264,14 @@ const Accounts: React.FC<AccountsProps> = ({ accounts, installments = [], transa
     }
   };
 
+  // 🟢 Listen for the mobile floating bar "+" button
+  useEffect(() => {
+    const handleOpenAddAccount = () => openAddModal();
+    window.addEventListener('open_add_account_modal', handleOpenAddAccount);
+    return () => window.removeEventListener('open_add_account_modal', handleOpenAddAccount);
+  }, [activeTab]);
+
+
 
   const openEditModal = (acc: Account) => {
     setEditingId(acc.id);

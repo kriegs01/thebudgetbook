@@ -610,8 +610,33 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
     );
   };
 
+  const handleOpenAddBiller = useCallback(() => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const activeCats = categories.filter(c => {
+      if (c.active === false) {
+        if (!c.deactivatedAt) return false;
+        const deactivationDate = new Date(c.deactivatedAt.split('-').map(Number)[0], c.deactivatedAt.split('-').map(Number)[1] - 1, 1);
+        return today < deactivationDate;
+      }
+      return true;
+    });
+    const defaultCat = activeCats[0]?.name || categories[0]?.name || '';
+
+    setAddFormData(prev => ({ ...prev, category: defaultCat }));
+    setShowAddModal(true);
+    setTimingFeedback('');
+  }, [categories]);
+
+  // 🟢 Listen for the mobile floating bar "+" button
+  useEffect(() => {
+    window.addEventListener('open_add_biller_modal', handleOpenAddBiller);
+    return () => window.removeEventListener('open_add_biller_modal', handleOpenAddBiller);
+  }, [handleOpenAddBiller]);
+
   return (
     <div className="space-y-6 animate-in fade-in duration-500 pb-12">
+
       {!loading && (
         <>
           {detailedBiller ? (
@@ -683,35 +708,20 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
             </div>
           ) : (
             <>
-            <PageHeader 
+                        <PageHeader 
               title="Billers" 
               subtitle="Your forever-bills, on autopilot" 
               icon={<div className={`w-14 h-14 rounded-2xl flex items-center justify-center text-white border-[3px] border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] -rotate-3 transition-all hover:rotate-0 hover:scale-110 z-10 relative ${getAccentClasses('bg')}`}><Receipt className="w-7 h-7" /></div>} 
               actions={
                 <button 
-                  onClick={() => { 
-                    const today = new Date();
-                    today.setHours(0, 0, 0, 0);
-                    const activeCats = categories.filter(c => {
-                      if (c.active === false) {
-                        if (!c.deactivatedAt) return false;
-                        const deactivationDate = new Date(c.deactivatedAt.split('-').map(Number)[0], c.deactivatedAt.split('-').map(Number)[1] - 1, 1);
-                        return today < deactivationDate;
-                      }
-                      return true;
-                    });
-                    const defaultCat = activeCats[0]?.name || categories[0]?.name || '';
-                    
-                    setAddFormData(prev => ({ ...prev, category: defaultCat }));
-                    setShowAddModal(true); 
-                    setTimingFeedback(''); 
-                  }} 
-                  className={`flex items-center gap-2 text-white px-5 py-3 rounded-xl font-bold text-sm transition-all border-2 border-black shadow-[2px_2px_0px_#000] hover:shadow-none hover:translate-x-[1px] hover:translate-y-[1px] active:translate-x-[2px] active:translate-y-[2px] ${getAccentClasses('bg')}`}
+                  onClick={handleOpenAddBiller} 
+                  className={`hidden md:flex items-center gap-2 text-white px-5 py-3 rounded-xl font-bold text-sm transition-all border-2 border-black shadow-[2px_2px_0px_#000] hover:shadow-none hover:translate-x-[1px] hover:translate-y-[1px] active:translate-x-[2px] active:translate-y-[2px] ${getAccentClasses('bg')}`}
                 >
                   <Plus className="w-4 h-4" /><span className="hidden sm:inline">Add Biller</span>
                 </button>
               } 
             />
+
             
             {activeBillers.length > 0 && (
               <div className="mb-8">
@@ -760,14 +770,16 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
 
           )}
 
-          {showAddModal && (
-            <div className="fixed inset-0 bg-black bg-opacity-60 z-50 flex items-center justify-center p-4 animate-in fade-in">
-              <div className="bg-white dark:bg-gray-900 rounded-3xl shadow-2xl w-full max-w-lg max-h-[90vh] flex flex-col animate-in zoom-in-95">
-                <div className="p-8 border-b border-gray-100 dark:border-gray-800">
+{showAddModal && (
+            <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[9999] flex items-center justify-center pt-16 pb-28 px-4 sm:p-4 animate-in fade-in">
+              <div className="bg-white dark:bg-gray-900 border-[3px] border-black rounded-3xl shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] w-full max-w-lg max-h-[calc(100dvh-12rem)] sm:max-h-[90vh] flex flex-col overflow-hidden animate-in zoom-in-95">
+                <div className="p-5 sm:p-8 border-b border-gray-100 dark:border-gray-800 shrink-0">
                   <h2 className="text-2xl font-black text-gray-900 dark:text-gray-100">New Biller</h2>
                   <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Add a new recurring bill to your list</p>
                 </div>
-                <form onSubmit={handleAddSubmit} className="p-8 overflow-y-auto space-y-6">
+                <form onSubmit={handleAddSubmit} className="p-5 sm:p-8 overflow-y-auto flex-1 space-y-5 sm:space-y-6">
+
+
                   <div>
                     <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 mb-2">Biller Name</label>
                     <input value={addFormData.name} onChange={e => setAddFormData(f => ({ ...f, name: e.target.value }))} required className="w-full bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-2 border-gray-200 dark:border-gray-700 rounded-xl p-4 font-bold focus:ring-2 focus:ring-indigo-500 transition-all" />
@@ -882,7 +894,7 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
                     )}
                   </div>
                 </form>
-                <div className="p-8 border-t border-gray-100 dark:border-gray-800 flex justify-end gap-4">
+                <div className="p-4 sm:p-8 border-t border-gray-100 dark:border-gray-800 flex justify-end gap-4 shrink-0 bg-white dark:bg-gray-900">
                   <button type="button" onClick={() => setShowAddModal(false)} className="px-6 py-3 rounded-xl font-bold bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors">Cancel</button>
                   <button type="submit" form="add-biller-form" onClick={handleAddSubmit} disabled={isSubmitting} className="px-6 py-3 rounded-xl font-bold bg-indigo-600 text-white hover:bg-indigo-700 transition-colors disabled:opacity-50">{isSubmitting ? 'Saving...' : 'Save Biller'}</button>
                 </div>
@@ -890,14 +902,15 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
             </div>
           )}
 
-          {showEditModal && showEditModal.status === 'active' && (
-            <div className="fixed inset-0 bg-black bg-opacity-60 z-50 flex items-center justify-center p-4 animate-in fade-in">
-              <div className="bg-white dark:bg-gray-900 rounded-3xl shadow-2xl w-full max-w-lg max-h-[90vh] flex flex-col animate-in zoom-in-95">
-                <div className="p-8 border-b border-gray-100 dark:border-gray-800">
+{showEditModal && showEditModal.status === 'active' && (
+            <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[9999] flex items-center justify-center pt-16 pb-28 px-4 sm:p-4 animate-in fade-in">
+            <div className="bg-white dark:bg-gray-900 border-[3px] border-black rounded-3xl shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] w-full max-w-lg max-h-[calc(100dvh-12rem)] sm:max-h-[90vh] flex flex-col overflow-hidden animate-in zoom-in-95">
+              <div className="p-5 sm:p-8 border-b border-gray-100 dark:border-gray-800 shrink-0">
                   <h2 className="text-2xl font-black text-gray-900 dark:text-gray-100">Edit Biller</h2>
                   <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Update details for {showEditModal.name}</p>
                 </div>
-                <form onSubmit={handleEditSubmit} className="p-8 overflow-y-auto space-y-6">
+                <form id="edit-biller-form" onSubmit={handleEditSubmit} className="p-5 sm:p-8 overflow-y-auto flex-1 space-y-5 sm:space-y-6">
+
                   <div>
                     <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 mb-2">Biller Name</label>
                     <input value={editFormData.name} onChange={e => setEditFormData(f => ({ ...f, name: e.target.value }))} required className="w-full bg-gray-50 dark:bg-gray-800 dark:text-gray-100 border-2 border-gray-200 dark:border-gray-700 rounded-xl p-4 font-bold focus:ring-2 focus:ring-indigo-500 transition-all" />
@@ -1014,7 +1027,8 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
                     )}
                   </div>
                 </form>
-                <div className="p-8 border-t border-gray-100 dark:border-gray-800 flex justify-end gap-4">
+                <div className="p-4 sm:p-8 border-t border-gray-100 dark:border-gray-800 flex justify-end gap-4 shrink-0 bg-white dark:bg-gray-900">
+
                   <button type="button" onClick={() => setShowEditModal(null)} className="px-6 py-3 rounded-xl font-bold bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors">Cancel</button>
                   <button type="submit" form="edit-biller-form" onClick={handleEditSubmit} disabled={isSubmitting} className="px-6 py-3 rounded-xl font-bold bg-indigo-600 text-white hover:bg-indigo-700 transition-colors disabled:opacity-50">{isSubmitting ? 'Saving...' : 'Save Changes'}</button>
                 </div>
@@ -1023,9 +1037,9 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
           )}
 
           {showEditModal && showEditModal.status === 'inactive' && (
-            <div className="fixed inset-0 bg-black bg-opacity-60 z-50 flex items-center justify-center p-4 animate-in fade-in">
-              <div className="bg-white dark:bg-gray-900 rounded-3xl shadow-2xl w-full max-w-lg animate-in zoom-in-95">
-                <div className="p-8 border-b border-gray-100 dark:border-gray-800">
+            <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[9999] flex items-center justify-center pt-16 pb-28 px-4 sm:p-4 animate-in fade-in">
+            <div className="bg-white dark:bg-gray-900 border-[3px] border-black rounded-3xl shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] w-full max-w-lg max-h-[calc(100dvh-12rem)] sm:max-h-[90vh] flex flex-col overflow-hidden animate-in zoom-in-95">
+              <div className="p-5 sm:p-8 border-b border-gray-100 dark:border-gray-800 shrink-0">
                   <h2 className="text-2xl font-black text-gray-900 dark:text-gray-100">Reactivate Biller</h2>
                   <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Re-activate {showEditModal.name} with a new activation date</p>
                 </div>
@@ -1041,7 +1055,7 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
                 </form>
                 <div className="p-8 border-t border-gray-100 dark:border-gray-800 flex justify-end gap-4">
                   <button type="button" onClick={() => setShowEditModal(null)} className="px-6 py-3 rounded-xl font-bold bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors">Cancel</button>
-                  <button type="submit" form="edit-biller-form" onClick={handleEditSubmit} disabled={isSubmitting} className="px-6 py-3 rounded-xl font-bold bg-green-600 text-white hover:bg-green-700 transition-colors disabled:opacity-50">{isSubmitting ? 'Reactivating...' : 'Reactivate Biller'}</button>
+                  <button type="submit" form="edit-biller-form" onClick={handleEditSubmit} disabled={isSubmitting} className="px-6 py-3 rounded-xl font-bold bg-green-600 text-white hover:bg-green-700 transition-colors disabled:opacity-50">{isSubmitting ? 'Reactivating...' : 'Reactivate'}</button>
                 </div>
               </div>
             </div>

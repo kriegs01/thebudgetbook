@@ -1144,7 +1144,15 @@ const [paymentTab, setPaymentTab] = useState<'my_account' | 'budee'>('my_account
   const activeInstallmentsList = installments.filter(i => !isItemArchived(i));
   const archivedInstallmentsList = installments.filter(i => isItemArchived(i));
 
+  // 🟢 Listen for the mobile floating bar "+" button
+  useEffect(() => {
+    const handleOpenAddInstallment = () => setShowModal(true);
+    window.addEventListener('open_add_installment_modal', handleOpenAddInstallment);
+    return () => window.removeEventListener('open_add_installment_modal', handleOpenAddInstallment);
+  }, []);
+
   return (
+
     <div className="space-y-8 animate-in fade-in duration-500">
       {/* Loading State */}
       {loading && (
@@ -1209,34 +1217,29 @@ const [paymentTab, setPaymentTab] = useState<'my_account' | 'budee'>('my_account
         ) : undefined}
       />
 
-      {isMobile && (
-        <div className="flex justify-end mb-1">
-          <div className="flex items-center gap-3">
-            <div className="flex items-center bg-gray-50 dark:bg-gray-800 rounded-xl p-1 space-x-1 transition-colors border-2 border-black shadow-[2px_2px_0px_rgba(0,0,0,1)]">
-              <button 
-                onClick={() => setViewMode('card')}
-                className={`p-2 rounded-lg transition-colors ${viewMode === 'card' ? 'bg-white dark:bg-gray-700 shadow-sm text-indigo-600 dark:text-indigo-400' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'}`}
-                title="Card view"
-              >
-                <LayoutGrid className="w-4 h-4" />
-              </button>
-              <button 
-                onClick={() => setViewMode('list')}
-                className={`p-2 rounded-lg transition-colors ${viewMode === 'list' ? 'bg-white dark:bg-gray-700 shadow-sm text-indigo-600 dark:text-indigo-400' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'}`}
-                title="List view"
-              >
-                <List className="w-4 h-4" />
-              </button>
-            </div>
-            <button 
-              onClick={() => setShowModal(true)}
-                className={`flex items-center gap-2 text-white px-4 py-3 rounded-xl font-bold transition-all text-sm ${getAccentClasses('bg')} filter drop-shadow-[0_10px_30px_rgba(0,0,0,0.12)] border-[3px] border-black shadow-[4px_4px_0px_rgba(0,0,0,1)] hover:scale-105`}
-            >
-              <Plus className="w-4 h-4" />
-            </button>
-          </div>
-        </div>
-      )}
+      {isMobile && (
+        <div className="flex justify-end mb-1">
+          <div className="flex items-center gap-3">
+            <div className="flex items-center bg-gray-50 dark:bg-gray-800 rounded-xl p-1 space-x-1 transition-colors border-2 border-black shadow-[2px_2px_0px_rgba(0,0,0,1)]">
+              <button 
+                onClick={() => setViewMode('card')}
+                className={`p-2 rounded-lg transition-colors ${viewMode === 'card' ? 'bg-white dark:bg-gray-700 shadow-sm text-indigo-600 dark:text-indigo-400' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'}`}
+                title="Card view"
+              >
+                <LayoutGrid className="w-4 h-4" />
+              </button>
+              <button 
+                onClick={() => setViewMode('list')}
+                className={`p-2 rounded-lg transition-colors ${viewMode === 'list' ? 'bg-white dark:bg-gray-700 shadow-sm text-indigo-600 dark:text-indigo-400' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'}`}
+                title="List view"
+              >
+                <List className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
 
       <div className={viewMode === 'card' ? "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6" : "space-y-4"}>
         {activeInstallmentsList.length > 0 ? (
@@ -1270,26 +1273,28 @@ const [paymentTab, setPaymentTab] = useState<'my_account' | 'budee'>('my_account
       </>
       )}
 
-      {/* Track Modal */}
-      {showModal && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md">
-          <div className="bg-white dark:bg-gray-900 rounded-[2.5rem] w-full max-w-lg p-10 shadow-2xl animate-in zoom-in-95 max-h-[90vh] overflow-y-auto transition-colors border-2 border-black shadow-[6px_6px_0px_rgba(0,0,0,0.08)]">
-            <h2 className={`text-2xl font-titan normal-case tracking-tighter leading-none ${getAccentClasses('text')} mb-6`}>Track New Installment</h2>
-            <form onSubmit={handleSubmit} className="space-y-6">
+            {/* Track Modal */}
+                  {/* Track Modal */}
+      {showModal && (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center pt-14 pb-28 px-4 sm:p-4 bg-black/60 backdrop-blur-md">
+          <div className="bg-white dark:bg-gray-900 rounded-[2rem] sm:rounded-[2.5rem] w-full max-w-lg p-5 sm:p-10 shadow-2xl animate-in zoom-in-95 max-h-[calc(100dvh-12rem)] sm:max-h-[90vh] overflow-y-auto transition-colors border-[3px] border-black shadow-[8px_8px_0px_rgba(0,0,0,1)]">
+
+            <h2 className={`text-2xl font-titan normal-case tracking-tighter leading-none ${getAccentClasses('text')} mb-5 sm:mb-6`}>Track New Installment</h2>
+            <form onSubmit={handleSubmit} className="space-y-5 sm:space-y-6">
               <div>
                 <label className="block text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-2 transition-colors">Installment Name</label>
                 <input required type="text" value={formData.name} onChange={(e) => setFormData({...formData, name: e.target.value})} className="w-full bg-gray-50 dark:bg-gray-900 dark:text-gray-100 border-2 border-black rounded-2xl p-4 outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 font-bold transition-colors shadow-[2px_2px_0px_rgba(0,0,0,0.12)]" placeholder="e.g. MacBook Pro" />
               </div>
-                            {/* Principal & Monthly Grid */}
-                            <div className="grid grid-cols-2 gap-4">
-                <div>
+              {/* Principal & Monthly Grid */}
+              <div className="grid grid-cols-2 gap-4">
+                <div className="flex flex-col justify-end">
                   <label className="block text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-2 transition-colors">Principal (Item Cost)</label>
                   <div className="relative">
                     <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 dark:text-gray-500 font-bold transition-colors">₱</span>
                     <input required type="number" value={formData.principalAmount} onChange={(e) => setFormData({...formData, principalAmount: e.target.value})} className="w-full bg-gray-50 dark:bg-gray-900 dark:text-gray-100 border-2 border-black rounded-2xl p-4 pl-8 outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 font-black transition-colors shadow-[2px_2px_0px_rgba(0,0,0,0.12)]" />
                   </div>
                 </div>
-                <div>
+                <div className="flex flex-col justify-end">
                   <label className="block text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-2 transition-colors">Monthly Payment</label>
                   <div className="relative">
                     <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 dark:text-gray-500 font-bold transition-colors">₱</span>
@@ -1297,6 +1302,7 @@ const [paymentTab, setPaymentTab] = useState<'my_account' | 'budee'>('my_account
                   </div>
                 </div>
               </div>
+
               
               {/* Auto-Calculated Total Payable */}
               <div>
@@ -1716,8 +1722,8 @@ const [paymentTab, setPaymentTab] = useState<'my_account' | 'budee'>('my_account
 
             {/* Edit Modal */}
             {showEditModal && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md">
-          <div className="bg-white dark:bg-gray-900 rounded-[2.5rem] w-full max-w-lg p-10 shadow-2xl animate-in zoom-in-95 max-h-[90vh] overflow-y-auto transition-colors">
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center pt-14 pb-28 px-4 sm:p-4 bg-black/60 backdrop-blur-md">
+          <div className="bg-white dark:bg-gray-900 rounded-[2rem] sm:rounded-[2.5rem] w-full max-w-lg p-5 sm:p-10 shadow-2xl animate-in zoom-in-95 max-h-[calc(100dvh-12rem)] sm:max-h-[90vh] overflow-y-auto transition-colors border-[3px] border-black shadow-[8px_8px_0px_rgba(0,0,0,1)]">
             <h2 className="text-2xl font-black text-gray-900 dark:text-gray-100 mb-6 uppercase tracking-tight transition-colors">Edit Installment</h2>
             <form onSubmit={handleEditSubmit} className="space-y-6">
               <div>

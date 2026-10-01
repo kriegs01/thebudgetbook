@@ -50,9 +50,12 @@ export const BudgetSetupsList: React.FC<BudgetSetupsListProps> = ({
   }, {} as Record<string, { key: string; month: string; year: number; setups: SavedBudgetSetup[] }>);
 
   const sortedGroups = Object.values(groupedSetups).sort((a, b) => {
-    if (a.year !== b.year) return a.year - b.year;
-    return MONTHS.indexOf(a.month) - MONTHS.indexOf(b.month);
+    const yearDiff = a.year !== b.year
+      ? a.year - b.year
+      : MONTHS.indexOf(a.month) - MONTHS.indexOf(b.month);
+    return isArchived ? -yearDiff : yearDiff;
   });
+
 
   const handleScroll = () => {
     if (!scrollContainerRef.current) return;
