@@ -1,6 +1,8 @@
 // src/services/bnplService.ts
 import { supabase } from '../utils/supabaseClient';
 import { Transaction } from '../types';
+import { generateInstallmentPaymentSchedules } from '../utils/paymentSchedulesGenerator';
+import { createPaymentSchedulesBulk } from './paymentSchedulesService';
 
 export const convertMultipleToBNPL = async (
   transactions: Transaction[],
@@ -28,11 +30,10 @@ export const convertMultipleToBNPL = async (
     ? selectedStartDate
     : `${selectedStartDate}T12:00:00`;
 
-  // 🟢 NEW: Get the current user to satisfy Supabase Row Level Security (RLS)
   const { data: authData } = await supabase.auth.getUser();
 
-  // 1. Create the provisional installment record FIRST.
-  const { error: instError } = await supabase
+  // 1. Create the provisional installment record
+  const { data: installmentData, error: instError } = await supabase
     .from('installments')
     .insert({
       name: `BNPL Converted (${transactions.length} items)`,
@@ -48,11 +49,13 @@ export const convertMultipleToBNPL = async (
       user_id: authData.user?.id,
       start_date: safeStartDate,
       due_date: installmentDetails.dueDate || '15'
-    });
+    })
+    .select()
+    .single();
 
   if (instError) throw instError;
 
-  // 2. Tag the raw transactions with the same group and requested status.
+  // 2. Tag the raw transactions with the same group and requested status
   const { error: txError } = await supabase
     .from('transactions')
     .update({
@@ -67,4 +70,32 @@ export const convertMultipleToBNPL = async (
     throw txError;
   }
 
+  // 3. Generate and create payment schedules for the new installment
+  try {
+    const schedules = generateInstallmentPaymentSchedules({
+      id: installmentData.id,
+      name: installmentData.name,
+      monthlyAmount: installmentData.monthly_amount,
+      termDuration: `${installmentData.term_duration} months`,
+      startDate: installmentData.start_date.substring(0, 7), // Expects YYYY-MM
+      accountId: installmentData.account_id,
+    });
+
+    if (schedules.length > 0) {
+      const { error: schedulesError } = await createPaymentSchedulesBulk(schedules);
+      if (schedulesError) {
+        // If schedule creation fails, roll back everything to maintain data integrity
+        console.error('Schedule creation failed. Rolling back BNPL conversion.', schedulesError);
+        await supabase.from('installments').delete().eq('id', installmentData.id);
+        await supabase.from('transactions').update({ conversion_group_id: null, conversion_status: null }).in('id', txIds);
+        throw schedulesError;
+      }
+    }
+  } catch (error) {
+    // Catch any other error during schedule generation and roll back
+    console.error('Error during payment schedule generation. Rolling back BNPL conversion.', error);
+    await supabase.from('installments').delete().eq('id', installmentData.id);
+    await supabase.from('transactions').update({ conversion_group_id: null, conversion_status: null }).in('id', txIds);
+    throw error;
+  }
 };
