@@ -739,20 +739,7 @@ if (acc.hasVaultEnabled && acc.vaultId) {
       
       {/* (Keep your Modals exactly as they were underneath this) */}
 
-                        {/* 🟢 3. The FAB positioned fixed in the bottom corner (Transactions Style) */}
-      {isMobile && !loading && (
-        <div className="fixed bottom-[10px] right-6 z-40 animate-in fade-in zoom-in duration-300">
-          <div className="relative z-40 flex items-center justify-center">
-            <button
-              onClick={openAddModal}
-              className={`relative z-10 w-14 h-14 text-white rounded-2xl border-[3px] border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] flex items-center justify-center transition-all duration-300 ${getAccentClasses('bg')} hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none active:translate-x-[2px] active:translate-y-[2px] active:shadow-none`}
-              aria-label="Add Account"
-            >
-              <Plus className="w-6 h-6" strokeWidth={3} />
-            </button>
-          </div>
-        </div>
-      )}
+                        
 
 {showCreditTypeModal && (
         <div className="fixed inset-0 z-[99999] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in">

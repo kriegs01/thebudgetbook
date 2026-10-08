@@ -575,7 +575,10 @@ const Billers: React.FC<BillersProps> = ({ billers, installments = [], onAdd, ac
       <div key={biller.id} className="relative bg-white dark:bg-gray-800 border-[3px] border-black rounded-2xl p-6 flex flex-col h-full group transition-all duration-300 shadow-[4px_4px_0px_#000]">
         <div className="flex items-start justify-between gap-4">
           <div className="flex-1 min-w-0">
-            <h3 onClick={() => setDetailedBillerId(biller.id)} className={`font-titan text-xl tracking-tighter truncate transition-all cursor-pointer ${getAccentClasses('text')} [text-shadow:-1px_-1px_0_#000,1px_-1px_0_#000,-1px_1px_0_#000,1px_1px_0_#000] drop-shadow-[2px_2px_0px_#000] hover:drop-shadow-none hover:translate-x-[1px] hover:translate-y-[1px] active:translate-x-[2px] active:translate-y-[2px]`}>{biller.name}</h3>
+            <h3 onClick={() => setDetailedBillerId(biller.id)} className="font-black text-xl truncate transition-all cursor-pointer text-gray-900 dark:text-white hover:opacity-70 active:scale-95">
+  {biller.name}
+</h3>
+
             <div className="flex items-center flex-wrap gap-2 mt-2">
               <span className="text-[10px] font-bold px-2 py-0.5 bg-gray-100 dark:bg-gray-700/50 rounded text-gray-600 dark:text-gray-300 uppercase">{biller.category}</span>
               {linkedAccount && <span className="text-[10px] font-bold px-2 py-0.5 bg-gray-100 dark:bg-gray-700/50 rounded text-gray-600 dark:text-gray-300 uppercase flex items-center gap-1"><span role="img" aria-label="Linked">🔗</span> {linkedAccount.bank}</span>}

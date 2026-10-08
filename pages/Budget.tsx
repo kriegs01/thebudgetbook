@@ -33,6 +33,7 @@ import { processCreditAccount } from '../src/utils/statementAggregator';
 import { generateCreditBuckets, getBucketForMonth } from '../src/utils/bucketEngine';
 import { getCreditStatementTotal } from '../src//utils/creditEngines/creditEngineRouter';
 import { SyncIndicator, SyncStatus } from '../src/components/SyncIndicator';
+import { createPortal } from 'react-dom';
 
 
 interface BudgetProps {
@@ -308,11 +309,12 @@ const TimelineCard = ({
     return (
     <div className="relative w-full">
       
-            {/* 🟢 CALENDAR BADGE OVER THE TIMELINE */}
-      <div className={`absolute top-4 -left-[45px] z-10 flex flex-col items-center justify-center w-10 bg-white dark:bg-gray-800 border-2 border-black rounded-lg overflow-hidden shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] transition-opacity ${isSettled ? 'opacity-60 grayscale' : 'opacity-100'}`}>
+                  {/* 🟢 CALENDAR BADGE OVER THE TIMELINE */}
+      <div className="absolute top-4 -left-[45px] z-10 flex flex-col items-center justify-center w-10 bg-white dark:bg-gray-800 border-2 border-black rounded-lg overflow-hidden shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]">
         <span className={`w-full text-white text-[9px] font-black uppercase text-center py-0.5 tracking-widest border-b-2 border-black ${isSettled ? 'bg-gray-500' : 'bg-red-500'}`}>Due</span>
         <span className={`text-[14px] leading-tight font-black py-1 ${isSettled ? 'text-gray-500' : 'text-gray-900 dark:text-gray-100'}`}>{item.dueDate}</span>
       </div>
+
 
 
       {/* MAIN CARD CONTENT */}
@@ -584,6 +586,7 @@ const effectiveCategories = React.useMemo(() => {
     }
   }, [view, selectedMonth, selectedYear, selectedTiming, navigate, searchParams]);
 
+  
 
   const [setupData, setSetupData] = useState<{ [key: string]: CategorizedSetupItem[] }>({});
   const [removedIds, setRemovedIds] = useState<Set<string>>(new Set());
@@ -910,6 +913,7 @@ const [activePeriodIndex, setActivePeriodIndex] = useState<number>(1);
       };
     });
   }, [currentPeriods]);
+
 
 
   // Load dynamic periods safely via useEffect
@@ -1690,6 +1694,8 @@ const getFrozenCycleAmount = (account: Account): number => {
       },
     });
   };
+  
+
   
 
   useEffect(() => {
@@ -2543,7 +2549,25 @@ const getFrozenCycleAmount = (account: Account): number => {
     };
   }, []);
 
+  const [syncSlot, setSyncSlot] = useState<HTMLElement | null>(null);
+
+    // 🟢 SAFE MOBILE BACK LISTENER
+    useEffect(() => {
+      const handleMobileBack = async () => {
+        const currentSetup = savedSetups.find(s => s.month === selectedMonth && s.timing === selectedTiming);
+        const isCurrentlyReadOnly = currentSetup?.isArchived ?? false;
+        
+        if (!isCurrentlyReadOnly) await autoSave();
+        setView('summary');
+      };
+      window.addEventListener('budget_mobile_back', handleMobileBack);
+      return () => window.removeEventListener('budget_mobile_back', handleMobileBack);
+    }, [autoSave, savedSetups, selectedMonth, selectedTiming, view]);
+  
+
   const handleSetupToggle = (category: string, id: string) => {
+
+
     setSetupData(prev => ({
       ...prev,
       [category]: prev[category].map(item => 
@@ -3296,6 +3320,7 @@ const getFrozenCycleAmount = (account: Account): number => {
         return () => window.removeEventListener('open_add_budget_modal', handleOpenAddBudget);
       }, [savedSetups, billers, accounts, transactions, effectiveCategories]);
     
+
       const handleLoadSetup = (setup: SavedBudgetSetup) => {
     
     if (typeof setup.data !== 'object' || setup.data === null || Array.isArray(setup.data)) {
@@ -3696,7 +3721,7 @@ const getFrozenCycleAmount = (account: Account): number => {
 
     return (
 // ... keep everything else underneath the exact same (the <div className="space-y-8... block)
-<div className="space-y-2 lg:space-y-8 animate-in fade-in duration-500 w-full max-w-7xl mx-auto pt-0 lg:pt-10 pb-28 lg:pb-10">
+<div className="space-y-2 lg:space-y-8 animate-in fade-in duration-500 w-full max-w-7xl mx-auto pb-28 lg:pb-10">
 
 <PageHeader 
               title="Budget"
@@ -4117,6 +4142,8 @@ const totalSpend = grandTotal;
   const isReadOnly = currentSetup?.isArchived ?? false;
   const legacyMode = isLegacyBudget(selectedYear, selectedMonth);
 
+ 
+
       // ⚡ UNIVERSAL PAY ROUTER
   const handleTimelinePay = (item: TimelineNode) => {
         // 1. STANDARD BILLERS
@@ -4273,357 +4300,434 @@ const totalSpend = grandTotal;
 
   return (
     <div className={`space-y-8 animate-in slide-in-from-right-4 duration-500 pb-20 w-full ${isMobile ? 'p-2' : 'p-4 md:p-8'} relative`}>
-      <div className="flex flex-col space-y-6">
-        <PageHeader 
-          title="Budget Plan"
-          subtitle={isReadOnly ? 'Archived – Read Only' : 'Your Money-Pie for the month'}
-          icon={
-            <div className={`w-14 h-14 rounded-2xl flex items-center justify-center text-white border-[3px] border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] -rotate-3 transition-all hover:rotate-0 hover:scale-110 z-10 relative ${getAccentClasses('bg')}`}>
-              <WalletIcon className="w-7 h-7" />
-            </div>
-          }
-          actions={isMobile ? null : (
-            <div className="flex items-center gap-3 flex-wrap justify-end">
-              {!isReadOnly && <SyncIndicator status={saveStatus} />}
-              {currentSetup && isReadOnly && (<PinProtectedAction featureId="budget_modifications" onVerified={() => handleReopenSetup(currentSetup)} actionLabel="Reopen Budget"><button onClick={(e) => e.preventDefault()} disabled={archiveSubmitting} className="flex items-center gap-2 bg-indigo-50 text-indigo-700 px-5 py-3 rounded-xl font-bold text-sm border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[1px] hover:translate-y-[1px] transition-all disabled:opacity-50"><RotateCcw className="w-4 h-4" /><span className="hidden sm:inline">Reopen</span></button></PinProtectedAction>)}
-              {currentSetup && !isReadOnly && (<PinProtectedAction featureId="budget_modifications" onVerified={() => handleArchiveSetup(currentSetup)} actionLabel="Close Budget"><button onClick={(e) => e.preventDefault()} disabled={archiveSubmitting} className="flex items-center gap-2 bg-amber-50 text-amber-700 px-5 py-3 rounded-xl font-bold text-sm border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[1px] hover:translate-y-[1px] transition-all disabled:opacity-50"><Archive className="w-4 h-4" /><span className="hidden sm:inline">Close</span></button></PinProtectedAction>)}
-              {!isReadOnly && (
-                <PinProtectedAction featureId="budget_modifications" onVerified={handleSaveSetup} actionLabel="Save Budget">
-                  <button onClick={(e) => e.preventDefault()} className={`flex items-center gap-2 text-white px-5 py-3 rounded-xl font-bold transition-all border-2 border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[1px] hover:translate-y-[1px] text-sm ${getAccentClasses('bg')}`}>
-                    <Save className="w-4 h-4" />
-                    <span className="hidden sm:inline">Save</span>
-                  </button>
-                </PinProtectedAction>
-              )}
-            </div>
-          )}
-        />
-
-        <div className="flex items-center justify-between w-full md:justify-center mb-6 md:relative">
-          <div className="flex-none md:absolute md:left-0 md:top-1/2 md:-translate-y-1/2">
-            <button 
-              onClick={async () => {
-                if (!isReadOnly) {
-                  await autoSave();
-                }
-                setView('summary');
-              }} 
-              className="flex items-center justify-center w-10 h-10 rounded-xl bg-gray-50 dark:bg-gray-800 text-gray-500 dark:text-gray-400 border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[0.5px] hover:translate-y-[0.5px] transition-all shrink-0"
-            >
-              <ArrowLeft className="w-5 h-5" />
-            </button>
-          </div>
-  
-          <div className="flex-grow flex justify-center items-center space-x-2 md:flex-grow-0">
+                  <div className="flex flex-col space-y-4 md:space-y-6">
+        {isMobile ? (
+                                        // 📱 COMPACT MOBILE HEADER
+          <div className="flex items-center w-full mb-0 mt-1 relative z-[70] min-h-[3rem]">
+            
+          <div className="relative flex items-center h-full">
             <select 
               value={selectedMonth} 
               onChange={(e) => {
-                // 🟢 FIX 1: Instantly kill pending Auto-Saves to stop cross-contamination!
                 if (autoSaveTimeoutRef.current) clearTimeout(autoSaveTimeoutRef.current);
                 setSelectedMonth(e.target.value);
               }} 
               disabled={isReadOnly} 
-              className={`bg-white dark:bg-gray-900 border-2 border-black rounded-xl md:rounded-[1.5rem] h-10 md:h-auto px-3 md:px-8 md:py-4 font-black text-xs md:text-base shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] outline-none disabled:opacity-60 disabled:cursor-not-allowed transition-colors text-center appearance-none ${getAccentClasses('text')}`}
+              className={`bg-transparent border-none font-black tracking-tight text-3xl outline-none appearance-none pr-8 py-1 pl-1 drop-shadow-sm ${getAccentClasses('text')}`}
             >
               {MONTHS.map(m => <option key={m} value={m}>{m}</option>)}
             </select>
-
-
-            {legacyMode && (
-              <span className="hidden md:block text-[10px] font-black text-gray-400 dark:text-gray-500 bg-gray-100 dark:bg-gray-800 border-2 border-black px-4 py-2 rounded-full uppercase tracking-widest">Legacy Budget</span>
-            )}
+            <ChevronDown className={`absolute right-1 top-1/2 -translate-y-1/2 w-7 h-7 pointer-events-none drop-shadow-sm ${getAccentClasses('text')}`} strokeWidth={3} />
           </div>
-  
-          <div className="flex-none flex items-center gap-2 md:hidden">
-            {currentSetup && !isReadOnly && (
-              <PinProtectedAction featureId="budget_modifications" onVerified={() => handleArchiveSetup(currentSetup)} actionLabel="Close Budget">
-                <button onClick={(e) => e.preventDefault()} disabled={archiveSubmitting} className="flex items-center justify-center w-10 h-10 rounded-xl bg-amber-50 text-amber-700 border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[0.5px] hover:translate-y-[0.5px] transition-all disabled:opacity-50" aria-label="Close">
-                  <Archive className="w-4 h-4" />
-                </button>
-              </PinProtectedAction>
-            )}
-            {!isReadOnly && (
-              <PinProtectedAction featureId="budget_modifications" onVerified={handleSaveSetup} actionLabel="Save Budget">
-                <button onClick={(e) => e.preventDefault()} className={`flex items-center justify-center w-10 h-10 rounded-xl text-white border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[0.5px] hover:translate-y-[0.5px] ${getAccentClasses('bg')}`} aria-label="Save">
-                  <Save className="w-4 h-4" />
-                </button>
-              </PinProtectedAction>
-            )}
-          </div>
+
+          {/* 🟢 PORTAL TO EXACT SCREEN CORNER + STRIP INTERNAL MOBILE CSS */}
+          {isMobile && !isReadOnly && createPortal(
+            <div className="fixed top-4 right-4 z-[9999] pointer-events-auto flex items-center justify-center [&>*]:!static [&>*]:!transform-none [&>*]:!m-0">
+               <SyncIndicator status={saveStatus} />
+            </div>,
+            document.body
+          )}
         </div>
-      </div>
-  
-{/* 2. THE DYNAMIC TABS */}
 
-<div className="flex space-x-2 overflow-x-auto pb-1 max-w-full scrollbar-hide">
-  {currentPeriods.map((period, index) => {
-    const periodNum = index + 1;
-    const isActive = activePeriodIndex === periodNum;
-    
-    // Format dates for the sub-label
-    const formattedStart = period?.startDate ? new Date(period.startDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '';
-    const formattedEnd = period?.endDate ? new Date(period.endDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '';
-    
-    return (
-      <button
-      key={periodNum}
-      onClick={() => {
-        setActivePeriodIndex(periodNum);
-        setSelectedTiming(`${periodNum}/${currentPeriods.length || 2}` as any);
-      }}
-      disabled={isReadOnly}
-        type="button"
-        className={`flex-shrink-0 px-4 py-2 font-black uppercase text-xs tracking-wider border-2 rounded-xl transition-all shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] disabled:opacity-60 disabled:cursor-not-allowed ${
-          isActive 
-            ? 'bg-indigo-600 text-white border-black translate-x-[1px] translate-y-[1px] shadow-none' 
-            : 'bg-white dark:bg-gray-900 text-gray-500 border-black hover:bg-gray-100 dark:hover:bg-gray-800 hover:translate-x-[1px] hover:translate-y-[1px] hover:shadow-none'
-        }`}
-      >
-        {period.label || `Period ${periodNum}`}
-        {formattedStart && formattedEnd && (
-          <span className={`block text-[9px] font-medium mt-1 ${isActive ? 'text-indigo-200' : 'text-gray-400'}`}>
-            {formattedStart} - {formattedEnd}
-          </span>
-        )}
-      </button>
-    );
-  })}
-</div>
+        
+        ) : (
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">  
-        <div className="bg-white dark:bg-gray-900 rounded-2xl border-4 border-black shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] overflow-hidden w-full transition-colors">
-          <div className="p-4 border-b-4 border-black bg-gray-50/30 dark:bg-gray-800/30"><h3 className="text-xs font-black text-gray-900 dark:text-gray-100 uppercase tracking-[0.25em] text-center">BUDGET SUMMARY</h3></div>
-          <table className="w-full text-left">
-            <thead><tr className="text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase border-b border-gray-100 dark:border-gray-800"><th className="p-3 pl-6">Category</th><th className="p-3 pr-6 text-right">Amount</th></tr></thead>
-            <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
-              {categorySummary
-                .filter((item) => item.total >= 0.01)
-                .map((item) => (
-                  <tr 
-                  key={item.category} 
-                  onClick={() => {
-                    setExpandedBreakdownIds(new Set()); // 🟢 RESET ACCORDIONS
-                    setSummaryBreakdownModal(item);
-                  }}
-                  className="cursor-pointer hover:bg-indigo-50/50 dark:hover:bg-indigo-900/20 transition-colors group"
+          // 💻 DESKTOP HEADER (Original Layout)
+          <>
+            <PageHeader 
+              title="Budget Plan"
+              subtitle={isReadOnly ? 'Archived – Read Only' : 'Your Money-Pie for the month'}
+              icon={
+                <div className={`w-14 h-14 rounded-2xl flex items-center justify-center text-white border-[3px] border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] -rotate-3 transition-all hover:rotate-0 hover:scale-110 z-10 relative ${getAccentClasses('bg')}`}>
+                  <WalletIcon className="w-7 h-7" />
+                </div>
+              }
+              actions={
+                <div className="flex items-center gap-3 flex-wrap justify-end">
+                  {!isReadOnly && <SyncIndicator status={saveStatus} />}
+                  {currentSetup && isReadOnly && (<PinProtectedAction featureId="budget_modifications" onVerified={() => handleReopenSetup(currentSetup)} actionLabel="Reopen Budget"><button onClick={(e) => e.preventDefault()} disabled={archiveSubmitting} className="flex items-center gap-2 bg-indigo-50 text-indigo-700 px-5 py-3 rounded-xl font-bold text-sm border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[1px] hover:translate-y-[1px] transition-all disabled:opacity-50"><RotateCcw className="w-4 h-4" /><span className="hidden sm:inline">Reopen</span></button></PinProtectedAction>)}
+                  {currentSetup && !isReadOnly && (<PinProtectedAction featureId="budget_modifications" onVerified={() => handleArchiveSetup(currentSetup)} actionLabel="Close Budget"><button onClick={(e) => e.preventDefault()} disabled={archiveSubmitting} className="flex items-center gap-2 bg-amber-50 text-amber-700 px-5 py-3 rounded-xl font-bold text-sm border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[1px] hover:translate-y-[1px] transition-all disabled:opacity-50"><Archive className="w-4 h-4" /><span className="hidden sm:inline">Close</span></button></PinProtectedAction>)}
+                  {!isReadOnly && (
+                    <PinProtectedAction featureId="budget_modifications" onVerified={handleSaveSetup} actionLabel="Save Budget">
+                      <button onClick={(e) => e.preventDefault()} className={`flex items-center gap-2 text-white px-5 py-3 rounded-xl font-bold transition-all border-2 border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[1px] hover:translate-y-[1px] text-sm ${getAccentClasses('bg')}`}>
+                        <Save className="w-4 h-4" />
+                        <span className="hidden sm:inline">Save</span>
+                      </button>
+                    </PinProtectedAction>
+                  )}
+                </div>
+              }
+            />
+
+            <div className="flex items-center justify-between w-full md:justify-center mb-6 md:relative">
+              <div className="flex-none md:absolute md:left-0 md:top-1/2 md:-translate-y-1/2">
+                <button 
+                  onClick={async () => {
+                    if (!isReadOnly) {
+                      await autoSave();
+                    }
+                    setView('summary');
+                  }} 
+                  className="flex items-center justify-center w-10 h-10 rounded-xl bg-gray-50 dark:bg-gray-800 text-gray-500 dark:text-gray-400 border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[0.5px] hover:translate-y-[0.5px] transition-all shrink-0"
                 >
-
-                  <td className="p-3 pl-6 font-bold text-gray-700 dark:text-gray-300 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 text-sm transition-colors">
-                    {item.category}
-                  </td>
-                  <td className="p-3 pr-6 text-right font-black text-gray-900 dark:text-gray-100 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 text-sm transition-colors">
-                    {formatCurrency(item.total)}
-                  </td>
-                </tr>
-              ))}
-              
-              {/* 🟢 Clickable Stash Row */}
-              {periodStashTotal > 0 && (
-                <tr 
-                  onClick={() => {
-                    const stashBreakdown = wallets.filter(w => !excludedWalletIds.has(w.id)).map(w => {
-                      const periodCount = currentPeriods.length || 2;
-                      const targetAmount = Math.max(w.amount, getStashAggregates(w).funded);
-                      const amt = (!w.timing || w.timing === 'split') ? (targetAmount / periodCount) : (parseInt(w.timing, 10) === activePeriodIndex ? targetAmount : 0);
-                      return amt > 0 ? { id: w.id, name: w.name, amount: amt, type: 'Stash Target' } : null;
-                    }).filter(Boolean) as any[];
-
-                    setSummaryBreakdownModal({ category: 'Stash', total: periodStashTotal, breakdown: stashBreakdown });
-                    setExpandedBreakdownIds(new Set());
-                  }}
-                  className="cursor-pointer hover:bg-indigo-50/50 dark:hover:bg-indigo-900/20 transition-colors group"
-                >
-                  <td className="p-3 pl-6 font-bold text-gray-700 dark:text-gray-300 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 text-sm transition-colors">
-                    Stash
-                  </td>
-                  <td className="p-3 pr-6 text-right font-black text-gray-900 dark:text-gray-100 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 text-sm transition-colors">
-                    {formatCurrency(periodStashTotal)}
-                  </td>
-                </tr>
-              )}
-            </tbody>
-
-
-
-            <tfoot>
-              <tr className="bg-indigo-50/30 dark:bg-indigo-900/20 border-t-2 border-black"><td className="p-3 pl-6 text-xs font-black text-indigo-600 dark:text-indigo-400 uppercase">Grand Total</td><td className="p-3 pr-6 text-right text-lg font-black text-indigo-600 dark:text-indigo-400">{formatCurrency(grandTotal)}</td></tr>
-            </tfoot>
-          </table>
-        </div>
-
-        <div className="bg-white dark:bg-gray-900 rounded-2xl border-4 border-black shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] overflow-hidden w-full transition-colors">
-          <div className="p-4 border-b-4 border-black bg-gray-50/30 dark:bg-gray-800/30"><h3 className="text-xs font-black text-gray-900 dark:text-gray-100 uppercase tracking-[0.25em] text-center">MONTH SUMMARY</h3></div>
-          <table className="w-full text-left">
-            <thead><tr className="text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase border-b border-gray-100 dark:border-gray-800"><th className="p-3 pl-6">Item</th><th className="p-3 pr-6 text-right">Amount</th></tr></thead>
-            <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
-              <tr>
-                <td className="p-3 pl-6 font-bold text-gray-700 dark:text-gray-300 text-sm">Projected Income</td>
-                <td className="p-3 pr-6 text-right">
-                  <div className="flex items-center justify-end">
-                    {!isProjectedFocused ? (
-                      <span 
-                        className={`text-sm font-black text-gray-900 dark:text-gray-100 ${!isReadOnly ? 'cursor-pointer hover:text-indigo-600 dark:hover:text-indigo-400' : ''} transition-colors`}
-                        onClick={() => !isReadOnly && setIsProjectedFocused(true)}
-                      >
-                        {formatCurrency(parseFloat(projectedSalaryByPeriod[activePeriodIndex] || '0'))}
-                      </span>
-                    ) : (
-                      <div className="flex items-center justify-end space-x-1">
-                        <span className="text-gray-400 dark:text-gray-500 font-bold text-sm">₱</span>
-                        <input 
-                          autoFocus
-                          type="number" 
-                          min="0"
-                          step="0.01"
-                          value={projectedSalaryByPeriod[activePeriodIndex] || ''} 
-                          onChange={(e) => setProjectedSalaryByPeriod(prev => ({ ...prev, [activePeriodIndex]: e.target.value }))} 
-                          onFocus={() => { isFocusedRef.current = true; }}
-                          onBlur={() => { isFocusedRef.current = false; setIsProjectedFocused(false); }}
-                          disabled={isReadOnly}
-                          className="bg-transparent border-none text-sm font-black text-gray-900 dark:text-gray-100 w-28 text-right outline-none focus:bg-indigo-50 dark:focus:bg-indigo-900/30 rounded px-1 disabled:opacity-60 disabled:cursor-not-allowed"
-                        />
-                      </div>
-                    )}
-                  </div>
-                </td>
-              </tr>
-              <tr>
-                <td className="p-3 pl-6 font-bold text-gray-700 dark:text-gray-300 text-sm">Actual Income</td>
-                <td className="p-3 pr-6 text-right">
-                  <div className="flex items-center justify-end space-x-2">
-                    {!isActualFocused ? (
-                      <span 
-                        className={`text-sm font-black ${
-                          allIncomeTxs.length > 0 || actualSalaryByPeriod[activePeriodIndex] 
-                            ? 'text-gray-900 dark:text-gray-100' 
-                            : 'text-gray-400 dark:text-gray-500 italic'
-                        } ${!isReadOnly && allIncomeTxs.length === 0 ? 'cursor-pointer hover:text-indigo-600 dark:hover:text-indigo-400' : ''} transition-colors`}
-                        onClick={() => {
-                          // Only allow manual editing if there are no recorded transactions
-                          if (!isReadOnly && allIncomeTxs.length === 0) setIsActualFocused(true);
-                        }}
-                        title={allIncomeTxs.length > 0 ? "Locked to recorded transactions" : ""}
-                      >
-                        {allIncomeTxs.length > 0 
-                          // 🟢 DERIVED MATH: If transactions exist, forcefully sum them up and display them!
-                          ? formatCurrency(allIncomeTxs.reduce((sum, tx) => sum + Math.abs(parseFloat(tx.amount as any) || 0), 0))
-                          // Fallback to manual input if no transactions exist
-                          : (actualSalaryByPeriod[activePeriodIndex] ? formatCurrency(parseFloat(actualSalaryByPeriod[activePeriodIndex])) : 'Click to add...')
-                        }
-                      </span>
-                    ) : (
-                      <div className="flex items-center justify-end space-x-1">
-                        <span className="text-gray-400 dark:text-gray-500 font-bold text-sm">₱</span>
-                        <input 
-                          autoFocus
-                          type="number" 
-                          min="0"
-                          step="0.01"
-                          value={actualSalaryByPeriod[activePeriodIndex] || ''} 
-                          onChange={(e) => setActualSalaryByPeriod(prev => ({ ...prev, [activePeriodIndex]: e.target.value }))} 
-                          onFocus={() => { isFocusedRef.current = true; }}
-                          onBlur={() => { isFocusedRef.current = false; setIsActualFocused(false); }}
-                          disabled={isReadOnly}
-                          placeholder="Enter actual"
-                          className="bg-transparent border-none text-sm font-black text-gray-900 dark:text-gray-100 w-28 text-right outline-none focus:bg-indigo-50 dark:focus:bg-indigo-900/30 rounded px-1 placeholder:text-gray-300 dark:placeholder:text-gray-600 disabled:opacity-60 disabled:cursor-not-allowed"
-                        />
-                      </div>
-                    )}
-                    
-                    {/* The Wallet / List Buttons */}
-                    {!isReadOnly && (
-                      allIncomeTxs.length > 0 ? (
-                        <button onClick={() => setShowIncomeRecordsModal(true)} className="p-1.5 bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 rounded-lg border border-black shadow-[1px_1px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[0.5px] hover:translate-y-[0.5px] transition-all" title="View Income Records">
-                          <List className="w-4 h-4" />
-                        </button>
-                      ) : (
-                        <button onClick={() => {
-                            const debitAccounts = accounts.filter(a => a.type === 'Debit');
-                            
-                            const yyyy = selectedYear;
-                            const mm = String(MONTHS.indexOf(selectedMonth) + 1).padStart(2, '0');
-                            const dd = activePeriodIndex === 1 ? '01' : '16';
-                            
-                            setSalaryFormData({
-                              name: 'Income',
-                              amount: actualSalaryByPeriod[activePeriodIndex] || projectedSalaryByPeriod[activePeriodIndex] || '',
-                              date: `${yyyy}-${mm}-${dd}`, 
-                              accountId: debitAccounts[0]?.id || ''
-                            });
-                            setShowSalaryModal(true);
-                          }}
-                          className="p-1.5 bg-green-50 dark:bg-green-900/20 text-green-600 dark:text-green-400 rounded-lg border border-black shadow-[1px_1px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[0.5px] hover:translate-y-[0.5px] transition-all" title="Record as Cash In transaction">
-                          <WalletIcon className="w-4 h-4" />
-                        </button>
-                      )
-                    )}
-                  </div>
-                </td>
-              </tr>
-              {totalOtherIncome > 0 && (
-                <>
-                  <tr>
-                    <td className="p-3 pl-6 font-bold text-gray-700 dark:text-gray-300 text-sm">Other Income</td>
-                    <td className="p-3 pr-6 text-right">
-                      <span className="text-sm font-black text-gray-900 dark:text-gray-100">{formatCurrency(totalOtherIncome)}</span>
-                    </td>
-                  </tr>
-                  <tr className="bg-green-50/30 dark:bg-green-900/10">
-                    <td className="p-3 pl-6 font-bold text-green-700 dark:text-green-400 text-sm">Net Income</td>
-                    <td className="p-3 pr-6 text-right font-black text-green-700 dark:text-green-400 text-sm">{formatCurrency(netIncome)}</td>
-                  </tr>
-                </>
-              )}
-              <tr>
-                <td className="p-3 pl-6 font-bold text-gray-700 dark:text-gray-300 text-sm">Total Spend</td>
-                <td className="p-3 pr-6 text-right font-black text-gray-900 dark:text-gray-100 text-sm">{formatCurrency(totalSpend)}</td>
-              </tr>
-            </tbody>
-            <tfoot>
-              <tr className={`${remaining >= 0 ? 'bg-green-50/30 dark:bg-green-900/10' : 'bg-red-50/30 dark:bg-red-900/10'} border-t-2 border-black`}>
-                <td className="p-3 pl-6 text-xs font-black uppercase">Remaining</td>
-                <td className={`p-3 pr-6 text-right text-lg font-black ${remaining >= 0 ? 'text-green-600' : 'text-red-600'}`}>{formatCurrency(remaining)}</td>
-              </tr>
-            </tfoot>
-          </table>
-        </div>
-      </div>
+                  <ArrowLeft className="w-5 h-5" />
+                </button>
+              </div>
       
-                          {/* ========================================================= */}
+              <div className="flex-grow flex justify-center items-center space-x-2 md:flex-grow-0">
+                <select 
+                  value={selectedMonth} 
+                  onChange={(e) => {
+                    if (autoSaveTimeoutRef.current) clearTimeout(autoSaveTimeoutRef.current);
+                    setSelectedMonth(e.target.value);
+                  }} 
+                  disabled={isReadOnly} 
+                  className={`bg-white dark:bg-gray-900 border-2 border-black rounded-xl md:rounded-[1.5rem] h-10 md:h-auto px-3 md:px-8 md:py-4 font-black text-xs md:text-base shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] outline-none disabled:opacity-60 disabled:cursor-not-allowed transition-colors text-center appearance-none ${getAccentClasses('text')}`}
+                >
+                  {MONTHS.map(m => <option key={m} value={m}>{m}</option>)}
+                </select>
+
+                {legacyMode && (
+                  <span className="hidden md:block text-[10px] font-black text-gray-400 dark:text-gray-500 bg-gray-100 dark:bg-gray-800 border-2 border-black px-4 py-2 rounded-full uppercase tracking-widest">Legacy Budget</span>
+                )}
+              </div>
+            </div>
+          </>
+        )}
+      </div>
+
+  
+                {/* 2. PAYCHECK PAGINATION CONTROLS */}
+                <div className="relative flex items-center justify-center w-full max-w-full -mt-4 z-10 px-2 space-x-3 sm:space-x-6">
+          
+          {/* LEFT ARROW (Locks to the left of the center pill) */}
+          <button
+            type="button"
+            onClick={() => {
+              const newIndex = activePeriodIndex - 1;
+              setActivePeriodIndex(newIndex);
+              setSelectedTiming(`${newIndex}/${currentPeriods.length || 2}` as any);
+            }}
+            disabled={activePeriodIndex <= 1 || isReadOnly}
+            className={`flex items-center justify-center p-2 rounded-xl transition-all shrink-0 ${
+              activePeriodIndex <= 1 
+                ? 'opacity-0 pointer-events-none' 
+                : 'bg-white dark:bg-gray-900 border-[3px] border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] active:translate-y-[2px] active:translate-x-[2px] active:shadow-none hover:bg-gray-50'
+            }`}
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="m15 18-6-6 6-6"/></svg>
+          </button>
+
+          {/* CURRENT ACTIVE PAYCHECK PILL (Strictly Constrained Width) */}
+          {currentPeriods[activePeriodIndex - 1] && (() => {
+            const period = currentPeriods[activePeriodIndex - 1];
+            const formattedStart = period?.startDate ? new Date(period.startDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '';
+            const formattedEnd = period?.endDate ? new Date(period.endDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '';
+
+            return (
+              <div className="w-full max-w-[260px] sm:max-w-[320px] flex flex-col items-center justify-center text-center px-4 py-3 border-[3px] border-black rounded-2xl bg-indigo-600 text-white drop-shadow-sm overflow-hidden shrink-0">
+                <span className="block w-full truncate text-[11px] sm:text-xs md:text-sm font-black uppercase tracking-wider">
+                  {period.label || `Period ${activePeriodIndex}`}
+                </span>
+                {formattedStart && formattedEnd && (
+                  <span className="block w-full truncate text-[9px] sm:text-[10px] font-bold mt-1 text-indigo-200">
+                    {formattedStart} - {formattedEnd}
+                  </span>
+                )}
+              </div>
+            );
+          })()}
+
+          {/* RIGHT ARROW (Locks to the right of the center pill) */}
+          <button
+            type="button"
+            onClick={() => {
+              const newIndex = activePeriodIndex + 1;
+              setActivePeriodIndex(newIndex);
+              setSelectedTiming(`${newIndex}/${currentPeriods.length || 2}` as any);
+            }}
+            disabled={activePeriodIndex >= currentPeriods.length || isReadOnly}
+            className={`flex items-center justify-center p-2 rounded-xl transition-all shrink-0 ${
+              activePeriodIndex >= currentPeriods.length 
+                ? 'opacity-0 pointer-events-none' 
+                : 'bg-white dark:bg-gray-900 border-[3px] border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] active:translate-y-[2px] active:translate-x-[2px] active:shadow-none hover:bg-gray-50'
+            }`}
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="m9 18 6-6-6-6"/></svg>
+          </button>
+
+        </div>
+
+
+        {/* ========================================= */}
+        {/* 3 & 4. SWIPEABLE SUMMARY CAROUSEL         */}
+        {/* ========================================= */}
+        <div className="relative w-full z-10 mt-6 md:mt-8">
+          
+          {/* Scrollable Snap Container (Using gap instead of space-x to fix desktop grid) */}
+          <div className="flex lg:grid lg:grid-cols-2 overflow-x-auto lg:overflow-visible snap-x snap-mandatory scrollbar-hide gap-4 lg:gap-8 pb-6 lg:pb-0 w-[calc(100%+2rem)] -mx-4 px-4 sm:w-full sm:mx-0 sm:px-0">
+            
+            {/* CARD 1: BUDGET SUMMARY */}
+            <div className="snap-center shrink-0 w-[88vw] lg:w-full h-auto flex flex-col">
+              <div className="bg-white dark:bg-gray-900 rounded-2xl border-4 border-black shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] overflow-hidden w-full transition-colors flex-1">
+                <div className="p-4 border-b-4 border-black bg-gray-50/30 dark:bg-gray-800/30"><h3 className="text-xs font-black text-gray-900 dark:text-gray-100 uppercase tracking-[0.25em] text-center">BUDGET SUMMARY</h3></div>
+                
+                <table className="w-full text-left">
+                  <thead><tr className="text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase border-b border-gray-100 dark:border-gray-800"><th className="p-3 pl-6">Category</th><th className="p-3 pr-6 text-right">Amount</th></tr></thead>
+                  <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
+                    {categorySummary
+                      .filter((item) => item.total >= 0.01)
+                      .map((item) => (
+                        <tr 
+                        key={item.category} 
+                        onClick={() => {
+                          setExpandedBreakdownIds(new Set());
+                          setSummaryBreakdownModal(item);
+                        }}
+                        className="cursor-pointer hover:bg-indigo-50/50 dark:hover:bg-indigo-900/20 transition-colors group"
+                      >
+
+                        <td className="p-3 pl-6 font-bold text-gray-700 dark:text-gray-300 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 text-sm transition-colors">
+                          {item.category}
+                        </td>
+                        <td className="p-3 pr-6 text-right font-black text-gray-900 dark:text-gray-100 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 text-sm transition-colors">
+                          {formatCurrency(item.total)}
+                        </td>
+                      </tr>
+                    ))}
+                    
+                    {periodStashTotal > 0 && (
+                      <tr 
+                        onClick={() => {
+                          const stashBreakdown = wallets.filter(w => !excludedWalletIds.has(w.id)).map(w => {
+                            const periodCount = currentPeriods.length || 2;
+                            const targetAmount = Math.max(w.amount, getStashAggregates(w).funded);
+                            const amt = (!w.timing || w.timing === 'split') ? (targetAmount / periodCount) : (parseInt(w.timing, 10) === activePeriodIndex ? targetAmount : 0);
+                            return amt > 0 ? { id: w.id, name: w.name, amount: amt, type: 'Stash Target' } : null;
+                          }).filter(Boolean) as any[];
+
+                          setSummaryBreakdownModal({ category: 'Stash', total: periodStashTotal, breakdown: stashBreakdown });
+                          setExpandedBreakdownIds(new Set());
+                        }}
+                        className="cursor-pointer hover:bg-indigo-50/50 dark:hover:bg-indigo-900/20 transition-colors group"
+                      >
+                        <td className="p-3 pl-6 font-bold text-gray-700 dark:text-gray-300 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 text-sm transition-colors">
+                          Stash
+                        </td>
+                        <td className="p-3 pr-6 text-right font-black text-gray-900 dark:text-gray-100 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 text-sm transition-colors">
+                          {formatCurrency(periodStashTotal)}
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                  <tfoot>
+                    <tr className="bg-indigo-50/30 dark:bg-indigo-900/20 border-t-2 border-black"><td className="p-3 pl-6 text-xs font-black text-indigo-600 dark:text-indigo-400 uppercase">Grand Total</td><td className="p-3 pr-6 text-right text-lg font-black text-indigo-600 dark:text-indigo-400">{formatCurrency(grandTotal)}</td></tr>
+                  </tfoot>
+                </table>
+
+              </div>
+            </div>
+
+            {/* CARD 2: MONTH SUMMARY */}
+            <div className="snap-center shrink-0 w-[88vw] lg:w-full h-auto flex flex-col">
+              <div className="bg-white dark:bg-gray-900 rounded-2xl border-4 border-black shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] overflow-hidden w-full transition-colors flex-1">
+                <div className="p-4 border-b-4 border-black bg-gray-50/30 dark:bg-gray-800/30"><h3 className="text-xs font-black text-gray-900 dark:text-gray-100 uppercase tracking-[0.25em] text-center">MONTH SUMMARY</h3></div>
+                
+                <table className="w-full text-left">
+                  <thead><tr className="text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase border-b border-gray-100 dark:border-gray-800"><th className="p-3 pl-6">Item</th><th className="p-3 pr-6 text-right">Amount</th></tr></thead>
+                  <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
+                    <tr>
+                      <td className="p-3 pl-6 font-bold text-gray-700 dark:text-gray-300 text-sm">Projected Income</td>
+                      <td className="p-3 pr-6 text-right">
+                        <div className="flex items-center justify-end">
+                          {!isProjectedFocused ? (
+                            <span 
+                              className={`text-sm font-black text-gray-900 dark:text-gray-100 ${!isReadOnly ? 'cursor-pointer hover:text-indigo-600 dark:hover:text-indigo-400' : ''} transition-colors`}
+                              onClick={() => !isReadOnly && setIsProjectedFocused(true)}
+                            >
+                              {formatCurrency(parseFloat(projectedSalaryByPeriod[activePeriodIndex] || '0'))}
+                            </span>
+                          ) : (
+                            <div className="flex items-center justify-end space-x-1">
+                              <span className="text-gray-400 dark:text-gray-500 font-bold text-sm">₱</span>
+                              <input 
+                                autoFocus
+                                type="number" 
+                                min="0"
+                                step="0.01"
+                                value={projectedSalaryByPeriod[activePeriodIndex] || ''} 
+                                onChange={(e) => setProjectedSalaryByPeriod(prev => ({ ...prev, [activePeriodIndex]: e.target.value }))} 
+                                onFocus={() => { isFocusedRef.current = true; }}
+                                onBlur={() => { isFocusedRef.current = false; setIsProjectedFocused(false); }}
+                                disabled={isReadOnly}
+                                className="bg-transparent border-none text-sm font-black text-gray-900 dark:text-gray-100 w-28 text-right outline-none focus:bg-indigo-50 dark:focus:bg-indigo-900/30 rounded px-1 disabled:opacity-60 disabled:cursor-not-allowed"
+                              />
+                            </div>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                    <tr>
+                      <td className="p-3 pl-6 font-bold text-gray-700 dark:text-gray-300 text-sm">Actual Income</td>
+                      <td className="p-3 pr-6 text-right">
+                        <div className="flex items-center justify-end space-x-2">
+                          {!isActualFocused ? (
+                            <span 
+                              className={`text-sm font-black ${
+                                allIncomeTxs.length > 0 || actualSalaryByPeriod[activePeriodIndex] 
+                                  ? 'text-gray-900 dark:text-gray-100' 
+                                  : 'text-gray-400 dark:text-gray-500 italic'
+                              } ${!isReadOnly && allIncomeTxs.length === 0 ? 'cursor-pointer hover:text-indigo-600 dark:hover:text-indigo-400' : ''} transition-colors`}
+                              onClick={() => {
+                                if (!isReadOnly && allIncomeTxs.length === 0) setIsActualFocused(true);
+                              }}
+                              title={allIncomeTxs.length > 0 ? "Locked to recorded transactions" : ""}
+                            >
+                              {allIncomeTxs.length > 0 
+                                ? formatCurrency(allIncomeTxs.reduce((sum, tx) => sum + Math.abs(parseFloat(tx.amount as any) || 0), 0))
+                                : (actualSalaryByPeriod[activePeriodIndex] ? formatCurrency(parseFloat(actualSalaryByPeriod[activePeriodIndex])) : 'Click to add...')
+                              }
+                            </span>
+                          ) : (
+                            <div className="flex items-center justify-end space-x-1">
+                              <span className="text-gray-400 dark:text-gray-500 font-bold text-sm">₱</span>
+                              <input 
+                                autoFocus
+                                type="number" 
+                                min="0"
+                                step="0.01"
+                                value={actualSalaryByPeriod[activePeriodIndex] || ''} 
+                                onChange={(e) => setActualSalaryByPeriod(prev => ({ ...prev, [activePeriodIndex]: e.target.value }))} 
+                                onFocus={() => { isFocusedRef.current = true; }}
+                                onBlur={() => { isFocusedRef.current = false; setIsActualFocused(false); }}
+                                disabled={isReadOnly}
+                                placeholder="Enter actual"
+                                className="bg-transparent border-none text-sm font-black text-gray-900 dark:text-gray-100 w-28 text-right outline-none focus:bg-indigo-50 dark:focus:bg-indigo-900/30 rounded px-1 placeholder:text-gray-300 dark:placeholder:text-gray-600 disabled:opacity-60 disabled:cursor-not-allowed"
+                              />
+                            </div>
+                          )}
+                          
+                          {!isReadOnly && (
+                            allIncomeTxs.length > 0 ? (
+                              <button onClick={() => setShowIncomeRecordsModal(true)} className="p-1.5 bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 rounded-lg border border-black shadow-[1px_1px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[0.5px] hover:translate-y-[0.5px] transition-all" title="View Income Records">
+                                <List className="w-4 h-4" />
+                              </button>
+                            ) : (
+                              <button onClick={() => {
+                                  const debitAccounts = accounts.filter(a => a.type === 'Debit');
+                                  const yyyy = selectedYear;
+                                  const mm = String(MONTHS.indexOf(selectedMonth) + 1).padStart(2, '0');
+                                  const dd = activePeriodIndex === 1 ? '01' : '16';
+                                  
+                                  setSalaryFormData({
+                                    name: 'Income',
+                                    amount: actualSalaryByPeriod[activePeriodIndex] || projectedSalaryByPeriod[activePeriodIndex] || '',
+                                    date: `${yyyy}-${mm}-${dd}`, 
+                                    accountId: debitAccounts[0]?.id || ''
+                                  });
+                                  setShowSalaryModal(true);
+                                }}
+                                className="p-1.5 bg-green-50 dark:bg-green-900/20 text-green-600 dark:text-green-400 rounded-lg border border-black shadow-[1px_1px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[0.5px] hover:translate-y-[0.5px] transition-all" title="Record as Cash In transaction">
+                                <WalletIcon className="w-4 h-4" />
+                              </button>
+                            )
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                    {totalOtherIncome > 0 && (
+                      <>
+                        <tr>
+                          <td className="p-3 pl-6 font-bold text-gray-700 dark:text-gray-300 text-sm">Other Income</td>
+                          <td className="p-3 pr-6 text-right">
+                            <span className="text-sm font-black text-gray-900 dark:text-gray-100">{formatCurrency(totalOtherIncome)}</span>
+                          </td>
+                        </tr>
+                        <tr className="bg-green-50/30 dark:bg-green-900/10">
+                          <td className="p-3 pl-6 font-bold text-green-700 dark:text-green-400 text-sm">Net Income</td>
+                          <td className="p-3 pr-6 text-right font-black text-green-700 dark:text-green-400 text-sm">{formatCurrency(netIncome)}</td>
+                        </tr>
+                      </>
+                    )}
+                    <tr>
+                      <td className="p-3 pl-6 font-bold text-gray-700 dark:text-gray-300 text-sm">Total Spend</td>
+                      <td className="p-3 pr-6 text-right font-black text-gray-900 dark:text-gray-100 text-sm">{formatCurrency(totalSpend)}</td>
+                    </tr>
+                  </tbody>
+                  <tfoot>
+                    <tr className={`${remaining >= 0 ? 'bg-green-50/30 dark:bg-green-900/10' : 'bg-red-50/30 dark:bg-red-900/10'} border-t-2 border-black`}>
+                      <td className="p-3 pl-6 text-xs font-black uppercase">Remaining</td>
+                      <td className={`p-3 pr-6 text-right text-lg font-black ${remaining >= 0 ? 'text-green-600' : 'text-red-600'}`}>{formatCurrency(remaining)}</td>
+                    </tr>
+                  </tfoot>
+                </table>
+
+              </div>
+            </div>
+
+          </div>
+          
+          {/* Subtle Mobile Swipe Hint */}
+          <div className="flex justify-center w-full -mt-2 mb-6 lg:hidden opacity-40">
+            <span className="text-[9px] font-black uppercase tracking-[0.2em] flex items-center gap-2">
+              <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="m15 18-6-6 6-6"/></svg>
+              Swipe to compare
+              <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="m9 18 6-6-6-6"/></svg>
+            </span>
+          </div>
+
+        </div>
+
+    
+              {/* ========================================================= */}
           {/* ⚡ INCOME SLICER WORKSPACE PANEL                          */}
           {/* ========================================================= */}
           {(availableIncomes || []).length > 0 && (
-            <div className="mt-8 bg-[#F4F3EF] dark:bg-gray-900 border-4 border-black p-6 rounded-2xl shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] transition-colors">
+            <div className="mt-0 bg-[#F4F3EF] dark:bg-gray-900 border-[3px] md:border-4 border-black p-4 md:p-6 rounded-2xl shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] transition-colors">
               
-              {/* Header Section - 🟢 NOW CLICKABLE */}
+              {/* Header Section - 🟢 COMPACT & CLICKABLE */}
               <div 
-                className="flex flex-col md:flex-row md:items-center justify-between border-b-4 border-black pb-4 mb-4 cursor-pointer hover:bg-black/5 dark:hover:bg-white/5 rounded-xl transition-colors -mx-2 px-2"
+                className="flex items-center justify-between border-b-2 md:border-b-4 border-black pb-3 mb-3 md:pb-4 md:mb-4 cursor-pointer hover:bg-black/5 dark:hover:bg-white/5 rounded-xl transition-colors -mx-2 px-2"
                 onClick={() => setIsSlicerExpanded(!isSlicerExpanded)}
               >
-                <div>
-                  <span className="bg-amber-300 text-black border-2 border-black px-2.5 py-1 rounded-md text-[10px] font-black uppercase tracking-wider shadow-[1px_1px_0px_0px_rgba(0,0,0,1)]">
-                    Slicer Active
-                  </span>
-                  <div className="flex items-center gap-3 mt-2">
-                    <h2 className="text-xl font-black text-gray-900 dark:text-gray-100 uppercase tracking-tight">
+                <div className="flex-1 min-w-0 pr-2 md:pr-4">
+                  
+                  {/* Title & Badge Row */}
+                  <div className="flex items-center gap-2 md:gap-3">
+                    <span className="bg-amber-300 text-black border-2 border-black px-1.5 py-0.5 md:px-2.5 md:py-1 rounded-md text-[8px] md:text-[10px] font-black uppercase tracking-wider shadow-[1px_1px_0px_0px_rgba(0,0,0,1)] shrink-0">
+                      Slicer
+                    </span>
+                    <h2 className="text-sm md:text-xl font-black text-gray-900 dark:text-gray-100 uppercase tracking-tight truncate">
                       Distribute Income
                     </h2>
-                    <ChevronDown className={`w-6 h-6 text-gray-900 dark:text-gray-100 transition-transform duration-300 ${isSlicerExpanded ? 'rotate-180' : ''}`} />
+                    <ChevronDown className={`w-4 h-4 md:w-6 md:h-6 text-gray-900 dark:text-gray-100 transition-transform duration-300 shrink-0 ${isSlicerExpanded ? 'rotate-180' : ''}`} />
                   </div>
-                  <p className="text-xs text-gray-500 dark:text-gray-400 font-medium mt-0.5">
+                  
+                  {/* Desktop Description (Hidden on Mobile) */}
+                  <p className="hidden md:block text-xs text-gray-500 dark:text-gray-400 font-medium mt-1">
                     Select which recorded income transactions to slice and allocate to your budgets.
                   </p>
+                  
+                  {/* 📱 MOBILE INLINE STATS (Replaces the chunky boxed cards!) */}
+                  <div className="flex md:hidden items-center gap-3 mt-1.5 text-[10px] font-black uppercase tracking-wider">
+                    <span className="text-gray-500 dark:text-gray-400">
+                      Pool: <span className="text-emerald-600">₱{totalTrayPool.toLocaleString()}</span>
+                    </span>
+                    <span className="text-gray-500 dark:text-gray-400">
+                      Left: <span className={remainingToAllocate === 0 ? 'text-blue-500' : 'text-red-500'}>₱{remainingToAllocate.toLocaleString()}</span>
+                    </span>
+                  </div>
                 </div>
 
-                {/* Quick Stats */}
-                <div className="flex items-center space-x-4 mt-4 md:mt-0">
-                  <div className="bg-white dark:bg-gray-800 border-2 border-black p-3 rounded-xl shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]">
-                    <p className="text-[10px] uppercase font-black tracking-wider text-gray-400">Selected Pool</p>
-                    <p className="text-lg font-black text-emerald-600">₱{totalTrayPool.toLocaleString()}</p>
+                {/* 💻 DESKTOP QUICK STATS (Hidden on Mobile) */}
+                <div className="hidden md:flex items-center space-x-3 shrink-0">
+                  <div className="bg-white dark:bg-gray-800 border-2 border-black px-3 py-1.5 rounded-xl shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]">
+                    <p className="text-[9px] uppercase font-black tracking-wider text-gray-400">Selected Pool</p>
+                    <p className="text-sm font-black text-emerald-600">₱{totalTrayPool.toLocaleString()}</p>
                   </div>
-                  <div className="bg-white dark:bg-gray-800 border-2 border-black p-3 rounded-xl shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]">
-                    <p className="text-[10px] uppercase font-black tracking-wider text-gray-400">Remaining</p>
-                    <p className={`text-lg font-black ${remainingToAllocate === 0 ? 'text-blue-500' : 'text-red-500'}`}>
+                  <div className="bg-white dark:bg-gray-800 border-2 border-black px-3 py-1.5 rounded-xl shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]">
+                    <p className="text-[9px] uppercase font-black tracking-wider text-gray-400">Remaining</p>
+                    <p className={`text-sm font-black ${remainingToAllocate === 0 ? 'text-blue-500' : 'text-red-500'}`}>
                       ₱{remainingToAllocate.toLocaleString()}
                     </p>
                   </div>
@@ -4631,6 +4735,7 @@ const totalSpend = grandTotal;
               </div>
 
               {/* 🟢 THE EXPANDABLE CONTENT */}
+
               {isSlicerExpanded && (
                 <div className="animate-in slide-in-from-top-4 fade-in duration-300 pt-2">
                   {/* STEP 1: Select Income Transactions to Load Into Tray */}

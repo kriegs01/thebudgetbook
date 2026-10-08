@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { ChevronDown, ChevronRight, Hash, Globe, Bell, Lock, Trash2, AlertTriangle, RotateCcw, Plus, X, Database, Copy, Shield, User, Users, Mail, Key, MoreVertical, Check, SlidersHorizontal, Info, Banknote } from 'lucide-react';
+import { ChevronDown, ChevronRight, Hash, Globe, Bell, Lock, Trash2, AlertTriangle, RotateCcw, Plus, X, Database, Copy, Shield, User, Users, Mail, Key, MoreVertical, Check, SlidersHorizontal, Info, Banknote, HandCoins, BanknoteX, MonitorCog } from 'lucide-react';
 import { Account, BudgetCategory, Biller, Installment, SupabaseUserProfile } from '../types';
 import { useTestEnvironment } from '../src/contexts/TestEnvironmentContext';
 import { getAllPeople, createPerson, deletePerson } from '../src/services/peopleService';
@@ -911,7 +911,7 @@ const Settings: React.FC<SettingsProps> = ({ currency, setCurrency, categories, 
     {
       id: 'general',
       label: 'General',
-      icon: <SlidersHorizontal className="w-5 h-5" />,
+      icon: <MonitorCog className="w-5 h-5" />,
       content: (
         <div className="space-y-4 pt-2">
           <div className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-800/50 rounded-2xl border border-gray-200 dark:border-gray-700 transition-colors">
@@ -1114,7 +1114,7 @@ const Settings: React.FC<SettingsProps> = ({ currency, setCurrency, categories, 
     { 
       id: 'accounts',
       label: 'Accounts',
-      icon: <SlidersHorizontal className="w-5 h-5" />,
+      icon: <BanknoteX className="w-5 h-5" />,
       content: (
         <div className="space-y-4 pt-2">
           <div className="rounded-2xl border border-gray-200 bg-white p-4 transition-colors dark:border-gray-800 dark:bg-gray-900">
@@ -1234,8 +1234,8 @@ const Settings: React.FC<SettingsProps> = ({ currency, setCurrency, categories, 
     //Pay Frequency Settings
     {
       id: 'pay-schedule',
-      label: 'Pay Schedule & Frequencies',
-      icon: <Banknote className="w-5 h-5" />, // or any icon you prefer
+      label: 'Pay Schedule',
+      icon: <HandCoins className="w-5 h-5" />, // or any icon you prefer
       content: (
         <div className="space-y-4 pt-2">
           <PayScheduleSettings onRuleSaved={() => {

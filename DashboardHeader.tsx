@@ -17,8 +17,8 @@ export const DashboardHeader: React.FC<DashboardHeaderProps> = ({ name }) => {
 
       {/* Main Page Title */}
       <div className="relative inline-block">
-        <h1 className="text-[clamp(2.5rem,11vw,4rem)] font-[950] uppercase tracking-tighter leading-none relative z-10 text-black dark:text-white transition-colors duration-300">
-          DASHBOARD
+        <h1 className="text-[clamp(2.5rem,11vw,4rem)] font-[950]  tracking-tighter leading-none relative z-10 text-black dark:text-white transition-colors duration-300">
+          Dashboard
         </h1>
         {/* Retro Highlighter Accent */}
         <div className={`absolute bottom-1 left-0 w-[110%] h-5 ${getAccentClasses('bg')} opacity-40 -z-0 -rotate-1 -translate-x-2 transition-colors duration-300`} />

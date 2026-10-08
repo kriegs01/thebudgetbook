@@ -1279,7 +1279,7 @@ const [paymentTab, setPaymentTab] = useState<'my_account' | 'budee'>('my_account
         <div className="fixed inset-0 z-[9999] flex items-center justify-center pt-14 pb-28 px-4 sm:p-4 bg-black/60 backdrop-blur-md">
           <div className="bg-white dark:bg-gray-900 rounded-[2rem] sm:rounded-[2.5rem] w-full max-w-lg p-5 sm:p-10 shadow-2xl animate-in zoom-in-95 max-h-[calc(100dvh-12rem)] sm:max-h-[90vh] overflow-y-auto transition-colors border-[3px] border-black shadow-[8px_8px_0px_rgba(0,0,0,1)]">
 
-            <h2 className={`text-2xl font-titan normal-case tracking-tighter leading-none ${getAccentClasses('text')} mb-5 sm:mb-6`}>Track New Installment</h2>
+            <h2 className={`text-2xl font-black normal-case tracking-tighter leading-none ${getAccentClasses('text')} mb-5 sm:mb-6`}>New Installment</h2>
             <form onSubmit={handleSubmit} className="space-y-5 sm:space-y-6">
               <div>
                 <label className="block text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-2 transition-colors">Installment Name</label>
@@ -1313,7 +1313,7 @@ const [paymentTab, setPaymentTab] = useState<'my_account' | 'budee'>('my_account
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
+              <div >
                 <div>
                   <label className="block text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-2 transition-colors">Start Date</label>
                   <input type="month" placeholder="YYYY-MM" value={formData.startDate} onChange={(e) => setFormData({...formData, startDate: e.target.value})} className="w-full bg-gray-50 dark:bg-gray-900 dark:text-gray-100 border-2 border-black rounded-2xl p-4 outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 font-bold transition-colors shadow-[2px_2px_0px_rgba(0,0,0,0.12)]" />

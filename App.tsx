@@ -247,6 +247,10 @@ const MainApp: React.FC = () => {
   const { getAccentClasses } = useTheme();
   const [showMobileMore, setShowMobileMore] = useState(false);
 
+  const [showLeftTray, setShowLeftTray] = useState(false);
+  const [showRightTray, setShowRightTray] = useState(false);
+
+
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [budgetItems, setBudgetItems] = useState(INITIAL_BUDGET);
   const [billers, setBillers] = useState<Biller[]>([]);
@@ -274,6 +278,7 @@ const MainApp: React.FC = () => {
       return isNotMigrated && isNotArchived && needsDueDate;
     });
   }, [installments]); // Removed showMigrationModal as it is not needed here[span_2](start_span)[span_2](end_span)
+  
   
 
   // Scroll listener for Dashboard top bar visibility
@@ -1373,8 +1378,11 @@ useEffect(() => {
     }
   };
 
-      if (showSplash) {
+  const totalAlerts = unreadMessagesCount + (pendingRequests?.length || 0) + (pendingTransactions?.length || 0);
+
+  if (showSplash) {
     return (
+
       <div className="fixed inset-0 z-[9999] flex flex-col items-center justify-center bg-[#FCF6E8] dark:bg-gray-950 transition-colors duration-500">
         <style>
           {`@import url('https://fonts.googleapis.com/css2?family=Titan+One&display=swap');
@@ -1401,16 +1409,12 @@ useEffect(() => {
           }`}
         </style>
         <div className="text-center animate-in fade-in zoom-in duration-700">
-          <div className="flex flex-row flex-nowrap justify-center items-center mb-6 active:scale-95 transition-transform">
-            <img 
-              src="/iconapp.png" 
-              alt="Budee Mascot" 
-              className="w-24 h-24 md:w-32 md:h-32 drop-shadow-2xl z-10 -mr-10 md:-mr-12 rotate-[15deg] animate-squeeze-mascot" 
-            />
-            <div className="mt-2 md:mt-4">
-              <Logo className="text-6xl md:text-8xl text-gray-900 dark:text-white transition-colors duration-500" />
-            </div>
-          </div>
+          <div className="flex flex-row flex-nowrap justify-center items-center mb-6 active:scale-95 transition-transform">
+            <div className="mt-2 md:mt-4">
+              <Logo className="text-6xl md:text-8xl text-gray-900 dark:text-white transition-colors duration-500" />
+            </div>
+          </div>
+
           <p
             style={{ fontFamily: "'Inter', sans-serif", fontWeight: 900 }}
             className="text-sm md:text-base font-black uppercase text-gray-600 dark:text-gray-400 tracking-widest animate-flicker transition-colors duration-500"
@@ -1867,166 +1871,41 @@ useEffect(() => {
 
         {/* Top Navigation Bar - Reactive for Dashboard, Static for others */}
         
-                {/* 🟢 MOBILE & PORTRAIT TOP HEADER */}
-        <header className="fixed top-4 left-4 right-4 z-[60] flex items-center justify-between lg:hidden portrait:!flex pointer-events-none">
+                                                                {/* 🟢 MOBILE & PORTRAIT TOP HEADER */}
+        <header className="fixed top-4 left-4 right-4 z-[60] flex items-center justify-end lg:hidden portrait:!flex pointer-events-none">
           
-          {/* LEFT: Logo Pill */}
-          <div className="pointer-events-auto flex items-center h-14 px-4 bg-[#FCF6E8] dark:bg-gray-900 border-[3px] border-black rounded-[1.2rem] shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] active:translate-x-[2px] active:translate-y-[2px] active:shadow-none transition-all">
-            <img src="/iconapp.png" alt="Budee Mascot" className="w-8 h-8 rotate-[15deg]" />
-            <Logo className="text-2xl ml-1" />
-          </div>
-
-          {/* RIGHT: Action Pill */}
-          <div className="pointer-events-auto flex items-center h-14 px-2 gap-1 bg-[#FCF6E8] dark:bg-gray-900 border-[3px] border-black rounded-[1.2rem] shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]">
-            
-            {/* Messages */}
-            <button onClick={() => setIsMessagesOpen(!isMessagesOpen)} className="relative p-2 rounded-xl hover:bg-amber-500/10 transition-colors">
-              <MessageCircle className="w-5 h-5 text-gray-900 dark:text-gray-100" />
-              {unreadMessagesCount > 0 && !isMessagesOpen && (
-                <span className="absolute top-0 right-0 flex items-center justify-center min-w-[16px] h-[16px] bg-yellow-300 text-black text-[9px] font-black border-2 border-black shadow-[1px_1px_0px_0px_rgba(0,0,0,1)]">
-                  {unreadMessagesCount > 99 ? '99+' : unreadMessagesCount}
-                </span>
-              )}
-            </button>
-
-            {/* Notifications */}
-            <div className="relative">
-              <button onClick={() => setIsNotificationsOpen(!isNotificationsOpen)} className="relative p-2 rounded-xl hover:bg-amber-500/10 transition-colors">
-                <Bell className="w-5 h-5 text-gray-900 dark:text-gray-100" />
-                {((pendingRequests?.length || 0) + (pendingTransactions?.length || 0)) > 0 && (
-                  <span className="absolute top-1 right-1 w-2.5 h-2.5 bg-yellow-300 border-2 border-black rounded-full"></span>
+          {!(location.pathname === '/budget' && (location.search || '').includes('view=setup')) ? (
+            /* 1. SHOW PROFILE BUBBLE GLOBALLY */
+            <div className="pointer-events-auto flex items-center animate-in zoom-in fade-in duration-300">
+              <button 
+                onClick={() => setShowRightTray(true)}
+                className={`relative flex items-center justify-center border-[3px] border-black ${getAccentClasses('bg')} text-white font-black text-sm w-12 h-12 rounded-full shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] active:scale-95 active:shadow-none active:translate-y-[2px] transition-all`}
+              >
+                {userProfile ? `${userProfile.first_name.charAt(0)}${userProfile.last_name.charAt(0)}`.toUpperCase() : user?.email?.charAt(0).toUpperCase() || 'U'}
+                {totalAlerts > 0 && (
+                   <span className="absolute -top-1 -right-1 flex items-center justify-center min-w-[18px] h-[18px] px-1 bg-yellow-300 text-black text-[9px] font-black border-2 border-black rounded-full shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] animate-bounce z-10">
+                     {totalAlerts > 99 ? '99+' : totalAlerts}
+                   </span>
                 )}
               </button>
-              
-              {/* Notifications Modal */}
-              {isNotificationsOpen && (
-                <>
-                  <div className="fixed inset-0 z-[40]" onClick={() => setIsNotificationsOpen(false)}></div>
-                  <div className="absolute right-0 top-full mt-4 w-[calc(100vw-3rem)] sm:w-80 bg-white dark:bg-gray-900 rounded-[1.5rem] border-[4px] border-black shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] py-2 z-[50] animate-in slide-in-from-top-2">
-                    <div className="px-4 py-3 border-b-[3px] border-black flex justify-between items-center">
-                      <h3 className="text-sm font-black text-gray-900 dark:text-gray-100 uppercase tracking-widest">Notifications</h3>
-                      {((pendingRequests?.length || 0) + (pendingTransactions?.length || 0)) > 0 && (
-                        <span className={`${getAccentClasses('lightBg')} text-[10px] font-bold px-2 py-0.5 rounded-full border-2 border-black`}>
-                          {(pendingRequests?.length || 0) + (pendingTransactions?.length || 0)} New
-                        </span>
-                      )}
-                    </div>
-                    <div className="max-h-[60vh] overflow-y-auto">
-                      {((pendingRequests?.length || 0) + (pendingTransactions?.length || 0)) > 0 ? (
-                        <>
-                          {pendingRequests.map(req => (
-                          <div key={req.id} className="p-4 border-b-2 border-gray-100 dark:border-gray-800 last:border-0 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
-                            <div className="flex items-center gap-3 mb-3">
-                              <div className="w-10 h-10 rounded-full bg-indigo-100 dark:bg-indigo-900/50 text-indigo-600 dark:text-indigo-400 font-black flex items-center justify-center uppercase shrink-0 border-2 border-black">
-                                {(req.sender_profile?.first_name?.charAt(0) || '') + (req.sender_profile?.last_name?.charAt(0) || '') || '?'}
-                              </div>
-                              <div>
-                                <p className="text-sm font-bold text-gray-900 dark:text-gray-100">{req.sender_profile?.first_name} {req.sender_profile?.last_name}</p>
-                                <p className="text-xs text-gray-500 font-medium">sent a Connect Request</p>
-                              </div>
-                            </div>
-                            <div className="flex gap-2">
-                              <button onClick={() => handleAcceptRequest(req.id)} className={`flex-1 text-white py-2 rounded-xl text-xs font-black uppercase tracking-widest border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:translate-x-[1px] hover:translate-y-[1px] hover:shadow-none transition-all ${getAccentClasses('bg')}`}>Accept</button>
-                              <button onClick={() => handleDeclineRequest(req.id)} className="flex-1 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 py-2 rounded-xl text-xs font-black uppercase tracking-widest border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:translate-x-[1px] hover:translate-y-[1px] hover:shadow-none transition-all">Decline</button>
-                            </div>
-                          </div>
-                          ))}
-                          {pendingTransactions.map(tx => {
-                            const senderName = tx.sender_profile ? `${tx.sender_profile.first_name} ${tx.sender_profile.last_name}` : 'A Budee';
-                            const formatCurrency = (val: number) => new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP', minimumFractionDigits: 2 }).format(val);
-                            const needsAccount = !userProfile?.settings?.defaultReceiveAccountId;
-                            return (
-                              <div key={tx.id} className="p-4 border-b-2 border-gray-100 dark:border-gray-800 last:border-0 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
-                                <div className="flex items-center gap-3 mb-3">
-                                  <div className="w-10 h-10 rounded-full bg-green-100 dark:bg-green-900/50 text-green-600 dark:text-green-400 font-black flex items-center justify-center uppercase shrink-0 border-2 border-black">
-                                    {tx.sender_profile?.first_name?.charAt(0) || 'B'}{tx.sender_profile?.last_name?.charAt(0) || ''}
-                                  </div>
-                                  <div>
-                                    <p className="text-sm font-bold text-gray-900 dark:text-gray-100">{senderName}</p>
-                                    <p className="text-xs text-gray-500 font-medium">sent you {formatCurrency(tx.amount)}</p>
-                                  </div>
-                                </div>
-                                {needsAccount && (
-                                  <div className="mb-3">
-                                    <select 
-                                      className="w-full text-xs p-2 rounded-xl bg-gray-50 dark:bg-gray-800 border-2 border-black outline-none font-bold text-gray-700 dark:text-gray-300"
-                                      value={txAccountSelections[tx.id] || ''}
-                                      onChange={e => setTxAccountSelections(prev => ({...prev, [tx.id]: e.target.value}))}
-                                    >
-                                      <option value="">Select deposit account...</option>
-                                      {accounts.filter(a => a.type === 'Debit').map(a => (
-                                        <option key={a.id} value={a.id}>{a.bank}</option>
-                                      ))}
-                                    </select>
-                                  </div>
-                                )}
-                                <div className="flex gap-2">
-                                  <button onClick={() => handleResolveTransaction(tx.id, 'accept')} disabled={resolvingIds.has(tx.id)} className="flex-1 bg-green-400 text-black py-2 rounded-xl text-xs font-black uppercase tracking-widest border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:translate-x-[1px] hover:translate-y-[1px] hover:shadow-none transition-all disabled:opacity-50">
-                                    {resolvingIds.has(tx.id) ? '...' : 'Accept'}
-                                  </button>
-                                  <button onClick={() => handleResolveTransaction(tx.id, 'decline')} disabled={resolvingIds.has(tx.id)} className="flex-1 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 py-2 rounded-xl text-xs font-black uppercase tracking-widest border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:translate-x-[1px] hover:translate-y-[1px] hover:shadow-none transition-all disabled:opacity-50">
-                                    {resolvingIds.has(tx.id) ? '...' : 'Decline'}
-                                  </button>
-                                </div>
-                              </div>
-                            );
-                          })}
-                        </>
-                      ) : (
-                        <div className="p-8 flex flex-col items-center justify-center text-center">
-                          <div className="w-12 h-12 bg-white dark:bg-gray-800 border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] rounded-full flex items-center justify-center mb-3">
-                            <Bell className="w-6 h-6 text-gray-300 dark:text-gray-600" />
-                          </div>
-                          <p className="text-sm font-black text-gray-900 dark:text-gray-100 uppercase tracking-widest mb-1">All caught up!</p>
-                          <p className="text-xs font-medium text-gray-500">No new notifications.</p>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </>
-              )}
             </div>
-
-            {/* Profile */}
-            <div className="relative">
-              <button onClick={() => setIsUserMenuOpen(!isUserMenuOpen)} className="p-1 ml-1 hover:scale-105 active:scale-95 transition-transform">
-                <div className={`w-8 h-8 rounded-lg border-2 border-black ${getAccentClasses('bg')} flex items-center justify-center text-white font-black text-xs shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]`}>
-                  {userProfile ? `${userProfile.first_name.charAt(0)}${userProfile.last_name.charAt(0)}`.toUpperCase() : user?.email?.charAt(0).toUpperCase() || 'U'}
-                </div>
-              </button>
-              
-              {/* Profile Modal */}
-              {isUserMenuOpen && (
-                <>
-                  <div className="fixed inset-0 z-[40]" onClick={() => setIsUserMenuOpen(false)}></div>
-                  <div className="absolute right-0 top-full mt-4 w-56 bg-white dark:bg-gray-900 rounded-[1.5rem] border-[4px] border-black shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] py-2 z-[50] animate-in slide-in-from-top-2">
-                    <div className="px-4 py-3 border-b-[3px] border-black mb-2">
-                      <p className="text-sm font-black text-gray-900 dark:text-gray-100 uppercase tracking-tight truncate">
-                        {userProfile ? `${userProfile.first_name} ${userProfile.last_name}` : 'User'}
-                      </p>
-                      <p className="text-[10px] font-bold text-gray-500 dark:text-gray-400 truncate">{user?.email}</p>
-                    </div>
-                    {isPinEnabled() && (
-                      <button onClick={() => { setIsUserMenuOpen(false); triggerStandbyLock(); }} className="w-full flex items-center space-x-3 py-2.5 px-4 text-sm font-black text-gray-700 dark:text-gray-300 hover:bg-amber-500/10 dark:hover:bg-amber-500/20 transition-colors uppercase tracking-widest">
-                        <Lock className="w-4 h-4" /><span>Lock App</span>
-                      </button>
-                    )}
-                    <button onClick={async () => { try { setIsUserMenuOpen(false); await signOut(); } catch (error) { console.error('Logout error:', error); } }} className="w-full flex items-center space-x-3 py-2.5 px-4 text-sm font-black text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors uppercase tracking-widest">
-                      <LogOut className="w-4 h-4" /><span>Logout</span>
-                    </button>
-                  </div>
-                </>
-              )}
-            </div>
-
-          </div>
+          ) : (
+            /* 2. SHOW EMPTY SLOT DURING BUDGET SETUP */
+            <div id="budget-sync-slot" className="pointer-events-auto flex items-center justify-end h-12 w-12"></div>
+          )}
         </header>
 
-                  <div 
+
+
+
+
+
+                          <div 
           ref={scrollContainerRef}
-          className="w-full flex-1 overflow-auto pt-14 lg:pt-0 portrait:!pt-14 px-4 pb-32 lg:pb-6 portrait:!pb-32 md:px-8" 
+          className="w-full flex-1 overflow-auto pt-2 lg:pt-0 portrait:!pt-2 px-4 pb-32 lg:pb-6 portrait:!pb-32 md:px-8" 
           style={{ WebkitOverflowScrolling: 'touch' }}
         >
+
 
 
             <Routes>
@@ -2275,22 +2154,126 @@ useEffect(() => {
   {/* 🟢 BOTTOM BLUR BLANKET */}
 <div className="fixed bottom-0 left-0 w-full h-20 pointer-events-none z-[90] bg-gradient-to-t from-[#FCF6E8] dark:from-gray-950 to-transparent" />
 
+          {/* 🟢 NEW LEFT TRAY (Slide-out Drawer) */}
+          {showLeftTray && (
+            <div 
+              className="fixed inset-0 bg-black/40 backdrop-blur-sm z-[110] animate-in fade-in duration-200"
+              onClick={() => setShowLeftTray(false)} 
+            />
+          )}
+
+          <div 
+            className={`fixed top-0 left-0 bottom-0 w-[80vw] max-w-[300px] z-[120] bg-[#FCF6E8] dark:bg-gray-950 border-r-[4px] border-black transition-transform duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] flex flex-col ${
+              showLeftTray ? 'translate-x-0 shadow-[8px_0px_20px_rgba(0,0,0,0.3)]' : '-translate-x-full'
+            }`}
+          >
+            <div className="p-6 border-b-[4px] border-black flex items-center justify-between bg-white dark:bg-gray-900">
+              <div className="flex items-center gap-3">
+                <img src="/iconapp.png" alt="Budee" className="w-8 h-8" />
+                <Logo className="text-2xl" />
+              </div>
+              <button onClick={() => setShowLeftTray(false)} className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full active:scale-95 transition-all">
+                <X className="w-5 h-5 text-gray-500" />
+              </button>
+            </div>
+
+            <div className="p-4 flex-1 overflow-y-auto space-y-3 pt-6">
+              <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 pl-2">Social & Connections</p>
+              <NavLink to="/people" onClick={() => setShowLeftTray(false)} className={({ isActive }) => `flex items-center gap-3 p-4 rounded-2xl border-[3px] border-black font-black uppercase tracking-wide text-sm transition-all active:translate-x-[2px] active:translate-y-[2px] active:shadow-none ${isActive ? getAccentClasses('bg') + ' text-white shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]' : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:bg-gray-50'}`}>
+                <Users className="w-5 h-5" />
+                My Budees
+              </NavLink>
+            </div>
+          </div>
+
+          {/* 🟢 NEW RIGHT/SOCIAL TRAY (Slide-up Drawer) */}
+          {showRightTray && (
+            <div 
+              className="fixed inset-0 bg-black/40 backdrop-blur-sm z-[110] animate-in fade-in duration-200"
+              onClick={() => setShowRightTray(false)} 
+            />
+          )}
+
+          <div 
+            className={`fixed bottom-0 left-0 right-0 z-[120] bg-[#FCF6E8] dark:bg-gray-950 border-t-[4px] border-black rounded-t-[2.5rem] transition-transform duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] flex flex-col pb-8 ${
+              showRightTray ? 'translate-y-0 shadow-[0px_-8px_20px_rgba(0,0,0,0.15)]' : 'translate-y-full'
+            }`}
+          >
+            <div className="w-full flex justify-center pt-5 pb-3 cursor-pointer" onClick={() => setShowRightTray(false)}>
+              <div className="w-14 h-1.5 bg-gray-300 dark:bg-gray-700 rounded-full" />
+            </div>
+
+            <div className="px-6 pt-2 pb-6 space-y-4">
+              {/* Profile Header */}
+              <div className="bg-white dark:bg-gray-900 border-[3px] border-black rounded-2xl p-4 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] flex items-center justify-between">
+                <div className="min-w-0 pr-4">
+                  <p className="text-lg font-black text-gray-900 dark:text-gray-100 uppercase tracking-tight truncate">
+                    {userProfile ? `${userProfile.first_name} ${userProfile.last_name}` : 'User'}
+                  </p>
+                  <p className="text-[10px] font-bold text-gray-500 dark:text-gray-400 truncate">{user?.email}</p>
+                </div>
+                <button onClick={async () => { setShowRightTray(false); await signOut(); }} className="w-12 h-12 shrink-0 bg-red-100 dark:bg-red-900/30 border-2 border-black rounded-xl flex items-center justify-center text-red-600 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] active:scale-95 active:shadow-none transition-all">
+                  <LogOut className="w-5 h-5" />
+                </button>
+              </div>
+
+              {/* Social Navigation Grid */}
+              <div className="grid grid-cols-3 gap-3">
+                <button onClick={() => { setShowRightTray(false); setIsNotificationsOpen(true); }} className="bg-white dark:bg-gray-900 border-[3px] border-black rounded-2xl p-4 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] flex flex-col items-center justify-center gap-2 active:scale-95 transition-all relative">
+                  <Bell className="w-6 h-6 text-gray-700 dark:text-gray-300" />
+                  <span className="text-[10px] font-black uppercase tracking-widest text-gray-900 dark:text-white">Alerts</span>
+                  {((pendingRequests?.length || 0) + (pendingTransactions?.length || 0)) > 0 && (
+                    <span className="absolute -top-2 -right-2 bg-yellow-300 text-black text-[10px] font-black border-2 border-black px-1.5 py-0.5 rounded-full shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]">
+                      {(pendingRequests?.length || 0) + (pendingTransactions?.length || 0)}
+                    </span>
+                  )}
+                </button>
+
+                <button onClick={() => { setShowRightTray(false); setIsMessagesOpen(true); }} className="bg-white dark:bg-gray-900 border-[3px] border-black rounded-2xl p-4 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] flex flex-col items-center justify-center gap-2 active:scale-95 transition-all relative">
+                  <MessageCircle className="w-6 h-6 text-gray-700 dark:text-gray-300" />
+                  <span className="text-[10px] font-black uppercase tracking-widest text-gray-900 dark:text-white">Chats</span>
+                  {unreadMessagesCount > 0 && (
+                    <span className="absolute -top-2 -right-2 bg-yellow-300 text-black text-[10px] font-black border-2 border-black px-1.5 py-0.5 rounded-full shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]">
+                      {unreadMessagesCount}
+                    </span>
+                  )}
+                </button>
+
+                <NavLink to="/people" onClick={() => setShowRightTray(false)} className={({ isActive }) => `border-[3px] border-black rounded-2xl p-4 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] flex flex-col items-center justify-center gap-2 active:scale-95 transition-all ${isActive ? getAccentClasses('bg') + ' text-white' : 'bg-white dark:bg-gray-900 text-gray-700 dark:text-gray-300'}`}>
+                  <Users className="w-6 h-6" />
+                  <span className="text-[10px] font-black uppercase tracking-widest">Budees</span>
+                </NavLink>
+              </div>
+            </div>
+          </div>
+
+        
 
 
                     {/* 1. Floating Nav Bar */}
           <div id="global-nav-bar" className="fixed bottom-6 md:bottom-10 left-0 w-full px-4 z-[100] flex items-center justify-center gap-3 md:gap-5 pointer-events-none">
-            {['/accounts/view', '/accounts/statement'].includes(location.pathname) && (
+                      {/* BACK BUBBLE */}
+                      {(['/accounts/view', '/accounts/statement', '/wallets/view'].includes(location.pathname) || (location.pathname === '/budget' && (location.search || '').includes('view=setup'))) && (
               <button
                 type="button"
-                onClick={() => navigate(-1)}
+                onClick={() => {
+                  if (location.pathname === '/budget') {
+                    // Tell the Budget page to auto-save and close!
+                    window.dispatchEvent(new CustomEvent('budget_mobile_back'));
+                  } else {
+                    navigate(-1);
+                  }
+                }}
                 aria-label="Go back"
                 className="pointer-events-auto flex h-14 w-14 md:h-16 md:w-16 shrink-0 items-center justify-center rounded-full border-[3px] md:border-[4px] border-black bg-white text-black shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] transition-transform active:scale-95 dark:bg-gray-900 dark:text-white"
               >
                 <ChevronLeft className="h-6 w-6 md:h-8 md:w-8" />
               </button>
             )}
+
+            {/* MAIN NAVIGATION BAR */}
             <nav className={`pointer-events-auto flex items-center bg-white dark:bg-gray-900 border-[3px] md:border-[4px] border-black rounded-full px-4 py-2.5 md:px-6 md:py-3.5 shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] md:shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] transition-all duration-300 ${
-              ['/accounts', '/transactions', '/budget', '/billers', '/installments'].includes(location.pathname) ? 'animate-mitosis' : 'gap-2 md:gap-4'
+              ['/accounts', '/transactions', '/billers', '/installments', '/wallets'].includes(location.pathname) || (location.pathname === '/budget' && !(location.search || '').includes('view=setup')) ? 'animate-mitosis' : 'gap-2 md:gap-4'
             }`}>
               
               <div className="flex items-center gap-1 md:gap-2">
@@ -2302,7 +2285,8 @@ useEffect(() => {
                 </NavLink>
               </div>
 
-              {['/accounts', '/transactions', '/budget', '/billers', '/installments'].includes(location.pathname) && (
+              {/* FLOATING ACTION BUTTON (+) */}
+              {(['/accounts', '/transactions', '/billers', '/installments', '/wallets'].includes(location.pathname) || (location.pathname === '/budget' && !(location.search || '').includes('view=setup'))) && (
                 <div id="global-mobile-fab" className="animate-in zoom-in-50 duration-300 px-1 md:px-3 -my-4 md:-my-6 relative z-10">
                   <button
                     type="button"
@@ -2312,7 +2296,8 @@ useEffect(() => {
                         '/transactions': 'open_add_transaction_modal',
                         '/budget': 'open_add_budget_modal',
                         '/billers': 'open_add_biller_modal',
-                        '/installments': 'open_add_installment_modal'
+                        '/installments': 'open_add_installment_modal',
+                        '/wallets': 'open_add_wallet_modal'
                       };
                       const eventName = eventMap[location.pathname];
                       if (eventName) {
@@ -2337,13 +2322,15 @@ useEffect(() => {
                     e.stopPropagation();
                     setShowMobileMore(true);
                   }} 
-                  className={`p-2.5 md:p-3 rounded-2xl transition-all ${['/accounts', '/billers', '/installments', '/wallet', '/people', '/settings'].includes(location.pathname) ? getAccentClasses('bg') + ' text-white -rotate-3 border-2 md:border-[3px] border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]' : 'text-gray-500 hover:bg-amber-500/10 dark:hover:bg-amber-500/20'}`}
+                  className={`p-2.5 md:p-3 rounded-2xl transition-all ${['/accounts', '/billers', '/installments', '/wallets', '/people', '/settings'].includes(location.pathname) ? getAccentClasses('bg') + ' text-white -rotate-3 border-2 md:border-[3px] border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]' : 'text-gray-500 hover:bg-amber-500/10 dark:hover:bg-amber-500/20'}`}
                 >
                   <MoreHorizontal className="w-5 h-5 md:w-6 md:h-6" />
                 </button>
               </div>
 
             </nav>
+
+
           </div>
 
 
@@ -2378,8 +2365,7 @@ useEffect(() => {
                   { path: '/accounts', label: 'Accounts', icon: <WalletCards className="w-6 h-6" /> },
                   { path: '/billers', label: 'Billers', icon: <Receipt className="w-6 h-6" /> },
                   { path: '/installments', label: 'Installments', icon: <CreditCard className="w-6 h-6" /> },
-                  { path: '/wallet', label: 'Wallet', icon: <Wallet className="w-6 h-6" /> },
-                  { path: '/people', label: 'My Budees', icon: <Users className="w-6 h-6" /> },
+                  { path: '/wallets', label: 'Wallets', icon: <Wallet className="w-6 h-6" /> },
                   { path: '/settings', label: 'Settings', icon: <SlidersHorizontal className="w-6 h-6" /> },
                 ].map((item) => (
                   <NavLink

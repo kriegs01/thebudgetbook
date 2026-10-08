@@ -30,9 +30,11 @@ export const PageHeader: React.FC<PageHeaderProps> = ({ title, subtitle, icon, a
           <div className="relative inline-block">
             <div ref={titleContainerRef} className="flex items-center gap-4">
               {icon && <div className="z-10 shrink-0">{icon}</div>}
-              <h1 className={`font-titan text-[clamp(2rem,7.5vw,3.75rem)] uppercase tracking-tighter leading-none relative z-10 [text-shadow:-1px_-1px_0_#000,1px_-1px_0_#000,-1px_1px_0_#000,1px_1px_0_#000] drop-shadow-[3px_3px_0px_#000] ${getAccentClasses('text')}`}>
-                {title}
-              </h1>
+              <h1 className="font-black text-[clamp(2rem,7.5vw,3.75rem)] leading-none relative z-10 text-gray-900 dark:text-white">
+  {title}
+</h1>
+
+
             </div>
             {highlightWidth > 0 && (
               <div

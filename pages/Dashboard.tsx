@@ -571,7 +571,7 @@ const Dashboard: React.FC<DashboardProps> = ({ accounts, budget, installments, t
           {/* Card 1: Total Balance */}
           <div className="w-[85vw] md:w-full shrink-0 snap-center bg-white dark:bg-gray-900 rounded-3xl border-[3px] border-black shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] overflow-hidden flex flex-col">
             <div className="p-4 sm:p-6 bg-teal-400 border-b-[3px] border-black">
-              <h3 className="font-['Titan_One'] text-sm sm:text-base text-black uppercase tracking-widest">Total Balance</h3>
+              <h3 className="font-black text-sm sm:text-base text-black uppercase tracking-widest">Total Balance</h3>
             </div>
             <div className="p-4 sm:p-6 flex-grow flex flex-col justify-between">
               <div className="flex justify-between items-start mb-4">
@@ -592,7 +592,7 @@ const Dashboard: React.FC<DashboardProps> = ({ accounts, budget, installments, t
           {/* Card 2: Budget Used */}
           <div className="w-[85vw] md:w-full shrink-0 snap-center bg-white dark:bg-gray-900 rounded-3xl border-[3px] border-black shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] overflow-hidden flex flex-col">
             <div className="p-4 sm:p-6 bg-fuchsia-400 border-b-[3px] border-black">
-              <h3 className="font-['Titan_One'] text-sm sm:text-base text-black uppercase tracking-widest">Budget Used</h3>
+              <h3 className="font-black text-sm sm:text-base text-black uppercase tracking-widest">Budget Used</h3>
             </div>
             <div className="p-4 sm:p-6 flex-grow flex flex-col justify-between">
               <div className="flex justify-between items-start mb-4">
@@ -613,7 +613,7 @@ const Dashboard: React.FC<DashboardProps> = ({ accounts, budget, installments, t
           {/* Card 3: Credit Debt */}
           <div className="w-[85vw] md:w-full shrink-0 snap-center bg-white dark:bg-gray-900 rounded-3xl border-[3px] border-black shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] overflow-hidden flex flex-col">
             <div className="p-4 sm:p-6 bg-amber-400 border-b-[3px] border-black">
-              <h3 className="font-['Titan_One'] text-sm sm:text-base text-black uppercase tracking-widest">Credit Debt</h3>
+              <h3 className="font-black text-sm sm:text-base text-black uppercase tracking-widest">Credit Debt</h3>
             </div>
             <div className="p-4 sm:p-6 flex-grow flex flex-col justify-between">
               <div className="flex justify-between items-start mb-4">
@@ -651,8 +651,8 @@ const Dashboard: React.FC<DashboardProps> = ({ accounts, budget, installments, t
         <div className="grid grid-cols-3 gap-3 !mt-3 !mb-2 px-4 md:px-0">
         {[
           { icon: Plus, label: 'Add Transaction', color: 'bg-[#c4a1ff]', route: '/transactions' },
-          { icon: Sparkles, label: 'Crystal Ball', color: 'bg-white', route: '/budget' },
-          { icon: Tag, label: 'PriceTag', color: 'bg-white', route: '/scanner' },
+          { icon: Sparkles, label: 'Forecast', color: 'bg-white', route: '/budget' },
+          { icon: Tag, label: 'Grocery Trip', color: 'bg-white', route: '/scanner' },
         ].map((action, idx) => (
           <button 
             key={idx} 
@@ -668,7 +668,7 @@ const Dashboard: React.FC<DashboardProps> = ({ accounts, budget, installments, t
           >
 
             <action.icon className="w-6 h-6 md:w-8 md:h-8 text-black mb-1" />
-            <span className="font-['Titan_One'] text-[9px] md:text-[11px] text-black tracking-wider uppercase text-center leading-tight">{action.label}</span>
+            <span className="font-black text-[9px] md:text-[11px] text-black tracking-wider uppercase text-center leading-tight">{action.label}</span>
           </button>
         ))}
       </div>
@@ -697,7 +697,7 @@ const Dashboard: React.FC<DashboardProps> = ({ accounts, budget, installments, t
               <div className="flex items-center gap-3">
                 <div className="flex items-center space-x-2">
                   <CalendarClock className="w-5 h-5 md:w-6 md:h-6 text-black" />
-                  <h3 className="font-['Titan_One'] text-lg md:text-xl text-black uppercase tracking-tight">Due Soon</h3>
+                  <h3 className="font-black text-lg md:text-xl text-black uppercase tracking-tight">Due Soon</h3>
                 </div>
                 
                 {/* 🔴 THE LIVE COUNT BADGE (Calculates based on urgentThreshold) */}
@@ -781,7 +781,7 @@ const Dashboard: React.FC<DashboardProps> = ({ accounts, budget, installments, t
              {/* 🟢 RECENT ACTIVITY (Always visible, just gets pushed down!) */}
       <div className="bg-white dark:bg-gray-900 rounded-3xl border-[3px] border-black shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] overflow-hidden">
         <div className="p-6 bg-white border-b-[3px] border-black flex items-center justify-between">
-          <h3 className="font-['Titan_One'] text-2xl text-black uppercase tracking-tight">Recent Activity</h3>
+          <h3 className="font-black text-2xl text-black uppercase tracking-tight">Recent Activity</h3>
           <button 
             onClick={() => navigate('/transactions')} 
             className={`text-xs font-black uppercase tracking-widest border-2 border-black px-3 py-1 rounded-lg hover:bg-black hover:text-white transition-colors`}
@@ -823,7 +823,7 @@ const Dashboard: React.FC<DashboardProps> = ({ accounts, budget, installments, t
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-2 md:gap-4">
             <div className="flex items-center space-x-2 self-center md:self-auto">
               <TrendingUp className="w-6 h-6 text-white" />
-              <h3 className="font-['Titan_One'] text-xl md:text-2xl text-white uppercase tracking-tight">Budget Projections</h3>
+              <h3 className="font-black text-xl md:text-2xl text-white uppercase tracking-tight">Budget Projections</h3>
             </div>
             {/* Date range selector 
             <div className="flex flex-row items-center flex-wrap justify-center md:justify-end gap-1 sm:gap-2">
@@ -1002,7 +1002,7 @@ const Dashboard: React.FC<DashboardProps> = ({ accounts, budget, installments, t
           <div className="bg-white dark:bg-gray-900 rounded-3xl border-[3px] border-black shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] overflow-hidden">
             <div className="p-6 bg-purple-500 border-b-[3px] border-black flex items-center space-x-2">
               <CreditCard className="w-6 h-6 text-white" />
-              <h3 className="font-['Titan_One'] text-2xl text-white uppercase tracking-tight">Credit Utilization</h3>
+              <h3 className="font-black text-2xl text-white uppercase tracking-tight">Credit Utilization</h3>
             </div>
             <div className="p-6 space-y-4">
               
@@ -1121,7 +1121,7 @@ const Dashboard: React.FC<DashboardProps> = ({ accounts, budget, installments, t
           <div className="bg-white dark:bg-gray-900 rounded-3xl border-[3px] border-black shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] overflow-hidden">
             <div className="p-6 bg-teal-500 border-b-[3px] border-black flex items-center space-x-2">
               <Wallet className="w-6 h-6 text-white" />
-              <h3 className="font-['Titan_One'] text-2xl text-white uppercase tracking-tight">Debit Overview</h3>
+              <h3 className="font-black text-2xl text-white uppercase tracking-tight">Debit Overview</h3>
             </div>
             <div className="p-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {debitAccounts.map((account) => {
