@@ -1,9 +1,9 @@
-import { LayoutDashboard, Wallet, WalletCards, Receipt, CreditCard, Landmark, PiggyBank, Settings, Trash2, FileText, ScanLine } from 'lucide-react';
+import { LayoutDashboard, Wallet, WalletCards, Receipt, CreditCard, Landmark, PiggyBank, Settings, Trash2, FileText, ScanLine, ChartPie } from 'lucide-react';
 import { Page, Account, BudgetItem, Biller, Installment, SavingsJar, BudgetCategory, PaymentSchedule, CategorizedSetupItem } from './types';
 
 export const NAV_ITEMS = [
   { id: Page.DASHBOARD, label: 'Dashboard', icon: <LayoutDashboard className="w-5 h-5" />, path: "/" },
-  { id: Page.BUDGET, label: 'Budget', icon: <Wallet className="w-5 h-5" />, path: "/budget" },
+  { id: Page.BUDGET, label: 'Budget', icon: <ChartPie className="w-5 h-5" />, path: "/budget" },
   { id: Page.TRANSACTIONS, label: "Transactions", icon: <FileText className="w-5 h-5" />, path: "/transactions" },
   { id: Page.BILLERS, label: 'Billers', icon: <Receipt className="w-5 h-5" />, path: "/billers" },
   { id: Page.INSTALLMENTS, label: 'Installments', icon: <CreditCard className="w-5 h-5" />, path: "/installments" },

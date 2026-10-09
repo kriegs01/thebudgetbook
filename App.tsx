@@ -1874,7 +1874,10 @@ useEffect(() => {
                                                                 {/* 🟢 MOBILE & PORTRAIT TOP HEADER */}
         <header className="fixed top-4 left-4 right-4 z-[60] flex items-center justify-end lg:hidden portrait:!flex pointer-events-none">
           
-          {!(location.pathname === '/budget' && (location.search || '').includes('view=setup')) ? (
+          {!(
+            (location.pathname === '/budget' && (location.search || '').includes('view=setup')) || 
+            (location.search || '').includes('sandbox')
+          ) ? (
             /* 1. SHOW PROFILE BUBBLE GLOBALLY */
             <div className="pointer-events-auto flex items-center animate-in zoom-in fade-in duration-300">
               <button 
@@ -2152,7 +2155,9 @@ useEffect(() => {
                 {/* 🟢 MOBILE & PORTRAIT NAVIGATION: Floating Bar & More Tray */}
       <div className="block lg:hidden portrait:!block">
   {/* 🟢 BOTTOM BLUR BLANKET */}
-<div className="fixed bottom-0 left-0 w-full h-20 pointer-events-none z-[90] bg-gradient-to-t from-[#FCF6E8] dark:from-gray-950 to-transparent" />
+<div 
+id="bottom-blue-blanket"
+className="fixed bottom-0 left-0 w-full h-20 pointer-events-none z-[90] bg-gradient-to-t from-[#FCF6E8] dark:from-gray-950 to-transparent" />
 
           {/* 🟢 NEW LEFT TRAY (Slide-out Drawer) */}
           {showLeftTray && (

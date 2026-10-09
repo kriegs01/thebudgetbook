@@ -1,11 +1,18 @@
 // src/components/SandboxView.tsx
 import React, { useState, useRef } from 'react';
 import { useSandbox } from '../components/useSandbox';
-import { Plus, Trash2, Calendar, WalletCards, CalendarDays, ChevronLeft, ChevronRight, CreditCard, Sparkles, Columns3 } from 'lucide-react';
+import { Plus, Trash2, Calendar, WalletCards, CalendarDays, ChevronLeft, ChevronRight, CreditCard, Sparkles, Columns3, ArrowLeft } from 'lucide-react';
 import { PageHeader } from './PageHeader';
 import { useTheme } from '../contexts/ThemeContext';
 import { calculateBillingCycles } from '../utils/billingCycles';
 import { determineItemPeriod } from '../utils/budgetEngine';
+import { createPortal } from 'react-dom';
+
+const Portal: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  if (typeof document === 'undefined') return null;
+  return createPortal(children, document.body);
+};
+
 
 interface SandboxViewProps {
   onClose: () => void;
@@ -32,7 +39,7 @@ export const SandboxView: React.FC<SandboxViewProps> = ({
 
   const { getAccentClasses } = useTheme();
 
-  const [isTrayOpen, setIsTrayOpen] = useState(true);
+  const [isTrayOpen, setIsTrayOpen] = useState(false);
   
   // Dynamic Date Range Controls
   const [forecastMonths, setForecastMonths] = useState<number>(3);
@@ -258,90 +265,103 @@ export const SandboxView: React.FC<SandboxViewProps> = ({
   const handleNext = () => scrollToCard(Math.min(timeline.length - 1, activeIndex + 1));
 
   React.useEffect(() => {
-    // Grab the entire global navigation bar
+    // 1. Hide the global nav bar and blur blanket
     const navBar = document.getElementById('global-nav-bar');
-    
-    // Hide it completely the moment Crystal Ball opens
+    const blurBlanket = document.getElementById('bottom-blur-blanket');
     if (navBar) navBar.style.display = 'none';
-    
-    // Bring it back exactly as it was when you hit Exit!
+    if (blurBlanket) blurBlanket.style.display = 'none';
+  
+    // 2. Inject an absolute override rule to hide ANY fixed mobile header
+    const styleEl = document.createElement('style');
+    styleEl.id = 'hide-mobile-header-override';
+    styleEl.innerHTML = `
+      header.fixed.top-4.z-\\[60\\],
+      #global-mobile-header {
+        display: none !important;
+      }
+    `;
+    document.head.appendChild(styleEl);
+  
     return () => {
       if (navBar) navBar.style.display = 'flex';
+      if (blurBlanket) blurBlanket.style.display = 'block';
+      
+      // Clean up style rule on exit
+      const el = document.getElementById('hide-mobile-header-override');
+      if (el) el.remove();
     };
   }, []);
+  
+  
 
+  return (
+    <div className="fixed inset-0 z-[150] overflow-y-auto bg-[#FCF6E8] dark:bg-gray-950 px-3 lg:px-8 pt-4 pb-24 duration-300 animate-in fade-in">
 
-  return (
-    <div className={`slide-in-from-bottom-4 duration-500 bg-[#F4F3EF] dark:bg-gray-950 min-h-screen pb-48 pt-4 overflow-y-auto w-full px-1 lg:px-8 ${isTrayOpen ? 'relative z-20' : 'animate-in'}`}>
-
-      {/* 🔮 PAGE HEADER COMPONENT */}
-      <div className="shrink-0 mb-6 w-full">
+            {/* 🔮 PAGE HEADER COMPONENT */}
+            <div className="shrink-0 mb-6 w-full">
         <PageHeader 
           title="Crystal Ball"
           subtitle="Check your future"
           icon={
-            <div className={`w-14 h-14 rounded-2xl flex items-center justify-center text-white border-[3px] border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] -rotate-3 transition-all hover:rotate-0 hover:scale-110 z-10 relative ${getAccentClasses('bg')}`}>              {/* 🟢 Replaced the emoji with the Lucide Sparkles icon! */}
-              <Sparkles className="w-7 h-7" />            </div>
+            <div className={`w-14 h-14 rounded-2xl flex items-center justify-center text-white border-[3px] border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] -rotate-3 transition-all hover:rotate-0 hover:scale-110 z-10 relative ${getAccentClasses('bg')}`}>
+              <Sparkles className="w-7 h-7" />
+            </div>
           }
           actions={
             <button 
+              type="button"
               onClick={onClose}
-              className="px-5 py-3 bg-red-100 text-red-700 border-[3px] border-black rounded-xl font-black uppercase tracking-wider text-xs shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none transition-all"
+              aria-label="Exit Crystal Ball"
+              className="w-11 h-11 flex items-center justify-center bg-red-100 hover:bg-red-200 text-red-700 border-[3px] border-black rounded-xl shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] hover:translate-x-[1px] hover:translate-y-[1px] hover:shadow-none active:translate-x-[2px] active:translate-y-[2px] transition-all"
             >
-              Exit
+              <ArrowLeft className="w-5 h-5 stroke-[2.5]" />
             </button>
           }
         />
       </div>
 
-      {/* 🟢 MAIN LAYOUT */}
-      <div className="flex flex-col lg:flex-row gap-8 flex-1 min-h-0">
+
+            {/* 🟢 MAIN LAYOUT */}
+            <div className="flex flex-col lg:flex-row gap-8 flex-1 min-h-0">
         
         {/* 🎶 APPLE MUSIC TRAY / LEFT COLUMN (Locked to 380px on Desktop) */}
-        {/* TO (Notice 'top-14 lg:top-auto' added to the second line): */}
-<div className={`
-  order-2 lg:order-1 w-full lg:w-[380px] shrink-0 flex flex-col gap-6 lg:sticky lg:top-4 lg:translate-y-0 lg:h-[calc(100vh-8rem)]
-  fixed inset-x-0 bottom-0 top-14 lg:top-auto z-[120] lg:z-auto lg:relative bg-[#F4F3EF] dark:bg-gray-900 lg:bg-transparent lg:dark:bg-transparent
-  rounded-t-[2.5rem] lg:rounded-none border-t-4 border-l-4 border-r-4 lg:border-none border-black
-  shadow-[0px_-8px_20px_rgba(0,0,0,0.15)] lg:shadow-none transition-transform duration-500 ease-[cubic-bezier(0.32,0.72,0,1)]
-  ${isTrayOpen ? 'translate-y-0' : 'translate-y-[calc(100%-4.5rem)] lg:translate-y-0'}
-`}>
+        <Portal> 
+          <div className={`
+            order-2 lg:order-1 w-full lg:w-[380px] shrink-0 flex flex-col gap-6 lg:sticky lg:top-4 lg:translate-y-0 lg:h-[calc(100vh-8rem)]
+            fixed inset-x-0 bottom-0 top-14 lg:top-auto z-[200] lg:z-auto lg:relative bg-[#F4F3EF] dark:bg-gray-900 lg:bg-transparent lg:dark:bg-transparent
+            rounded-t-[2.5rem] lg:rounded-none border-t-4 border-l-4 border-r-4 lg:border-none border-black
+            shadow-[0px_-8px_20px_rgba(0,0,0,0.15)] lg:shadow-none transition-transform duration-500 ease-[cubic-bezier(0.32,0.72,0,1)]
+            ${isTrayOpen ? 'translate-y-0' : 'translate-y-[calc(100%-4.5rem)] lg:translate-y-0'}
+          `}>
 
-          {/* TO: */}
-<div className="lg:hidden w-full h-[4.5rem] flex flex-col items-center justify-center cursor-pointer active:bg-gray-200 dark:active:bg-gray-800 rounded-t-[2.5rem] transition-colors bg-white dark:bg-gray-900 border-b-4 border-black" onClick={() => setIsTrayOpen(!isTrayOpen)}>
-  <div className="w-12 h-1.5 bg-black dark:bg-gray-500 rounded-full mb-2"></div>
-  <p className="font-black text-black dark:text-white uppercase tracking-widest text-sm">
-
-              {isTrayOpen ? 'Tap to Close' : 'Tap to Add Purchases'}
-            </p>
-          </div>
-
-          {/* Tray */}
-<div className="px-6 pb-40 pt-1 lg:p-0 max-h-[70vh] lg:max-h-none overflow-y-auto lg:overflow-visible block space-y-6 bg-[#F4F3EF] dark:bg-gray-900 lg:bg-transparent lg:dark:bg-transparent">
-        
-            <div className="p-2 bg-white dark:bg-gray-900 border-4 border-black rounded-2xl shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] shrink-0">
-              <h2 className="text-xl font-black mb-2 uppercase">Money-Chill Zone</h2>
-              <div className="flex items-center border-2 border-black rounded-xl px-3 py-2.5 bg-gray-50 dark:bg-gray-800 focus-within:ring-2 focus-within:ring-amber-400 transition-all mt-4">
-                <span className="text-gray-400 font-bold mr-2 text-sm">₱</span>
-                <input type="number" value={safetyNet || ''} onChange={(e) => setSafetyNet(Number(e.target.value))} placeholder="e.g. 5000" className="flex-1 bg-transparent outline-none text-base font-black text-amber-600 dark:text-amber-400" />
-              </div>
+            <div className="lg:hidden w-full h-[4.5rem] flex flex-col items-center justify-center cursor-pointer active:bg-gray-200 dark:active:bg-gray-800 rounded-t-[2.5rem] transition-colors bg-white dark:bg-gray-900 border-b-4 border-black" onClick={() => setIsTrayOpen(!isTrayOpen)}>
+              <div className="w-12 h-1.5 bg-black dark:bg-gray-500 rounded-full mb-2"></div>
+              <p className="font-black text-black dark:text-white uppercase tracking-widest text-sm">
+                {isTrayOpen ? 'Tap to Close' : 'Tap to Add Purchases'}
+              </p>
             </div>
 
-            <div className="p-6 bg-white dark:bg-gray-900 border-4 border-black rounded-2xl shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] flex-1 lg:flex-none lg:h-fit flex flex-col">
-              <div className="shrink-0 mb-6">
-                <h2 className="text-xl font-black mb-4 uppercase">What if I buy...</h2>
-                
-                {/* TO: */}
-<div className="flex gap-2 mb-4 bg-gray-100 dark:bg-gray-800 p-1 rounded-xl border-2 border-black">
-  <button onClick={() => setPurchaseType('one-off')} className={`flex-1 py-1.5 text-xs font-black uppercase rounded-lg transition-all ${purchaseType === 'one-off' ? 'bg-white dark:bg-gray-700 dark:text-white border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]' : 'text-gray-500 dark:text-gray-400 border-2 border-transparent'}`}>One-Off</button>
-  <button onClick={() => setPurchaseType('installment')} className={`flex-1 py-1.5 text-xs font-black uppercase rounded-lg transition-all ${purchaseType === 'installment' ? 'bg-white dark:bg-gray-700 dark:text-white border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]' : 'text-gray-500 dark:text-gray-400 border-2 border-transparent'}`}>Installment</button>
-</div>
-
-
-                <div className="space-y-3 mb-4">
+            {/* Tray */}
+            <div className="px-6 pb-40 pt-1 lg:p-0 max-h-[70vh] lg:max-h-none overflow-y-auto lg:overflow-visible block space-y-6 bg-[#F4F3EF] dark:bg-gray-900 lg:bg-transparent lg:dark:bg-transparent">
                   
-                  {/* 🟢 NEW: Payment Method Toggle */}
-                  {/* TO: */}
+              <div className="p-2 bg-white dark:bg-gray-900 border-4 border-black rounded-2xl shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] shrink-0">
+                <h2 className="text-xl font-black mb-2 uppercase">Money-Chill Zone</h2>
+                <div className="flex items-center border-2 border-black rounded-xl px-3 py-2.5 bg-gray-50 dark:bg-gray-800 focus-within:ring-2 focus-within:ring-amber-400 transition-all mt-4">
+                  <span className="text-gray-400 font-bold mr-2 text-sm">₱</span>
+                  <input type="number" value={safetyNet || ''} onChange={(e) => setSafetyNet(Number(e.target.value))} placeholder="e.g. 5000" className="flex-1 bg-transparent outline-none text-base font-black text-amber-600 dark:text-amber-400" />
+                </div>
+              </div>
+
+              <div className="p-6 bg-white dark:bg-gray-900 border-4 border-black rounded-2xl shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] flex-1 lg:flex-none lg:h-fit flex flex-col">
+                <div className="shrink-0 mb-6">
+                  <h2 className="text-xl font-black mb-4 uppercase">What if I buy...</h2>
+                  
+                  <div className="flex gap-2 mb-4 bg-gray-100 dark:bg-gray-800 p-1 rounded-xl border-2 border-black">
+                    <button onClick={() => setPurchaseType('one-off')} className={`flex-1 py-1.5 text-xs font-black uppercase rounded-lg transition-all ${purchaseType === 'one-off' ? 'bg-white dark:bg-gray-700 dark:text-white border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]' : 'text-gray-500 dark:text-gray-400 border-2 border-transparent'}`}>One-Off</button>
+                    <button onClick={() => setPurchaseType('installment')} className={`flex-1 py-1.5 text-xs font-black uppercase rounded-lg transition-all ${purchaseType === 'installment' ? 'bg-white dark:bg-gray-700 dark:text-white border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]' : 'text-gray-500 dark:text-gray-400 border-2 border-transparent'}`}>Installment</button>
+                  </div>
+
+                  <div className="space-y-3 mb-4">
                     <div className="flex bg-gray-100 dark:bg-gray-800 p-1 rounded-xl border-2 border-black">
                       <button 
                         onClick={() => { setPaymentMethod('cash'); setSelectedCreditCardId(''); }} 
@@ -357,10 +377,8 @@ export const SandboxView: React.FC<SandboxViewProps> = ({
                       </button>
                     </div>
 
-
-                  {/* 🟢 NEW: Credit Card Selector Dropdown */}
-                  {paymentMethod === 'credit' && creditCardAccounts.length > 0 && (
-                     <div className="animate-in slide-in-from-top-2 duration-300">
+                    {paymentMethod === 'credit' && creditCardAccounts.length > 0 && (
+                      <div className="animate-in slide-in-from-top-2 duration-300">
                         <select 
                           value={selectedCreditCardId}
                           onChange={(e) => setSelectedCreditCardId(e.target.value)}
@@ -371,156 +389,145 @@ export const SandboxView: React.FC<SandboxViewProps> = ({
                             <option key={acc.id} value={acc.id}>{acc.bank}</option>
                           ))}
                         </select>
-                     </div>
-                  )}
+                      </div>
+                    )}
 
-<input 
-  type="text" 
-  value={newPurchaseName} 
-  onChange={(e) => setNewPurchaseName(e.target.value)} 
-  placeholder="Item name" 
-  className="w-full bg-gray-50 dark:bg-gray-800 border-2 border-black rounded-xl px-3 py-2 outline-none font-bold text-[16px]" 
-/>
+                    <input 
+                      type="text" 
+                      value={newPurchaseName} 
+                      onChange={(e) => setNewPurchaseName(e.target.value)} 
+                      placeholder="Item name" 
+                      className="w-full bg-gray-50 dark:bg-gray-800 border-2 border-black rounded-xl px-3 py-2 outline-none font-bold text-[16px]" 
+                    />
+                    
+                    <div className="flex gap-2">
+                      <div className="relative flex-1">
+                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 font-bold text-[16px] md:text-xs">₱</span>
+                        <input 
+                          type="number" 
+                          value={newPurchaseAmount} 
+                          onChange={(e) => setNewPurchaseAmount(e.target.value)} 
+                          placeholder={purchaseType === 'installment' ? 'Monthly Amount' : 'Amount'} 
+                          className="w-full pl-7 md:pl-6 bg-gray-50 dark:bg-gray-800 border-2 border-black rounded-xl px-3 py-2 outline-none font-black text-[16px] md:text-xs" 
+                        />
+                      </div>
+                      
+                      {purchaseType === 'installment' && (
+                        <div className="relative flex-[0.5]">
+                          <input 
+                            type="number" 
+                            value={durationMonths} 
+                            onChange={(e) => setDurationMonths(e.target.value)} 
+                            placeholder="Months" 
+                            className="w-full bg-gray-50 dark:bg-gray-800 border-2 border-black rounded-xl px-3 py-2 outline-none font-black text-[16px] md:text-xs" 
+                          />
+                          <span className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 font-bold text-[10px] uppercase">Mos</span>
+                        </div>
+                      )}
+                    </div>
 
-
-                  
-<div className="flex gap-2">
-  <div className="relative flex-1">
-    {/* Scaled the peso sign to 16px on mobile to match the input, shrinks back to text-xs on desktop */}
-    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 font-bold text-[16px] md:text-xs">₱</span>
-    <input 
-      type="number" 
-      value={newPurchaseAmount} 
-      onChange={(e) => setNewPurchaseAmount(e.target.value)} 
-      placeholder={purchaseType === 'installment' ? 'Monthly Amount' : 'Amount'} 
-      className="w-full pl-7 md:pl-6 bg-gray-50 dark:bg-gray-800 border-2 border-black rounded-xl px-3 py-2 outline-none font-black text-[16px] md:text-xs" 
-    />
-  </div>
-  
-  {purchaseType === 'installment' && (
-    <div className="relative flex-[0.5]">
-      <input 
-        type="number" 
-        value={durationMonths} 
-        onChange={(e) => setDurationMonths(e.target.value)} 
-        placeholder="Months" 
-        className="w-full bg-gray-50 dark:bg-gray-800 border-2 border-black rounded-xl px-3 py-2 outline-none font-black text-[16px] md:text-xs" 
-      />
-      {/* Kept "Mos" small since it acts as a tiny decorative label */}
-      <span className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 font-bold text-[10px] uppercase">Mos</span>
-    </div>
-  )}
-</div>
-
-                  
-                  <div className="relative">
-                    <CalendarDays className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
-                    <input type="date" value={purchaseDate} onChange={(e) => setPurchaseDate(e.target.value)} className="w-full pl-0 bg-gray-50 dark:bg-gray-800 border-2 border-black rounded-xl px-3 py-2 outline-none font-bold text-xs" />
+                    <div className="relative">
+                      <CalendarDays className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                      <input type="date" value={purchaseDate} onChange={(e) => setPurchaseDate(e.target.value)} className="w-full pl-0 bg-gray-50 dark:bg-gray-800 border-2 border-black rounded-xl px-3 py-2 outline-none font-bold text-xs" />
+                    </div>
                   </div>
+
+                  <button 
+                    onClick={() => {
+                      if (newPurchaseName && newPurchaseAmount) {
+                        if (paymentMethod === 'credit' && !selectedCreditCardId) {
+                          alert("Please select a credit card to swipe.");
+                          return;
+                        }
+
+                        addMockPurchase({ 
+                          id: Date.now().toString(), 
+                          name: newPurchaseName, 
+                          amount: Number(newPurchaseAmount),
+                          type: purchaseType, 
+                          startDate: purchaseDate, 
+                          durationMonths: purchaseType === 'installment' ? Number(durationMonths) : undefined,
+                          paymentMethod: paymentMethod,
+                          creditCardId: paymentMethod === 'credit' ? selectedCreditCardId : undefined
+                        });
+
+                        setNewPurchaseName(''); setNewPurchaseAmount('');
+                      }
+                    }}
+                    className="w-full flex items-center justify-center gap-2 bg-amber-400 text-black p-3 rounded-xl border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] active:shadow-none active:translate-x-[2px] active:translate-y-[2px] transition-all font-black text-xs uppercase"
+                  >
+                    <Plus className="w-4 h-4" /> Add to cart!
+                  </button>
                 </div>
 
-                <button 
-                  onClick={() => {
-                    if (newPurchaseName && newPurchaseAmount) {
-                      // Prevent submission if they chose Credit but didn't pick a card
-                      if (paymentMethod === 'credit' && !selectedCreditCardId) {
-                         alert("Please select a credit card to swipe.");
-                         return;
+                <div className="space-y-3 overflow-y-auto flex-1 pr-1 custom-scrollbar min-h-[150px] border-t-2 border-dashed border-gray-200 pt-4">
+                  {!hasMockPurchases ? (
+                    <p className="text-xs text-gray-400 italic text-center py-4">No mock purchases yet.</p>
+                  ) : (
+                    mockPurchases.map(purchase => {
+                      let paymentLabel = 'Cash/Debit';
+                      if (purchase.paymentMethod === 'credit' && purchase.creditCardId) {
+                        const card = accounts?.find(a => a.id === purchase.creditCardId);
+                        paymentLabel = card ? card.bank : 'Credit';
                       }
 
-                      addMockPurchase({ 
-                        id: Date.now().toString(), 
-                        name: newPurchaseName, 
-                        amount: Number(newPurchaseAmount),
-                        type: purchaseType, 
-                        startDate: purchaseDate, 
-                        durationMonths: purchaseType === 'installment' ? Number(durationMonths) : undefined,
-                        // 🟢 Send the swipe data to the engine
-                        paymentMethod: paymentMethod,
-                        creditCardId: paymentMethod === 'credit' ? selectedCreditCardId : undefined
-                      });
-
-                      setNewPurchaseName(''); setNewPurchaseAmount('');
-                    }
-                  }}
-                  className="w-full flex items-center justify-center gap-2 bg-amber-400 text-black p-3 rounded-xl border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] active:shadow-none active:translate-x-[2px] active:translate-y-[2px] transition-all font-black text-xs uppercase"
-                >
-
-                  <Plus className="w-4 h-4" /> Add to cart!
-                </button>
+                      return (
+                        <div key={purchase.id} className="flex justify-between items-center bg-gray-50 dark:bg-gray-800 border-2 border-black p-3 rounded-xl shrink-0">
+                          <div className="flex flex-col min-w-0 pr-2">
+                            <span className="text-sm font-bold truncate">{purchase.name}</span>
+                            <span className="text-[9px] font-black uppercase text-gray-500">
+                              {purchase.type === 'installment' 
+                                ? `${purchase.durationMonths} Mos • Starts ${new Date(purchase.startDate).toLocaleDateString()} • ${paymentLabel}` 
+                                : `One-off • ${new Date(purchase.startDate).toLocaleDateString()} • ${paymentLabel}`}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-3 shrink-0">
+                            <span className="text-sm font-black text-red-500">
+                              ₱{purchase.amount.toLocaleString()}
+                              {purchase.type === 'installment' && <span className="text-[10px] text-gray-500 font-bold ml-1">/ mo</span>}
+                            </span>
+                            <button onClick={() => removeMockPurchase(purchase.id)} className="text-gray-400 hover:text-red-500 transition-colors bg-white border border-gray-200 rounded p-1 shadow-sm">
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
               </div>
 
-              <div className="space-y-3 overflow-y-auto flex-1 pr-1 custom-scrollbar min-h-[150px] border-t-2 border-dashed border-gray-200 pt-4">
-                {!hasMockPurchases ? (
-                  <p className="text-xs text-gray-400 italic text-center py-4">No mock purchases yet.</p>
-                ) : (
-                  mockPurchases.map(purchase => {
-                    let paymentLabel = 'Cash/Debit';
-                    if (purchase.paymentMethod === 'credit' && purchase.creditCardId) {
-                      const card = accounts?.find(a => a.id === purchase.creditCardId);
-                      paymentLabel = card ? card.bank : 'Credit';
-                    }
-
-                    return (
-                      <div key={purchase.id} className="flex justify-between items-center bg-gray-50 dark:bg-gray-800 border-2 border-black p-3 rounded-xl shrink-0">
-                        <div className="flex flex-col min-w-0 pr-2">
-                          <span className="text-sm font-bold truncate">{purchase.name}</span>
-                          <span className="text-[9px] font-black uppercase text-gray-500">
-                            {purchase.type === 'installment' 
-                              ? `${purchase.durationMonths} Mos • Starts ${new Date(purchase.startDate).toLocaleDateString()} • ${paymentLabel}` 
-                              : `One-off • ${new Date(purchase.startDate).toLocaleDateString()} • ${paymentLabel}`}
-                          </span>
-                        </div>
-                        <div className="flex items-center gap-3 shrink-0">
-                          <span className="text-sm font-black text-red-500">
-                            ₱{purchase.amount.toLocaleString()}
-                            {purchase.type === 'installment' && <span className="text-[10px] text-gray-500 font-bold ml-1">/ mo</span>}
-                          </span>
-                          <button onClick={() => removeMockPurchase(purchase.id)} className="text-gray-400 hover:text-red-500 transition-colors bg-white border border-gray-200 rounded p-1 shadow-sm">
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        </div>
-                      </div>
-                    );
-                  })
-                )}
-              </div>
             </div>
-
           </div>
-        </div>
+        </Portal>
 
         {/* 🟡 FORECAST BOARD */}
-
         <div className="flex-1 min-w-0 w-full flex flex-col gap-6 order-1 lg:order-2 overflow-hidden">
           
           <div className="flex flex-wrap gap-2 items-center bg-white dark:bg-gray-900 border-4 border-black p-4 rounded-2xl shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] shrink-0">
-          <div className="flex items-center gap-2 w-full min-w-0">
-  <Calendar className="w-5 h-5 text-indigo-500 shrink-0" />
-  
-  <div className="flex items-center gap-1.5 bg-gray-50 dark:bg-gray-800 border-2 border-black rounded-lg px-1.5 py-1 flex-1 min-w-0 overflow-hidden">
-    
-    <span className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded px-1.5 py-1 text-gray-500 select-none whitespace-nowrap shrink-0 text-sm">
-      {startLabel}
-    </span>
-    
-    <span className="text-gray-400 text-sm shrink-0">To</span>
-    
-    <select
-      value={forecastMonths}
-      onChange={(e) => setForecastMonths(Number(e.target.value))}
-      className="bg-white dark:bg-gray-900 border-2 border-black rounded px-1 py-1 outline-none text-indigo-600 dark:text-indigo-400 flex-1 min-w-0 text-ellipsis whitespace-nowrap text-sm"
-    >
-      {endOptions.map(opt => (
-        <option key={opt.months} value={opt.months}>
-          {opt.label} ({opt.months} {opt.months === 1 ? 'mo' : 'mos'})
-        </option>
-      ))}
-    </select>
-    
-  </div>
-</div>
-
+            <div className="flex items-center gap-2 w-full min-w-0">
+              <Calendar className="w-5 h-5 text-indigo-500 shrink-0" />
+              
+              <div className="flex items-center gap-1.5 bg-gray-50 dark:bg-gray-800 border-2 border-black rounded-lg px-1.5 py-1 flex-1 min-w-0 overflow-hidden">
+                <span className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded px-1.5 py-1 text-gray-500 select-none whitespace-nowrap shrink-0 text-sm">
+                  {startLabel}
+                </span>
+                
+                <span className="text-gray-400 text-sm shrink-0">To</span>
+                
+                <select
+                  value={forecastMonths}
+                  onChange={(e) => setForecastMonths(Number(e.target.value))}
+                  className="bg-white dark:bg-gray-900 border-2 border-black rounded px-1 py-1 outline-none text-indigo-600 dark:text-indigo-400 flex-1 min-w-0 text-ellipsis whitespace-nowrap text-sm"
+                >
+                  {endOptions.map(opt => (
+                    <option key={opt.months} value={opt.months}>
+                      {opt.label} ({opt.months} {opt.months === 1 ? 'mo' : 'mos'})
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
 
             <div className="flex flex-wrap items-center gap-2">
               <Columns3 className="w-5 h-5 text-indigo-500" />
@@ -652,9 +659,15 @@ export const SandboxView: React.FC<SandboxViewProps> = ({
 
       </div>
 
-      {isTrayOpen && (
-        <div className="lg:hidden fixed inset-0 bg-black/40 z-40 transition-opacity duration-500 animate-in fade-in" onClick={() => setIsTrayOpen(false)} />
-      )}
+      <Portal>
+        {isTrayOpen && (
+          <div 
+            className="lg:hidden fixed inset-0 bg-black/40 z-[190] transition-opacity duration-500 animate-in fade-in" 
+            onClick={() => setIsTrayOpen(false)} 
+          />
+        )}
+      </Portal>
     </div>
   );
 };
+

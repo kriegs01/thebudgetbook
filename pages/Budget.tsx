@@ -3,7 +3,7 @@ import { useSearchParams } from 'react-router-dom';
 import { useNavigate } from 'react-router-dom';
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { BudgetItem, Account, Biller, PaymentSchedule, CategorizedSetupItem, SavedBudgetSetup, BudgetCategory, Installment, Wallet } from '../types';
-import { Plus, Check, ChevronDown, Trash2, Save, Wallet as WalletIcon, ArrowLeft, Upload, CheckCircle2, X, AlertTriangle, Info, Archive, RotateCcw, List, Hand, Sparkles, ReceiptText, ArrowDownToLine } from 'lucide-react';
+import { Plus, Check, ChevronDown, Trash2, Save, Wallet as WalletIcon, ArrowLeft, Upload, CheckCircle2, X, AlertTriangle, Info, Archive, RotateCcw, List, Hand, Sparkles, ReceiptText, ArrowDownToLine, BanknoteArrowDown, ChartPie } from 'lucide-react';
 import { PinProtectedAction } from '../src/components/PinProtectedAction';
 import { createBudgetSetupFrontend, updateBudgetSetupFrontend } from '../src/services/budgetSetupsService';
 import { createTransaction, getAllTransactions, updateTransaction, updateTransactionAndSyncSchedule, createPaymentScheduleTransaction, uploadTransactionReceipt, getTransactionsByPaymentSchedule, getReceiptSignedUrl, deleteTransactionAndRevertSchedule, getAllStashTransactions, createTransfer } from '../src/services/transactionsService';
@@ -290,6 +290,18 @@ const calculateBudgetRemaining = (
   }
 };
 
+const Portal: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const [mounted, setMounted] = React.useState(false);
+
+  React.useEffect(() => {
+    setMounted(true);
+    return () => setMounted(false);
+  }, []);
+
+  return mounted ? createPortal(children, document.body) : null;
+};
+
+
 const TimelineCard = ({ 
   item, 
   isSettled, 
@@ -303,136 +315,173 @@ const TimelineCard = ({
   onPay: () => void,
   onInfo: (subItemId?: string) => void
 }) => {
+  // 🟢 Local state for the accordion toggle
+  const [isExpanded, setIsExpanded] = React.useState(false);
+
   // 🟢 Detect if this card is in "Reimbursement Mode"
   const isFronted = !!item.frontedInfo;
+  const hasSubItems = item.subItems && item.subItems.length > 0;
 
-    return (
+  return (
     <div className="relative w-full">
       
-                  {/* 🟢 CALENDAR BADGE OVER THE TIMELINE */}
+      {/* 🟢 CALENDAR BADGE OVER THE TIMELINE */}
       <div className="absolute top-4 -left-[45px] z-10 flex flex-col items-center justify-center w-10 bg-white dark:bg-gray-800 border-2 border-black rounded-lg overflow-hidden shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]">
         <span className={`w-full text-white text-[9px] font-black uppercase text-center py-0.5 tracking-widest border-b-2 border-black ${isSettled ? 'bg-gray-500' : 'bg-red-500'}`}>Due</span>
         <span className={`text-[14px] leading-tight font-black py-1 ${isSettled ? 'text-gray-500' : 'text-gray-900 dark:text-gray-100'}`}>{item.dueDate}</span>
       </div>
 
+      {/* 📦 THE NEW SWIPEABLE TIMELINE WRAPPER */}
+      <div className="relative w-full mb-1">
+
+                {/* 🟠 UNDERLYING REVEAL TRAY (Clickable) */}
+                <div 
+          className={`absolute top-[2px] right-2 w-[80px] bottom-[12px] rounded-[1.25rem] border-[3px] border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] flex flex-col items-center justify-center transition-colors z-0 ${item.isIncluded ? 'bg-[#E8F5E9]' : 'bg-[#FFEBEE]'}`}
+        >
+          <button 
+            className="flex flex-col items-center justify-center w-full h-full pb-1 pointer-events-none"
+            tabIndex={-1}
+          >
+            <span className={`text-[10px] font-black uppercase tracking-wider mb-1 ${item.isIncluded ? 'text-[#2E7D32]' : 'text-[#C62828]'}`}>
+              {item.isIncluded ? 'Included' : 'Skipped'}
+            </span>
+            <div className={`w-[36px] h-[20px] rounded-full border-2 border-black relative transition-colors ${item.isIncluded ? 'bg-indigo-600' : 'bg-gray-300 dark:bg-gray-600'}`}>
+              <span className={`absolute top-[1px] w-[14px] h-[14px] rounded-full border-2 border-black bg-white transition-transform ${item.isIncluded ? 'left-[17px]' : 'left-[1px]'}`} />
+            </div>
+          </button>
+        </div>
 
 
-      {/* MAIN CARD CONTENT */}
-      <div className={`p-4 rounded-xl border-2 flex flex-col transition-all shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] ${
-        !item.isIncluded ? 'opacity-50 bg-gray-50 dark:bg-gray-800/30 border-black' : 
-        isFronted ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-600 shadow-[4px_4px_0px_0px_rgba(37,99,235,1)]' : 
-        isSettled ? 'bg-gray-50 dark:bg-gray-800/50 opacity-75 shadow-none hover:opacity-100 border-black' : 'bg-white dark:bg-gray-800 border-black'
-      }`}>
-        
-        <div className="flex justify-between items-start gap-4">
-
-        
-        {/* LEFT COLUMN: Title & Info */}
-        <div className="flex flex-col gap-1.5 md:gap-2 min-w-0 flex-1">
-          <h4 className={`text-sm md:text-base font-black truncate leading-tight ${
-            isSettled ? 'text-gray-600 dark:text-gray-400 line-through' : 
-            isFronted ? 'text-blue-800 dark:text-blue-300' : 'text-gray-900 dark:text-gray-100'
+        {/* 🔵 FOREGROUND SCROLLER */}
+        <div className="flex overflow-x-auto snap-x snap-mandatory scrollbar-hide pb-2 w-full relative z-10">
+          
+          {/* MAIN CARD CONTENT */}
+          <div className={`snap-start w-[calc(100%-8px)] ml-[2px] shrink-0 p-4 rounded-[1.25rem] border-[3px] flex flex-col transition-all shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] ${
+            !item.isIncluded ? 'bg-gray-100 dark:bg-gray-900 border-black grayscale-[0.5]' : 
+            isFronted ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-600 shadow-[4px_4px_0px_0px_rgba(37,99,235,1)]' : 
+            isSettled ? 'bg-gray-100 dark:bg-gray-800 shadow-none border-black' : 'bg-white dark:bg-gray-800 border-black'
           }`}>
-            {isFronted ? `Reimburse Savings for ${item.name}` : item.name}
-          </h4>
-          
-          <div className="flex flex-col md:flex-row items-start md:items-center gap-1 md:gap-2">
-            <span className={`w-fit text-[9px] font-black px-2 py-0.5 border rounded uppercase tracking-wider ${
-              isFronted ? 'bg-blue-200 text-blue-800 border-blue-400' :
-              item.type === 'credit' ? 'bg-purple-100 text-purple-700 border-black' :
-              item.type === 'installment' ? 'bg-indigo-100 text-indigo-700 border-black' :
-              item.type === 'expense' ? 'bg-red-100 text-red-700 border-black' :
-              'bg-gray-100 text-gray-700 border-black'
-            }`}>
-              {isFronted ? 'Pending Reimbursement' : item.type}
-            </span>
-            <span className={`text-[10px] font-bold whitespace-nowrap mt-0.5 md:mt-0 ${isFronted ? 'text-blue-600' : 'text-gray-500'}`}>
-              Due: <span className={`text-xs md:text-[10px] font-black ${isSettled ? 'text-gray-500' : isFronted ? 'text-blue-700' : 'text-gray-900 dark:text-gray-100'}`}>{item.displayDueDate}</span>
-            </span>
-          </div>
-        </div>
+            
+            <div className={`flex justify-between items-start gap-4 transition-opacity ${item.isIncluded ? (isSettled ? 'opacity-75 hover:opacity-100' : 'opacity-100') : 'opacity-60'}`}>
+              
+              {/* LEFT COLUMN: Title & Info */}
+              <div className="flex flex-col justify-center gap-1.5 min-w-0 flex-1">
+                <h4 className={`text-sm md:text-base font-black truncate leading-tight ${
+                  isSettled ? 'text-gray-600 dark:text-gray-400 line-through' : 
+                  isFronted ? 'text-blue-800 dark:text-blue-300' : 'text-gray-900 dark:text-gray-100'
+                }`}>
+                  {isFronted ? `Reimburse Savings for ${item.name}` : item.name}
+                </h4>
+                
+                <div className="flex items-center gap-2 mt-0.5">
+                  <span className={`w-fit text-[9px] font-black px-2 py-0.5 border rounded uppercase tracking-wider ${
+                    isFronted ? 'bg-blue-200 text-blue-800 border-blue-400' :
+                    item.type === 'credit' ? 'bg-purple-100 text-purple-700 border-black' :
+                    item.type === 'installment' ? 'bg-indigo-100 text-indigo-700 border-black' :
+                    item.type === 'expense' ? 'bg-red-100 text-red-700 border-black' :
+                    'bg-gray-100 text-gray-700 border-black'
+                  }`}>
+                    {isFronted ? 'Pending' : item.type}
+                  </span>
 
-        {/* RIGHT COLUMN: Amount & Actions */}
-        <div className="flex flex-col items-end gap-2 shrink-0">
-          <span className={`text-sm md:text-base font-black text-right ${isSettled ? 'text-gray-500' : isFronted ? 'text-blue-800 dark:text-blue-300' : 'text-gray-900 dark:text-gray-100'}`}>
-            ₱{item.amount.toLocaleString(undefined, { minimumFractionDigits: 2 })}
-          </span>
-          
-          <div className="flex flex-col md:flex-row items-end md:items-center gap-2 mt-1 md:mt-0">
-            {isSettled ? (
-              <div className="flex items-center gap-1.5 h-6">
-                <span className="text-[10px] font-black text-green-600 flex items-center gap-1 uppercase tracking-wider">
-                  <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg> 
-                  Settled
-                </span>
-                <button onClick={(e) => { e.preventDefault(); e.stopPropagation(); onInfo(); }} className="p-1 text-gray-400 hover:text-indigo-600 transition-colors" title="View Payment Records"><ReceiptText className="w-3.5 h-3.5" /></button>
+                  {/* 🟢 THE EXPAND TOGGLE */}
+                  {hasSubItems && (
+                    <button 
+                      onClick={(e) => { e.preventDefault(); e.stopPropagation(); setIsExpanded(!isExpanded); }}
+                      className="flex items-center gap-0.5 text-[9px] font-black uppercase tracking-widest text-gray-400 hover:text-indigo-500 transition-colors"
+                    >
+                      <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-300 ${isExpanded ? 'rotate-180' : ''}`} />
+                      <span>{item.subItems!.length} items</span>
+                    </button>
+                  )}
+                </div>
               </div>
-            ) : (
-              <button 
-                type="button"
-                onClick={(e) => { e.preventDefault(); e.stopPropagation(); onPay(); }}
-                className={`px-3 h-6 text-white text-[10px] font-black uppercase rounded-lg border-2 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[1px] hover:translate-y-[1px] transition-all flex items-center justify-center ${
-                  isFronted ? 'bg-blue-600 border-blue-800 shadow-[2px_2px_0px_0px_rgba(30,64,175,1)]' : 'bg-indigo-600 border-black'
-                }`}
-              >
-                {isFronted ? 'Reimburse' : 'Pay'}
-              </button>
-            )}
 
-            <button 
-              type="button" role="switch" aria-checked={item.isIncluded}
-              onClick={(e) => { e.preventDefault(); e.stopPropagation(); onToggle(); }}
-              className={`flex items-center h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 p-0.5 transition-colors duration-200 ease-in-out shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] ${
-                isFronted ? (item.isIncluded ? 'bg-blue-600 border-blue-800 shadow-[2px_2px_0px_0px_rgba(30,64,175,1)]' : 'bg-blue-200 border-blue-800') :
-                (item.isIncluded ? 'bg-indigo-600 border-black' : 'bg-gray-200 dark:bg-gray-700 border-black')
-              }`}
-            >
-              <span className={`pointer-events-none inline-block h-4 w-4 transform rounded-full border-2 bg-white transition duration-200 ease-in-out ${
-                item.isIncluded ? 'translate-x-[16px]' : 'translate-x-0'
-              } ${isFronted ? 'border-blue-800' : 'border-black'}`} />
-            </button>
-          </div>
-        </div>
-        
-      </div>
-
-      {/* NESTED SUB-ITEMS (Installments) */}
-      {item.subItems && item.subItems.length > 0 && (
-        <div className={`mt-4 pt-3 border-t-2 border-dashed flex flex-col gap-2 pl-1 ${isFronted ? 'border-blue-300' : 'border-black/10'}`}>
-          {item.subItems.map(subItem => {
-            const isSubFronted = !!subItem.frontedInfo;
-            return (
-            <div key={subItem.id} className="flex justify-between items-center text-sm group">
-              <div className="flex items-center gap-2">
-                <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${isSubFronted ? 'bg-blue-500' : subItem.id.includes('-base') ? 'bg-purple-400' : 'bg-indigo-400'}`}></span>
-                <span className={`font-bold text-xs ${isSettled || !subItem.isIncluded ? 'text-gray-400 line-through' : isSubFronted ? 'text-blue-700' : 'text-gray-700 dark:text-gray-300'}`}>
-                  {isSubFronted ? `Reimburse: ${subItem.name}` : subItem.name}
-                </span>
-              </div>
-              <div className="flex items-center gap-3">
-                <span className={`font-black text-xs ${isSettled || !subItem.isIncluded ? 'text-gray-400' : isSubFronted ? 'text-blue-800' : 'text-gray-900 dark:text-gray-100'}`}>
-                  ₱{subItem.amount.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+              {/* RIGHT COLUMN: Amount & Actions */}
+              <div className="flex flex-col items-end gap-1 shrink-0">
+                <span className={`text-sm md:text-base font-black text-right ${isSettled ? 'text-gray-500' : isFronted ? 'text-blue-800 dark:text-blue-300' : 'text-gray-900 dark:text-gray-100'}`}>
+                  ₱{item.amount.toLocaleString(undefined, { minimumFractionDigits: 2 })}
                 </span>
                 
-                {subItem.isPaid && (
-                  <div className="flex items-center gap-1">
-                    <span className="text-[9px] font-black text-green-600 flex items-center gap-0.5 uppercase tracking-wider">
-                      <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg> 
-                      Settled
-                    </span>
-                    <button onClick={(e) => { e.preventDefault(); e.stopPropagation(); onInfo(subItem.id); }} className="p-0.5 text-gray-400 hover:text-indigo-600 transition-colors" title="View Payment Records"><ReceiptText className="w-3 h-3" /></button>
-                  </div>
-                )}
-                
+                <div className="flex flex-col md:flex-row items-end md:items-center gap-2 md:mt-0">
+                  {isSettled ? (
+                    <div className="flex items-center gap-1.5 h-6">
+                      <span className="text-[10px] font-black text-green-600 flex items-center gap-1 uppercase tracking-wider">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg> 
+                        Settled
+                      </span>
+                      <button onClick={(e) => { e.preventDefault(); e.stopPropagation(); onInfo(); }} className="p-1 text-gray-400 hover:text-indigo-600 transition-colors" title="View Payment Records"><ReceiptText className="w-3.5 h-3.5" /></button>
+                    </div>
+                  ) : (
+                    <button 
+                      type="button"
+                      onClick={(e) => { e.preventDefault(); e.stopPropagation(); onPay(); }}
+                      disabled={!item.isIncluded}
+                      className={`px-3 h-6 text-white text-[10px] font-black uppercase rounded-lg border-2 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] transition-all flex items-center justify-center ${
+                        !item.isIncluded ? 'bg-gray-400 border-gray-500 shadow-none cursor-not-allowed opacity-50' :
+                        isFronted ? 'bg-blue-600 border-blue-800 shadow-[2px_2px_0px_0px_rgba(30,64,175,1)] hover:shadow-none hover:translate-x-[1px] hover:translate-y-[1px]' : 
+                        'bg-indigo-600 border-black hover:shadow-none hover:translate-x-[1px] hover:translate-y-[1px]'
+                      }`}
+                    >
+                      {isFronted ? 'Reimburse' : 'Pay'}
+                    </button>
+                  )}
+                </div>
               </div>
             </div>
-          )})}
+
+            {/* 🟢 NESTED SUB-ITEMS - NOW COLLAPSIBLE ACCORDION */}
+            {hasSubItems && (
+              <div className={`transition-all duration-300 ease-in-out overflow-hidden ${isExpanded ? 'max-h-[1000px] opacity-100' : 'max-h-0 opacity-0'}`}>
+                <div className={`mt-4 pt-3 border-t-2 border-dashed flex flex-col gap-2 pl-1 ${isFronted ? 'border-blue-300' : 'border-black/10'}`}>
+                  {item.subItems!.map(subItem => {
+                    const isSubFronted = !!subItem.frontedInfo;
+                    return (
+                    <div key={subItem.id} className={`flex justify-between items-center text-sm group transition-opacity ${item.isIncluded ? 'opacity-100' : 'opacity-60'}`}>
+                      <div className="flex items-center gap-2">
+                        <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${isSubFronted ? 'bg-blue-500' : subItem.id.includes('-base') ? 'bg-purple-400' : 'bg-indigo-400'}`}></span>
+                        <span className={`font-bold text-xs ${isSettled || !subItem.isIncluded ? 'text-gray-400 line-through' : isSubFronted ? 'text-blue-700' : 'text-gray-700 dark:text-gray-300'}`}>
+                          {isSubFronted ? `Reimburse: ${subItem.name}` : subItem.name}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <span className={`font-black text-xs ${isSettled || !subItem.isIncluded ? 'text-gray-400' : isSubFronted ? 'text-blue-800' : 'text-gray-900 dark:text-gray-100'}`}>
+                          ₱{subItem.amount.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                        </span>
+                        
+                        {subItem.isPaid && (
+                          <div className="flex items-center gap-1">
+                            <span className="text-[9px] font-black text-green-600 flex items-center gap-0.5 uppercase tracking-wider">
+                              <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg> 
+                              Settled
+                            </span>
+                            <button onClick={(e) => { e.preventDefault(); e.stopPropagation(); onInfo(subItem.id); }} className="p-0.5 text-gray-400 hover:text-indigo-600 transition-colors" title="View Payment Records"><ReceiptText className="w-3 h-3" /></button>
+                          </div>
+                        )}
+                        
+                      </div>
+                    </div>
+                  )})}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* INVISIBLE SCROLL SPACER (Click Target for the toggle action) */}
+          <div 
+            className="snap-end w-[90px] shrink-0 cursor-pointer"
+            onClick={(e) => {
+              e.stopPropagation();
+              onToggle();
+            }}
+          ></div>
+
         </div>
-              )}
       </div>
     </div>
   );
 };
+
 
 
 
@@ -3727,8 +3776,8 @@ const getFrozenCycleAmount = (account: Account): number => {
               title="Budget"
               subtitle="Vibe check for the Month"
               icon={
-                <div className={`w-14 h-14 rounded-2xl flex items-center justify-center text-white border-[3px] border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] -rotate-3 transition-all hover:rotate-0 hover:scale-110 z-10 relative ${getAccentClasses('bg')}`}>
-                  <WalletIcon className="w-7 h-7" />
+                <div className={`w-12 h-12 rounded-2xl flex items-center justify-center text-white border-[3px] border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] -rotate-3 transition-all hover:rotate-0 hover:scale-110 z-10 relative ${getAccentClasses('bg')}`}>
+                  <ChartPie className="w-5 h-5" />
                 </div>
               }
               actions={!isMobile && (
@@ -3750,10 +3799,9 @@ const getFrozenCycleAmount = (account: Account): number => {
   🔮 Crystal Ball
 </button>
 
+
 {/* 📱 MOBILE-ONLY 3-WAY TAB BAR */}
-{/* TO: */}
-{/* 📱 MOBILE-ONLY 3-WAY TAB BAR */}
-<div className="flex lg:hidden w-full border-[3px] border-black rounded-xl overflow-hidden mb-2 bg-white dark:bg-gray-900 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] text-xs sm:text-sm font-black uppercase tracking-wider transition-colors">
+<div className="flex lg:hidden w-full border-[3px] border-black rounded-xl overflow-hidden mb-5 bg-white dark:bg-gray-900 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] text-xs sm:text-sm font-black uppercase tracking-wider transition-colors">
   
   {/* ACTIVE TAB */}
   <button 
@@ -3801,7 +3849,8 @@ const getFrozenCycleAmount = (account: Account): number => {
             )}
 
             {/* --- BUDGET LISTS WRAPPER --- */}
-<div className="w-full flex flex-col gap-0 lg:gap-8">
+            <div className="w-full flex flex-col gap-0 lg:gap-8 mt-6">
+
   
   {/* 1. ACTIVE BUDGETS */}
   <div className={showArchived ? 'hidden lg:block' : 'block'}>
@@ -4339,7 +4388,7 @@ const totalSpend = grandTotal;
               subtitle={isReadOnly ? 'Archived – Read Only' : 'Your Money-Pie for the month'}
               icon={
                 <div className={`w-14 h-14 rounded-2xl flex items-center justify-center text-white border-[3px] border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] -rotate-3 transition-all hover:rotate-0 hover:scale-110 z-10 relative ${getAccentClasses('bg')}`}>
-                  <WalletIcon className="w-7 h-7" />
+                  <ChartPie className="w-7 h-7" />
                 </div>
               }
               actions={
@@ -4971,13 +5020,12 @@ const totalSpend = grandTotal;
           </div>
           <div className="w-full">
             {isMobile ? (
-              <div className="p-4 space-y-4 bg-gray-50/30 dark:bg-gray-955/10">
-                {wallets.map((wallet) => {
+              <div className="p-4 space-y-1 bg-gray-50/30 dark:bg-gray-955/10">
+                                {wallets.map((wallet) => {
                   const linkedAccount = accounts.find(a => a.id === wallet.accountId);
                   const { funded, isFunded } = getStashAggregates(wallet);
                   const isIncluded = !excludedWalletIds.has(wallet.id);
 
-                  // 🟢 Add this to calculate the split for the UI
                   const periodCount = currentPeriods.length || 2;
                   const allocatedAmount = (!wallet.timing || wallet.timing === 'split') 
                     ? (wallet.amount / periodCount) 
@@ -4985,49 +5033,105 @@ const totalSpend = grandTotal;
 
                   const isOverFunded = funded > wallet.amount && wallet.amount > 0;
                   const isExactlyFunded = funded === wallet.amount && wallet.amount > 0;
+                  
                   return (
-                    <div key={wallet.id} className={`p-4 rounded-xl border-2 border-black bg-white dark:bg-gray-800 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] flex flex-col gap-3 transition-all ${isIncluded ? 'opacity-100' : 'opacity-60'}`}>
-                      <div className="flex justify-between items-start gap-2">
-                        <div>
-                          <span className="text-sm font-black text-gray-900 dark:text-gray-100 block">{wallet.name}</span>
-                          {linkedAccount && <span className="text-[10px] text-gray-400 font-bold block mt-0.5">{linkedAccount.bank} ({linkedAccount.classification})</span>}
-                        </div>
-                        {!isReadOnly && (
-                          <button 
-                            onClick={() => handleWalletIncludeToggle(wallet.id)} 
-                            className={`w-8 h-8 rounded-xl border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[0.5px] hover:translate-y-[0.5px] flex items-center justify-center transition-all ${isIncluded ? 'bg-indigo-600 text-white' : 'bg-white dark:bg-gray-700 text-transparent'}`}
-                          >
-                            <Check className="w-4 h-4" />
-                          </button>
-                        )}
-                      </div>
-                      <div className="flex justify-between items-center bg-gray-50 dark:bg-gray-900/50 p-2.5 rounded-lg border-2 border-black">
-                      <div>
-                        <span className="text-[10px] font-black uppercase text-gray-400 block tracking-widest">This Paycheck</span>
-                        <span className="text-sm font-black text-indigo-600 dark:text-indigo-400">{formatCurrency(allocatedAmount)}</span>
-                        <span className="text-[9px] font-bold text-gray-400 block mt-0.5">Total Target: {formatCurrency(wallet.amount)}</span>
-                      </div>
+                    // 📦 OUTER WRAPPER
+                    <div key={wallet.id} className="relative w-full mb-1">
 
-                        <div className="flex items-center space-x-1">
-                          {isOverFunded ? (
-                            <span className="text-[9px] font-black text-blue-600 px-2 py-0.5 bg-blue-50 border border-blue-200 rounded">Over +{formatCurrency(funded - wallet.amount)}</span>
-                          ) : isExactlyFunded ? (
-                            <span className="text-[9px] font-black text-green-600 px-2 py-0.5 bg-green-50 border border-green-200 rounded">Funded</span>
-                          ) : null}
-                          <button onClick={() => setStashInfoModal({ wallet })} className="text-gray-400 border border-transparent p-1 hover:bg-indigo-50 rounded-full"><Info className="w-4 h-4" /></button>
-                        </div>
-                      </div>
+                      {/* 🟠 UNDERLYING REVEAL TRAY (Clickable) */}
                       {!isReadOnly && (
-                        <button 
-                          onClick={() => handleOpenFundModal(wallet)} 
-                          className="w-full flex items-center justify-center space-x-1 py-2.5 rounded-xl bg-indigo-50 border-2 border-black text-indigo-600 font-black uppercase tracking-wider text-xs shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[1px] hover:translate-y-[1px] transition-all"
+                        <div 
+                          className={`absolute top-0 right-1 w-[90px] bottom-2 rounded-[1.25rem] border-[3px] border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] flex flex-col items-center justify-center transition-colors z-0 ${isIncluded ? 'bg-[#E8F5E9]' : 'bg-[#FFEBEE]'}`}
                         >
-                          <Plus className="w-4 h-4" /> <span>{isFunded ? 'Add More' : 'Fund Stash'}</span>
-                        </button>
+                          <button 
+                            className="flex flex-col items-center justify-center w-full h-full pb-1 pointer-events-none"
+                            tabIndex={-1}
+                          >
+                            <span className={`text-[10px] font-black uppercase tracking-wider mb-1 ${isIncluded ? 'text-[#2E7D32]' : 'text-[#C62828]'}`}>
+                              {isIncluded ? 'Included' : 'Skipped'}
+                            </span>
+                            {/* Toggle representing CURRENT STATE */}
+                            <div className={`w-[36px] h-[20px] rounded-full border-2 border-black relative transition-colors ${isIncluded ? 'bg-indigo-600' : 'bg-gray-300 dark:bg-gray-600'}`}>
+                              <span className={`absolute top-[1px] w-[14px] h-[14px] rounded-full border-2 border-black bg-white transition-transform ${isIncluded ? 'left-[17px]' : 'left-[1px]'}`} />
+                            </div>
+                          </button>
+                        </div>
                       )}
+
+                      {/* 🔵 FOREGROUND SCROLLER */}
+                      <div className="flex overflow-x-auto snap-x snap-mandatory scrollbar-hide pb-2 w-full relative z-10">
+                        
+                                                {/* MAIN CARD (Now more compact!) */}
+                                                <div className={`snap-start w-[calc(100%-8px)] ml-[2px] shrink-0 py-3 px-4 rounded-[1.25rem] border-[3px] border-black flex justify-between gap-4 transition-all shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] ${isIncluded ? 'bg-white dark:bg-gray-800' : 'bg-gray-100 dark:bg-gray-900 grayscale-[0.5]'}`}>
+                          
+                          {/* LEFT COLUMN: Identity & Info (Reduced gap-4 to gap-2) */}
+                          <div className={`flex flex-col justify-between items-start gap-2 transition-opacity ${isIncluded ? 'opacity-100' : 'opacity-60'}`}>
+                            <div>
+                              <span className="text-[15px] font-black text-gray-900 dark:text-gray-100 block leading-tight tracking-tight truncate max-w-[160px] sm:max-w-[200px]">
+                                {wallet.name}
+                              </span>
+                              {linkedAccount && (
+                                <span className="text-[10px] text-gray-400 font-bold block mt-0.5 truncate max-w-[160px] sm:max-w-[200px]">
+                                  {linkedAccount.bank} ({linkedAccount.classification})
+                                </span>
+                              )}
+                            </div>
+
+                            <div className="flex items-center gap-2 mt-0.5">
+                              {isOverFunded ? (
+                                <span className="text-[9px] font-black text-blue-700 px-2 py-0.5 bg-blue-100 border-2 border-black rounded-md uppercase shadow-[1px_1px_0px_0px_rgba(0,0,0,1)]">
+                                  Over
+                                </span>
+                              ) : isExactlyFunded ? (
+                                <span className="text-[9px] font-black text-green-700 px-2 py-0.5 bg-green-100 border-2 border-black rounded-md uppercase shadow-[1px_1px_0px_0px_rgba(0,0,0,1)]">
+                                  Funded
+                                </span>
+                              ) : (
+                                <span className="text-[9px] font-black text-gray-600 dark:text-gray-300 px-2 py-0.5 bg-white dark:bg-gray-700 border-2 border-black rounded-md uppercase shadow-[1px_1px_0px_0px_rgba(0,0,0,1)]">
+                                  Pending
+                                </span>
+                              )}
+                              <button onClick={() => setStashInfoModal({ wallet })} className="text-gray-400 hover:text-gray-600 transition-colors p-1 -ml-1">
+                                <Info className="w-4 h-4" />
+                              </button>
+                            </div>
+                          </div>
+
+                          {/* RIGHT COLUMN: Just the Math & Fund Button (Reduced gap-2 to gap-1) */}
+                          <div className={`flex flex-col justify-between items-end gap-1 shrink-0 transition-opacity ${isIncluded ? 'opacity-100' : 'opacity-60'}`}>
+                            <span className="text-[16px] font-black text-indigo-700 dark:text-indigo-400 leading-none mt-1">
+                              {formatCurrency(allocatedAmount)}
+                            </span>
+
+                            {!isReadOnly && (
+                              <button 
+                                onClick={() => handleOpenFundModal(wallet)} 
+                                disabled={!isIncluded}
+                                className={`w-12 h-6 border-[3px] border-black rounded-[0.4rem] flex items-center justify-center transition-all ${isIncluded ? 'bg-white dark:bg-gray-800 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[2px] hover:translate-y-[2px]' : 'bg-gray-200 dark:bg-gray-700 cursor-not-allowed shadow-[1px_1px_0px_0px_rgba(0,0,0,0.5)]'}`}
+                              >
+                                <Plus className="w-4 h-4 stroke-[4] text-black dark:text-white" />
+                              </button>
+                            )}
+                          </div>
+                        </div>
+
+
+                        {/* INVISIBLE SCROLL SPACER (Click Target) */}
+                        {!isReadOnly && (
+                          <div 
+                            className="snap-end w-[100px] shrink-0 cursor-pointer"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleWalletIncludeToggle(wallet.id);
+                            }}
+                          ></div>
+                        )}
+
+                      </div>
                     </div>
                   );
                 })}
+
               </div>
                             ) : (
                               <div className="overflow-x-auto">
@@ -5139,7 +5243,7 @@ const totalSpend = grandTotal;
       <h3 className="text-xs font-black text-gray-400 uppercase tracking-widest pl-2">
         Upcoming Commitments
       </h3>
-<div className="flex flex-col gap-3 pl-4 ml-6 border-l-2 border-dashed border-gray-300 dark:border-gray-700">        {upcomingItems.map(item => (
+<div className="flex flex-col gap-1 pl-4 ml-6 border-l-2 border-dashed border-gray-300 dark:border-gray-700">        {upcomingItems.map(item => (
           <TimelineCard 
             key={item.id} 
             item={item} 
@@ -5177,7 +5281,7 @@ const totalSpend = grandTotal;
       <h3 className="text-xs font-black text-gray-400 uppercase tracking-widest pl-2">
         Settled & Spent
       </h3>
-<div className="flex flex-col gap-3 pl-4 ml-6 border-l-2 border-solid border-gray-200 dark:border-gray-800">        {settledItems.map(item => (
+<div className="flex flex-col gap-1 pl-4 ml-6 border-l-2 border-solid border-gray-200 dark:border-gray-800">        {settledItems.map(item => (
           <TimelineCard 
             key={item.id} 
             item={item} 
@@ -5403,9 +5507,18 @@ const totalSpend = grandTotal;
 
 
       {showPayModal && (
+        <Portal>
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md animate-in fade-in">
           <div className="bg-white dark:bg-gray-900 rounded-2xl w-full max-w-sm p-6 border-4 border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] relative animate-in zoom-in-95">
-            <button onClick={() => setShowPayModal(null)} className="absolute right-4 top-4 p-1.5 hover:bg-gray-100 rounded-full transition-colors"><X className="w-5 h-5 text-gray-400" /></button>
+          <button 
+  type="button"
+  onClick={() => setShowPayModal(null)}
+  className="absolute top-4 right-4 z-20 flex items-center justify-center w-8 h-8 rounded-full border-2 border-black bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[1px] hover:translate-y-[1px] transition-all"
+  aria-label="Close modal"
+>
+  <X className="w-4 h-4 text-black dark:text-white" />
+</button>
+
             <h2 className="text-xl font-black text-gray-900 dark:text-gray-100 mb-1">Pay {showPayModal.biller.name}</h2>
             <p className="text-gray-500 dark:text-gray-400 text-xs mb-4">{payFormData.transactionId ? `Updating payment for ${showPayModal.schedule.month}` : `Recording payment for ${showPayModal.schedule.month}`}</p>
             <form onSubmit={handlePaySubmit} className="space-y-4">
@@ -5434,17 +5547,28 @@ const totalSpend = grandTotal;
 
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">Date Paid</label>
-                  <input required type="date" value={payFormData.datePaid} onChange={(e) => setPayFormData({...payFormData, datePaid: e.target.value})} className="w-full bg-gray-50 dark:bg-gray-800 border-2 border-black rounded-xl px-2.5 py-2 outline-none font-bold text-xs dark:text-gray-100" />
-                </div>
-                <div>
-                  <label className="block text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">Payment Method</label>
-                  <select value={payFormData.accountId} onChange={(e) => setPayFormData({...payFormData, accountId: e.target.value})} className="w-full bg-gray-50 dark:bg-gray-800 border-2 border-black rounded-xl px-2.5 py-2 outline-none font-bold text-xs appearance-none dark:text-gray-100">
-                    {accounts.map(acc => <option key={acc.id} value={acc.id}>{acc.bank} ({acc.classification})</option>)}
-                  </select>
-                </div>
-              </div>
+  <div className="min-w-0">
+    <label className="block text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">Date Paid</label>
+    <input 
+      required 
+      type="date" 
+      value={payFormData.datePaid} 
+      onChange={(e) => setPayFormData({...payFormData, datePaid: e.target.value})} 
+      className="block w-full appearance-none min-w-0 bg-gray-50 dark:bg-gray-800 border-2 border-black rounded-xl px-2.5 py-2 outline-none font-bold text-xs dark:text-gray-100 text-center" 
+    />
+  </div>
+  <div className="min-w-0">
+    <label className="block text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">Payment Method</label>
+    <select 
+      value={payFormData.accountId} 
+      onChange={(e) => setPayFormData({...payFormData, accountId: e.target.value})} 
+      className="block w-full appearance-none min-w-0 bg-gray-50 dark:bg-gray-800 border-2 border-black rounded-xl px-2.5 py-2 outline-none font-bold text-xs dark:text-gray-100 truncate"
+    >
+      {accounts.map(acc => <option key={acc.id} value={acc.id}>{acc.bank} ({acc.classification})</option>)}
+    </select>
+  </div>
+</div>
+
               <div>
                 <label className="block text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">Upload Receipt (Optional)</label>
                 <div className="relative">
@@ -5464,9 +5588,11 @@ const totalSpend = grandTotal;
             </form>
           </div>
         </div>
+        </Portal>
       )}
 
       {showTransactionModal && (
+        <Portal>
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md animate-in fade-in">
           <div className="bg-white dark:bg-gray-900 border-4 border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] rounded-2xl w-full max-w-sm p-6 relative transition-colors">
             <button onClick={() => setShowTransactionModal(false)} className="absolute right-4 top-4 p-1.5 hover:bg-gray-100 rounded-full transition-colors"><X className="w-5 h-5 text-gray-400" /></button>
@@ -5498,58 +5624,120 @@ const totalSpend = grandTotal;
             </form>
           </div>
         </div>
+        </Portal>
       )}
 
-      {fundModal && (
-        <div className="fixed inset-0 z-[150] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md" onClick={() => setFundModal(null)}>
-          <div className="w-full max-w-sm bg-white dark:bg-gray-900 border-4 border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] rounded-2xl p-6 relative" onClick={e => e.stopPropagation()}>
-            <button onClick={() => setFundModal(null)} className="absolute top-4 right-4 text-gray-400 p-1.5 rounded-full hover:bg-gray-100"><X className="w-5 h-5" /></button>
-            <div className="flex items-center space-x-2 mb-4">
-              <div className="w-10 h-10 bg-indigo-50 dark:bg-indigo-900/20 border-2 border-black text-indigo-600 rounded-xl flex items-center justify-center"><Plus className="w-5 h-5" /></div>
-              <div><h2 className="text-lg font-black text-gray-900 dark:text-gray-100 uppercase tracking-tight">Fund Stash</h2><p className="text-[11px] text-gray-500 font-medium">{fundModal.wallet.name}</p></div>
-            </div>
-            <form onSubmit={handleFundSubmit} className="space-y-4">
-              <div>
-                <label className="block text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">Source Account <span className="text-red-500">*</span></label>
-                <select
-                  value={fundForm.sourceAccountId}
-                  onChange={e => setFundForm(f => ({ ...f, sourceAccountId: e.target.value }))}
-                  required
-                  className="w-full bg-white dark:bg-gray-800 border-2 border-black rounded-xl px-3 py-2 text-xs font-bold text-gray-800 dark:text-gray-100 outline-none"
-                >
-                  {accounts.filter(a => a.type === 'Debit').map(account => (
-                    <option key={account.id} value={account.id}>
-                      {account.bank} ({account.classification})
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className="block text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">Amount <span className="text-red-500">*</span></label>
-                <div className="flex items-center border-2 border-black rounded-xl px-3 py-2.5 bg-white dark:bg-gray-800"><span className="text-gray-400 font-bold mr-2 text-xs">₱</span><input type="number" min="0.01" step="0.01" value={fundForm.amount} onChange={e => setFundForm(f => ({ ...f, amount: e.target.value }))} placeholder="0.00" required className="flex-1 bg-transparent outline-none text-sm font-black text-indigo-600" /></div>
-              </div>
-              <div>
-                <label className="block text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">Date <span className="text-red-500">*</span></label>
-                <input type="date" value={fundForm.date} onChange={e => setFundForm(f => ({ ...f, date: e.target.value }))} required className="w-full bg-white dark:bg-gray-800 border-2 border-black rounded-xl px-3 py-2 text-xs font-bold text-gray-800 dark:text-gray-100 outline-none" />
-              </div>
-              <div>
-                <label className="block text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">Notes <span className="text-gray-300">(optional)</span></label>
-                <input type="text" value={fundForm.notes} onChange={e => setFundForm(f => ({ ...f, notes: e.target.value }))} placeholder="e.g. Monthly allocation" className="w-full bg-white dark:bg-gray-800 border-2 border-black rounded-xl px-3 py-2 text-xs text-gray-700 dark:text-gray-300 outline-none" />
-              </div>
-              <div className="flex flex-col space-y-2 pt-1">
-                <button type="submit" disabled={fundSubmitting} className="w-full bg-indigo-600 text-white border-2 border-black py-2.5 rounded-xl font-black uppercase tracking-widest text-[10px] shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[1px] hover:translate-y-[1px] transition-all">{fundSubmitting ? 'Funding…' : 'Fund Stash'}</button>
-                <button type="button" onClick={() => setFundModal(null)} className="w-full bg-gray-100 dark:bg-gray-800 text-gray-500 border-2 border-black py-2.5 rounded-xl font-black uppercase tracking-widest text-[10px] shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[1px] hover:translate-y-[1px] transition-all">Cancel</button>
-              </div>
-            </form>
+{fundModal && (
+  <Portal>
+    <div 
+      className="fixed inset-0 z-[999] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md" 
+      onClick={() => setFundModal(null)}
+    >
+      <div 
+        className="w-full max-w-sm bg-white dark:bg-gray-900 border-4 border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] rounded-2xl p-6 relative" 
+        onClick={e => e.stopPropagation()}
+      >
+        <button onClick={() => setFundModal(null)} className="absolute top-4 right-4 text-gray-400 p-1.5 rounded-full hover:bg-gray-100">
+          <X className="w-5 h-5" />
+        </button>
+        <div className="flex items-center space-x-2 mb-4">
+          <div className="w-10 h-10 bg-amber-50 dark:bg-amber-900/20 border-2 border-black text-amber-600 rounded-xl flex items-center justify-center">
+            <BanknoteArrowDown className="w-5 h-5" />
+          </div>
+          <div>
+            <h2 className="text-lg font-black text-gray-900 dark:text-gray-100 uppercase tracking-tight">Fund Stash</h2>
+            <p className="text-[15px] text-gray-500 font-medium">{fundModal.wallet.name}</p>
           </div>
         </div>
-      )}
+        <form onSubmit={handleFundSubmit} className="space-y-4">
+          <div>
+            <label className="block text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">
+              Source Account <span className="text-red-500">*</span>
+            </label>
+            <select
+              value={fundForm.sourceAccountId}
+              onChange={e => setFundForm(f => ({ ...f, sourceAccountId: e.target.value }))}
+              required
+              className="w-full bg-white dark:bg-gray-800 border-2 border-black rounded-xl px-3 py-2 text-xs font-bold text-gray-800 dark:text-gray-100 outline-none"
+            >
+              {accounts.filter(a => a.type === 'Debit').map(account => (
+                <option key={account.id} value={account.id}>
+                  {account.bank} ({account.classification})
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="block text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">
+              Amount <span className="text-red-500">*</span>
+            </label>
+            <div className="flex items-center border-2 border-black rounded-xl px-3 py-2.5 bg-white dark:bg-gray-800">
+              <span className="text-gray-400 font-bold mr-2 text-xs">₱</span>
+              <input 
+                type="number" 
+                min="0.01" 
+                step="0.01" 
+                value={fundForm.amount} 
+                onChange={e => setFundForm(f => ({ ...f, amount: e.target.value }))} 
+                placeholder="0.00" 
+                required 
+                className="flex-1 bg-transparent outline-none text-sm font-black text-amber-600" 
+              />
+            </div>
+          </div>
+          <div>
+            <label className="block text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">
+              Date <span className="text-red-500">*</span>
+            </label>
+            <input 
+              type="date" 
+              value={fundForm.date} 
+              onChange={e => setFundForm(f => ({ ...f, date: e.target.value }))} 
+              required 
+              className="block w-full appearance-none min-w-0 bg-white dark:bg-gray-800 border-2 border-black rounded-xl px-3 py-2 text-xs font-bold text-gray-800 dark:text-gray-100 outline-none text-center" 
+            />
+          </div>
+          <div>
+            <label className="block text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">
+              Notes <span className="text-gray-300">(optional)</span>
+            </label>
+            <input 
+              type="text" 
+              value={fundForm.notes} 
+              onChange={e => setFundForm(f => ({ ...f, notes: e.target.value }))} 
+              placeholder="e.g. Monthly allocation" 
+              className="w-full bg-white dark:bg-gray-800 border-2 border-black rounded-xl px-3 py-2 text-xs text-gray-700 dark:text-gray-300 outline-none" 
+            />
+          </div>
+          <div className="flex flex-col space-y-2 pt-1">
+            <button 
+              type="submit" 
+              disabled={fundSubmitting} 
+              className="w-full bg-amber-500 text-white border-2 border-black py-2.5 rounded-xl font-black uppercase tracking-widest text-[10px] shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[1px] hover:translate-y-[1px] transition-all"
+            >
+              {fundSubmitting ? 'Funding…' : 'Fund Stash'}
+            </button>
+            <button 
+              type="button" 
+              onClick={() => setFundModal(null)} 
+              className="w-full bg-gray-100 dark:bg-gray-800 text-gray-500 border-2 border-black py-2.5 rounded-xl font-black uppercase tracking-widest text-[10px] shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[1px] hover:translate-y-[1px] transition-all"
+            >
+              Cancel
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </Portal>
+)}
+
 
       {stashInfoModal && (() => {
         const { funded, remaining, topUps } = getStashAggregates(stashInfoModal.wallet);
         const linkedAccount = accounts.find(a => a.id === stashInfoModal.wallet.accountId);
         const legacyTopUps = topUps.filter(isLegacyStashTopUp);
         return (
+          <Portal> 
           <div className="fixed inset-0 z-[150] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md" onClick={() => setStashInfoModal(null)}>
             <div className="w-full max-w-md bg-white dark:bg-gray-900 border-4 border-black shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] rounded-2xl p-6 relative max-h-[85vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
               <button onClick={() => setStashInfoModal(null)} className="absolute top-4 right-4 text-gray-400 p-1.5 rounded-full hover:bg-gray-100"><X className="w-5 h-5" /></button>
@@ -5615,6 +5803,7 @@ const totalSpend = grandTotal;
               )}
             </div>
           </div>
+          </Portal>
         );
       })()}
 
@@ -5671,6 +5860,7 @@ const totalSpend = grandTotal;
       )}
 
       {schedulePaymentsModal && (
+        <Portal> 
         <div className="fixed inset-0 z-[150] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md" onClick={() => setSchedulePaymentsModal(null)}>
           <div className="w-full max-w-sm bg-white border-4 border-black shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] rounded-2xl p-6 relative max-h-[85vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
             <button onClick={() => setSchedulePaymentsModal(null)} className="absolute top-4 right-4 text-gray-400 p-1.5 rounded-full hover:bg-gray-100"><X className="w-5 h-5" /></button>
@@ -5702,83 +5892,112 @@ const totalSpend = grandTotal;
             )}
           </div>
         </div>
+        </Portal>
       )}
 
 {showIncomeRecordsModal && (
-  <div className="fixed inset-0 z-[150] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md animate-in fade-in" onClick={() => setShowIncomeRecordsModal(false)}>
-    <div className="bg-white dark:bg-gray-900 border-4 border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] rounded-2xl w-full max-w-sm p-6 relative max-h-[85vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
-      <button type="button" onClick={() => setShowIncomeRecordsModal(false)} className="absolute top-4 right-4 p-1.5 hover:bg-gray-100 rounded-full transition-colors"><X className="w-5 h-5 text-gray-400" /></button>
-      <div className="flex items-center justify-between mb-4">
-        <div>
-          <h2 className="text-lg font-black text-gray-900 dark:text-gray-100 mb-0.5">Income</h2>
-          <p className="text-gray-500 text-xs">{selectedMonth} {selectedYear}</p>
-        </div>
+  <Portal>
+    <div className="fixed inset-0 z-[2000] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md animate-in fade-in" onClick={() => setShowIncomeRecordsModal(false)}>
+      <div className="bg-white dark:bg-gray-900 border-4 border-black shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] rounded-3xl w-full max-w-sm p-6 relative max-h-[85vh] flex flex-col" onClick={e => e.stopPropagation()}>
+        
+        {/* 🟢 TUCKED CIRCLED CLOSE BUTTON */}
         <button 
           type="button" 
-          onClick={() => { 
-            setShowIncomeRecordsModal(false); 
-            const debitAccounts = accounts.filter(a => a.type === 'Debit'); 
-            setSalaryFormData({ name: 'Income', amount: '', date: getTodayIso(), accountId: debitAccounts[0]?.id || '' }); 
-            setShowSalaryModal(true); 
-          }} 
-          className="flex items-center gap-1 bg-indigo-50 border-2 border-black text-indigo-600 px-2.5 py-1.5 rounded-xl font-bold shadow-[1.5px_1.5px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[0.5px] hover:translate-y-[0.5px] transition-all text-xs"
+          onClick={() => setShowIncomeRecordsModal(false)} 
+          className="absolute top-5 right-5 z-20 flex items-center justify-center w-8 h-8 rounded-full border-2 border-black bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[1px] hover:translate-y-[1px] transition-all"
+          aria-label="Close modal"
         >
-          <Plus className="w-3.5 h-3.5" />Add
+          <X className="w-4 h-4 text-black dark:text-white" />
         </button>
-      </div>
-      {(!allIncomeTxs || allIncomeTxs.filter(Boolean).length === 0) ? (
-        <div className="text-center py-6 text-gray-400 text-xs italic">No income records found.</div>
-      ) : (
-        <div className="space-y-3">
-          {allIncomeTxs.filter(Boolean).map(tx => {
-            if (!tx || !tx.id) return null;
-            const pmName = accounts?.find(a => a?.id === tx?.payment_method_id)?.bank || tx?.payment_method_id || 'Unknown';
-            const displayDate = tx?.date ? new Date(tx.date).toLocaleDateString() : 'No Date';
-            const displayName = tx?.name || 'Income Record';
-            const displayAmount = formatCurrency(Math.abs(tx?.amount || 0));
 
-            return (
-              <div key={tx.id} className="bg-gray-50 dark:bg-gray-800/50 border-2 border-black rounded-xl p-3 space-y-1">
-                <div className="flex justify-between items-start">
-                  <div className="min-w-0 flex-1">
-                    <p className="text-xs font-black text-gray-900 dark:text-gray-100 truncate">{displayName}</p>
-                    <p className="text-[10px] text-gray-500 truncate">{pmName} • {displayDate}</p>
-                  </div>
-                  <span className="text-xs font-black text-green-600 ml-2">{displayAmount}</span>
-                </div>
-                <div className="flex justify-end pt-1">
-                  <PinProtectedAction 
-                    featureId="transaction_deletions" 
-                    onVerified={async () => { 
-                      try { 
-                        const { error } = await deleteTransactionAndRevertSchedule(tx.id); 
-                        if (error) throw error; 
-                        if (displayName.trim().toLowerCase() === 'salary') setActualSalary(''); 
-                        await reloadTransactions(); 
-                        if (onTransactionDeleted) onTransactionDeleted(); 
-                      } catch (e) { 
-                        console.error(e);
-                        alert('Error deleting transaction.'); 
-                      } 
-                    }} 
-                    actionLabel="Delete Record"
-                  >
-                    <button type="button" onClick={(e) => e.preventDefault()} className="text-[9px] font-black text-red-500 border-2 border-black bg-white px-2 py-0.5 rounded-lg shadow-[1px_1px_0px_0px_rgba(0,0,0,1)] hover:shadow-none">Delete</button>
-                  </PinProtectedAction>
-                </div>
-              </div>
-            );
-          })}
+        {/* HEADER (Cleaned up, no top Add button) */}
+        <div className="mb-4">
+          <h2 className="text-xl font-black text-gray-900 dark:text-gray-100 leading-none">Income Records</h2>
+          <p className="text-[10px] text-gray-500 uppercase tracking-widest font-black mt-1">{selectedMonth} {selectedYear}</p>
         </div>
-      )}
+
+        {/* SCROLLABLE RECORDS LIST */}
+        <div className="overflow-y-auto flex-1 space-y-3 pb-2 pr-1">
+          {(!allIncomeTxs || allIncomeTxs.filter(Boolean).length === 0) ? (
+            <div className="text-center py-6 text-gray-400 text-xs italic">No income records found.</div>
+          ) : (
+            allIncomeTxs.filter(Boolean).map(tx => {
+              if (!tx || !tx.id) return null;
+              const pmName = accounts?.find(a => a?.id === tx?.payment_method_id)?.bank || tx?.payment_method_id || 'Unknown';
+              const displayDate = tx?.date ? new Date(tx.date).toLocaleDateString() : 'No Date';
+              const displayName = tx?.name || 'Income Record';
+              const displayAmount = formatCurrency(Math.abs(tx?.amount || 0));
+
+              return (
+                <div key={tx.id} className="bg-gray-50 dark:bg-gray-800/50 border-2 border-black rounded-xl p-3 space-y-1">
+                  <div className="flex justify-between items-start">
+                    <div className="min-w-0 flex-1">
+                      <p className="text-xs font-black text-gray-900 dark:text-gray-100 truncate">{displayName}</p>
+                      <p className="text-[10px] text-gray-500 truncate">{pmName} • {displayDate}</p>
+                    </div>
+                    <span className="text-xs font-black text-green-600 ml-2">{displayAmount}</span>
+                  </div>
+                  <div className="flex justify-end pt-1">
+                    <PinProtectedAction 
+                      featureId="transaction_deletions" 
+                      onVerified={async () => { 
+                        try { 
+                          const { error } = await deleteTransactionAndRevertSchedule(tx.id); 
+                          if (error) throw error; 
+                          if (displayName.trim().toLowerCase() === 'salary') setActualSalary(''); 
+                          await reloadTransactions(); 
+                          if (onTransactionDeleted) onTransactionDeleted(); 
+                        } catch (e) { 
+                          console.error(e);
+                          alert('Error deleting transaction.'); 
+                        } 
+                      }} 
+                      actionLabel="Delete Record"
+                    >
+                      <button type="button" onClick={(e) => e.preventDefault()} className="text-[9px] font-black text-red-500 border-2 border-black bg-white px-2 py-0.5 rounded-lg shadow-[1px_1px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[0.5px] hover:translate-y-[0.5px] transition-all">Delete</button>
+                    </PinProtectedAction>
+                  </div>
+                </div>
+              );
+            })
+          )}
+        </div>
+
+        {/* 🟢 FULL-WIDTH BOTTOM ADD BUTTON */}
+        <div className="pt-3 border-t-2 border-dashed border-gray-200 dark:border-gray-800">
+          <button 
+            type="button" 
+            onClick={() => { 
+              setShowIncomeRecordsModal(false); 
+              const debitAccounts = accounts.filter(a => a.type === 'Debit'); 
+              setSalaryFormData({ name: 'Income', amount: '', date: getTodayIso(), accountId: debitAccounts[0]?.id || '' }); 
+              setShowSalaryModal(true); 
+            }} 
+            className="w-full flex items-center justify-center gap-2 bg-indigo-600 text-white border-2 border-black py-3 rounded-xl font-black uppercase tracking-wider text-xs shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[1px] hover:translate-y-[1px] transition-all"
+          >
+            <Plus className="w-4 h-4" />
+            <span>Add Income Record</span>
+          </button>
+        </div>
+
+      </div>
     </div>
-  </div>
+  </Portal>
 )}
 
+
 {showSalaryModal && (
+  <Portal>
         <div className="fixed inset-0 z-[150] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md animate-in fade-in" onClick={() => setShowSalaryModal(false)}>
           <div className="bg-white dark:bg-gray-900 border-4 border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] rounded-2xl w-full max-w-sm p-6 relative transition-colors" onClick={e => e.stopPropagation()}>
-            <button onClick={() => setShowSalaryModal(false)} className="absolute right-4 top-4 p-1.5 hover:bg-gray-100 rounded-full transition-colors"><X className="w-5 h-5 text-gray-400" /></button>
+          <button 
+  type="button"
+  onClick={() => setShowSalaryModal(false)}
+  className="absolute top-4 right-4 z-20 flex items-center justify-center w-8 h-8 rounded-full border-2 border-black bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[1px] hover:translate-y-[1px] transition-all"
+  aria-label="Close modal"
+>
+  <X className="w-4 h-4 text-black dark:text-white" />
+</button>
             <h2 className="text-xl font-black text-gray-900 dark:text-gray-100 mb-4">Record Income</h2>
             <form onSubmit={handleSalaryCashIn} className="space-y-4">
               <div>
@@ -5789,17 +6008,30 @@ const totalSpend = grandTotal;
                 </div>
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">Date</label>
-                  <input required type="date" value={salaryFormData.date} onChange={(e) => setSalaryFormData({...salaryFormData, date: e.target.value})} className="w-full bg-gray-50 dark:bg-gray-800 border-2 border-black rounded-xl px-2.5 py-2 outline-none font-bold text-xs dark:text-gray-100" />
-                </div>
-                <div>
-                  <label className="block text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">Account</label>
-                  <select value={salaryFormData.accountId} onChange={(e) => setSalaryFormData({...salaryFormData, accountId: e.target.value})} className="w-full bg-gray-50 dark:bg-gray-800 border-2 border-black rounded-xl px-2.5 py-2 outline-none font-bold text-xs dark:text-gray-100">
-                    {accounts.filter(a => a.type === 'Debit').map(acc => <option key={acc.id} value={acc.id}>{acc.bank} ({acc.classification})</option>)}
-                  </select>
-                </div>
-              </div>
+  <div className="min-w-0">
+    <label className="block text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">Date</label>
+    <input 
+      required 
+      type="date" 
+      value={salaryFormData.date} 
+      onChange={(e) => setSalaryFormData({...salaryFormData, date: e.target.value})} 
+      className="block w-full appearance-none min-w-0 bg-gray-50 dark:bg-gray-800 border-2 border-black rounded-xl px-2.5 py-2 outline-none font-bold text-xs dark:text-gray-100 text-center" 
+    />
+  </div>
+  <div className="min-w-0">
+    <label className="block text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">Account</label>
+    <select 
+      value={salaryFormData.accountId} 
+      onChange={(e) => setSalaryFormData({...salaryFormData, accountId: e.target.value})} 
+      className="block w-full appearance-none min-w-0 bg-gray-50 dark:bg-gray-800 border-2 border-black rounded-xl px-2.5 py-2 outline-none font-bold text-xs dark:text-gray-100 truncate"
+    >
+      {accounts.filter(a => a.type === 'Debit').map(acc => (
+        <option key={acc.id} value={acc.id}>{acc.bank} ({acc.classification})</option>
+      ))}
+    </select>
+  </div>
+</div>
+
               <div className="flex space-x-3 pt-2">
                 <button type="button" onClick={() => setShowSalaryModal(false)} className="flex-1 bg-gray-100 dark:bg-gray-800 border-2 border-black py-2.5 rounded-xl font-black text-xs text-gray-500 uppercase tracking-wider shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[1px] hover:translate-y-[1px] transition-all">Cancel</button>
                 <button type="submit" className="flex-1 bg-green-600 text-white border-2 border-black py-2.5 rounded-xl font-black text-xs uppercase tracking-wider shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[1px] hover:translate-y-[1px] transition-all">Submit</button>
@@ -5807,6 +6039,7 @@ const totalSpend = grandTotal;
             </form>
           </div>
         </div>
+        </Portal>
       )}
 
 
@@ -5887,14 +6120,11 @@ const totalSpend = grandTotal;
       {confirmModal.show && <ConfirmDialog {...confirmModal} onClose={() => setConfirmModal(p => ({ ...p, show: false }))} />}
 
       {showCreditPayModal && (
-        <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/80 backdrop-blur-md animate-in fade-in">
-          <button
-            onClick={() => setShowCreditPayModal(null)}
-            className="absolute top-6 right-6 p-2 bg-white/20 hover:bg-white/40 backdrop-blur-sm rounded-full text-white border-2 border-white/20 transition-colors z-[210]"
-          >
-            <X className="w-6 h-6" />
-          </button>
-
+        <Portal>
+        <div 
+          className="fixed inset-0 z-[2000] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md" 
+          onClick={() => setShowCreditPayModal(null)}
+        >
           <div className="w-full relative flex flex-col items-center">
             
             {/* 🟢 NEW: Floating Navigation Arrows */}
@@ -5968,15 +6198,26 @@ const totalSpend = grandTotal;
                 return (
                 <div 
                   key={item.id} 
+                  onClick={(e) => e.stopPropagation()}
                   className="w-[85vw] sm:w-[24rem] shrink-0 snap-center bg-white dark:bg-gray-900 rounded-[2rem] p-6 sm:p-8 border-4 border-black shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] relative flex flex-col transition-all duration-300 ease-out"
                   style={{ 
                     transform: index === 0 ? 'scale(1)' : 'scale(0.9)', 
                     opacity: index === 0 ? 1 : 0.5                      
                   }}
                 >
+                  {/* 🟢 CLOSE BUTTON IS NOW INSIDE THE CARD */}
+                  <button 
+                    type="button"
+                    onClick={() => setShowCreditPayModal(null)}
+                    className="absolute top-5 right-5 z-20 flex items-center justify-center w-8 h-8 rounded-full border-2 border-black bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[1px] hover:translate-y-[1px] transition-all"
+                    aria-label="Close modal"
+                  >
+                    <X className="w-4 h-4 text-black dark:text-white" />
+                  </button>
                   
                   {/* Card Header */}
                   <div className="mb-6">
+
                     {isItemFronted ? (
                       <span className="text-[10px] font-black uppercase tracking-widest text-blue-600 bg-blue-100 border-2 border-black px-3 py-1 rounded-lg mb-3 inline-block shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]">
                         Reimburse
@@ -6171,20 +6412,21 @@ const totalSpend = grandTotal;
                       </div>
                       
                       <div className="grid grid-cols-2 gap-3">
-                        <div>
-                          <label className="block text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">Source Account</label>
-                          <select required name="sourceAccountId" defaultValue={accounts.find(a => a.type === 'Debit')?.id || ''} className="w-full bg-gray-50 dark:bg-gray-800 border-2 border-black rounded-xl px-2.5 py-3 outline-none font-bold text-xs dark:text-gray-100">
-                            {accounts.filter(a => a.type === 'Debit').map(acc => (
-                              <option key={acc.id} value={acc.id}>{acc.bank}</option>
-                            ))}
-                          </select>
-                        </div>
+  <div className="min-w-0">
+    <label className="block text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">Source Account</label>
+    <select required name="sourceAccountId" defaultValue={accounts.find(a => a.type === 'Debit')?.id || ''} className="block w-full appearance-none min-w-0 bg-gray-50 dark:bg-gray-800 border-2 border-black rounded-xl px-2.5 py-3 outline-none font-bold text-xs dark:text-gray-100 truncate">
+      {accounts.filter(a => a.type === 'Debit').map(acc => (
+        <option key={acc.id} value={acc.id}>{acc.bank}</option>
+      ))}
+    </select>
+  </div>
 
-                        <div>
-                          <label className="block text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">Date</label>
-                          <input required name="date" type="date" defaultValue={getTodayIso()} className="w-full bg-gray-50 dark:bg-gray-800 border-2 border-black rounded-xl px-2.5 py-3 outline-none font-bold text-xs dark:text-gray-100" />
-                        </div>
-                      </div>
+  <div className="min-w-0">
+    <label className="block text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">Date</label>
+    <input required name="date" type="date" defaultValue={getTodayIso()} className="block w-full appearance-none min-w-0 bg-gray-50 dark:bg-gray-800 border-2 border-black rounded-xl px-2.5 py-3 outline-none font-bold text-xs dark:text-gray-100 text-center" />
+  </div>
+</div>
+
 
                         <div>
                           <label className="block text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">Receipt (Optional)</label>
@@ -6219,6 +6461,7 @@ const totalSpend = grandTotal;
             )}
           </div>
         </div>
+        </Portal>
       )}
 
 
@@ -6228,32 +6471,12 @@ const totalSpend = grandTotal;
       {/* 🟢 BUDEE 2-STEP COLLECT CAROUSEL          */}
       {/* ========================================= */}
       {showBudeeCarousel && (
+        <Portal>
         <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/80 backdrop-blur-md animate-in fade-in">
-          
-          <button 
-            onClick={() => setShowBudeeCarousel(null)} 
-            className="absolute top-6 right-6 p-2 bg-white/20 hover:bg-white/40 backdrop-blur-sm rounded-full text-white border-2 border-white/20 transition-colors z-[210]"
-          >
-            <X className="w-6 h-6"/>
-          </button>
+        
 
           <div className="w-full relative flex flex-col items-center">
             
-            {/* Navigation Arrows */}
-            <button 
-              type="button"
-              onClick={(e) => { e.preventDefault(); e.stopPropagation(); const container = document.getElementById('budee-carousel'); if (container && container.firstElementChild) { container.scrollTo({ left: container.scrollLeft - (container.firstElementChild.clientWidth + (window.innerWidth >= 640 ? 24 : 16)), behavior: 'smooth' }); } }}
-              className="absolute left-2 sm:left-1/2 sm:-ml-[15rem] top-1/2 -translate-y-1/2 p-2 sm:p-3 bg-white/90 dark:bg-gray-800/90 hover:bg-white dark:hover:bg-gray-800 backdrop-blur-md border-2 border-black rounded-full shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:translate-x-[1px] hover:translate-y-[1px] hover:shadow-none transition-all z-[210] text-black dark:text-white"
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="m15 18-6-6 6-6"/></svg>
-            </button>
-            <button 
-              type="button"
-              onClick={(e) => { e.preventDefault(); e.stopPropagation(); const container = document.getElementById('budee-carousel'); if (container && container.firstElementChild) { container.scrollTo({ left: container.scrollLeft + (container.firstElementChild.clientWidth + (window.innerWidth >= 640 ? 24 : 16)), behavior: 'smooth' }); } }}
-              className="absolute right-2 sm:right-1/2 sm:-mr-[15rem] top-1/2 -translate-y-1/2 p-2 sm:p-3 bg-white/90 dark:bg-gray-800/90 hover:bg-white dark:hover:bg-gray-800 backdrop-blur-md border-2 border-black rounded-full shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:translate-x-[1px] hover:translate-y-[1px] hover:shadow-none transition-all z-[210] text-black dark:text-white"
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="m9 18 6-6-6-6"/></svg>
-            </button>
 
                         {/* Swipe Container */}
                         <div id="budee-carousel"
@@ -6281,6 +6504,16 @@ const totalSpend = grandTotal;
                   className="w-[85vw] sm:w-[24rem] shrink-0 snap-center bg-white dark:bg-gray-900 rounded-[2rem] p-6 sm:p-8 border-4 border-black shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] relative flex flex-col transition-all duration-300 ease-out"
                   style={{ transform: 'scale(1)', opacity: 1 }}
                 >
+                  {/* 🟢 TUCKED INSIDE CLOSE BUTTON */}
+<button 
+  type="button"
+  onClick={() => setShowBudeeCarousel(null)}
+  className="absolute top-5 right-5 z-20 flex items-center justify-center w-8 h-8 rounded-full border-2 border-black bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[1px] hover:translate-y-[1px] transition-all"
+  aria-label="Close modal"
+>
+  <X className="w-4 h-4 text-black dark:text-white" />
+</button>
+
                   <div className="mb-6">
                     <span className="text-[10px] font-black uppercase tracking-widest text-blue-600 bg-blue-100 border-2 border-black px-3 py-1 rounded-lg mb-3 inline-block shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]">
                       Pay Budee
@@ -6389,6 +6622,16 @@ const totalSpend = grandTotal;
                   className="w-[85vw] sm:w-[24rem] shrink-0 snap-center bg-white dark:bg-gray-900 rounded-[2rem] p-6 sm:p-8 border-4 border-black shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] relative flex flex-col transition-all duration-300 ease-out"
                   style={{ transform: 'scale(1)', opacity: 1 }}
                 >
+                  {/* 🟢 TUCKED INSIDE CLOSE BUTTON */}
+<button 
+  type="button"
+  onClick={() => setShowBudeeCarousel(null)}
+  className="absolute top-5 right-5 z-20 flex items-center justify-center w-8 h-8 rounded-full border-2 border-black bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[1px] hover:translate-y-[1px] transition-all"
+  aria-label="Close modal"
+>
+  <X className="w-4 h-4 text-black dark:text-white" />
+</button>
+
                   <div className="mb-6">
                     <span className="text-[10px] font-black uppercase tracking-widest text-emerald-600 bg-emerald-100 border-2 border-black px-3 py-1 rounded-lg mb-3 inline-block shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]">
                       Step 1 of {showBudeeCarousel.amount < showBudeeCarousel.installment.monthlyAmount ? '3' : '2'}
@@ -6480,6 +6723,16 @@ const totalSpend = grandTotal;
                   className="w-[85vw] sm:w-[24rem] shrink-0 snap-center bg-white dark:bg-gray-900 rounded-[2rem] p-6 sm:p-8 border-4 border-black shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] relative flex flex-col transition-all duration-300 ease-out"
                   style={{ transform: 'scale(1)', opacity: 1 }}
                 >
+                  {/* 🟢 TUCKED INSIDE CLOSE BUTTON */}
+<button 
+  type="button"
+  onClick={() => setShowBudeeCarousel(null)}
+  className="absolute top-5 right-5 z-20 flex items-center justify-center w-8 h-8 rounded-full border-2 border-black bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[1px] hover:translate-y-[1px] transition-all"
+  aria-label="Close modal"
+>
+  <X className="w-4 h-4 text-black dark:text-white" />
+</button>
+
                   <div className="mb-4">
                     <span className="text-[10px] font-black uppercase tracking-widest text-indigo-600 bg-indigo-100 border-2 border-black px-3 py-1 rounded-lg mb-3 inline-block shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]">
                       Step 2 of {showBudeeCarousel.totalCollected! < showBudeeCarousel.installment.monthlyAmount ? '3' : '2'}
@@ -6616,6 +6869,16 @@ const totalSpend = grandTotal;
                   className="w-[85vw] sm:w-[24rem] shrink-0 snap-center bg-white dark:bg-gray-900 rounded-[2rem] p-6 sm:p-8 border-4 border-black shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] relative flex flex-col transition-all duration-300 ease-out" 
                   style={{ transform: 'scale(1)', opacity: 1 }}
                 >
+                  {/* 🟢 TUCKED INSIDE CLOSE BUTTON */}
+<button 
+  type="button"
+  onClick={() => setShowBudeeCarousel(null)}
+  className="absolute top-5 right-5 z-20 flex items-center justify-center w-8 h-8 rounded-full border-2 border-black bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[1px] hover:translate-y-[1px] transition-all"
+  aria-label="Close modal"
+>
+  <X className="w-4 h-4 text-black dark:text-white" />
+</button>
+
                   <div className="mb-4">
                     <span className="text-[10px] font-black uppercase tracking-widest text-orange-600 bg-orange-100 border-2 border-black px-3 py-1 rounded-lg mb-3 inline-block shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]">
                       Step 3 of 3
@@ -6731,7 +6994,18 @@ const totalSpend = grandTotal;
 
               {/* 🟢 SCENARIO 3: REIMBURSE SAVINGS */}
               {showBudeeCarousel.direction === 'reimburse' && (
+                
                 <div className="w-[85vw] sm:w-[24rem] shrink-0 snap-center bg-white dark:bg-gray-900 rounded-[2rem] p-6 sm:p-8 border-4 border-black shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] relative flex flex-col transition-all duration-300 ease-out" style={{ transform: 'scale(1)', opacity: 1 }}>
+                  {/* 🟢 TUCKED INSIDE CLOSE BUTTON */}
+<button 
+  type="button"
+  onClick={() => setShowBudeeCarousel(null)}
+  className="absolute top-5 right-5 z-20 flex items-center justify-center w-8 h-8 rounded-full border-2 border-black bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[1px] hover:translate-y-[1px] transition-all"
+  aria-label="Close modal"
+>
+  <X className="w-4 h-4 text-black dark:text-white" />
+</button>
+
                   <div className="mb-6">
                     <span className="text-[10px] font-black uppercase tracking-widest text-blue-600 bg-blue-100 border-2 border-black px-3 py-1 rounded-lg mb-3 inline-block shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]">Reimburse</span>
                     <h2 className="text-xl font-black text-gray-900 dark:text-gray-100 leading-tight mb-1">Pay Back Savings</h2>
@@ -6799,19 +7073,32 @@ const totalSpend = grandTotal;
                     </div>
                   </form>
                 </div>
+              
               )}
 
 
             </div>
           </div>
         </div>
+        </Portal>
       )}
 
       {creditInfoModal && (
-
+<Portal> 
         <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md animate-in fade-in" onClick={() => setCreditInfoModal(null)}>
           <div className="bg-white dark:bg-gray-900 rounded-2xl w-full max-w-sm p-6 border-4 border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] relative animate-in zoom-in-95 max-h-[80vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
-            <button onClick={() => setCreditInfoModal(null)} className="absolute right-4 top-4 p-1.5 hover:bg-gray-100 rounded-full transition-colors"><X className="w-5 h-5 text-gray-400" /></button>
+          <button 
+          type="button"
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            setCreditInfoModal(null);
+          }}
+          className="absolute top-5 right-5 z-30 flex items-center justify-center w-8 h-8 rounded-full border-2 border-black bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[1px] hover:translate-y-[1px] transition-all cursor-pointer pointer-events-auto"
+          aria-label="Close modal"
+        >
+          <X className="w-4 h-4 text-black dark:text-white" />
+        </button>
             <h2 className="text-xl font-black text-gray-900 dark:text-gray-100 mb-1">{creditInfoModal.account.bank}</h2>
             <p className="text-gray-500 dark:text-gray-400 text-xs mb-4">Payment History — {selectedMonth} {selectedYear}</p>
             
@@ -6864,6 +7151,7 @@ const totalSpend = grandTotal;
             </div>
           </div>
         </div>
+        </Portal>
       )}
 
       {/* Smart Rollover Prompt Modal for Budget Page */}
@@ -6927,11 +7215,22 @@ const totalSpend = grandTotal;
 
             {/* 🟢 CATEGORY BREAKDOWN MODAL */}
             {summaryBreakdownModal && (
+              <Portal> 
         <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md animate-in fade-in" onClick={() => setSummaryBreakdownModal(null)}>
           <div className="bg-white dark:bg-gray-900 rounded-3xl w-full max-w-sm p-6 border-4 border-black shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] relative flex flex-col max-h-[80vh]" onClick={e => e.stopPropagation()}>
-            <button onClick={() => setSummaryBreakdownModal(null)} className="absolute right-4 top-4 p-1.5 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full transition-colors">
-              <X className="w-5 h-5 text-gray-500" />
-            </button>
+          <button 
+          type="button"
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            setSummaryBreakdownModal(null);
+          }}
+          className="absolute top-5 right-5 z-30 flex items-center justify-center w-8 h-8 rounded-full border-2 border-black bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[1px] hover:translate-y-[1px] transition-all cursor-pointer pointer-events-auto"
+          aria-label="Close modal"
+        >
+          <X className="w-4 h-4 text-black dark:text-white" />
+        </button>
+
             
             <h2 className="text-xl font-black text-gray-900 dark:text-gray-100 leading-none">{summaryBreakdownModal.category}</h2>
             <p className="text-[10px] text-gray-500 dark:text-gray-400 uppercase tracking-widest font-black mt-1 mb-6">Category Breakdown</p>
@@ -7023,6 +7322,7 @@ const totalSpend = grandTotal;
             </div>
           </div>
         </div>
+        </Portal>
       )}
 
 
