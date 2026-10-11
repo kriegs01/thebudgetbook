@@ -65,7 +65,7 @@ export const SandboxView: React.FC<SandboxViewProps> = ({
     return (accounts || []).filter(acc => acc.type === 'Credit' || acc.classification === 'Credit Card');
   }, [accounts]);
 
-
+  
 
   // --- ISOLATED FORECAST MATH ---
   const startMonthIdx = activeSetup?.month ? MONTHS.indexOf(activeSetup.month) : new Date().getMonth();
@@ -265,37 +265,40 @@ export const SandboxView: React.FC<SandboxViewProps> = ({
   const handleNext = () => scrollToCard(Math.min(timeline.length - 1, activeIndex + 1));
 
   React.useEffect(() => {
-    // 1. Hide the global nav bar and blur blanket
-    const navBar = document.getElementById('global-nav-bar');
-    const blurBlanket = document.getElementById('bottom-blur-blanket');
-    if (navBar) navBar.style.display = 'none';
-    if (blurBlanket) blurBlanket.style.display = 'none';
-  
-    // 2. Inject an absolute override rule to hide ANY fixed mobile header
+    // Inject an override rule to forcefully hide fixed mobile bars & blankets
     const styleEl = document.createElement('style');
     styleEl.id = 'hide-mobile-header-override';
     styleEl.innerHTML = `
       header.fixed.top-4.z-\\[60\\],
-      #global-mobile-header {
+      #global-mobile-header,
+      #global-nav-bar,
+      #bottom-blur-blanket {
         display: none !important;
       }
     `;
     document.head.appendChild(styleEl);
   
     return () => {
-      if (navBar) navBar.style.display = 'flex';
-      if (blurBlanket) blurBlanket.style.display = 'block';
-      
-      // Clean up style rule on exit
+      // Clean up style rule on exit so the app returns to normal
       const el = document.getElementById('hide-mobile-header-override');
       if (el) el.remove();
     };
   }, []);
   
   
+  const [isDesktop, setIsDesktop] = React.useState(false);
 
-  return (
-    <div className="fixed inset-0 z-[150] overflow-y-auto bg-[#FCF6E8] dark:bg-gray-950 px-3 lg:px-8 pt-4 pb-24 duration-300 animate-in fade-in">
+  React.useEffect(() => {
+    const handleResize = () => setIsDesktop(window.innerWidth >= 1024);
+    handleResize();
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+
+    return (
+    <div className="fixed inset-0 z-[300] overflow-y-auto bg-[#FCF6E8] dark:bg-gray-950 px-3 lg:px-8 pt-4 pb-24 duration-300 animate-in fade-in">
+  
 
             {/* 🔮 PAGE HEADER COMPONENT */}
             <div className="shrink-0 mb-6 w-full">
@@ -321,44 +324,46 @@ export const SandboxView: React.FC<SandboxViewProps> = ({
       </div>
 
 
-            {/* 🟢 MAIN LAYOUT */}
-            <div className="flex flex-col lg:flex-row gap-8 flex-1 min-h-0">
+                  {/* 🟢 MAIN LAYOUT */}
+      <div className="flex flex-col lg:flex-row gap-8 flex-1 min-h-0">
         
-        {/* 🎶 APPLE MUSIC TRAY / LEFT COLUMN (Locked to 380px on Desktop) */}
-        <Portal> 
-          <div className={`
-            order-2 lg:order-1 w-full lg:w-[380px] shrink-0 flex flex-col gap-6 lg:sticky lg:top-4 lg:translate-y-0 lg:h-[calc(100vh-8rem)]
-            fixed inset-x-0 bottom-0 top-14 lg:top-auto z-[200] lg:z-auto lg:relative bg-[#F4F3EF] dark:bg-gray-900 lg:bg-transparent lg:dark:bg-transparent
-            rounded-t-[2.5rem] lg:rounded-none border-t-4 border-l-4 border-r-4 lg:border-none border-black
-            shadow-[0px_-8px_20px_rgba(0,0,0,0.15)] lg:shadow-none transition-transform duration-500 ease-[cubic-bezier(0.32,0.72,0,1)]
-            ${isTrayOpen ? 'translate-y-0' : 'translate-y-[calc(100%-4.5rem)] lg:translate-y-0'}
-          `}>
-
-            <div className="lg:hidden w-full h-[4.5rem] flex flex-col items-center justify-center cursor-pointer active:bg-gray-200 dark:active:bg-gray-800 rounded-t-[2.5rem] transition-colors bg-white dark:bg-gray-900 border-b-4 border-black" onClick={() => setIsTrayOpen(!isTrayOpen)}>
-              <div className="w-12 h-1.5 bg-black dark:bg-gray-500 rounded-full mb-2"></div>
-              <p className="font-black text-black dark:text-white uppercase tracking-widest text-sm">
-                {isTrayOpen ? 'Tap to Close' : 'Tap to Add Purchases'}
-              </p>
-            </div>
-
-            {/* Tray */}
-            <div className="px-6 pb-40 pt-1 lg:p-0 max-h-[70vh] lg:max-h-none overflow-y-auto lg:overflow-visible block space-y-6 bg-[#F4F3EF] dark:bg-gray-900 lg:bg-transparent lg:dark:bg-transparent">
-                  
+        {/* Helper function to avoid duplicating the tray form */}
+        {(() => {
+          const renderTrayContent = () => (
+            <>
+              {/* Money-Chill Zone */}
               <div className="p-2 bg-white dark:bg-gray-900 border-4 border-black rounded-2xl shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] shrink-0">
                 <h2 className="text-xl font-black mb-2 uppercase">Money-Chill Zone</h2>
                 <div className="flex items-center border-2 border-black rounded-xl px-3 py-2.5 bg-gray-50 dark:bg-gray-800 focus-within:ring-2 focus-within:ring-amber-400 transition-all mt-4">
                   <span className="text-gray-400 font-bold mr-2 text-sm">₱</span>
-                  <input type="number" value={safetyNet || ''} onChange={(e) => setSafetyNet(Number(e.target.value))} placeholder="e.g. 5000" className="flex-1 bg-transparent outline-none text-base font-black text-amber-600 dark:text-amber-400" />
+                  <input 
+                    type="number" 
+                    value={safetyNet || ''} 
+                    onChange={(e) => setSafetyNet(Number(e.target.value))} 
+                    placeholder="e.g. 5000" 
+                    className="flex-1 bg-transparent outline-none text-base font-black text-amber-600 dark:text-amber-400" 
+                  />
                 </div>
               </div>
 
+              {/* What if I buy... */}
               <div className="p-6 bg-white dark:bg-gray-900 border-4 border-black rounded-2xl shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] flex-1 lg:flex-none lg:h-fit flex flex-col">
                 <div className="shrink-0 mb-6">
                   <h2 className="text-xl font-black mb-4 uppercase">What if I buy...</h2>
                   
                   <div className="flex gap-2 mb-4 bg-gray-100 dark:bg-gray-800 p-1 rounded-xl border-2 border-black">
-                    <button onClick={() => setPurchaseType('one-off')} className={`flex-1 py-1.5 text-xs font-black uppercase rounded-lg transition-all ${purchaseType === 'one-off' ? 'bg-white dark:bg-gray-700 dark:text-white border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]' : 'text-gray-500 dark:text-gray-400 border-2 border-transparent'}`}>One-Off</button>
-                    <button onClick={() => setPurchaseType('installment')} className={`flex-1 py-1.5 text-xs font-black uppercase rounded-lg transition-all ${purchaseType === 'installment' ? 'bg-white dark:bg-gray-700 dark:text-white border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]' : 'text-gray-500 dark:text-gray-400 border-2 border-transparent'}`}>Installment</button>
+                    <button 
+                      onClick={() => setPurchaseType('one-off')} 
+                      className={`flex-1 py-1.5 text-xs font-black uppercase rounded-lg transition-all ${purchaseType === 'one-off' ? 'bg-white dark:bg-gray-700 dark:text-white border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]' : 'text-gray-500 dark:text-gray-400 border-2 border-transparent'}`}
+                    >
+                      One-Off
+                    </button>
+                    <button 
+                      onClick={() => setPurchaseType('installment')} 
+                      className={`flex-1 py-1.5 text-xs font-black uppercase rounded-lg transition-all ${purchaseType === 'installment' ? 'bg-white dark:bg-gray-700 dark:text-white border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]' : 'text-gray-500 dark:text-gray-400 border-2 border-transparent'}`}
+                    >
+                      Installment
+                    </button>
                   </div>
 
                   <div className="space-y-3 mb-4">
@@ -428,7 +433,12 @@ export const SandboxView: React.FC<SandboxViewProps> = ({
 
                     <div className="relative">
                       <CalendarDays className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
-                      <input type="date" value={purchaseDate} onChange={(e) => setPurchaseDate(e.target.value)} className="w-full pl-0 bg-gray-50 dark:bg-gray-800 border-2 border-black rounded-xl px-3 py-2 outline-none font-bold text-xs" />
+                      <input 
+                        type="date" 
+                        value={purchaseDate} 
+                        onChange={(e) => setPurchaseDate(e.target.value)} 
+                        className="w-full pl-0 bg-gray-50 dark:bg-gray-800 border-2 border-black rounded-xl px-3 py-2 outline-none font-bold text-xs" 
+                      />
                     </div>
                   </div>
 
@@ -496,13 +506,48 @@ export const SandboxView: React.FC<SandboxViewProps> = ({
                   )}
                 </div>
               </div>
+            </>
+          );
 
-            </div>
-          </div>
-        </Portal>
+          return (
+              <>
+                {/* 1. DESKTOP VIEW: In normal flex layout (No Portal = Never overlaps the timeline!) */}
+                <div className="hidden lg:flex w-[380px] shrink-0 flex-col gap-6 sticky top-4 h-[calc(100vh-8rem)]">
+                  <div className="p-0 overflow-visible space-y-6">
+                    {renderTrayContent()}
+                  </div>
+                </div>
+  
+                {/* 2. MOBILE VIEW: Hoisted to document.body via Portal with z-[9999] */}
+                <Portal>
+                  <div className={`
+                    lg:hidden fixed inset-x-0 bottom-0 top-14 z-[9999] bg-[#F4F3EF] dark:bg-gray-900
+                    rounded-t-[2.5rem] border-t-4 border-l-4 border-r-4 border-black
+                    shadow-[0px_-8px_20px_rgba(0,0,0,0.25)] transition-transform duration-500 ease-[cubic-bezier(0.32,0.72,0,1)]
+                    ${isTrayOpen ? 'translate-y-0' : 'translate-y-[calc(100%-4.5rem)]'}
+                  `}>
+                    <div 
+                      className="w-full h-[4.5rem] flex flex-col items-center justify-center cursor-pointer active:bg-gray-200 dark:active:bg-gray-800 rounded-t-[2.5rem] transition-colors bg-white dark:bg-gray-900 border-b-4 border-black" 
+                      onClick={() => setIsTrayOpen(!isTrayOpen)}
+                    >
+                      <div className="w-12 h-1.5 bg-black dark:bg-gray-500 rounded-full mb-2"></div>
+                      <p className="font-black text-black dark:text-white uppercase tracking-widest text-sm">
+                        {isTrayOpen ? 'Tap to Close' : 'Tap to Add Purchases'}
+                      </p>
+                    </div>
+  
+                    <div className="px-6 pb-40 pt-1 max-h-[70vh] overflow-y-auto space-y-6 bg-[#F4F3EF] dark:bg-gray-900">
+                      {renderTrayContent()}
+                    </div>
+                  </div>
+                </Portal>
+              </>
+            );
+          })()}
+  
 
         {/* 🟡 FORECAST BOARD */}
-        <div className="flex-1 min-w-0 w-full flex flex-col gap-6 order-1 lg:order-2 overflow-hidden">
+        <div className="flex-1 min-w-0 w-full flex flex-col gap-6 overflow-hidden">
           
           <div className="flex flex-wrap gap-2 items-center bg-white dark:bg-gray-900 border-4 border-black p-4 rounded-2xl shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] shrink-0">
             <div className="flex items-center gap-2 w-full min-w-0">
@@ -560,7 +605,8 @@ export const SandboxView: React.FC<SandboxViewProps> = ({
           </div>
 
           {/* TIMELINE UI (with Carousel Support) */}
-          <div className="p-4 bg-white dark:bg-gray-900 border-4 border-black rounded-2xl shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] flex-1 flex flex-col overflow-hidden min-h-[400px]">
+<div className="p-4 bg-white dark:bg-gray-900 border-4 border-black rounded-2xl shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] flex flex-col overflow-hidden">
+
             <div className="mb-6 flex justify-between items-end shrink-0">
               <h2 className="text-xl font-black uppercase">Take a peek!</h2>
               {totalMockSpend > 0 && (
@@ -572,10 +618,11 @@ export const SandboxView: React.FC<SandboxViewProps> = ({
             </div>
 
             <div 
-              ref={scrollContainerRef}
-              onScroll={handleScroll}
-              className="flex-1 overflow-y-auto lg:overflow-x-auto lg:overflow-y-hidden custom-scrollbar pb-4"
-            >
+  ref={scrollContainerRef}
+  onScroll={handleScroll}
+  className="overflow-y-auto lg:overflow-x-auto lg:overflow-y-hidden custom-scrollbar pb-2"
+>
+
               <div className={`relative flex w-full flex-col space-y-6 lg:space-y-0 lg:flex-row lg:space-x-6 lg:min-w-max`}>
                 <div className="absolute left-[15px] top-4 bottom-4 w-1 bg-black lg:hidden z-0"></div>
                 <div className="hidden lg:block absolute top-[15px] left-4 right-4 h-1 bg-black z-0"></div>
@@ -625,7 +672,8 @@ export const SandboxView: React.FC<SandboxViewProps> = ({
             </div>
 
             {/* 🟢 DESKTOP CAROUSEL CONTROLS */}
-            <div className="hidden lg:flex items-center justify-center gap-6 pt-4 shrink-0 border-t-2 border-dashed border-gray-200 dark:border-gray-700 mt-auto">
+<div className="hidden lg:flex items-center justify-center gap-6 pt-3 shrink-0 border-t-2 border-dashed border-gray-200 dark:border-gray-700 mt-2">
+
               <button 
                 onClick={handlePrev} 
                 disabled={activeIndex === 0} 
@@ -662,7 +710,7 @@ export const SandboxView: React.FC<SandboxViewProps> = ({
       <Portal>
         {isTrayOpen && (
           <div 
-            className="lg:hidden fixed inset-0 bg-black/40 z-[190] transition-opacity duration-500 animate-in fade-in" 
+            className="lg:hidden fixed inset-0 bg-black/40 z-[9990] transition-opacity duration-500 animate-in fade-in" 
             onClick={() => setIsTrayOpen(false)} 
           />
         )}
@@ -670,4 +718,5 @@ export const SandboxView: React.FC<SandboxViewProps> = ({
     </div>
   );
 };
+
 

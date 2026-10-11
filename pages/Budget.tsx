@@ -2435,9 +2435,28 @@ const getFrozenCycleAmount = (account: Account): number => {
           });
           return sum + bundleInsts.reduce((s, i) => s + i.monthlyAmount, 0);
         } else {
-          const amt = getFrozenCycleAmount(account);
+          let amt = getFrozenCycleAmount(account);
+        
+          // 🟢 Mirror UI math: calculate sub-items so parent never drops below children
+          const buckets = generateCreditBuckets(account, transactions || [], budgetInstallments, selectedYear, selectedMonth);
+          const targetBucket = getBucketForMonth(buckets, selectedMonth, selectedYear);
+          const pb = targetBucket?.personalBreakdown;
+        
+          if (pb) {
+            const baseAmount = (pb.unpaidRollover || 0) + (pb.newSwipesTotal || 0);
+            const activeInstSum = (pb.activeInstallments || [])
+              .filter((inst: any) => !excludedInstallmentIds.has(inst.id))
+              .reduce((s: number, inst: any) => s + (Number(inst.monthlyAmount) || Number(inst.amount) || 0), 0);
+        
+            const subTotal = baseAmount + activeInstSum;
+            if (amt < subTotal) {
+              amt = subTotal;
+            }
+          }
+        
           return amt >= 0.01 ? sum + amt : sum;
         }
+        
       }, 0);
 
       const periodCount = currentPeriods.length || 2;
@@ -2781,9 +2800,28 @@ const getFrozenCycleAmount = (account: Account): number => {
           });
           return sum + bundleInsts.reduce((s, i) => s + i.monthlyAmount, 0);
         } else {
-          const amt = getFrozenCycleAmount(account);
+          let amt = getFrozenCycleAmount(account);
+        
+          // 🟢 Mirror UI math: calculate sub-items so parent never drops below children
+          const buckets = generateCreditBuckets(account, transactions || [], budgetInstallments, selectedYear, selectedMonth);
+          const targetBucket = getBucketForMonth(buckets, selectedMonth, selectedYear);
+          const pb = targetBucket?.personalBreakdown;
+        
+          if (pb) {
+            const baseAmount = (pb.unpaidRollover || 0) + (pb.newSwipesTotal || 0);
+            const activeInstSum = (pb.activeInstallments || [])
+              .filter((inst: any) => !excludedInstallmentIds.has(inst.id))
+              .reduce((s: number, inst: any) => s + (Number(inst.monthlyAmount) || Number(inst.amount) || 0), 0);
+        
+            const subTotal = baseAmount + activeInstSum;
+            if (amt < subTotal) {
+              amt = subTotal;
+            }
+          }
+        
           return amt >= 0.01 ? sum + amt : sum;
         }
+        
       }, 0);
 
       const periodCount = currentPeriods.length || 2;
@@ -3495,10 +3533,23 @@ const getFrozenCycleAmount = (account: Account): number => {
 
     const isInstActiveForTimeline = (inst: any) => {
       if (inst.status === 'pending') return false;
+      
       const isBudee = !!(inst.funding_friend_id || inst.debtor_friend_id || inst.friend_user_id);
-      if (inst.isArchived && (!isBudee || !shouldShowInstallment(inst, selectedMonth, selectedYear))) return false;
+      if (inst.isArchived && !isBudee) return false;
+    
+      // 1. Verify that this installment actually has a payment schedule or is active for this month/year
+      const scheduleForMonth = getPaymentSchedule('installment', inst.id, selectedMonth, selectedYear);
+      const isActiveForMonth = scheduleForMonth !== undefined || shouldShowInstallment(inst, selectedMonth, selectedYear);
+      if (!isActiveForMonth) return false;
+    
+      // 2. Filter out installments that are already finished
+      const isFinished = !scheduleForMonth && inst.totalAmount > 0 && inst.paidAmount >= inst.totalAmount;
+      if (isFinished) return false;
+    
+      // 3. Match the current active paycheck period (1st half vs 2nd half)
       return determineItemPeriod(inst, currentPeriods, selectedMonth, selectedYear) === activePeriodIndex;
     };
+    
 
         // 🟢 SCANS FOR THE TOGGLE'S TAG!
     const getFrontedData = (itemName: string) => {
@@ -4580,7 +4631,11 @@ const totalSpend = grandTotal;
             {/* CARD 2: MONTH SUMMARY */}
             <div className="snap-center shrink-0 w-[88vw] lg:w-full h-auto flex flex-col">
               <div className="bg-white dark:bg-gray-900 rounded-2xl border-4 border-black shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] overflow-hidden w-full transition-colors flex-1">
-                <div className="p-4 border-b-4 border-black bg-gray-50/30 dark:bg-gray-800/30"><h3 className="text-xs font-black text-gray-900 dark:text-gray-100 uppercase tracking-[0.25em] text-center">MONTH SUMMARY</h3></div>
+                <div className="p-4 border-b-4 border-black bg-gray-50/30 dark:bg-gray-800/30"><h3 className="text-xs font-black text-gray-900 dark:text-gray-100 uppercase tracking-[0.25em] text-center">
+  {currentPeriods[activePeriodIndex - 1]?.label 
+    ? `${currentPeriods[activePeriodIndex - 1].label.toUpperCase()} SUMMARY` 
+    : `PAYCHECK ${activePeriodIndex} SUMMARY`}
+</h3></div>
                 
                 <table className="w-full text-left">
                   <thead><tr className="text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase border-b border-gray-100 dark:border-gray-800"><th className="p-3 pl-6">Item</th><th className="p-3 pr-6 text-right">Amount</th></tr></thead>
