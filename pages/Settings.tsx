@@ -13,6 +13,7 @@ import { useTheme } from '../src/contexts/ThemeContext';
 import { PageHeader } from '../src/components/PageHeader';
 import { updateAccount } from '../src/services/accountsService';
 import { PayScheduleSettings } from '../src/components/PayScheduleSettings'; // adjust path as needed based on your file structure
+import { AboutSection } from '../src/components/AboutSection';
 
 
 interface SettingsProps {
@@ -1749,6 +1750,18 @@ const Settings: React.FC<SettingsProps> = ({ currency, setCurrency, categories, 
       label: 'Security',
       icon: <Shield className="w-5 h-5" />,
       content: <SecuritySettings />
+    },
+
+    {
+      id: 'about',
+      label: 'About & Updates',
+      icon: <Info classname="w-5 h-5" />,
+      content: (
+        <div className="pt-2">
+          <AboutSection />
+          </div>
+
+      )
     },
     ...((userProfile as any)?.role === 'admin' ? [{
       id: 'test-environment',

@@ -331,11 +331,11 @@ const TimelineCard = ({
         <span className={`text-[14px] leading-tight font-black py-1 ${isSettled ? 'text-gray-500' : 'text-gray-900 dark:text-gray-100'}`}>{item.dueDate}</span>
       </div>
 
-      {/* 📦 THE NEW SWIPEABLE TIMELINE WRAPPER */}
+      {/* 📦 THE SWIPEABLE TIMELINE WRAPPER */}
       <div className="relative w-full mb-1">
 
-                {/* 🟠 UNDERLYING REVEAL TRAY (Clickable) */}
-                <div 
+        {/* 🟠 UNDERLYING REVEAL TRAY (Clickable) */}
+        <div 
           className={`absolute top-[2px] right-2 w-[80px] bottom-[12px] rounded-[1.25rem] border-[3px] border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] flex flex-col items-center justify-center transition-colors z-0 ${item.isIncluded ? 'bg-[#E8F5E9]' : 'bg-[#FFEBEE]'}`}
         >
           <button 
@@ -351,48 +351,43 @@ const TimelineCard = ({
           </button>
         </div>
 
-
         {/* 🔵 FOREGROUND SCROLLER */}
         <div className="flex overflow-x-auto snap-x snap-mandatory scrollbar-hide pb-2 w-full relative z-10">
           
-          {/* MAIN CARD CONTENT */}
+                              {/* MAIN CARD CONTENT */}
           <div className={`snap-start w-[calc(100%-8px)] ml-[2px] shrink-0 p-4 rounded-[1.25rem] border-[3px] flex flex-col transition-all shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] ${
             !item.isIncluded ? 'bg-gray-100 dark:bg-gray-900 border-black grayscale-[0.5]' : 
-            isFronted ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-600 shadow-[4px_4px_0px_0px_rgba(37,99,235,1)]' : 
+            isFronted ? 'bg-blue-50 dark:bg-[#0f172a] border-blue-600 shadow-[4px_4px_0px_0px_rgba(37,99,235,1)]' : 
             isSettled ? 'bg-gray-100 dark:bg-gray-800 shadow-none border-black' : 'bg-white dark:bg-gray-800 border-black'
           }`}>
             
+            {/* TOP HEADER ROW: Name & Amount */}
             <div className={`flex justify-between items-start gap-4 transition-opacity ${item.isIncluded ? (isSettled ? 'opacity-75 hover:opacity-100' : 'opacity-100') : 'opacity-60'}`}>
               
-              {/* LEFT COLUMN: Title & Info */}
-              <div className="flex flex-col justify-center gap-1.5 min-w-0 flex-1">
+              {/* LEFT COLUMN: Title & Subtitle */}
+              <div className="flex flex-col justify-center gap-1 min-w-0 flex-1">
                 <h4 className={`text-sm md:text-base font-black truncate leading-tight ${
                   isSettled ? 'text-gray-600 dark:text-gray-400 line-through' : 
                   isFronted ? 'text-blue-800 dark:text-blue-300' : 'text-gray-900 dark:text-gray-100'
                 }`}>
-                  {isFronted ? `Reimburse Savings for ${item.name}` : item.name}
+                  {item.name}
                 </h4>
                 
-                <div className="flex items-center gap-2 mt-0.5">
-                  <span className={`w-fit text-[9px] font-black px-2 py-0.5 border rounded uppercase tracking-wider ${
-                    isFronted ? 'bg-blue-200 text-blue-800 border-blue-400' :
-                    item.type === 'credit' ? 'bg-purple-100 text-purple-700 border-black' :
-                    item.type === 'installment' ? 'bg-indigo-100 text-indigo-700 border-black' :
-                    item.type === 'expense' ? 'bg-red-100 text-red-700 border-black' :
-                    'bg-gray-100 text-gray-700 border-black'
-                  }`}>
-                    {isFronted ? 'Pending' : item.type}
-                  </span>
-
-                  {/* 🟢 THE EXPAND TOGGLE */}
-                  {hasSubItems && (
-                    <button 
-                      onClick={(e) => { e.preventDefault(); e.stopPropagation(); setIsExpanded(!isExpanded); }}
-                      className="flex items-center gap-0.5 text-[9px] font-black uppercase tracking-widest text-gray-400 hover:text-indigo-500 transition-colors"
-                    >
-                      <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-300 ${isExpanded ? 'rotate-180' : ''}`} />
-                      <span>{item.subItems!.length} items</span>
-                    </button>
+                {/* Clean, uncrowded subtitle row */}
+                <div className="flex items-center mt-0.5">
+                  {isFronted ? (
+                    <span className="text-[11px] font-bold text-blue-600/90 dark:text-blue-400/90 whitespace-nowrap">
+                      Paid using Savings
+                    </span>
+                  ) : (
+                    <span className={`w-fit text-[9px] font-black px-2 py-0.5 border rounded uppercase tracking-wider ${
+                      item.type === 'credit' ? 'bg-purple-100 text-purple-700 border-black' :
+                      item.type === 'installment' ? 'bg-indigo-100 text-indigo-700 border-black' :
+                      item.type === 'expense' ? 'bg-red-100 text-red-700 border-black' :
+                      'bg-gray-100 text-gray-700 border-black'
+                    }`}>
+                      {item.type}
+                    </span>
                   )}
                 </div>
               </div>
@@ -430,41 +425,125 @@ const TimelineCard = ({
               </div>
             </div>
 
-            {/* 🟢 NESTED SUB-ITEMS - NOW COLLAPSIBLE ACCORDION */}
+            {/* 🟢 BOTTOM ACCORDION TRIGGER (Full-width & coherent) */}
+            {hasSubItems && (
+              <button 
+                type="button"
+                onClick={(e) => { e.preventDefault(); e.stopPropagation(); setIsExpanded(!isExpanded); }}
+                className={`mt-3 pt-2 border-t flex items-center justify-between w-full text-[10px] font-black uppercase tracking-wider transition-colors ${
+                  isFronted 
+                    ? 'border-blue-500/20 text-blue-700/80 hover:text-blue-800 dark:text-blue-400/80 dark:hover:text-blue-300' 
+                    : 'border-black/5 dark:border-white/10 text-gray-400 hover:text-indigo-600 dark:hover:text-indigo-400'
+                }`}
+              >
+                <span>{item.subItems!.length} {item.subItems!.length === 1 ? 'item' : 'items'}</span>
+                <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-300 ${isExpanded ? 'rotate-180' : ''}`} />
+              </button>
+            )}
+
+            {/* NESTED SUB-ITEMS ACCORDION */}
             {hasSubItems && (
               <div className={`transition-all duration-300 ease-in-out overflow-hidden ${isExpanded ? 'max-h-[1000px] opacity-100' : 'max-h-0 opacity-0'}`}>
-                <div className={`mt-4 pt-3 border-t-2 border-dashed flex flex-col gap-2 pl-1 ${isFronted ? 'border-blue-300' : 'border-black/10'}`}>
-                  {item.subItems!.map(subItem => {
-                    const isSubFronted = !!subItem.frontedInfo;
-                    return (
-                    <div key={subItem.id} className={`flex justify-between items-center text-sm group transition-opacity ${item.isIncluded ? 'opacity-100' : 'opacity-60'}`}>
-                      <div className="flex items-center gap-2">
-                        <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${isSubFronted ? 'bg-blue-500' : subItem.id.includes('-base') ? 'bg-purple-400' : 'bg-indigo-400'}`}></span>
-                        <span className={`font-bold text-xs ${isSettled || !subItem.isIncluded ? 'text-gray-400 line-through' : isSubFronted ? 'text-blue-700' : 'text-gray-700 dark:text-gray-300'}`}>
-                          {isSubFronted ? `Reimburse: ${subItem.name}` : subItem.name}
+                {/* ... (leave your sub-items content exactly as it is) ... */}
+
+                <div className={`mt-4 pt-3 border-t-2 border-dashed flex flex-col gap-3 pl-1 ${isFronted ? 'border-blue-300' : 'border-black/10'}`}>
+                  
+                  {/* --- ME SECTION --- */}
+                  <div className="flex flex-col gap-1.5">
+                    <div className="flex justify-between items-center text-[10px] font-black uppercase tracking-wider text-blue-600 dark:text-blue-400">
+                      <span>Me (Personal Share)</span>
+                      <span className="text-blue-600 dark:text-blue-400 font-black">
+                        ₱{item.subItems!.reduce((s, sub) => s + sub.amount, 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                      </span>
+                    </div>
+
+                    <div className="flex flex-col gap-1.5 pl-2">
+                      {item.subItems!.map(subItem => {
+                        const isSubFronted = !!subItem.frontedInfo;
+                        return (
+                          <div key={subItem.id} className={`flex justify-between items-center text-xs group transition-opacity ${item.isIncluded ? 'opacity-100' : 'opacity-60'}`}>
+                            <div className="flex items-center gap-2">
+                              {/* 🟢 Bullet matches Budee's bg-blue-500 */}
+                              <span className="w-1.5 h-1.5 rounded-full shrink-0 bg-blue-500" />
+                              <span className={`font-bold ${isSettled || !subItem.isIncluded ? 'text-gray-400 line-through' : 'text-gray-700 dark:text-gray-300'}`}>
+                                {isSubFronted ? `Reimburse: ${subItem.name}` : subItem.name}
+                              </span>
+                            </div>
+
+                            <div className="flex items-center gap-2">
+                              {/* 🟢 Amount text matches Budee's text-blue-800 dark:text-blue-200 */}
+                              <span className={`font-black ${isSettled || !subItem.isIncluded ? 'text-gray-400 line-through' : 'text-blue-800 dark:text-blue-200'}`}>
+                                ₱{subItem.amount.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                              </span>
+
+                              {/* Settled status badge & receipt viewer shortcut */}
+                              {subItem.isPaid && (
+                                <div className="flex items-center gap-1">
+                                  <span className="text-[9px] font-black text-green-600 flex items-center gap-0.5 uppercase tracking-wider">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                                      <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
+                                      <polyline points="22 4 12 14.01 9 11.01" />
+                                    </svg> 
+                                    Settled
+                                  </span>
+                                  <button 
+                                    onClick={(e) => { e.preventDefault(); e.stopPropagation(); onInfo(subItem.id); }} 
+                                    className="p-0.5 text-gray-400 hover:text-indigo-600 transition-colors" 
+                                    title="View Payment Records"
+                                  >
+                                    <ReceiptText className="w-3 h-3" />
+                                  </button>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* --- BUDEE SECTION (Reimbursable shares on this statement) --- */}
+                  {item.rawItem?.reimbursableItems && item.rawItem.reimbursableItems.length > 0 && (
+                    <div className="flex flex-col gap-1.5 pt-2 border-t border-dashed border-gray-200 dark:border-gray-700">
+                      <div className="flex justify-between items-center text-[10px] font-black uppercase tracking-wider text-blue-600 dark:text-blue-400">
+                        <span>Budee (Reimbursable)</span>
+                        <span>
+                          ₱{item.rawItem.reimbursableItems.reduce((s: number, b: any) => s + b.amount, 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
                         </span>
                       </div>
-                      <div className="flex items-center gap-3">
-                        <span className={`font-black text-xs ${isSettled || !subItem.isIncluded ? 'text-gray-400' : isSubFronted ? 'text-blue-800' : 'text-gray-900 dark:text-gray-100'}`}>
-                          ₱{subItem.amount.toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                        </span>
-                        
-                        {subItem.isPaid && (
-                          <div className="flex items-center gap-1">
-                            <span className="text-[9px] font-black text-green-600 flex items-center gap-0.5 uppercase tracking-wider">
-                              <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg> 
-                              Settled
+
+                      <div className="flex flex-col gap-1.5 pl-2">
+                        {item.rawItem.reimbursableItems.map((budeeItem: any) => (
+                          <div key={budeeItem.id} className="flex justify-between items-center text-xs">
+                            <div className="flex items-center gap-2">
+                              <span className="w-1.5 h-1.5 rounded-full bg-blue-500 shrink-0" />
+                              <span className="font-bold text-gray-700 dark:text-gray-300">
+                                {budeeItem.name}
+                              </span>
+                            </div>
+                            <span className="font-black text-blue-800 dark:text-blue-200">
+                              ₱{budeeItem.amount.toLocaleString(undefined, { minimumFractionDigits: 2 })}
                             </span>
-                            <button onClick={(e) => { e.preventDefault(); e.stopPropagation(); onInfo(subItem.id); }} className="p-0.5 text-gray-400 hover:text-indigo-600 transition-colors" title="View Payment Records"><ReceiptText className="w-3 h-3" /></button>
                           </div>
-                        )}
-                        
+                        ))}
                       </div>
                     </div>
-                  )})}
+                  )}
+
+                  {/* --- TOTAL STATEMENT BILL FOOTER --- */}
+                  {item.rawItem?.totalStatementBalance && item.rawItem.totalStatementBalance > item.amount && (
+                    <div className="pt-2 border-t-2 border-black/10 flex justify-between items-center text-xs font-black">
+                      <span className="text-[10px] uppercase tracking-widest text-gray-400">Total Statement Bill</span>
+                      <span className="text-gray-900 dark:text-gray-100">
+                        ₱{item.rawItem.totalStatementBalance.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                      </span>
+                    </div>
+                  )}
+
                 </div>
               </div>
             )}
+
           </div>
 
           {/* INVISIBLE SCROLL SPACER (Click Target for the toggle action) */}
@@ -481,6 +560,7 @@ const TimelineCard = ({
     </div>
   );
 };
+
 
 
 
@@ -580,15 +660,25 @@ const effectiveCategories = React.useMemo(() => {
     });
   }
   
-  // 🟢 NEW: Inject the Budee category
-  if (!list.some(c => c?.name === 'Budee')) {
-    list.push({
-      id: 'system-budee-category',
-      name: 'Budee',
-      active: true,
-      flexiMode: false
-    });
-  }
+    // 🟢 Inject Budee In (Receivables) and Budee Out (Payables)
+    if (!list.some(c => c?.name === 'Budee Out')) {
+      list.push({
+        id: 'system-budee-out-category',
+        name: 'Budee Out',
+        active: true,
+        flexiMode: false
+      });
+    }
+  
+    if (!list.some(c => c?.name === 'Budee In')) {
+      list.push({
+        id: 'system-budee-in-category',
+        name: 'Budee In',
+        active: true,
+        flexiMode: false
+      });
+    }
+  
   
   return list;
 }, [categories]);
@@ -3623,7 +3713,11 @@ const getFrozenCycleAmount = (account: Account): number => {
 
     activeCredit.forEach(acc => {
       const exclusionKey = `${acc.id}-${activePeriodIndex}`;
-      let amount = 0; let isPaid = false; const subItems: TimelineNode[] = [];
+      let amount = 0; 
+      let isPaid = false; 
+      const subItems: TimelineNode[] = [];
+      let cardReimbursableItems: any[] = [];
+      let totalStatementBalance = 0;
 
       const linkedInsts = budgetInstallments.filter(inst => {
         const linkedId = inst.accountId || inst.account_id || inst.linkedAccountId || inst.linked_account_id;
@@ -3646,29 +3740,30 @@ const getFrozenCycleAmount = (account: Account): number => {
           if (frontedInfo) subIsPaid = false;
 
           subItems.push({
-            id: inst.id, name: isBudee ? `${inst.name} (Budee)` : inst.name, amount: Number(inst.monthlyAmount) || Number(inst.amount) || 0,
+            id: inst.id, 
+            name: isBudee ? `${inst.name} (Budee)` : inst.name, 
+            amount: Number(inst.monthlyAmount) || Number(inst.amount) || 0,
             type: 'installment', 
-            // 🟢 FIX: Do NOT use getCreditDueDay. Use the raw or Budee date.
             dueDate: getSafeDay(getInstallmentDueDay(inst)), 
             displayDueDate: getDisplayDate(getInstallmentDueDay(inst)),
-            isPaid: subIsPaid, isIncluded: !excludedInstallmentIds.has(inst.id), rawItem: inst, frontedInfo 
+            isPaid: subIsPaid, 
+            isIncluded: !excludedInstallmentIds.has(inst.id), 
+            rawItem: inst, 
+            frontedInfo 
           });
         });
 
         amount = linkedInsts.reduce((s, i) => s + (Number(i.monthlyAmount) || Number(i.amount) || 0), 0);
+        totalStatementBalance = amount;
         isPaid = subItems.length > 0 && subItems.every(s => s.isPaid);
-        // 🟢 FIX: The Master Bundle Card should just adopt the date of its first active installment
         rawDue = subItems.length > 0 ? String(subItems[0].dueDate) : '15';
         
-                  } else {
-        // 🟢 MATCH THE HELPER: Drop negative transactions here too!
+      } else {
         const frozenTxs = transactions.filter(tx => {
           if (tx.payment_method_id !== acc.id) return true;
           const txDate = new Date(tx.date);
           const isThisMonth = txDate.getMonth() === MONTHS.indexOf(selectedMonth) && txDate.getFullYear() === selectedYear;
-          
           if (isThisMonth && tx.amount < 0) return false;
-          
           return true;
         });
 
@@ -3678,19 +3773,32 @@ const getFrozenCycleAmount = (account: Account): number => {
         const targetBucket = getBucketForMonth(buckets, selectedMonth, selectedYear);
         const personalBreakdown = targetBucket?.personalBreakdown;
 
-                let baseAmount = 0;
-                if (personalBreakdown) {
+        // Personal Base Charges
+        let baseAmount = 0;
+        if (personalBreakdown) {
           baseAmount = (personalBreakdown.unpaidRollover || 0) + (personalBreakdown.newSwipesTotal || 0);
           if (baseAmount > 0) {
-             const baseName = 'Previous Balance + New Charges';
-             let frontedInfo = getFrontedData(baseName);
-             let isBasePaid = checkIfPaidByTransaction(baseName, baseAmount, selectedMonth, selectedYear, selectedTiming);
-             if (frontedInfo) isBasePaid = false; // 🟢 Force it to stay active!
+            const baseName = 'Previous Balance + New Charges';
+            let frontedInfo = getFrontedData(baseName);
+            let isBasePaid = checkIfPaidByTransaction(baseName, baseAmount, selectedMonth, selectedYear, selectedTiming);
+            if (frontedInfo) isBasePaid = false;
 
-             subItems.push({ id: `${acc.id}-base`, name: baseName, amount: baseAmount, type: 'expense', dueDate: 0, displayDueDate: '', isPaid: isBasePaid, isIncluded: true, rawItem: null, frontedInfo });
+            subItems.push({
+              id: `${acc.id}-base`,
+              name: baseName,
+              amount: baseAmount,
+              type: 'expense',
+              dueDate: 0,
+              displayDueDate: '',
+              isPaid: isBasePaid,
+              isIncluded: true,
+              rawItem: null,
+              frontedInfo
+            });
           }
         }
 
+        // Personal Installments
         (personalBreakdown?.activeInstallments || []).forEach((inst: any) => {
           if (!excludedInstallmentIds.has(inst.id)) {
             let frontedInfo = getFrontedData(inst.name);
@@ -3699,35 +3807,66 @@ const getFrozenCycleAmount = (account: Account): number => {
             if (schedule) subIsPaid = schedule.status === 'paid';
             else subIsPaid = checkIfPaidByTransaction(inst.name, inst.monthlyAmount || inst.amount, selectedMonth, selectedYear, selectedTiming);
             
-            if (frontedInfo) subIsPaid = false; // 🟢 Force it to stay active!
+            if (frontedInfo) subIsPaid = false;
 
-            subItems.push({ id: inst.id, name: inst.name, amount: Number(inst.monthlyAmount) || Number(inst.amount) || 0, type: 'Installment', isPaid: subIsPaid, frontedInfo });
+            subItems.push({
+              id: inst.id,
+              name: inst.name,
+              amount: Number(inst.monthlyAmount) || Number(inst.amount) || 0,
+              type: 'Installment',
+              dueDate: 0,
+              displayDueDate: '',
+              isPaid: subIsPaid,
+              isIncluded: true, // Stops premature strikethrough
+              rawItem: inst,
+              frontedInfo
+            });
           }
         });
 
+        // Budee Reimbursables on this statement
+        cardReimbursableItems = (targetBucket?.budeeBreakdown || []).map((item: any) => ({
+          id: item.id,
+          name: item.name,
+          amount: item.amount,
+          type: item.isReceivable ? 'Owed to Me' : 'Budee Expense'
+        }));
 
+        const budeeSum = cardReimbursableItems.reduce((s: number, b: any) => s + (Number(b.amount) || 0), 0);
         amount = getFrozenCycleAmount(acc);
+        totalStatementBalance = targetBucket?.endingBalance || (amount + budeeSum);
         rawDue = getCreditDueDay(acc);
-        
-        // 🟢 FIX 2C: The parent card is only marked "Settled" if ALL its sub-items are paid!
         isPaid = subItems.length > 0 && subItems.every(sub => sub.isPaid);
-     }
+      }
 
+      const subItemsTotal = subItems.reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
+      if (amount < subItemsTotal) {
+        amount = subItemsTotal;
+      }
 
-     // 🟢 THE BULLETPROOF FIX:
-     // If the math engine drops the parent to 0, but the sub-items still have a balance,
-     // force the parent to explicitly equal the sum of its children. This locks the target!
-     const subItemsTotal = subItems.reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
-     if (amount < subItemsTotal) {
-         amount = subItemsTotal;
-     }
+      // Check if any sub-item was fronted from savings
+      const frontedSubItem = subItems.find(sub => !!sub.frontedInfo);
+      if (frontedSubItem) isPaid = false;
 
-     // 🟢 BUBBLE UP: Check if ANY sub-item was fronted from savings
-     const frontedSubItem = subItems.find(sub => !!sub.frontedInfo);
-     if (frontedSubItem) isPaid = false; 
+      timeline.push({
+        id: acc.id,
+        name: acc.bank,
+        amount, // Personal share untouched (₱1,981.94)
+        type: 'credit',
+        dueDate: getSafeDay(rawDue),
+        displayDueDate: getDisplayDate(rawDue),
+        isPaid,
+        isIncluded: !excludedCreditIds.has(exclusionKey),
+        subItems,
+        rawItem: {
+          ...acc,
+          reimbursableItems: cardReimbursableItems,
+          totalStatementBalance
+        },
+        frontedInfo: frontedSubItem?.frontedInfo
+      });
+    }); // Closes activeCredit.forEach
 
-     timeline.push({ id: acc.id, name: acc.bank, amount, type: 'credit', dueDate: getSafeDay(rawDue), displayDueDate: getDisplayDate(rawDue), isPaid, isIncluded: !excludedCreditIds.has(exclusionKey), subItems, rawItem: acc, frontedInfo: frontedSubItem?.frontedInfo });
-   });
 
 
   
@@ -3979,18 +4118,19 @@ const getFrozenCycleAmount = (account: Account): number => {
   }
 
                 // 🟢 ENGINE-POWERED CATEGORY SUMMARY
-    const categorySummary = effectiveCategories
-    .filter(cat => {
-      const hasRegularData = processedBudgetMap[activePeriodIndex]?.[cat.name]?.length > 0;
-      const hasLoansData = (cat.name === 'Loans' || cat.name === 'Budee') && installments.some(inst => !inst.isArchived);
-      const hasCreditData = cat.name === 'Credit' && creditBudgetAccounts.length > 0;
-      return shouldRenderCategorySection(cat, hasRegularData || hasLoansData || hasCreditData, selectedYear, selectedMonth);
-    })
-    .map((cat) => {
-      const periodItems = processedBudgetMap[activePeriodIndex]?.[cat.name] || [];
-      const breakdown: { id: string, name: string, amount: number, type: string, reimbursableItems?: { id: string, name: string, amount: number, type: string }[] }[] = [];
-
-      const itemsTotal = periodItems.reduce((sum, item) => {
+                const categorySummary = effectiveCategories
+                .filter(cat => {
+                  const hasRegularData = processedBudgetMap[activePeriodIndex]?.[cat.name]?.length > 0;
+                  const isBudeeCat = cat.name === 'Budee' || cat.name === 'Budee In' || cat.name === 'Budee Out';
+                  const hasLoansData = (cat.name === 'Loans' || isBudeeCat) && installments.some(inst => !inst.isArchived);
+                  const hasCreditData = cat.name === 'Credit' && creditBudgetAccounts.length > 0;
+                  return shouldRenderCategorySection(cat, hasRegularData || hasLoansData || hasCreditData, selectedYear, selectedMonth);
+                })
+                .map((cat) => {
+                  const periodItems = processedBudgetMap[activePeriodIndex]?.[cat.name] || [];
+                  const breakdown: { id: string, name: string, amount: number, type: string, reimbursableItems?: { id: string, name: string, amount: number, type: string }[] }[] = [];
+            
+                  const itemsTotal = periodItems.reduce((sum, item) => {
         if (!item.included) return sum; 
         
         const isBillerItem = item.isBiller || (billers && billers.some(b => b.id === item.id));
@@ -4019,17 +4159,20 @@ const getFrozenCycleAmount = (account: Account): number => {
       }, 0);
 
       let installmentsTotal = 0;
-      if (cat.name === 'Loans' || cat.name === 'Budee') {
+      const isBudeeOut = cat.name === 'Budee Out' || cat.name === 'Budee';
+      const isBudeeIn = cat.name === 'Budee In';
+
+      if (cat.name === 'Loans' || isBudeeOut || isBudeeIn) {
         installmentsTotal = budgetInstallments
           .filter(inst => {
             if (inst.isArchived || excludedInstallmentIds.has(inst.id)) return false;
-            // 🟢 NEW (Accurate):
-// If you don't owe them (funding_friend_id is empty), it is NOT your expense!
-if (cat.name === 'Budee' && !inst.funding_friend_id) return false;
 
             const isBudee = !!(inst.funding_friend_id || inst.debtor_friend_id || (inst as any).friend_user_id);
             if (cat.name === 'Loans' && isBudee) return false;
-            if (cat.name === 'Budee' && !isBudee) return false;
+
+            // 🟢 Strict Direction Check:
+            if (isBudeeOut && (!isBudee || !inst.funding_friend_id)) return false; // You owe them
+            if (isBudeeIn && (!isBudee || !!inst.funding_friend_id)) return false;  // They owe you
 
             const linkedId = inst.accountId || inst.account_id || inst.linkedAccountId || inst.linked_account_id;
             const isSwallowedByCreditAccount = creditBudgetAccounts.some(acc => acc.id === linkedId);
@@ -4045,14 +4188,12 @@ if (cat.name === 'Budee' && !inst.funding_friend_id) return false;
             return isActiveForPeriod && !isFinished;
           })
           .reduce((s, inst) => {
-            // 🟢 THE FIX: Check if it is a Budee item inside the reduce loop!
-            const isBudee = !!(inst.funding_friend_id || inst.debtor_friend_id || (inst as any).friend_user_id);
-            
+            const isOwedToMe = !inst.funding_friend_id;
             breakdown.push({ 
               id: inst.id, 
               name: inst.name, 
               amount: inst.monthlyAmount, 
-              type: isBudee ? 'Budee Plan' : 'Installment' 
+              type: isOwedToMe ? 'Owed to Me' : 'I Owe' 
             });
             
             return s + inst.monthlyAmount;
@@ -4148,7 +4289,7 @@ if (cat.name === 'Budee' && !inst.funding_friend_id) return false;
       return { 
         category: cat.name, 
         total: itemsTotal + installmentsTotal + creditTotal,
-        breakdown // 🟢 Store the breakdown in the object!
+        breakdown
       };
     });
 
@@ -4165,7 +4306,10 @@ const periodStashTotal = wallets.filter(w => !excludedWalletIds.has(w.id)).reduc
   return s;
 }, 0);
 
-const grandTotal = categorySummary.reduce((sum, cat) => sum + cat.total, 0) + periodStashTotal;
+const grandTotal = categorySummary
+  .filter(cat => cat.category !== 'Budee In') // 🟢 Omit inflows from expense total
+  .reduce((sum, cat) => sum + cat.total, 0) + periodStashTotal;
+
 const totalSpend = grandTotal;
 
       
@@ -4497,10 +4641,10 @@ const totalSpend = grandTotal;
       </div>
 
   
-                {/* 2. PAYCHECK PAGINATION CONTROLS */}
-                <div className="relative flex items-center justify-center w-full max-w-full -mt-4 z-10 px-2 space-x-3 sm:space-x-6">
+                        {/* 2. PAYCHECK PAGINATION CONTROLS */}
+        <div className="relative flex items-center justify-center w-full max-w-full -mt-4 z-10 px-2 space-x-3 sm:space-x-6">
           
-          {/* LEFT ARROW (Locks to the left of the center pill) */}
+          {/* LEFT ARROW (Circular) */}
           <button
             type="button"
             onClick={() => {
@@ -4509,16 +4653,16 @@ const totalSpend = grandTotal;
               setSelectedTiming(`${newIndex}/${currentPeriods.length || 2}` as any);
             }}
             disabled={activePeriodIndex <= 1 || isReadOnly}
-            className={`flex items-center justify-center p-2 rounded-xl transition-all shrink-0 ${
+            className={`flex items-center justify-center w-10 h-10 sm:w-11 sm:h-11 rounded-full transition-all shrink-0 ${
               activePeriodIndex <= 1 
                 ? 'opacity-0 pointer-events-none' 
-                : 'bg-white dark:bg-gray-900 border-[3px] border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] active:translate-y-[2px] active:translate-x-[2px] active:shadow-none hover:bg-gray-50'
+                : 'bg-white dark:bg-gray-900 border-[3px] border-black shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] active:translate-y-[2px] active:translate-x-[2px] active:shadow-none hover:bg-gray-50 dark:hover:bg-gray-800'
             }`}
           >
-            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="m15 18-6-6 6-6"/></svg>
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="m15 18-6-6 6-6"/></svg>
           </button>
 
-          {/* CURRENT ACTIVE PAYCHECK PILL (Strictly Constrained Width) */}
+          {/* CURRENT ACTIVE PAYCHECK PILL */}
           {currentPeriods[activePeriodIndex - 1] && (() => {
             const period = currentPeriods[activePeriodIndex - 1];
             const formattedStart = period?.startDate ? new Date(period.startDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '';
@@ -4538,7 +4682,7 @@ const totalSpend = grandTotal;
             );
           })()}
 
-          {/* RIGHT ARROW (Locks to the right of the center pill) */}
+          {/* RIGHT ARROW (Circular) */}
           <button
             type="button"
             onClick={() => {
@@ -4547,13 +4691,13 @@ const totalSpend = grandTotal;
               setSelectedTiming(`${newIndex}/${currentPeriods.length || 2}` as any);
             }}
             disabled={activePeriodIndex >= currentPeriods.length || isReadOnly}
-            className={`flex items-center justify-center p-2 rounded-xl transition-all shrink-0 ${
+            className={`flex items-center justify-center w-10 h-10 sm:w-11 sm:h-11 rounded-full transition-all shrink-0 ${
               activePeriodIndex >= currentPeriods.length 
                 ? 'opacity-0 pointer-events-none' 
-                : 'bg-white dark:bg-gray-900 border-[3px] border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] active:translate-y-[2px] active:translate-x-[2px] active:shadow-none hover:bg-gray-50'
+                : 'bg-white dark:bg-gray-900 border-[3px] border-black shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] active:translate-y-[2px] active:translate-x-[2px] active:shadow-none hover:bg-gray-50 dark:hover:bg-gray-800'
             }`}
           >
-            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="m9 18 6-6-6-6"/></svg>
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="m9 18 6-6-6-6"/></svg>
           </button>
 
         </div>
@@ -4621,8 +4765,24 @@ const totalSpend = grandTotal;
                     )}
                   </tbody>
                   <tfoot>
-                    <tr className="bg-indigo-50/30 dark:bg-indigo-900/20 border-t-2 border-black"><td className="p-3 pl-6 text-xs font-black text-indigo-600 dark:text-indigo-400 uppercase">Grand Total</td><td className="p-3 pr-6 text-right text-lg font-black text-indigo-600 dark:text-indigo-400">{formatCurrency(grandTotal)}</td></tr>
+                    <tr className="bg-indigo-50/30 dark:bg-indigo-900/20 border-t-2 border-black">
+                      <td className="p-3 pl-6 align-top text-xs font-black text-indigo-600 dark:text-indigo-400 uppercase">
+                        Grand Total
+                      </td>
+                      <td className="p-3 pr-6 text-right">
+                        <span className="text-lg font-black text-indigo-600 dark:text-indigo-400 block leading-tight">
+                          {formatCurrency(grandTotal)}
+                        </span>
+                        {categorySummary.some(c => c.category === 'Budee In' && c.total > 0) && (
+                          <span className="text-[10px] font-bold text-gray-400 dark:text-gray-500 block mt-0.5">
+                            Excluding {formatCurrency(categorySummary.find(c => c.category === 'Budee In')?.total || 0)} for Budee In
+                          </span>
+                        )}
+                      </td>
+                    </tr>
                   </tfoot>
+
+
                 </table>
 
               </div>
@@ -5121,16 +5281,17 @@ const totalSpend = grandTotal;
                           
                           {/* LEFT COLUMN: Identity & Info (Reduced gap-4 to gap-2) */}
                           <div className={`flex flex-col justify-between items-start gap-2 transition-opacity ${isIncluded ? 'opacity-100' : 'opacity-60'}`}>
-                            <div>
-                              <span className="text-[15px] font-black text-gray-900 dark:text-gray-100 block leading-tight tracking-tight truncate max-w-[160px] sm:max-w-[200px]">
-                                {wallet.name}
-                              </span>
-                              {linkedAccount && (
-                                <span className="text-[10px] text-gray-400 font-bold block mt-0.5 truncate max-w-[160px] sm:max-w-[200px]">
-                                  {linkedAccount.bank} ({linkedAccount.classification})
-                                </span>
-                              )}
-                            </div>
+                          <div>
+  <span className="text-sm md:text-base font-black text-gray-900 dark:text-gray-100 block leading-tight truncate max-w-[170px] sm:max-w-[210px]">
+    {wallet.name}
+  </span>
+  {linkedAccount && (
+    <span className="text-[10px] text-gray-400 font-bold block mt-0.5 truncate max-w-[170px] sm:max-w-[210px]">
+      {linkedAccount.bank} ({linkedAccount.classification})
+    </span>
+  )}
+</div>
+
 
                             <div className="flex items-center gap-2 mt-0.5">
                               {isOverFunded ? (
@@ -5154,9 +5315,10 @@ const totalSpend = grandTotal;
 
                           {/* RIGHT COLUMN: Just the Math & Fund Button (Reduced gap-2 to gap-1) */}
                           <div className={`flex flex-col justify-between items-end gap-1 shrink-0 transition-opacity ${isIncluded ? 'opacity-100' : 'opacity-60'}`}>
-                            <span className="text-[16px] font-black text-indigo-700 dark:text-indigo-400 leading-none mt-1">
-                              {formatCurrency(allocatedAmount)}
-                            </span>
+                          <span className="text-sm md:text-base font-black text-indigo-700 dark:text-indigo-400 leading-none mt-1">
+  {formatCurrency(allocatedAmount)}
+</span>
+
 
                             {!isReadOnly && (
                               <button 
