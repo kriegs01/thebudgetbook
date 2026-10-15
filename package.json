@@ -45,8 +45,9 @@
   },
   "scripts": {
   "dev": "vite",
-  "build": "tsc && vite build",
-  "release": "node scripts/sync-changelog.mjs"
+  "build": "vite build",
+  "release": "node --experimental-websocket scripts/sync-changelog.mjs"
+
 }
 
 }
