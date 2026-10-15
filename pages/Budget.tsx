@@ -465,16 +465,18 @@ const TimelineCard = ({
                             <div className="flex items-center gap-2">
                               {/* 🟢 Bullet matches Budee's bg-blue-500 */}
                               <span className="w-1.5 h-1.5 rounded-full shrink-0 bg-blue-500" />
-                              <span className={`font-bold ${isSettled || !subItem.isIncluded ? 'text-gray-400 line-through' : 'text-gray-700 dark:text-gray-300'}`}>
+                              <span className={`font-bold ${isSettled || subItem.isPaid || !subItem.isIncluded ? 'text-gray-400 line-through' : 'text-gray-700 dark:text-gray-300'}`}>
                                 {isSubFronted ? `Reimburse: ${subItem.name}` : subItem.name}
                               </span>
+
                             </div>
 
                             <div className="flex items-center gap-2">
                               {/* 🟢 Amount text matches Budee's text-blue-800 dark:text-blue-200 */}
-                              <span className={`font-black ${isSettled || !subItem.isIncluded ? 'text-gray-400 line-through' : 'text-blue-800 dark:text-blue-200'}`}>
+                              <span className={`font-black ${isSettled || subItem.isPaid || !subItem.isIncluded ? 'text-gray-400 line-through' : 'text-blue-800 dark:text-blue-200'}`}>
                                 ₱{subItem.amount.toLocaleString(undefined, { minimumFractionDigits: 2 })}
                               </span>
+
 
                               {/* Settled status badge & receipt viewer shortcut */}
                               {subItem.isPaid && (
@@ -502,8 +504,8 @@ const TimelineCard = ({
                     </div>
                   </div>
 
-                  {/* --- BUDEE SECTION (Reimbursable shares on this statement) --- */}
-                  {item.rawItem?.reimbursableItems && item.rawItem.reimbursableItems.length > 0 && (
+                                    {/* --- BUDEE SECTION (Reimbursable shares on this statement) --- */}
+                                    {item.rawItem?.reimbursableItems && item.rawItem.reimbursableItems.length > 0 && (
                     <div className="flex flex-col gap-1.5 pt-2 border-t border-dashed border-gray-200 dark:border-gray-700">
                       <div className="flex justify-between items-center text-[10px] font-black uppercase tracking-wider text-blue-600 dark:text-blue-400">
                         <span>Budee (Reimbursable)</span>
@@ -513,22 +515,47 @@ const TimelineCard = ({
                       </div>
 
                       <div className="flex flex-col gap-1.5 pl-2">
-                        {item.rawItem.reimbursableItems.map((budeeItem: any) => (
-                          <div key={budeeItem.id} className="flex justify-between items-center text-xs">
-                            <div className="flex items-center gap-2">
-                              <span className="w-1.5 h-1.5 rounded-full bg-blue-500 shrink-0" />
-                              <span className="font-bold text-gray-700 dark:text-gray-300">
-                                {budeeItem.name}
-                              </span>
+                      {item.rawItem.reimbursableItems.map((budeeItem: any) => {
+                          const isBudeeFronted = !!budeeItem.frontedInfo;
+                          return (
+                            <div key={budeeItem.id} className="flex justify-between items-center text-xs">
+                              <div className="flex items-center gap-2">
+                                <span className="w-1.5 h-1.5 rounded-full bg-blue-500 shrink-0" />
+                                <span className={`font-bold ${isSettled || budeeItem.isPaid ? 'text-gray-400 line-through' : 'text-gray-700 dark:text-gray-300'}`}>
+                                  {isBudeeFronted ? `Reimburse: ${budeeItem.name}` : budeeItem.name}
+                                </span>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <span className={`font-black ${isSettled || budeeItem.isPaid ? 'text-gray-400 line-through' : 'text-blue-800 dark:text-blue-200'}`}>
+                                  ₱{budeeItem.amount.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                                </span>
+                                {budeeItem.isPaid && (
+                                  <div className="flex items-center gap-1">
+                                    <span className="text-[9px] font-black text-green-600 flex items-center gap-0.5 uppercase tracking-wider">
+                                      <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                                        <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
+                                        <polyline points="22 4 12 14.01 9 11.01" />
+                                      </svg> 
+                                      Settled
+                                    </span>
+                                    <button 
+                                      onClick={(e) => { e.preventDefault(); e.stopPropagation(); onInfo(budeeItem.id); }} 
+                                      className="p-0.5 text-gray-400 hover:text-indigo-600 transition-colors" 
+                                      title="View Payment Records"
+                                    >
+                                      <ReceiptText className="w-3 h-3" />
+                                    </button>
+                                  </div>
+                                )}
+                              </div>
                             </div>
-                            <span className="font-black text-blue-800 dark:text-blue-200">
-                              ₱{budeeItem.amount.toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                            </span>
-                          </div>
-                        ))}
+                          );
+                        })}
+
                       </div>
                     </div>
                   )}
+
 
                   {/* --- TOTAL STATEMENT BILL FOOTER --- */}
                   {item.rawItem?.totalStatementBalance && item.rawItem.totalStatementBalance > item.amount && (
@@ -730,11 +757,22 @@ const effectiveCategories = React.useMemo(() => {
   const [setupData, setSetupData] = useState<{ [key: string]: CategorizedSetupItem[] }>({});
   const [removedIds, setRemovedIds] = useState<Set<string>>(new Set());
   
-  const [showCreditPayModal, setShowCreditPayModal] = useState<{ 
-    accountId: string; 
-    bank: string; 
-    items: { id: string; name: string; amount: number; type: 'base' | 'installment' }[];
-  } | null>(null);
+    // 🟢 UPDATED: Supports Budee and Fronted flags
+    const [showCreditPayModal, setShowCreditPayModal] = useState<{ 
+      accountId: string; 
+      totalCount?: number;
+      bank: string; 
+      items: { 
+        id: string; 
+        name: string; 
+        amount: number; 
+        type: 'base' | 'installment'; 
+        frontedInfo?: any; 
+        isBudee?: boolean; 
+        debtorName?: string; 
+      }[];
+    } | null>(null);
+  
 
   
   const [showBudeeCarousel, setShowBudeeCarousel] = useState<{
@@ -3773,30 +3811,40 @@ const getFrozenCycleAmount = (account: Account): number => {
         const targetBucket = getBucketForMonth(buckets, selectedMonth, selectedYear);
         const personalBreakdown = targetBucket?.personalBreakdown;
 
-        // Personal Base Charges
-        let baseAmount = 0;
-        if (personalBreakdown) {
-          baseAmount = (personalBreakdown.unpaidRollover || 0) + (personalBreakdown.newSwipesTotal || 0);
-          if (baseAmount > 0) {
-            const baseName = 'Previous Balance + New Charges';
-            let frontedInfo = getFrontedData(baseName);
-            let isBasePaid = checkIfPaidByTransaction(baseName, baseAmount, selectedMonth, selectedYear, selectedTiming);
-            if (frontedInfo) isBasePaid = false;
-
-            subItems.push({
-              id: `${acc.id}-base`,
-              name: baseName,
-              amount: baseAmount,
-              type: 'expense',
-              dueDate: 0,
-              displayDueDate: '',
-              isPaid: isBasePaid,
-              isIncluded: true,
-              rawItem: null,
-              frontedInfo
-            });
-          }
-        }
+                // Personal Base Charges
+                let baseAmount = 0;
+                if (personalBreakdown) {
+                  baseAmount = (personalBreakdown.unpaidRollover || 0) + (personalBreakdown.newSwipesTotal || 0);
+                  if (baseAmount > 0) {
+                    const baseName = 'Previous Balance + New Charges';
+                    let frontedInfo = getFrontedData(baseName);
+                    
+                    // 🟢 Robust matching: Check if any transaction paid toward base charges on this card
+                    const isBasePaid = transactions.some(tx => {
+                      if (tx.payment_method_id !== acc.id) return false;
+                      if (tx.transaction_type !== 'credit_payment') return false;
+                      const txName = (tx.name || '').toLowerCase();
+                      const isBaseTx = txName.includes('previous balance') || txName.includes('new charges') || txName.includes('base');
+                      const txDate = new Date(tx.date);
+                      const isSameMonth = txDate.getMonth() === MONTHS.indexOf(selectedMonth) && txDate.getFullYear() === selectedYear;
+                      return isBaseTx && isSameMonth;
+                    }) || checkIfPaidByTransaction(baseName, baseAmount, selectedMonth, selectedYear, selectedTiming);
+        
+                    subItems.push({
+                      id: `${acc.id}-base`,
+                      name: baseName,
+                      amount: baseAmount,
+                      type: 'expense',
+                      dueDate: 0,
+                      displayDueDate: '',
+                      isPaid: !frontedInfo && isBasePaid,
+                      isIncluded: true,
+                      rawItem: null,
+                      frontedInfo
+                    });
+                  }
+                }
+        
 
         // Personal Installments
         (personalBreakdown?.activeInstallments || []).forEach((inst: any) => {
@@ -3824,13 +3872,30 @@ const getFrozenCycleAmount = (account: Account): number => {
           }
         });
 
-        // Budee Reimbursables on this statement
-        cardReimbursableItems = (targetBucket?.budeeBreakdown || []).map((item: any) => ({
-          id: item.id,
-          name: item.name,
-          amount: item.amount,
-          type: item.isReceivable ? 'Owed to Me' : 'Budee Expense'
-        }));
+                // Budee Reimbursables on this statement
+                cardReimbursableItems = (targetBucket?.budeeBreakdown || []).map((item: any) => {
+                  let bFrontedInfo = getFrontedData(item.name);
+                  
+                  // Check if paid via transaction this month
+                  const isBudeePaid = transactions.some(tx => {
+                    const txName = (tx.name || '').toLowerCase();
+                    const targetName = (item.name || '').toLowerCase();
+                    const isMatch = txName.includes(targetName);
+                    const txDate = new Date(tx.date);
+                    const isSameMonth = txDate.getMonth() === MONTHS.indexOf(selectedMonth) && txDate.getFullYear() === selectedYear;
+                    return isMatch && isSameMonth;
+                  });
+        
+                  return {
+                    id: item.id,
+                    name: item.name,
+                    amount: item.amount,
+                    type: item.isReceivable ? 'Owed to Me' : 'Budee Expense',
+                    isPaid: !bFrontedInfo && isBudeePaid,
+                    frontedInfo: bFrontedInfo
+                  };
+                });
+        
 
         const budeeSum = cardReimbursableItems.reduce((s: number, b: any) => s + (Number(b.amount) || 0), 0);
         amount = getFrozenCycleAmount(acc);
@@ -3844,27 +3909,55 @@ const getFrozenCycleAmount = (account: Account): number => {
         amount = subItemsTotal;
       }
 
-      // Check if any sub-item was fronted from savings
-      const frontedSubItem = subItems.find(sub => !!sub.frontedInfo);
-      if (frontedSubItem) isPaid = false;
+                          // 🟢 SAFE CHECK WITH NULL-COALESCING GUARDS:
+          const safeSubItems = Array.isArray(subItems) ? subItems : [];
+          const safeReimbursableItems = Array.isArray(cardReimbursableItems) ? cardReimbursableItems : [];
 
-      timeline.push({
-        id: acc.id,
-        name: acc.bank,
-        amount, // Personal share untouched (₱1,981.94)
-        type: 'credit',
-        dueDate: getSafeDay(rawDue),
-        displayDueDate: getDisplayDate(rawDue),
-        isPaid,
-        isIncluded: !excludedCreditIds.has(exclusionKey),
-        subItems,
-        rawItem: {
-          ...acc,
-          reimbursableItems: cardReimbursableItems,
-          totalStatementBalance
-        },
-        frontedInfo: frontedSubItem?.frontedInfo
-      });
+          // 1. Check unpaid bank obligations
+          const hasUnpaidPersonalItems = safeSubItems.some(sub => !sub.isPaid && !sub.frontedInfo);
+          const hasUnpaidBudeeItems = safeReimbursableItems.some(sub => !sub.isPaid && !sub.frontedInfo);
+          const hasUnpaidBankObligations = hasUnpaidPersonalItems || hasUnpaidBudeeItems;
+
+          // 2. Check fronted items waiting for reimbursement
+          const frontedSubItem = safeSubItems.find(sub => Boolean(sub?.frontedInfo) && !sub.isPaid);
+          const hasFrontedObligations = Boolean(frontedSubItem);
+
+          // 3. Determine parent card state
+          let parentIsPaid = false;
+          let parentFrontedInfo: any = undefined;
+
+          if (hasUnpaidBankObligations) {
+            parentIsPaid = false;
+            parentFrontedInfo = undefined;
+          } else if (hasFrontedObligations) {
+            parentIsPaid = false;
+            parentFrontedInfo = frontedSubItem?.frontedInfo;
+          } else {
+            parentIsPaid = true;
+            parentFrontedInfo = undefined;
+          }
+
+
+                    // 🟢 FIXED TIMELINE PUSH:
+                    timeline.push({
+                      id: `credit-${acc.id}`,
+                      type: 'credit',
+                      name: acc.bank,
+                      amount: amount,
+                      dueDate: getSafeDay(rawDue),
+                      displayDueDate: getDisplayDate(rawDue),
+                      isPaid: parentIsPaid,
+                      isIncluded: !excludedCreditIds.has(exclusionKey),
+                      rawItem: { 
+                        ...acc, 
+                        reimbursableItems: cardReimbursableItems, 
+                        totalStatementBalance: totalStatementBalance 
+                      },
+                      subItems: subItems,
+                      frontedInfo: parentFrontedInfo
+                    });
+          
+
     }); // Closes activeCredit.forEach
 
 
@@ -4435,20 +4528,54 @@ const totalSpend = grandTotal;
       });
       setShowTransactionModal(true);
     } 
-                // 3. CREDIT CARDS & LOAN BUNDLES
-        else if (item.type === 'credit') {
-          const acc = item.rawItem as Account;
-          const carouselItems: any[] = [];
-          if (item.subItems) {
-            item.subItems.forEach(sub => {
-              // 🟢 FIX 3: Only push UNPAID items into the payment carousel!
-              if (sub.amount > 0 && !sub.isPaid) { 
-                carouselItems.push({ id: sub.id, name: sub.name, amount: sub.amount, type: sub.id.includes('-base') ? 'base' : 'installment', frontedInfo: sub.frontedInfo });
-              }
+    else if (item.type === 'credit') {
+      const acc = item.rawItem as any;
+      const carouselItems: any[] = [];
+      let counter = 1;
+
+      // 1. Add unpaid Personal Share items
+      if (item.subItems) {
+        item.subItems.forEach(sub => {
+          if (sub.amount > 0 && !sub.isPaid) { 
+            carouselItems.push({ 
+              id: sub.id, 
+              name: sub.name, 
+              amount: sub.amount, 
+              type: sub.id.includes('-base') ? 'base' : 'installment', 
+              frontedInfo: sub.frontedInfo,
+              isBudee: false,
+              itemIndex: counter++
             });
           }
-          setShowCreditPayModal({ accountId: acc.id, bank: acc.bank, items: carouselItems });
-        } 
+        });
+      }
+
+      // 2. Add unpaid Budee items
+      const reimbursableList = acc?.reimbursableItems || [];
+      reimbursableList.forEach((budeeItem: any) => {
+        if (budeeItem.amount > 0 && !budeeItem.isPaid) {
+          carouselItems.push({
+            id: budeeItem.id,
+            name: budeeItem.name,
+            amount: budeeItem.amount,
+            type: 'installment',
+            frontedInfo: budeeItem.frontedInfo,
+            isBudee: true,
+            debtorName: budeeItem.debtorName || budeeItem.friendName || 'Budee',
+            itemIndex: counter++
+          });
+        }
+      });
+
+      setShowCreditPayModal({ 
+        accountId: acc.id, 
+        bank: acc.bank, 
+        totalCount: carouselItems.length,
+        items: carouselItems 
+      });
+    }
+
+  
 
     
     // 4. INSTALLMENTS & BUDEE
@@ -4513,32 +4640,55 @@ const totalSpend = grandTotal;
 
   
 
-    // ⚡ UNIVERSAL INFO ROUTER
-    const handleTimelineInfo = (item: TimelineNode, subItemId?: string) => {
-      let targetId = subItemId || item.id;
-      let targetType = item.type;
-      let targetName = item.name;
-  
-      // If they clicked an info button on a nested installment
-      if (subItemId && item.subItems) {
-        const sub = item.subItems.find(s => s.id === subItemId);
-        if (sub) {
-          targetType = sub.type;
-          targetName = sub.name;
-        }
+     // ⚡ UNIVERSAL INFO ROUTER
+  const handleTimelineInfo = (item: TimelineNode, subItemId?: string) => {
+    let targetId = subItemId || item.id;
+    let targetType = item.type;
+    let targetName = item.name;
+
+    // 1. Check if clicked inside personal sub-items
+    if (subItemId && item.subItems) {
+      const sub = item.subItems.find(s => s.id === subItemId);
+      if (sub) {
+        targetType = sub.type?.toLowerCase() === 'installment' ? 'installment' : 'expense';
+        targetName = sub.name;
       }
-  
-      if (targetType === 'bill' || targetType === 'expense') {
-        const schedule = getPaymentSchedule('biller', targetId, selectedMonth, selectedYear);
-        if (schedule) openSchedulePaymentsModal(schedule.id, `${targetName} - ${selectedMonth}`);
-      } else if (targetType === 'installment') {
-        const schedule = getPaymentSchedule('installment', targetId, selectedMonth, selectedYear);
-        if (schedule) openSchedulePaymentsModal(schedule.id, `${targetName} - ${selectedMonth}`);
-      } else if (targetType === 'credit') {
-        const acc = accounts.find(a => a.id === targetId);
-        if (acc) setCreditInfoModal({ account: acc });
+    }
+
+    // 2. Check if clicked inside Budee reimbursable items
+    if (subItemId && item.rawItem?.reimbursableItems) {
+      const bItem = item.rawItem.reimbursableItems.find((b: any) => b.id === subItemId);
+      if (bItem) {
+        targetType = 'installment';
+        targetName = bItem.name;
       }
-    };
+    }
+
+    // 3. Try finding linked schedule modal
+    if (targetType === 'bill' || targetType === 'expense') {
+      const schedule = getPaymentSchedule('biller', targetId, selectedMonth, selectedYear);
+      if (schedule) {
+        openSchedulePaymentsModal(schedule.id, `${targetName} - ${selectedMonth}`);
+        return;
+      }
+    } 
+    
+    if (targetType === 'installment') {
+      const schedule = getPaymentSchedule('installment', targetId, selectedMonth, selectedYear);
+      if (schedule) {
+        openSchedulePaymentsModal(schedule.id, `${targetName} - ${selectedMonth}`);
+        return;
+      }
+    }
+
+    // 4. If credit card sub-item has no independent schedule (e.g., base charges or direct card swipe), open Credit Info Modal
+    const parentAccountId = item.id.replace('credit-', '');
+    const acc = accounts.find(a => a.id === targetId || a.id === parentAccountId || a.id === item.rawItem?.id);
+    if (acc) {
+      setCreditInfoModal({ account: acc });
+    }
+  };
+
   
 
 
@@ -6432,18 +6582,28 @@ const totalSpend = grandTotal;
                     <X className="w-4 h-4 text-black dark:text-white" />
                   </button>
                   
-                  {/* Card Header */}
-                  <div className="mb-6">
+                    {/* Card Header */}
+  <div className="mb-6">
+    <div className="flex items-center gap-2 mb-3">
+      {isItemFronted ? (
+        <span className="text-[10px] font-black uppercase tracking-widest text-blue-600 bg-blue-100 border-2 border-black px-3 py-1 rounded-lg shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]">
+          Reimburse
+        </span>
+      ) : item.isBudee ? (
+        <span className="text-[10px] font-black uppercase tracking-widest text-blue-700 bg-blue-100 border-2 border-black px-3 py-1 rounded-lg shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]">
+          Budee ({item.debtorName || 'Share'})
+        </span>
+      ) : (
+        <span className="text-[10px] font-black uppercase tracking-widest text-purple-600 bg-purple-100 border-2 border-black px-3 py-1 rounded-lg shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]">
+          Personal Share
+        </span>
+      )}
+            <span className="text-[10px] font-black uppercase tracking-widest text-gray-500 bg-gray-100 dark:bg-gray-800 border-2 border-black px-2 py-1 rounded-lg shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]">
+        {item.itemIndex || (index + 1)} of {showCreditPayModal.totalCount || showCreditPayModal.items.length}
+      </span>
 
-                    {isItemFronted ? (
-                      <span className="text-[10px] font-black uppercase tracking-widest text-blue-600 bg-blue-100 border-2 border-black px-3 py-1 rounded-lg mb-3 inline-block shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]">
-                        Reimburse
-                      </span>
-                    ) : (
-                      <span className="text-[10px] font-black uppercase tracking-widest text-purple-600 bg-purple-100 border-2 border-black px-3 py-1 rounded-lg mb-3 inline-block shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]">
-                        {index + 1} of {showCreditPayModal.items.length}
-                      </span>
-                    )}
+    </div>
+
                     <h2 className="text-xl font-black text-gray-900 dark:text-gray-100 leading-tight mb-1">{isItemFronted ? 'Pay Back Savings' : item.name}</h2>
                     <p className="text-gray-500 dark:text-gray-400 text-xs font-bold uppercase tracking-widest">{isItemFronted ? `For ${item.name} (${showCreditPayModal.bank})` : showCreditPayModal.bank}</p>
                   </div>
@@ -6479,7 +6639,16 @@ const totalSpend = grandTotal;
 
                             submitBtn.className = 'w-full bg-gray-200 text-gray-500 border-2 border-black py-4 rounded-xl font-black text-sm uppercase tracking-wider transition-all';
                             submitBtn.textContent = 'Reimbursed! ✓';
-                            setTimeout(() => setShowCreditPayModal(null), 1000);
+                          
+                            setTimeout(() => {
+                              setShowCreditPayModal(prev => {
+                                if (!prev) return null;
+                                const remainingItems = prev.items.filter(i => i.id !== item.id);
+                                if (remainingItems.length === 0) return null;
+                                return { ...prev, items: remainingItems };
+                              });
+                            }, 800);
+                          
                           } catch (err: any) {
                             alert(`Reimbursement failed: ${err.message || 'Server error.'}`);
                             submitBtn.disabled = false;
@@ -6544,20 +6713,18 @@ const totalSpend = grandTotal;
 
                             if (debitError) throw debitError;
 
-                            const { data: creditTx, error: creditError } = await createTransaction({
-                              name: `${showCreditPayModal.bank} Payment - ${item.name}`,
-                           
-                              amount: -Math.abs(amount),
-                           
-                              date: combineDateWithCurrentTime(date),
-                              payment_method_id: showCreditPayModal.accountId,
-                           
-                              transaction_type: 'credit_payment',
-                           
-                              related_transaction_id: debitTx?.id,
-                           
-                              notes: `Budget Timing: ${selectedTiming}`
-                            } as any);
+                            const targetStatementPeriod = `${selectedYear}-${String(MONTHS.indexOf(selectedMonth) + 1).padStart(2, '0')}`;
+
+const { data: creditTx, error: creditError } = await createTransaction({
+  name: `${showCreditPayModal.bank} Payment - ${item.name}`,
+  amount: -Math.abs(amount),
+  date: combineDateWithCurrentTime(date),
+  payment_method_id: showCreditPayModal.accountId,
+  transaction_type: 'credit_payment',
+  related_transaction_id: debitTx?.id,
+  notes: `Statement: ${targetStatementPeriod} | Budget Timing: ${selectedTiming}`
+} as any);
+
 
                             if (creditError) {
                             await recordCreditPayment(showCreditPayModal.accountId, amount, `${showCreditPayModal.bank} Payment - ${item.name}`, date);
@@ -6601,8 +6768,16 @@ const totalSpend = grandTotal;
                           
                           submitBtn.className = "w-full bg-gray-200 text-gray-500 border-2 border-black py-4 rounded-xl font-black text-sm uppercase tracking-wider transition-all";
                           submitBtn.textContent = 'Paid! ✓';
-
-                          setTimeout(() => setShowCreditPayModal(null), 1000);
+                        
+                          setTimeout(() => {
+                            setShowCreditPayModal(prev => {
+                              if (!prev) return null;
+                              const remainingItems = prev.items.filter(i => i.id !== item.id);
+                              if (remainingItems.length === 0) return null;
+                              return { ...prev, items: remainingItems };
+                            });
+                          }, 800);
+                        
                           
                         } catch (err: any) {
                           alert(`Payment failed: ${err.message || 'Server rejected the transaction.'}`);
@@ -6789,9 +6964,7 @@ const totalSpend = grandTotal;
                         
                         await reloadTransactions();
                         await reloadPaymentSchedules();
-                        submitBtn.className = "w-full bg-gray-200 text-gray-500 border-2 border-black py-4 rounded-xl font-black text-sm uppercase tracking-wider transition-all";
-                        submitBtn.textContent = 'Paid! ✓';
-                        setTimeout(() => setShowBudeeCarousel(null), 1000);
+                        
                       } catch (err) {
                         alert('Failed to record payment.');
                         submitBtn.disabled = false; submitBtn.textContent = 'Pay Budee';
@@ -6800,8 +6973,8 @@ const totalSpend = grandTotal;
                     className="space-y-4 mt-auto"
                   >
 
-                    {/* 🟢 FRONTING TOGGLE */}
-                    <div className="bg-blue-50 dark:bg-blue-900/20 border-2 border-blue-400 p-3 rounded-xl flex items-start gap-3 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] transition-colors">
+                                        {/* 🟢 FRONTING TOGGLE */}
+                                        <div className="bg-blue-50 dark:bg-blue-900/20 border-2 border-blue-400 p-3 rounded-xl flex items-start gap-3 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] transition-colors">
                        <input type="checkbox" name="isFronted" id="isFronted" className="mt-1 w-4 h-4 rounded border-black accent-blue-600 cursor-pointer" />
                        <div>
                           <label htmlFor="isFronted" className="text-xs font-black text-blue-900 dark:text-blue-300 cursor-pointer block">Borrow from Savings</label>
@@ -6811,6 +6984,7 @@ const totalSpend = grandTotal;
 
                     <div>
                       <label className="block text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">Amount to Pay</label>
+
                       <div className="relative"><span className="absolute left-3 top-1/2 -translate-y-1/2 font-bold text-gray-400">₱</span><input required name="amount" type="number" step="0.01" defaultValue={showBudeeCarousel.amount.toFixed(2)} className="w-full bg-gray-50 dark:bg-gray-800 border-2 border-black rounded-xl p-3 pl-8 outline-none text-lg font-black dark:text-gray-100" /></div>
                     </div>
                     <div className="grid grid-cols-2 gap-3">
