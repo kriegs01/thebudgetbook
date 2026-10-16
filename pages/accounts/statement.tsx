@@ -11,6 +11,8 @@ import { getPaymentSchedulesBySource } from '../../src/services/paymentSchedules
 import { groupBNPLTransactions } from '../../src/utils/creditEngines/transactionGrouper';
 import { MultiBNPLConversionModal } from '../../src/components/BNPLConversionModal';
 import { useQueryClient } from '@tanstack/react-query';
+import { supabase } from '../../src/utils/supabaseClient';
+
 
 const formatCurrency = (val: number) =>
   new Intl.NumberFormat('en-PH', {
@@ -47,6 +49,10 @@ const StatementPage: React.FC<StatementPageProps> = ({ accounts, installments = 
 
 const [showMultiBNPLModal, setShowMultiBNPLModal] = useState(false);
 const [showReviewModal, setShowReviewModal] = useState(false);
+
+const [isFilterExpanded, setIsFilterExpanded] = useState(false);
+
+const [showAllCyclesModal, setShowAllCyclesModal] = useState(false);
 
 
   const toggleGroup = (groupId: string) => {
@@ -118,27 +124,45 @@ const [showReviewModal, setShowReviewModal] = useState(false);
 
         const latestRefDate = new Date(Math.max(now.getTime(), latestTxDate));
 
-        // 🟢 FIX: Look 2 months ahead of the latest activity so the active unbilled cycle 
+                // 🟢 FIX: Look 2 months ahead of the latest activity so the active unbilled cycle 
         // (whose due date falls in the following month due to grace period) is always generated!
         const targetDate = new Date(latestRefDate.getFullYear(), latestRefDate.getMonth() + 2, 1);
+
+        // 1. Fetch exact schedules so the bucket engine knows the actual amounts (₱350 vs ₱700)
+        const instIds = (installments || []).map(i => i.id);
+        let allSchedules: any[] = [];
+        if (instIds.length > 0) {
+          const { data: schedData } = await supabase
+            .from('monthly_payment_schedules')
+            .select('*')
+            .in('source_id', instIds);
+          if (schedData) allSchedules = schedData;
+        }
 
         const buckets = generateCreditBuckets(
           acc,
           transactions || [],
           installments || [],
           targetDate.getFullYear(),
-          monthNames[targetDate.getMonth()]
+          monthNames[targetDate.getMonth()],
+          allSchedules // 👈 Passes the schedules to the engine
         );
+        
+                        // Reverse so newest statement is on top for the UI
+        const reversedBuckets = [...buckets].reverse();
+        setCycles(reversedBuckets);
 
-        
-                // Reverse so newest statement is on top for the UI
-                const reversedBuckets = [...buckets].reverse();
-                setCycles(reversedBuckets);
-        
-        
-        // ONLY reset to 0 if we are on a brand new page load or the selection is out of bounds
-        setSelectedCycleIndex(prev => (prev < reversedBuckets.length ? prev : 0));
-        
+        // 🟢 Find the current active cycle by today's date
+        const today = new Date();
+        const activeIndex = reversedBuckets.findIndex(bucket => {
+          const start = new Date(bucket.cycleStart);
+          const end = new Date(bucket.cycleEnd);
+          return today >= start && today <= end;
+        });
+
+        // Default to active cycle if found, otherwise fallback to the most recent closed statement or 0
+        setSelectedCycleIndex(activeIndex !== -1 ? activeIndex : 0);
+
       } catch (error) {
         console.error('Error loading statement buckets:', error);
       } finally {
@@ -151,7 +175,7 @@ const [showReviewModal, setShowReviewModal] = useState(false);
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-gray-50 dark:bg-gray-950 p-8 transition-colors">
+      <div className="min-h-screen bg-transparent dark:transparent p-8 transition-colors">
         <div className="max-w-4xl mx-auto flex items-center justify-center py-24">
           <div className="text-center">
             <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600 mb-4"></div>
@@ -222,6 +246,8 @@ const [showReviewModal, setShowReviewModal] = useState(false);
     });
 
     const totalRemaining = totalPayableAll - totalPaidAll;
+
+    
 
     return (
       <div className={`min-h-screen bg-transparent dark:bg-transparent transition-colors ${isMobile ? 'overflow-x-hidden px-4 pb-8 pt-6' : 'p-8'}`}>
@@ -441,7 +467,19 @@ const [showReviewModal, setShowReviewModal] = useState(false);
     })
   ] : [];
 
-  const groupedCurrentTxs = groupBNPLTransactions(currentTxs as any, installments).filter((item) => {
+  const groupedCurrentTxs = groupBNPLTransactions(currentTxs as any, installments).map(item => {
+    if (item.isGroup && item.parentInstallment) {
+      // Read the true amount (₱350 vs ₱700) calculated by the engine for this specific cycle
+      const cycleItem = selectedCycle?.personalBreakdown.activeInstallments.find(
+        (inst: any) => inst.id === item.parentInstallment.id
+      );
+      if (cycleItem) {
+        return { ...item, totalAmount: cycleItem.amount };
+      }
+    }
+    return item;
+  }).filter((item) => {
+
     if (!item.isGroup) {
       const tx = item.transactions[0];
       return !(tx?.conversion_status === 'approved' && tx?.conversion_group_id);
@@ -451,6 +489,14 @@ const [showReviewModal, setShowReviewModal] = useState(false);
   const visibleMobileTxs = currentTxs.filter(tx => !(tx.conversion_status === 'approved' && tx.conversion_group_id));
   const pendingConversions = currentTxs.filter(tx => tx.conversion_status === 'pending');
   const visibleStatementCount = groupedCurrentTxs.length;
+
+  console.log(`STATEMENT DIAGNOSTIC [${selectedCycle?.targetMonth}]:`, {
+    engineCalculatedAmount: selectedCycle?.personalBreakdown?.activeInstallments?.find(i => i?.name?.includes('BNPL'))?.amount,
+    groupedUIAmount: groupedCurrentTxs?.find(i => i?.name?.includes('BNPL'))?.totalAmount,
+    schedulesFound: selectedCycle?.personalBreakdown?.activeInstallments
+  });
+
+  
 
   return (
     <div className={`min-h-screen bg-transparent dark:bg-transparent transition-colors ${isMobile ? 'overflow-x-hidden px-2 pb-8 pt-6' : 'p-8'}`}>
@@ -470,56 +516,128 @@ const [showReviewModal, setShowReviewModal] = useState(false);
           ) : undefined}
         />
 
+        {/* 🟢 BILLING CYCLE CAROUSEL */}
         <div className={`${isMobile ? 'mb-5' : 'mb-6'}`}>
           <div className="min-w-0 flex-1 rounded-[1.8rem] border-[4px] border-black bg-white p-4 shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] transition-colors dark:bg-gray-900">
-            <div className={`flex items-center gap-3 ${isMobile ? 'justify-center' : 'justify-between'}`}>
+            {/* Header: Title + ALL Button */}
+            <div className="flex items-center justify-between gap-3 mb-3">
               <div className="flex items-center gap-3">
-                <div className="inline-flex h-11 w-11 items-center justify-center rounded-[1.2rem] border-[3px] border-black bg-purple-100 text-purple-700 shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] transition-colors dark:bg-purple-900/20 dark:text-purple-300">
+                <div className="inline-flex h-10 w-10 items-center justify-center rounded-[1.1rem] border-[3px] border-black bg-purple-100 text-purple-700 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] transition-colors dark:bg-purple-900/20 dark:text-purple-300">
                   <Calendar className="w-4 h-4" />
                 </div>
-                <p className={`text-sm font-black tracking-[0.08em] text-gray-800 dark:text-gray-100 ${isMobile ? 'text-center leading-tight' : 'leading-none'}`}>
+                <p className="text-sm font-black tracking-[0.08em] text-gray-800 dark:text-gray-100 leading-none">
                   <span className="uppercase tracking-[0.18em]">Billing Cycle:</span>{' '}
                   <span className="text-xs font-bold uppercase tracking-[0.12em] text-gray-500 dark:text-gray-400">Statement Range</span>
                 </p>
               </div>
+
+              {/* ALL / History Modal Button */}
+              {cycles.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setShowAllCyclesModal(true)}
+                  className="px-3 py-1.5 rounded-xl border-2 border-black bg-[#fff8ea] dark:bg-gray-800 text-[11px] font-black uppercase tracking-wider text-gray-700 dark:text-gray-300 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:translate-x-[1px] hover:translate-y-[1px] hover:shadow-none transition-all"
+                >
+                  All ({cycles.length})
+                </button>
+              )}
             </div>
 
-            <div className="mt-4">
-              {isMobile ? (
-                <div className="relative">
-                  <select
-                    value={selectedCycleIndex}
-                    onChange={(e) => setSelectedCycleIndex(Number(e.target.value))}
-                    className="w-full appearance-none rounded-2xl border-[3px] border-black bg-[#fff8ea] px-4 py-3 pr-12 text-sm font-black text-gray-900 outline-none transition-colors dark:bg-gray-800 dark:text-gray-100"
-                  >
-                    {cycles.map((cycle, index) => (
-                      <option key={cycle.cycleLabel} value={index}>
-                        {cycle.cycleLabel}
-                      </option>
-                    ))}
-                  </select>
-                  <ChevronDown className="pointer-events-none absolute right-4 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-500 dark:text-gray-400" />
+            {/* Paginator Bar */}
+            {selectedCycle && (
+              <div className="flex items-center justify-between gap-2 p-2 sm:p-3 rounded-2xl border-[3px] border-black bg-[#fff8ea] dark:bg-gray-800 shadow-[3px_3px_0px_0px_rgba(0,0,0,1)]">
+                {/* Newer Cycle (<) - cycles are reversed so older is higher index */}
+                <button
+                  type="button"
+                  onClick={() => setSelectedCycleIndex(prev => Math.min(cycles.length - 1, prev + 1))}
+                  disabled={selectedCycleIndex >= cycles.length - 1}
+                  className="h-10 w-10 sm:h-11 sm:w-11 shrink-0 flex items-center justify-center rounded-xl border-2 border-black bg-white dark:bg-gray-900 text-black dark:text-white shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] disabled:opacity-30 disabled:shadow-none disabled:cursor-not-allowed hover:bg-gray-50 active:translate-x-[1px] active:translate-y-[1px] transition-all"
+                  aria-label="Previous Statement"
+                >
+                  <ArrowLeft className="w-4 h-4" />
+                </button>
+
+                {/* Center Content: Statement Month & Range/Due */}
+                <div className="flex flex-col items-center justify-center text-center min-w-0 px-2 flex-1">
+                  <h4 className="text-base sm:text-lg font-black text-gray-900 dark:text-gray-100 tracking-tight leading-tight">
+                    {selectedCycle.targetMonth} {selectedCycle.targetYear}
+                  </h4>
+                  <p className="text-xs sm:text-xs font-bold text-gray-500 dark:text-gray-400 mt-0.5 truncate max-w-full">
+                    {selectedCycle.cycleLabel}{' '}
+                    {selectedCycle.calculatedDueDate && (
+                      <span className="text-indigo-600 dark:text-indigo-400 font-black">
+                        | Due: {new Date(selectedCycle.calculatedDueDate + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                      </span>
+                    )}
+                  </p>
                 </div>
-              ) : (
-                <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
-                  {cycles.map((cycle, index) => (
+
+                {/* Older Cycle (>) */}
+                <button
+                  type="button"
+                  onClick={() => setSelectedCycleIndex(prev => Math.max(0, prev - 1))}
+                  disabled={selectedCycleIndex <= 0}
+                  className="h-10 w-10 sm:h-11 sm:w-11 shrink-0 flex items-center justify-center rounded-xl border-2 border-black bg-white dark:bg-gray-900 text-black dark:text-white shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] disabled:opacity-30 disabled:shadow-none disabled:cursor-not-allowed hover:bg-gray-50 active:translate-x-[1px] active:translate-y-[1px] transition-all rotate-180"
+                  aria-label="Next Statement"
+                >
+                  <ArrowLeft className="w-4 h-4" />
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* 🟢 "ALL STATEMENTS" POPUP MODAL */}
+        {showAllCyclesModal && (
+          <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
+            <div className="relative w-full max-w-xl rounded-3xl border-4 border-black bg-white p-5 sm:p-6 shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] dark:bg-gray-900 max-h-[85vh] flex flex-col">
+              <div className="flex items-center justify-between pb-4 border-b-2 border-black">
+                <h3 className="text-lg font-black text-gray-900 dark:text-gray-100 uppercase tracking-tight">
+                  All Statement Cycles
+                </h3>
+                <button
+                  type="button"
+                  onClick={() => setShowAllCyclesModal(false)}
+                  className="rounded-xl border-2 border-black p-1.5 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+                >
+                  ✕
+                </button>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 overflow-y-auto py-4 flex-1">
+                {cycles.map((cycle, index) => {
+                  const dueFormatted = cycle.calculatedDueDate
+                    ? new Date(cycle.calculatedDueDate + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+                    : null;
+
+                  return (
                     <button
                       key={cycle.cycleLabel}
-                      onClick={() => setSelectedCycleIndex(index)}
-                      className={`rounded-[1.3rem] border-[3px] p-4 text-left shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] transition-all ${
+                      onClick={() => {
+                        setSelectedCycleIndex(index);
+                        setShowAllCyclesModal(false);
+                      }}
+                      className={`rounded-2xl border-[3px] p-3 text-left shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] transition-all ${
                         selectedCycleIndex === index
-                          ? 'border-black bg-purple-100 dark:bg-purple-900/20'
+                          ? 'border-black bg-purple-100 dark:bg-purple-900/40'
                           : 'border-black bg-[#fff8ea] hover:-translate-y-0.5 dark:bg-gray-800'
                       }`}
                     >
-                      <div className="text-sm font-black text-gray-900 dark:text-gray-100 transition-colors">{cycle.cycleLabel}</div>
+                      <div className="text-sm font-black text-gray-900 dark:text-gray-100">
+                        {cycle.targetMonth} {cycle.targetYear}
+                      </div>
+                      <div className="text-xs font-bold text-gray-500 dark:text-gray-400 mt-0.5 truncate">
+                        {cycle.cycleLabel} {dueFormatted && <span className="text-indigo-600 dark:text-indigo-400 font-black">| Due: {dueFormatted}</span>}
+                      </div>
                     </button>
-                  ))}
-                </div>
-              )}
+                  );
+                })}
+              </div>
             </div>
           </div>
-        </div>
+        )}
+
+
 
         {selectedCycle && (
           <>

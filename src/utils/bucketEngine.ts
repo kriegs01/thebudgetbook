@@ -1,3 +1,6 @@
+import { getAccountProfile } from './creditEngines/accountProfiles';
+
+
 const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 
 export interface BucketItem {
@@ -63,8 +66,11 @@ export const generateCreditBuckets = (
   transactions: any[],
   installments: any[],
   upToYear: number,
-  upToMonthName: string
+  upToMonthName: string,
+  paymentSchedules: any[] = [] // 👈 Added this
 ): CreditBucket[] => {
+
+
   try {
     if (!account) return [];
     
@@ -188,8 +194,11 @@ export const generateCreditBuckets = (
       const dueDateObj = new Date(cycleEnd);
       dueDateObj.setDate(dueDateObj.getDate() + graceDays);
       const calculatedDueDate = dueDateObj.toISOString().split('T')[0];
-      const targetMonth = MONTHS[dueDateObj.getMonth()];
-      const targetYear = dueDateObj.getFullYear();
+      
+      // 🟢 Delegate statement naming to the account profile
+      const profile = getAccountProfile(account);
+      const { targetMonth, targetYear } = profile.getStatementName(cycleStart, cycleEnd, dueDateObj);
+
 
                   // -- SORT TRANSACTIONS --
       const txsInCycle = accountTxs.filter(tx => {
@@ -209,38 +218,53 @@ export const generateCreditBuckets = (
       // 🟢 Swipes are strictly normal purchases
       const swipes = txsInCycle.filter(tx => !isTrueBillPayment(tx) && Number(tx.amount) > 0);
 
-            // 🟢 Smart Envelope Matching for TRUE Payments Only
-            const payments = accountTxs.filter(tx => {
-              if (!isTrueBillPayment(tx)) return false;
-              
-              // 1. If an older statement already claimed this payment, ignore it!
-              if (claimedPaymentIds.has(tx.id)) return false;
-      
-              const name = String(tx.name).toLowerCase();
-              const targetMonthLower = targetMonth.toLowerCase();
-              
-              const explicitMonthMatch = MONTHS.find(m => {
-                const mLower = m.toLowerCase();
-                const shortM = mLower.substring(0, 3);
-                const regex = new RegExp(`\\b(${mLower}|${shortM})\\b`, 'i');
-                return regex.test(name);
-              });
-      
-              // 2. Explicit name match (e.g., "August Payment")
-              if (explicitMonthMatch) {
-                  return explicitMonthMatch.toLowerCase() === targetMonthLower;
-              } 
-              
-              const txDate = parseSafeDate(tx.date);
-              if (!txDate) return false;
-      
-              // 3. 🟢 THE FIX: Extend the payment window up to the Due Date (+ 3 days buffer).
-              // This ensures payments made *after* the cycle closes still attach to the bill they are paying!
-              const paymentWindowEnd = new Date(dueDateObj);
-              paymentWindowEnd.setDate(paymentWindowEnd.getDate() + 3);
-      
-              return txDate >= cycleStart && txDate <= paymentWindowEnd;
-            });
+                  // 🟢 Smart Envelope Matching for TRUE Payments Only
+      const payments = accountTxs.filter(tx => {
+        if (!isTrueBillPayment(tx)) return false;
+        
+        // 1. If an older statement already claimed this payment, ignore it!
+        if (claimedPaymentIds.has(tx.id)) return false;
+
+        const txDate = parseSafeDate(tx.date);
+        if (!txDate) return false;
+
+        // Payment window: from cycleStart up to Due Date (+ 3 days grace buffer)
+        const paymentWindowEnd = new Date(dueDateObj);
+        paymentWindowEnd.setDate(paymentWindowEnd.getDate() + 3);
+
+        // 🟢 STRICT OVERLAP PREVENTION
+        // Unlabelled payments are bound strictly between the PREVIOUS cycle's 
+        // payment deadline and THIS cycle's payment deadline.
+        const previousPaymentWindowEnd = new Date(paymentWindowEnd);
+        previousPaymentWindowEnd.setMonth(previousPaymentWindowEnd.getMonth() - 1);
+
+        const name = String(tx.name).toLowerCase();
+        const targetMonthLower = targetMonth.toLowerCase();
+
+        // Check if name has an explicit month tag
+        const explicitMonthMatch = MONTHS.find(m => {
+          const mLower = m.toLowerCase();
+          const shortM = mLower.substring(0, 3);
+          const regex = new RegExp(`\\b(${mLower}|${shortM})\\b`, 'i');
+          return regex.test(name);
+        });
+
+        if (!explicitMonthMatch) {
+           // Strict chronological capture for unlabelled payments
+           return txDate > previousPaymentWindowEnd && txDate <= paymentWindowEnd;
+        }
+
+        // 2. Off-cycle payments with explicit statement tags
+        if (explicitMonthMatch.toLowerCase() === targetMonthLower) {
+           return true;
+        }
+
+        // Failsafe: If the tag points to the wrong month but the payment was made 
+        // exactly around this cycle's due date, it actually belongs to this cycle.
+        const isDueAroundDate = Math.abs(txDate.getTime() - dueDateObj.getTime()) <= (5 * 24 * 60 * 60 * 1000);
+        return isDueAroundDate;
+      });
+
             
             // 🟢 Lock these payments to this bucket so the next running bucket ignores them
             payments.forEach(tx => claimedPaymentIds.add(tx.id));
@@ -295,9 +319,23 @@ export const generateCreditBuckets = (
       let budeeNewChargesTotal = 0;
 
       activeInst.forEach(inst => {
-        const amt = Number(inst.monthlyAmount) || 0;
+        const matchingSchedule = paymentSchedules.find((s: any) => 
+          (s.source_id === inst.id || s.sourceId === inst.id) &&
+          Number(s.year) === Number(targetYear) &&
+          String(s.month).toLowerCase() === String(targetMonth).toLowerCase()
+        );
+
+        // 🟢 Ensure amt is always a POSITIVE charge on the statement
+        const rawAmt = matchingSchedule 
+          ? Number(matchingSchedule.expected_amount ?? matchingSchedule.amount ?? 0) 
+          : (Number(inst.monthlyAmount || inst.monthly_amount) || 0);
+
+        const amt = Math.abs(rawAmt);
+
+        if (amt === 0) return;
+
         const budeeId = inst.debtor_friend_id || inst.funding_friend_id || (inst as any).friend_user_id;
-        
+
         if (budeeId) {
           budeeNewChargesTotal += amt;
           budeeBreakdown.push({ 
@@ -314,10 +352,12 @@ export const generateCreditBuckets = (
             ...inst,
             id: inst.id,
             name: inst.name,
-            amount: amt,
+            amount: amt, // Positive charge
           });
         }
       });
+
+
 
       swipes.forEach(tx => {
         const nameStr = String(tx.name || '').toLowerCase();
@@ -434,5 +474,18 @@ export const getBucketForMonth = (
   targetMonth: string, 
   targetYear: number
 ): CreditBucket | null => {
-  return buckets.find(b => b.targetMonth === targetMonth && b.targetYear === targetYear) || null;
+  const monthMap = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+  const targetMonthIdx = monthMap.indexOf(targetMonth);
+
+  return buckets.find(b => {
+    if (b.calculatedDueDate) {
+      // 🟢 Strict Due Date Matching for the Budget Plan
+      // Ensures the October budget loads the bill actually due in October
+      const dueDate = new Date(b.calculatedDueDate + 'T00:00:00');
+      return dueDate.getMonth() === targetMonthIdx && dueDate.getFullYear() === targetYear;
+    }
+    // Fallback if no due date exists
+    return b.targetMonth === targetMonth && b.targetYear === targetYear;
+  }) || null;
 };
+

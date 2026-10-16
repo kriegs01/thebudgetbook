@@ -24,6 +24,8 @@ import { useTheme } from '../src/contexts/ThemeContext';
 import { PageHeader } from '../src/components/PageHeader';
 import useMediaQuery from '../src/hooks/useMediaQuery';
 import { generateCreditBuckets } from '../src/utils/bucketEngine';
+import { accountProfiles } from '../src/utils/creditEngines/accountProfiles';
+import { EngineInfoModal } from '../src/components/EngineInfoModal'; // Adjust path if needed
 
 
 interface AccountsProps {
@@ -92,15 +94,19 @@ const Accounts: React.FC<AccountsProps> = ({ accounts, installments = [], transa
     classification: 'Checking' as AccountClassification, 
     balance: '', 
     type: 'Debit' as 'Debit' | 'Credit', 
+    subtype: '', // 👈 Ensure subtype is here
     creditLimit: '', 
     billingDate: '', 
     dueDate: '', 
     lastFour: '',
     interestRate: '',
-    qrCodeBase64: '', // 🟢 ADD THIS
-    hasVaultEnabled: false, // 🟢 NEW
-    vaultId: ''             // 🟢 NEW
+    qrCodeBase64: '', 
+    hasVaultEnabled: false, 
+    vaultId: '',
+    engineId: 'default' // 🟢 NEW
   });
+
+  const [showEngineModal, setShowEngineModal] = useState(false); // 🟢 NEW
 
 
 
@@ -202,7 +208,8 @@ const Accounts: React.FC<AccountsProps> = ({ accounts, installments = [], transa
       interestRate: '', 
       qrCodeBase64: '',
       hasVaultEnabled: false, // 🟢 NEW
-      vaultId: ''             // 🟢 NEW 
+      vaultId: '',             // 🟢 NEW 
+      engineId: 'default'
     }); // 🟢 Added qrCodeBase64
     setEditingId(null);
   };
@@ -233,7 +240,8 @@ const Accounts: React.FC<AccountsProps> = ({ accounts, installments = [], transa
         interestRate: formData.type === 'Credit' ? (formData.interestRate ? parseFloat(formData.interestRate) : undefined) : undefined,
         qrCodeBase64: formData.qrCodeBase64 || undefined,
         hasVaultEnabled: formData.hasVaultEnabled,
-        vaultId: formData.vaultId || undefined  
+        vaultId: formData.vaultId || undefined,
+        engine_id: formData.engineId  
       };
 
 
@@ -288,7 +296,8 @@ const Accounts: React.FC<AccountsProps> = ({ accounts, installments = [], transa
       qrCodeBase64: acc.qrCodeBase64 || '',
       // 🟢 NEW: Safely load Vault state
       hasVaultEnabled: acc.hasVaultEnabled || false,
-      vaultId: acc.vaultId || ''
+      vaultId: acc.vaultId || '',
+      engineId: (acc as any).engine_id || 'default'
     });
     setShowModal(true);
   };
@@ -826,7 +835,8 @@ if (acc.hasVaultEnabled && acc.vaultId) {
         <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in">
           
                     {/* 3D Scene Container */}
-                    <div className="group perspective-[1200px] w-full max-w-[22rem] sm:max-w-[32rem] mx-auto relative mt-8 sm:mt-12">
+<div className="group perspective-[1200px] w-full max-w-[22rem] sm:max-w-[32rem] mx-auto relative -mt-60 sm:-mt-10">
+
             
             {/* X Button (Safely floating above the card) */}
             <div className="absolute -top-12 sm:-top-14 right-0 z-[110]">
@@ -931,28 +941,44 @@ if (acc.hasVaultEnabled && acc.vaultId) {
                 <div className="w-full h-10 sm:h-14 bg-gray-900 mt-6 sm:mt-8 mb-4 sm:mb-6"></div>
                 
                 <div className="px-5 sm:px-8 flex-1 flex flex-col justify-between pb-5 sm:pb-8">
-                  <div className="grid grid-cols-2 gap-x-3 sm:gap-x-5 gap-y-3 sm:gap-y-5">
-                    
-                    {/* Credit Limit */}
-                    <div className="col-span-2">
-                       <label className="block text-[10px] sm:text-xs font-black text-gray-600 dark:text-gray-400 uppercase tracking-widest mb-1 sm:mb-2">{formData.subtype === 'Loan_Bundle' ? 'Bundle Limit' : 'Credit Limit'}</label>
-                       <div className="flex items-center rounded-xl sm:rounded-2xl border-[3px] border-black bg-white dark:bg-gray-900 overflow-hidden">
-                         <span className="pl-3 sm:pl-4 text-base sm:text-xl font-black text-gray-400">₱</span>
-                         <input type="number" value={formData.creditLimit} onChange={(e) => setFormData({...formData, creditLimit: e.target.value})} className="w-full bg-transparent px-2 sm:px-3 py-2 sm:py-3 text-base sm:text-xl font-black text-black dark:text-white outline-none" placeholder="0.00" />
-                       </div>
-                    </div>
+                <div className="grid grid-cols-2 gap-x-3 sm:gap-x-5 gap-y-2.5 sm:gap-y-4">
+  
+  {/* ROW 1: Credit Limit (Left) + Credit Provider (Right) */}
+  <div className="col-span-1">
+     <label className="block text-[9px] sm:text-[10px] font-black text-gray-600 dark:text-gray-400 uppercase tracking-widest mb-1">{formData.subtype === 'Loan_Bundle' ? 'Bundle Limit' : 'Credit Limit'}</label>
+     <div className="flex items-center rounded-xl border-[3px] border-black bg-white dark:bg-gray-900 overflow-hidden">
+       <span className="pl-2 sm:pl-3 text-sm sm:text-base font-black text-gray-400">₱</span>
+       <input type="number" value={formData.creditLimit} onChange={(e) => setFormData({...formData, creditLimit: e.target.value})} className="w-full bg-transparent px-2 py-1.5 sm:py-2 text-sm sm:text-base font-black text-black dark:text-white outline-none" placeholder="0.00" />
+     </div>
+  </div>
 
-                    {/* Billing Cycle Fields for ALL Credit Types */}
-                    <div>
-                      <label className="block text-[9px] sm:text-xs font-black text-gray-600 dark:text-gray-400 uppercase tracking-widest mb-1 sm:mb-2">Statement Day</label>
-                      <input type="number" min="1" max="31" placeholder="15" value={formData.billingDate} onChange={(e) => setFormData({...formData, billingDate: e.target.value})} className="w-full rounded-xl border-[3px] border-black bg-white dark:bg-gray-900 px-3 py-2 text-sm sm:text-lg font-black text-black dark:text-white outline-none" />
-                    </div>
-                    <div>
-                      <label className="block text-[9px] sm:text-xs font-black text-gray-600 dark:text-gray-400 uppercase tracking-widest mb-1 sm:mb-2">Days to Pay</label>
-                      <input type="number" min="1" max="60" placeholder="21" value={formData.dueDate} onChange={(e) => setFormData({...formData, dueDate: e.target.value})} className="w-full rounded-xl border-[3px] border-black bg-white dark:bg-gray-900 px-3 py-2 text-sm sm:text-lg font-black text-black dark:text-white outline-none" />
-                    </div>
+  <div className="col-span-1">
+    <label className="block text-[9px] sm:text-[10px] font-black text-gray-600 dark:text-gray-400 uppercase tracking-widest mb-1">Credit Provider</label>
+    <select 
+      value={formData.engineId} 
+      onChange={(e) => setFormData({...formData, engineId: e.target.value})} 
+      className="w-full rounded-xl border-[3px] border-black bg-white dark:bg-gray-900 px-2 py-1.5 sm:py-2 text-xs sm:text-sm font-black text-black dark:text-white outline-none cursor-pointer truncate"
+    >
+      {accountProfiles.map(p => (
+        <option key={p.id} value={p.id}>{p.name}</option>
+      ))}
+    </select>
+  </div>
 
-                  </div>
+  {/* ROW 2: Statement Day (Left) + Days to Pay (Right) */}
+  <div className="col-span-1">
+    <label className="block text-[9px] sm:text-[10px] font-black text-gray-600 dark:text-gray-400 uppercase tracking-widest mb-1">Statement Day</label>
+    <input type="number" min="1" max="31" placeholder="15" value={formData.billingDate} onChange={(e) => setFormData({...formData, billingDate: e.target.value})} className="w-full rounded-xl border-[3px] border-black bg-white dark:bg-gray-900 px-3 py-1.5 sm:py-2 text-sm sm:text-base font-black text-black dark:text-white outline-none" />
+  </div>
+  <div className="col-span-1">
+    <label className="block text-[9px] sm:text-[10px] font-black text-gray-600 dark:text-gray-400 uppercase tracking-widest mb-1">Days to Pay</label>
+    <input type="number" min="1" max="60" placeholder="21" value={formData.dueDate} onChange={(e) => setFormData({...formData, dueDate: e.target.value})} className="w-full rounded-xl border-[3px] border-black bg-white dark:bg-gray-900 px-3 py-1.5 sm:py-2 text-sm sm:text-base font-black text-black dark:text-white outline-none" />
+  </div>
+
+  
+
+</div>
+
 
                                     {/* Next Button (Inside card for desktop, hidden on mobile) */}
                                     <div className="hidden sm:flex justify-end mt-4">
@@ -968,19 +994,54 @@ if (acc.hasVaultEnabled && acc.vaultId) {
             
           
 
-            {/* 🟢 Mobile Floating "Next" Button (Visible when Flipped) */}
-            <div className={`sm:hidden absolute -bottom-16 left-1/2 -translate-x-1/2 w-max transition-opacity duration-300 delay-150 ${!isFlipped ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
-              <button type="button" onClick={() => setIsFlipped(false)} className={`px-8 py-3 rounded-xl border-[3px] border-black text-[11px] font-black text-white uppercase tracking-widest shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] active:translate-x-[2px] active:translate-y-[2px] active:shadow-none transition-all ${getAccentClasses('bg')}`}>
-                Next: Front Details ↺
-              </button>
-            </div>
-
-            {/* Submit Button Floating Below Card (Visible when NOT Flipped) */}
-            <div className={`absolute -bottom-16 sm:-bottom-24 left-1/2 -translate-x-1/2 w-max transition-opacity duration-300 delay-150 ${isFlipped ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
+                        {/* 🟢 FRONT OF CARD CONTROLS (Submit Button) */}
+                        <div className={`absolute top-full mt-6 sm:mt-8 left-1/2 -translate-x-1/2 w-max transition-opacity duration-300 delay-150 ${isFlipped ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
               <button onClick={handleSubmit} disabled={isSubmitting} className={`px-10 sm:px-14 py-3 sm:py-4 rounded-xl sm:rounded-2xl border-[3px] sm:border-[4px] border-black text-sm sm:text-lg font-black text-white uppercase tracking-widest shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] sm:shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] active:translate-x-[4px] active:translate-y-[4px] transition-all disabled:opacity-50 ${getAccentClasses('bg')}`}>
                 {isSubmitting ? 'Minting...' : (editingId ? 'Save Updates' : 'Add to Wallet')}
               </button>
             </div>
+
+            {/* 🧲 BACK OF CARD CONTROLS (External Info Box + Mobile Next Button) */}
+            <div className={`absolute top-full mt-4 left-0 right-0 flex flex-col items-center gap-4 transition-opacity duration-300 delay-150 ${!isFlipped ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
+              
+              {/* External Provider Rules Panel */}
+              {formData.engineId !== 'default' && (
+                <div className="w-full rounded-[1rem] border-[3px] border-black bg-indigo-50 dark:bg-indigo-900/30 p-3 sm:p-4 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] animate-in slide-in-from-top-2">
+                  <div className="flex items-center gap-1.5 mb-2">
+                    <Sparkles className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
+                    <span className="text-[10px] sm:text-xs font-black uppercase tracking-widest text-indigo-900 dark:text-indigo-300">Provider Ruleset</span>
+                  </div>
+                  
+                  {(() => {
+                    const profile = accountProfiles.find(p => p.id === formData.engineId);
+                    if (!profile) return null;
+                    return (
+                      <div className="text-left">
+                        <p className="text-[10px] sm:text-xs font-bold text-indigo-900/80 dark:text-indigo-200 leading-tight mb-2.5">
+                          {profile.namingDescription}
+                        </p>
+                        {profile.features.length > 0 && (
+                          <div className="space-y-1.5 border-t-[2px] border-dashed border-indigo-200 dark:border-indigo-800/50 pt-2.5">
+                            {profile.features.map((f, i) => (
+                              <p key={i} className="text-[9px] sm:text-[10px] text-indigo-900 dark:text-indigo-300">
+                                <span className="font-black mr-1.5 uppercase tracking-wider">{f.title}:</span>
+                                <span className="opacity-80">{f.desc}</span>
+                              </p>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })()}
+                </div>
+              )}
+
+              {/* Mobile Next Button */}
+              <button type="button" onClick={() => setIsFlipped(false)} className={`sm:hidden w-max px-8 py-3 rounded-xl border-[3px] border-black text-[11px] font-black text-white uppercase tracking-widest shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] active:translate-x-[2px] active:translate-y-[2px] active:shadow-none transition-all ${getAccentClasses('bg')}`}>
+                Next: Front Details ↺
+              </button>
+            </div>
+
 
           </div>
         </div>
@@ -1064,6 +1125,14 @@ if (acc.hasVaultEnabled && acc.vaultId) {
           </div>
         </div>
       )}
+
+      {/* 🟢 NEW: The Engine Details Pop-up */}
+      <EngineInfoModal 
+        profile={accountProfiles.find(p => p.id === formData.engineId) || null}
+        isOpen={showEngineModal}
+        onClose={() => setShowEngineModal(false)}
+      />
+
 
       {confirmModal.show && <ConfirmDialog {...confirmModal} onClose={() => setConfirmModal(p => ({ ...p, show: false }))} />}
     </div>

@@ -17,7 +17,15 @@ if (!supabaseUrl || !supabaseKey) {
   process.exit(1);
 }
 
-const supabase = createClient(supabaseUrl, supabaseKey);
+const supabase = createClient(supabaseUrl, supabaseKey, {
+  realtime: {
+    transport: null
+  },
+  auth: {
+    persistSession: false
+  }
+});
+
 
 function parseLatestChangelog() {
   const changelogPath = path.resolve(process.cwd(), 'CHANGELOG.md');

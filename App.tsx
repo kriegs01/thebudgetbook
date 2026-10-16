@@ -73,6 +73,7 @@ const accountToSupabase = (account: Account) => ({
   due_date: account.dueDate ?? null,
   is_active: (account as any).isActive !== false,
   deactivation_date: (account as any).deactivationDate ?? null,
+  engine_id: account.engine_id || 'default'
 });
 
 // Helper function to convert Supabase Account to UI format
@@ -87,6 +88,7 @@ const supabaseToAccount = (supabaseAccount: any): Account => ({
   dueDate: supabaseAccount.due_date,
   isActive: supabaseAccount.is_active ?? true,
   deactivationDate: supabaseAccount.deactivation_date,
+  engine_id: supabaseAccount.engine_id || 'default'
 });
 
 // Helper function to convert UI Biller to Supabase format

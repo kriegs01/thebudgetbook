@@ -30,6 +30,7 @@ export const supabaseAccountToFrontend = (supabaseAccount: SupabaseAccount): Acc
     subtype: supabaseAccount.subtype ?? undefined,
     hasVaultEnabled: supabaseAccount.has_vault_enabled ?? false,
     vaultId: supabaseAccount.vault_id ?? undefined,
+    engine_id: supabaseAccount.engine_id || 'default'
   };
 };
 
@@ -52,6 +53,7 @@ export const frontendAccountToSupabase = (account: Account): Omit<SupabaseAccoun
     subtype: account.subtype ?? null,
     has_vault_enabled: account.hasVaultEnabled ?? false,
     vault_id: account.vaultId ?? null,
+    engine_id: account.engine_id || 'default',
   };
 };
 

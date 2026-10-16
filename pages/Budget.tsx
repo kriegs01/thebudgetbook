@@ -3897,65 +3897,58 @@ const getFrozenCycleAmount = (account: Account): number => {
                 });
         
 
-        const budeeSum = cardReimbursableItems.reduce((s: number, b: any) => s + (Number(b.amount) || 0), 0);
+                const budeeSum = cardReimbursableItems.reduce((s: number, b: any) => s + (Number(b.amount) || 0), 0);
         amount = getFrozenCycleAmount(acc);
-        totalStatementBalance = targetBucket?.endingBalance || (amount + budeeSum);
+        totalStatementBalance = targetBucket?.newChargesTotal || (amount + budeeSum);
         rawDue = getCreditDueDay(acc);
-        isPaid = subItems.length > 0 && subItems.every(sub => sub.isPaid);
-      }
+        
+        // 1. Check if all personal and budee items are individually paid
+        const allPersonalPaid = subItems.length === 0 || subItems.every((sub: any) => sub.isPaid);
+        const allBudeePaid = cardReimbursableItems.length === 0 || cardReimbursableItems.every((sub: any) => sub.isPaid);
+        
+        // 2. The card is ONLY fully paid if BOTH shares are completely settled
+        isPaid = (subItems.length > 0 || cardReimbursableItems.length > 0) && allPersonalPaid && allBudeePaid;
 
-      const subItemsTotal = subItems.reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
+        // 3. Find any active fronted/reimburse items to trigger the Reimburse UI state
+        const frontedBudee = cardReimbursableItems.find((b: any) => b.frontedInfo && !b.isPaid);
+        const frontedPersonal = subItems.find((s: any) => s.frontedInfo && !s.isPaid);
+        const activeFrontedItem = frontedPersonal || frontedBudee;
+
+      } // <-- (Your closing bracket)
+
+      const subItemsTotal = subItems.reduce((sum: number, item: any) => sum + (Number(item.amount) || 0), 0);
       if (amount < subItemsTotal) {
         amount = subItemsTotal;
       }
 
-                          // 🟢 SAFE CHECK WITH NULL-COALESCING GUARDS:
-          const safeSubItems = Array.isArray(subItems) ? subItems : [];
-          const safeReimbursableItems = Array.isArray(cardReimbursableItems) ? cardReimbursableItems : [];
+      // 🟢 SCOPE FIX: Calculate fronted info out here in the main loop scope
+      const safeSubItems = Array.isArray(subItems) ? subItems : [];
+      const safeReimbursableItems = Array.isArray(cardReimbursableItems) ? cardReimbursableItems : [];
+      
+      const frontedBudee = safeReimbursableItems.find((b: any) => b.frontedInfo && !b.isPaid);
+      const frontedPersonal = safeSubItems.find((s: any) => s.frontedInfo && !s.isPaid);
+      const activeFrontedInfo = (frontedPersonal || frontedBudee)?.frontedInfo;
 
-          // 1. Check unpaid bank obligations
-          const hasUnpaidPersonalItems = safeSubItems.some(sub => !sub.isPaid && !sub.frontedInfo);
-          const hasUnpaidBudeeItems = safeReimbursableItems.some(sub => !sub.isPaid && !sub.frontedInfo);
-          const hasUnpaidBankObligations = hasUnpaidPersonalItems || hasUnpaidBudeeItems;
-
-          // 2. Check fronted items waiting for reimbursement
-          const frontedSubItem = safeSubItems.find(sub => Boolean(sub?.frontedInfo) && !sub.isPaid);
-          const hasFrontedObligations = Boolean(frontedSubItem);
-
-          // 3. Determine parent card state
-          let parentIsPaid = false;
-          let parentFrontedInfo: any = undefined;
-
-          if (hasUnpaidBankObligations) {
-            parentIsPaid = false;
-            parentFrontedInfo = undefined;
-          } else if (hasFrontedObligations) {
-            parentIsPaid = false;
-            parentFrontedInfo = frontedSubItem?.frontedInfo;
-          } else {
-            parentIsPaid = true;
-            parentFrontedInfo = undefined;
-          }
+      // 4. Push directly to timeline
+      timeline.push({
+        id: `credit-${acc.id}`,
+        type: 'credit',
+        name: acc.bank,
+        amount: amount,
+        dueDate: getSafeDay(rawDue),
+        displayDueDate: getDisplayDate(rawDue),
+        isPaid: isPaid, // 🟢 Strictly prevents the card from settling early
+        isIncluded: !excludedCreditIds.has(exclusionKey),
+        rawItem: { 
+          ...acc, 
+          reimbursableItems: cardReimbursableItems,
+          totalStatementBalance: totalStatementBalance 
+        },
+        subItems: subItems,
+        frontedInfo: activeFrontedInfo // 🟢 Triggers Reimburse UI safely
+      });
 
 
-                    // 🟢 FIXED TIMELINE PUSH:
-                    timeline.push({
-                      id: `credit-${acc.id}`,
-                      type: 'credit',
-                      name: acc.bank,
-                      amount: amount,
-                      dueDate: getSafeDay(rawDue),
-                      displayDueDate: getDisplayDate(rawDue),
-                      isPaid: parentIsPaid,
-                      isIncluded: !excludedCreditIds.has(exclusionKey),
-                      rawItem: { 
-                        ...acc, 
-                        reimbursableItems: cardReimbursableItems, 
-                        totalStatementBalance: totalStatementBalance 
-                      },
-                      subItems: subItems,
-                      frontedInfo: parentFrontedInfo
-                    });
           
 
     }); // Closes activeCredit.forEach

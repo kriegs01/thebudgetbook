@@ -18,6 +18,7 @@ export interface Account {
   // 🟢 NEW: Vault / Sub-account support
   hasVaultEnabled?: boolean;
   vaultId?: string; // The ID of the hidden sub-account (e.g., 'Go Save')
+  engine_id?: string;
 }
 
 

@@ -8,6 +8,7 @@ import { X, Clock, CheckCircle2 } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
 import { supabase } from '../utils/supabaseClient';
 import { createPortal } from 'react-dom';
+import { createPaymentSchedulesBulk } from '../services/paymentSchedulesService';
 
 
 
@@ -38,13 +39,14 @@ export const MultiBNPLConversionModal: React.FC<MultiBNPLConversionModalProps> =
   const [selectedTxIds, setSelectedTxIds] = useState<Set<string>>(
     () => mode === 'review' ? new Set(availableTransactions.map(tx => tx.id)) : new Set()
   );
-  const [status, setStatus] = useState<'pending' | 'approved'>('approved');
+  const [status, setStatus] = useState<'pending' | 'approved'>('pending');
   const [months, setMonths] = useState<number>(3);
   const [customMonthly, setCustomMonthly] = useState<number | ''>('');
   const [selectedCycle, setSelectedCycle] = useState<string>('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [reviewIndex, setReviewIndex] = useState(0);
-  const [itemOverrides, setItemOverrides] = useState<Record<string, string>>({});
+  const [itemOverrides, setItemOverrides] = useState<Record<string, { monthly?: string; startCycle?: string }>>({});
+
   const [cancelledGroupIds, setCancelledGroupIds] = useState<Set<string>>(new Set());
 
   const reviewGroups = useMemo(() => {
@@ -64,23 +66,27 @@ export const MultiBNPLConversionModal: React.FC<MultiBNPLConversionModalProps> =
   const activeGroupId = activeReviewGroup[0]?.conversion_group_id;
   const currentGroupInstallment = installments.find(installment => installment.conversion_group_id === activeGroupId);
 
-  useEffect(() => {
-    if (mode === 'review') {
-      setItemOverrides({});
-      const savedStartDate = (currentGroupInstallment as (Installment & { start_date?: string | null }) | undefined)?.start_date
-        || currentGroupInstallment?.startDateExact;
-      if (savedStartDate) setSelectedCycle(savedStartDate.split('T')[0]);
-    }
-  }, [mode, reviewIndex, currentGroupInstallment]);
 
   const statementOptions = useMemo(() => {
     const now = new Date();
-    // Look back one month to ensure we don't truncate the currently active/recent billing cycle
-    const referenceDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-    const targetDate = new Date(now.getFullYear(), now.getMonth() + 4, 1);
+    
+    // 1. Find the oldest transaction date in the batch to prevent time travel
+    const earliestTxDate = availableTransactions?.length > 0 
+      ? availableTransactions.reduce((min, tx) => {
+          if (!tx.date) return min;
+          const txDate = new Date(tx.date);
+          return txDate < min ? txDate : min;
+        }, new Date())
+      : now;
+
+    // Clear the time for a clean calendar-day comparison
+    earliestTxDate.setHours(0, 0, 0, 0);
+
+    const targetDate = new Date(now.getFullYear(), now.getMonth() + 6, 1);
+    
     const structuralAccount = {
       ...account,
-      openingBalanceDate: referenceDate.toISOString().slice(0, 10),
+      openingBalanceDate: earliestTxDate.toISOString().slice(0, 10),
     };
 
     const buckets = generateCreditBuckets(
@@ -91,24 +97,93 @@ export const MultiBNPLConversionModal: React.FC<MultiBNPLConversionModalProps> =
       targetDate.toLocaleString('en-US', { month: 'long' })
     );
 
+    const monthMap: Record<string, string> = {
+      January: '01', February: '02', March: '03', April: '04',
+      May: '05', June: '06', July: '07', August: '08',
+      September: '09', October: '10', November: '11', December: '12'
+    };
+
     return buckets
-      .filter(bucket => bucket.targetYear > now.getFullYear() || (
-        bucket.targetYear === now.getFullYear() &&
-        new Date(bucket.targetYear, new Date(`${bucket.targetMonth} 1`).getMonth(), 1) >= referenceDate
-      ))
+      .filter(bucket => {
+        const cycleEndDate = new Date(bucket.cycleEnd);
+        cycleEndDate.setHours(23, 59, 59, 999);
+        // 2. Only allow cycles that close ON or AFTER the transaction date!
+        return cycleEndDate >= earliestTxDate;
+      })
       .slice(0, 5)
       .map(bucket => {
-        const year = bucket.cycleStart.getFullYear();
-        const month = String(bucket.cycleStart.getMonth() + 1).padStart(2, '0');
-        const day = String(bucket.cycleStart.getDate()).padStart(2, '0');
+        const startYr = bucket.cycleStart.getFullYear();
+        const startMo = String(bucket.cycleStart.getMonth() + 1).padStart(2, '0');
+        const startDay = String(bucket.cycleStart.getDate()).padStart(2, '0');
+
+        const startStr = bucket.cycleStart.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+        const endStr = bucket.cycleEnd.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 
         return {
-          id: `${year}-${month}-${day}`,
-          label: bucket.cycleLabel,
+          id: `${startYr}-${startMo}-${startDay}`,
+          // 🟢 Store bucket metadata directly in the key
+          cycleKey: `${bucket.targetYear}-${monthMap[bucket.targetMonth] || startMo}`, 
+          targetMonth: bucket.targetMonth,
+          targetYear: bucket.targetYear,
+          cycleStartDate: bucket.cycleStart.toISOString(),
+          label: `${bucket.targetMonth} ${bucket.targetYear} (${startStr} - ${endStr})`,
         };
       });
-  }, [account]);
 
+
+  }, [account, availableTransactions]); // 👈 Added availableTransactions to dependencies
+
+
+   // Track whether we have initialized this group so we don't clobber user changes
+   const initializedGroupRef = React.useRef<string | null>(null);
+
+   useEffect(() => {
+     // 🛑 If we are submitting or have already initialized this active group, DO NOT overwrite!
+     if (isSubmitting) return;
+     if (!activeGroupId || initializedGroupRef.current === activeGroupId) return;
+ 
+     if (mode === 'review' && activeReviewGroup.length > 0) {
+       initializedGroupRef.current = activeGroupId;
+ 
+       // 1. Extract Parent Cycle Key (e.g., '2026-10') from start_date
+       const savedStartDate = (currentGroupInstallment as any)?.start_date || currentGroupInstallment?.startDateExact;
+       let parentCycleKey = '';
+       if (savedStartDate) {
+         const [year, month] = String(savedStartDate).split('T')[0].split('-');
+         parentCycleKey = `${year}-${month}`;
+       }
+       
+       // 2. Find matching statement option
+       const matchedOption = statementOptions.find(opt => opt.cycleKey === parentCycleKey) || statementOptions[0];
+       const targetCycleKey = matchedOption?.cycleKey || statementOptions[0]?.cycleKey || '';
+       const targetCycleId = matchedOption?.id || statementOptions[0]?.id || '';
+ 
+       if (targetCycleId) {
+         setSelectedCycle(targetCycleId);
+       }
+ 
+       // 3. Restore the Months (Tenure)
+       const savedTenure = parseInt(String(currentGroupInstallment?.term_duration || '3').replace(/\D/g, ''), 10);
+       if (savedTenure) {
+         setMonths(savedTenure);
+       }
+ 
+       // 4. Set overrides once without wiping on subsequent renders
+       setItemOverrides(prev => {
+         const next = { ...prev };
+         activeReviewGroup.forEach(tx => {
+           if (!next[tx.id]) {
+             next[tx.id] = {
+               monthly: '',
+               startCycle: targetCycleKey
+             };
+           }
+         });
+         return next;
+       });
+     }
+   }, [mode, activeGroupId, activeReviewGroup, currentGroupInstallment, statementOptions, isSubmitting]);
+ 
 
 
   const toggleSelection = (id: string) => {
@@ -131,12 +206,22 @@ export const MultiBNPLConversionModal: React.FC<MultiBNPLConversionModalProps> =
     }
     return Math.abs(tx.amount) / term;
   };
-  const baseMonthly = totalPrincipal / activeTerm;
-  const activeMonthlyAmount = mode === 'review'
-    ? selectedTransactions.reduce((sum, tx) => sum + getTxMonthly(tx, activeTerm), 0)
-    : customMonthly !== '' ? Number(customMonthly) : baseMonthly;
-  const totalAmountToRepay = activeMonthlyAmount * activeTerm;
-  const totalInterestAndFees = totalAmountToRepay - totalPrincipal;
+    // Sum monthly amounts across all selected transactions, respecting per-item inputs
+    const activeMonthlyAmount = useMemo(() => {
+      return selectedTransactions.reduce((sum, tx) => {
+        const override = itemOverrides[tx.id];
+        const fallbackMonthly = Math.abs(tx.amount) / activeTerm;
+        const parsedOverride = override?.monthly !== undefined && override.monthly !== ''
+          ? Number(override.monthly)
+          : fallbackMonthly;
+        const safeMonthly = isNaN(parsedOverride) ? fallbackMonthly : parsedOverride;
+        return sum + safeMonthly;
+      }, 0);
+    }, [selectedTransactions, itemOverrides, activeTerm]);
+  
+    const totalAmountToRepay = activeMonthlyAmount * activeTerm;
+    const totalInterestAndFees = Math.max(0, totalAmountToRepay - totalPrincipal);
+  
 
   const handleCancelPending = async () => {
     if (mode !== 'review') return;
@@ -188,51 +273,170 @@ export const MultiBNPLConversionModal: React.FC<MultiBNPLConversionModalProps> =
       totalInterestAndFees
     });
 
-        if (!selectedCycle) {
-      return alert('Please select a starting Statement Month from the dropdown.');
-    }
 
     if (selectedTransactions.length === 0) return alert('No transactions are available for this conversion.');
     
     setIsSubmitting(true);
         try {
-      if (mode === 'review') {
-        const conversionGroupId = activeReviewGroup[0]?.conversion_group_id;
-        if (!conversionGroupId) throw new Error('Pending conversion group is missing an ID.');
+          if (mode === 'review') {
+            const conversionGroupId = activeReviewGroup[0]?.conversion_group_id || currentGroupInstallment?.conversion_group_id;
+            const targetInstallmentId = currentGroupInstallment?.id;
+    
+            if (!conversionGroupId && !targetInstallmentId) {
+              throw new Error('Pending conversion group is missing an ID.');
+            }
+    
+            const MONTH_NAMES = [
+              'January', 'February', 'March', 'April', 'May', 'June',
+              'July', 'August', 'September', 'October', 'November', 'December'
+            ];
+            
+            const fallbackCycle = statementOptions[0]?.cycleKey || new Date().toISOString().substring(0, 7);
+            const scheduleCurve: Record<string, number> = {};
+    
+                        // 🟢 Calculate schedules using profile-aligned target months
+                        selectedTransactions.forEach(tx => {
+                          const override = itemOverrides[tx.id];
+                          const itemCycle = override?.startCycle || fallbackCycle;
+                          
+                          const itemMonthly = override?.monthly !== undefined && override.monthly !== ''
+                            ? Number(override.monthly)
+                            : (Math.abs(tx.amount) / activeTerm);
+                
+                          const itemTenure = months || activeTerm || 3;
+                          const [startYear, startMonth] = itemCycle.split('-').map(Number);
+                          
+                          for (let i = 0; i < itemTenure; i++) {
+                            const targetDate = new Date(startYear, startMonth - 1 + i, 1);
+                            const cycleKey = `${targetDate.getFullYear()}-${String(targetDate.getMonth() + 1).padStart(2, '0')}`;
+                            scheduleCurve[cycleKey] = (scheduleCurve[cycleKey] || 0) + itemMonthly;
+                          }
+                        });
+                
+                        const sortedCycles = Object.keys(scheduleCurve).sort();
+                        const earliestCycle = sortedCycles[0] || fallbackCycle;
+                        const initialMonthlyAmount = scheduleCurve[earliestCycle] || activeMonthlyAmount;
+                        const computedTotalRepayment = Object.values(scheduleCurve).reduce((sum, amt) => sum + amt, 0);
+                        
+                        // 🟢 Anchor the start date to the 15th of the start cycle month to prevent premature activation
+                        const safeStartDate = `${earliestCycle}-15T12:00:00`;
+            
+    
+            console.log('APPROVING BNPL BATCH:', {
+              targetInstallmentId,
+              conversionGroupId,
+              sortedCycles,
+              scheduleCurve,
+              computedTotalRepayment
+            });
+    
+            // 1. Update parent installment to active using its explicit ID
+                    // ✅ Change to:
+        let installmentQuery = supabase.from('installments').update({
+          principal_amount: totalPrincipal,
+          total_amount: computedTotalRepayment > 0 ? computedTotalRepayment : totalAmountToRepay,
+          monthly_amount: initialMonthlyAmount,
+          term_duration: sortedCycles.length || activeTerm, // 👈 Pure integer!
+          start_date: safeStartDate,
+          status: 'active'
+        });
 
-        const safeStartDate = selectedCycle.includes('T') ? selectedCycle : `${selectedCycle}T12:00:00`;
-        const { error: installmentError } = await supabase
-          .from('installments')
-          .update({
-            principal_amount: totalPrincipal,
-            total_amount: totalAmountToRepay,
-            monthly_amount: activeMonthlyAmount,
-            term_duration: activeTerm,
-            start_date: safeStartDate,
-            status: 'active'
-          })
-          .eq('conversion_group_id', conversionGroupId);
+    
+            if (targetInstallmentId) {
+              installmentQuery = installmentQuery.eq('id', targetInstallmentId);
+            } else {
+              installmentQuery = installmentQuery.eq('conversion_group_id', conversionGroupId);
+            }
+    
+            const { data: updatedInstallment, error: installmentError } = await installmentQuery.select().single();
+    
+            if (installmentError) {
+              console.error('Failed to activate installment:', installmentError);
+              throw installmentError;
+            }
+    
+            const activeId = updatedInstallment.id;
+            const activeAccountId = updatedInstallment.account_id || account.id;
+    
+            // 2. Mark raw transactions approved
+            const { error: transactionError } = await supabase
+              .from('transactions')
+              .update({ conversion_status: 'approved' })
+              .eq('conversion_group_id', conversionGroupId);
+    
+            if (transactionError) {
+              console.error('Failed to update transactions status:', transactionError);
+              throw transactionError;
+            }
+    
+            // 3. Delete existing schedules for this installment
+            const { error: delError } = await supabase
+              .from('monthly_payment_schedules')
+              .delete()
+              .eq('source_type', 'installment')
+              .eq('source_id', activeId);
+    
+            if (delError) {
+              console.warn('Notice on cleaning old schedules:', delError);
+            }
+    
+                    // 4. Build schedules payload
+        const { data: authData } = await supabase.auth.getUser();
+        const schedulesToInsert = sortedCycles.map((cycleKey, idx) => {
+          const [yearStr, monthStr] = cycleKey.split('-');
+          const monthIndex = parseInt(monthStr, 10) - 1;
+          const expectedAmount = scheduleCurve[cycleKey];
 
-        if (installmentError) throw installmentError;
+          return {
+            source_type: 'installment',
+            source_id: activeId,
+            month: MONTH_NAMES[monthIndex],
+            year: parseInt(yearStr, 10),
+            payment_number: idx + 1,
+            expected_amount: Number(expectedAmount.toFixed(2)),
+            amount_paid: 0,
+            status: 'pending', // 👈 SATISFIES CONSTRAINT
+            account_id: activeAccountId,
+            user_id: authData?.user?.id
+          };
+        });
 
-        const { error: transactionError } = await supabase
-          .from('transactions')
-          .update({ conversion_status: 'approved' })
-          .eq('conversion_group_id', conversionGroupId);
+        console.log('INSERTING SCHEDULES:', schedulesToInsert);
 
-        if (transactionError) throw transactionError;
-
-        await queryClient.invalidateQueries({ queryKey: ['transactions'] });
-
-        if (reviewIndex < reviewGroups.length - 1) {
-          setReviewIndex(currentIndex => currentIndex + 1);
-          setCustomMonthly('');
-          setIsSubmitting(false);
-        } else {
-          await onSuccess();
-          onClose();
+        if (schedulesToInsert.length > 0) {
+          const { error: schedError } = await createPaymentSchedulesBulk(schedulesToInsert as any);
+          if (schedError) {
+            console.error('Failed to create plotted schedules:', schedError);
+            alert(`Schedule insertion error: ${schedError.message || JSON.stringify(schedError)}`);
+            throw schedError;
+          }
         }
-      } else {
+
+        // Close the modal FIRST so Realtime refetch does not leave the modal hanging
+        setIsSubmitting(false);
+        onClose();
+
+        // Then refresh queries
+        await queryClient.invalidateQueries({ queryKey: ['transactions'] });
+        await queryClient.invalidateQueries({ queryKey: ['installments'] });
+        await queryClient.invalidateQueries({ queryKey: ['payment_schedules'] });
+        await onSuccess();
+        return;
+
+    
+            if (reviewIndex < reviewGroups.length - 1) {
+              setReviewIndex(currentIndex => currentIndex + 1);
+              setCustomMonthly('');
+              setItemOverrides({});
+              setIsSubmitting(false);
+            } else {
+              await onSuccess();
+              onClose();
+            }
+          }
+    
+    
+     else {
         let calculatedDueDay = '';
 
         if (account.dueDate) {
@@ -254,19 +458,30 @@ export const MultiBNPLConversionModal: React.FC<MultiBNPLConversionModalProps> =
           calculatedDueDay = String(rolledOverDay);
         }
 
-        await convertMultipleToBNPL(
-          selectedTransactions,
-          status,
-          {
-            months,
-            statementId: selectedCycle || new Date().toISOString().slice(0, 10),
-            monthlyAmount: activeMonthlyAmount,
-            principalAmount: totalPrincipal,
-            totalAmount: totalAmountToRepay,
-            dueDate: calculatedDueDay
-          },
-          account.id
-        );
+                // Format the overrides dictionary so numbers and cycle strings are clean
+                const formattedOverrides: Record<string, { monthly?: number; startCycle?: string }> = {};
+                Object.entries(itemOverrides).forEach(([id, val]) => {
+                  formattedOverrides[id] = {
+                    monthly: val.monthly !== undefined && val.monthly !== '' ? Number(val.monthly) : undefined,
+                    startCycle: val.startCycle || (selectedCycle ? selectedCycle.substring(0, 7) : undefined)
+                  };
+                });
+        
+                await convertMultipleToBNPL(
+                  selectedTransactions,
+                  status,
+                  {
+                    months,
+                    statementId: selectedCycle || new Date().toISOString().slice(0, 10),
+                    monthlyAmount: activeMonthlyAmount,
+                    principalAmount: totalPrincipal,
+                    totalAmount: totalAmountToRepay,
+                    dueDate: calculatedDueDay,
+                    itemOverrides: formattedOverrides
+                  },
+                  account.id
+                );
+        
 
         await queryClient.invalidateQueries({ queryKey: ['transactions'] });
         await onSuccess();
@@ -305,50 +520,86 @@ export const MultiBNPLConversionModal: React.FC<MultiBNPLConversionModalProps> =
         </p>
 
         {/* 1. Transaction Checklist (Scrollable) */}
-        <div className="flex-1 min-h-[120px] overflow-y-auto mb-6 space-y-2 rounded-xl border-2 border-black bg-gray-50 p-2 dark:bg-gray-800/50">
+        <div className="flex-1 min-h-[140px] max-h-[280px] overflow-y-auto mb-4 space-y-2 rounded-xl border-2 border-black bg-gray-50 p-2 dark:bg-gray-800/50">
           {displayTransactions.length === 0 ? (
             <p className="text-xs text-center p-4 text-gray-400">No eligible transactions available.</p>
           ) : (
             displayTransactions.map(tx => (
-              <label key={tx.id} className="flex items-center space-x-2 p-2 bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700 cursor-pointer hover:border-indigo-400 transition-colors">                {mode === 'create' && (
-                  <input
-                    type="checkbox"
-                    checked={selectedTxIds.has(tx.id)}
-                    onChange={() => toggleSelection(tx.id)}
-                    className="w-4 h-4 rounded border-black accent-indigo-600 cursor-pointer"
-                  />
-                )}
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-bold text-gray-900 dark:text-gray-100 truncate">{tx.name}</p>
-                  <p className="text-[10px] text-gray-500">
-                    {mode === 'review'
-                      ? `₱${Math.abs(tx.amount).toLocaleString(undefined, { minimumFractionDigits: 2 })} ${tx.date ? `| ${new Date(tx.date).toLocaleDateString()}` : ''}`
-                      : (tx.date ? new Date(tx.date).toLocaleDateString() : '')
-                    }
-                  </p>
-                </div>
-                {mode === 'review' ? (
-                  <input
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    value={itemOverrides[tx.id] ?? ''}
-                    onChange={(event) => setItemOverrides(previous => ({
-                      ...previous,
-                      [tx.id]: event.target.value
-                    }))}
-                    placeholder={`₱${getTxMonthly(tx, activeTerm).toLocaleString(undefined, { minimumFractionDigits: 2 })}`}
-                    aria-label={`Monthly amount for ${tx.name}`}
-                    className="w-32 rounded-lg border-2 border-black dark:border-gray-600 bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-gray-100 px-2 py-1 text-right text-sm font-black outline-none"                  />
-                ) : (
-                  <p className="text-sm font-black text-gray-900 dark:text-gray-100">
-                    ₱{Math.abs(tx.amount).toLocaleString()}
-                  </p>
-                )}
-              </label>
+              <label 
+  key={tx.id} 
+  className="flex flex-col p-3 bg-white dark:bg-gray-900 rounded-xl border-2 border-black/10 dark:border-gray-700 hover:border-indigo-500 transition-all gap-2"
+>
+  {/* TOP ROW: Checkbox + Name + (Date) | Amount */}
+  <div className="flex items-center justify-between gap-2">
+    <div className="flex items-center space-x-2 min-w-0 flex-1">
+      {mode === 'create' && (
+        <input
+          type="checkbox"
+          checked={selectedTxIds.has(tx.id)}
+          onChange={() => toggleSelection(tx.id)}
+          className="w-4 h-4 rounded border-black accent-indigo-600 cursor-pointer shrink-0"
+        />
+      )}
+      <div className="flex items-baseline gap-1.5 min-w-0 truncate">
+        <span className="text-sm font-black text-gray-900 dark:text-gray-100 truncate">
+          {tx.name}
+        </span>
+        {tx.date && (
+          <span className="text-[10px] font-bold text-gray-400 shrink-0">
+            ({new Date(tx.date).toLocaleDateString()})
+          </span>
+        )}
+      </div>
+    </div>
+
+    {/* Principal Amount Tag */}
+    <span className="text-xs font-black text-indigo-600 dark:text-indigo-400 shrink-0">
+      ₱{Math.abs(tx.amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+    </span>
+  </div>
+
+  {/* BOTTOM ROW: Full-width Statement Selector + Compact Monthly Input */}
+<div className="flex items-center gap-2 pt-1 border-t border-dashed border-gray-100 dark:border-gray-800">
+  <select
+    value={itemOverrides[tx.id]?.startCycle || statementOptions[0]?.cycleKey || ''}
+    onChange={(e) => {
+      const val = e.target.value;
+      setItemOverrides(prev => ({
+        ...prev,
+        [tx.id]: { ...prev[tx.id], startCycle: val }
+      }));
+    }}
+    className="flex-1 min-w-0 text-xs font-bold border-2 border-amber-500 dark:border-amber-400 rounded-lg px-2.5 py-1.5 bg-amber-50 dark:bg-amber-900/20 text-amber-900 dark:text-amber-100 outline-none truncate animate-pulse focus:animate-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/50 transition-all"
+  >
+    {statementOptions.map(o => (
+      <option key={o.id} value={o.cycleKey}>
+        {o.label}
+      </option>
+    ))}
+  </select>
+
+  <div className="relative shrink-0">
+    <input
+      type="number"
+      min="0"
+      step="0.01"
+      value={itemOverrides[tx.id]?.monthly ?? ''}
+      onChange={(e) => setItemOverrides(prev => ({
+        ...prev,
+        [tx.id]: { ...prev[tx.id], monthly: e.target.value }
+      }))}
+      placeholder={`₱${(Math.abs(tx.amount) / activeTerm).toFixed(2)}`}
+      className="w-24 rounded-lg border-2 border-amber-500 dark:border-amber-400 bg-amber-50 dark:bg-amber-900/20 text-amber-900 dark:text-amber-100 px-2 py-1.5 text-right text-xs font-black outline-none animate-pulse focus:animate-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/50 transition-all"
+    />
+  </div>
+</div>
+
+</label>
+
             ))
           )}
         </div>
+
 
         {/* 2. Math Summary */}
         <div className="shrink-0 flex justify-between items-center mb-4 p-3 bg-indigo-50 border-2 border-indigo-200 rounded-xl">
@@ -363,51 +614,46 @@ export const MultiBNPLConversionModal: React.FC<MultiBNPLConversionModalProps> =
         </div>
 
         {/* 3. Conversion Form */}
-        <form onSubmit={handleSubmit} className="space-y-4 shrink-0">
-          {mode === 'create' && <div className="flex gap-2 p-1 bg-gray-100 dark:bg-gray-800 rounded-xl border-2 border-black">
-            <button type="button" onClick={() => setStatus('pending')} className={`flex-1 py-2 rounded-lg text-xs font-bold uppercase flex items-center justify-center gap-1 transition-all ${status === 'pending' ? 'bg-amber-400 text-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]' : 'text-gray-500'}`}>
-              <Clock className="w-4 h-4" /> Pending
-            </button>
-            <button type="button" onClick={() => setStatus('approved')} className={`flex-1 py-2 rounded-lg text-xs font-bold uppercase flex items-center justify-center gap-1 transition-all ${status === 'approved' ? 'bg-green-400 text-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]' : 'text-gray-500'}`}>
-              <CheckCircle2 className="w-4 h-4" /> Approved
-            </button>
-          </div>}
-
-          <div className="space-y-4">
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Term Duration</label>
-                  <select value={mode === 'review' ? activeTerm : months} onChange={(e) => setMonths(Number(e.target.value))} disabled={mode === 'review'} className="w-full bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-2 border-black dark:border-gray-600 rounded-xl px-2 py-2 font-bold text-sm outline-none disabled:opacity-60 disabled:cursor-not-allowed">
-                    <option value={3}>3 Months</option>
-                    <option value={6}>6 Months</option>
-                    <option value={12}>12 Months</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Starts On</label>
-                  <select value={selectedCycle} onChange={(e) => setSelectedCycle(e.target.value)} className="w-full bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-2 border-black dark:border-gray-600 rounded-xl px-2 py-2 font-bold text-sm outline-none">
-                    <option value="" disabled>Select Statement</option>
-                    {statementOptions.map(o => <option key={o.id} value={o.id}>{o.label}</option>)}
-                  </select>
-                </div>
-              </div>
-              <div>
-                <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Actual Monthly Amortization</label>
-                <input
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  value={mode === 'review' ? Number(activeMonthlyAmount.toFixed(2)) : customMonthly}
-                  onChange={(e) => setCustomMonthly(e.target.value === '' ? '' : Number(e.target.value))}
-                  disabled={mode === 'review'}
-                  placeholder={`₱${baseMonthly.toLocaleString(undefined, { minimumFractionDigits: 2 })}`}
-                  className="w-full bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-2 border-black dark:border-gray-600 rounded-xl px-3 py-2 font-bold text-sm outline-none disabled:opacity-60 disabled:cursor-not-allowed"
-                />
-              </div>
+                {/* 3. Conversion Form Controls */}
+                <form onSubmit={handleSubmit} className="space-y-4 shrink-0">
+          {mode === 'create' && (
+            <div className="flex gap-2 p-1 bg-gray-100 dark:bg-gray-800 rounded-xl border-2 border-black">
+              <button 
+                type="button" 
+                onClick={() => setStatus('pending')} 
+                className={`flex-1 py-2 rounded-lg text-xs font-bold uppercase flex items-center justify-center gap-1 transition-all ${status === 'pending' ? 'bg-amber-400 text-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]' : 'text-gray-500'}`}
+              >
+                <Clock className="w-4 h-4" /> Pending
+              </button>
+              <button 
+                type="button" 
+                onClick={() => setStatus('approved')} 
+                className={`flex-1 py-2 rounded-lg text-xs font-bold uppercase flex items-center justify-center gap-1 transition-all ${status === 'approved' ? 'bg-green-400 text-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]' : 'text-gray-500'}`}
+              >
+                <CheckCircle2 className="w-4 h-4" /> Approved
+              </button>
             </div>
+          )}
+
+          {/* Unified Bulk Term / Tenure Selector */}
+          <div>
+            <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">
+              Term Duration
+            </label>
+            <select 
+              value={mode === 'review' ? activeTerm : months} 
+              onChange={(e) => setMonths(Number(e.target.value))} 
+              disabled={mode === 'review'} 
+              className="w-full bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-2 border-black dark:border-gray-600 rounded-xl px-3 py-2.5 font-bold text-sm outline-none disabled:opacity-60 disabled:cursor-not-allowed"
+            >
+              <option value={3}>3 Months</option>
+              <option value={6}>6 Months</option>
+              <option value={12}>12 Months</option>
+            </select>
+          </div>
 
           {mode === 'review' ? (
-            <div className="flex space-x-3 mt-6">
+            <div className="flex space-x-3 mt-4">
               <button
                 type="button"
                 onClick={handleCancelPending}
@@ -427,13 +673,14 @@ export const MultiBNPLConversionModal: React.FC<MultiBNPLConversionModalProps> =
           ) : (
             <button
               type="submit"
-              disabled={isSubmitting || selectedTransactions.length === 0 || (status === 'approved' && !selectedCycle)}
+              disabled={isSubmitting || selectedTransactions.length === 0}
               className="w-full bg-indigo-600 text-white border-2 border-black py-3 rounded-xl font-black text-sm uppercase tracking-wider shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[2px] hover:translate-y-[2px] transition-all disabled:opacity-50"
             >
               {isSubmitting ? 'Processing...' : `Convert ${selectedTxIds.size} Items`}
             </button>
           )}
         </form>
+
       </div>
       </div>
     ),
