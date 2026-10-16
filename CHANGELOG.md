@@ -1,29 +1,42 @@
 # Changelog
 
+##[v4.2.0] - 2026-10-16
+## What's New
+- Smart Billing Automation: Introduced "Smart Engines" to natively handle unique statement naming conventions and cycle shifts for platforms like SPayLater.
+- Clearer Budget Math: The Budget Plan now explicitly displays the "Previous Statement Balance" for carried-over debt, ensuring visible items always add up perfectly to your total bill.
+- Accurate Statement Footers: Credit card timeline footers now accurately reflect the current cycle's "New Charges" total instead of the raw ending balance.
+
+## Bug Fixes
+- Fixed an issue where converting items to Buy Now, Pay Later (BNPL) caused the UI to snap, reset, and overwrite user cycle selections.
+- Fixed a BNPL schedule generation bug that caused future installment months to calculate backward instead of shifting forward accurately.
+- Fixed payment bleed-through where unlabelled payments made during overlapping statement windows were double-counted across multiple cycles.
+- Fixed the Budget Plan dropping valid charges by ensuring it strictly loads statements based on their physical due date rather than their string name.
+- Fixed a bug where a credit card would prematurely move to "Settled & Spent" once the personal share was paid, ensuring the card retains its active "Reimburse" UI state until all Budee items are fully returned.
+
 ## [v4.1.0] - 2026-10-15
 ### What's New
-- Unified Credit Pay Carousel: Settle both your personal share and friend (Budee) reimbursable expenses in a single, uninterrupted payment flow[span_0](start_span)[span_0](end_span)[span_1](start_span)[span_1](end_span).
-- Clear Ownership Badges: Each card in the payment carousel now clearly indicates whether it is a Personal Share or a Budee expense[span_2](start_span)[span_2](end_span).
-- Direct Receipt Access: Added receipt shortcut buttons to Budee line items in credit card accordions to easily view past payments[span_3](start_span)[span_3](end_span).
+- Unified Credit Pay Carousel: Settle both your personal share and friend (Budee) reimbursable expenses in a single, uninterrupted payment flow.
+- Clear Ownership Badges: Each card in the payment carousel now clearly indicates whether it is a Personal Share or a Budee expense.
+- Direct Receipt Access: Added receipt shortcut buttons to Budee line items in credit card accordions to easily view past payments.
 
 ### Bug Fixes
-- Fixed an issue where paying or borrowing from savings for one item prematurely locked the parent credit card or flipped it to Reimburse mode[span_4](start_span)[span_4](end_span)[span_5](start_span)[span_5](end_span).
-- The credit payment modal no longer kicks you out after paying one item—completed cards now drop off smoothly while keeping the deck open for the rest[span_6](start_span)[span_6](end_span)[span_7](start_span)[span_7](end_span).
-- Fixed card counter badges so they maintain accurate numbers (e.g., "Item 2 of 4") as you pay items[span_8](start_span)[span_8](end_span).
-- Fixed credit card charges ("Previous Balance + New Charges") and sub-items resetting to unpaid after payment[span_9](start_span)[span_9](end_span)[span_10](start_span)[span_10](end_span).
-- Line items now accurately show strikethroughs and settled checkmarks as soon as they are paid without waiting for the whole card to settle[span_11](start_span)[span_11](end_span).
+- Fixed an issue where paying or borrowing from savings for one item prematurely locked the parent credit card or flipped it to Reimburse mode.
+- The credit payment modal no longer kicks you out after paying one item—completed cards now drop off smoothly while keeping the deck open for the rest.
+- Fixed card counter badges so they maintain accurate numbers (e.g., "Item 2 of 4") as you pay items.
+- Fixed credit card charges ("Previous Balance + New Charges") and sub-items resetting to unpaid after payment.
+- Line items now accurately show strikethroughs and settled checkmarks as soon as they are paid without waiting for the whole card to settle.
 
 ---
 
 ## [v4.0.0] - 2026-10-14
 ### What's New
 - Added About & Updates section to Settings with live changelog history
-- Restructured timeline reimbursement cards with clean "Paid using Savings" subtitles[span_12](start_span)[span_12](end_span)[span_13](start_span)[span_13](end_span)
-- Circular paycheck pagination buttons for easier navigation[span_14](start_span)[span_14](end_span)
-- Segregated Budee Out (Payables) & Budee In (Receivables) in Budget Plan[span_15](start_span)[span_15](end_span)
-- Added Me vs. Budee breakdown within Credit Card statement timelines[span_16](start_span)[span_16](end_span)
+- Restructured timeline reimbursement cards with clean "Paid using Savings" subtitles
+- Circular paycheck pagination buttons for easier navigation
+- Segregated Budee Out (Payables) & Budee In (Receivables) in Budget Plan
+- Added Me vs. Budee breakdown within Credit Card statement timelines
 
 ### Bug Fixes
-- Fixed premature strikethrough and prefix bug on credit timeline sub-items[span_17](start_span)[span_17](end_span)
+- Fixed premature strikethrough and prefix bug on credit timeline sub-items
 - Fixed dark-mode swipe-to-include background bleed
 - Fixed active credit card installment scope errors in budget engine
