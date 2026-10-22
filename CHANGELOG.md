@@ -7,7 +7,7 @@
 
 ### Bug Fixes
 - Calibrated hit frame in the budget plan Skip and Partial toggles for both touch and mouse navigation. 
-
+- Fixed the credit account due date paycheck tab distribution by introducing the db-backed statement due date and cycle shift logic. By creating an engine that takes existing credit account statements billing cycle and calculating approximate due date, the amount due reflects correctly in its correct paycheck tab by due date.
 
 ##[v4.2.0] - 2026-10-16
 ## What's New
