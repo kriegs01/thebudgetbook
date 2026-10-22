@@ -12,6 +12,8 @@ import { groupBNPLTransactions } from '../../src/utils/creditEngines/transaction
 import { MultiBNPLConversionModal } from '../../src/components/BNPLConversionModal';
 import { useQueryClient } from '@tanstack/react-query';
 import { supabase } from '../../src/utils/supabaseClient';
+import { saveCreditStatement } from '../../src/services/statementsService';
+import { getCreditStatementsByPeriod } from '../../src/services/statementsService';
 
 
 const formatCurrency = (val: number) =>
@@ -172,6 +174,60 @@ const [showAllCyclesModal, setShowAllCyclesModal] = useState(false);
     
     loadAccountAndTransactions();
   }, [accountId, accounts, installments, transactions]);
+
+    // 🟢 BUDGET ENGINE HANDOFF: Silently push the exact dates to the database
+    useEffect(() => {
+      const pushStatementToDatabase = async () => {
+        console.log("[Statement Handoff] Hook fired! Checking requirements...");
+        const selectedCycle = cycles[selectedCycleIndex];
+        
+        if (!selectedCycle || !account || !accountId) {
+          console.log("[Statement Handoff] Missing cycle or account data, aborting.");
+          return;
+        }
+  
+        const monthIndex = monthNames.indexOf(selectedCycle.targetMonth) + 1;
+        const statementPeriod = `${selectedCycle.targetYear}-${String(monthIndex).padStart(2, '0')}`;
+  
+        const cycleEndDate = new Date(selectedCycle.cycleEnd);
+      
+      // 🟢 THE FIX: Safely extract grace days so we don't jump 20 million days into the future
+      let graceDays = 21;
+      if (account.dueDate) {
+        const numStr = String(account.dueDate).replace(/\D/g, '');
+        // If it grabbed a full date string, take just the last 2 digits, otherwise parse it normally
+        const parsed = parseInt(numStr.length >= 8 ? numStr.slice(-2) : numStr, 10);
+        graceDays = (parsed > 0 && parsed <= 31) ? parsed : 21;
+      }
+      
+      const exactDueDate = new Date(cycleEndDate);
+      exactDueDate.setDate(exactDueDate.getDate() + graceDays);
+
+      const cutoffDateStr = cycleEndDate.toISOString().split('T')[0];
+      const dueDateStr = exactDueDate.toISOString().split('T')[0];
+  
+        console.log(`[Statement Handoff] Attempting to save: ${statementPeriod} | Due: ${dueDateStr}`);
+  
+        const result = await saveCreditStatement({
+          account_id: accountId,
+          statement_period: statementPeriod,
+          cutoff_date: cutoffDateStr,
+          due_date: dueDateStr,
+          is_locked: false
+        });
+        
+        if (result.error) {
+          console.error("[Statement Handoff] SUPABASE ERROR:", result.error);
+        } else {
+          console.log("[Statement Handoff] SUCCESS! Saved to database.");
+        }
+      };
+  
+      pushStatementToDatabase();
+    }, [selectedCycleIndex, cycles, account, accountId]);
+  
+
+
 
   if (isLoading) {
     return (

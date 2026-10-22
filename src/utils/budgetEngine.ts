@@ -73,24 +73,32 @@ export const determineItemPeriod = (item: any, currentPeriods: PayPeriod[], mont
     let dayNum = 1;
     let forceNextMonth = false;
 
-            // 1. SPECIAL CASE: Credit Cards (Statement Date + Grace Period)
+                    // 1. SPECIAL CASE: Credit Cards (Statement Date + Grace Period)
     if (item.type === 'Credit' || item.classification === 'Credit Card') {
-      const stmtRaw = item.billingDate || item.billing_date || item.statementDate || item.statement_date;
-      const dueRaw = item.dueDate || item.due_date;
       
-      if (stmtRaw && dueRaw) {
-        const stmtDay = extractDay(stmtRaw);
-        const graceDays = extractDay(dueRaw);
-        
-        // 🟢 FIX: Use a 30-day month (April = index 3) for standard banking math
-        const calcDate = new Date(2024, 3, stmtDay); 
-        calcDate.setDate(calcDate.getDate() + graceDays); 
-        dayNum = calcDate.getDate();
-        if (calcDate.getMonth() !== 3) forceNextMonth = true;
+      // 🟢 DIRECT HANDOFF: Read the safe property without breaking the fallback grace math!
+      if (item.hasExactStatementDue) {
+        dayNum = extractDay(item.exactStatementDueDay);
       } else {
-        dayNum = extractDay(dueRaw || 1);
+        const stmtRaw = item.billingDate || item.billing_date || item.statementDate || item.statement_date;
+        const dueRaw = item.dueDate || item.due_date;
+        
+        if (stmtRaw && dueRaw) {
+          const stmtDay = extractDay(stmtRaw);
+          const graceDays = extractDay(dueRaw);
+          
+          // FIX: Use a 30-day month (April = index 3) for standard banking math
+          const calcDate = new Date(2024, 3, stmtDay); 
+          calcDate.setDate(calcDate.getDate() + graceDays); 
+          dayNum = calcDate.getDate();
+          if (calcDate.getMonth() !== 3) forceNextMonth = true;
+        } else {
+          dayNum = extractDay(dueRaw || 1);
+        }
       }
     } 
+
+
     // 🟢 NEW: SPECIAL CASE: Budee Virtual Billing (Statement Date + Grace Period)
     else if (item.budee_billing_date && item.budee_days_to_pay !== undefined && item.budee_days_to_pay !== null) {
       const stmtDay = extractDay(item.budee_billing_date);

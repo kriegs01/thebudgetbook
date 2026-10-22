@@ -34,6 +34,7 @@ import { generateCreditBuckets, getBucketForMonth } from '../src/utils/bucketEng
 import { getCreditStatementTotal } from '../src//utils/creditEngines/creditEngineRouter';
 import { SyncIndicator, SyncStatus } from '../src/components/SyncIndicator';
 import { createPortal } from 'react-dom';
+import { getCreditStatementsByPeriod } from '../src/services/statementsService';
 
 
 interface BudgetProps {
@@ -69,10 +70,13 @@ type TimelineNode = {
   displayDueDate: string; 
   isPaid: boolean;
   isIncluded: boolean;
+  isTargetMet?: boolean;
+  partialTargetAmount?: number;
   categoryName?: string;
   rawItem: any;
   subItems?: TimelineNode[]; 
   frontedInfo?: { txId: string; accountId: string } | null; // 🟢 NEW: Tracks if we owe savings!
+  periodAmountPaid?: number;
 };
 
 
@@ -307,14 +311,20 @@ const TimelineCard = ({
   isSettled, 
   onToggle, 
   onPay,
-  onInfo 
+  onInfo,
+  onTogglePartial,         // 🟢 MUST BE HERE
+  onUpdatePartialAmount    // 🟢 MUST BE HERE
 }: { 
   item: TimelineNode, 
   isSettled: boolean, 
   onToggle: () => void, 
   onPay: () => void,
-  onInfo: (subItemId?: string) => void
+  onInfo: (subItemId?: string) => void,
+  onTogglePartial?: () => void,                  // 🟢 MUST BE HERE
+  onUpdatePartialAmount?: (amount: number) => void // 🟢 MUST BE HERE
 }) => {
+
+
   // 🟢 Local state for the accordion toggle
   const [isExpanded, setIsExpanded] = React.useState(false);
 
@@ -334,22 +344,33 @@ const TimelineCard = ({
       {/* 📦 THE SWIPEABLE TIMELINE WRAPPER */}
       <div className="relative w-full mb-1">
 
-        {/* 🟠 UNDERLYING REVEAL TRAY (Clickable) */}
-        <div 
-          className={`absolute top-[2px] right-2 w-[80px] bottom-[12px] rounded-[1.25rem] border-[3px] border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] flex flex-col items-center justify-center transition-colors z-0 ${item.isIncluded ? 'bg-[#E8F5E9]' : 'bg-[#FFEBEE]'}`}
-        >
-          <button 
-            className="flex flex-col items-center justify-center w-full h-full pb-1 pointer-events-none"
-            tabIndex={-1}
-          >
-            <span className={`text-[10px] font-black uppercase tracking-wider mb-1 ${item.isIncluded ? 'text-[#2E7D32]' : 'text-[#C62828]'}`}>
+                        {/* 🟠 UNDERLYING REVEAL TRAY (Clickable) */}
+        <div className="absolute top-[2px] right-2 w-[90px] bottom-[12px] rounded-[1.25rem] border-[3px] border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] flex flex-col transition-colors z-0 overflow-hidden bg-gray-100 dark:bg-gray-800">
+          
+          {/* Top Half: Include Toggle */}
+          <div className={`flex flex-col items-center justify-center transition-colors ${item.type === 'credit' ? 'flex-1 border-b-[3px] border-black' : 'h-full'} ${item.isIncluded ? 'bg-[#E8F5E9]' : 'bg-[#FFEBEE]'}`}>
+            <span className={`text-[9px] font-black uppercase tracking-wider mb-1 ${item.isIncluded ? 'text-[#2E7D32]' : 'text-[#C62828]'}`}>
               {item.isIncluded ? 'Included' : 'Skipped'}
             </span>
-            <div className={`w-[36px] h-[20px] rounded-full border-2 border-black relative transition-colors ${item.isIncluded ? 'bg-indigo-600' : 'bg-gray-300 dark:bg-gray-600'}`}>
-              <span className={`absolute top-[1px] w-[14px] h-[14px] rounded-full border-2 border-black bg-white transition-transform ${item.isIncluded ? 'left-[17px]' : 'left-[1px]'}`} />
+            <div className={`w-[32px] h-[18px] rounded-full border-2 border-black relative transition-colors ${item.isIncluded ? 'bg-indigo-600' : 'bg-gray-300 dark:bg-gray-600'}`}>
+              <span className={`absolute top-[1px] w-[12px] h-[12px] rounded-full border-2 border-black bg-white transition-transform ${item.isIncluded ? 'left-[15px]' : 'left-[1px]'}`} />
             </div>
-          </button>
+          </div>
+
+          {/* Bottom Half: Partial Toggle (ONLY FOR CREDIT CARDS) */}
+          {item.type === 'credit' && (
+            <div className={`flex flex-col items-center justify-center flex-1 transition-colors ${item.isPartialOverride ? 'bg-yellow-100' : 'bg-gray-200 dark:bg-gray-700'}`}>
+              <span className={`text-[9px] font-black uppercase tracking-wider mb-1 ${item.isPartialOverride ? 'text-yellow-800' : 'text-gray-500'}`}>
+                {item.isPartialOverride ? 'Partial' : 'Full Pay'}
+              </span>
+              <div className={`w-[32px] h-[18px] rounded-full border-2 border-black relative transition-colors ${item.isPartialOverride ? 'bg-yellow-500' : 'bg-gray-400 dark:bg-gray-600'}`}>
+                <span className={`absolute top-[1px] w-[12px] h-[12px] rounded-full border-2 border-black bg-white transition-transform ${item.isPartialOverride ? 'left-[15px]' : 'left-[1px]'}`} />
+              </div>
+            </div>
+          )}
+
         </div>
+
 
         {/* 🔵 FOREGROUND SCROLLER */}
         <div className="flex overflow-x-auto snap-x snap-mandatory scrollbar-hide pb-2 w-full relative z-10">
@@ -392,22 +413,77 @@ const TimelineCard = ({
                 </div>
               </div>
 
-              {/* RIGHT COLUMN: Amount & Actions */}
-              <div className="flex flex-col items-end gap-1 shrink-0">
-                <span className={`text-sm md:text-base font-black text-right ${isSettled ? 'text-gray-500' : isFronted ? 'text-blue-800 dark:text-blue-300' : 'text-gray-900 dark:text-gray-100'}`}>
-                  ₱{item.amount.toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                </span>
+                            {/* RIGHT COLUMN: Amount & Actions */}
+                            <div className="flex flex-col items-end gap-1 shrink-0">
                 
-                <div className="flex flex-col md:flex-row items-end md:items-center gap-2 md:mt-0">
-                  {isSettled ? (
-                    <div className="flex items-center gap-1.5 h-6">
-                      <span className="text-[10px] font-black text-green-600 flex items-center gap-1 uppercase tracking-wider">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg> 
-                        Settled
-                      </span>
-                      <button onClick={(e) => { e.preventDefault(); e.stopPropagation(); onInfo(); }} className="p-1 text-gray-400 hover:text-indigo-600 transition-colors" title="View Payment Records"><ReceiptText className="w-3.5 h-3.5" /></button>
+                {/* 🟢 EDITABLE AMOUNT TOGGLE */}
+                {item.isPartialOverride && !isSettled ? (
+                  <div className="flex flex-col items-end">
+                    <div className="flex items-center">
+                      <span className="text-sm md:text-base font-black text-gray-400 mr-0.5">₱</span>
+                      <input 
+                        type="number"
+                        defaultValue={item.partialTargetAmount || item.amount}
+                        onBlur={(e) => onUpdatePartialAmount?.(Number(e.target.value))}
+                        onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur(); }}
+                        onClick={(e) => e.stopPropagation()}
+                        className="w-[80px] text-right bg-transparent border-b-2 border-dashed border-gray-400 focus:border-indigo-600 focus:border-solid outline-none text-sm md:text-base font-black text-gray-900 dark:text-gray-100"
+                      />
+
                     </div>
-                  ) : (
+                    <span className="text-[8px] font-bold text-gray-500 uppercase tracking-wider mt-0.5">
+                      of ₱{item.amount.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                    </span>
+                  </div>
+                ) : (
+                  <span className={`text-sm md:text-base font-black text-right ${isSettled ? 'text-gray-500' : isFronted ? 'text-blue-800 dark:text-blue-300' : 'text-gray-900 dark:text-gray-100'}`}>
+                    ₱{(item.isTargetMet && item.partialTargetAmount ? item.partialTargetAmount : item.amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                  </span>
+                )}
+
+                
+<div className="flex flex-col md:flex-row items-end md:items-center gap-2 md:mt-0">
+                
+                {/* Partially Paid Indicator */}
+                {(item.periodAmountPaid || 0) > 0 && !isSettled && (
+                  <div className="flex flex-col items-end mr-1 mt-1 md:mt-0">
+                    <span className="text-[8px] font-black text-indigo-700 bg-indigo-100 border border-indigo-300 px-1.5 py-0.5 rounded shadow-[1px_1px_0px_0px_rgba(0,0,0,1)] uppercase tracking-wider mb-0.5">
+                      Partially Paid
+                    </span>
+                    <span className="text-[9px] font-bold text-indigo-700 whitespace-nowrap">
+                      Paid ₱{(item.periodAmountPaid || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })} of ₱{item.amount.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                    </span>
+                  </div>
+                )}
+
+                {isSettled ? (
+                  <div className="flex items-center gap-1.5 h-6">
+                    {/* The Badge Ternary */}
+                    {item.isTargetMet && !item.isPaid ? (
+                      <span className="text-[10px] font-black text-yellow-600 bg-yellow-100 px-2 py-0.5 rounded uppercase tracking-wider border border-yellow-300">
+                        Target Met
+                      </span>
+                    ) : (
+                      <span className="text-[10px] font-black text-green-600 flex items-center gap-1 uppercase tracking-wider">
+                        <Check className="w-3 h-3" /> Settled
+                      </span>
+                    )}
+                    
+                    {/* The Receipt Button (Always shows for settled items) */}
+                    <button onClick={(e) => { e.preventDefault(); e.stopPropagation(); onInfo(); }} className="p-1 text-gray-400 hover:text-indigo-600 transition-colors" title="View Payment Records">
+                      <ReceiptText className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-2 h-6">
+                    
+                    {/* 🟢 THE FIX: Add the Receipt Button for Partially Paid items! */}
+                    {(item.periodAmountPaid || 0) > 0 && (
+                      <button onClick={(e) => { e.preventDefault(); e.stopPropagation(); onInfo(); }} className="p-1 text-gray-400 hover:text-indigo-600 transition-colors" title="View Payment Records">
+                        <ReceiptText className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+
                     <button 
                       type="button"
                       onClick={(e) => { e.preventDefault(); e.stopPropagation(); onPay(); }}
@@ -420,8 +496,11 @@ const TimelineCard = ({
                     >
                       {isFronted ? 'Reimburse' : 'Pay'}
                     </button>
-                  )}
+                  </div>
+                )}
+
                 </div>
+
               </div>
             </div>
 
@@ -573,14 +652,31 @@ const TimelineCard = ({
 
           </div>
 
-          {/* INVISIBLE SCROLL SPACER (Click Target for the toggle action) */}
-          <div 
-            className="snap-end w-[90px] shrink-0 cursor-pointer"
-            onClick={(e) => {
-              e.stopPropagation();
-              onToggle();
-            }}
-          ></div>
+                                                  {/* INVISIBLE SCROLL SPACER (Click Targets) */}
+          <div className={`snap-end w-[90px] shrink-0 grid z-20 ${item.type === 'credit' ? 'grid-rows-2' : 'grid-rows-1'}`}>
+            
+            {/* Top Half: Include Toggle */}
+            <div 
+              className={`w-full h-full cursor-pointer ${item.type === 'credit' ? 'min-h-[55px]' : 'min-h-[110px]'}`}
+              onClick={(e) => { 
+                e.stopPropagation(); 
+                onToggle(); 
+              }}
+            />
+
+            {/* Bottom Half: Partial Toggle (ONLY FOR CREDIT CARDS) */}
+            {item.type === 'credit' && (
+              <div 
+                className="w-full h-full min-h-[55px] cursor-pointer" 
+                onClick={(e) => { 
+                  e.stopPropagation(); 
+                  onTogglePartial?.(); 
+                }}
+              />
+            )}
+          </div>
+
+
 
         </div>
       </div>
@@ -624,6 +720,30 @@ const [view, setView] = useState<'summary' | 'setup'>('summary');
 const [selectedMonth, setSelectedMonth] = useState(MONTHS[new Date().getMonth()]);
 const [selectedTiming, setSelectedTiming] = useState<'1/2' | '2/2'>('1/2');
 const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
+
+const [creditStatements, setCreditStatements] = useState<any[]>([]);
+
+    // 🟢 BUDGET ENGINE: Fetch the exact statement dates for this month
+    useEffect(() => {
+      const loadStatements = async () => {
+        const monthIndex = MONTHS.indexOf(selectedMonth) + 1;
+        const statementPeriod = `${selectedYear}-${String(monthIndex).padStart(2, '0')}`;
+        
+        console.log(`[TRACER 1] Fetching DB statements for period: ${statementPeriod}`);
+        
+        const { data } = await getCreditStatementsByPeriod(statementPeriod);
+        
+        console.log(`[TRACER 2] DB returned:`, data);
+        
+        if (data) {
+          setCreditStatements(data);
+        }
+      };
+  
+      loadStatements();
+    }, [selectedMonth, selectedYear]);
+  
+
 
 const [showSandbox, setShowSandbox] = useState(false);
 
@@ -671,8 +791,29 @@ const creditBudgetAccounts = React.useMemo(() => {
       acc?.type === 'Loan' || 
       acc?.classification === 'Loan' || 
       acc?.type === 'Liability'
-    );
-}, [accounts]); 
+    )
+    .map(acc => {
+      // 🟢 THE FIX: Inject the date into a custom safe property so we don't break the Bucket Math!
+      const savedStatement = creditStatements.find(s => s.account_id === acc.id);
+      if (savedStatement && savedStatement.due_date) {
+        const exactDay = savedStatement.due_date.split('-')[2];
+        const dayString = String(parseInt(exactDay, 10));
+        
+        return { 
+          ...acc, 
+          exactStatementDueDay: dayString, // <-- Safe property
+          hasExactStatementDue: true 
+        };
+      }
+      return acc;
+    });
+}, [accounts, creditStatements]); 
+
+
+
+
+
+
 
 
 const effectiveCategories = React.useMemo(() => {
@@ -794,6 +935,9 @@ const effectiveCategories = React.useMemo(() => {
   
   // Around line 316
   const [excludedCreditIds, setExcludedCreditIds] = useState<Set<string>>(new Set());
+// 🟢 NEW: State to store custom targets. Saves as { "credit-id-period": 5000 }
+const [creditOverrides, setCreditOverrides] = useState<Record<string, number>>({}); 
+
 
   const isFocusedRef = useRef(false);
   const [excludedInstallmentIds, setExcludedInstallmentIds] = useState<Set<string>>(new Set());
@@ -1291,6 +1435,8 @@ const [activePeriodIndex, setActivePeriodIndex] = useState<number>(1);
       setExcludedInstallmentIds(new Set(unifiedSetup.data._excludedInstallmentIds || []));
       setExcludedWalletIds(new Set(unifiedSetup.data._excludedWalletIds || []));
       setExcludedCreditIds(new Set(unifiedSetup.data._excludedCreditIds || []));
+      setCreditOverrides(unifiedSetup.data._creditOverrides || {}); // 🟢 ADD THIS
+
   
     } else if (setupsForMonth.length > 0) {
       // 🟡 PATH B: LAZY MERGE with auto-injected active billers
@@ -1352,7 +1498,8 @@ const [activePeriodIndex, setActivePeriodIndex] = useState<number>(1);
       setExcludedInstallmentIds(new Set(baseSetup._excludedInstallmentIds || []));
       setExcludedWalletIds(new Set(baseSetup._excludedWalletIds || []));
       setExcludedCreditIds(new Set(baseSetup._excludedCreditIds || []));
-  
+      setCreditOverrides(baseSetup._creditOverrides || {}); // 🟢 ADD THIS
+
     } else {
       // ⚪ PATH C: Empty State with auto-injected active billers
       const initialEmpty: { [key: string]: CategorizedSetupItem[] } = {};
@@ -1367,6 +1514,7 @@ const [activePeriodIndex, setActivePeriodIndex] = useState<number>(1);
       setExcludedInstallmentIds(new Set());
       setExcludedWalletIds(new Set());
       setExcludedCreditIds(new Set()); 
+      setCreditOverrides({}); // 🟢 ADD THIS
     }
   }, [selectedMonth, selectedYear, savedSetups, effectiveCategories, activePeriodIndex, billers]);
 
@@ -2513,17 +2661,18 @@ const getFrozenCycleAmount = (account: Account): number => {
       let itemsTotal = 0;
       if (processedBudgetMap[period]) {
         Object.values(processedBudgetMap[period]).forEach(catItems => {
+          // 🟢 THE FIX: Safely check if catItems is an array before looping!
+          if (!Array.isArray(catItems)) return;
+          
           catItems.forEach(item => {
-            if (!item.included) return;
+            if (!item || !item.included) return; // 🟢 Safe item check
 
-            // 🟢 UNIFIED MATH: No more ghost filters. If the engine put it in this tab, sum it!
             const val = item.amountsByPeriod?.[period] !== undefined ? item.amountsByPeriod[period] : item.amount;
             itemsTotal += (parseFloat(val) || 0);
           });
-
-
         });
       }
+
 
 
       const instTotal = (installments || []).filter(inst => {
@@ -2581,10 +2730,15 @@ const getFrozenCycleAmount = (account: Account): number => {
               amt = subTotal;
             }
           }
-        
-          return amt >= 0.01 ? sum + amt : sum;
+            // 🟢 ADD THIS: Apply the partial override to the background math!
+        const exclusionKey = `${account.id}-${period}`;
+        const overrideAmount = creditOverrides[exclusionKey];
+        if (overrideAmount !== undefined) {
+           amt = overrideAmount;
         }
         
+          return amt >= 0.01 ? sum + amt : sum;
+      }
       }, 0);
 
       const periodCount = currentPeriods.length || 2;
@@ -2649,8 +2803,10 @@ const getFrozenCycleAmount = (account: Account): number => {
       _periodTotals: _periodTotals,
       _excludedInstallmentIds: [...excludedInstallmentIds],
       _excludedWalletIds: [...excludedWalletIds],
-      _excludedCreditIds: [...excludedCreditIds]
-    };    
+      _excludedCreditIds: [...excludedCreditIds],
+      _creditOverrides: creditOverrides // 🟢 ADD THIS LINE
+    };
+
 
         // Calculate absolute grand total from our clean period totals!
         const total = Object.values(_periodTotals).reduce((sum, val) => sum + (val as number), 0);
@@ -2735,7 +2891,9 @@ const getFrozenCycleAmount = (account: Account): number => {
     if (view === 'setup') {
       triggerAutoSave();
     }
-  }, [setupData, projectedSalary, actualSalary, excludedInstallmentIds, excludedWalletIds, excludedCreditIds,view, triggerAutoSave]);
+  }, [setupData, projectedSalary, actualSalary, excludedInstallmentIds, excludedWalletIds, excludedCreditIds, creditOverrides, view, triggerAutoSave]); 
+  // 🟢 Added creditOverrides to the array above
+
 
   useEffect(() => {
     return () => {
@@ -2879,17 +3037,18 @@ const getFrozenCycleAmount = (account: Account): number => {
       let itemsTotal = 0;
       if (processedBudgetMap[period]) {
         Object.values(processedBudgetMap[period]).forEach(catItems => {
+          // 🟢 THE FIX: Safely check if catItems is an array before looping!
+          if (!Array.isArray(catItems)) return;
+          
           catItems.forEach(item => {
-            if (!item.included) return;
+            if (!item || !item.included) return; // 🟢 Safe item check
 
-            // 🟢 UNIFIED MATH: No more ghost filters. If the engine put it in this tab, sum it!
             const val = item.amountsByPeriod?.[period] !== undefined ? item.amountsByPeriod[period] : item.amount;
             itemsTotal += (parseFloat(val) || 0);
           });
-
-
         });
       }
+
 
 
       const instTotal = (installments || []).filter(inst => {
@@ -2946,9 +3105,17 @@ const getFrozenCycleAmount = (account: Account): number => {
               amt = subTotal;
             }
           }
+        }
+        
+          // 🟢 ADD THIS: Apply the partial override to the background math!
+          const exclusionKey = `${account.id}-${period}`;
+          const overrideAmount = creditOverrides[exclusionKey];
+          if (overrideAmount !== undefined) {
+             amt = overrideAmount;
+          }
         
           return amt >= 0.01 ? sum + amt : sum;
-        }
+        
         
       }, 0);
 
@@ -3526,6 +3693,7 @@ const getFrozenCycleAmount = (account: Account): number => {
         setExcludedInstallmentIds(new Set());
         setExcludedWalletIds(new Set());
         setExcludedCreditIds(new Set());
+        setCreditOverrides ({});
       };
     
       // 🟢 Listen for the mobile floating bar "+" button
@@ -3552,6 +3720,8 @@ const getFrozenCycleAmount = (account: Account): number => {
     } else {
       setExcludedInstallmentIds(new Set());
     }
+    setCreditOverrides(loadedData._creditOverrides || {}); // 🟢 ADD THIS
+
     setSelectedMonth(setup.month);
     setSelectedYear(parseInt(setup.data?._year || new Date().getFullYear().toString(), 10));
     setSelectedTiming(setup.timing as '1/2' | '2/2');
@@ -3641,21 +3811,34 @@ const getFrozenCycleAmount = (account: Account): number => {
       return inst.dueDate || inst.due_date || '1';
     };
 
-    // 🟢 HELPER: Calculates visual due date for Credit Cards (30-day math)
-    const getCreditDueDay = (acc: any) => {
-      const stmtRaw = acc.billingDate || acc.billing_date || acc.statementDate || acc.statement_date;
-      const dueRaw = acc.dueDate || acc.due_date;
-      
-      if (stmtRaw && dueRaw) {
-        const stmtDay = getSafeDay(stmtRaw);
-        const graceDays = getSafeDay(dueRaw);
-        
-        const calcDate = new Date(2024, 3, stmtDay);
-        calcDate.setDate(calcDate.getDate() + graceDays);
-        return String(calcDate.getDate());
-      }
-      return String(getSafeDay(dueRaw || stmtRaw || '15'));
-    };
+        // 🟢 HELPER: Calculates visual due date (Prioritizes Direct DB Handoff)
+        const getCreditDueDay = (acc: any) => {
+          // 1. DIRECT HANDOFF: Check if the Statement Page saved an exact date
+          const savedStatement = creditStatements.find(s => s.account_id === acc.id);
+          
+          if (savedStatement && savedStatement.due_date) {
+            // Extract the exact day (e.g., "2026-11-05" becomes "5")
+            // We use split('-')[2] to strictly extract the day string without time zone shifts
+            const exactDay = savedStatement.due_date.split('-')[2];
+            return String(parseInt(exactDay, 10));
+          }
+    
+          // 2. FALLBACK: The legacy 30-day math for cards without generated statements
+          const stmtRaw = acc.billingDate || acc.billing_date || acc.statementDate || acc.statement_date;
+          const dueRaw = acc.dueDate || acc.due_date;
+          
+          if (stmtRaw && dueRaw) {
+            const stmtDay = getSafeDay(stmtRaw);
+            const graceDays = getSafeDay(dueRaw);
+            
+            const calcDate = new Date(2024, 3, stmtDay);
+            calcDate.setDate(calcDate.getDate() + graceDays);
+            return String(calcDate.getDate());
+          }
+          return String(getSafeDay(dueRaw || stmtRaw || '15'));
+        };
+    
+
 
     
 
@@ -3679,32 +3862,46 @@ const getFrozenCycleAmount = (account: Account): number => {
     };
     
 
-        // 🟢 SCANS FOR THE TOGGLE'S TAG!
-    const getFrontedData = (itemName: string) => {
+            // 🟢 SCANS FOR THE TOGGLE'S TAG!
+    const getFrontedData = (itemName?: string) => {
+      if (!itemName) return null; // Abort if the budget item itself has no name
+      
       const tx = transactions.find(t => {
         if (!t.notes?.includes('FRONTED_FROM_SAVINGS')) return false;
         
-        const nameMatch = t.name.toLowerCase().includes(itemName.toLowerCase()) || itemName.toLowerCase().includes(t.name.toLowerCase());
+        // 🟢 THE FIX: Safely cast both names to strings to prevent null-crashes!
+        const safeTxName = String(t.name || '').toLowerCase();
+        const safeItemName = String(itemName).toLowerCase();
+        
+        const nameMatch = safeTxName.includes(safeItemName) || safeItemName.includes(safeTxName);
         
         const txDate = new Date(t.date);
         const dateMatch = txDate.getMonth() === MONTHS.indexOf(selectedMonth) && txDate.getFullYear() === selectedYear;
-        // 🟢 Fallback: Check if the transaction name explicitly mentions the budget month
-        const labelMatch = t.name.toLowerCase().includes(selectedMonth.toLowerCase());
+        const labelMatch = safeTxName.includes(selectedMonth.toLowerCase());
         
         return nameMatch && (dateMatch || labelMatch);
       });
+      
       if (tx) return { txId: tx.id, accountId: tx.notes.split('|')[1] || '' };
       return null;
     };
 
 
+
     const timeline: TimelineNode[] = [];
 
-        // Extract Standard Bills & Expenses
-        Object.keys(processedBudgetMap[activePeriodIndex] || {}).forEach(catName => {
-          const items = processedBudgetMap[activePeriodIndex][catName] || [];
-          items.forEach(item => {
-            const val = item.amountsByPeriod?.[activePeriodIndex] !== undefined ? item.amountsByPeriod[activePeriodIndex] : item.amount;
+                // Extract Standard Bills & Expenses
+                Object.keys(processedBudgetMap[activePeriodIndex] || {}).forEach(catName => {
+                  const items = processedBudgetMap[activePeriodIndex][catName] || [];
+                  
+                  // 🟢 THE FIX: Safely check if items is an array before looping!
+                  if (!Array.isArray(items)) return;
+                  
+                  items.forEach(item => {
+                     if (!item) return; // 🟢 Safe item check
+        
+                    const val = item.amountsByPeriod?.[activePeriodIndex] !== undefined ? item.amountsByPeriod[activePeriodIndex] : item.amount;
+        
             const amount = parseFloat(val) || 0;
             if (amount <= 0 && catName !== 'Fixed') return;
     
@@ -3716,9 +3913,11 @@ const getFrozenCycleAmount = (account: Account): number => {
             let frontedInfo = getFrontedData(item.name);
             const schedule = getPaymentSchedule('biller', item.id, selectedMonth, selectedYear);
             let isPaid = false;
+            let periodAmountPaid = 0;
             
             if (schedule) {
               isPaid = checkIfPaidBySchedule('biller', item.id);
+              periodAmountPaid = schedule.amount_paid || 0;
             } else {
               isPaid = checkIfPaidByTransaction(item.name, amount, selectedMonth, selectedYear, selectedTiming);
             }
@@ -3728,7 +3927,8 @@ const getFrozenCycleAmount = (account: Account): number => {
             timeline.push({
               id: item.id, name: item.name, amount, type: isBillerItem ? 'bill' : 'expense',
               dueDate: getSafeDay(rawDue), displayDueDate: getDisplayDate(rawDue),
-              isPaid, isIncluded: item.included, categoryName: catName, rawItem: item, frontedInfo // 🟢 Inject fronted state
+              isPaid, isIncluded: item.included, categoryName: catName, rawItem: item, frontedInfo, // 🟢 Inject fronted state
+              periodAmountPaid
             });
           });
         });
@@ -3900,7 +4100,7 @@ const getFrozenCycleAmount = (account: Account): number => {
                 const budeeSum = cardReimbursableItems.reduce((s: number, b: any) => s + (Number(b.amount) || 0), 0);
         amount = getFrozenCycleAmount(acc);
         totalStatementBalance = targetBucket?.newChargesTotal || (amount + budeeSum);
-        rawDue = getCreditDueDay(acc);
+        rawDue = getCreditDueDay(acc, targetBucket);
         
         // 1. Check if all personal and budee items are individually paid
         const allPersonalPaid = subItems.length === 0 || subItems.every((sub: any) => sub.isPaid);
@@ -3915,6 +4115,25 @@ const getFrozenCycleAmount = (account: Account): number => {
         const activeFrontedItem = frontedPersonal || frontedBudee;
 
       } // <-- (Your closing bracket)
+
+      const overrideAmount = creditOverrides[exclusionKey];
+      const hasOverride = overrideAmount !== undefined && overrideAmount > 0;
+      
+      // Calculate how much they've paid so far this month
+      const paymentsMade = transactions.filter(tx => {
+        const txDate = new Date(tx.date);
+        return tx.payment_method_id === acc.id && 
+               tx.transaction_type === 'credit_payment' &&
+               txDate.getMonth() === MONTHS.indexOf(selectedMonth) &&
+               txDate.getFullYear() === selectedYear;
+      }).reduce((sum, tx) => sum + Math.abs(tx.amount), 0);
+
+      // 🟢 Check if they hit their custom goal
+      const isTargetMet = hasOverride && (paymentsMade >= overrideAmount);
+
+      // If an override exists, the budget amount becomes the override amount!
+      const effectiveBudgetAmount = hasOverride ? overrideAmount : amount;
+
 
       const subItemsTotal = subItems.reduce((sum: number, item: any) => sum + (Number(item.amount) || 0), 0);
       if (amount < subItemsTotal) {
@@ -3934,19 +4153,26 @@ const getFrozenCycleAmount = (account: Account): number => {
         id: `credit-${acc.id}`,
         type: 'credit',
         name: acc.bank,
-        amount: amount,
+        amount: effectiveBudgetAmount, // 🟢 Make sure this uses the effective amount you calculated earlier!
         dueDate: getSafeDay(rawDue),
         displayDueDate: getDisplayDate(rawDue),
-        isPaid: isPaid, // 🟢 Strictly prevents the card from settling early
+        isPaid: isPaid, 
         isIncluded: !excludedCreditIds.has(exclusionKey),
+        
+        // 🟢 Pass the flags directly using the variables you already declared higher up
+        isPartialOverride: hasOverride,
+        partialTargetAmount: hasOverride ? overrideAmount : undefined,
+
         rawItem: { 
           ...acc, 
           reimbursableItems: cardReimbursableItems,
           totalStatementBalance: totalStatementBalance 
         },
         subItems: subItems,
-        frontedInfo: activeFrontedInfo // 🟢 Triggers Reimburse UI safely
+        frontedInfo: activeFrontedInfo 
       });
+
+
 
 
           
@@ -3972,25 +4198,33 @@ const getFrozenCycleAmount = (account: Account): number => {
       const rawDue = getInstallmentDueDay(inst); // 🟢 Uses the new visual math!
       const isBudee = !!(inst.funding_friend_id || inst.debtor_friend_id || (inst as any).friend_user_id);
       
-      // 🟢 FRONTING MATH
-      let frontedInfo = getFrontedData(inst.name);
-      const schedule = getPaymentSchedule('installment', inst.id, selectedMonth, selectedYear);
-      const isSchedulePaid = schedule ? schedule.status === 'paid' : false;
+            // 🟢 FRONTING MATH
+            let frontedInfo = getFrontedData(inst.name);
+            const schedule = getPaymentSchedule('installment', inst.id, selectedMonth, selectedYear);
+            const isSchedulePaid = schedule ? schedule.status === 'paid' : false;
+            
+            let isPaid = false;
+            let periodAmountPaid = 0; // 🟢 NEW TRACKER
       
-      let isPaid = false;
-      if (schedule) isPaid = isSchedulePaid;
-      else isPaid = checkIfPaidByTransaction(inst.name, inst.monthlyAmount, selectedMonth, selectedYear, selectedTiming);
-      if (frontedInfo) isPaid = false; // Forces it to stay in Upcoming
-
-      timeline.push({
-        id: inst.id, name: isBudee ? `${inst.name} (Budee)` : inst.name, amount: inst.monthlyAmount, type: 'installment',
-        dueDate: getSafeDay(rawDue), displayDueDate: getDisplayDate(rawDue),
-        isPaid, isIncluded: !excludedInstallmentIds.has(inst.id), rawItem: inst, frontedInfo // 🟢 Inject fronted state!
-      });
+            if (schedule) {
+              isPaid = isSchedulePaid;
+              periodAmountPaid = schedule.amount_paid || 0; // 🟢 Extract amount paid!
+            } else {
+              isPaid = checkIfPaidByTransaction(inst.name, inst.monthlyAmount, selectedMonth, selectedYear, selectedTiming);
+            }
+            if (frontedInfo) isPaid = false; // Forces it to stay in Upcoming
+      
+            timeline.push({
+              id: inst.id, name: isBudee ? `${inst.name} (Budee)` : inst.name, amount: inst.monthlyAmount, type: 'installment',
+              dueDate: getSafeDay(rawDue), displayDueDate: getDisplayDate(rawDue),
+              isPaid, isIncluded: !excludedInstallmentIds.has(inst.id), rawItem: inst, frontedInfo,
+              periodAmountPaid // 🟢 Push it to the card
+            });
+      
     });
 
     return timeline.sort((a, b) => a.dueDate - b.dueDate);
-  }, [processedBudgetMap, activePeriodIndex, billers, budgetInstallments, selectedMonth, selectedYear, selectedTiming, getPaymentSchedule, checkIfPaidBySchedule, checkIfPaidByTransaction, excludedInstallmentIds, creditBudgetAccounts, excludedCreditIds]);
+    }, [processedBudgetMap, activePeriodIndex, billers, budgetInstallments, selectedMonth, selectedYear, selectedTiming, getPaymentSchedule, checkIfPaidBySchedule, checkIfPaidByTransaction, excludedInstallmentIds, creditBudgetAccounts, excludedCreditIds, creditOverrides, creditStatements]); // 🟢 ADDED creditStatements
 
 
   
@@ -3999,12 +4233,15 @@ const getFrozenCycleAmount = (account: Account): number => {
 
   // 2. TIMELINE SPLITTERS (Must be declared AFTER sortedTimelineItems)
   const upcomingItems = React.useMemo(() => {
-    return sortedTimelineItems.filter(item => !item.isPaid && item.type !== 'expense');
+    // 🟢 Now hides cards if they hit the target!
+    return sortedTimelineItems.filter(item => !item.isPaid && !item.isTargetMet && item.type !== 'expense');
   }, [sortedTimelineItems]);
 
   const settledItems = React.useMemo(() => {
-    return sortedTimelineItems.filter(item => item.isPaid || item.type === 'expense');
+    // 🟢 Now catches cards that hit the target!
+    return sortedTimelineItems.filter(item => item.isPaid || item.isTargetMet || item.type === 'expense');
   }, [sortedTimelineItems]);
+
 
   
 
@@ -4290,12 +4527,17 @@ const getFrozenCycleAmount = (account: Account): number => {
       let creditTotal = 0;
       if (cat.name === 'Credit') {
         creditTotal = creditBudgetAccounts.filter(acc => {
-          const exclusionKey = `${acc.id}-${activePeriodIndex}`;
+          
+          // 🟢 THE FIX: Strip 'credit-' from the ID so it correctly matches the UI toggle state!
+          const rawId = String(acc.id).replace('credit-', '');
+          const exclusionKey = `${rawId}-${activePeriodIndex}`;
+          
           if (excludedCreditIds.has(exclusionKey)) return false;
           
           const isLoanBundle = acc.subtype === 'Loan_Bundle';
           return isLoanBundle || getAccountPeriodIndex(acc) === activePeriodIndex;
         }).reduce((sum, account) => {
+
           let accountAmt = 0;
           // 🟢 Prepare to catch subItems!
           const subItems: { id: string, name: string, amount: number, type: string }[] = [];
@@ -4354,6 +4596,13 @@ const getFrozenCycleAmount = (account: Account): number => {
           if (accountAmt < subItemsTotal) {
              accountAmt = subItemsTotal;
           }
+
+            // 🟢 ADD THIS: Apply the partial override to the summary!
+            const exclusionKey = `${account.id}-${activePeriodIndex}`;
+            const overrideAmount = creditOverrides[exclusionKey];
+            if (overrideAmount !== undefined) {
+               accountAmt = overrideAmount;
+            }
 
           if (accountAmt >= 0.01) {
              breakdown.push({ 
@@ -5614,12 +5863,16 @@ const totalSpend = grandTotal;
               if (item.type === 'credit') {
                 setExcludedCreditIds(prev => {
                   const next = new Set(prev);
-                  // 🟢 Securely link the exclusion to this specific tab!
-                  const key = `${item.id}-${activePeriodIndex}`;
+                  
+                  // 🟢 THE FIX: Strip 'credit-' so the status toggle actually clicks!
+                  const rawId = item.id.replace('credit-', '');
+                  const key = `${rawId}-${activePeriodIndex}`;
+                  
                   if (next.has(key)) next.delete(key); else next.add(key);
                   return next;
                 });
               } else if (item.type === 'installment') {
+
                 setExcludedInstallmentIds(prev => {
                   const next = new Set(prev);
                   if (next.has(item.id)) next.delete(item.id); else next.add(item.id);
@@ -5627,6 +5880,30 @@ const totalSpend = grandTotal;
                 });
               } else if (item.categoryName) {
                 handleSetupToggle(item.categoryName, item.id);
+              }
+            }}
+             // 🟢 NEW: Wire up the Partial Toggle
+             onTogglePartial={() => {
+              if (item.type === 'credit') {
+                setCreditOverrides(prev => {
+                  const key = `${item.id.replace('credit-', '')}-${activePeriodIndex}`;
+                  const next = { ...prev };
+                  if (next[key] !== undefined) {
+                    delete next[key]; // Toggle OFF
+                  } else {
+                    next[key] = item.amount; // Toggle ON (Defaults to current full amount)
+                  }
+                  return next;
+                });
+              }
+            }}
+            // 🟢 NEW: Wire up the Amount Input
+            onUpdatePartialAmount={(newAmount) => {
+              if (item.type === 'credit') {
+                setCreditOverrides(prev => ({
+                  ...prev,
+                  [`${item.id.replace('credit-', '')}-${activePeriodIndex}`]: newAmount
+                }));
               }
             }}
           />
@@ -5652,12 +5929,16 @@ const totalSpend = grandTotal;
               if (item.type === 'credit') {
                 setExcludedCreditIds(prev => {
                   const next = new Set(prev);
-                  // 🟢 Securely link the exclusion to this specific tab!
-                  const key = `${item.id}-${activePeriodIndex}`;
+                  
+                  // 🟢 THE FIX: Strip 'credit-' so the status toggle actually clicks!
+                  const rawId = item.id.replace('credit-', '');
+                  const key = `${rawId}-${activePeriodIndex}`;
+                  
                   if (next.has(key)) next.delete(key); else next.add(key);
                   return next;
                 });
               } else if (item.type === 'installment') {
+
                 setExcludedInstallmentIds(prev => {
                   const next = new Set(prev);
                   if (next.has(item.id)) next.delete(item.id); else next.add(item.id);
@@ -5665,6 +5946,30 @@ const totalSpend = grandTotal;
                 });
               } else if (item.categoryName) {
                 handleSetupToggle(item.categoryName, item.id);
+              }
+            }}
+             // 🟢 NEW: Wire up the Partial Toggle
+             onTogglePartial={() => {
+              if (item.type === 'credit') {
+                setCreditOverrides(prev => {
+                  const key = `${item.id.replace('credit-', '')}-${activePeriodIndex}`;
+                  const next = { ...prev };
+                  if (next[key] !== undefined) {
+                    delete next[key]; // Toggle OFF
+                  } else {
+                    next[key] = item.amount; // Toggle ON (Defaults to current full amount)
+                  }
+                  return next;
+                });
+              }
+            }}
+            // 🟢 NEW: Wire up the Amount Input
+            onUpdatePartialAmount={(newAmount) => {
+              if (item.type === 'credit') {
+                setCreditOverrides(prev => ({
+                  ...prev,
+                  [`${item.id.replace('credit-', '')}-${activePeriodIndex}`]: newAmount
+                }));
               }
             }}
           />

@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { 
   Menu, ChevronLeft, SlidersHorizontal, ArrowUp, ArrowDown, Eye, EyeOff, X, ChevronDown, 
   LogOut, Lock, Users, Bell, MessageCircle, AlertCircle, LayoutDashboard, PieChart, 
-  WalletCards, Plus, MoreHorizontal, Receipt, Wallet, FileText, CreditCard, Tag, ToolCase, ChartPie, ArrowLeftRight 
+  WalletCards, Plus, MoreHorizontal, Receipt, Wallet, FileText, CreditCard, Tag, ToolCase, ChartPie, ArrowLeftRight, HeartPlus 
 } from 'lucide-react';
 
 import { BrowserRouter, Routes, Route, NavLink, useLocation, useNavigate, Navigate, Outlet } from 'react-router-dom';
@@ -61,6 +61,11 @@ import { MessagesInbox } from './src/components/MessagesInbox';
 import MigrationModal from './src/components/MigrationModal';
 
 import BarcodeScanner from './src/components/BarcodeScanner';
+
+import { bulkSyncCreditStatements } from './src/services/statementsService';
+
+import Wishlist from './pages/Wishlist';
+
 
 // Helper function to convert UI Account to Supabase format
 const accountToSupabase = (account: Account) => ({
@@ -678,9 +683,18 @@ const MainApp: React.FC = () => {
       setBudgetSetupsLoading(false);
     };
 
+    const fetchAccountsAndSync = async () => {
+      const { data, error } = await getAllAccountsFrontend();
+      if (!error && data) {
+        // Run the bulk sync silently in the background!
+        await bulkSyncCreditStatements(data);
+      }
+    };
+
     fetchBillers();
     fetchInstallments();
     fetchBudgetSetups();
+    fetchAccountsAndSync();
   }, []);
 
   // Auto-recalculate account balances whenever accounts or transactions update!
@@ -2075,6 +2089,12 @@ useEffect(() => {
               {/* Start with Dashboard and redirect anything else unrecognized */}
               
               <Route path="*" element={<Navigate to="/" replace />} />
+
+              <Route path="/wishlist" element={<Wishlist />} />
+
+
+
+
             </Routes>
           </div>
         </main>
@@ -2280,7 +2300,7 @@ className="fixed bottom-0 left-0 w-full h-20 pointer-events-none z-[90] bg-gradi
 
             {/* MAIN NAVIGATION BAR */}
             <nav className={`pointer-events-auto flex items-center bg-white dark:bg-gray-900 border-[3px] md:border-[4px] border-black rounded-full px-4 py-2.5 md:px-6 md:py-3.5 shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] md:shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] transition-all duration-300 ${
-              ['/accounts', '/transactions', '/billers', '/installments', '/wallets'].includes(location.pathname) || (location.pathname === '/budget' && !(location.search || '').includes('view=setup')) ? 'animate-mitosis' : 'gap-2 md:gap-4'
+              ['/accounts', '/transactions', '/billers', '/installments', '/wallets', '/wishlist'].includes(location.pathname) || (location.pathname === '/budget' && !(location.search || '').includes('view=setup')) ? 'animate-mitosis' : 'gap-2 md:gap-4'
             }`}>
               
               <div className="flex items-center gap-1 md:gap-2">
@@ -2293,7 +2313,7 @@ className="fixed bottom-0 left-0 w-full h-20 pointer-events-none z-[90] bg-gradi
               </div>
 
               {/* FLOATING ACTION BUTTON (+) */}
-              {(['/accounts', '/transactions', '/billers', '/installments', '/wallets'].includes(location.pathname) || (location.pathname === '/budget' && !(location.search || '').includes('view=setup'))) && (
+              {(['/accounts', '/transactions', '/billers', '/installments', '/wallets', '/wishlist'].includes(location.pathname) || (location.pathname === '/budget' && !(location.search || '').includes('view=setup'))) && (
                 <div id="global-mobile-fab" className="animate-in zoom-in-50 duration-300 px-1 md:px-3 -my-4 md:-my-6 relative z-10">
                   <button
                     type="button"
@@ -2304,8 +2324,10 @@ className="fixed bottom-0 left-0 w-full h-20 pointer-events-none z-[90] bg-gradi
                         '/budget': 'open_add_budget_modal',
                         '/billers': 'open_add_biller_modal',
                         '/installments': 'open_add_installment_modal',
-                        '/wallets': 'open_add_wallet_modal'
+                        '/wallets': 'open_add_wallet_modal',
+                        '/wishlist': 'open_add_wishlist_modal' // 🟢 Added this line
                       };
+
                       const eventName = eventMap[location.pathname];
                       if (eventName) {
                         window.dispatchEvent(new CustomEvent(eventName));
@@ -2367,14 +2389,16 @@ className="fixed bottom-0 left-0 w-full h-20 pointer-events-none z-[90] bg-gradi
               </h3>
               
               <div className="grid grid-cols-2 gap-3">
-                {/* 1. REGULAR PAGES MAP */}
-                {[
+                                {/* 1. REGULAR PAGES MAP */}
+                                {[
                   { path: '/accounts', label: 'Accounts', icon: <WalletCards className="w-6 h-6" /> },
                   { path: '/billers', label: 'Billers', icon: <Receipt className="w-6 h-6" /> },
                   { path: '/installments', label: 'Installments', icon: <CreditCard className="w-6 h-6" /> },
                   { path: '/wallets', label: 'Wallets', icon: <Wallet className="w-6 h-6" /> },
+                  { path: '/wishlist', label: 'Wishlist', icon: <HeartPlus className="w-6 h-6" /> }, // 🟢 Added this line
                   { path: '/settings', label: 'Settings', icon: <SlidersHorizontal className="w-6 h-6" /> },
                 ].map((item) => (
+
                   <NavLink
                     key={item.path}
                     to={item.path}
