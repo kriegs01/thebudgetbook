@@ -1,0 +1,103 @@
+
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <!-- Browser Tab Icon -->
+    <link rel="icon" type="image/png" href="/favicon.png" />
+    <!-- iPadOS/iOS Home Screen Icon -->
+    <link rel="apple-touch-icon" sizes="180x180" href="/favicon.png" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+    <meta name="theme-color" content="#4F46E5" />
+    <link rel="manifest" href="/manifest.json" />
+    <title>Budee</title>
+                    <style>
+                      @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
+                      
+                      /* 🟢 PROPORTIONAL MOBILE SCALING (Forces UI to scale like a vector on phones) */
+                      @media (max-width: 767px) {
+                        html {
+                          /* Tweak this number (e.g., 3.8vw, 4.5vw) until the UI scale feels perfect! */
+                          font-size: 4.2vw !important;
+                        }
+                      }
+                
+                      /* 🟢 SAFARI ASSASSIN: Completely freeze the background so the OS can't pull it */
+                      html, body {
+                        font-family: 'Inter', sans-serif;
+                        position: fixed;
+                        top: 0;
+                        left: 0;
+                        width: 100%;
+                        height: 100%;
+                        overflow: hidden;
+                        overscroll-behavior: none;
+                        touch-action: none;
+                      }
+                
+                      /* 🟢 Move all scrolling inside your React app instead */
+                      #root {
+                        width: 100%;
+                        height: 100%;
+                        overflow-y: auto;
+                        overflow-x: hidden;
+                        -webkit-overflow-scrolling: touch; /* Keeps the buttery smooth iOS momentum scrolling */
+                      }
+                      
+                      .glass-effect {
+                        background: rgba(255, 255, 255, 0.7);
+                        backdrop-filter: blur(10px);
+                        border: 1px solid rgba(255, 255, 255, 0.2);
+                      }
+                    </style> 
+                
+          
+  <script type="importmap">
+{
+  "imports": {
+    "recharts": "https://esm.sh/recharts@^3.7.0",
+    "react/": "https://esm.sh/react@^19.2.3/",
+    "react": "https://esm.sh/react@^19.2.3",
+    "react-dom/": "https://esm.sh/react-dom@^19.2.3/",
+    "react-dom": "https://esm.sh/react-dom@^19.2.3",
+    "react-router-dom": "https://esm.sh/react-router-dom@^7.13.0",
+    "lucide-react": "https://esm.sh/lucide-react@^0.563.0",
+    "@supabase/supabase-js": "https://esm.sh/@supabase/supabase-js@^2.93.3"
+  }
+}
+</script>
+<link rel="stylesheet" href="./index.css">
+
+    <script>
+      // Instantly apply the cached theme before the page renders
+      if (localStorage.getItem('theme') === 'dark') {
+        document.documentElement.classList.add('dark');
+      } else if (localStorage.getItem('theme') === 'light') {
+        document.documentElement.classList.remove('dark');
+      } else if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
+        // Fallback to system preference if no login cache exists
+        document.documentElement.classList.add('dark');
+      }
+    </script>
+
+</head>
+<body class="bg-[#FCF6E8] dark:bg-gray-950 transition-colors duration-500">
+  <div id="root"></div>
+  <script type="module" src="/index.tsx"></script>
+  <script>
+    // 🟢 TRACKPAD ASSASSIN: Kills the 2-finger horizontal swipe on Apple Trackpads
+    document.addEventListener('wheel', function(e) {
+      // If the user is scrolling horizontally more than vertically
+      const isHorizontalScroll = Math.abs(e.deltaX) > Math.abs(e.deltaY);
+      
+      if (isHorizontalScroll) {
+        e.preventDefault(); // Stop Safari from navigating back/forward!
+      }
+    }, { passive: false });
+  </script>
+
+</body>
+</html>
+
+</body>
+</html>

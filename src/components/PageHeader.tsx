@@ -4,7 +4,7 @@ import { useTheme } from '../contexts/ThemeContext';
 
 export type PageHeaderProps = {
   title: React.ReactNode;
-  subtitle: React.ReactNode;
+  subtitle?: React.ReactNode;
   icon?: React.ReactNode;
   actions?: React.ReactNode;
   backButton?: React.ReactNode;
@@ -23,16 +23,18 @@ export const PageHeader: React.FC<PageHeaderProps> = ({ title, subtitle, icon, a
   }, [title, isMobile]);
 
   return (
-    <header className={`${isMobile ? 'pt-16' : 'pt-12'} flex flex-row items-center justify-between gap-6 mb-4`}>
+    <header className={`${isMobile ? 'pt-8' : 'pt-8'} flex flex-row items-center justify-between gap-6 mb-4`}>
+
       <div className="flex flex-1 items-center gap-6">
-        {backButton}
         <div className="flex-1">
           <div className="relative inline-block">
             <div ref={titleContainerRef} className="flex items-center gap-4">
               {icon && <div className="z-10 shrink-0">{icon}</div>}
-              <h1 className={`font-titan text-[clamp(2rem,7.5vw,3.75rem)] uppercase tracking-tighter leading-none relative z-10 [text-shadow:-1px_-1px_0_#000,1px_-1px_0_#000,-1px_1px_0_#000,1px_1px_0_#000] drop-shadow-[3px_3px_0px_#000] ${getAccentClasses('text')}`}>
-                {title}
-              </h1>
+              <h1 className="font-black text-[clamp(2rem,7.5vw,3.75rem)] leading-none relative z-10 text-gray-900 dark:text-white">
+  {title}
+</h1>
+
+
             </div>
             {highlightWidth > 0 && (
               <div
@@ -41,16 +43,22 @@ export const PageHeader: React.FC<PageHeaderProps> = ({ title, subtitle, icon, a
               />
             )}
           </div>
-          <div className="flex items-center gap-3 mt-1 ml-1">
-            <p className="text-[clamp(1rem,3vw,1.25rem)] font-bold italic text-black/50 dark:text-gray-400 transition-colors duration-300">
-              {subtitle}
-            </p>
-          </div>
+          {subtitle && (
+            <div className="flex items-center gap-3 mt-1 ml-1">
+              <p className="text-[clamp(1rem,3vw,1.25rem)] font-bold italic text-black/50 dark:text-gray-400 transition-colors duration-300">
+                {subtitle}
+              </p>
+            </div>
+          )}
           <div className="h-2 w-32 mt-2 bg-black dark:bg-white/20 transition-colors duration-300" />
         </div>
       </div>
-      {actions && <div className="flex items-center justify-end gap-3">{actions}</div>}
+      {(actions || backButton) && (
+        <div className="flex shrink-0 items-center justify-end gap-3">
+          {actions}
+          {backButton}
+        </div>
+      )}
     </header>
   );
 };
-

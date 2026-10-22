@@ -1,0 +1,2502 @@
+import React, { useState, useEffect, useRef } from 'react';
+import { 
+  Menu, ChevronLeft, SlidersHorizontal, ArrowUp, ArrowDown, Eye, EyeOff, X, ChevronDown, 
+  LogOut, Lock, Users, Bell, MessageCircle, AlertCircle, LayoutDashboard, PieChart, 
+  WalletCards, Plus, MoreHorizontal, Receipt, Wallet, FileText, CreditCard, Tag, ToolCase, ChartPie, ArrowLeftRight, HeartPlus 
+} from 'lucide-react';
+
+import { BrowserRouter, Routes, Route, NavLink, useLocation, useNavigate, Navigate, Outlet } from 'react-router-dom';
+import { FloatingHUD } from './FloatingHUD';
+import { QueryClient, QueryClientProvider, useQueryClient } from '@tanstack/react-query';
+import { NAV_ITEMS, INITIAL_BUDGET, DEFAULT_SETUP, INITIAL_CATEGORIES } from './constants';
+import { getAllBillersFrontend, createBillerFrontend, updateBillerFrontend, deleteBillerFrontend } from './src/services/billersService';
+import { getAllAccountsFrontend, createAccountFrontend, updateAccountFrontend, deleteAccountFrontend } from './src/services/accountsService';
+import { getAllInstallmentsFrontend, createInstallmentFrontend, updateInstallmentFrontend, deleteInstallmentFrontend } from './src/services/installmentsService';
+import { getAllBudgetSetupsFrontend, deleteBudgetSetupFrontend, archiveBudgetSetup, reopenBudgetSetup } from './src/services/budgetSetupsService';
+import { getPaymentSchedulesBySource } from './src/services/paymentSchedulesService';
+import { getAllTransactions, createTransaction, createPaymentScheduleTransaction, uploadTransactionReceipt, updateTransaction, getPendingTransactions, resolvePendingTransaction } from './src/services/transactionsService';
+import { recordPayment } from './src/services/paymentSchedulesService';
+import { supabase } from './src/utils/supabaseClient';
+import { combineDateWithCurrentTime } from './src/utils/dateUtils';
+import { recalculateAllAccountBalances } from './src/utils/accountBalanceCalculator';
+import { updateUserProfile } from './src/services/userProfileService';
+import { acceptFriendRequest, removeFriendship } from './src/services/friendshipsService';
+import { getAllPeople, createPerson } from './src/services/peopleService';
+import type { Biller, Account, Installment, Transaction, BudgetCategory, SavingsJar } from './types';
+import type { SupabaseTransaction } from './src/types/supabase';
+
+// Context
+import { TestEnvironmentProvider, useTestEnvironment } from './src/contexts/TestEnvironmentContext';
+import { PinProtectionProvider, usePinProtection } from './src/contexts/PinProtectionContext';
+import { AuthProvider, useAuth } from './src/contexts/AuthContext';
+import { ThemeProvider, useTheme } from './src/contexts/ThemeContext';
+import { TestModeBanner } from './src/components/TestModeBanner';
+
+// Pages
+import Dashboard from './pages/Dashboard';
+import Budget from './pages/Budget';
+import TransactionsPage from './pages/transactions';
+import Orders from './pages/Orders';
+import Billers from './pages/Billers';
+import Installments from './pages/Installments';
+import Accounts from './pages/Accounts';
+import AccountFilteredTransactions from './pages/accounts/view';
+import StatementPage from './pages/accounts/statement';
+import WalletsPage from './pages/Wallets';
+import WalletView from './pages/wallets/view';
+import PeoplePage from './pages/People';
+import SettingsPage from './pages/Settings';
+import SupabaseDemo from './pages/SupabaseDemo';
+import Auth from './pages/Auth';
+import UpdatePassword from './pages/update-password';
+import AuthConfirm from './pages/AuthConfirm';
+import { useTransactions } from './src/hooks/useTransactions';
+import { useAccounts } from './src/hooks/useAccounts';
+import { useIncomingRequests, useUnreadMessagesCount, socialKeys } from './src/hooks/useBudies';
+import { SetupWizard } from './src/components/SetupWizard';
+import { Logo } from './src/components/Logo';
+import useMediaQuery from './src/hooks/useMediaQuery';
+import { MessagesInbox } from './src/components/MessagesInbox';
+
+import MigrationModal from './src/components/MigrationModal';
+
+import BarcodeScanner from './src/components/BarcodeScanner';
+
+import { bulkSyncCreditStatements } from './src/services/statementsService';
+
+import Wishlist from './pages/Wishlist';
+
+
+// Helper function to convert UI Account to Supabase format
+const accountToSupabase = (account: Account) => ({
+  bank: account.bank,
+  classification: account.classification,
+  balance: account.balance,
+  type: account.type,
+  credit_limit: account.creditLimit ?? null,
+  billing_date: account.billingDate ?? null,
+  due_date: account.dueDate ?? null,
+  is_active: (account as any).isActive !== false,
+  deactivation_date: (account as any).deactivationDate ?? null,
+  engine_id: account.engine_id || 'default'
+});
+
+// Helper function to convert Supabase Account to UI format
+const supabaseToAccount = (supabaseAccount: any): Account => ({
+  id: supabaseAccount.id,
+  bank: supabaseAccount.bank,
+  classification: supabaseAccount.classification,
+  balance: supabaseAccount.balance,
+  type: supabaseAccount.type,
+  creditLimit: supabaseAccount.credit_limit,
+  billingDate: supabaseAccount.billing_date,
+  dueDate: supabaseAccount.due_date,
+  isActive: supabaseAccount.is_active ?? true,
+  deactivationDate: supabaseAccount.deactivation_date,
+  engine_id: supabaseAccount.engine_id || 'default'
+});
+
+// Helper function to convert UI Biller to Supabase format
+const billerToSupabase = (biller: Biller) => ({
+  name: biller.name,
+  category: biller.category,
+  due_date: biller.dueDate,
+  expected_amount: biller.expectedAmount,
+  timing: biller.timing,
+  activation_date: biller.activationDate,
+  deactivation_c: biller.deactivationDate ?? null,
+  status: biller.status,
+  schedules: biller.schedules,
+});
+
+// Helper function to convert Supabase Biller to UI format
+const supabaseToBiller = (supabaseBiller: any): Biller => ({
+  id: supabaseBiller.id,
+  name: supabaseBiller.name,
+  category: supabaseBiller.category,
+  dueDate: supabaseBiller.due_date,
+  expectedAmount: supabaseBiller.expected_amount,
+  timing: supabaseBiller.timing,
+  activationDate: supabaseBiller.activation_date,
+  deactivationDate: supabaseBiller.deactivation_c,
+  status: supabaseBiller.status,
+  schedules: biller.schedules,
+});
+
+// Helper function to convert UI Installment to Supabase format
+const installmentToSupabase = (installment: Installment) => {
+  // Extract numeric value from termDuration string (e.g., "12 months" -> 12)
+  let termDurationNum = 0;
+  if (installment.termDuration) {
+    const match = installment.termDuration.match(/\d+/);
+    if (match) {
+      termDurationNum = parseInt(match[0], 10);
+    }
+  }
+  // Default to 12 if no valid number found
+  if (termDurationNum <= 0) {
+    termDurationNum = 12;
+  }
+  
+  return {
+    name: installment.name,
+    total_amount: installment.totalAmount,
+    monthly_amount: installment.monthlyAmount,
+    term_duration: termDurationNum,
+    paid_amount: installment.paidAmount,
+    account_id: installment.accountId,
+    is_archived: installment.isArchived ?? false,
+    archive_status: installment.archiveStatus ?? null,
+  };
+};
+
+// Helper function to convert Supabase Installment to UI format
+const supabaseToInstallment = (supabaseInstallment: any): Installment => ({
+  id: supabaseInstallment.id,
+  name: supabaseInstallment.name,
+  totalAmount: supabaseInstallment.total_amount,
+  monthlyAmount: supabaseInstallment.monthly_amount,
+  termDuration: `${supabaseInstallment.term_duration} months`,
+  paidAmount: supabaseInstallment.paid_amount,
+  accountId: supabaseInstallment.account_id,
+  isArchived: supabaseInstallment.is_archived,
+  archiveStatus: supabaseInstallment.archive_status,
+});
+
+// Helper function to convert UI SavingsJar to Supabase format
+const savingsToSupabase = (savings: SavingsJar) => ({
+  name: savings.name,
+  account_id: savings.accountId,
+  current_balance: savings.currentBalance,
+});
+
+// Helper function to convert Supabase Savings to UI format
+const supabaseToSavings = (supabaseSavings: any): SavingsJar => ({
+  id: supabaseSavings.id,
+  name: supabaseSavings.name,
+  accountId: supabaseSavings.account_id,
+  currentBalance: supabaseSavings.current_balance,
+});
+
+// Helper function to convert Supabase Transaction to UI format
+const formatTransaction = (supabaseTransaction: SupabaseTransaction): Transaction => ({
+  id: supabaseTransaction.id,
+  name: supabaseTransaction.name,
+  date: supabaseTransaction.date,
+  amount: supabaseTransaction.amount,
+  paymentMethodId: supabaseTransaction.payment_method_id,
+});
+
+const queryClient = new QueryClient();
+
+const AuthErrorPage: React.FC<{ title: string; message: string }> = ({ title, message }) => (
+  <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center text-center p-4">
+    <AlertCircle className="w-12 h-12 text-red-600 mb-4" />
+    <h1 className="text-2xl font-semibold text-red-800">{title}</h1>
+    <p className="text-gray-600 mt-2">{message}</p>
+  </div>
+);
+
+const ProtectedRoute: React.FC = () => {
+  const { user, loading: authLoading, isPasswordRecovery } = useAuth();
+  const location = useLocation();
+
+  if (authLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-100 via-gray-50 to-purple-100 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900">
+        <div className="text-center">
+          <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mb-4"></div>
+          <p className="text-gray-600">Loading...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return <Navigate to="/auth" replace />;
+  }
+
+  if (isPasswordRecovery && location.pathname !== '/update-password') {
+    return <Navigate to="/update-password" replace />;
+  }
+
+  return (
+    <PinProtectionProvider>
+      <Outlet />
+    </PinProtectionProvider>
+  );
+};
+
+const MainApp: React.FC = () => {
+  const { user, userProfile, signOut } = useAuth();
+  const queryClient = useQueryClient();
+  const location = useLocation();
+  const navigate = useNavigate();
+  const isDashboard = location.pathname === '/';
+  const [isScrolled, setIsScrolled] = useState(false);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const isMobile = useMediaQuery('(max-width: 767px)');
+  const [isSidebarOpen, setIsSidebarOpen] = useState(!isMobile);
+  const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
+  const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
+  const [showMigrationModal, setShowMigrationModal] = useState(false);//<=== MigrationModal declaration
+  const [isToolboxOpen, setIsToolboxOpen] = useState(false);
+  const [isTrackersOpen, setIsTrackersOpen] = useState(false);
+  const [isMigrating, setIsMigrating] = useState(false); // Add this flag
+  const migrationAttempted = useRef(false); // Add this ref
+  const [isMessagesOpen, setIsMessagesOpen] = useState(false);
+  const [activeChatFriendId, setActiveChatFriendId] = useState<string | undefined>();
+  const { data: pendingRequests = [], refetch: refetchRequests } = useIncomingRequests();
+  const { data: unreadMessagesCount = 0 } = useUnreadMessagesCount();
+  const [pendingTransactions, setPendingTransactions] = useState<any[]>([]);
+  const [txAccountSelections, setTxAccountSelections] = useState<Record<string, string>>({});
+  const [resolvingIds, setResolvingIds] = useState<Set<string>>(new Set());
+  const { getAccentClasses } = useTheme();
+  const [showMobileMore, setShowMobileMore] = useState(false);
+
+  const [showLeftTray, setShowLeftTray] = useState(false);
+  const [showRightTray, setShowRightTray] = useState(false);
+
+
+  const [accounts, setAccounts] = useState<Account[]>([]);
+  const [budgetItems, setBudgetItems] = useState(INITIAL_BUDGET);
+  const [billers, setBillers] = useState<Biller[]>([]);
+  const [billersLoading, setBillersLoading] = useState(true);
+  const [billersError, setBillersError] = useState<string | null>(null);
+  const [installments, setInstallments] = useState<Installment[]>([]);
+  const [installmentsLoading, setInstallmentsLoading] = useState(true);
+  const [installmentsError, setInstallmentsError] = useState<string | null>(null);
+
+  // Splash Screen State
+  const [showSplash, setShowSplash] = useState(true);
+  const [minSplashTimeElapsed, setMinSplashTimeElapsed] = useState(false);
+
+  // Inside your MainApp component, before the return statement:
+  const filteredInstallments = React.useMemo(() => {
+    return installments.filter(i => {
+      // Explicitly check that we only want items that:
+      // 1. Are NOT already migrated
+      // 2. Are NOT archived
+      // 3. Are missing a due date
+      const isNotMigrated = i.isMigrated !== true;
+      const isNotArchived = i.isArchived !== true;
+      const needsDueDate = !i.dueDate;
+      
+      return isNotMigrated && isNotArchived && needsDueDate;
+    });
+  }, [installments]); // Removed showMigrationModal as it is not needed here[span_2](start_span)[span_2](end_span)
+  
+  
+
+  // Scroll listener for Dashboard top bar visibility
+  useEffect(() => {
+    const handleScroll = () => {
+      if (scrollContainerRef.current) {
+        setIsScrolled(scrollContainerRef.current.scrollTop > 40);
+      }
+    };
+
+    const container = scrollContainerRef.current;
+    container?.addEventListener('scroll', handleScroll);
+    return () => container?.removeEventListener('scroll', handleScroll);
+  }, [isDashboard, showSplash]);
+
+  // Global scroll-to-top on page change
+  useEffect(() => {
+    if (scrollContainerRef.current) {
+      scrollContainerRef.current.scrollTop = 0;
+    }
+  }, [location.pathname]);
+
+  // In App.tsx
+  useEffect(() => {
+    if (!installmentsLoading && userProfile && !migrationAttempted.current) {
+      const hasCompleted = localStorage.getItem('hasCompletedMigration') === 'true';
+      const hasDismissed = localStorage.getItem('hasDismissedMigration') === 'true';
+  
+      if (!hasCompleted && !hasDismissed) {
+        // Only target items that are NOT archived, NOT migrated, and missing a due date
+        const needsMigration = installments.some(i => 
+          i.isArchived !== true && 
+          i.is_archived !== true && 
+          i.isMigrated !== true && 
+          i.is_migrated !== true && 
+          !i.due_date && 
+          !i.dueDate
+        );
+        
+        if (needsMigration) {
+          migrationAttempted.current = true; 
+          setShowMigrationModal(true);
+        }
+      }
+    }
+  }, [installments, userProfile, installmentsLoading]);  
+
+
+  useEffect(() => {
+    setIsSidebarOpen(!isMobile);
+  }, [isMobile]);
+
+  const loadNotifications = async () => {
+    const { data: pTxs } = await getPendingTransactions();
+    if (pTxs) setPendingTransactions(pTxs);
+  };
+
+  useEffect(() => {
+    if (!user) return;
+    
+    loadNotifications();
+
+    // Global Realtime Listeners for instant social alerts (Messages & Connections)
+    const channel = supabase
+      .channel(`global-social-alerts-${user.id}`)
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'messages' },
+        (payload) => {
+          if (payload.new && payload.new.receiver_id === user.id) {
+            console.log('[Realtime] New message received:', payload.new);
+            // Optimistically update the message notification badge instantly
+            queryClient.setQueryData(socialKeys.unreadMessages(), (old: number = 0) => old + 1);
+            // Delay network fetch slightly to avoid database read-replica lag
+            setTimeout(() => {
+              queryClient.invalidateQueries({ queryKey: socialKeys.unreadMessages() });
+            }, 500);
+          }
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'friendships' },
+        (payload) => {
+          if (payload.new && payload.new.friend_id === user.id) {
+            console.log('[Realtime] New connect request received:', payload.new);
+            setTimeout(() => {
+              refetchRequests(); // Force immediate refetch of the hook
+              queryClient.invalidateQueries({ queryKey: socialKeys.incomingRequests() });
+            }, 500);
+          }
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'friendships' },
+        (payload) => {
+          if (payload.new && (payload.new.user_id === user.id || payload.new.friend_id === user.id)) {
+            console.log('[Realtime] Connect request accepted:', payload.new);
+            setTimeout(() => {
+              queryClient.invalidateQueries({ queryKey: socialKeys.friendships() });
+            }, 500);
+          }
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'transactions' },
+        (payload) => {
+          console.log('[Realtime] Transaction change detected, updating notifications', payload);
+          
+          // 1. Optimistic Update (Replicating Messages Logic)
+          // Instantly update the UI without waiting for the network fetch
+          if (payload.eventType === 'INSERT' && payload.new) {
+            // Only show notification if the transaction was created by someone else
+            if (payload.new.user_id && payload.new.user_id !== user.id) {
+              setPendingTransactions((prev) => {
+                if (prev.some(tx => tx.id === payload.new.id)) return prev;
+                return [{ ...payload.new, sender_profile: null }, ...prev];
+              });
+            }
+          } else if (payload.eventType === 'UPDATE' && payload.new) {
+            setPendingTransactions((prev) => prev.filter(tx => tx.id !== payload.new.id));
+          }
+
+          // 2. Delayed Network Fetch (to grab joined data like the sender's real name)
+          setTimeout(() => {
+            loadNotifications();
+            queryClient.invalidateQueries({ queryKey: ['transactions'] });
+            queryClient.invalidateQueries({ queryKey: ['accounts'] });
+          }, 1200);
+        }
+      )
+      .subscribe((status) => {
+        console.log('[Realtime] Global alerts subscription status:', status);
+      });
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [user, queryClient]);
+
+  const handleResolveTransaction = async (id: string, action: 'accept' | 'decline') => {
+    if (resolvingIds.has(id)) return;
+    setResolvingIds(prev => new Set(prev).add(id));
+    
+    try {
+      let accountId = userProfile?.settings?.defaultReceiveAccountId || txAccountSelections[id];
+      if (action === 'accept' && !accountId) {
+        alert('Please select an account to receive these funds.');
+        return;
+      }
+      const { error } = await resolvePendingTransaction(id, action, accountId);
+      if (error) return alert('Failed to process transaction.');
+      
+      setPendingTransactions(prev => prev.filter(tx => tx.id !== id));
+      
+      if (action === 'accept') {
+        await reloadAccounts();
+        queryClient.invalidateQueries({ queryKey: ['transactions'] });
+        // Force immediate background data refetch on active pages
+        window.dispatchEvent(new CustomEvent('transactions_updated'));
+      }
+    } finally {
+      setResolvingIds(prev => { const next = new Set(prev); next.delete(id); return next; });
+    }
+  };
+
+  const handleAcceptRequest = async (id: string) => {
+    await acceptFriendRequest(id);
+    await refetchRequests();
+    // Per touchbase notes (Issue #2), the immediate profile creation logic is removed from here.
+    // This logic will be moved to the People page to ensure profiles are created for BOTH users
+    // when they load their connections, fixing the bug where the sender was left out.
+  };
+
+  const handleDeclineRequest = async (id: string) => {
+    await removeFriendship(id);
+    await refetchRequests();
+  };
+
+  const { data: txData, isLoading: transactionsLoading, refetch: refetchTransactions } = useTransactions();
+  const rawTransactions = txData?.raw || [];
+  // Ensure newly added database fields (like person_name) that might be stripped 
+  // by the hook's formatting are preserved and passed down to the UI components.
+  const transactions = (txData?.formatted || []).map((tx: any) => {
+    const raw = rawTransactions.find((r: any) => r.id === tx.id);
+    return {
+      ...tx,
+      person_name: raw?.person_name || tx.person_name,
+      borrower_name: raw?.borrower_name || tx.borrower_name,
+      transaction_type: raw?.transaction_type || tx.transaction_type
+    };
+  });
+
+  const { data: rawAccounts = [], isLoading: accountsLoading, error: accountsQueryError } = useAccounts();
+  const accountsError = accountsQueryError ? (accountsQueryError as Error).message : null;
+
+  const [currency, setCurrency] = useState('PHP');
+  const [categories, setCategories] = useState(INITIAL_CATEGORIES);
+  const [theme, setTheme] = useState<'light' | 'dark'>('light');
+  
+  // Preserve a locally chosen theme even while the user profile is still loading.
+  useEffect(() => {
+    const localTheme = localStorage.getItem('theme');
+    if (localTheme === 'dark' || localTheme === 'light') {
+      setTheme(localTheme);
+    }
+  }, []);
+
+  // Wizard State
+  const [showWizard, setShowWizard] = useState(false);
+
+  // Load Custom Categories from User Profile
+  useEffect(() => {
+    if (userProfile?.settings?.categories && Array.isArray(userProfile.settings.categories)) {
+      setCategories(userProfile.settings.categories);
+    } else {
+      setCategories(INITIAL_CATEGORIES); // Fallback for new accounts
+    }
+
+    // Intercept New Users for Setup Wizard
+    if (user?.created_at) {
+      const isSetupCompleted = userProfile?.settings?.setupCompleted;
+      const hasCustomCategories = userProfile?.settings?.categories && userProfile.settings.categories.length > 0;
+      
+      // Calculate account age in days
+      const accountAgeDays = (new Date().getTime() - new Date(user.created_at).getTime()) / (1000 * 3600 * 24);
+      
+      if (accountAgeDays <= 7 && !isSetupCompleted && !hasCustomCategories) {
+        setShowWizard(true);
+      } else {
+        setShowWizard(false);
+      }
+    }
+  }, [userProfile, user]);
+
+  // Lifted Budget Setups State - now loaded from Supabase
+  const [budgetSetups, setBudgetSetups] = useState<any[]>([]);
+  const [budgetSetupsLoading, setBudgetSetupsLoading] = useState(true);
+  const [budgetSetupsError, setBudgetSetupsError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const timer = setTimeout(() => setMinSplashTimeElapsed(true), 3000); // 3 seconds buffer
+    return () => clearTimeout(timer);
+  }, []);
+
+  const isDataLoading = accountsLoading || transactionsLoading || billersLoading || installmentsLoading || budgetSetupsLoading;
+
+  useEffect(() => {
+    if (!isDataLoading && minSplashTimeElapsed) setShowSplash(false);
+  }, [isDataLoading, minSplashTimeElapsed]);
+
+  // Navigation Customization State
+  const [navPreferences, setNavPreferences] = useState<{id: string, visible: boolean}[]>([]);
+  const [showNavEditModal, setShowNavEditModal] = useState(false);
+  const [tempNavPrefs, setTempNavPrefs] = useState(navPreferences);
+
+  const { triggerStandbyLock, isPinEnabled } = usePinProtection();
+
+  const effectiveNavItems = React.useMemo(() => {
+    // Filter out savings and trash items from the menu
+    const items = [...NAV_ITEMS].filter(item => 
+      item.path !== '/savings' && 
+      item.path !== '/trash' &&
+      item.path !== '/settings' &&
+      item.id?.toLowerCase() !== 'savings' &&
+      item.id?.toLowerCase() !== 'trash' &&
+      item.id?.toLowerCase() !== 'settings'
+    );
+    if (userProfile?.settings?.usePeoplePage && !items.find(i => i.id === 'people')) {
+      items.push({
+        id: 'people',
+        label: 'My Budees',
+        path: '/people',
+        icon: <Users className="w-5 h-5" />
+      });
+    }
+    return items;
+  }, [userProfile?.settings?.usePeoplePage]);
+
+  useEffect(() => {
+    let initialPrefs = null;
+
+    // Priority: 1. Supabase profile, 2. localStorage (fallback), 3. Default
+    if (userProfile?.nav_preferences && Array.isArray(userProfile.nav_preferences)) {
+      console.log('[App] Loading nav preferences from Supabase profile.');
+      initialPrefs = userProfile.nav_preferences;
+    } else {
+      const localData = localStorage.getItem('nav_preferences');
+      if (localData) {
+        try {
+          console.log('[App] Loading nav preferences from localStorage (fallback).');
+          initialPrefs = JSON.parse(localData);
+        } catch (e) {
+          console.error('Failed to parse nav preferences from localStorage', e);
+        }
+      }
+    }
+
+    if (!initialPrefs || !Array.isArray(initialPrefs)) {
+      console.log('[App] Setting default nav preferences.');
+      initialPrefs = effectiveNavItems.map(item => ({ id: item.id, visible: true }));
+    }
+
+    // Merge with hardcoded effectiveNavItems to include any new items from constants.ts
+    const currentNavIds = new Set(initialPrefs.map((p: any) => p.id));
+    const newItems = effectiveNavItems.filter(n => !currentNavIds.has(n.id)).map(n => ({ id: n.id, visible: true }));
+    const combinedPrefs = [...initialPrefs, ...newItems].filter(p => effectiveNavItems.some(n => n.id === p.id));
+    setNavPreferences(combinedPrefs);
+  }, [userProfile, effectiveNavItems]);
+
+  // Theme Initialization and Synchronization
+  useEffect(() => {
+    const localTheme = localStorage.getItem('theme');
+    if (localTheme === 'dark' || localTheme === 'light') {
+      return; // Keep the locally chosen theme if the user already selected one.
+    }
+
+    if (userProfile?.theme === 'dark' || userProfile?.theme === 'light') {
+      setTheme(userProfile.theme);
+    }
+  }, [userProfile]);
+
+  useEffect(() => {
+    if (theme === 'dark') {
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+    }
+  }, [theme]);
+
+  const { isTestMode, setTestMode } = useTestEnvironment();
+  
+  // Security fallback: Ensure non-admin users cannot be in test mode
+  useEffect(() => {
+    if (userProfile && (userProfile as any).role !== 'admin' && isTestMode) {
+      console.log('[App] Non-admin user detected in test mode. Disabling test mode.');
+      setTestMode(false);
+    }
+  }, [userProfile, isTestMode, setTestMode]);
+
+  // Wallet state is managed internally by WalletsPage and WalletView (they fetch their own data)
+  
+  // Load all data from Supabase on component mount
+  useEffect(() => {
+    const fetchBillers = async () => {
+      setBillersLoading(true);
+      setBillersError(null);
+      
+      const { data, error } = await getAllBillersFrontend();
+      
+      if (error) {
+        console.error('Error loading billers:', error);
+        setBillersError('Failed to load billers from database');
+        setBillers([]);
+      } else {
+        setBillers(data || []);
+      }
+      
+      setBillersLoading(false);
+    };
+
+    const fetchInstallments = async () => {
+      setInstallmentsLoading(true);
+      setInstallmentsError(null);
+      
+      const { data, error } = await getAllInstallmentsFrontend();
+      
+      if (error) {
+        console.error('Error loading installments:', error);
+        setInstallmentsError('Failed to load installments from database');
+        setInstallments([]);
+      } else {
+        setInstallments(data || []);
+      }
+      
+      setInstallmentsLoading(false);
+    };
+
+    const fetchBudgetSetups = async () => {
+      setBudgetSetupsLoading(true);
+      setBudgetSetupsError(null);
+      
+      const { data, error } = await getAllBudgetSetupsFrontend();
+      
+      if (error) {
+        console.error('Error loading budget setups:', error);
+        setBudgetSetupsError('Failed to load budget setups from database');
+        setBudgetSetups([]);
+      } else {
+        setBudgetSetups(data || []);
+      }
+      
+      setBudgetSetupsLoading(false);
+    };
+
+    const fetchAccountsAndSync = async () => {
+      const { data, error } = await getAllAccountsFrontend();
+      if (!error && data) {
+        // Run the bulk sync silently in the background!
+        await bulkSyncCreditStatements(data);
+      }
+    };
+
+    fetchBillers();
+    fetchInstallments();
+    fetchBudgetSetups();
+    fetchAccountsAndSync();
+  }, []);
+
+  // Auto-recalculate account balances whenever accounts or transactions update!
+  {/* TO: */}
+  // Auto-recalculate account balances whenever accounts or transactions update!
+  useEffect(() => {
+    if (rawAccounts.length > 0) {
+      const baseCalculated = recalculateAllAccountBalances(rawAccounts, rawTransactions);
+      
+      // 🟢 FORCE FIX FOR ACCOUNT BALANCES: Ensure the live balance strictly sums ALL transaction types 
+      // by value, bypassing aggressive filters in the base calculator that ignored budget 'payment' types.
+      const properlySyncedAccounts = baseCalculated.map(account => {
+        const rawAccount = rawAccounts.find((r: any) => r.id === account.id);
+        const accountTxs = rawTransactions.filter((tx: any) => tx.payment_method_id === account.id);
+        
+        // Safely grab opening balance from raw data if it exists
+        const startingBalance = Number(rawAccount?.opening_balance || rawAccount?.openingBalance) || 0;
+        {/* TO: */}
+        const isCredit = account.type === 'Credit' || 
+        account.classification === 'Credit Card' || 
+        account.type === 'Loan' || 
+        account.classification === 'Loan' || 
+        account.type === 'Liability';
+
+        
+        const liveBalance = accountTxs.reduce((sum: number, tx: any) => {
+          const amt = Number(tx.amount) || 0;
+          if (isCredit) {
+            // Credit: Positive amounts (expenses) increase debt. Negative amounts (payments) decrease debt.
+            return sum + amt; 
+          } else {
+            // Debit: Positive amounts (expenses) decrease balance. Negative amounts (income) increase balance.
+            return amt < 0 ? sum + Math.abs(amt) : sum - amt;
+          }
+        }, startingBalance);
+        
+        return { ...account, balance: liveBalance };
+      });
+
+      setAccounts(properlySyncedAccounts);
+    } else {
+      setAccounts([]);
+    }
+  }, [rawAccounts, rawTransactions]);
+
+
+  // Setup Wizard Completion Handler
+  const handleCompleteWizard = async (wizardCategories: BudgetCategory[], newAccount: Account | null) => {
+    if (newAccount) {
+      await handleAddAccount(newAccount);
+    }
+    
+    const newSettings = {
+      ...(userProfile?.settings || {}),
+      categories: wizardCategories,
+      setupCompleted: true
+    };
+    
+    try {
+      await updateUserProfile(user.id, { settings: newSettings });
+      setCategories(wizardCategories);
+      setShowWizard(false);
+    } catch (err) {
+      console.error('Failed to complete setup wizard:', err);
+      alert('Failed to save your setup. Please check your connection and try again.');
+    }
+  };
+
+  // Reload functions for each entity
+  const reloadBillers = async () => {
+    const { data, error } = await getAllBillersFrontend();
+    if (error) {
+      console.error('Error reloading billers:', error);
+      setBillersError('Failed to reload billers from database');
+    } else {
+      setBillers(data || []);
+      setBillersError(null);
+    }
+  };
+
+  const reloadAccounts = async () => {
+    await queryClient.invalidateQueries({ queryKey: ['accounts'] });
+  };
+
+  const reloadInstallments = async () => {
+    const { data, error } = await getAllInstallmentsFrontend();
+    if (error) {
+      console.error('Error reloading installments:', error);
+      setInstallmentsError('Failed to reload installments from database');
+    } else {
+      setInstallments(data || []);
+      setInstallmentsError(null);
+    }
+  };
+
+  const reloadBudgetSetups = async () => {
+    const { data, error } = await getAllBudgetSetupsFrontend();
+    if (error) {
+      console.error('Error reloading budget setups:', error);
+      setBudgetSetupsError('Failed to reload budget setups from database');
+    } else {
+      setBudgetSetups(data || []);
+      setBudgetSetupsError(null);
+    }
+  };
+
+  const handleAddBiller = async (newBiller: Biller) => {
+    const { data, error } = await createBillerFrontend(newBiller);
+    if (error) {
+      console.error('Error creating biller:', error);
+      alert('Failed to create biller. Please try again.');
+    } else {
+      // Reload billers to get fresh data from Supabase
+      await reloadBillers();
+    }
+  };
+
+  const handleUpdateBiller = async (updatedBiller: Biller) => {
+    const previousBiller = billers.find(b => b.id === updatedBiller.id);
+    const { data, error } = await updateBillerFrontend(updatedBiller, previousBiller);
+    if (error) {
+      console.error('Error updating biller:', error);
+      alert('Failed to update biller. Please try again.');
+    } else {
+      // Reload billers to get fresh data from Supabase
+      await reloadBillers();
+    }
+  };
+
+  const handleDeleteBiller = async (id: string) => {
+    const { error } = await deleteBillerFrontend(id);
+    if (error) {
+      console.error('Error deleting biller:', error);
+      alert('Failed to delete biller. Please try again.');
+    } else {
+      // Reload billers to get fresh data from Supabase
+      await reloadBillers();
+    }
+  };
+
+  const [people, setPeople] = useState<any[]>([]);
+
+useEffect(() => {
+  const loadPeople = async () => {
+    const { data, error } = await getAllPeople();
+    if (data) setPeople(data);
+  };
+  loadPeople();
+}, []);
+
+
+  // Account handlers
+  const handleAddAccount = async (newAccount: Account) => {
+    const { data, error } = await createAccountFrontend(newAccount);
+    if (error) {
+      console.error('Error creating account:', error);
+      alert('Failed to create account. Please try again.');
+    } else {
+      await reloadAccounts();
+    }
+  };
+
+  const handleEditAccount = async (updatedAccount: Account) => {
+    const { data, error } = await updateAccountFrontend(updatedAccount);
+    if (error) {
+      console.error('Error updating account:', error);
+      alert('Failed to update account. Please try again.');
+    } else {
+      await reloadAccounts();
+    }
+  };
+
+  const handleDeleteAccount = async (id: string) => {
+    const { error } = await deleteAccountFrontend(id);
+    if (error) {
+      console.error('Error deleting account:', error);
+      throw new Error('Failed to delete account due to existing relationships.');
+    } else {
+      await reloadAccounts();
+    }
+  };
+
+  // Installment handlers
+  const handleAddInstallment = async (newInstallment: Installment) => {
+    const { data, error } = await createInstallmentFrontend(newInstallment);
+    if (error) {
+      console.error('Error creating installment:', error);
+      alert('Failed to create installment. Please try again.');
+    } else {
+      await reloadInstallments();
+    }
+  };
+
+  const handleUpdateInstallment = async (updatedInstallment: Installment) => {
+    const { data, error } = await updateInstallmentFrontend(updatedInstallment);
+    if (error) {
+      console.error('Error updating installment:', error);
+      alert('Failed to update installment. Please try again.');
+    } else {
+      await reloadInstallments();
+    }
+  };
+
+  const handleDeleteInstallment = async (id: string) => {
+    const { error } = await deleteInstallmentFrontend(id);
+    if (error) {
+      console.error('Error deleting installment:', error);
+      alert('Failed to delete installment. Please try again.');
+    } else {
+      await reloadInstallments();
+    }
+  };
+
+  /**
+   * Handle installment payment via transaction and payment schedule
+   * This is the new way to record installment payments
+   */
+  const handlePayInstallment = async (
+    installmentId: string,
+    payment: {
+      amount: number;
+      date: string;
+      accountId: string;
+      receipt?: string;
+      receiptFile?: File;
+      scheduleId?: string; // target schedule ID passed from the UI selection
+    }
+  ) => {
+    try {
+      console.log('[App] Processing installment payment with transaction:', {
+        installmentId,
+        amount: payment.amount,
+        date: payment.date,
+        scheduleId: payment.scheduleId,
+      });
+
+      // Find the installment to get its details
+      const installment = installments.find(i => i.id === installmentId);
+      if (!installment) {
+        throw new Error('Installment not found');
+      }
+
+      // Get payment schedules for this installment
+      const { data: schedules, error: schedulesError } = await getPaymentSchedulesBySource('installment', installmentId);
+      
+      if (schedulesError || !schedules) {
+        console.error('Error fetching payment schedules:', schedulesError);
+        throw new Error('Could not find payment schedules for this installment');
+      }
+
+      let targetSchedule;
+
+      // Prefer the schedule ID passed directly from the UI (exact selection by the user)
+      if (payment.scheduleId) {
+        targetSchedule = schedules.find(s => s.id === payment.scheduleId);
+        if (!targetSchedule) {
+          console.warn('[App] Provided scheduleId not found in fetched schedules — falling back to date-based matching', {
+            scheduleId: payment.scheduleId,
+            availableIds: schedules.map(s => s.id),
+          });
+        }
+      }
+
+      // Fallback: try to match by payment date month/year (only for unpaid schedules)
+      // Use en-US locale to match the English month names stored in the DB (e.g. "January")
+      if (!targetSchedule) {
+        const currentMonth = new Date(payment.date).toLocaleString('en-US', { month: 'long' });
+        const currentYear = new Date(payment.date).getFullYear();
+        
+        // First try to find schedule for current month/year
+        targetSchedule = schedules.find(s => 
+          s.month === currentMonth && 
+          s.year === currentYear &&
+          s.status !== 'paid'
+        );
+      }
+
+      // Last resort: find the first unpaid schedule
+      if (!targetSchedule) {
+        targetSchedule = schedules.find(s => s.status === 'pending' || s.status === 'partial');
+      }
+
+      if (!targetSchedule) {
+        throw new Error('No unpaid payment schedule found for this installment');
+      }
+
+      console.log('[App] Found target payment schedule:', {
+        scheduleId: targetSchedule.id,
+        month: targetSchedule.month,
+        year: targetSchedule.year,
+        currentStatus: targetSchedule.status,
+      });
+
+      // Create the transaction FIRST (before marking schedule as paid)
+      let transaction: any = null;
+      let transactionError: any = null;
+      
+      try {
+        const result = await createPaymentScheduleTransaction(
+          targetSchedule.id,
+          {
+            name: `${installment.name} - ${targetSchedule.month} ${targetSchedule.year}`,
+            date: combineDateWithCurrentTime(payment.date),
+            amount: Math.abs(payment.amount),
+            paymentMethodId: payment.accountId,
+            transactionType: 'payment',
+          }
+        );
+        transaction = result.data;
+        transactionError = result.error;
+      } catch (err) {
+        transactionError = err;
+      }
+
+      // If primary transaction creation fails, try fallback without payment_schedule_id
+      if (transactionError || !transaction) {
+        console.error('Error creating transaction with payment_schedule_id:', transactionError);
+        try {
+          const fallbackResult = await createTransaction({
+            name: `${installment.name} - ${targetSchedule.month} ${targetSchedule.year}`,
+            date: combineDateWithCurrentTime(payment.date),
+            amount: payment.amount,
+            payment_method_id: payment.accountId,
+            transaction_type: 'payment',
+            notes: `Installment payment (schedule: ${targetSchedule.id})`,
+            payment_schedule_id: null,
+          });
+          transaction = fallbackResult.data;
+          transactionError = fallbackResult.error;
+        } catch (err) {
+          transactionError = err;
+        }
+      }
+
+      // Only proceed with recording payment if transaction was created successfully
+      if (transactionError || !transaction) {
+        console.error('[App] Transaction creation failed:', transactionError);
+        throw new Error(`Failed to create transaction: ${transactionError?.message || transactionError}`);
+      }
+
+      console.log('[App] Transaction created successfully:', {
+        transactionId: transaction.id,
+        linkedScheduleId: targetSchedule.id,
+      });
+
+      // NOW record the payment on the schedule (after successful transaction creation)
+      const { data: updatedSchedule, error: paymentError } = await recordPayment(targetSchedule.id, {
+        amountPaid: payment.amount,
+        datePaid: payment.date,
+        accountId: payment.accountId,
+        receipt: payment.receipt,
+      });
+
+      if (paymentError || !updatedSchedule) {
+        throw new Error('Failed to record payment on schedule');
+      }
+
+      // Upload receipt to storage if a file was provided
+      if (payment.receiptFile) {
+        const { path, error: uploadError } = await uploadTransactionReceipt(transaction.id, payment.receiptFile);
+        if (uploadError || !path) {
+          console.error('[App] Receipt upload failed for installment payment:', uploadError);
+          alert('Payment saved, but receipt upload failed. You can re-attach it from the transaction details.');
+        } else {
+          await updateTransaction(transaction.id, { receipt_url: path });
+          console.log('[App] Receipt uploaded and linked to installment transaction:', path);
+        }
+      }
+
+      // Update the installment's paidAmount
+      const updatedInstallment: Installment = {
+        ...installment,
+        paidAmount: installment.paidAmount + Math.abs(payment.amount),
+      };
+
+      await updateInstallmentFrontend(updatedInstallment);
+
+      // Reload installments and transactions to get fresh data
+      await reloadInstallments();
+
+      console.log('[App] Installment payment processed successfully');
+    } catch (error) {
+      console.error('[App] Error processing installment payment:', error);
+      throw error; // Re-throw to let the UI handle it
+    }
+  };
+
+  /**
+   * Handle biller payment via transaction and payment schedule
+   * This is the new way to record biller payments
+   */
+  const handlePayBiller = async (
+    billerId: string,
+    payment: {
+      amount: number;
+      date: string;
+      accountId: string;
+      receipt?: string;
+      receiptFile?: File;
+      scheduleId?: string; // target schedule ID passed from the UI selection
+      expectedAmount?: number; // true expected amount when DB expected_amount is 0 (e.g. Loans billers)
+    }
+  ) => {
+    try {
+      console.log('[App] Processing biller payment with transaction:', {
+        billerId,
+        amount: payment.amount,
+        date: payment.date,
+        scheduleId: payment.scheduleId,
+      });
+
+      // Find the biller to get its details
+      const biller = billers.find(b => b.id === billerId);
+      if (!biller) {
+        throw new Error('Biller not found');
+      }
+
+      // Get payment schedules for this biller
+      const { data: schedules, error: schedulesError } = await getPaymentSchedulesBySource('biller', billerId);
+      
+      if (schedulesError || !schedules) {
+        console.error('Error fetching payment schedules:', schedulesError);
+        throw new Error('Could not find payment schedules for this biller');
+      }
+
+      let targetSchedule;
+
+      // Prefer the schedule ID passed directly from the UI (exact selection by the user)
+      if (payment.scheduleId) {
+        targetSchedule = schedules.find(s => s.id === payment.scheduleId);
+        if (!targetSchedule) {
+          console.warn('[App] Provided scheduleId not found in fetched schedules — falling back to date-based matching', {
+            scheduleId: payment.scheduleId,
+            availableIds: schedules.map(s => s.id),
+          });
+        }
+      }
+
+      // Fallback: try to match by payment date month/year (only for unpaid schedules)
+      // Use en-US locale to match the English month names stored in the DB (e.g. "January")
+      if (!targetSchedule) {
+        const currentMonth = new Date(payment.date).toLocaleString('en-US', { month: 'long' });
+        const currentYear = new Date(payment.date).getFullYear();
+        targetSchedule = schedules.find(s => 
+          s.month === currentMonth && 
+          s.year === currentYear &&
+          s.status !== 'paid'
+        );
+      }
+
+      // Last resort: first unpaid or partially paid schedule
+      if (!targetSchedule) {
+        targetSchedule = schedules.find(s => s.status === 'pending' || s.status === 'partial');
+      }
+
+      if (!targetSchedule) {
+        throw new Error('No unpaid payment schedule found for this biller');
+      }
+
+      console.log('[App] Found target payment schedule:', {
+        scheduleId: targetSchedule.id,
+        month: targetSchedule.month,
+        year: targetSchedule.year,
+        currentStatus: targetSchedule.status,
+      });
+
+      // Record the payment on the schedule
+      const { data: updatedSchedule, error: paymentError } = await recordPayment(targetSchedule.id, {
+        amountPaid: payment.amount,
+        datePaid: payment.date,
+        accountId: payment.accountId,
+        receipt: payment.receipt,
+        expectedAmount: payment.expectedAmount,
+      });
+
+      if (paymentError || !updatedSchedule) {
+        throw new Error('Failed to record payment on schedule');
+      }
+
+      // Create the transaction linked to the payment schedule
+      {/* TO: */}
+      const { data: transaction, error: transactionError } = await createPaymentScheduleTransaction(
+        targetSchedule.id,
+        {
+          name: `${biller.name} - ${targetSchedule.month} ${targetSchedule.year}`,
+          date: combineDateWithCurrentTime(payment.date),
+          amount: Math.abs(payment.amount),
+          paymentMethodId: payment.accountId,
+          transaction_type: 'payment',
+        }
+      );
+
+      if (transactionError || !transaction) {
+        console.error('Error creating biller transaction:', transactionError);
+        throw new Error('Failed to create transaction');
+      }
+
+      console.log('[App] Biller transaction created successfully:', transaction.id);
+
+      // Upload receipt to storage if a file was provided
+      if (payment.receiptFile) {
+        const { path, error: uploadError } = await uploadTransactionReceipt(transaction.id, payment.receiptFile);
+        if (uploadError || !path) {
+          console.error('[App] Receipt upload failed for biller payment:', uploadError);
+          alert('Payment saved, but receipt upload failed. You can re-attach it from the transaction details.');
+        } else {
+          await updateTransaction(transaction.id, { receipt_url: path });
+          console.log('[App] Receipt uploaded and linked to biller transaction:', path);
+        }
+      }
+
+      // If this biller is linked to a credit account, record a credit_payment on that account
+      // so the outstanding balance and available credit are updated automatically.
+      {/* TO: */}
+      if (biller.linkedAccountId) {
+        const linkedAccount = accounts.find(a => a.id === biller.linkedAccountId);
+        if (linkedAccount?.type === 'Credit' || linkedAccount?.classification === 'Credit Card' || linkedAccount?.type === 'Loan' || linkedAccount?.classification === 'Loan') {
+
+          const { error: creditTxError } = await createTransaction({
+            name: `${biller.name} - ${targetSchedule.month} ${targetSchedule.year}`,
+            date: combineDateWithCurrentTime(payment.date),
+            amount: -Math.abs(payment.amount), // negative → reduces outstanding balance
+            payment_method_id: biller.linkedAccountId,
+            transaction_type: 'credit_payment',
+            notes: null,
+            payment_schedule_id: null,
+            related_transaction_id: transaction.id,
+          });
+          if (creditTxError) {
+            console.error('[App] Failed to create credit account payment transaction:', creditTxError);
+          } else {
+            console.log('[App] Credit account payment transaction created for linked account:', biller.linkedAccountId);
+          }
+        }
+      }
+
+      // Update biller's payment tracking in the old schedules array (for backward compatibility)
+      // This updates the biller object stored in the billers table
+      const updatedBiller = {
+        ...biller,
+        schedules: biller.schedules.map(s => {
+          if (s.month === targetSchedule.month && s.year === targetSchedule.year) {
+            return {
+              ...s,
+              amountPaid: payment.amount,
+              datePaid: payment.date,
+              accountId: payment.accountId,
+              receipt: payment.receipt,
+            };
+          }
+          return s;
+        }),
+      };
+
+      await handleUpdateBiller(updatedBiller);
+
+      // ==========================================
+      // 🟢 BUDEE SPLIT ENGINE: AUTOMATIC DEBT GENERATION
+      // ==========================================
+      if (biller.shared_budee_id) {
+        let budeeShare = 0;
+        
+        // 1. Calculate how much the Budee owes based on the configuration
+        if (biller.split_type === 'percentage' && biller.split_value) {
+          budeeShare = payment.amount * (biller.split_value / 100);
+        } else if (biller.split_type === 'exact_amount' && biller.split_value) {
+          budeeShare = biller.split_value;
+        }
+
+        // 2. If they owe a piece of this, generate the collection item!
+        if (budeeShare > 0) {
+          console.log(`[App] Shared bill paid! Generating ${budeeShare} collection for Budee ${biller.shared_budee_id}`);
+          
+          // Format the date to push the due date to their timeline
+          const today = new Date();
+          const yyyy = today.getFullYear();
+          const mm = String(today.getMonth() + 1).padStart(2, '0');
+          const dd = String(today.getDate()).padStart(2, '0');
+          
+          await handleAddInstallment({
+            id: '', // Will be generated by Supabase
+            name: `${biller.name} Share (${targetSchedule.month})`,
+            totalAmount: budeeShare,
+            monthlyAmount: budeeShare,
+            termDuration: '1', // Single payment collection
+            paidAmount: 0,
+            accountId: payment.accountId, // Reimburses to the account you used to pay the bill
+            debtor_friend_id: biller.shared_budee_id, // Tags it as money owed TO you
+            startDate: `${yyyy}-${mm}-${dd}`,
+            isArchived: false,
+            dueDate: biller.dueDate // Inherits the bill's original due date
+          } as Installment);
+          
+          // Refresh the installments list so it pops up on the UI instantly
+          await reloadInstallments();
+        }
+      }
+      // ==========================================
+
+
+      console.log('[App] Payment processed successfully, reloading billers and transactions');
+      await reloadBillers();
+    } catch (err) {
+      console.error('[App] Error processing biller payment:', err);
+      throw err;
+    }
+  };
+
+  /**
+   * Handle transaction deletion with payment schedule reversion
+   * This triggers a reload of accounts, installments and transactions to reflect status changes in UI
+   */
+  const handleTransactionDeleted = async () => {
+    console.log('[App] Transaction deleted, reloading accounts and installments to reflect changes');
+    await reloadAccounts(); // Reload accounts to recalculate balances
+    await reloadInstallments();
+  };
+
+  /**
+   * Handle transaction creation
+   * This triggers a reload of accounts to recalculate balances
+   */
+  const handleTransactionCreated = async () => {
+    console.log('[App] Transaction created, reloading accounts to recalculate balances');
+    await reloadAccounts(); // Reload accounts to recalculate balances
+  };
+
+
+  const handleResetAll = () => {
+    const confirmation = window.confirm(
+      "WARNING: This will permanently clear all your accounts, budget history, billers, installments, savings jars, and trash. This action cannot be undone. Do you want to proceed?"
+    );
+    if (confirmation) {
+      setAccounts([]);
+      setBudgetItems([]);
+      setBillers([]);
+      setInstallments([]);
+      setBudgetSetups([]);
+    }
+  };
+
+  const handleSaveNavPreferences = async () => {
+    setNavPreferences(tempNavPrefs);
+    setShowNavEditModal(false);
+
+    // Save to Supabase profile
+    const { error } = await supabase
+      .from('user_profiles')
+      .update({ nav_preferences: tempNavPrefs })
+      .eq('user_id', user.id);
+
+    if (error) {
+      console.error("Failed to save nav preferences to Supabase:", error);
+      // Fallback to localStorage if Supabase fails, so user doesn't lose settings on this device
+      alert('Could not save your navigation settings to the cloud. They will be saved on this device only for now.');
+      localStorage.setItem('nav_preferences', JSON.stringify(tempNavPrefs));
+    } else {
+      // On successful save to Supabase, remove the old localStorage value
+      localStorage.removeItem('nav_preferences');
+      console.log("Nav preferences saved to Supabase profile.");
+    }
+  };
+
+  const handleMoveNavUp = (index: number) => {
+    if (index === 0) return;
+    const newPrefs = [...tempNavPrefs];
+    [newPrefs[index - 1], newPrefs[index]] = [newPrefs[index], newPrefs[index - 1]];
+    setTempNavPrefs(newPrefs);
+  };
+
+  const handleMoveNavDown = (index: number) => {
+    if (index === tempNavPrefs.length - 1) return;
+    const newPrefs = [...tempNavPrefs];
+    [newPrefs[index], newPrefs[index + 1]] = [newPrefs[index + 1], newPrefs[index]];
+    setTempNavPrefs(newPrefs);
+  };
+
+  const handleToggleNavVisibility = (id: string) => {
+    setTempNavPrefs(tempNavPrefs.map(pref => 
+      pref.id === id ? { ...pref, visible: !pref.visible } : pref
+    ));
+  };
+
+  const handleToggleTheme = async () => {
+    const newTheme = theme === 'light' ? 'dark' : 'light';
+    setTheme(newTheme);
+    localStorage.setItem('theme', newTheme);
+
+    if (user?.id) {
+      const { data, error } = await updateUserProfile(user.id, { theme: newTheme });
+      if (error) {
+        console.error('Failed to save theme to Supabase:', error);
+      } else if (data) {
+        // Keep the authenticated profile state in sync with the new theme
+        await refreshProfile();
+      }
+    }
+  };
+
+  const totalAlerts = unreadMessagesCount + (pendingRequests?.length || 0) + (pendingTransactions?.length || 0);
+
+  if (showSplash) {
+    return (
+
+      <div className="fixed inset-0 z-[9999] flex flex-col items-center justify-center bg-[#FCF6E8] dark:bg-gray-950 transition-colors duration-500">
+        <style>
+          {`@import url('https://fonts.googleapis.com/css2?family=Titan+One&display=swap');
+          .font-titan { font-family: 'Titan One', cursive; font-weight: 400; letter-spacing: 1px; }
+          .font-brand { font-family: 'Titan One', cursive; }
+          @keyframes squeeze-mascot {
+            0% { transform: translateY(16px) rotate(15deg); }
+            5% { transform: translateY(16px) rotate(15deg); }
+            30% { transform: translateY(0) rotate(15deg); }
+            38% { transform: translateY(0) rotate(15deg); }
+            55% { transform: translateY(0) translateX(12px) rotate(22deg) scale(0.92); }
+            72% { transform: translateY(0) translateX(12px) rotate(22deg) scale(0.92); }
+            100% { transform: translateY(0) translateX(0) rotate(15deg) scale(1); }
+          }
+          .animate-squeeze-mascot {
+            animation: squeeze-mascot 1.8s ease-in-out forwards;
+          }
+          @keyframes flicker {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.6; }
+          }
+          .animate-flicker {
+            animation: flicker 1.5s ease-in-out infinite;
+          }`}
+        </style>
+        <div className="text-center animate-in fade-in zoom-in duration-700">
+          <div className="flex flex-row flex-nowrap justify-center items-center mb-6 active:scale-95 transition-transform">
+            <div className="mt-2 md:mt-4">
+              <Logo className="text-6xl md:text-8xl text-gray-900 dark:text-white transition-colors duration-500" />
+            </div>
+          </div>
+
+          <p
+            style={{ fontFamily: "'Inter', sans-serif", fontWeight: 900 }}
+            className="text-sm md:text-base font-black uppercase text-gray-600 dark:text-gray-400 tracking-widest animate-flicker transition-colors duration-500"
+          >
+            GETTING YOUR BUDGET READY...
+          </p>
+
+        </div>
+      </div>
+    );
+  }
+
+
+
+  return (
+    <>
+        {showWizard && <SetupWizard onComplete={handleCompleteWizard} />}
+        <style>
+          {`@import url('https://fonts.googleapis.com/css2?family=Titan+One&display=swap');
+          .font-titan { font-family: 'Titan One', cursive; font-weight: 400; letter-spacing: 1px; }
+          
+          @keyframes ring {
+            0% { transform: rotate(0); }
+            5% { transform: rotate(15deg); }
+            10% { transform: rotate(-10deg); }
+            15% { transform: rotate(15deg); }
+            20% { transform: rotate(-10deg); }
+            25% { transform: rotate(0); }
+            100% { transform: rotate(0); }
+          }
+          .animate-ring { animation: ring 2s ease-in-out infinite; }
+          
+          @keyframes mitosis {
+            0% { gap: 0.5rem; padding-left: 1rem; padding-right: 1rem; }
+            50% { gap: 1rem; padding-left: 1.5rem; padding-right: 1.5rem; }
+            100% { gap: 1.5rem; padding-left: 1rem; padding-right: 1rem; }
+          }
+          .animate-mitosis {
+            animation: mitosis 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+          }`}
+        </style>
+
+        <div className="flex h-[100dvh] bg-[#FCF6E8] dark:bg-gray-950 w-full overflow-hidden fixed inset-0 transition-colors duration-200">
+
+							
+                				{isSidebarOpen && isMobile && (
+        <div
+          className="fixed inset-0 bg-black/50 z-40 md:hidden"
+          onClick={() => setIsSidebarOpen(false)}
+        />
+      )}
+      
+                {/* 🟢 MASTER SIDEBAR WRAPPER */}
+        {/* 🟢 MASTER SIDEBAR WRAPPER */}
+        <div className={`fixed top-4 bottom-4 left-4 z-50 flex-col gap-3 transition-all duration-300 ease-in-out hidden lg:flex portrait:!hidden ${isSidebarOpen ? 'w-52' : 'w-20'}`}>
+
+
+          
+                                        {/* 1. DETACHED LOGO PILL */}
+          <div 
+            onClick={() => !isSidebarOpen && setIsSidebarOpen(true)}
+            className="shrink-0 flex items-center justify-center h-16 bg-[#FCF6E8] dark:bg-gray-900 border-[4px] border-black rounded-[1.5rem] shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] cursor-pointer active:scale-95 transition-all z-50 px-3 md:px-4"
+            title={!isSidebarOpen ? "Expand Menu" : ""}
+          >
+            {!isSidebarOpen ? (
+              <img 
+                src="/iconapp.png" 
+                alt="Budee Mascot" 
+                className="w-10 h-10 shrink-0 drop-shadow-md transition-all duration-300 hover:scale-110" 
+              />
+            ) : (
+              <div className="mt-1 shrink min-w-0 flex items-center justify-center">
+                <Logo className="text-3xl md:text-4xl whitespace-nowrap" />
+              </div>
+            )}
+          </div>
+
+          {/* 2. DETACHED NAVIGATION DRAWER */}
+          <aside className="flex-1 min-h-0 hidden lg:flex flex-col bg-[#FCF6E8] dark:bg-gray-900 border-[4px] border-black rounded-[1.5rem] shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] overscroll-none relative overflow-visible">
+
+            {/* 🟢 TOP SECTION: User, Alerts, People */}
+            <div className="shrink-0 p-2.5 space-y-1 border-b-[4px] border-black bg-transparent dark:bg-gray-800 rounded-t-[1.2rem] z-50">
+
+              
+              {/* Profile Dropdown */}
+              <div className="relative">
+                <button 
+                  onClick={() => setIsUserMenuOpen(!isUserMenuOpen)}
+                  className="w-full flex items-center p-2 rounded-xl transition-colors  hover:bg-amber-500/10 dark:hover:bg-amber-500/20 group"
+                >
+                  <div className={`shrink-0 w-9 h-9 rounded-xl border-2 border-black ${getAccentClasses('bg')} flex items-center justify-center text-white font-black text-sm transition-transform group-hover:scale-110 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]`}>
+                    {userProfile ? `${userProfile.first_name.charAt(0)}${userProfile.last_name.charAt(0)}`.toUpperCase() : user?.email?.charAt(0).toUpperCase() || 'U'}
+                  </div>
+                  {isSidebarOpen && (
+                    <div className="ml-2.5 flex-1 flex justify-between items-center min-w-0">
+                      <span className="font-bold text-sm text-gray-900 dark:text-white truncate">
+                        {userProfile ? userProfile.first_name : (user?.email?.split('@')[0] || 'User')}
+                      </span>
+                      <ChevronDown className={`w-4 h-4 shrink-0 text-gray-500 transition-transform ${isUserMenuOpen ? 'rotate-180' : ''}`} />
+                    </div>
+                  )}
+                </button>
+
+                {/* USER MENU MODAL */}
+                {isUserMenuOpen && (
+                  <>
+                    <div className="fixed inset-0 z-[40]" onClick={() => setIsUserMenuOpen(false)}></div>
+                    <div className="absolute left-full top-0 ml-4 w-56 bg-white dark:bg-gray-900 rounded-[1.5rem] border-[4px] border-black shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] py-2 z-[50] animate-in slide-in-from-left-2">
+                      <div className="px-4 py-3 border-b-[3px] border-black mb-2">
+                        <p className="text-sm font-black text-gray-900 dark:text-gray-100 uppercase tracking-tight truncate">
+                          {userProfile ? `${userProfile.first_name} ${userProfile.last_name}` : 'User'}
+                        </p>
+                        <p className="text-[10px] font-bold text-gray-500 dark:text-gray-400 truncate">{user?.email}</p>
+                      </div>
+                      {isPinEnabled() && (
+                        <button onClick={() => { setIsUserMenuOpen(false); triggerStandbyLock(); }} className="w-full flex items-center space-x-3 py-2.5 px-4 text-sm font-black text-gray-700 dark:text-gray-300 hover:bg-amber-500/10 dark:hover:bg-amber-500/20 transition-colors uppercase tracking-widest">
+                          <Lock className="w-4 h-4" /><span>Lock App</span>
+                        </button>
+                      )}
+                      <button onClick={async () => { try { setIsUserMenuOpen(false); await signOut(); } catch (error) { console.error('Logout error:', error); } }} className="w-full flex items-center space-x-3 py-2.5 px-4 text-sm font-black text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors uppercase tracking-widest">
+                        <LogOut className="w-4 h-4" /><span>Logout</span>
+                      </button>
+                    </div>
+                  </>
+                )}
+              </div>
+
+              {/* Messages */}
+              <div className="relative">
+                <button 
+                  onClick={() => setIsMessagesOpen(!isMessagesOpen)}
+                  className="w-full flex items-center p-2 rounded-xl transition-colors hover:bg-amber-500/10 dark:hover:bg-amber-500/20 group"
+                >
+                  <div className={`shrink-0 w-9 h-9 rounded-xl border-2 border-black bg-white dark:bg-gray-800 flex items-center justify-center transition-transform group-hover:scale-110 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] ${unreadMessagesCount > 0 && !isMessagesOpen ? 'animate-ring' : ''}`}>
+                    <MessageCircle className="w-5 h-5 text-gray-900 dark:text-gray-100" />
+                    {unreadMessagesCount > 0 && !isMessagesOpen && (
+                      <span className="absolute -top-1 -right-1 flex items-center justify-center min-w-[18px] h-[18px] px-1 bg-yellow-300 text-black text-[9px] font-black border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] z-10">
+                        {unreadMessagesCount > 99 ? '99+' : unreadMessagesCount}
+                      </span>
+                    )}
+                  </div>
+                  {isSidebarOpen && <span className="ml-2.5 font-bold text-sm text-gray-700 dark:text-gray-300 group-hover:text-gray-900 dark:group-hover:text-white transition-colors">Messages</span>}
+                </button>
+              </div>
+
+              {/* Notifications */}
+              <div className="relative">
+                <button 
+                  onClick={() => setIsNotificationsOpen(!isNotificationsOpen)}
+                  className="w-full flex items-center p-2 rounded-xl transition-colors hover:bg-amber-500/10 dark:hover:bg-amber-500/20 group"
+                >
+                  <div className="shrink-0 w-9 h-9 rounded-xl border-2 border-black bg-white dark:bg-gray-800 flex items-center justify-center transition-transform group-hover:scale-110 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]">
+                    <Bell className="w-5 h-5 text-gray-900 dark:text-gray-100" />
+                    {((pendingRequests?.length || 0) + (pendingTransactions?.length || 0)) > 0 && (
+                      <span className="absolute -top-1 -right-1 w-3 h-3 bg-yellow-300 border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] z-10"></span>
+                    )}
+                  </div>
+                  {isSidebarOpen && <span className="ml-2.5 font-bold text-sm text-gray-700 dark:text-gray-300 group-hover:text-gray-900 dark:group-hover:text-white transition-colors">Notifications</span>}
+                </button>
+
+                {/* NOTIFICATIONS MODAL */}
+                {isNotificationsOpen && (
+                  <>
+                    <div className="fixed inset-0 z-[40]" onClick={() => setIsNotificationsOpen(false)}></div>
+                    <div className="absolute left-full top-0 ml-4 w-80 bg-white dark:bg-gray-900 rounded-[1.5rem] border-[4px] border-black shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] py-2 z-[50] animate-in slide-in-from-left-2">
+                      <div className="px-4 py-3 border-b-[3px] border-black flex justify-between items-center">
+                        <h3 className="text-sm font-black text-gray-900 dark:text-gray-100 uppercase tracking-widest">Notifications</h3>
+                        {((pendingRequests?.length || 0) + (pendingTransactions?.length || 0)) > 0 && (
+                          <span className={`${getAccentClasses('lightBg')} text-[10px] font-bold px-2 py-0.5 rounded-full border-2 border-black`}>
+                            {(pendingRequests?.length || 0) + (pendingTransactions?.length || 0)} New
+                          </span>
+                        )}
+                      </div>
+                      <div className="max-h-[60vh] overflow-y-auto">
+                        {((pendingRequests?.length || 0) + (pendingTransactions?.length || 0)) > 0 ? (
+                          <>
+                            {pendingRequests.map(req => (
+                            <div key={req.id} className="p-4 border-b-2 border-gray-100 dark:border-gray-800 last:border-0 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
+                              <div className="flex items-center gap-3 mb-3">
+                                <div className="w-10 h-10 rounded-full bg-indigo-100 dark:bg-indigo-900/50 text-indigo-600 dark:text-indigo-400 font-black flex items-center justify-center uppercase shrink-0 border-2 border-black">
+                                  {(req.sender_profile?.first_name?.charAt(0) || '') + (req.sender_profile?.last_name?.charAt(0) || '') || '?'}
+                                </div>
+                                <div>
+                                  <p className="text-sm font-bold text-gray-900 dark:text-gray-100">{req.sender_profile?.first_name} {req.sender_profile?.last_name}</p>
+                                  <p className="text-xs text-gray-500 font-medium">sent a Connect Request</p>
+                                </div>
+                              </div>
+                              <div className="flex gap-2">
+                                <button onClick={() => handleAcceptRequest(req.id)} className={`flex-1 text-white py-2 rounded-xl text-xs font-black uppercase tracking-widest border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:translate-x-[1px] hover:translate-y-[1px] hover:shadow-none transition-all ${getAccentClasses('bg')}`}>Accept</button>
+                                <button onClick={() => handleDeclineRequest(req.id)} className="flex-1 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 py-2 rounded-xl text-xs font-black uppercase tracking-widest border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:translate-x-[1px] hover:translate-y-[1px] hover:shadow-none transition-all">Decline</button>
+                              </div>
+                            </div>
+                            ))}
+                            {pendingTransactions.map(tx => {
+                              const senderName = tx.sender_profile ? `${tx.sender_profile.first_name} ${tx.sender_profile.last_name}` : 'A Budee';
+                              const formatCurrency = (val: number) => new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP', minimumFractionDigits: 2 }).format(val);
+                              const needsAccount = !userProfile?.settings?.defaultReceiveAccountId;
+                              return (
+                                <div key={tx.id} className="p-4 border-b-2 border-gray-100 dark:border-gray-800 last:border-0 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
+                                  <div className="flex items-center gap-3 mb-3">
+                                    <div className="w-10 h-10 rounded-full bg-green-100 dark:bg-green-900/50 text-green-600 dark:text-green-400 font-black flex items-center justify-center uppercase shrink-0 border-2 border-black">
+                                      {tx.sender_profile?.first_name?.charAt(0) || 'B'}{tx.sender_profile?.last_name?.charAt(0) || ''}
+                                    </div>
+                                    <div>
+                                      <p className="text-sm font-bold text-gray-900 dark:text-gray-100">{senderName}</p>
+                                      <p className="text-xs text-gray-500 font-medium">sent you {formatCurrency(tx.amount)}</p>
+                                    </div>
+                                  </div>
+                                  {needsAccount && (
+                                    <div className="mb-3">
+                                      <select 
+                                        className="w-full text-xs p-2 rounded-xl bg-gray-50 dark:bg-gray-800 border-2 border-black outline-none font-bold text-gray-700 dark:text-gray-300"
+                                        value={txAccountSelections[tx.id] || ''}
+                                        onChange={e => setTxAccountSelections(prev => ({...prev, [tx.id]: e.target.value}))}
+                                      >
+                                        <option value="">Select deposit account...</option>
+                                        {accounts.filter(a => a.type === 'Debit').map(a => (
+                                          <option key={a.id} value={a.id}>{a.bank}</option>
+                                        ))}
+                                      </select>
+                                    </div>
+                                  )}
+                                  <div className="flex gap-2">
+                                    <button onClick={() => handleResolveTransaction(tx.id, 'accept')} disabled={resolvingIds.has(tx.id)} className="flex-1 bg-green-400 text-black py-2 rounded-xl text-xs font-black uppercase tracking-widest border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:translate-x-[1px] hover:translate-y-[1px] hover:shadow-none transition-all disabled:opacity-50">
+                                      {resolvingIds.has(tx.id) ? '...' : 'Accept'}
+                                    </button>
+                                    <button onClick={() => handleResolveTransaction(tx.id, 'decline')} disabled={resolvingIds.has(tx.id)} className="flex-1 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 py-2 rounded-xl text-xs font-black uppercase tracking-widest border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:translate-x-[1px] hover:translate-y-[1px] hover:shadow-none transition-all disabled:opacity-50">
+                                      {resolvingIds.has(tx.id) ? '...' : 'Decline'}
+                                    </button>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </>
+                        ) : (
+                          <div className="p-8 flex flex-col items-center justify-center text-center">
+                            <div className="w-12 h-12 bg-white dark:bg-gray-800 border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] rounded-full flex items-center justify-center mb-3">
+                              <Bell className="w-6 h-6 text-gray-300 dark:text-gray-600" />
+                            </div>
+                            <p className="text-sm font-black text-gray-900 dark:text-gray-100 uppercase tracking-widest mb-1">All caught up!</p>
+                            <p className="text-xs font-medium text-gray-500">No new notifications.</p>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </>
+                )}
+              </div>
+
+              {/* People Nav Item (Moved to top group) */}
+              {(() => {
+                const item = effectiveNavItems.find(n => n.id === 'people');
+                const pref = navPreferences.find(p => p.id === 'people');
+                if (!item || (pref && !pref.visible)) return null;
+                return (
+                  <NavLink
+                    to={item.path}
+                    onClick={() => { if (isMobile) setIsSidebarOpen(false); }}
+                    className={({ isActive }) => `w-full flex items-center p-2 rounded-xl transition-colors group ${isActive ? 'bg-black/5 dark:bg-white/5' : 'hover:bg-amber-500/10 dark:hover:bg-amber-500/20'}`}
+                  >
+                    {({ isActive }) => (
+                      <>
+                        <div className={`shrink-0 w-9 h-9 rounded-xl border-2 border-black flex items-center justify-center transition-transform group-hover:scale-110 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] ${isActive ? `${getAccentClasses('bg')} text-white` : 'bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100'}`}>
+                          {item.icon}
+                        </div>
+                        {isSidebarOpen && <span className={`ml-2.5 font-bold text-sm transition-colors ${isActive ? 'text-gray-900 dark:text-white' : 'text-gray-700 dark:text-gray-300 group-hover:text-gray-900 dark:group-hover:text-white'}`}>{item.label}</span>}
+                      </>
+                    )}
+                  </NavLink>
+                );
+              })()}
+
+            </div>
+
+                        {/* 🟢 MAIN NAVIGATION */}
+<nav className="flex-1 min-h-0 px-2.5 py-3 space-y-1 overflow-y-auto">
+
+              
+              {/* CORE DASHBOARD GROUP */}
+              {navPreferences.filter(pref => pref.visible).map((pref) => {
+                const item = effectiveNavItems.find(n => n.id === pref.id);
+                if (!item) return null;
+                
+                // Skip items that belong in Trackers, People, or Settings
+                if (['/billers', '/installments', '/wallets', '/people', '/settings'].includes(item.path)) return null;
+
+                return (
+                  <NavLink
+                    key={item.id}
+                    to={item.path}
+                    onClick={() => { if (isMobile) setIsSidebarOpen(false); }}
+                    className={({ isActive }) => `w-full flex items-center p-2 rounded-xl transition-colors group ${isActive ? 'bg-black/5 dark:bg-white/5' : 'text-gray-700 dark:text-gray-300 hover:bg-amber-500/10 dark:hover:bg-amber-500/20/50'}`}
+                    end={item.path === '/'}
+                  >
+                    {({ isActive }) => (
+                      <>
+                        <div className={`shrink-0 w-9 h-9 rounded-xl flex items-center justify-center border-2 border-black transition-all duration-200 z-10 relative ${isSidebarOpen ? '' : 'mx-auto'} ${isActive ? `${getAccentClasses('bg')} text-white shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] -rotate-3` : 'bg-white dark:bg-gray-800 text-gray-400 dark:text-gray-500 shadow-none'} group-hover:rotate-0 group-hover:scale-110 group-hover:shadow-[3px_3px_0px_0px_rgba(0,0,0,1)]`}>
+                          {item.icon}
+                        </div>
+                        {isSidebarOpen && <span className={`ml-2.5 font-bold text-sm transition-colors ${isActive ? 'text-gray-900 dark:text-white' : 'text-gray-600 dark:text-gray-400'}`}>{item.label}</span>}
+                      </>
+                    )}
+                  </NavLink>
+                );
+              })}
+
+              {/* 🟢 TRACKERS ACCORDION */}
+              <div className="pt-2 mt-2 border-t border-gray-200/50 dark:border-gray-800/50">
+                <button
+                  onClick={() => {
+                    setIsTrackersOpen(!isTrackersOpen);
+                    if (!isSidebarOpen) setIsSidebarOpen(true);
+                  }}
+                  className={`w-full flex items-center justify-between p-2 rounded-xl transition-colors group ${isTrackersOpen ? 'bg-black/5 dark:bg-white/5' : 'text-gray-700 dark:text-gray-300 hover:bg-amber-500/10 dark:hover:bg-amber-500/20/50'}`}
+                >
+                  <div className="flex items-center">
+                    <div className={`shrink-0 w-9 h-9 rounded-xl flex items-center justify-center border-2 border-black transition-all duration-200 z-10 relative ${isSidebarOpen ? '' : 'mx-auto'} ${isTrackersOpen ? `${getAccentClasses('bg')} text-white shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] -rotate-3` : 'bg-white dark:bg-gray-800 text-gray-400 dark:text-gray-500 shadow-none'} group-hover:rotate-0 group-hover:scale-110 group-hover:shadow-[3px_3px_0px_0px_rgba(0,0,0,1)]`}>
+                      <ChartPie className="w-5 h-5" />
+                    </div>
+                    {isSidebarOpen && <span className={`ml-2.5 font-bold text-sm transition-colors ${isTrackersOpen ? 'text-gray-900 dark:text-white' : 'text-gray-600 dark:text-gray-400'}`}>Items</span>}
+                  </div>
+                  {isSidebarOpen && <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform ${isTrackersOpen ? 'rotate-180' : ''}`} />}
+                </button>
+                
+                <div className={`overflow-hidden transition-all duration-300 ${isTrackersOpen && isSidebarOpen ? 'max-h-48 opacity-100 mt-1' : 'max-h-0 opacity-0'}`}>
+                  <div className="space-y-1">
+                    {navPreferences.filter(pref => pref.visible).map((pref) => {
+                      const item = effectiveNavItems.find(n => n.id === pref.id);
+                      if (!item) return null;
+                      
+                      // ONLY show specific Tracker paths here
+                      if (!['/billers', '/installments', '/wallets'].includes(item.path)) return null;
+                      
+                      return (
+                        <NavLink
+                          key={item.id}
+                          to={item.path}
+                          onClick={() => { if (isMobile) setIsSidebarOpen(false); }}
+                          className={({ isActive }) => `w-full flex items-center p-2 rounded-xl transition-colors group ${isActive ? 'bg-black/5 dark:bg-white/5' : 'text-gray-700 dark:text-gray-300 hover:bg-amber-500/10 dark:hover:bg-amber-500/20/50'}`}
+                        >
+                          {({ isActive }) => (
+                            <>
+                              <div className={`shrink-0 w-7 h-7 rounded-lg flex items-center justify-center border-2 border-black transition-all duration-200 z-10 relative ${isActive ? `${getAccentClasses('bg')} text-white shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] -rotate-3` : 'bg-white dark:bg-gray-800 text-gray-400 dark:text-gray-500 shadow-none'} group-hover:rotate-0 group-hover:scale-110 group-hover:shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]`}>
+                                {item.icon}
+                              </div>
+                              <span className={`ml-2.5 font-bold text-sm transition-colors ${isActive ? 'text-gray-900 dark:text-white' : 'text-gray-600 dark:text-gray-400'}`}>{item.label}</span>
+                            </>
+                          )}
+                        </NavLink>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+              
+              {/* 🟢 TOOLBOX COLLAPSIBLE */}
+              <div className="pt-2 mt-2 border-t border-gray-200/50 dark:border-gray-800/50">
+                <button
+                  onClick={() => {
+                    setIsToolboxOpen(!isToolboxOpen);
+                    if (!isSidebarOpen) setIsSidebarOpen(true);
+                  }}
+                  className={`w-full flex items-center justify-between p-2 rounded-xl transition-colors group ${isToolboxOpen ? 'bg-black/5 dark:bg-white/5' : 'text-gray-700 dark:text-gray-300 hover:bg-amber-500/10 dark:hover:bg-amber-500/20/50'}`}
+                >
+                  <div className="flex items-center">
+                    <div className={`shrink-0 w-9 h-9 rounded-xl flex items-center justify-center border-2 border-black transition-all duration-200 z-10 relative ${isSidebarOpen ? '' : 'mx-auto'} ${isToolboxOpen ? `${getAccentClasses('bg')} text-white shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] -rotate-3` : 'bg-white dark:bg-gray-800 text-gray-400 dark:text-gray-500 shadow-none'} group-hover:rotate-0 group-hover:scale-110 group-hover:shadow-[3px_3px_0px_0px_rgba(0,0,0,1)]`}>
+                      <ToolCase className="w-5 h-5" />
+                    </div>
+                    {isSidebarOpen && <span className={`ml-2.5 font-bold text-sm transition-colors ${isToolboxOpen ? 'text-gray-900 dark:text-white' : 'text-gray-600 dark:text-gray-400'}`}>Toolbox</span>}
+                  </div>
+
+                  {isSidebarOpen && <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform ${isToolboxOpen ? 'rotate-180' : ''}`} />}
+                </button>
+                
+                <div className={`overflow-hidden transition-all duration-300 ${isToolboxOpen && isSidebarOpen ? 'max-h-40 opacity-100 mt-1' : 'max-h-0 opacity-0'}`}>
+                  <div>
+                    <NavLink
+                      to="/scanner"
+                      onClick={() => { if (isMobile) setIsSidebarOpen(false); }}
+                      className={({ isActive }) => `w-full flex items-center p-2 rounded-xl transition-colors group ${isActive ? 'bg-black/5 dark:bg-white/5' : 'text-gray-700 dark:text-gray-300 hover:bg-amber-500/10 dark:hover:bg-amber-500/20/50'}`}
+                    >
+                      {({ isActive }) => (
+                        <>
+                          <div className={`shrink-0 w-7 h-7 rounded-lg flex items-center justify-center border-2 border-black transition-all duration-200 z-10 relative ${isActive ? `${getAccentClasses('bg')} text-white shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] -rotate-3` : 'bg-white dark:bg-gray-800 text-gray-400 dark:text-gray-500 shadow-none'} group-hover:rotate-0 group-hover:scale-110 group-hover:shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]`}>
+                            <Tag className="w-4 h-4" />
+                          </div>
+                          <span className={`ml-2.5 font-bold text-sm transition-colors ${isActive ? 'text-gray-900 dark:text-white' : 'text-gray-600 dark:text-gray-400'}`}>PriceTag</span>
+                        </>
+                      )}
+                    </NavLink>
+                  </div>
+                </div>
+              </div>
+            </nav>
+
+
+                                 {/* 🟢 BOTTOM SECTION: Settings & Edit Menu */}
+         <div className="relative p-2.5 pt-5 space-y-2 border-t-[4px] border-black bg-transparent dark:bg-gray-800 rounded-b-[1.2rem] shrink-0">
+
+{/* 🟢 FLOATING COLLAPSE/EXPAND BUBBLE ON DIVIDER LINE */}
+<button 
+  onClick={() => setIsSidebarOpen(!isSidebarOpen)}
+  className="absolute -top-5 left-1/2 -translate-x-1/2 z-[60] flex items-center justify-center w-9 h-9 bg-amber-400 border-[3px] border-black rounded-full shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:scale-110 hover:-translate-y-0.5 active:scale-95 transition-all cursor-pointer"
+  title={isSidebarOpen ? "Collapse Menu" : "Expand Menu"}
+>
+  <ChevronLeft className={`w-5 h-5 text-black transition-transform duration-300 ${isSidebarOpen ? '-ml-0.5' : 'rotate-180 -mr-0.5'}`} />
+</button>
+
+{/* Settings Nav Item (Hardcoded to bypass the Edit Menu filter) */}
+
+              <NavLink
+                to="/settings"
+                onClick={() => { if (isMobile) setIsSidebarOpen(false); }}
+                className={({ isActive }) => `w-full flex items-center p-2 rounded-xl transition-colors group ${isActive ? 'bg-black/5 dark:bg-white/5' : 'hover:bg-amber-500/10 dark:hover:bg-amber-500/20'}`}
+              >
+                {({ isActive }) => (
+                  <>
+                    <div className={`shrink-0 w-9 h-9 rounded-xl border-2 border-black flex items-center justify-center transition-transform group-hover:scale-110 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] ${isSidebarOpen ? '' : 'mx-auto'} ${isActive ? `${getAccentClasses('bg')} text-white` : 'bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100'}`}>
+                      <SlidersHorizontal className="w-5 h-5" />
+                    </div>
+                    {isSidebarOpen && <span className={`ml-2.5 font-bold text-sm transition-colors ${isActive ? 'text-gray-900 dark:text-white' : 'text-gray-700 dark:text-gray-300 group-hover:text-gray-900 dark:group-hover:text-white'}`}>Settings</span>}
+                  </>
+                )}
+              </NavLink>
+
+              {/* Edit Menu */}
+              {isSidebarOpen && (
+                <div className="flex justify-center px-2 pt-1 pb-1">
+                  <button 
+                    onClick={() => { setTempNavPrefs(navPreferences); setShowNavEditModal(true); }} 
+                    className="w-full bg-white dark:bg-gray-900 hover:bg-amber-500/10 dark:hover:bg-amber-500/20 text-gray-600 dark:text-gray-400 border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] active:translate-x-[1px] active:translate-y-[1px] active:shadow-none px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all"
+                  >
+                    Edit Menu
+                  </button>
+                </div>
+              )}
+            </div>
+
+
+          </aside>
+        </div>
+
+        
+
+
+
+
+                         {/* 🟢 ADJUSTED MARGIN TO ACCOMMODATE THE FLOATING SIDEBAR'S SHADOW */}
+        <main className={`flex-1 w-full bg-transparent dark:bg-gray-950 transition-all duration-300 ease-in-out ${isSidebarOpen ? 'lg:ml-[15.5rem]' : 'lg:ml-[6.5rem]'} portrait:!ml-0 h-full flex flex-col overflow-hidden`}>
+
+
+        
+        <TestModeBanner sidebarOpen={isSidebarOpen} />
+
+        {/* Top Navigation Bar - Reactive for Dashboard, Static for others */}
+        
+                                                                {/* 🟢 MOBILE & PORTRAIT TOP HEADER */}
+        <header className="fixed top-4 left-4 right-4 z-[60] flex items-center justify-end lg:hidden portrait:!flex pointer-events-none">
+          
+          {!(
+            (location.pathname === '/budget' && (location.search || '').includes('view=setup')) || 
+            (location.search || '').includes('sandbox')
+          ) ? (
+            /* 1. SHOW PROFILE BUBBLE GLOBALLY */
+            <div className="pointer-events-auto flex items-center animate-in zoom-in fade-in duration-300">
+              <button 
+                onClick={() => setShowRightTray(true)}
+                className={`relative flex items-center justify-center border-[3px] border-black ${getAccentClasses('bg')} text-white font-black text-sm w-12 h-12 rounded-full shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] active:scale-95 active:shadow-none active:translate-y-[2px] transition-all`}
+              >
+                {userProfile ? `${userProfile.first_name.charAt(0)}${userProfile.last_name.charAt(0)}`.toUpperCase() : user?.email?.charAt(0).toUpperCase() || 'U'}
+                {totalAlerts > 0 && (
+                   <span className="absolute -top-1 -right-1 flex items-center justify-center min-w-[18px] h-[18px] px-1 bg-yellow-300 text-black text-[9px] font-black border-2 border-black rounded-full shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] animate-bounce z-10">
+                     {totalAlerts > 99 ? '99+' : totalAlerts}
+                   </span>
+                )}
+              </button>
+            </div>
+          ) : (
+            /* 2. SHOW EMPTY SLOT DURING BUDGET SETUP */
+            <div id="budget-sync-slot" className="pointer-events-auto flex items-center justify-end h-12 w-12"></div>
+          )}
+        </header>
+
+
+
+
+
+
+                          <div 
+          ref={scrollContainerRef}
+          className="w-full flex-1 overflow-auto pt-2 lg:pt-0 portrait:!pt-2 px-4 pb-32 lg:pb-6 portrait:!pb-32 md:px-8" 
+          style={{ WebkitOverflowScrolling: 'touch' }}
+        >
+
+
+
+            <Routes>
+              <Route path="/" element={<Dashboard accounts={accounts} budget={budgetItems} installments={installments} transactions={transactions} budgetSetups={budgetSetups} userProfile={userProfile} theme={theme} />} />
+              <Route path="budget" element={
+                <Budget
+                  items={budgetItems} 
+                  userProfile={userProfile}
+                  accounts={accounts} 
+                  billers={billers}
+                  people={people}
+                  categories={categories}
+                  savedSetups={budgetSetups}
+                  setSavedSetups={setBudgetSetups}
+                  onAdd={(item) => setBudgetItems(prev => [...prev, item])}
+                  onUpdateBiller={handleUpdateBiller}
+                  onUpdateInstallment={handleUpdateInstallment}
+                  installments={installments}
+                  onMoveToTrash={async (setup) => {
+                    // Delete from Supabase
+                    const { error } = await deleteBudgetSetupFrontend(setup.id);
+                    if (error) {
+                      console.error('Error deleting budget setup:', error);
+                      alert('Failed to delete budget setup. Please try again.');
+                    } else {
+                      // Update local state
+                      setBudgetSetups(prev => prev.filter(s => s.id !== setup.id));
+                    }
+                  }}
+                  onReloadSetups={reloadBudgetSetups}
+                  onReloadBillers={reloadBillers}
+                  onTransactionCreated={handleTransactionCreated}
+                  onTransactionDeleted={handleTransactionDeleted}
+                  onArchiveBudget={async (setup) => {
+                    const { data, error } = await archiveBudgetSetup(setup.id);
+                    if (error) {
+                      console.error('Error archiving budget setup:', error);
+                      throw error;
+                    }
+                    if (data) {
+                      setBudgetSetups(prev => prev.map(s => s.id === data.id ? data : s));
+                    }
+                  }}
+                  onReopenBudget={async (setup) => {
+                    const { data, error } = await reopenBudgetSetup(setup.id);
+                    if (error) {
+                      console.error('Error reopening budget setup:', error);
+                      throw error;
+                    }
+                    if (data) {
+                      setBudgetSetups(prev => prev.map(s => s.id === data.id ? data : s));
+                    }
+                  }}
+                />
+              } />
+            <Route path="billers" element={
+                <Billers
+                  billers={billers}
+                  installments={installments}
+                  onAdd={handleAddBiller}
+                  accounts={accounts}
+                  categories={categories}
+                  onUpdate={handleUpdateBiller}
+                  onDelete={handleDeleteBiller}
+                  onPayBiller={handlePayBiller}
+                  loading={billersLoading}
+                  error={billersError}
+                  people={people} // 🟢 ADDED THIS LINE!
+                />
+              } />
+
+              <Route path="installments" element={
+                <Installments
+                  installments={installments}
+                  accounts={accounts}
+                  billers={billers}
+                  people={people}
+                  onAdd={handleAddInstallment}
+                  onUpdate={handleUpdateInstallment}
+                  onDelete={handleDeleteInstallment}
+                  onPayInstallment={handlePayInstallment}
+                  loading={installmentsLoading}
+                  error={installmentsError}
+                />
+              } />
+              <Route path="accounts" element={
+                <Accounts
+                  accounts={accounts}
+                  installments={installments}
+                  transactions={rawTransactions}
+                  onAdd={handleAddAccount}
+                  onEdit={handleEditAccount}
+                  onDelete={handleDeleteAccount}
+                  onDeactivate={async (id, when) => {
+                    const accountToDeactivate = accounts.find(a => a.id === id);
+                    if (accountToDeactivate) {
+                      try {
+                        const isTestMode = localStorage.getItem('test_environment_enabled') === 'true';
+                        const tableName = isTestMode ? 'accounts_test' : 'accounts';
+                        
+                        let updatePayload: any = {};
+                        if (when === 'now') {
+                          updatePayload = { is_active: false };
+                        } else {
+                          updatePayload = { deactivation_date: when };
+                        }
+                        
+                        const { error } = await supabase.from(tableName).update(updatePayload).eq('id', id);
+                        if (error) throw error;
+                        
+                        await reloadAccounts();
+                      } catch (err) {
+                        console.error('Failed to deactivate account:', err);
+                        alert('Failed to deactivate account. Please try again.');
+                      }
+                    }
+                  }}
+                  loading={accountsLoading}
+                  error={accountsError}
+                />
+              } />
+              <Route path="/accounts/view" element={<AccountFilteredTransactions accounts={accounts} onTransactionCreated={reloadAccounts} installments={installments} />} />
+              <Route path="/accounts/statement" element={<StatementPage accounts={accounts} installments={installments} transactions={rawTransactions} onRefreshData={async () => {
+                await Promise.all([refetchTransactions(), reloadInstallments()]);
+              }} />} />
+              <Route path="/wallets" element={<WalletsPage accounts={accounts} />} />
+              <Route path="/wallets/view" element={<WalletView accounts={accounts} />} />
+              <Route path="/settings" element={
+                <SettingsPage 
+                  currency={currency}
+                  setCurrency={setCurrency}
+                  categories={categories}
+                  setCategories={setCategories}
+                  accounts={accounts}
+                  setAccounts={setAccounts}
+                  onResetAll={handleResetAll}
+                  billers={billers}
+                  installments={installments}
+                  onUpdateBiller={handleUpdateBiller}
+                  theme={theme}
+                  onToggleTheme={handleToggleTheme}
+                />
+              } />
+          <Route path="/people" element={<PeoplePage onStartChat={(friendId: string) => {
+            setActiveChatFriendId(friendId);
+            setIsMessagesOpen(true);
+          }} />} />
+              <Route path="/transactions" element={
+                <TransactionsPage 
+                  transactions={transactions}
+                  loading={transactionsLoading}
+                  onTransactionDeleted={handleTransactionDeleted}
+                  onTransactionCreated={handleTransactionCreated}
+                />
+              } />
+              <Route path="/orders" element={<Orders />} />
+              <Route path="/supabase-demo" element={
+                <SupabaseDemo />
+              } />
+              <Route path="/update-password" element={<UpdatePassword />} />
+              <Route path="/scanner" element={<BarcodeScanner />} />
+              {/* Start with Dashboard and redirect anything else unrecognized */}
+              
+              <Route path="*" element={<Navigate to="/" replace />} />
+
+              <Route path="/wishlist" element={<Wishlist />} />
+
+
+
+
+            </Routes>
+          </div>
+        </main>
+      </div>
+
+      {/* Navigation Edit Modal */}
+      {showNavEditModal && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md">
+          <div className="bg-white dark:bg-gray-900 rounded-[2.5rem] w-full max-w-md p-8 shadow-2xl relative flex flex-col max-h-[85vh] animate-in zoom-in-95 transition-colors">
+            <button onClick={() => setShowNavEditModal(false)} className="absolute right-6 top-6 p-2 hover:bg-amber-500/10 dark:hover:bg-amber-500/20 rounded-full transition-colors">
+              <X className="w-5 h-5 text-gray-400 dark:text-gray-500" />
+            </button>
+            <h2 className="text-2xl font-black text-gray-900 dark:text-gray-100 mb-2 uppercase tracking-tight transition-colors">Edit Menu</h2>
+            <p className="text-gray-500 dark:text-gray-400 text-sm mb-6 font-medium transition-colors">Reorder pages or hide the ones you don't use often.</p>
+            
+            <div className="flex-1 overflow-y-auto space-y-2 mb-6 pr-2">
+              {tempNavPrefs.map((pref, idx) => {
+                const item = effectiveNavItems.find(n => n.id === pref.id);
+                if (!item) return null;
+                return (
+                  <div key={pref.id} className={`flex items-center justify-between p-3 rounded-2xl border transition-all ${pref.visible ? 'bg-white dark:bg-gray-900 border-gray-200 dark:border-gray-700' : 'bg-gray-50 dark:bg-gray-800/50 border-transparent opacity-60'}`}>
+                    <div className="flex items-center space-x-3">
+                      <div className={`p-2 rounded-xl ${pref.visible ? 'bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400' : 'bg-gray-200 dark:bg-gray-800 text-gray-500 dark:text-gray-400'}`}>
+                        {item.icon}
+                      </div>
+                      <span className="font-bold text-gray-800 dark:text-gray-200">{item.label}</span>
+                    </div>
+                    <div className="flex items-center space-x-1">
+                      <button onClick={() => handleMoveNavUp(idx)} disabled={idx === 0} className="p-2 text-gray-400 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 rounded-xl disabled:opacity-30 transition-colors"><ArrowUp className="w-4 h-4" /></button>
+                      <button onClick={() => handleMoveNavDown(idx)} disabled={idx === tempNavPrefs.length - 1} className="p-2 text-gray-400 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 rounded-xl disabled:opacity-30 transition-colors"><ArrowDown className="w-4 h-4" /></button>
+                      <div className="w-px h-6 bg-gray-200 dark:bg-gray-700 mx-1"></div>
+                      <button onClick={() => handleToggleNavVisibility(pref.id)} className={`p-2 rounded-xl transition-colors ${pref.visible ? 'text-green-600 dark:text-green-500 hover:bg-green-50 dark:hover:bg-green-900/20' : 'text-gray-400 hover:bg-amber-500/10 dark:hover:bg-amber-500/20'}`}>
+                        {pref.visible ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+            
+            <div className="flex space-x-3 pt-2">
+              <button onClick={() => setShowNavEditModal(false)} className="flex-1 bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 py-4 rounded-2xl font-black uppercase tracking-widest text-[10px] hover:bg-amber-500/10 dark:hover:bg-amber-500/20 transition-colors">Cancel</button>
+              <button onClick={handleSaveNavPreferences} className={`flex-1 text-white py-4 rounded-2xl font-black uppercase tracking-widest text-[10px] transition-colors shadow-xl ${getAccentClasses('bg')} ${getAccentClasses('shadow')}`}>Save Changes</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Messages Inbox Drawer */}
+      <MessagesInbox 
+        isOpen={isMessagesOpen}
+        onClose={() => setIsMessagesOpen(false)}
+        currentUserId={user.id}
+        activeFriendId={activeChatFriendId}
+        onClearActiveChat={() => setActiveChatFriendId(undefined)}
+      />
+      {/* Global Migration Modal */}
+{showMigrationModal && (
+<MigrationModal 
+  installments={filteredInstallments} 
+  onClose={() => setShowMigrationModal(false)}
+  onUpdate={async (id, updateFields) => {
+    // 1. Find the full existing installment object
+    const currentInstallment = installments.find(i => i.id === id);
+    
+    if (currentInstallment) {
+      // 2. Create the full object by merging current data with new update fields
+      const updatedFullInstallment = {
+        ...currentInstallment,
+        ...updateFields
+      };
+      
+      // 3. Now pass the full object to your existing handleUpdateInstallment
+      await handleUpdateInstallment(updatedFullInstallment);
+    }
+  }}
+/>
+)}
+
+                {/* 🟢 MOBILE & PORTRAIT NAVIGATION: Floating Bar & More Tray */}
+      <div className="block lg:hidden portrait:!block">
+  {/* 🟢 BOTTOM BLUR BLANKET */}
+<div 
+id="bottom-blue-blanket"
+className="fixed bottom-0 left-0 w-full h-20 pointer-events-none z-[90] bg-gradient-to-t from-[#FCF6E8] dark:from-gray-950 to-transparent" />
+
+          {/* 🟢 NEW LEFT TRAY (Slide-out Drawer) */}
+          {showLeftTray && (
+            <div 
+              className="fixed inset-0 bg-black/40 backdrop-blur-sm z-[110] animate-in fade-in duration-200"
+              onClick={() => setShowLeftTray(false)} 
+            />
+          )}
+
+          <div 
+            className={`fixed top-0 left-0 bottom-0 w-[80vw] max-w-[300px] z-[120] bg-[#FCF6E8] dark:bg-gray-950 border-r-[4px] border-black transition-transform duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] flex flex-col ${
+              showLeftTray ? 'translate-x-0 shadow-[8px_0px_20px_rgba(0,0,0,0.3)]' : '-translate-x-full'
+            }`}
+          >
+            <div className="p-6 border-b-[4px] border-black flex items-center justify-between bg-white dark:bg-gray-900">
+              <div className="flex items-center gap-3">
+                <img src="/iconapp.png" alt="Budee" className="w-8 h-8" />
+                <Logo className="text-2xl" />
+              </div>
+              <button onClick={() => setShowLeftTray(false)} className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full active:scale-95 transition-all">
+                <X className="w-5 h-5 text-gray-500" />
+              </button>
+            </div>
+
+            <div className="p-4 flex-1 overflow-y-auto space-y-3 pt-6">
+              <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 pl-2">Social & Connections</p>
+              <NavLink to="/people" onClick={() => setShowLeftTray(false)} className={({ isActive }) => `flex items-center gap-3 p-4 rounded-2xl border-[3px] border-black font-black uppercase tracking-wide text-sm transition-all active:translate-x-[2px] active:translate-y-[2px] active:shadow-none ${isActive ? getAccentClasses('bg') + ' text-white shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]' : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:bg-gray-50'}`}>
+                <Users className="w-5 h-5" />
+                My Budees
+              </NavLink>
+            </div>
+          </div>
+
+          {/* 🟢 NEW RIGHT/SOCIAL TRAY (Slide-up Drawer) */}
+          {showRightTray && (
+            <div 
+              className="fixed inset-0 bg-black/40 backdrop-blur-sm z-[110] animate-in fade-in duration-200"
+              onClick={() => setShowRightTray(false)} 
+            />
+          )}
+
+          <div 
+            className={`fixed bottom-0 left-0 right-0 z-[120] bg-[#FCF6E8] dark:bg-gray-950 border-t-[4px] border-black rounded-t-[2.5rem] transition-transform duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] flex flex-col pb-8 ${
+              showRightTray ? 'translate-y-0 shadow-[0px_-8px_20px_rgba(0,0,0,0.15)]' : 'translate-y-full'
+            }`}
+          >
+            <div className="w-full flex justify-center pt-5 pb-3 cursor-pointer" onClick={() => setShowRightTray(false)}>
+              <div className="w-14 h-1.5 bg-gray-300 dark:bg-gray-700 rounded-full" />
+            </div>
+
+            <div className="px-6 pt-2 pb-6 space-y-4">
+              {/* Profile Header */}
+              <div className="bg-white dark:bg-gray-900 border-[3px] border-black rounded-2xl p-4 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] flex items-center justify-between">
+                <div className="min-w-0 pr-4">
+                  <p className="text-lg font-black text-gray-900 dark:text-gray-100 uppercase tracking-tight truncate">
+                    {userProfile ? `${userProfile.first_name} ${userProfile.last_name}` : 'User'}
+                  </p>
+                  <p className="text-[10px] font-bold text-gray-500 dark:text-gray-400 truncate">{user?.email}</p>
+                </div>
+                <button onClick={async () => { setShowRightTray(false); await signOut(); }} className="w-12 h-12 shrink-0 bg-red-100 dark:bg-red-900/30 border-2 border-black rounded-xl flex items-center justify-center text-red-600 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] active:scale-95 active:shadow-none transition-all">
+                  <LogOut className="w-5 h-5" />
+                </button>
+              </div>
+
+              {/* Social Navigation Grid */}
+              <div className="grid grid-cols-3 gap-3">
+                <button onClick={() => { setShowRightTray(false); setIsNotificationsOpen(true); }} className="bg-white dark:bg-gray-900 border-[3px] border-black rounded-2xl p-4 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] flex flex-col items-center justify-center gap-2 active:scale-95 transition-all relative">
+                  <Bell className="w-6 h-6 text-gray-700 dark:text-gray-300" />
+                  <span className="text-[10px] font-black uppercase tracking-widest text-gray-900 dark:text-white">Alerts</span>
+                  {((pendingRequests?.length || 0) + (pendingTransactions?.length || 0)) > 0 && (
+                    <span className="absolute -top-2 -right-2 bg-yellow-300 text-black text-[10px] font-black border-2 border-black px-1.5 py-0.5 rounded-full shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]">
+                      {(pendingRequests?.length || 0) + (pendingTransactions?.length || 0)}
+                    </span>
+                  )}
+                </button>
+
+                <button onClick={() => { setShowRightTray(false); setIsMessagesOpen(true); }} className="bg-white dark:bg-gray-900 border-[3px] border-black rounded-2xl p-4 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] flex flex-col items-center justify-center gap-2 active:scale-95 transition-all relative">
+                  <MessageCircle className="w-6 h-6 text-gray-700 dark:text-gray-300" />
+                  <span className="text-[10px] font-black uppercase tracking-widest text-gray-900 dark:text-white">Chats</span>
+                  {unreadMessagesCount > 0 && (
+                    <span className="absolute -top-2 -right-2 bg-yellow-300 text-black text-[10px] font-black border-2 border-black px-1.5 py-0.5 rounded-full shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]">
+                      {unreadMessagesCount}
+                    </span>
+                  )}
+                </button>
+
+                <NavLink to="/people" onClick={() => setShowRightTray(false)} className={({ isActive }) => `border-[3px] border-black rounded-2xl p-4 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] flex flex-col items-center justify-center gap-2 active:scale-95 transition-all ${isActive ? getAccentClasses('bg') + ' text-white' : 'bg-white dark:bg-gray-900 text-gray-700 dark:text-gray-300'}`}>
+                  <Users className="w-6 h-6" />
+                  <span className="text-[10px] font-black uppercase tracking-widest">Budees</span>
+                </NavLink>
+              </div>
+            </div>
+          </div>
+
+        
+
+
+                    {/* 1. Floating Nav Bar */}
+          <div id="global-nav-bar" className="fixed bottom-6 md:bottom-10 left-0 w-full px-4 z-[100] flex items-center justify-center gap-3 md:gap-5 pointer-events-none">
+                      {/* BACK BUBBLE */}
+                      {(['/accounts/view', '/accounts/statement', '/wallets/view'].includes(location.pathname) || (location.pathname === '/budget' && (location.search || '').includes('view=setup'))) && (
+              <button
+                type="button"
+                onClick={() => {
+                  if (location.pathname === '/budget') {
+                    // Tell the Budget page to auto-save and close!
+                    window.dispatchEvent(new CustomEvent('budget_mobile_back'));
+                  } else {
+                    navigate(-1);
+                  }
+                }}
+                aria-label="Go back"
+                className="pointer-events-auto flex h-14 w-14 md:h-16 md:w-16 shrink-0 items-center justify-center rounded-full border-[3px] md:border-[4px] border-black bg-white text-black shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] transition-transform active:scale-95 dark:bg-gray-900 dark:text-white"
+              >
+                <ChevronLeft className="h-6 w-6 md:h-8 md:w-8" />
+              </button>
+            )}
+
+            {/* MAIN NAVIGATION BAR */}
+            <nav className={`pointer-events-auto flex items-center bg-white dark:bg-gray-900 border-[3px] md:border-[4px] border-black rounded-full px-4 py-2.5 md:px-6 md:py-3.5 shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] md:shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] transition-all duration-300 ${
+              ['/accounts', '/transactions', '/billers', '/installments', '/wallets', '/wishlist'].includes(location.pathname) || (location.pathname === '/budget' && !(location.search || '').includes('view=setup')) ? 'animate-mitosis' : 'gap-2 md:gap-4'
+            }`}>
+              
+              <div className="flex items-center gap-1 md:gap-2">
+                <NavLink to="/" className={({ isActive }) => `p-2.5 md:p-3 rounded-2xl transition-all ${isActive ? getAccentClasses('bg') + ' text-white -rotate-3 border-2 md:border-[3px] border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]' : 'text-gray-500 hover:bg-amber-500/10 dark:hover:bg-amber-500/20'}`}>
+                  <LayoutDashboard className="w-5 h-5 md:w-6 md:h-6" />
+                </NavLink>
+                <NavLink to="/transactions" className={({ isActive }) => `p-2.5 md:p-3 rounded-2xl transition-all ${isActive ? getAccentClasses('bg') + ' text-white -rotate-3 border-2 md:border-[3px] border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]' : 'text-gray-500 hover:bg-amber-500/10 dark:hover:bg-amber-500/20'}`}>
+                  <FileText className="w-5 h-5 md:w-6 md:h-6" />
+                </NavLink>
+              </div>
+
+              {/* FLOATING ACTION BUTTON (+) */}
+              {(['/accounts', '/transactions', '/billers', '/installments', '/wallets', '/wishlist'].includes(location.pathname) || (location.pathname === '/budget' && !(location.search || '').includes('view=setup'))) && (
+                <div id="global-mobile-fab" className="animate-in zoom-in-50 duration-300 px-1 md:px-3 -my-4 md:-my-6 relative z-10">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const eventMap: Record<string, string> = {
+                        '/accounts': 'open_add_account_modal',
+                        '/transactions': 'open_add_transaction_modal',
+                        '/budget': 'open_add_budget_modal',
+                        '/billers': 'open_add_biller_modal',
+                        '/installments': 'open_add_installment_modal',
+                        '/wallets': 'open_add_wallet_modal',
+                        '/wishlist': 'open_add_wishlist_modal' // 🟢 Added this line
+                      };
+
+                      const eventName = eventMap[location.pathname];
+                      if (eventName) {
+                        window.dispatchEvent(new CustomEvent(eventName));
+                      }
+                    }}
+                    className={`flex h-14 w-14 md:h-16 md:w-16 items-center justify-center rounded-full border-[3px] md:border-[4px] border-black text-white shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] transition-transform active:translate-x-[2px] active:translate-y-[2px] active:shadow-none ${getAccentClasses('bg')}`}
+                  >
+                    <Plus className="h-6 w-6 md:h-8 md:w-8" strokeWidth={3} />
+                  </button>
+                </div>
+              )}
+
+              <div className="flex items-center gap-1 md:gap-2">
+                <NavLink to="/budget" className={({ isActive }) => `p-2.5 md:p-3 rounded-2xl transition-all ${isActive ? getAccentClasses('bg') + ' text-white -rotate-3 border-2 md:border-[3px] border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]' : 'text-gray-500 hover:bg-amber-500/10 dark:hover:bg-amber-500/20'}`}>
+                  <PieChart className="w-5 h-5 md:w-6 md:h-6" />
+                </NavLink>
+                <button 
+                  type="button"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    setShowMobileMore(true);
+                  }} 
+                  className={`p-2.5 md:p-3 rounded-2xl transition-all ${['/accounts', '/billers', '/installments', '/wallets', '/people', '/settings'].includes(location.pathname) ? getAccentClasses('bg') + ' text-white -rotate-3 border-2 md:border-[3px] border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]' : 'text-gray-500 hover:bg-amber-500/10 dark:hover:bg-amber-500/20'}`}
+                >
+                  <MoreHorizontal className="w-5 h-5 md:w-6 md:h-6" />
+                </button>
+              </div>
+
+            </nav>
+
+
+          </div>
+
+
+          {/* 2. Mobile "More" Tray */}
+          {showMobileMore && (
+            <div 
+              className="fixed inset-0 bg-black/40 backdrop-blur-sm z-[110] animate-in fade-in duration-200"
+              onClick={() => setShowMobileMore(false)} 
+            />
+          )}
+
+          <div 
+            className={`fixed bottom-0 left-0 right-0 z-[120] bg-white dark:bg-gray-900 border-t-[3px] border-black rounded-t-[2.5rem] transition-transform duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] flex flex-col pb-8 ${
+              showMobileMore ? 'translate-y-0 shadow-[0px_-8px_20px_rgba(0,0,0,0.15)]' : 'translate-y-full'
+            }`}
+          >
+            <div 
+              className="w-full flex justify-center pt-5 pb-3 cursor-pointer" 
+              onClick={() => setShowMobileMore(false)}
+            >
+              <div className="w-14 h-1.5 bg-gray-300 dark:bg-gray-700 rounded-full" />
+            </div>
+
+            <div className="px-6 pb-6 pt-2">
+              <h3 className="text-xl font-black uppercase tracking-tight text-center text-gray-900 dark:text-white mb-6">
+                Other Pages
+              </h3>
+              
+              <div className="grid grid-cols-2 gap-3">
+                                {/* 1. REGULAR PAGES MAP */}
+                                {[
+                  { path: '/accounts', label: 'Accounts', icon: <WalletCards className="w-6 h-6" /> },
+                  { path: '/billers', label: 'Billers', icon: <Receipt className="w-6 h-6" /> },
+                  { path: '/installments', label: 'Installments', icon: <CreditCard className="w-6 h-6" /> },
+                  { path: '/wallets', label: 'Wallets', icon: <Wallet className="w-6 h-6" /> },
+                  { path: '/wishlist', label: 'Wishlist', icon: <HeartPlus className="w-6 h-6" /> }, // 🟢 Added this line
+                  { path: '/settings', label: 'Settings', icon: <SlidersHorizontal className="w-6 h-6" /> },
+                ].map((item) => (
+
+                  <NavLink
+                    key={item.path}
+                    to={item.path}
+                    onClick={() => setShowMobileMore(false)}
+                    className={({ isActive }) => `flex flex-col items-center justify-center p-4 rounded-2xl border-[3px] border-black transition-all active:translate-x-[2px] active:translate-y-[2px] active:shadow-none ${
+                      isActive 
+                        ? getAccentClasses('bg') + ' text-white shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]' 
+                        : 'bg-gray-50 dark:bg-gray-800 text-gray-700 dark:text-gray-300 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]'
+                    }`}
+                  >
+                    <div className="mb-2">{item.icon}</div>
+                    <span className="font-bold text-xs sm:text-sm uppercase tracking-wide">{item.label}</span>
+                  </NavLink>
+                ))}
+
+                {/* 2. THE TOOLBOX TILE (Toggles Accordion) */}
+                <button
+                  onClick={(e) => {
+                    e.preventDefault();
+                    setIsToolboxOpen(!isToolboxOpen);
+                  }}
+                  className={`flex flex-col items-center justify-center p-4 rounded-2xl border-[3px] border-black transition-all active:translate-x-[2px] active:translate-y-[2px] active:shadow-none ${
+                    isToolboxOpen 
+                      ? getAccentClasses('bg') + ' text-white shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]' 
+                      : 'bg-gray-50 dark:bg-gray-800 text-gray-700 dark:text-gray-300 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]'
+                  }`}
+                >
+                  <div className="mb-2"><ToolCase className="w-6 h-6" /></div>
+                  <span className="font-bold text-xs sm:text-sm uppercase tracking-wide">Toolbox</span>
+                </button>
+              </div>
+
+              {/* 3. NESTED TOOLBOX CONTENT (Expands down) */}
+              <div className={`overflow-hidden transition-all duration-300 ${isToolboxOpen ? 'max-h-40 opacity-100 mt-4' : 'max-h-0 opacity-0'}`}>
+                <div className="p-4 bg-gray-100 dark:bg-gray-800 rounded-3xl border-[3px] border-dashed border-gray-300 dark:border-gray-700">
+                  <div className="grid grid-cols-2 gap-3">
+                    <NavLink
+                      to="/scanner"
+                      onClick={() => setShowMobileMore(false)}
+                      className={({ isActive }) => `flex flex-col items-center justify-center p-3 rounded-2xl border-[3px] border-black transition-all active:translate-x-[2px] active:translate-y-[2px] active:shadow-none ${
+                        isActive 
+                          ? getAccentClasses('bg') + ' text-white shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]' 
+                          : 'bg-white dark:bg-gray-900 text-gray-700 dark:text-gray-300 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]'
+                      }`}
+                    >
+                      <Tag className="w-5 h-5 mb-2" />
+                      <span className="font-bold text-xs uppercase tracking-wide">PriceTag</span>
+                    </NavLink>
+                  </div>
+                </div>
+              </div>
+
+            </div>
+
+          </div>
+        </div>
+
+
+
+
+    </>
+  );
+};
+
+
+    
+// Main App component with Auth Provider
+const App: React.FC = () => {
+  return (
+    <QueryClientProvider client={queryClient}>
+      <TestEnvironmentProvider>
+        <AuthProvider>
+          <ThemeProvider>
+            <BrowserRouter>
+              <Routes>
+                <Route path="/auth" element={<Auth />} />
+                <Route path="/auth/confirm" element={<AuthConfirm />} />
+                <Route path="/update-password" element={<UpdatePassword />} />
+                <Route
+                  path="/auth/auth-code-error"
+                  element={
+                    <AuthErrorPage
+                      title="Link Invalid"
+                      message="The password reset link is invalid or has expired. Please try again."
+                    />
+                  }
+                />
+
+                <Route element={<ProtectedRoute />}>
+                  <Route path="/*" element={<MainApp />} />
+                </Route>
+              </Routes>
+            </BrowserRouter>
+          </ThemeProvider>
+        </AuthProvider>
+      </TestEnvironmentProvider>
+    </QueryClientProvider>
+  );
+};
+
+export default App;

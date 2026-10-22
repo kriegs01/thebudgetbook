@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import useMediaQuery from '../src/hooks/useMediaQuery';
-import { Users, Plus, LayoutGrid, List, MoreVertical, Trash2, ArrowRight, ArrowLeft, X, AlertTriangle, User, Landmark, ArrowUpFromLine, ArrowDownToLine, ArrowLeftRight, BanknoteArrowDown, ChevronDown, ChevronUp, Edit2, Search, UserPlus, CheckSquare, Clock, RefreshCw, Check, MessageCircle } from 'lucide-react';
+import { Users, Plus, LayoutGrid, List, MoreVertical, Trash2, ArrowRight, ArrowLeft, X, AlertTriangle, User, Landmark, ArrowUpFromLine, ArrowDownToLine, ArrowLeftRight, BanknoteArrowDown, BadgeCheck, ChevronDown, ChevronUp, Edit2, Search, UserPlus, CheckSquare, Clock, RefreshCw, Check, MessageCircle } from 'lucide-react';
 import { createPerson, deletePerson } from '../src/services/peopleService';
 import { getAllTransactions, createTransaction, deleteTransaction, updateTransaction, getUnsyncedHistoricalTransactionsCount, getUnsyncedHistoricalTransactions, syncSpecificHistoricalTransactions } from '../src/services/transactionsService';
 import { getAllAccountsFrontend } from '../src/services/accountsService';
@@ -13,47 +13,9 @@ import { supabase } from '../src/utils/supabaseClient';
 import { useAuth } from '../src/contexts/AuthContext';
 import { useQueryClient } from '@tanstack/react-query';
 import { useLocalPeople, useFriendships, useBudeeProfiles, socialKeys } from '../src/hooks/useBudies';
+import { PageHeader } from '../src/components/PageHeader';
 
-/** 
- * PageHeader component mirroring Dashboard style
- */
-const PageHeader: React.FC<{ 
-  title: string; 
-  subtitle: string; 
-  icon?: React.ReactNode; 
-  actions?: React.ReactNode;
-  backButton?: React.ReactNode;
-}> = ({ title, subtitle, icon, actions, backButton }) => {
-  const { getAccentClasses } = useTheme();
-  const isMobile = useMediaQuery('(max-width: 767px)');
-  
-  return (
-    <header className={`${isMobile ? 'pt-16' : 'pt-12'} flex flex-row items-center justify-between gap-6 mb-4`}>
-      <div className="flex flex-1 items-center gap-6">
-        {backButton}
-        <div className="flex-1">
-          <div className="relative inline-block">
-            <div className="flex items-center gap-4">
-               {icon && <div className="z-10 shrink-0">{icon}</div>}
-               <h1 className={`text-[clamp(2rem,7.5vw,3.75rem)] font-titan normal-case tracking-tighter leading-none relative z-10 [text-shadow:-1px_-1px_0_#000,1px_-1px_0_#000,-1px_1px_0_#000,1px_1px_0_#000] drop-shadow-[3px_3px_0px_#000] ${icon ? getAccentClasses('text') : 'text-black dark:text-white'}`}>
-                {title}
-              </h1>
-            </div>
-            <div className={`absolute bottom-0 left-0 h-4 ${getAccentClasses('bg')} opacity-40 -z-0 -rotate-1 -translate-x-2 transition-colors duration-300`} style={{ width: `110%` }} />
-          </div>
-          <div className="flex items-center gap-3 mt-1 ml-1">
-            {backButton}
-            <p className="text-[clamp(1rem,3vw,1.25rem)] font-bold italic text-black/50 dark:text-gray-400 transition-colors duration-300">
-              {subtitle}
-            </p>
-          </div>
-          <div className={`h-2 w-32 mt-2 bg-black dark:bg-white/20 transition-colors duration-300`} />
-        </div>
-      </div>
-      {actions && <div className="flex items-center justify-end gap-3">{actions}</div>}
-    </header>
-  );
-};
+
 
 const formatCurrency = (val: number) =>
   new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP', minimumFractionDigits: 2 }).format(val);
@@ -150,7 +112,7 @@ export default function PeoplePage({ onStartChat }: PeoplePageProps) {
       linkedPeople.forEach(p => {
         const prof = friendProfiles.find(lp => lp.user_id === p.friend_user_id);
         if (prof) {
-          const correctName = `${prof.first_name} ${prof.last_name}${prof.username ? ` (@${prof.username})` : ''}`;
+          const correctName = `${prof.first_name} ${prof.last_name}`;
           if (p.name !== correctName) {
             needsUpdate = true;
             const isTestMode = localStorage.getItem('test_environment_enabled') === 'true';
@@ -160,7 +122,7 @@ export default function PeoplePage({ onStartChat }: PeoplePageProps) {
             const txsToUpdate = transactions.filter(t => (t as any).person_name === p.name || t.borrower_name === p.name);
             txsToUpdate.forEach(tx => {
               const updates: any = {};
-              if ((tx as any).person_name === p.name) updates.person_name = correctName;
+              if ((t as any).person_name === p.name) updates.person_name = correctName;
               if (tx.borrower_name === p.name) updates.borrower_name = correctName;
               updateTransaction(tx.id, updates).then();
             });
@@ -178,7 +140,7 @@ export default function PeoplePage({ onStartChat }: PeoplePageProps) {
   const handleCreateProfileForBudee = async (prof: SupabaseUserProfile) => {
     setIsSubmitting(true);
     try {
-      const newName = `${prof.first_name} ${prof.last_name}${prof.username ? ` (@${prof.username})` : ''}`;
+      const newName = `${prof.first_name} ${prof.last_name}`;
       const { data: newPerson, error: createErr } = await createPerson({ name: newName } as any);
       
       if (createErr) {
@@ -218,7 +180,7 @@ export default function PeoplePage({ onStartChat }: PeoplePageProps) {
     try {
       const personRecord = people.find(p => p.id === selectedLocalPersonToLink);
       if (!personRecord) return;
-      const newName = `${linkBudeeModal.first_name} ${linkBudeeModal.last_name}${linkBudeeModal.username ? ` (@${linkBudeeModal.username})` : ''}`;
+      const newName = `${linkBudeeModal.first_name} ${linkBudeeModal.last_name}`;
       const isTestMode = localStorage.getItem('test_environment_enabled') === 'true';
       const peopleTable = isTestMode ? 'people_test' : 'people';
       
@@ -237,7 +199,7 @@ export default function PeoplePage({ onStartChat }: PeoplePageProps) {
       const txsToUpdate = transactions.filter(t => (t as any).person_name === personRecord.name || t.borrower_name === personRecord.name);
       for (const tx of txsToUpdate) {
         const updates: any = {};
-        if ((tx as any).person_name === personRecord.name) updates.person_name = newName;
+        if ((t as any).person_name === personRecord.name) updates.person_name = newName;
         if (tx.borrower_name === personRecord.name) updates.borrower_name = newName;
         if (Object.keys(updates).length > 0) {
           await updateTransaction(tx.id, updates);
@@ -937,7 +899,7 @@ export default function PeoplePage({ onStartChat }: PeoplePageProps) {
                         
                         for (const tx of txsToUpdate) {
                           const updates: any = {};
-                          if ((tx as any).person_name === selectedPerson) updates.person_name = editPersonForm.name;
+                          if ((t as any).person_name === selectedPerson) updates.person_name = editPersonForm.name;
                           if (tx.borrower_name === selectedPerson) updates.borrower_name = editPersonForm.name;
                           
                           if (Object.keys(updates).length > 0) {
@@ -1003,8 +965,8 @@ export default function PeoplePage({ onStartChat }: PeoplePageProps) {
 
         {/* ── Header & Controllers ───────────────────────────────────────── */}
         <PageHeader 
-          title="People"
-          subtitle="Manage shared tracking and active loans"
+          title="My Budees"
+          subtitle="For the big goals and the little IOUs."
           icon={
             <div className={`w-14 h-14 rounded-2xl flex items-center justify-center text-white border-[3px] border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] -rotate-3 transition-all hover:rotate-0 hover:scale-110 z-10 relative ${getAccentClasses('bg')}`}>
               <Users className="w-7 h-7" />
@@ -1030,17 +992,17 @@ export default function PeoplePage({ onStartChat }: PeoplePageProps) {
               )}
               <button
                 onClick={() => setShowFindFriendsModal(true)}
-                className={`flex items-center gap-2 bg-white dark:bg-gray-800 border px-5 py-3 rounded-xl font-bold transition-all shadow-sm ${getAccentClasses('text')} ${getAccentClasses('borderLight')} ${getAccentClasses('hoverLight')}`}
+                className={`flex items-center gap-2 px-5 py-3 rounded-xl font-bold transition-all duration-200 bg-white dark:bg-gray-800 border-black dark:border-gray-600 border-[2px] shadow-[3px_3px_0px_#000] hover:shadow-[1px_1px_0px_#000] dark:shadow-[3px_3px_0px_#666] dark:hover:shadow-[1px_1px_0px_#666] hover:-translate-y-px hover:-translate-x-px ${getAccentClasses('hover:text')} ${getAccentClasses('hover:bg')}`}
               >
                 <Search className="w-4 h-4" />
-                <span className="hidden sm:inline">Find Friends</span>
+                <span className="hidden sm:inline">Find Budees</span>
               </button>
               <button 
                 onClick={() => setShowAddModal(true)} 
-                className={`flex items-center gap-2 text-white px-5 py-3 rounded-xl font-bold transition-all shadow-md dark:shadow-none ${getAccentClasses('bg')} ${getAccentClasses('shadow')}`}
+                className={`flex items-center gap-2 text-white px-5 py-3 rounded-xl font-bold transition-all duration-200 border-black border-[2px] shadow-[3px_3px_0px_#000] hover:shadow-[1px_1px_0px_#000] hover:-translate-y-px hover:-translate-x-px ${getAccentClasses('bg')} ${getAccentClasses('shadow')}`}
               >
                 <Plus className="w-4 h-4" />
-                <span className="hidden sm:inline">New Person</span>
+                <span className="hidden sm:inline">New Budee</span>
               </button>
             </div>
           }
@@ -1051,14 +1013,14 @@ export default function PeoplePage({ onStartChat }: PeoplePageProps) {
             onClick={() => setMainTab('profiles')}
             className={`pb-4 text-sm font-black uppercase tracking-widest transition-colors relative ${mainTab === 'profiles' ? getAccentClasses('text') : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-300'}`}
           >
-            Local Profiles
+            Tabs
             {mainTab === 'profiles' && <span className={`absolute bottom-0 left-0 w-full h-0.5 rounded-t-full ${getAccentClasses('indicator')}`}></span>}
           </button>
           <button
             onClick={() => setMainTab('budies')}
             className={`pb-4 text-sm font-black uppercase tracking-widest transition-colors relative ${mainTab === 'budies' ? getAccentClasses('text') : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-300'}`}
           >
-            My Budies
+            My Budees
             {mainTab === 'budies' && <span className={`absolute bottom-0 left-0 w-full h-0.5 rounded-t-full ${getAccentClasses('indicator')}`}></span>}
           </button>
         </div>
@@ -1073,7 +1035,7 @@ export default function PeoplePage({ onStartChat }: PeoplePageProps) {
             <h3 className="text-lg font-black text-gray-900 dark:text-gray-100 uppercase tracking-widest mb-1">No people found</h3>
             <p className="text-sm text-gray-500 dark:text-gray-400 mb-6">Add someone to start tracking shared expenses and loans.</p>
             <button onClick={() => setShowAddModal(true)} className={`px-6 py-3 rounded-xl font-bold transition-colors ${getAccentClasses('lightBg')}`}>
-              Add your first person
+              Add your first budee
             </button>
           </div>
         ) : viewMode === 'grid' ? (
@@ -1082,70 +1044,71 @@ export default function PeoplePage({ onStartChat }: PeoplePageProps) {
               const stats = getPersonStats(person.name);
               const fStatus = getFriendshipStatus(person.friend_user_id);
               const budeeProf = friendProfiles.find(fp => fp.user_id === person.friend_user_id);
-              return (
-                <div key={person.id} className="bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-800 rounded-[2rem] p-6 hover:shadow-lg transition-all group relative overflow-hidden">
+                            return (
+                <div key={person.id} className="bg-white dark:bg-gray-900 rounded-[2rem] p-6 group relative overflow-hidden border-[4px] border-black shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] hover:shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:translate-x-[2px] hover:translate-y-[2px] transition-all duration-200">
                   <button 
                     onClick={() => handleDeleteTrigger(person.id, person.name)}
-                    className="absolute top-4 right-4 p-2 text-gray-300 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-full opacity-0 group-hover:opacity-100 transition-all"
+                    className="absolute top-4 right-4 p-2 text-red-600 bg-red-100 dark:bg-red-900/50 rounded-lg border-[3px] border-black opacity-0 group-hover:opacity-100 transition-all shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] active:shadow-none active:translate-y-px active:translate-x-px"
                   >
                     <Trash2 className="w-4 h-4" />
                   </button>
                   
                   <div className="flex items-center gap-4 mb-6">
-                    <div className="w-14 h-14 rounded-full bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 font-black text-xl flex items-center justify-center border border-indigo-100 dark:border-indigo-800 transition-colors">
+                    <div className={`w-14 h-14 rounded-2xl flex items-center justify-center font-black text-xl text-white border-[3px] border-black shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] transition-colors ${getAccentClasses('bg')}`}>
                       {person.name.substring(0, 2).toUpperCase()}
                     </div>
                     <div className="flex flex-col min-w-0 pr-8">
-                      <h3 className="text-lg font-black text-gray-900 dark:text-gray-100 truncate">{person.name}</h3>
+                      <h3 className="text-lg font-black text-gray-900 dark:text-gray-100 truncate tracking-tight">{person.name}</h3>
                       {budeeProf && (
                         <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mt-0.5">
                           {budeeProf.username ? `@${budeeProf.username}` : budeeProf.email}
                         </p>
                       )}
                       {person.friend_user_id && fStatus === 'accepted' && (
-                        <span className="inline-flex items-center gap-1 w-fit mt-0.5 text-[9px] font-bold px-2 py-0.5 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 rounded uppercase tracking-widest transition-colors">
-                          <CheckSquare className="w-3 h-3" /> Linked
+                        <span className="inline-flex items-center gap-1 w-fit mt-0.5 text-[9px] font-black px-2 py-0.5 bg-green-300 text-black border-2 border-black rounded uppercase tracking-widest shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]">
+                          <BadgeCheck className="w-3 h-3" /> Linked
                         </span>
                       )}
                       {person.friend_user_id && fStatus === 'pending' && (
-                        <span className="inline-flex items-center gap-1 w-fit mt-0.5 text-[9px] font-bold px-2 py-0.5 bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400 rounded uppercase tracking-widest transition-colors" title="Waiting confirmation">
-                          <Clock className="w-3 h-3" /> Waiting confirmation from {person.name}
+                        <span className="inline-flex items-center gap-1 w-fit mt-0.5 text-[9px] font-black px-2 py-0.5 bg-yellow-300 text-black border-2 border-black rounded uppercase tracking-widest shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]" title="Waiting confirmation">
+                          <Clock className="w-3 h-3" /> Waiting...
                         </span>
                       )}
                     </div>
                   </div>
                   
-                  <div className="space-y-3 bg-gray-50 dark:bg-gray-800/50 p-4 rounded-2xl transition-colors">
+                  <div className="space-y-3 bg-gray-50 dark:bg-black/20 p-4 rounded-2xl border-[3px] border-black transition-colors">
                     <div className="flex justify-between items-center">
-                      <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Recorded Loans</span>
-                      <span className="text-sm font-bold text-gray-900 dark:text-gray-100">{formatCurrency(stats.totalLoanAmount)}</span>
+                      <span className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Recorded Loans</span>
+                      <span className="text-sm font-black text-gray-900 dark:text-gray-100">{formatCurrency(stats.totalLoanAmount)}</span>
                     </div>
                     <div className="flex justify-between items-center">
-                      <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Transactions</span>
-                      <span className="text-xs font-bold bg-indigo-100 dark:bg-indigo-900/50 text-indigo-700 dark:text-indigo-300 px-2 py-0.5 rounded-full">{stats.txCount}</span>
+                      <span className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Transactions</span>
+                      <span className="text-xs font-black bg-indigo-300 text-black border-2 border-black px-2 py-0.5 rounded-full shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]">{stats.txCount}</span>
                     </div>
                   </div>
                   
                   <button 
                     onClick={() => setSelectedPerson(person.name)}
-                    className="w-full mt-4 bg-gray-50 dark:bg-gray-800/80 text-gray-700 dark:text-gray-300 py-3 rounded-xl text-xs font-black uppercase tracking-widest hover:bg-indigo-50 dark:hover:bg-indigo-900/30 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors"
+                    className={`w-full mt-4 py-3 rounded-xl text-xs font-black uppercase tracking-widest transition-all duration-200 border-[3px] border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] active:translate-x-[2px] active:translate-y-[2px] active:shadow-none text-white ${getAccentClasses('bg')}`}
                   >
                     View Profile
                   </button>
                 </div>
               );
+
             })}
           </div>
         ) : (
-          <div className="bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-800 rounded-[2rem] overflow-hidden transition-colors">
+          <div className="bg-white dark:bg-gray-900 rounded-[2rem] overflow-hidden transition-colors border-black dark:border-gray-600 border-[3px] shadow-[4px_4px_0px_#000] dark:shadow-[4px_4px_0px_#666]">
             {people.map((person, i) => {
               const stats = getPersonStats(person.name);
               const fStatus = getFriendshipStatus(person.friend_user_id);
               const budeeProf = friendProfiles.find(fp => fp.user_id === person.friend_user_id);
               return (
-                <div key={person.id} className={`flex items-center justify-between p-5 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors ${i !== people.length - 1 ? 'border-b border-gray-50 dark:border-gray-800' : ''}`}>
+                <div key={person.id} className={`flex items-center justify-between p-5 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors ${i !== people.length - 1 ? 'border-b border-gray-50 dark:border-gray-800' : ''} retro-sticker-card`}>
                   <div className="flex items-center gap-4">
-                    <div className="w-10 h-10 rounded-full bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 font-black text-sm flex items-center justify-center border border-indigo-100 dark:border-indigo-800 transition-colors">
+                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-black text-sm text-white border-[2px] border-black shadow-[2px_2px_0px_#000] transition-colors ${getAccentClasses('bg')}`}>
                       {person.name.substring(0, 2).toUpperCase()}
                     </div>
                     <div className="flex flex-col min-w-0">
@@ -1153,7 +1116,7 @@ export default function PeoplePage({ onStartChat }: PeoplePageProps) {
                         <h3 className="text-base font-black text-gray-900 dark:text-gray-100 truncate">{person.name}</h3>
                         {person.friend_user_id && fStatus === 'accepted' && (
                           <span className="inline-flex items-center gap-1 text-[9px] font-bold px-2 py-0.5 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 rounded uppercase tracking-widest transition-colors" title="Linked">
-                            <CheckSquare className="w-3 h-3" />
+                            <BadgeCheck className="w-3 h-3" />
                           </span>
                         )}
                         {person.friend_user_id && fStatus === 'pending' && (
@@ -1163,7 +1126,7 @@ export default function PeoplePage({ onStartChat }: PeoplePageProps) {
                         )}
                       </div>
                       {budeeProf ? (
-                        <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">{budeeProf.username ? `@${budeeProf.username}` : budeeProf.email}</p>
+                        <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">{budeeProf.username ? `@${budeeProf.username}` : prof.email}</p>
                       ) : (
                         <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">{stats.txCount} transactions</p>
                       )}
@@ -1185,13 +1148,13 @@ export default function PeoplePage({ onStartChat }: PeoplePageProps) {
                     )}
                     <button 
                       onClick={() => setSelectedPerson(person.name)}
-                      className="text-xs font-bold text-indigo-600 bg-indigo-50 dark:bg-indigo-900/30 dark:text-indigo-400 px-4 py-2 rounded-xl hover:bg-indigo-100 dark:hover:bg-indigo-900/50 transition-colors uppercase tracking-widest"
+                      className={`text-xs font-bold px-4 py-2 rounded-xl transition-all duration-200 bg-white dark:bg-gray-800 border-black dark:border-gray-600 border-[2px] shadow-[2px_2px_0px_#000] hover:shadow-[1px_1px_0px_#000] dark:shadow-[2px_2px_0px_#666] dark:hover:shadow-[1px_1px_0px_#666] hover:-translate-y-px hover:-translate-x-px ${getAccentClasses('hover:text')} ${getAccentClasses('hover:bg')} uppercase tracking-widest`}
                     >
                       View
                     </button>
                     <button 
                       onClick={() => handleDeleteTrigger(person.id, person.name)}
-                      className="text-gray-300 hover:text-red-500 p-2 rounded-full hover:bg-red-50 dark:hover:bg-red-900/20 transition-all"
+                      className="p-2 text-red-500 bg-red-100/50 dark:bg-red-900/30 rounded-lg border border-black/20 dark:border-white/20 shadow-[2px_2px_0px_rgba(0,0,0,0.1)] hover:shadow-[1px_1px_0px_rgba(0,0,0,0.1)] hover:-translate-y-px hover:-translate-x-px transition-all"
                     >
                       <Trash2 className="w-4 h-4" />
                     </button>
@@ -1202,14 +1165,14 @@ export default function PeoplePage({ onStartChat }: PeoplePageProps) {
           </div>
         )
       ) : (
-        <div className="bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-800 rounded-[2.5rem] overflow-hidden transition-colors">
+        <div className="bg-white dark:bg-gray-900 rounded-[2.5rem] overflow-hidden transition-colors border-black dark:border-gray-600 border-[3px] shadow-[4px_4px_0px_#000] dark:shadow-[4px_4px_0px_#666]">
           {friendProfiles.length === 0 ? (
             <div className="text-center py-20">
               <Users className="w-16 h-16 text-gray-300 dark:text-gray-600 mx-auto mb-4" />
               <h3 className="text-lg font-black text-gray-900 dark:text-gray-100 uppercase tracking-widest mb-1">No Budies Yet</h3>
               <p className="text-sm text-gray-500 dark:text-gray-400 mb-6">Search and connect with friends to see them here.</p>
               <button onClick={() => setShowFindFriendsModal(true)} className="bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 px-6 py-3 rounded-xl font-bold hover:bg-indigo-100 dark:hover:bg-indigo-900/50 transition-colors">
-                Find Friends
+                Find Budees
               </button>
             </div>
           ) : (
@@ -1219,9 +1182,9 @@ export default function PeoplePage({ onStartChat }: PeoplePageProps) {
               const displayName = `${prof.first_name} ${prof.last_name}`;
               
               return (
-                <div key={prof.user_id} className={`flex items-center justify-between p-5 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors ${i !== friendProfiles.length - 1 ? 'border-b border-gray-50 dark:border-gray-800' : ''}`}>
+                <div key={prof.user_id} className={`flex items-center justify-between p-5 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors ${i !== friendProfiles.length - 1 ? 'border-b border-gray-50 dark:border-gray-800' : ''} retro-sticker-card`}>
                   <div className="flex items-center gap-4">
-                    <div className="w-10 h-10 rounded-full bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 font-black text-sm flex items-center justify-center border border-indigo-100 dark:border-indigo-800 uppercase">
+                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-black text-sm text-white border-[2px] border-black shadow-[2px_2px_0px_#000] transition-colors ${getAccentClasses('bg')} uppercase`}>
                       {(prof.first_name?.charAt(0) || '')}{(prof.last_name?.charAt(0) || '')}
                     </div>
                     <div className="flex flex-col min-w-0">
@@ -1239,20 +1202,20 @@ export default function PeoplePage({ onStartChat }: PeoplePageProps) {
                   <div className="flex items-center gap-3">
                     {linkedPerson ? (
                       <span className="inline-flex items-center gap-1 text-[10px] font-bold px-3 py-1.5 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 rounded-xl uppercase tracking-widest">
-                        <CheckSquare className="w-3 h-3" /> Linked to {linkedPerson.name}
+                        <BadgeCheck className="w-3 h-3" /> Linked to {linkedPerson.name}
                       </span>
                     ) : fStatus === 'accepted' ? (
                       <div className="flex gap-2">
                         <button 
                           onClick={() => handleCreateProfileForBudee(prof)}
                           disabled={isSubmitting}
-                          className="text-xs font-bold text-white bg-indigo-600 px-4 py-2 rounded-xl hover:bg-indigo-700 transition-colors uppercase tracking-widest disabled:opacity-50"
+                          className={`text-xs font-bold text-white px-4 py-2 rounded-xl transition-all duration-200 border-black border-[2px] shadow-[3px_3px_0px_#000] hover:shadow-[1px_1px_0px_#000] hover:-translate-y-px hover:-translate-x-px uppercase tracking-widest disabled:opacity-50 ${getAccentClasses('bg')} ${getAccentClasses('shadow')}`}
                         >
                           Create Profile
                         </button>
                         <button 
                           onClick={() => { setLinkBudeeModal(prof); setSelectedLocalPersonToLink(''); }}
-                          className="text-xs font-bold text-indigo-600 bg-indigo-50 dark:bg-indigo-900/30 dark:text-indigo-400 px-4 py-2 rounded-xl hover:bg-indigo-100 dark:hover:bg-indigo-900/50 transition-colors uppercase tracking-widest"
+                          className={`text-xs font-bold px-4 py-2 rounded-xl transition-all duration-200 bg-white dark:bg-gray-800 border-black dark:border-gray-600 border-[2px] shadow-[2px_2px_0px_#000] hover:shadow-[1px_1px_0px_#000] dark:shadow-[2px_2px_0px_#666] dark:hover:shadow-[1px_1px_0px_#666] hover:-translate-y-px hover:-translate-x-px ${getAccentClasses('hover:text')} ${getAccentClasses('hover:bg')} uppercase tracking-widest`}
                         >
                           Link Existing
                         </button>
@@ -1315,7 +1278,7 @@ export default function PeoplePage({ onStartChat }: PeoplePageProps) {
               <X className="w-5 h-5" />
             </button>
             <h2 className="text-xl font-black text-gray-900 dark:text-gray-100 mb-1 uppercase tracking-tight">Find Friends</h2>
-            <p className="text-sm text-gray-500 dark:text-gray-400 mb-6 font-medium">Search by email or @handle to connect.</p>
+            <p className="text-sm text-gray-500 dark:text-gray-400 mb-6 font-medium">Search by name, email, or @handle to connect.</p>
 
             <div className="relative mb-6">
               <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />

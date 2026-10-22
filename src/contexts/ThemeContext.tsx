@@ -37,43 +37,24 @@ export const ThemeProvider: React.FC<{ children: ReactNode }> = ({ children }) =
   }, []);
 
   // Helper to dynamically get Tailwind classes for the current accent
-  const getAccentClasses = (type: 'text' | 'bg' | 'lightBg' | 'border' | 'borderLight' | 'ring' | 'shadow' | 'hoverLight' | 'indicator') => {
-    const map = {
-      fuchsia: {
-        text: 'text-fuchsia-600 dark:text-fuchsia-400',
-        bg: 'bg-fuchsia-600 hover:bg-fuchsia-700 text-white',
-        lightBg: 'bg-fuchsia-50 dark:bg-fuchsia-900/30 text-fuchsia-600 dark:text-fuchsia-400',
-        border: 'border-fuchsia-500',
-        borderLight: 'border-fuchsia-200 dark:border-fuchsia-800/30',
-        ring: 'focus:ring-fuchsia-500',
-        shadow: 'shadow-fuchsia-200 dark:shadow-none',
-        hoverLight: 'hover:bg-fuchsia-50 dark:hover:bg-fuchsia-900/30 hover:text-fuchsia-600 dark:hover:text-fuchsia-400',
-        indicator: 'bg-fuchsia-600 dark:bg-fuchsia-400'
-      },
-      teal: {
-        text: 'text-teal-600 dark:text-teal-400',
-        bg: 'bg-teal-600 hover:bg-teal-700 text-white',
-        lightBg: 'bg-teal-50 dark:bg-teal-900/30 text-teal-600 dark:text-teal-400',
-        border: 'border-teal-500',
-        borderLight: 'border-teal-200 dark:border-teal-800/30',
-        ring: 'focus:ring-teal-500',
-        shadow: 'shadow-teal-200 dark:shadow-none',
-        hoverLight: 'hover:bg-teal-50 dark:hover:bg-teal-900/30 hover:text-teal-600 dark:hover:text-teal-400',
-        indicator: 'bg-teal-600 dark:bg-teal-400'
-      },
-      amber: {
-        text: 'text-amber-600 dark:text-amber-400',
-        bg: 'bg-amber-500 hover:bg-amber-600 text-white', // Adjusted specifically for Amber to keep it bright!
-        lightBg: 'bg-amber-50 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400',
-        border: 'border-amber-500',
-        borderLight: 'border-amber-200 dark:border-amber-800/30',
-        ring: 'focus:ring-amber-500',
-        shadow: 'shadow-amber-200 dark:shadow-none',
-        hoverLight: 'hover:bg-amber-50 dark:hover:bg-amber-900/30 hover:text-amber-600 dark:hover:text-amber-400',
-        indicator: 'bg-amber-500 dark:bg-amber-400'
-      }
-    };
-    return map[accentColor][type];
+      // Helper to dynamically get Tailwind classes for the current accent
+  const getAccentClasses = (type: 'bg' | 'text' | 'border' | 'lightBg' = 'bg') => {
+    switch (type) {
+      case 'bg':
+        // The main solid color (retro amber background with stark black text for high contrast)
+        return 'bg-amber-500 text-black border-black';
+      case 'text':
+        // For highlighted text or icons
+        return 'text-amber-600 dark:text-amber-400';
+      case 'border':
+        // For colored outlines
+        return 'border-amber-500';
+      case 'lightBg':
+        // For subtle notification badges or soft backgrounds
+        return 'bg-amber-100 text-amber-900 dark:bg-amber-900/40 dark:text-amber-300';
+      default:
+        return 'bg-amber-500 text-black';
+    }
   };
 
   return (
@@ -82,6 +63,7 @@ export const ThemeProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     </ThemeContext.Provider>
   );
 };
+
 
 export const useTheme = () => {
   const context = useContext(ThemeContext);

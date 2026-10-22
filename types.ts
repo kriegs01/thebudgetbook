@@ -1,0 +1,220 @@
+export type AccountClassification = 'Checking' | 'Savings' | 'Credit Card' | 'Loan' | 'Investment';
+
+{/* TO: */}
+export interface Account {
+  id: string;
+  bank: string;
+  classification: AccountClassification;
+  balance: number;
+  openingBalance?: number; 
+  type: 'Debit' | 'Credit';
+  creditLimit?: number;
+  billingDate?: string;
+  dueDate?: string;
+  overdraftMode?: 'allow' | 'warn' | 'block';
+  lastFour?: string;
+  interestRate?: number;
+  subtype?: string;
+  // 🟢 NEW: Vault / Sub-account support
+  hasVaultEnabled?: boolean;
+  vaultId?: string; // The ID of the hidden sub-account (e.g., 'Go Save')
+  engine_id?: string;
+}
+
+
+
+export interface BudgetItem {
+  id: string;
+  name: string;
+  amount: number;
+  category: string;
+  date: string;
+  accountId: string;
+}
+
+export interface BudgetCategory {
+  id: string;
+  name: string;
+  subcategories: string[];
+
+  // Lifecycle config — default: active (treat missing `active` as true)
+  active?: boolean;          // false = deactivated category
+  deactivatedAt?: string;    // ISO date, e.g. '2026-03-01' — first month where category is HIDDEN
+  reactivatedFrom?: string;  // ISO date, e.g. '2026-09-01' — first month where category is VISIBLE again (inclusive)
+  legacyFrom?: string;       // ISO date — if set, "Legacy" label shown only for months >= this date (before deactivation)
+
+  // Behavior config — default: data + manual (treat missing `flexiMode` as true)
+  flexiMode?: boolean;       // true = data + manual "Add Item"; false = data-only (no Add Item button)
+}
+
+export interface PaymentSchedule {
+  id: string; // Unique identifier for the schedule
+  month: string;
+  year: string;
+  expectedAmount: number;
+  amountPaid?: number;
+  receipt?: string;
+  datePaid?: string;
+  accountId?: string;
+}
+
+export interface BillerAmountIncrease {
+  effectiveDate: string; // 'YYYY-MM-DD'
+  amount: number;        // new amount from this date onward
+}
+
+export interface Biller {
+  id: string;
+  name: string;
+  category: string;
+  dueDate: string;
+  expectedAmount: number;
+  timing: '1/2' | '2/2';
+  activationDate: {
+    month: string;
+    day?: string;
+    year: string;
+  };
+  deactivationDate?: {
+    month: string;
+    year: string;
+  };
+  status: 'active' | 'inactive';
+  schedules: PaymentSchedule[];
+  linkedAccountId?: string; // ENHANCEMENT: Links Loans-category billers to credit accounts for dynamic amount calculation
+  scheduledIncreases?: BillerAmountIncrease[]; // Scheduled future amount changes (Fixed/Utilities/Subscriptions only)
+  
+  // 🟢 NEW: Dynamic & Shared Biller Properties
+  is_dynamic?: boolean;
+  shared_budee_id?: string | null;
+  split_type?: 'percentage' | 'exact_amount' | null;
+  split_value?: number | null;
+}
+
+
+export interface Installment {
+  id: string;
+  name: string;
+  totalAmount: number;
+  monthlyAmount: number;
+  termDuration: string; // e.g., "12 months"
+  paidAmount: number;
+  accountId: string;
+  startDate?: string; // Format: YYYY-MM
+  startDateExact?: string;
+  billerId?: string; // Link to Biller for Loans category
+  timing?: '1/2' | '2/2'; // PROTOTYPE: Payment timing within the month
+  due_date?: string | null;
+  is_migrated?: boolean;
+  // 🟢 NEW: Links this installment to a specific Credit Card statement
+  linkedAccountId?: string;
+  funding_friend_id?: string | null;
+  debtor_friend_id?: string | null;
+  friend_user_id?: string | null;
+  expected_account_id?: string | null;
+  principalAmount?: number;
+  budee_due_day?: number | null;
+  budee_month_offset?: number;
+  budee_billing_date?: number | null;
+  budee_days_to_pay?: number | null;
+  // 🟢 NEW: BNPL & Decoupled Order Tags
+  conversion_group_id?: string | null;
+  statement_id?: string | null;
+  status?: string;
+}
+
+
+export interface SavingsJar {
+  id: string;
+  name: string;
+  accountId: string;
+  currentBalance: number;
+}
+
+export interface Transaction {
+  id: string;
+  name: string;
+  date: string;
+  amount: number;
+  paymentMethodId: string; // For internal transfers, this points to either the Main Account ID or the Vault ID
+  // 🟢 NEW: Added 'internal_transfer' to the union
+  transaction_type?: 'payment' | 'withdraw' | 'transfer' | 'loan' | 'cash_in' | 'loan_payment' | 'credit_payment' | 'internal_transfer' | null;
+  notes?: string | null;
+  related_transaction_id?: string | null;
+  borrower_name?: string | null;
+  receiptUrl?: string | null;
+  person_name?: string | null;
+  isreconciled?: boolean;
+  payer_id?: string | null;
+  beneficiary_id?: string | null;
+  funding_friend_id?: string | null;
+  debtor_friend_id?: string | null;
+  friend_user_id?: string | null;
+  expected_account_id?: string | null;
+  iou_status?: 'none' | 'pending' | 'settled';
+  split_details?: Record<string, number> | null;
+  statement_ref?: string | null; 
+  // 🟢 NEW: BNPL & Decoupled Order Tags
+  conversion_group_id?: string | null;
+  conversion_status?: 'none' | 'pending' | 'approved' | 'rejected';
+  order_status?: 'pending_delivery' | 'completed' | 'return_pending' | 'returned';
+  completed_date?: string | null;
+}
+
+
+
+
+export interface CategorizedSetupItem {
+  id: string;
+  name: string;
+  amount?: string; // Legacy fallback for the lazy merge
+  amountsByPeriod?: Record<number, string>; // NEW: Maps tab index to amount (e.g., { 1: "2500", 2: "2500" })
+  included: boolean;
+  isBiller?: boolean;
+  timing?: string;
+}
+
+
+export interface SavedBudgetSetup {
+  id: string;
+  month: string;
+  timing: string;
+  status: string;
+  totalAmount: number;
+  data: { [key: string]: CategorizedSetupItem[] } & {
+    _projectedSalary?: string;
+    _actualSalary?: string;
+    _excludedInstallmentIds?: string[];
+  };
+  isArchived: boolean;
+  closedAt: string | null;
+  reopenedAt: string | null;
+}
+
+export type ViewMode = 'card' | 'list';
+
+export interface Wallet {
+  id: string;
+  userId: string;
+  name: string;
+  amount: number;
+  accountId: string;
+  createdAt: string;
+  updatedAt: string;
+  // 🟢 NEW: Add this line to support flexible stash allocations
+  timing?: string;
+}
+
+
+export enum Page {
+  DASHBOARD = 'DASHBOARD',
+  BUDGET = 'BUDGET',
+  TRANSACTIONS = 'TRANSACTIONS',
+  BILLERS = 'BILLERS',
+  INSTALLMENTS = 'INSTALLMENTS',
+  ACCOUNTS = 'ACCOUNTS',
+  SAVINGS = 'SAVINGS',
+  WALLET = 'WALLET',
+  SETTINGS = 'SETTINGS',
+  TRASH = 'TRASH',
+}

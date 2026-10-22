@@ -1,0 +1,2089 @@
+import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react';
+import { createPortal } from 'react-dom';
+import { Plus, Info, Eye, ZoomIn, ZoomOut, Download, X, ArrowLeft, Pencil, Trash2, CheckSquare, Square, ChevronDown, ChevronRight, Filter, AlertTriangle, ArrowUpFromLine, ArrowDownToLine, ArrowLeftRight, Landmark, CreditCard, FileText, User, UserPlus, Hand, Lock, Package } from 'lucide-react';
+import { PinProtectedAction } from '../src/components/PinProtectedAction';
+import { useAuth } from '../src/contexts/AuthContext';
+import { createTransaction, updateTransaction, deleteTransactionAndRevertSchedule, uploadTransactionReceipt, getReceiptSignedUrl, batchDeleteTransactions, createTransfer } from '../src/services/transactionsService';
+import { getAllAccountsFrontend } from '../src/services/accountsService';
+import { getAllPeople, createPerson } from '../src/services/peopleService';
+import { getFriendships } from '../src/services/friendshipsService';
+import type { SupabasePerson, SupabaseUserProfile, SupabaseFriendship } from '../src/types/supabase';
+import { supabase } from '../src/utils/supabaseClient';
+import { combineDateWithCurrentTime, getTodayIso, getFirstDayOfCurrentYearIso, getLastDayOfCurrentYearIso, toLocalDateInputValue } from '../src/utils/dateUtils';
+import { useTheme } from '../src/contexts/ThemeContext';
+import useMediaQuery from '../src/hooks/useMediaQuery';
+import { TransactionList } from '../src/components/TransactionList';
+import type { Transaction, Account } from '../types';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { PageHeader } from '../src/components/PageHeader';
+
+
+const FILTER_MIN_DATE = '2025-01-01';
+
+
+
+// Use the utility function from dateUtils
+const todayIso = getTodayIso;
+
+const formatCurrency = (val: number) =>
+  new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP', minimumFractionDigits: 2 }).format(val);
+
+const TRANSACTION_TYPES = [
+  { id: 'payment', label: 'Payment', icon: <CreditCard className="w-5 h-5" />, x: -130, y: 0 },
+  { id: 'withdraw', label: 'Withdrawal', icon: <ArrowUpFromLine className="w-5 h-5" />, x: -120, y: -50 },
+  { id: 'cash_in', label: 'Cash In', icon: <ArrowDownToLine className="w-5 h-5" />, x: -92, y: -92 },
+  { id: 'transfer', label: 'Transfer', icon: <ArrowLeftRight className="w-5 h-5" />, x: -50, y: -120 },
+  { id: 'loan', label: 'Loan', icon: <Landmark className="w-5 h-5" />, x: 0, y: -130 },
+];
+
+type ContactOption = {
+  id: string;
+  name: string;
+  handleOrEmail?: string;
+  isLinked: boolean;
+  isBudeeOnly: boolean;
+  budeeProfile?: SupabaseUserProfile;
+};
+
+
+
+const ContactDropdown = ({ value, onChange, contacts, placeholder }: { value: string, onChange: (val: string) => void, contacts: ContactOption[], placeholder: string }) => {
+  const { getAccentClasses } = useTheme();
+  const [isOpen, setIsOpen] = useState(false);
+  const [search, setSearch] = useState(value);
+  const wrapperRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => { setSearch(value); }, [value]);
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (wrapperRef.current && !wrapperRef.current.contains(e.target as Node)) setIsOpen(false);
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const filtered = contacts.filter(c => c.name.toLowerCase().includes(search.toLowerCase()));
+  const exactMatch = contacts.find(c => c.name.toLowerCase() === search.toLowerCase());
+
+  return (
+    <div className="relative" ref={wrapperRef}>
+      <input
+        type="text"
+        value={search}
+        onChange={e => { setSearch(e.target.value); onChange(e.target.value); setIsOpen(true); }}
+        onFocus={() => setIsOpen(true)}
+        placeholder={placeholder}
+        className={`w-full bg-white dark:bg-gray-800 border-2 border-black dark:border-gray-700 rounded-xl p-3.5 pr-10 font-bold outline-none focus:ring-offset-2 ${getAccentClasses('ring')} transition-all text-sm`}
+      />
+      {exactMatch && !isOpen && (
+        <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none">
+          {exactMatch.isLinked && (
+            <div className="flex items-center justify-center bg-green-100 dark:bg-green-900/30 p-1.5 rounded-lg" title="Profile Linked">
+              <CheckSquare className="w-3.5 h-3.5 text-green-600 dark:text-green-400" />
+            </div>
+          )}
+          {exactMatch.isBudeeOnly && (
+            <div className="flex items-center justify-center bg-indigo-100 dark:bg-indigo-900/30 p-1.5 rounded-lg" title="Budee Connection">
+              <UserPlus className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
+            </div>
+          )}
+        </div>
+      )}
+      {isOpen && filtered.length > 0 && (
+        <div className="absolute z-50 w-full mt-2 bg-white dark:bg-gray-900 border-2 border-black rounded-xl shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] max-h-48 overflow-y-auto">
+          {filtered.map(c => (
+            <div key={c.id} onClick={() => { setSearch(c.name); onChange(c.name); setIsOpen(false); }} className={`px-4 py-3 cursor-pointer flex items-center justify-between transition-colors border-b-2 border-black last:border-0 ${getAccentClasses('hoverLight')}`}>
+              <div className="flex flex-col min-w-0 pr-2">
+                <span className="text-sm font-bold truncate">{c.name}</span>
+                {c.handleOrEmail && <span className="text-[10px] text-gray-500 truncate">{c.handleOrEmail}</span>}
+              </div>
+              <div className="flex items-center gap-2 flex-shrink-0">
+                {c.isLinked && (
+                  <div className="flex items-center gap-1 bg-green-100 dark:bg-green-900/30 px-2 py-1 rounded" title="Profile Linked"><CheckSquare className="w-3 h-3 text-green-600 dark:text-green-400" /></div>
+                )}
+                {c.isBudeeOnly && (
+                  <div className="flex items-center gap-1 bg-indigo-100 dark:bg-indigo-900/30 px-2 py-1 rounded" title="Budee Connection"><UserPlus className="w-3 h-3 text-indigo-600 dark:text-indigo-400" /></div>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
+
+interface TransactionsPageProps {
+  transactions: Transaction[];
+  loading?: boolean;
+  onTransactionDeleted?: () => void;
+  onTransactionCreated?: () => void;
+}
+
+const Portal: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+    return () => setMounted(false);
+  }, []);
+
+  return mounted ? createPortal(children, document.body) : null;
+};
+
+type OverdraftPromptState = {
+  mode: 'block' | 'warn';
+  accountId: string;
+  accountName: string;
+  currentBalance: number;
+  transactionAmount: number;
+  projectedBalance: number;
+};
+
+const retroModalShell = 'w-full rounded-[2rem] border-[4px] border-black bg-[#fff8ee] p-6 shadow-[10px_10px_0px_0px_rgba(0,0,0,1)] dark:bg-gray-900 sm:p-8';
+const retroModalTitle = 'text-center font-black uppercase tracking-[0.2em] text-gray-900 dark:text-gray-100';
+const retroModalSubtitle = 'text-center text-sm font-bold leading-relaxed text-gray-600 dark:text-gray-300';
+const retroPanelClass = 'rounded-[1.5rem] border-[3px] border-black bg-white/80 p-4 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] dark:bg-gray-800';
+const retroGhostButton = 'bg-gray-200 py-4 rounded-xl font-black uppercase tracking-widest text-[10px] text-gray-800 dark:bg-gray-700 dark:text-gray-200 border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[1px] hover:translate-y-[1px] transition-all';
+const retroCloseButton = 'absolute right-4 top-4 flex h-10 w-10 items-center justify-center rounded-full border-[3px] border-black bg-white text-gray-700 shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] transition-all hover:translate-x-[1px] hover:translate-y-[1px] hover:shadow-none dark:bg-gray-800 dark:text-gray-100';
+
+function TransactionsPage({ transactions, loading = false, onTransactionDeleted, onTransactionCreated }) {
+  const { getAccentClasses } = useTheme();
+  const { userProfile } = useAuth();
+  const isMobile = useMediaQuery('(max-width: 767px)');
+
+  const location = useLocation();
+  const navigate = useNavigate();
+  const hasAutoOpened = useRef(false);
+
+  useEffect(() => {
+    if (location.state?.autoOpenAddTray && !hasAutoOpened.current) {
+      hasAutoOpened.current = true; 
+
+      setTimeout(() => {
+        if (isMobile) {
+          // 🟢 Only open the sliding tray on mobile
+          setShowFabMenu(true); 
+        } else {
+          // 🟢 Only open the center modal on desktop/iPad
+          setShowTypeModal(true); 
+        }
+      }, 300);
+      
+      // Wipe the history state
+      window.history.replaceState({}, '');
+    }
+  }, [location.state, isMobile]);
+
+  
+
+  const [accounts, setAccounts] = useState<Account[]>([]);
+  const [people, setPeople] = useState<SupabasePerson[]>([]);
+  const [showForm, setShowForm] = useState(false);
+  const [editingTxId, setEditingTxId] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const headerRef = useRef<HTMLDivElement>(null);
+  const [showFloatingAdd, setShowFloatingAdd] = useState(false);
+  const [showTypeModal, setShowTypeModal] = useState(false);
+  const [showFabMenu, setShowFabMenu] = useState(false);
+  const [formSource, setFormSource] = useState<'top' | 'fab' | null>(null);
+  const [transferTab, setTransferTab] = useState<'accounts' | 'friends'>('accounts');
+  const [friendProfiles, setFriendProfiles] = useState<SupabaseUserProfile[]>([]);
+  const [pendingProfileModal, setPendingProfileModal] = useState<{ budee: SupabaseUserProfile; formName: string; } | null>(null);
+  const [overdraftPrompt, setOverdraftPrompt] = useState<OverdraftPromptState | null>(null);
+  // Transaction details modal
+  const [selectedTx, setSelectedTx] = useState<Transaction | null>(null);
+
+  // Stash to Vault state
+  const [isStashModalOpen, setIsStashModalOpen] = useState(false);
+  const [stashTx, setStashTx] = useState<Transaction | null>(null);
+  const [stashAmount, setStashAmount] = useState<string>('');
+
+
+  // Signed URL for displaying a receipt (generated fresh each time the modal opens)
+  const [receiptSignedUrl, setReceiptSignedUrl] = useState<string | null | undefined>(undefined);
+  // Receipt preview modal
+  const [previewReceiptUrl, setPreviewReceiptUrl] = useState<string | null>(null);
+  const [zoom, setZoom] = useState(0.5);
+  // Receipt file for the add-transaction form
+  const [receiptFile, setReceiptFile] = useState<File | null>(null);
+
+    // 🟢 Payment Routing Tabs State
+    const [paymentTab, setPaymentTab] = useState<'my_account' | 'budee'>('my_account');
+    const [isIOU, setIsIOU] = useState(false);
+  
+
+  // 🟢 UPDATED: Added payerId and beneficiaryId to the form state
+    const [form, setForm] = useState({
+    name: '',
+    date: todayIso(),
+    amount: '',
+    feeAmount: '',
+    paymentMethodId: '',
+    transactionType: 'payment',
+    transferToAccountId: '',
+    borrowerName: '',
+    personName: '',
+    payerId: 'me',
+    beneficiaryId: 'me',
+    // 🟢 ADD THESE LOGISTICS STATES
+    isPhysicalOrder: false,
+    trackingNumber: '',
+    courier: 'SPX',
+    isFronted: false
+  });
+
+
+
+  // 🟢 Global Mitosis FAB listener to toggle the pull-up tray
+  useEffect(() => {
+    const handleToggleTray = () => setShowFabMenu(true); 
+    window.addEventListener('open_add_transaction_modal', handleToggleTray);
+    return () => window.removeEventListener('open_add_transaction_modal', handleToggleTray);
+  }, []);
+
+
+  // ── Filter state ──────────────────────────────────────────────────────────
+  const [filterStartDate, setFilterStartDate] = useState<string>(getFirstDayOfCurrentYearIso());
+  const [filterEndDate, setFilterEndDate] = useState<string>(getLastDayOfCurrentYearIso());
+  const [filterPaymentMethods, setFilterPaymentMethods] = useState<Set<string>>(new Set());
+  const [showPaymentMethodDropdown, setShowPaymentMethodDropdown] = useState(false);
+  const [isFiltersOpen, setIsFiltersOpen] = useState(true);
+  const pmDropdownRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (isMobile) {
+      setIsFiltersOpen(false);
+    } else {
+      setIsFiltersOpen(true);
+    }
+  }, [isMobile]);
+
+  // ── Select / batch-delete state ───────────────────────────────────────────
+  const [isSelectMode, setIsSelectMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [showBatchConfirm, setShowBatchConfirm] = useState(false);
+  const [isBatchDeleting, setIsBatchDeleting] = useState(false);
+
+  const uniquePeopleNames = useMemo(() => {
+    const names = [
+      ...people.map(p => p.name),
+      ...transactions.map(t => (t as any).person_name).filter(Boolean)
+    ];
+    return Array.from(new Set(names));
+  }, [people, transactions]);
+  
+  const selectedPaymentAccount = useMemo(
+    () => accounts.find(account => account.id === form.paymentMethodId) ?? null,
+    [accounts, form.paymentMethodId]
+  );
+
+  const editingTransaction = useMemo(
+    () => (editingTxId ? transactions.find(tx => tx.id === editingTxId) ?? null : null),
+    [editingTxId, transactions]
+  );
+
+  const getCurrentBalanceForAccount = useCallback((account: Account) => {
+    const baseline = account.openingBalance ?? account.balance ?? 0;
+    const sortedTransactions = transactions
+      .filter(tx => tx.paymentMethodId === account.id)
+      .sort((a, b) => {
+        const byDate = new Date(a.date).getTime() - new Date(b.date).getTime();
+        return byDate !== 0 ? byDate : a.id.localeCompare(b.id);
+      });
+
+    if (account.type === 'Debit') {
+      return sortedTransactions.reduce((balance, tx) => balance - tx.amount, baseline);
+    }
+
+    return sortedTransactions.reduce((balance, tx) => balance + tx.amount, baseline);
+  }, [transactions]);
+
+  const closeOverdraftPrompt = () => {
+    setOverdraftPrompt(null);
+  };
+
+  const openTopUpFromOverdraftPrompt = () => {
+    if (!overdraftPrompt) return;
+
+    const shortfall = Math.abs(Math.min(overdraftPrompt.projectedBalance, 0));
+    setOverdraftPrompt(null);
+    setEditingTxId(null);
+    setTransferTab('accounts');
+    setForm({
+      name: '',
+      date: todayIso(),
+      amount: shortfall > 0 ? shortfall.toFixed(2) : '',
+      feeAmount: '',
+      paymentMethodId: overdraftPrompt.accountId,
+      transactionType: 'cash_in',
+      transferToAccountId: '',
+      borrowerName: '',
+      personName: ''
+    });
+    setReceiptFile(null);
+    setShowForm(true);
+  };
+
+  const guardTransactionsOverdraft = async (outflowAmount: number, action: () => Promise<void>) => {
+    if (!selectedPaymentAccount || selectedPaymentAccount.type !== 'Debit' || outflowAmount <= 0) {
+      await action();
+      return;
+    }
+
+    const overdraftMode = selectedPaymentAccount.overdraftMode || 'allow';
+    const currentBalance = getCurrentBalanceForAccount(selectedPaymentAccount);
+    const projectedBalance = editingTransaction && editingTransaction.paymentMethodId === selectedPaymentAccount.id
+      ? currentBalance + editingTransaction.amount - outflowAmount
+      : currentBalance - outflowAmount;
+
+    if (projectedBalance >= 0 || overdraftMode === 'allow') {
+      await action();
+      return;
+    }
+
+    setOverdraftPrompt({
+      mode: overdraftMode === 'block' ? 'block' : 'warn',
+      accountId: selectedPaymentAccount.id,
+      accountName: selectedPaymentAccount.bank,
+      currentBalance,
+      transactionAmount: outflowAmount,
+      projectedBalance,
+    });
+  };
+
+  const [confirmModal, setConfirmModal] = useState<{
+    show: boolean;
+    title: string;
+    message: string;
+    onConfirm: () => void;
+  }>({ show: false, title: '', message: '', onConfirm: () => { } });
+
+  const filteredTransactions = useMemo(() => {
+    return transactions.filter(tx => {
+      if (tx.transaction_type === 'credit_payment') return false;
+      const d = tx.date.slice(0, 10);
+      if (filterStartDate && d < filterStartDate) return false;
+      if (filterEndDate && d > filterEndDate) return false;
+      if (filterPaymentMethods.size > 0 && !filterPaymentMethods.has(tx.paymentMethodId)) return false;
+      return true;
+    });
+  }, [transactions, filterStartDate, filterEndDate, filterPaymentMethods]);
+
+  const totalSpend = useMemo(
+    () => filteredTransactions.reduce((sum, tx) => sum + (tx.amount > 0 ? tx.amount : 0), 0),
+    [filteredTransactions]
+  );
+
+  const loadData = useCallback(async () => {
+    setIsLoading(true);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      const myId = user?.id;
+
+      const [accountsResult, peopleResult, friendshipsResult] = await Promise.all([
+        getAllAccountsFrontend(),
+        getAllPeople(),
+        getFriendships()
+      ]);
+
+      if (accountsResult.error) {
+        console.error('Error loading accounts:', accountsResult.error);
+      } else if (accountsResult.data) {
+        setAccounts(accountsResult.data);
+      }
+
+      if (peopleResult.error) {
+        console.error('Error loading people:', peopleResult.error);
+      } else if (peopleResult.data) {
+        setPeople(peopleResult.data);
+      }
+
+      if (myId) {
+        const linkedFriendIds = peopleResult.data ? peopleResult.data.filter(p => p.friend_user_id).map(p => p.friend_user_id) : [];
+        let friendIds: string[] = [];
+        if (friendshipsResult.data) {
+          const validFriendships = friendshipsResult.data.filter(f => f.status === 'accepted');
+          friendIds = validFriendships.map(f => f.user_id === myId ? f.friend_id : f.user_id);
+        }
+
+        const allProfileIdsToFetch = Array.from(new Set([...linkedFriendIds, ...friendIds]));
+
+        if (allProfileIdsToFetch.length > 0) {
+          const { data: fProfiles } = await supabase.from('user_profiles').select('*').in('user_id', allProfileIdsToFetch);
+          if (fProfiles) setFriendProfiles(fProfiles);
+        } else {
+          setFriendProfiles([]);
+        }
+      }
+    } catch (error) {
+      console.error('Error loading data:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadData();
+  }, [loadData]);
+
+  useEffect(() => {
+    const handleUpdate = () => loadData();
+    window.addEventListener('transactions_updated', handleUpdate);
+    return () => window.removeEventListener('transactions_updated', handleUpdate);
+  }, [loadData]);
+
+  const selectableContacts: ContactOption[] = useMemo(() => {
+    const list: ContactOption[] = [];
+    const addedNames = new Set<string>();
+
+    people.forEach(p => {
+      const isLinked = !!p.friend_user_id;
+      let handleOrEmail = '';
+      if (isLinked) {
+        const prof = friendProfiles.find(fp => fp.user_id === p.friend_user_id);
+        if (prof) handleOrEmail = prof.username ? `@${prof.username}` : prof.email;
+      }
+      list.push({ id: p.id, name: p.name, handleOrEmail, isLinked, isBudeeOnly: false });
+      addedNames.add(p.name.toLowerCase());
+    });
+
+    friendProfiles.forEach(prof => {
+      const isAlreadyLinked = people.some(p => p.friend_user_id === prof.user_id);
+      if (!isAlreadyLinked) {
+        const name = `${prof.first_name} ${prof.last_name}${prof.username ? ` (@${prof.username})` : ''}`;
+        list.push({ id: prof.user_id, name: name, handleOrEmail: prof.username ? `@${prof.username}` : prof.email, isLinked: false, isBudeeOnly: true, budeeProfile: prof });
+        addedNames.add(name.toLowerCase());
+      }
+    });
+
+    uniquePeopleNames.forEach(name => {
+      if (name && !addedNames.has(name.toLowerCase())) {
+        list.push({
+          id: `hist-${name}`,
+          name: name,
+          isLinked: false,
+          isBudeeOnly: false
+        });
+        addedNames.add(name.toLowerCase());
+      }
+    });
+    return list;
+  }, [people, friendProfiles, uniquePeopleNames]);
+
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        setShowFloatingAdd(!entry.isIntersecting);
+      },
+      { root: null, threshold: 0 }
+    );
+    if (headerRef.current) {
+      observer.observe(headerRef.current);
+    }
+    return () => observer.disconnect();
+  }, []);
+
+  useEffect(() => {
+    if (accounts.length > 0 && !form.paymentMethodId) {
+      const defaultAcc = accounts.find(a => form.transactionType === 'payment' ? a.classification !== 'Credit Card' : a.type !== 'Credit') || accounts[0];
+      setForm(f => ({ ...f, paymentMethodId: defaultAcc?.id ?? '' }));
+    }
+  }, [accounts, form.paymentMethodId, form.transactionType]);
+
+  useEffect(() => {
+    if (selectedTx?.receiptUrl) {
+      setReceiptSignedUrl(undefined);
+      getReceiptSignedUrl(selectedTx.receiptUrl)
+        .then(url => setReceiptSignedUrl(url))
+        .catch(() => setReceiptSignedUrl(null));
+    } else {
+      setReceiptSignedUrl(null);
+    }
+  }, [selectedTx]);
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (pmDropdownRef.current && !pmDropdownRef.current.contains(e.target as Node)) {
+        setShowPaymentMethodDropdown(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
+
+  const openAddForm = (type: string, source: 'top' | 'fab' = 'top') => {
+    setForm({
+      name: '',
+      date: todayIso(),
+      amount: '',
+      paymentMethodId: accounts.find(a => type === 'payment' ? a.classification !== 'Credit Card' : a.type !== 'Credit')?.id ?? (accounts[0]?.id ?? ''),
+      transactionType: type,
+      transferToAccountId: '',
+      borrowerName: '',
+      personName: '',
+      payerId: 'me',       // 🟢 Reset to default
+      beneficiaryId: 'me',
+      isPhysicalOrder: false,
+      trackingNumber: '',
+      courier: 'SPX',  // 🟢 Reset to default
+      isFronted: false
+    });
+    setReceiptFile(null);
+    setPaymentTab('my_account'); // 🟢 Replaces setShowAdvancedOptions(false)
+    setIsIOU(false);
+
+
+        if (source === 'top') {
+      setShowFabMenu(false);
+      setShowTypeModal(false); // 🟢 FIX 1: Explicitly close the Type Modal!
+    }
+    setFormSource(source);
+    setShowForm(true);
+  };
+
+
+  const closeForm = () => {
+    setShowForm(false);
+    setEditingTxId(null);
+    setFormSource(null);
+    setReceiptFile(null);
+    setPaymentTab('my_account'); // 🟢 Replaces setShowAdvancedOptions(false)
+    setIsIOU(false);
+    
+    // 🟢 You missed the setForm call here!
+    setForm({
+      name: '', 
+      date: todayIso(), 
+      amount: '', 
+      paymentMethodId: accounts[0]?.id ?? '', 
+      transactionType: 'payment', 
+      transferToAccountId: '', 
+      borrowerName: '', 
+      personName: '',
+      payerId: 'me',       // 🟢 Reset to default
+      beneficiaryId: 'me',
+      isPhysicalOrder: false,
+      trackingNumber: '',
+      courier: 'SPX',
+      isFronted: false
+    });
+  };
+
+
+
+
+  const openEditForm = (tx: Transaction) => {
+    setEditingTxId(tx.id);
+    setFormSource(null);
+    setForm({
+      name: tx.name,
+      date: toLocalDateInputValue(tx.date),
+      amount: Math.abs(tx.amount).toFixed(2),
+      paymentMethodId: tx.paymentMethodId,
+      transactionType: tx.transaction_type || 'payment',
+      transferToAccountId: '',
+      borrowerName: tx.borrower_name || '',
+      personName: (tx as any).person_name || '',
+      payerId: (tx as any).payer_id || 'me',             // 🟢 Pre-fill existing data
+      beneficiaryId: (tx as any).beneficiary_id || 'me',  // 🟢 Pre-fill existing data
+      isFronted: !!(tx as any).notes?.includes('FRONTED_FROM_SAVINGS')
+    });
+    
+    // 🟢 Auto-configure tabs based on existing transaction data
+        const hasPayer = (tx as any).payer_id && (tx as any).payer_id !== 'me';
+        const hasBeneficiary = (tx as any).beneficiary_id && (tx as any).beneficiary_id !== 'me';
+        
+        setPaymentTab(hasPayer ? 'budee' : 'my_account');
+        setIsIOU(hasBeneficiary);
+        
+        setReceiptFile(null);
+    
+    setShowForm(true);
+  };
+
+
+  const executeTransactionSubmit = async () => {
+    if (form.transactionType === 'transfer' && transferTab === 'accounts' && !editingTxId) {
+      if (!form.paymentMethodId || !form.transferToAccountId || !form.amount || !form.date) return;
+
+      await guardTransactionsOverdraft(
+        Math.abs(parseFloat(form.amount)) + Math.abs(parseFloat(form.feeAmount || '0')),
+        async () => {
+          try {
+            const { error } = await createTransfer(
+              form.paymentMethodId,
+              form.transferToAccountId,
+              parseFloat(form.amount),
+              combineDateWithCurrentTime(form.date),
+              parseFloat(form.feeAmount || '0')
+            );
+            if (error) throw error;
+
+            await loadData();
+            if (onTransactionCreated) onTransactionCreated();
+            closeForm();
+          } catch (error) {
+            console.error('Error creating transfer:', error);
+            alert(error instanceof Error ? error.message : ((error as any)?.message || 'Failed to process transfer. Please try again.'));
+          }
+        }
+      );
+      return;
+    }
+
+    let txName = form.name;
+    if (form.transactionType === 'transfer' && transferTab === 'friends' && !txName) {
+      txName = `Transfer to ${form.personName}`;
+    }
+
+    if (!txName || !form.date || !form.amount || !form.paymentMethodId) return;
+
+    // 🟢 NEW: Format the IOU relational data
+    const payloadPayerId = form.payerId === 'me' ? null : form.payerId;
+    const payloadBeneficiaryId = form.beneficiaryId === 'me' ? null : form.beneficiaryId;
+    const payloadIouStatus = (payloadPayerId || payloadBeneficiaryId) ? 'pending' : 'none';
+
+
+    // 🟢 BUILD THE REIMBURSEMENT TAG
+    let resolvedNotes = editingTxId && editingTransaction ? ((editingTransaction as any).notes || '') : '';
+    if (form.isFronted) {
+      if (resolvedNotes.includes('FRONTED_FROM_SAVINGS')) {
+          resolvedNotes = resolvedNotes.replace(/FRONTED_FROM_SAVINGS\|[a-zA-Z0-9-]+/, `FRONTED_FROM_SAVINGS|${form.paymentMethodId}`);
+      } else {
+          resolvedNotes = resolvedNotes ? `${resolvedNotes} FRONTED_FROM_SAVINGS|${form.paymentMethodId}` : `FRONTED_FROM_SAVINGS|${form.paymentMethodId}`;
+      }
+    } else {
+      resolvedNotes = resolvedNotes.replace(/FRONTED_FROM_SAVINGS\|[a-zA-Z0-9-]+/, '').trim();
+    }
+    const finalNotes = resolvedNotes === '' ? null : resolvedNotes;
+
+
+    let finalAmount = parseFloat(form.amount);
+    if (form.transactionType === 'cash_in') {
+      finalAmount = -Math.abs(finalAmount);
+    } else if (['withdraw', 'payment', 'loan', 'transfer'].includes(form.transactionType)) {
+      finalAmount = Math.abs(finalAmount);
+    }
+
+    const outflowAmount = finalAmount > 0 ? finalAmount : 0;
+
+    await guardTransactionsOverdraft(outflowAmount, async () => {
+      try {
+        if (editingTxId) {
+                    const updates = {
+            name: txName,
+            date: combineDateWithCurrentTime(form.date),
+            amount: finalAmount,
+            payment_method_id: form.paymentMethodId,
+            transaction_type: form.transactionType,
+            borrower_name: form.transactionType === 'loan' ? form.borrowerName || null : null,
+            person_name: (form.transactionType === 'transfer' && transferTab === 'friends') ? form.personName || null : null,
+            payer_id: payloadPayerId,
+            beneficiary_id: payloadBeneficiaryId,
+            iou_status: payloadIouStatus,
+            // 🟢 Add these 3 logistics lines
+            order_status: form.isPhysicalOrder ? 'pending_delivery' : null,
+            tracking_number: form.isPhysicalOrder ? form.trackingNumber : null,
+            courier: form.isPhysicalOrder ? form.courier : null,
+            notes: finalNotes,
+         
+
+          };
+
+          
+
+          const { error } = await updateTransaction(editingTxId, updates);
+          if (error) {
+            console.error('Error updating transaction:', error);
+            alert(error instanceof Error ? error.message : ((error as any)?.message || 'Failed to update transaction. Please try again.'));
+            return;
+          }
+
+          if (receiptFile) {
+            const { path, error: uploadError } = await uploadTransactionReceipt(editingTxId, receiptFile);
+            if (uploadError) {
+              console.error('Error uploading receipt:', uploadError);
+              alert('Transaction updated, but receipt upload failed. Please try again.');
+            } else if (path) {
+              await updateTransaction(editingTxId, { receipt_url: path });
+            }
+          }
+        } else {
+                    const transaction = {
+            name: txName,
+            date: combineDateWithCurrentTime(form.date),
+            amount: finalAmount,
+            payment_method_id: form.paymentMethodId,
+            transaction_type: form.transactionType,
+            borrower_name: form.transactionType === 'loan' ? form.borrowerName || null : null,
+            person_name: (form.transactionType === 'transfer' && transferTab === 'friends') ? form.personName || null : null,
+            // 🟢 Add these 3 logistics lines
+            order_status: form.isPhysicalOrder ? 'pending_delivery' : null,
+            tracking_number: form.isPhysicalOrder ? form.trackingNumber : null,
+            courier: form.isPhysicalOrder ? form.courier : null,
+            notes: finalNotes,
+          };
+
+
+          const { data, error } = await createTransaction(transaction as any);
+
+          if (error) {
+            console.error('Error creating transaction:', error);
+            alert(error instanceof Error ? error.message : ((error as any)?.message || 'Failed to create transaction. Please try again.'));
+            return;
+          }
+
+          if (receiptFile && data) {
+            const { path, error: uploadError } = await uploadTransactionReceipt(data.id, receiptFile);
+            if (uploadError) {
+              console.error('Error uploading receipt:', uploadError);
+              alert('Transaction saved, but receipt upload failed. Please try again.');
+            } else if (path) {
+              await updateTransaction(data.id, { receipt_url: path });
+            }
+          }
+        }
+
+        await loadData();
+        if (onTransactionCreated) {
+          onTransactionCreated();
+        }
+        closeForm();
+      } catch (error) {
+        console.error('Error saving transaction:', error);
+        alert(error instanceof Error ? error.message : ((error as any)?.message || 'Failed to save transaction. Please try again.'));
+      }
+    });
+  };
+
+  const onSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    const isTransferToFriend = form.transactionType === 'transfer' && transferTab === 'friends' && !editingTxId;
+    const targetName = isTransferToFriend ? form.personName : (form.transactionType === 'loan' ? form.borrowerName : null);
+
+    if (targetName) {
+      const matchedBudee = selectableContacts.find(c => c.name === targetName && c.isBudeeOnly);
+      if (matchedBudee && matchedBudee.budeeProfile) {
+        setPendingProfileModal({ budee: matchedBudee.budeeProfile, formName: targetName });
+        return;
+      }
+    }
+    await executeTransactionSubmit();
+  };
+
+  const handleStashSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!stashTx || !stashAmount) return;
+
+    const account = accounts.find(a => a.id === stashTx.paymentMethodId);
+    if (!account || !account.hasVaultEnabled || !account.vaultId) return;
+
+    try {
+      const { error } = await createTransfer(
+        stashTx.paymentMethodId,
+        account.vaultId,
+        parseFloat(stashAmount),
+        new Date().toISOString(), // Use current timestamp for the transfer
+        0,
+        null
+      );
+
+      if (error) throw error;
+
+      setIsStashModalOpen(false);
+      setStashAmount('');
+      setStashTx(null);
+      await loadData();
+    } catch (error) {
+      console.error('Failed to stash funds:', error);
+      alert('Failed to stash funds. Please try again.');
+    }
+  };
+
+
+  const removeTx = async (id: string, name: string) => {
+    setConfirmModal({
+      show: true,
+      title: 'Delete Transaction',
+      message: `Are you sure you want to delete transaction "${name}"? This action cannot be undone.`,
+      onConfirm: async () => {
+        setConfirmModal(prev => ({ ...prev, show: false }));
+        try {
+          const { error } = await deleteTransactionAndRevertSchedule(id);
+          if (error) throw error;
+          await loadData();
+          if (onTransactionDeleted) {
+            onTransactionDeleted();
+          }
+        } catch (error) {
+          console.error('Error deleting transaction:', error);
+          alert('Failed to delete transaction. Please check your connection and try again.');
+        }
+      }
+    });
+  };
+
+  const toggleSelectMode = () => {
+    setIsSelectMode(prev => {
+      if (prev) setSelectedIds(new Set());
+      return !prev;
+    });
+  };
+
+  const toggleId = (id: string) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+
+  const toggleAllVisible = () => {
+    const visibleIds = filteredTransactions.map(t => t.id);
+    const allSelected = visibleIds.every(id => selectedIds.has(id));
+    setSelectedIds(allSelected ? new Set() : new Set(visibleIds));
+  };
+
+  const handleBatchDelete = async () => {
+    setIsBatchDeleting(true);
+    try {
+      const { errors } = await batchDeleteTransactions([...selectedIds]);
+      if (errors.length > 0) {
+        alert(`${errors.length} transaction(s) could not be deleted. Please try again.`);
+      }
+      setShowBatchConfirm(false);
+      setSelectedIds(new Set());
+      setIsSelectMode(false);
+      await loadData();
+      if (onTransactionDeleted) onTransactionDeleted();
+    } catch (error) {
+      console.error('Batch delete error:', error);
+      alert('Failed to delete transactions. Please try again.');
+    } finally {
+      setIsBatchDeleting(false);
+    }
+  };
+
+  const togglePaymentMethodFilter = (id: string) => {
+    setFilterPaymentMethods(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+
+  const resetFilters = () => {
+    setFilterStartDate(getFirstDayOfCurrentYearIso());
+    setFilterEndDate(getLastDayOfCurrentYearIso());
+    setFilterPaymentMethods(new Set());
+  };
+
+  const allVisibleSelected = filteredTransactions.length > 0 &&
+    filteredTransactions.every(t => selectedIds.has(t.id));
+
+  const pmFilterLabel = filterPaymentMethods.size === 0
+    ? 'All Accounts'
+    : filterPaymentMethods.size === 1
+      ? accounts.find(a => filterPaymentMethods.has(a.id))?.bank ?? '1 selected'
+      : `${filterPaymentMethods.size} selected`;
+
+      return (
+        <>
+          <div className="min-h-screen w-full bg-transparent dark:bg-gray-950 transition-colors duration-200 pr-2 sm:pr-0">
+            <div className="space-y-6 animate-in fade-in duration-500 w-full max-w-7xl mx-auto">
+    
+          <div ref={headerRef}>
+            <PageHeader
+              title="Transactions"
+              subtitle="Keep tabs on your funds"
+              icon={
+                <div className={`w-14 h-14 rounded-2xl flex items-center justify-center text-white border-[3px] border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] -rotate-3 transition-all hover:rotate-0 hover:scale-110 z-10 relative ${getAccentClasses('bg')}`}>
+                  <FileText className="w-7 h-7" />
+                </div>
+              }
+              actions={!isMobile && (
+                <button onClick={() => setShowTypeModal(true)} className={`flex items-center gap-2 text-white px-5 py-3 rounded-xl font-bold transition-all text-sm border-[3px] border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[2px] hover:translate-y-[2px] ${getAccentClasses('bg')}`}>
+                  <Plus className="w-4 h-4" />
+                  <span>Add Transaction</span>
+                </button>
+              )}
+            />
+          </div>
+
+
+
+
+          <div className="bg-[#FCF6E8] dark:bg-gray-900 border-4 border-black rounded-2xl shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] mb-2 relative z-10">
+                <button
+                  className="p-4 flex justify-between items-center w-full disabled:cursor-auto"
+                  onClick={() => setIsFiltersOpen(p => !p)}
+                  disabled={!isMobile}
+                >
+
+              <div className="flex items-center gap-3">
+                <Filter className="w-5 h-5 text-gray-400" />
+                <h3 className="text-sm font-bold uppercase text-gray-600 dark:text-gray-400 tracking-widest">
+                  Filters
+                </h3>
+              </div>
+              {isMobile && (
+                <ChevronDown className={`w-6 h-6 text-gray-400 transition-transform ${isFiltersOpen ? 'rotate-180' : ''}`} />
+              )}
+            </button>
+
+            {isFiltersOpen && (
+              <div className="p-4 pt-2 sm:pt-4 border-t-4 sm:border-t-0 border-black sm:border-transparent">
+                <div className="flex flex-col sm:flex-row sm:flex-wrap sm:items-end gap-3">
+                  <div className="flex flex-col gap-1">
+                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Start Date</label>
+                    <input
+                      type="date"
+                      value={filterStartDate}
+                      min={FILTER_MIN_DATE}
+                      max={filterEndDate}
+                      onChange={e => setFilterStartDate(e.target.value)}
+                      className={`bg-white dark:bg-gray-800 border-2 border-black dark:border-gray-700 rounded-xl px-3 py-2 text-sm font-bold outline-none focus:ring-offset-2 ${getAccentClasses('focus-ring')} transition-all`} />
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">End Date</label>
+                    <input
+                      type="date"
+                      value={filterEndDate}
+                      min={filterStartDate}
+                      onChange={e => setFilterEndDate(e.target.value)}
+                      className={`bg-white dark:bg-gray-800 border-2 border-black dark:border-gray-700 rounded-xl px-3 py-2 text-sm font-bold outline-none focus:ring-offset-2 ${getAccentClasses('focus-ring')} transition-all`} />
+                  </div>
+                  <div className="flex flex-col gap-1 relative" ref={pmDropdownRef}>
+                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Payment Method</label>
+                    <button
+                      type="button"
+                      onClick={() => setShowPaymentMethodDropdown(p => !p)}
+                      className={`flex items-center gap-2 w-full justify-between bg-white dark:bg-gray-800 border-2 border-black dark:border-gray-700 rounded-xl px-3 py-2 text-sm font-bold outline-none focus:ring-offset-2 ${getAccentClasses('focus-ring')} transition-all`}
+                    >
+                      <span>{pmFilterLabel}</span>
+                      <ChevronDown className="w-4 h-4 text-gray-400 shrink-0" />
+                    </button>
+                    {showPaymentMethodDropdown && (
+                      <div className="absolute top-full left-0 mt-1 z-30 bg-white dark:bg-gray-900 rounded-xl shadow-lg border border-gray-100 dark:border-gray-800 min-w-[180px] py-2 transition-colors">
+                        {accounts.map(a => (
+                          <label key={a.id} className="flex items-center gap-2 px-4 py-2 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
+                            <input
+                              type="checkbox"
+                              checked={filterPaymentMethods.has(a.id)}
+                              onChange={() => togglePaymentMethodFilter(a.id)}
+                              className="rounded" />
+                            <span className="text-sm font-medium text-gray-700 dark:text-gray-300">{a.bank}</span>
+                          </label>
+                        ))}
+                        {accounts.length === 0 && (
+                          <p className="px-4 py-2 text-sm text-gray-400">No accounts</p>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => { setFilterStartDate(''); setFilterEndDate(''); }}
+                    className={`self-end px-4 py-2.5 text-xs font-bold rounded-xl border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] transition-all hover:shadow-none hover:translate-x-[0.5px] hover:translate-y-[0.5px] ${getAccentClasses('bg')} text-white`}
+                  >
+                    All Time
+                  </button>
+                  <button
+                    type="button"
+                    onClick={resetFilters}
+                    className="self-end px-4 py-2.5 text-xs font-bold rounded-xl border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] transition-all hover:shadow-none hover:translate-x-[0.5px] hover:translate-y-[0.5px] bg-black text-white"
+                  >
+                    Reset
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+
+          <div className="mb-6 w-full">
+            <div className={`${getAccentClasses('bg')} border-4 border-black rounded-2xl shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] p-5 text-white w-full`}>
+              <p className="text-xs font-black uppercase tracking-widest text-white mb-1">Total Spend</p>
+              <p className="text-3xl font-black">{formatCurrency(totalSpend)}</p>
+              <p className="text-xs text-white mt-1">Based on current filter · {filteredTransactions.length} transaction{filteredTransactions.length !== 1 ? 's' : ''}</p>
+            </div>
+          </div>
+
+          {/* LOGISTICS ENTRY POINT */}
+<Link 
+  to="/orders" 
+  className="w-full bg-orange-100 dark:bg-orange-900/20 border-[3px] border-black rounded-2xl p-4 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] active:translate-x-[2px] active:translate-y-[2px] active:shadow-none transition-all flex items-center justify-between mb-6 group"
+>
+  <div className="flex items-center gap-3 sm:gap-4">
+    <div className="w-10 h-10 sm:w-12 sm:h-12 bg-orange-300 dark:bg-orange-600 rounded-xl border-2 border-black flex items-center justify-center shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] group-hover:scale-105 transition-transform">
+      <Package className="w-5 h-5 sm:w-6 sm:h-6 text-black dark:text-white" />
+    </div>
+    <div>
+      <h3 className="font-black text-gray-900 dark:text-white uppercase tracking-tight text-sm sm:text-base">Track Parcels</h3>
+      <p className="text-[10px] sm:text-xs font-bold text-gray-600 dark:text-gray-400">Manage pending deliveries & returns</p>
+    </div>
+  </div>
+  <div className="flex items-center gap-2">
+    <span className="bg-black text-white text-[9px] sm:text-[10px] font-black uppercase tracking-widest px-2 py-1 rounded-md">
+      In Transit
+    </span>
+    <ChevronRight className="w-5 h-5 text-gray-400" />
+  </div>
+</Link>
+
+
+          <div className="bg-[#FCF6E8] dark:bg-gray-900 border-4 border-black rounded-2xl shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] overflow-hidden transition-colors w-full max-w-full">
+            <div className="px-6 py-4 border-b-4 border-black flex items-center justify-between transition-colors">
+              <h2 className="text-sm font-bold uppercase text-gray-600 dark:text-gray-400 tracking-widest">All transactions</h2>
+              <div className="flex items-center gap-2">
+                <div className="text-sm text-gray-500">{filteredTransactions.length} items</div>
+                {isSelectMode && selectedIds.size > 0 && (
+                  <button
+                    onClick={() => setShowBatchConfirm(true)}
+                    title="Delete selected"
+                    aria-label="Delete selected transactions"
+                    className="flex items-center gap-1 px-3 py-1.5 bg-red-500 hover:bg-red-600 text-white text-xs font-bold rounded-lg border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] transition-all hover:shadow-none hover:translate-x-[0.5px] hover:translate-y-[0.5px]"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                    <span>{selectedIds.size}</span>
+                  </button>
+                )}
+                <button
+                  onClick={toggleSelectMode}
+                  title={isSelectMode ? 'Cancel selection' : 'Select transactions'}
+                  aria-label={isSelectMode ? 'Cancel selection' : 'Select transactions'}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-lg border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] transition-all hover:shadow-none hover:translate-x-[0.5px] hover:translate-y-[0.5px] ${isSelectMode ? 'bg-black text-white' : getAccentClasses('bg') + ' text-white'}`}>
+                  {isSelectMode ? <CheckSquare className="w-4 h-4" /> : <Square className="w-4 h-4" />}
+                  <span>Select</span>
+                </button>
+              </div>
+            </div>
+
+            <div className="w-full overflow-x-auto">
+              <div className="p-4">
+                {isLoading || loading ? (
+                  <div className="text-center py-8 text-gray-500">Loading transactions...</div>
+                ) : (
+                  <TransactionList
+                  transactions={filteredTransactions}
+                  accounts={accounts}
+                  isSelectMode={isSelectMode}
+                  selectedIds={selectedIds}
+                  onToggleId={toggleId}
+                  onSelectAll={toggleAllVisible}
+                  allVisibleSelected={allVisibleSelected}
+                  onViewDetails={setSelectedTx}
+                  onEdit={openEditForm}
+                  onDelete={removeTx}
+                  // 🟢 ADD THIS LINE:
+                  onStash={(tx) => {
+                    setStashTx(tx);
+                    setStashAmount(Math.abs(tx.amount).toString());
+                    setIsStashModalOpen(true);
+                  }} 
+                />
+              
+                )}
+                {filteredTransactions.length === 0 && !isLoading && (
+                  <div className="text-center py-16 px-6 bg-gray-50 dark:bg-gray-800/50 rounded-2xl border-2 border-dashed border-gray-300 dark:border-gray-700">
+                    <FileText className="w-12 h-12 mx-auto text-gray-300 dark:text-gray-600" />
+                    <p className="font-bold mt-4 text-gray-800 dark:text-gray-200">No transactions found</p>
+                    <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">There are no transactions for the selected date range and payment methods.</p>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <Portal>
+        {showForm && (
+          <div className="fixed inset-0 z-[999] flex items-center justify-center p-4 md:p-6 bg-black/60 backdrop-blur-md">
+            <div className="w-full max-w-md bg-white dark:bg-gray-900 border-4 border-black rounded-2xl shadow-2xl sm:shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] transition-all max-h-[75vh] flex flex-col">
+              <div className="flex-shrink-0 p-5 md:p-6 pb-2 md:pb-3 relative">
+                {formSource === 'top' && !editingTxId && (
+                  <button
+                    onClick={() => { setShowForm(false); setShowTypeModal(true); setFormSource(null); }}
+                    className="absolute left-4 top-4 md:left-6 md:top-6 p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full transition-colors"
+                    aria-label="Back to type selection"
+                  >
+
+
+                    <ArrowLeft className="w-5 h-5 text-gray-400" />
+                  </button>
+                )}
+                {(formSource === 'fab' || editingTxId) && (
+                  <button
+                    onClick={closeForm}
+                    className="absolute right-4 top-4 md:right-6 md:top-6 p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full transition-colors"
+                    aria-label="Close"
+                  >
+                    <X className="w-5 h-5 text-gray-400" />
+                  </button>
+                )}
+                <h2 className={`text-xl md:text-2xl font-black text-gray-900 dark:text-gray-100 mb-1 ${formSource === 'top' && !editingTxId ? 'mt-8 md:mt-6' : ''}`}>
+                  {editingTxId ? 'Edit Transaction' :
+                    form.transactionType === 'withdraw' ? 'Withdraw Funds' :
+                      form.transactionType === 'cash_in' ? 'Cash In' :
+                        form.transactionType === 'transfer' ? 'Transfer Funds' :
+                          form.transactionType === 'loan' ? 'Record Loan' :
+                            `Add New ${TRANSACTION_TYPES.find(t => t.id === form.transactionType)?.label || 'Transaction'}`}
+                </h2>
+                <p className="text-gray-500 text-xs md:text-sm">
+                  {editingTxId ? 'Update the transaction details below' :
+                    form.transactionType === 'withdraw' ? 'Record an ATM withdrawal or cash out' :
+                      form.transactionType === 'cash_in' ? 'Record incoming funds' :
+                        form.transactionType === 'transfer' ? 'Move money between accounts' :
+                          form.transactionType === 'loan' ? 'Record money lent out' :
+                            'Record a payment transaction'}
+                </p>
+              </div>
+
+              <div className="flex-1 overflow-y-auto overflow-x-hidden px-6 md:px-8">
+              <form id="transaction-form" onSubmit={onSubmit} className="space-y-3">⁠
+                  {(form.transactionType !== 'transfer' || editingTxId) && (
+                    <div>
+                      <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">
+                        {['withdraw', 'cash_in', 'loan', 'transfer'].includes(form.transactionType) ? 'Label' : 'Name'}
+                      </label>
+                      <input
+                        value={form.name}
+                        onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
+                        required
+                        placeholder={form.transactionType === 'withdraw' ? 'e.g. ATM Withdrawal' :
+                          form.transactionType === 'cash_in' ? 'e.g. Salary, Deposit' :
+                            form.transactionType === 'loan' ? 'e.g. Loan to John' :
+                              'e.g. Groceries, Gas, etc.'}
+                        className={`w-full bg-white dark:bg-gray-800 border-2 border-black dark:border-gray-700 rounded-xl py-2.5 px-3 font-bold outline-none focus:ring-offset-2 ${getAccentClasses('ring')} transition-all text-sm`} />
+                    </div>
+                  )}
+
+                  <div>
+                    <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Amount</label>
+                    <div className="relative">
+                      <span className="absolute left-4 top-1/2 -translate-y-1/2 font-bold text-gray-400">₱</span>
+                      <input
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        value={form.amount}
+                        onChange={e => setForm(f => ({ ...f, amount: e.target.value }))}
+                        required
+                        className={`w-full bg-white dark:bg-gray-800 border-2 border-black dark:border-gray-700 rounded-xl py-2.5 px-3py-2.5 px-3 pl-8 text-lg font-black outline-none focus:ring-offset-2 ${getAccentClasses('ring')} transition-all`} />
+                    </div>
+                  </div>
+
+                  {form.transactionType === 'transfer' && !editingTxId ? (
+                    <>
+                      <div className={`flex p-1 bg-gray-200 dark:bg-gray-800 rounded-xl mb-4 mt-2 border-2 border-black`}>
+                        <button
+                          type="button"
+                          onClick={() => setTransferTab('accounts')}
+                          className={`flex-1 flex items-center justify-center gap-2 py-2.5 px-3 rounded-lg text-xs md:text-sm font-bold transition-all ${transferTab === 'accounts' ? `bg-white dark:bg-gray-900 border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] ${getAccentClasses('text')}` : 'text-gray-500'}`}>
+                          <ArrowLeftRight className="w-4 h-4" />
+                          <span>My Accounts</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setTransferTab('friends')}
+                          className={`flex-1 flex items-center justify-center gap-2 py-2.5 px-3 rounded-lg text-xs md:text-sm font-bold transition-all ${transferTab === 'friends' ? `bg-white dark:bg-gray-900 border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] ${getAccentClasses('text')}` : 'text-gray-500'}`}>
+                          <User className="w-4 h-4" />
+                          <span>Friends</span>
+                        </button>
+                      </div>
+
+                      {transferTab === 'accounts' && (
+                        <div className="space-y-4 md:space-y-5 animate-in fade-in slide-in-from-left-4 duration-300">
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 relative">
+                            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 mt-0 sm:mt-3 flex items-center justify-center pointer-events-none z-10">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setForm(f => {
+                                    const newFrom = f.transferToAccountId || accounts.find(a => a.type !== 'Credit' && a.id !== f.paymentMethodId)?.id || f.paymentMethodId;
+                                    return {
+                                      ...f,
+                                      paymentMethodId: newFrom,
+                                      transferToAccountId: f.paymentMethodId
+                                    };
+                                  });
+                                }}
+                                className={`pointer-events-auto w-10 h-10 rounded-full bg-white dark:bg-gray-700 border-4 border-white dark:border-gray-900 flex items-center justify-center text-gray-500 transition-all shadow-sm ${getAccentClasses('hoverLight')}`}
+                                title="Swap accounts"
+                              >
+                                <ArrowLeftRight className="w-4 h-4 rotate-90 sm:rotate-0" />
+                              </button>
+                            </div>
+                            <div>
+                              <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Transfer From</label>
+                              {accounts.length === 0 ? (
+                                <div className="text-xs text-red-600 p-4">No accounts available</div>
+                              ) : (
+                                <select
+                                  value={form.paymentMethodId}
+                                  onChange={e => setForm(f => ({ ...f, paymentMethodId: e.target.value }))}
+                                  className={`w-full min-w-0 bg-white dark:bg-gray-800 border-2 border-black dark:border-gray-700 rounded-xl p-3.5 font-bold text-sm appearance-none outline-none focus:ring-offset-2 ${getAccentClasses('ring')}`}>
+                                  {/* Transfer From */}
+                                  {accounts.filter(a => a.type !== 'Credit' && a.classification !== 'Revolving Credit' && a.subtype !== 'Loan_Bundle').map(a => (
+                                    <option key={a.id} value={a.id}>{a.bank}</option>
+                                  ))}
+                                </select>
+                              )}
+                            </div>
+                            <div>
+                              <label className={`block text-[10px] font-black ${getAccentClasses('text')} uppercase tracking-widest mb-2`}>Transfer To</label>
+                              <select
+                                value={form.transferToAccountId}
+                                onChange={e => setForm(f => ({ ...f, transferToAccountId: e.target.value }))}
+                                className={`w-full min-w-0 bg-white dark:bg-gray-800 border-2 ${getAccentClasses('border')} rounded-xl p-3.5 font-bold text-sm appearance-none outline-none focus:ring-offset-2 ${getAccentClasses('ring')}`}>
+                                <option value="">Select Destination</option>
+                                {/* Transfer To */}
+                                {accounts.filter(a => a.id !== form.paymentMethodId && a.type !== 'Credit' && a.classification !== 'Revolving Credit' && a.subtype !== 'Loan_Bundle').map(a => (
+                                  <option key={a.id} value={a.id}>{a.bank}</option>
+                                ))}
+                              </select>
+                            </div>
+                          </div>
+                          <div>
+                            <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Transfer Fee (Optional)</label>
+                            <div className="relative mb-4">
+                              <span className="absolute left-4 top-1/2 -translate-y-1/2 font-bold text-gray-400">₱</span>
+                              <input
+                                type="number"
+                                step="0.01"
+                                min="0"
+                                value={form.feeAmount}
+                                onChange={e => setForm(f => ({ ...f, feeAmount: e.target.value }))}
+                                placeholder="0.00"
+                                className={`w-full bg-white dark:bg-gray-800 border-2 border-black dark:border-gray-700 rounded-xl p-3.5 pl-8 font-bold outline-none focus:ring-offset-2 ${getAccentClasses('ring')} transition-all text-sm`} />
+                            </div>
+                            <p className="text-[10px] text-gray-500 mt-[-10px] mb-4 font-medium">Logged as separate expense.</p>
+
+                            <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Date</label>
+                            <input
+                              type="date"
+                              value={form.date}
+                              onChange={e => setForm(f => ({ ...f, date: e.target.value }))}
+                              required
+                              className={`w-full min-w-0 bg-white dark:bg-gray-800 border-2 border-black dark:border-gray-700 rounded-xl p-3.5 font-bold outline-none focus:ring-offset-2 ${getAccentClasses('ring')} transition-all text-sm`} />
+                          </div>
+                        </div>
+                      )}
+
+                      {transferTab === 'friends' && (
+                        <div className="space-y-4 md:space-y-5 animate-in fade-in slide-in-from-right-4 duration-300">
+                          <div>
+                            <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">From Account</label>
+                            {accounts.length === 0 ? (
+                              <div className="text-xs text-red-600 p-4">No accounts available</div>
+                            ) : (
+                              <select
+                                value={form.paymentMethodId}
+                                onChange={e => setForm(f => ({ ...f, paymentMethodId: e.target.value }))}
+                                className={`w-full min-w-0 bg-white dark:bg-gray-800 border-2 border-black dark:border-gray-700 rounded-xl p-3.5 font-bold text-sm appearance-none outline-none focus:ring-offset-2 ${getAccentClasses('ring')}`}>
+                                {accounts.filter(a => a.type !== 'Credit' && a.classification !== 'Revolving Credit' && a.subtype !== 'Loan_Bundle').map(a => (
+                                  <option key={a.id} value={a.id}>{a.bank}</option>
+                                ))}
+                              </select>
+                            )}
+                          </div>
+
+                          <div>
+                            <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">To Who?</label>
+                            <ContactDropdown
+                              contacts={selectableContacts}
+                              value={form.personName || ''}
+                              onChange={val => setForm(f => ({ ...f, personName: val }))}
+                              placeholder="e.g. John Doe" />
+                          </div>
+
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <div>
+                              <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">For What? (Optional)</label>
+                              <input
+                                value={form.name}
+                                onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
+                                placeholder="e.g. Dinner"
+                                className={`w-full bg-white dark:bg-gray-800 border-2 border-black dark:border-gray-700 rounded-xl p-3.5 font-bold outline-none focus:ring-offset-2 ${getAccentClasses('ring')} transition-all text-sm`} />
+                            </div>
+                            <div>
+                              <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Date</label>
+                              <input
+                                type="date"
+                                value={form.date}
+                                onChange={e => setForm(f => ({ ...f, date: e.target.value }))}
+                                required
+                                className={`w-full bg-white dark:bg-gray-800 border-2 border-black dark:border-gray-700 rounded-xl p-3.5 font-bold outline-none focus:ring-offset-2 ${getAccentClasses('ring')} transition-all text-sm`} />
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                    </>
+                          ) : (
+                            //Transaction Modal Date Field
+                            <div className={`grid grid-cols-1 ${form.transactionType === 'loan' ? 'sm:grid-cols-2' : ''} gap-4`}>
+                              <div className="w-full min-w-0">
+                                <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">
+                                  {['withdraw', 'cash_in', 'loan', 'transfer'].includes(form.transactionType) ? 'Date' : 'Date Paid'}
+                                </label>
+                                {/* 🟢 Added 'block' and 'appearance-none' to strip the mobile browser's forced width! */}
+                                <input
+                                  type="date"
+                                  value={form.date}
+                                  onChange={e => setForm(f => ({ ...f, date: e.target.value }))}
+                                  required
+                                  className={`block w-full appearance-none min-w-0 bg-white dark:bg-gray-800 border-2 border-black dark:border-gray-700 rounded-xl py-2.5 px-3 font-bold outline-none focus:ring-offset-2 ${getAccentClasses('ring')} transition-all text-sm`} />
+                              </div>
+                              
+                              {form.transactionType === 'loan' && (
+                                <div className="w-full min-w-0">
+                                  <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Account</label>
+                                  {accounts.length === 0 ? (
+                                    <div className="text-xs text-red-600 p-4">No accounts available</div>
+                                  ) : (
+                                    <select
+                                      value={form.paymentMethodId}
+                                      onChange={e => setForm(f => ({ ...f, paymentMethodId: e.target.value }))}
+                                      className={`block w-full appearance-none min-w-0 bg-white dark:bg-gray-800 border-2 border-black dark:border-gray-700 rounded-xl py-2.5 px-3 font-bold text-sm outline-none focus:ring-offset-2 ${getAccentClasses('ring')}`}>
+                                      {accounts.filter(a => a.type !== 'Credit' && a.classification !== 'Revolving Credit' && a.subtype !== 'Loan_Bundle').map(a => (
+                                        <option key={a.id} value={a.id}>{a.bank}</option>
+                                      ))}
+                                    </select>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                          )}
+                                                                      
+                                    {/* 🟢 NEW: TABBED PAYMENT LAYOUT */}
+                                    {(form.transactionType === 'payment' || form.transactionType === 'withdraw' || form.transactionType === 'cash_in') && (
+                    <div className="mt-6 rounded-2xl border-[3px] border-black bg-gray-50 overflow-hidden shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] dark:bg-gray-900">
+                      
+                      {/* TABS HEADER */}
+                      <div className="flex border-b-[3px] border-black">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setPaymentTab('my_account');
+                            setForm(f => ({ ...f, payerId: 'me' }));
+                          }}
+                          className={`flex-1 py-3 px-4 text-xs font-black uppercase tracking-widest transition-colors ${
+                            paymentTab === 'my_account'
+                              ? 'bg-white text-indigo-600 dark:bg-gray-800 dark:text-indigo-400'
+                              : 'bg-gray-200 text-gray-500 hover:bg-gray-300 dark:bg-gray-900 dark:text-gray-400 dark:hover:bg-gray-800'
+                          }`}
+                        >
+                          My Account
+                        </button>
+                        <div className="w-[3px] bg-black"></div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setPaymentTab('budee');
+                            setIsIOU(false); 
+                            setForm(f => ({ ...f, beneficiaryId: 'me' }));
+                          }}
+                          className={`flex-1 py-3 px-4 text-xs font-black uppercase tracking-widest transition-colors ${
+                            paymentTab === 'budee'
+                              ? 'bg-white text-indigo-600 dark:bg-gray-800 dark:text-indigo-400'
+                              : 'bg-gray-200 text-gray-500 hover:bg-gray-300 dark:bg-gray-900 dark:text-gray-400 dark:hover:bg-gray-800'
+                          }`}
+                        >
+                          Budee
+                        </button>
+                      </div>
+
+                      {/* TAB CONTENT */}
+                      <div className="p-4 bg-white dark:bg-gray-800">
+                        
+                      {/* TAB 1: MY ACCOUNT */}
+                      {paymentTab === 'my_account' && (
+                          <div className="animate-in fade-in slide-in-from-left-2 duration-300">
+                            
+                            {/* 🟢 MOVED ACCOUNT DROPDOWN HERE */}
+                            <div className="mb-4">
+                              <label className="block text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-2 transition-colors">
+                                {['withdraw', 'cash_in'].includes(form.transactionType) ? 'Account' : 'Payment Method'}
+                              </label>
+                              <select 
+                                value={form.paymentMethodId} 
+                                onChange={e => setForm(f => ({ ...f, paymentMethodId: e.target.value }))}
+                                className={`w-full bg-white dark:bg-gray-900 dark:text-gray-100 border-2 border-black rounded-xl p-3.5 outline-none font-bold appearance-none focus:ring-offset-2 ${getAccentClasses('ring')} transition-colors shadow-[2px_2px_0px_rgba(0,0,0,0.12)]`}
+                              >
+                                {accounts.filter(a => {
+  const isAllowedBase = form.transactionType === 'payment' ? a.classification !== 'Credit Card' : a.type !== 'Credit';
+  return isAllowedBase && a.classification !== 'Revolving Credit' && a.subtype !== 'Loan_Bundle';
+}).map(a => (
+  <option key={a.id} value={a.id}>{a.bank}</option>
+))}
+
+                              </select>
+                            </div>
+
+                            {/* IOU Section */}
+                            <div className="pt-3 border-t-2 border-dashed border-gray-200 dark:border-gray-700">
+                              <label className="flex items-center gap-3 cursor-pointer py-1">
+                                <input 
+                                  type="checkbox" 
+                                  className="h-5 w-5 rounded border-black"
+                                  checked={isIOU} 
+                                  onChange={(e) => {
+                                    setIsIOU(e.target.checked);
+                                    if (!e.target.checked) setForm(f => ({ ...f, beneficiaryId: 'me' }));
+                                  }} 
+                                />
+                                <span className="text-sm font-bold text-gray-800 dark:text-gray-100">I paid for a Budee (IOU)</span>
+                              </label>
+
+                              {isIOU && (
+                                <div className="mt-4 space-y-4 animate-in fade-in slide-in-from-top-2 duration-300">
+                                  <div>
+                                    <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Who owes you?</label>
+                                    <select
+                                      value={form.beneficiaryId}
+                                      onChange={(e) => setForm(f => ({ ...f, beneficiaryId: e.target.value }))}
+                                      className={`w-full p-4 border-2 border-black dark:border-gray-700 rounded-xl text-sm font-bold bg-white dark:bg-gray-900 outline-none focus:ring-offset-2 ${getAccentClasses('ring')} transition-all shadow-[2px_2px_0px_rgba(0,0,0,0.12)]`}
+                                    >
+                                      <option value="me" disabled>Select a friend...</option>
+                                      {selectableContacts.map(c => (
+                                        <option key={`ben-${c.id}`} value={c.id}>{c.name}</option>
+                                      ))}
+                                    </select>
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        )}
+
+
+                        {/* TAB 2: BUDEE */}
+                        {paymentTab === 'budee' && (
+                          <div className="space-y-4 py-2 animate-in fade-in slide-in-from-right-2 duration-300">
+                            <div>
+                              <label className="block text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-2 transition-colors">Paid by</label>
+                              <select
+                                value={form.payerId}
+                                onChange={(e) => setForm(f => ({ ...f, payerId: e.target.value }))}
+                                className={`w-full p-4 border-2 border-black dark:border-gray-700 rounded-2xl text-sm font-bold bg-gray-50 dark:bg-gray-900 outline-none focus:ring-offset-2 ${getAccentClasses('ring')} transition-all shadow-[2px_2px_0px_rgba(0,0,0,0.12)]`}
+                                required={paymentTab === 'budee'}
+                              >
+                                <option value="me" disabled>Select a friend...</option>
+                                {selectableContacts.map(c => (
+                                  <option key={`payer-${c.id}`} value={c.id}>{c.name}</option>
+                                ))}
+                              </select>
+                              <p className="text-[9px] text-gray-400 mt-3 font-medium leading-tight">This will route the entire expense directly to this friend's profile instead of deducting from your bank account.</p>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                                    {/* 🟢 BORROW FROM SAVINGS TOGGLE */}
+                  {form.transactionType === 'payment' && (
+                    <button
+                      type="button"
+                      onClick={() => setForm(f => ({ ...f, isFronted: !f.isFronted }))}
+                      className={`mt-4 w-full flex items-center justify-between p-4 rounded-2xl border-[3px] border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] active:translate-x-[2px] active:translate-y-[2px] active:shadow-none transition-all ${
+                        form.isFronted ? 'bg-blue-300 dark:bg-blue-600' : 'bg-white dark:bg-gray-800'
+                      }`}
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className={`w-8 h-8 rounded-lg border-2 border-black flex items-center justify-center ${form.isFronted ? 'bg-black text-white' : 'bg-gray-100 dark:bg-gray-700 text-gray-500'}`}>
+                          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M2 12h4l3-9 5 18 3-9h5"/></svg>
+                        </div>
+                        <div className="text-left">
+                          <h4 className={`font-black uppercase tracking-tight text-sm ${form.isFronted ? 'text-black dark:text-white' : 'text-gray-700 dark:text-gray-300'}`}>
+                            Borrow from Savings
+                          </h4>
+                          <p className={`text-[10px] font-bold uppercase tracking-widest ${form.isFronted ? 'text-black/70 dark:text-white/70' : 'text-gray-500'}`}>
+                            Tag for Payday Reimbursement
+                          </p>
+                        </div>
+                      </div>
+                      
+                      {/* Custom Toggle Switch UI */}
+                      <div className={`w-12 h-6 rounded-full border-[3px] border-black relative transition-colors ${form.isFronted ? 'bg-white' : 'bg-gray-300 dark:bg-gray-600'}`}>
+                        <div className={`absolute top-[2px] w-4 h-4 rounded-full border-2 border-black bg-black transition-all ${form.isFronted ? 'left-[22px]' : 'left-[2px]'}`} />
+                      </div>
+                    </button>
+                  )}
+
+
+                  {/* 🟢 PHYSICAL PARCEL TOGGLE */}
+                  {form.transactionType === 'payment' && (
+                    <div className="flex flex-col gap-3 mt-4">
+                      <button
+                        type="button"
+                        onClick={() => setForm(f => ({ ...f, isPhysicalOrder: !f.isPhysicalOrder }))}
+                        className={`flex items-center justify-between p-4 rounded-2xl border-[3px] border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] active:translate-x-[2px] active:translate-y-[2px] active:shadow-none transition-all ${
+                          form.isPhysicalOrder ? 'bg-orange-300 dark:bg-orange-600' : 'bg-white dark:bg-gray-800'
+                        }`}
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className={`w-8 h-8 rounded-lg border-2 border-black flex items-center justify-center ${form.isPhysicalOrder ? 'bg-black text-white' : 'bg-gray-100 dark:bg-gray-700 text-gray-500'}`}>
+                            <Package className="w-4 h-4" />
+                          </div>
+                          <div className="text-left">
+                            <h4 className={`font-black uppercase tracking-tight text-sm ${form.isPhysicalOrder ? 'text-black dark:text-white' : 'text-gray-700 dark:text-gray-300'}`}>
+                              Physical Parcel
+                            </h4>
+                            <p className={`text-[10px] font-bold uppercase tracking-widest ${form.isPhysicalOrder ? 'text-black/70 dark:text-white/70' : 'text-gray-500'}`}>
+                              Route to Logistics Tracker
+                            </p>
+                          </div>
+                        </div>
+                        
+                        {/* Custom Toggle Switch UI */}
+                        <div className={`w-12 h-6 rounded-full border-[3px] border-black relative transition-colors ${form.isPhysicalOrder ? 'bg-white' : 'bg-gray-300 dark:bg-gray-600'}`}>
+                          <div className={`absolute top-[2px] w-4 h-4 rounded-full border-2 border-black bg-black transition-all ${form.isPhysicalOrder ? 'left-[22px]' : 'left-[2px]'}`} />
+                        </div>
+                      </button>
+
+                      {/* EXPANDING DETAILS SECTION */}
+                      {form.isPhysicalOrder && (
+                        <div className="p-4 bg-orange-50 dark:bg-orange-900/20 border-[3px] border-black border-dashed rounded-2xl flex flex-col gap-4 animate-in slide-in-from-top-2">
+                          <div>
+                            <label className="block text-[10px] font-black text-gray-500 uppercase tracking-widest mb-2">Courier (Optional)</label>
+                            <select 
+                              value={form.courier}
+                              onChange={(e) => setForm(f => ({ ...f, courier: e.target.value }))}
+                              className={`w-full rounded-xl border-[3px] border-black bg-white dark:bg-gray-800 px-4 py-3 text-sm font-black text-gray-900 dark:text-white outline-none shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]`}
+                            >
+                              <option value="SPX">Shopee Xpress (SPX)</option>
+                              <option value="J&T">J&T Express</option>
+                              <option value="Flash">Flash Express</option>
+                              <option value="NinjaVan">Ninja Van</option>
+                              <option value="LBC">LBC</option>
+                            </select>
+                          </div>
+                          <div>
+                            <label className="block text-[10px] font-black text-gray-500 uppercase tracking-widest mb-2">Tracking Number (Optional)</label>
+                            <input 
+                              type="text" 
+                              placeholder="e.g. SPX0123456789"
+                              value={form.trackingNumber}
+                              onChange={(e) => setForm(f => ({ ...f, trackingNumber: e.target.value }))}
+                              className={`w-full rounded-xl border-[3px] border-black bg-white dark:bg-gray-800 px-4 py-3 text-sm font-black text-gray-900 dark:text-white outline-none shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] placeholder-gray-400`}
+                            />
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+
+                  {form.transactionType === 'payment' && (
+                    <div>
+                      <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Upload Receipt (Optional)</label>
+                      <div className="relative">
+                        <input
+                          type="file"
+                          accept="image/*,application/pdf"
+                          className="absolute inset-0 opacity-0 cursor-pointer"
+                          onChange={e => setReceiptFile(e.target.files?.[0] ?? null)} />
+                        <div className={`w-full bg-white dark:bg-gray-800 border-2 border-black border-dashed rounded-xl p-5 md:p-6 text-center text-sm transition-all ${getAccentClasses('hoverLight')}`}>
+                          <span className="font-bold">{receiptFile ? receiptFile.name : 'Click or drag to upload receipt'}</span>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </form>
+              </div>
+
+              <div className="flex-shrink-0 p-5 md:p-6 pt-3 md:pt-4">
+                <div className="flex space-x-3">
+                  <button type="button" onClick={closeForm} className="flex-1 bg-gray-200 dark:bg-gray-700 py-3.5 rounded-xl font-bold text-gray-800 dark:text-gray-200 border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[1px] hover:translate-y-[1px] transition-all">Cancel</button>
+                  <button type="submit" form="transaction-form" disabled={accounts.length === 0 || (form.transactionType === 'transfer' && !editingTxId && transferTab === 'accounts' && !form.transferToAccountId) || (form.transactionType === 'transfer' && !editingTxId && transferTab === 'friends' && !form.personName)} className={`flex-1 bg-green-400 text-black py-3.5 rounded-xl font-bold border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[1px] hover:translate-y-[1px] transition-all disabled:opacity-50 disabled:bg-gray-300`}>
+                    {editingTxId ? 'Update' : form.transactionType === 'transfer' ? (transferTab === 'friends' ? 'Send to Friend' : 'Complete Transfer') : 'Submit'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {showTypeModal && (
+          <div className="fixed inset-0 z-[999] flex items-center justify-center p-2 sm:p-4 bg-black/60 backdrop-blur-md animate-in fade-in">
+            <div className="w-full max-w-lg bg-white dark:bg-gray-900 border-4 border-black rounded-2xl shadow-2xl sm:shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] p-6 sm:p-10 relative transition-all animate-in zoom-in-95">
+              <button onClick={() => setShowTypeModal(false)} className="absolute top-6 right-6 text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors" aria-label="Close">
+                <X className="w-5 h-5" />
+              </button>
+              <h2 className="text-2xl font-black text-gray-900 dark:text-gray-100 mb-2 uppercase tracking-tight">Transaction Type</h2>
+              <p className="text-gray-500 dark:text-gray-400 text-sm mb-8 font-medium">Select the type of transaction you want to record</p>
+
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+                {TRANSACTION_TYPES.map(type => (
+                  <button
+                    key={type.id}
+                    onClick={() => openAddForm(type.id, 'top')}
+                    className={`flex flex-col items-center justify-center p-6 bg-white dark:bg-gray-800/50 rounded-2xl border-2 border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] transition-all group ${getAccentClasses('hoverLight')}`}>
+                    <div className={`mb-4 p-4 rounded-full shadow-sm transition-transform duration-300 border-2 border-black ${getAccentClasses('lightBg')}`}>
+                      {type.icon}
+                    </div>
+                    <span className="font-bold text-sm">{type.label}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {showBatchConfirm && (
+          <div className="fixed inset-0 z-[1000] flex items-center justify-center p-2 sm:p-4 bg-black/60 backdrop-blur-md">
+            <div className="w-full max-w-sm bg-white dark:bg-gray-900 border-4 border-black rounded-2xl shadow-2xl sm:shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] p-6 md:p-8 transition-all flex flex-col max-h-[95vh]">
+              <div className="flex-shrink-0">
+                <h2 className="text-xl font-black text-gray-900 dark:text-gray-200 mb-3">Confirm Deletion</h2>
+              </div>
+              <div className="flex-1 overflow-y-auto overflow-x-hidden">
+                <p className="text-sm text-gray-600 dark:text-gray-400 mb-6">
+                  You are deleting <span className="font-black text-red-600">{selectedIds.size}</span> transaction{selectedIds.size !== 1 ? 's' : ''}, and this will be irreversible. Do you want to proceed?
+                </p>
+              </div>
+              <div className="flex-shrink-0 pt-6">
+                <div className="flex gap-4">
+                  <button
+                    type="button"
+                    onClick={() => setShowBatchConfirm(false)}
+                    disabled={isBatchDeleting}
+                    className="flex-1 bg-gray-200 dark:bg-gray-700 py-3 rounded-xl font-bold text-gray-800 dark:text-gray-200 border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[1px] hover:translate-y-[1px] transition-all"
+                  >
+                    Cancel
+                  </button>
+                  <PinProtectedAction
+                    featureId="transaction_deletions"
+                    onVerified={handleBatchDelete}
+                    actionLabel="Delete Multiple Transactions"
+                  >
+                    <button
+                      type="button"
+                      onClick={(e) => e.preventDefault()}
+                      disabled={isBatchDeleting}
+                      className="flex-1 bg-red-500 text-white py-3 rounded-xl font-bold border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[1px] hover:translate-y-[1px] transition-all disabled:opacity-50"
+                    >
+                      {isBatchDeleting ? 'Deleting…' : 'Yes, Delete'}
+                    </button>
+                  </PinProtectedAction>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {selectedTx && (() => {
+          const pm = accounts.find(a => a.id === selectedTx.paymentMethodId);
+          const linkedTransferTx = selectedTx.transaction_type === 'transfer' && selectedTx.related_transaction_id
+            ? transactions.find(t => t.id === selectedTx.related_transaction_id)
+            : null;
+          const linkedTransferAccount = linkedTransferTx
+            ? accounts.find(a => a.id === linkedTransferTx.paymentMethodId)
+            : null;
+          const transferAccountLabel = selectedTx.transaction_type === 'transfer'
+            ? (selectedTx.amount > 0 ? 'To Account' : 'From Account')
+            : null;
+          const transferAccountValue = linkedTransferAccount
+            ? linkedTransferAccount.bank
+            : linkedTransferTx?.paymentMethodId || 'N/A';
+          return (
+            <div className="fixed inset-0 z-[1000] flex items-center justify-center p-2 sm:p-4 bg-black/60 backdrop-blur-md" onClick={() => setSelectedTx(null)}>
+              <div className="w-full max-w-md bg-white dark:bg-gray-900 border-4 border-black rounded-2xl shadow-2xl sm:shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] p-6 md:p-8 relative transition-all flex flex-col max-h-[95vh]" onClick={e => e.stopPropagation()}>
+                <div className='flex-shrink-0'>
+                  <button
+                    onClick={() => setSelectedTx(null)}
+                    className="absolute top-4 right-4 text-gray-400 hover:text-gray-700 p-2 rounded-full hover:bg-gray-100 transition-colors"
+                    aria-label="Close"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
+                  <h2 className="text-2xl font-black text-gray-900 dark:text-gray-200 mb-6">Transaction Details</h2>
+                </div>
+                <div className="flex-1 overflow-y-auto overflow-x-hidden pr-2 -mr-2">
+                  <dl className="space-y-4 mb-6">
+                  <div className="flex justify-between">
+                    <dt className="text-[10px] font-black text-gray-400 uppercase tracking-widest self-center">Name</dt>
+                    <dd className="text-sm font-bold text-gray-900 dark:text-gray-100 flex items-center">
+                      {selectedTx.name}
+                      {selectedTx.transaction_type === 'income' && (
+                        <span className="ml-2 inline-flex items-center bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 border border-emerald-300 dark:border-emerald-700 px-2 py-0.5 rounded-lg text-[9px] font-black uppercase tracking-widest shadow-[1px_1px_0px_0px_rgba(0,0,0,0.1)]">
+                          Income
+                        </span>
+                      )}
+                    </dd>
+                  </div>
+                    <div className="flex justify-between">
+                      <dt className="text-[10px] font-black text-gray-400 uppercase tracking-widest self-center">Date</dt>
+                      <dd className="text-sm text-gray-900 dark:text-gray-100">
+                        {new Date(selectedTx.date).toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' })}
+                        <span className="ml-2 text-xs text-gray-400">{new Date(selectedTx.date).toLocaleTimeString()}</span>
+                      </dd>
+                    </div>
+                    <div className="flex justify-between">
+                      <dt className="text-[10px] font-black text-gray-400 uppercase tracking-widest self-center">Amount</dt>
+                      <dd className={`text-sm font-bold ${selectedTx.amount > 0 ? 'text-red-600' : 'text-green-600'}`}>
+                        {formatCurrency(-selectedTx.amount)}
+                      </dd>
+                    </div>
+                    <div className="flex justify-between">
+                      <dt className="text-[10px] font-black text-gray-400 uppercase tracking-widest self-center">Payment Method</dt>
+                      <dd className="text-sm text-gray-700 dark:text-gray-300">{pm ? pm.bank : selectedTx.paymentMethodId}</dd>
+                    </div>
+                    {selectedTx.transaction_type === 'transfer' ? (
+                      <div className="flex justify-between">
+                        <dt className="text-[10px] font-black text-gray-400 uppercase tracking-widest self-center">{transferAccountLabel}</dt>
+                        <dd className="text-sm text-gray-700 dark:text-gray-300">{transferAccountValue}</dd>
+                      </div>
+                    ) : (
+                      <div className="flex justify-between">
+                        <dt className="text-[10px] font-black text-gray-400 uppercase tracking-widest self-center">
+                          {selectedTx.transaction_type === 'loan' ? 'Borrower' : 'Recipient'}
+                        </dt>
+                        <dd className="text-sm text-gray-700 dark:text-gray-300">{selectedTx.borrower_name || (selectedTx as any).person_name || (selectedTx as any).personName || 'N/A'}</dd>
+                      </div>
+                    )}
+                  </dl>
+
+                  <div>
+                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-3">Receipt</p>
+                    {selectedTx.receiptUrl ? (
+                      receiptSignedUrl === undefined ? (
+                        <div className="text-sm text-gray-400">Loading receipt…</div>
+                      ) : receiptSignedUrl ? (
+                        <div className="flex items-center space-x-3">
+                          <img
+                            src={receiptSignedUrl}
+                            alt="Receipt thumbnail"
+                            className="w-16 h-16 rounded-xl object-cover border-2 border-black"
+                            onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
+                          <button
+                            onClick={() => { setZoom(0.5); setPreviewReceiptUrl(receiptSignedUrl); }}
+                            title="Preview receipt"
+                            className={`flex items-center space-x-1 px-3 py-2 rounded-xl text-sm font-bold border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[1px] hover:translate-y-[1px] transition-all ${getAccentClasses('lightBg')}`}>
+                            <Eye className="w-4 h-4" />
+                            <span>Preview</span>
+                          </button>
+                        </div>
+                      ) : (
+                        <p className="text-sm text-gray-400 italic">Could not load receipt preview.</p>
+                      )
+                    ) : (
+                      <p className="text-sm text-gray-400 italic">No receipt attached</p>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+          );
+        })()}
+
+        {previewReceiptUrl && (
+          <div className="fixed inset-0 z-[2000] flex items-center justify-center p-4" onClick={() => setPreviewReceiptUrl(null)}>
+            <div className="w-full max-w-2xl bg-white rounded-3xl shadow-2xl flex flex-col overflow-hidden" style={{ maxHeight: '90vh' }} onClick={e => e.stopPropagation()}>
+              <div className="flex items-center justify-between p-4 border-b border-gray-100">
+                <h3 className="text-base font-black text-gray-900 uppercase tracking-widest">Receipt Preview</h3>
+                <div className="flex items-center space-x-2">
+                  <button
+                    onClick={() => setZoom(z => Math.max(0.25, parseFloat((z - 0.25).toFixed(2))))}
+                    title="Zoom out"
+                    className="p-2 rounded-xl hover:bg-gray-100 text-gray-600 transition-colors"
+                    aria-label="Zoom out"
+                  >
+                    <ZoomOut className="w-4 h-4" />
+                  </button>
+                  <span className="text-xs font-bold text-gray-500 w-10 text-center">{Math.round(zoom * 100)}%</span>
+                  <button
+                    onClick={() => setZoom(z => Math.min(4, parseFloat((z + 0.25).toFixed(2))))}
+                    title="Zoom in"
+                    className="p-2 rounded-xl hover:bg-gray-100 text-gray-600 transition-colors"
+                    aria-label="Zoom in"
+                  >
+                    <ZoomIn className="w-4 h-4" />
+                  </button>
+                  <a
+                    href={previewReceiptUrl}
+                    download
+                    target="_blank"
+                    rel="noreferrer"
+                    title="Download receipt"
+                    className="p-2 rounded-xl hover:bg-indigo-50 text-indigo-600 transition-colors"
+                    aria-label="Download receipt"
+                  >
+                    <Download className="w-4 h-4" />
+                  </a>
+                  <button
+                    onClick={() => setPreviewReceiptUrl(null)}
+                    title="Close"
+                    className="p-2 rounded-xl hover:bg-gray-100 text-gray-600 transition-colors"
+                    aria-label="Close preview"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+              <div className="overflow-auto flex-1 p-4 flex justify-center">
+                <img
+                  src={previewReceiptUrl}
+                  alt="Receipt"
+                  style={{ width: `${zoom * 100}%`, height: 'auto', transition: 'width 0.2s' }} />
+              </div>
+            </div>
+          </div>
+        )}
+
+        
+
+                        {/* 🟢 Apple Music-Inspired Pull-Up Tray for Mobile */}
+        {isMobile && (
+          <>
+            {showFabMenu && (
+              <div 
+                className="fixed inset-0 bg-black/40 backdrop-blur-sm z-[90] animate-in fade-in duration-200"
+                onClick={() => setShowFabMenu(false)} 
+              />
+            )}
+
+            <div 
+              className={`fixed bottom-0 left-0 right-0 z-[100] bg-white dark:bg-gray-900 border-t-[3px] border-black rounded-t-[2.5rem] transition-transform duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] flex flex-col pb-safe ${
+                showFabMenu ? 'translate-y-0 shadow-[0px_-8px_20px_rgba(0,0,0,0.15)]' : 'translate-y-full'
+              }`}
+            >
+              <div 
+                className="w-full flex justify-center pt-3 pb-1 cursor-pointer" 
+                onClick={() => setShowFabMenu(false)}
+              >
+                <div className="w-14 h-1.5 bg-gray-300 dark:bg-gray-700 rounded-full" />
+              </div>
+
+              <div className="px-5 pb-6 pt-0">
+                <h3 className="text-lg font-black uppercase tracking-tight text-center text-gray-900 dark:text-white mb-3 mt-1">
+                  New Transaction
+                </h3>
+                
+                <div className="grid grid-cols-1 gap-2">
+                  {TRANSACTION_TYPES.map((item) => (
+                    <button
+                      key={item.id}
+                      onClick={() => {
+                        openAddForm(item.id, 'fab');
+                        setShowFabMenu(false);
+                      }}
+                      className="flex items-center p-3 bg-gray-50 dark:bg-gray-800 rounded-xl border-[3px] border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] active:translate-x-[2px] active:translate-y-[2px] active:shadow-none transition-all group"
+                    >
+                      <div className="w-9 h-9 rounded-lg border-2 border-black bg-white dark:bg-gray-700 flex items-center justify-center mr-3 group-hover:scale-105 transition-transform [&>svg]:w-5 [&>svg]:h-5">
+                        {item.icon}
+                      </div>
+                      
+                      <span className="font-bold text-sm text-gray-900 dark:text-white uppercase tracking-wide">
+                        {item.label}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </>
+        )}
+
+{isStashModalOpen && stashTx && (
+    <div className="fixed inset-0 z-[2000] flex items-center justify-center p-2 sm:p-4 bg-black/70 backdrop-blur-sm animate-in fade-in">
+      <div className="bg-white dark:bg-gray-900 rounded-2xl w-full max-w-sm p-6 sm:p-10 border-4 border-black shadow-2xl sm:shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] animate-in zoom-in-95 flex flex-col items-center text-center transition-all max-h-[95vh]">
+        <div className="flex-shrink-0 w-full mb-6 text-left">
+          <h3 className="text-2xl font-black text-gray-900 dark:text-gray-100 uppercase tracking-tight mb-2">Stash Funds</h3>
+          <p className="text-sm text-gray-500 font-bold">How much of this {stashTx.name} do you want to lock away?</p>
+        </div>
+        
+        <form onSubmit={handleStashSubmit} className="w-full space-y-6">
+          <div className="flex items-center border-b-4 border-black pb-2">
+            <span className="text-3xl font-black mr-2 text-gray-400">₱</span>
+            <input
+              type="number"
+              step="0.01"
+              max={Math.abs(stashTx.amount)}
+              value={stashAmount}
+              onChange={(e) => setStashAmount(e.target.value)}
+              className="w-full text-4xl font-black bg-transparent outline-none dark:text-white"
+              required
+              autoFocus
+            />
+          </div>
+          
+          <div className="flex flex-col w-full space-y-3">
+            <button
+              type="submit"
+              className={`w-full py-4 rounded-xl font-black uppercase tracking-widest text-[10px] border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[1px] hover:translate-y-[1px] transition-all bg-yellow-400 text-black`}
+            >
+              Lock It
+            </button>
+            <button
+              type="button"
+              onClick={() => setIsStashModalOpen(false)}
+              className="w-full bg-gray-200 dark:bg-gray-700 py-4 rounded-xl font-black uppercase tracking-widest text-[10px] text-gray-800 dark:text-gray-200 border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[1px] hover:translate-y-[1px] transition-all"
+            >
+              Cancel
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  )}
+
+
+        {pendingProfileModal && (
+          <div className="fixed inset-0 z-[1000] flex items-center justify-center p-2 sm:p-4 bg-black/60 backdrop-blur-sm animate-in fade-in">
+            <div className="bg-white dark:bg-gray-900 rounded-2xl w-full max-w-sm p-6 md:p-8 border-4 border-black shadow-2xl sm:shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] relative transition-all animate-in zoom-in-95 flex flex-col items-center text-center">
+              <div className={`w-16 h-16 rounded-3xl flex items-center justify-center mb-6 transition-colors border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] ${getAccentClasses('lightBg')}`}>
+                <UserPlus className="w-8 h-8" />
+              </div>
+              <h3 className="text-xl font-black text-gray-900 dark:text-gray-100 mb-2 uppercase tracking-tight transition-colors">Profile Required</h3>
+              <p className="text-sm text-gray-500 dark:text-gray-400 mb-8 font-medium leading-relaxed transition-colors">
+                You selected <strong>{pendingProfileModal.formName}</strong> who is a Budee but doesn't have a local profile yet. We will link them and create one so you can track this transaction.
+              </p>
+              <div className="flex flex-col w-full space-y-3">
+                <button
+                  disabled={isSubmitting}
+                  onClick={async () => {
+                    setIsSubmitting(true);
+                    try {
+                      const prof = pendingProfileModal.budee;
+                      const { data: newPerson } = await createPerson({ name: pendingProfileModal.formName } as any);
+                      if (newPerson) {
+                        const isTestMode = localStorage.getItem('test_environment_enabled') === 'true';
+                        const peopleTable = isTestMode ? 'people_test' : 'people';
+                        let { error: updateErr } = await supabase.from(peopleTable).update({ friend_user_id: prof.user_id }).eq('id', newPerson.id);
+                        if (updateErr && updateErr.code === '42P01') {
+                          updateErr = (await supabase.from('people').update({ friend_user_id: prof.user_id }).eq('id', newPerson.id)).error;
+                        }
+                        if (updateErr) {
+                          console.error('Failed to link profile to budee during transaction intercept:', updateErr);
+                          alert(`Profile created but failed to link: ${updateErr.message}`);
+                        }
+                      }
+                      setPendingProfileModal(null);
+                      await executeTransactionSubmit();
+                    } catch (e) {
+                      console.error('Failed to create profile', e);
+                      alert('Failed to create local profile.');
+                    } finally { setIsSubmitting(false); }
+                  }}
+                  className={`w-full py-4 rounded-xl font-black uppercase tracking-widest text-[10px] transition-all border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[1px] hover:translate-y-[1px] disabled:opacity-50 disabled:bg-gray-300 ${getAccentClasses('bg')}`}
+                >
+                  {isSubmitting ? 'Processing...' : 'Create Profile & Continue'}
+                </button>
+                <button disabled={isSubmitting} onClick={() => setPendingProfileModal(null)} className="w-full bg-gray-200 dark:bg-gray-700 py-4 rounded-xl font-black uppercase tracking-widest text-[10px] text-gray-800 dark:text-gray-200 border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[1px] hover:translate-y-[1px] transition-all disabled:opacity-50">
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {overdraftPrompt && (
+          <div className="fixed inset-0 z-[1500] flex items-center justify-center bg-black/60 p-4 backdrop-blur-md" onClick={closeOverdraftPrompt}>
+            <div className={`${retroModalShell} relative max-w-md`} onClick={(e) => e.stopPropagation()}>
+              <button type="button" onClick={closeOverdraftPrompt} className={retroCloseButton} aria-label="Close overdraft prompt">
+                <X className="h-4 w-4" />
+              </button>
+
+              <div className="absolute left-1/2 top-0 flex h-20 w-20 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border-[4px] border-black bg-[#ff7a59] text-white shadow-[6px_6px_0px_0px_rgba(0,0,0,1)]">
+                <Hand className="h-10 w-10" />
+              </div>
+
+              <div className="pt-10">
+                <div className="mb-4 text-center">
+                  <span className="inline-block -rotate-2 rounded-full border-[3px] border-black bg-yellow-300 px-4 py-1 text-[10px] font-black uppercase tracking-[0.25em] text-black shadow-[3px_3px_0px_0px_rgba(0,0,0,1)]">
+                    {overdraftPrompt.mode === 'block' ? 'Block Mode' : 'Warn Mode'}
+                  </span>
+                </div>
+
+                <h2 className={`${retroModalTitle} text-lg`}>
+                  {overdraftPrompt.mode === 'block'
+                    ? 'No can do. Please top-up to complete the transaction'
+                    : 'Hold on a sec-your account is a little short. This will drop you into a negative balance. Still a go?'}
+                </h2>
+
+                <p className={`${retroModalSubtitle} mt-4 mb-5`}>
+                  {overdraftPrompt.accountName} goes from {formatCurrency(overdraftPrompt.currentBalance)} to {formatCurrency(overdraftPrompt.projectedBalance)} after this transaction.
+                </p>
+
+                <div className={`${retroPanelClass} mb-5 space-y-3`}>
+                  <div className="flex justify-between gap-4">
+                    <span className="text-[10px] font-black uppercase tracking-widest text-gray-500 dark:text-gray-400">Current Balance</span>
+                    <span className="text-sm font-black text-gray-900 dark:text-gray-100">{formatCurrency(overdraftPrompt.currentBalance)}</span>
+                  </div>
+                  <div className="flex justify-between gap-4">
+                    <span className="text-[10px] font-black uppercase tracking-widest text-gray-500 dark:text-gray-400">Transaction Amount</span>
+                    <span className="text-sm font-black text-orange-600 dark:text-orange-400">{formatCurrency(overdraftPrompt.transactionAmount)}</span>
+                  </div>
+                  <div className="flex justify-between gap-4 border-t-[3px] border-black pt-3">
+                    <span className="text-[10px] font-black uppercase tracking-widest text-gray-500 dark:text-gray-400">Projected Balance</span>
+                    <span className="text-sm font-black text-red-600 dark:text-red-400">{formatCurrency(overdraftPrompt.projectedBalance)}</span>
+                  </div>
+                </div>
+
+                {overdraftPrompt.mode === 'block' ? (
+                  <button
+                    type="button"
+                    onClick={closeOverdraftPrompt}
+                    className="w-full rounded-2xl border-[3px] border-black bg-[#ffd54f] px-4 py-4 text-xs font-black uppercase tracking-widest text-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] transition-all hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none"
+                  >
+                    Got it.
+                  </button>
+                ) : (
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                    <button
+                      type="button"
+                      onClick={openTopUpFromOverdraftPrompt}
+                      className="rounded-2xl border-[3px] border-black bg-green-400 px-4 py-4 text-xs font-black uppercase tracking-widest text-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] transition-all hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none"
+                    >
+                      Top-up
+                    </button>
+                    <button
+                      type="button"
+                      onClick={closeOverdraftPrompt}
+                      className={`rounded-2xl border-[3px] border-black px-4 py-4 text-xs font-black uppercase tracking-widest ${retroGhostButton}`}
+                    >
+                      Nope
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+        {confirmModal.show && <ConfirmDialog {...confirmModal} onClose={() => setConfirmModal(p => ({ ...p, show: false }))} />}
+      </Portal>
+    </>
+  );
+}
+
+const ConfirmDialog: React.FC<{ show: boolean; title: string; message: string; onConfirm: () => void; onClose: () => void }> = ({ title, message, onConfirm, onClose }) => (
+    <Portal>
+        <div className="fixed inset-0 z-[2000] flex items-center justify-center p-2 sm:p-4 bg-black/70 backdrop-blur-sm animate-in fade-in">
+            <div className="bg-white dark:bg-gray-900 rounded-2xl w-full max-w-sm p-6 sm:p-10 border-4 border-black shadow-2xl sm:shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] animate-in zoom-in-95 flex flex-col items-center text-center transition-all max-h-[95vh]">
+                <div className="flex-shrink-0">
+                    <div className="w-16 h-16 bg-red-50 dark:bg-red-900/20 text-red-600 rounded-3xl flex items-center justify-center mb-6 border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]">
+                        <AlertTriangle className="w-8 h-8" />
+                    </div>
+                    <h3 className="text-xl font-black text-gray-900 dark:text-gray-100 mb-2 uppercase tracking-tight">{title}</h3>
+                </div>
+                <div className="flex-1 overflow-y-auto overflow-x-hidden mb-8">
+                    <p className="text-sm text-gray-500 dark:text-gray-400 font-medium leading-relaxed">{message}</p>
+                </div>
+                <div className="flex-shrink-0 w-full">
+                    <div className="flex flex-col w-full space-y-3">
+                        <button onClick={onConfirm} className="w-full bg-red-500 text-white py-4 rounded-xl font-black uppercase tracking-widest text-[10px] border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[1px] hover:translate-y-[1px] transition-all">Proceed</button>
+                        <button onClick={onClose} className="w-full bg-gray-200 dark:bg-gray-700 py-4 rounded-xl font-black uppercase tracking-widest text-[10px] text-gray-800 dark:text-gray-200 border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[1px] hover:translate-y-[1px] transition-all">Cancel</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </Portal>
+);
+
+export default TransactionsPage;
