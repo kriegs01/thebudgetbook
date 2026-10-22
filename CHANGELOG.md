@@ -1,5 +1,14 @@
 # Changelog
 
+##[v4.2.1] -2026-10-22
+### What's New
+- Partial amount override in Budget Plan: toggle the partial payment to accurately allocate amount for your credit account budget item
+- NEW Wishlist Page!: save that long-eyed items to the wishlist page. Group them by albums and prioritize according to your preference. Add item variants to track total amount and tick as you go. 
+
+### Bug Fixes
+- Calibrated hit frame in the budget plan Skip and Partial toggles for both touch and mouse navigation. 
+
+
 ##[v4.2.0] - 2026-10-16
 ## What's New
 - Smart Billing Automation: Introduced "Smart Engines" to natively handle unique statement naming conventions and cycle shifts for platforms like SPayLater.
