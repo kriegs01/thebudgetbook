@@ -35,6 +35,7 @@ import { getCreditStatementTotal } from '../src//utils/creditEngines/creditEngin
 import { SyncIndicator, SyncStatus } from '../src/components/SyncIndicator';
 import { createPortal } from 'react-dom';
 import { getCreditStatementsByPeriod } from '../src/services/statementsService';
+import { useAuth } from '../src/contexts/AuthContext';
 
 
 interface BudgetProps {
@@ -715,6 +716,8 @@ const Budget: React.FC<BudgetProps> = ({
 console.log("Budget Setup Categories:", (categories || []).map(c => c?.name));
 
 const { getAccentClasses } = useTheme();
+const { userProfile: authProfile } = useAuth();
+
 const isMobile = useMediaQuery('(max-width: 767px)');
 const [view, setView] = useState<'summary' | 'setup'>('summary');
 const [selectedMonth, setSelectedMonth] = useState(MONTHS[new Date().getMonth()]);
@@ -5338,7 +5341,7 @@ const totalSpend = grandTotal;
               {/* ========================================================= */}
           {/* ⚡ INCOME SLICER WORKSPACE PANEL                          */}
           {/* ========================================================= */}
-          {(availableIncomes || []).length > 0 && (
+          {(userProfile?.settings?.useIncomeSlicer !== false) && (availableIncomes || []).length > 0 && (
             <div className="mt-0 bg-[#F4F3EF] dark:bg-gray-900 border-[3px] md:border-4 border-black p-4 md:p-6 rounded-2xl shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] transition-colors">
               
               {/* Header Section - 🟢 COMPACT & CLICKABLE */}

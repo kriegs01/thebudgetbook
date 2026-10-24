@@ -1,4 +1,11 @@
 # Changelog
+##[4.2.2] - 2026-10-24
+### What's New 
+- NEW: Income Slicer optional toggle: You can now opt- in or out of the income slicer whenever you want! Just go to Settings > Budget and just toggle of the Income Slicer option. 
+- Settings Page Reorganized: We cleaned up the settings page a bit to follow the retro sticker/ neobrutalist theme and regrouped the settings to make this easier for you to find! 
+### Bug Fixes
+- Missing New Album Button in Wishlist page: We've brought back the New Album button so you can group your items in a tap! 
+
 
 ##[v4.2.1] -2026-10-22
 ### What's New

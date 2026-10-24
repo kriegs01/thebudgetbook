@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { ChevronDown, ChevronRight, Hash, Globe, Bell, Lock, Trash2, AlertTriangle, RotateCcw, Plus, X, Database, Copy, Shield, User, Users, Mail, Key, MoreVertical, Check, SlidersHorizontal, Info, Banknote, HandCoins, BanknoteX, MonitorCog } from 'lucide-react';
+import { ChevronDown, ChevronRight, Hash, Globe, Bell, Lock, Trash2, AlertTriangle, RotateCcw, Plus, X, Database, Lightbulb, Copy, Shield, User, Users, Mail, Key, MoreVertical, Check, SlidersHorizontal, Info, Banknote, HandCoins, BanknoteX, MonitorCog } from 'lucide-react';
 import { Account, BudgetCategory, Biller, Installment, SupabaseUserProfile } from '../types';
 import { useTestEnvironment } from '../src/contexts/TestEnvironmentContext';
 import { getAllPeople, createPerson, deletePerson } from '../src/services/peopleService';
@@ -110,6 +110,12 @@ const Settings: React.FC<SettingsProps> = ({ currency, setCurrency, categories, 
   const { getAccentClasses } = useTheme();
   // Auth context
   const { userProfile, updateProfile, refreshProfile, user } = useAuth();
+
+  const [isPeopleListExpanded, setIsPeopleListExpanded] = useState(false);
+
+  // NEW: Info Modal State
+  const [infoModal, setInfoModal] = useState<{ title: string; description: string } | null>(null);
+
 
   const [openSection, setOpenSection] = useState<string | null>(null);
   const [newCatName, setNewCatName] = useState('');
@@ -468,6 +474,19 @@ const Settings: React.FC<SettingsProps> = ({ currency, setCurrency, categories, 
   const [isUpdating, setIsUpdating] = useState(false);
   const [personInput, setPersonInput] = useState('');
   const [isPeopleEnabled, setIsPeopleEnabled] = useState(!!userProfile?.settings?.peopleEnabled);
+
+  const [isSlicerEnabled, setIsSlicerEnabled] = useState(userProfile?.settings?.useIncomeSlicer !== false); // Defaults to true
+  const [isTogglingSlicer, setIsTogglingSlicer] = useState(false);
+  
+  // Accordion states for the new nested settings
+  const [expandedBudgetSection, setExpandedBudgetSection] = useState<string | null>(null);
+  const [expandedAccountSection, setExpandedAccountSection] = useState<string | null>(null);
+
+  useEffect(() => {
+    setIsSlicerEnabled(userProfile?.settings?.useIncomeSlicer !== false);
+  }, [userProfile?.settings?.useIncomeSlicer]);
+
+
   const [isTogglingPeople, setIsTogglingPeople] = useState(false);
   const [isPeoplePageEnabled, setIsPeoplePageEnabled] = useState(!!userProfile?.settings?.usePeoplePage);
   const [isTogglingPeoplePage, setIsTogglingPeoplePage] = useState(false);
@@ -768,7 +787,6 @@ const Settings: React.FC<SettingsProps> = ({ currency, setCurrency, categories, 
             </div>
           </div>
 
-          {/* Messages */}
           {updateMessage && (
             <div className="p-4 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800/30 rounded-xl transition-colors">
               <p className="text-sm text-green-800 dark:text-green-400">{updateMessage}</p>
@@ -780,7 +798,7 @@ const Settings: React.FC<SettingsProps> = ({ currency, setCurrency, categories, 
             </div>
           )}
 
-          {/* Update Profile (Name & Username) */}
+          {/* Update Profile */}
           <div className="p-4 bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-800 space-y-3 transition-colors">
             <div className="flex items-center space-x-2 mb-4">
               <User className="w-5 h-5 text-gray-600 dark:text-gray-400" />
@@ -908,201 +926,97 @@ const Settings: React.FC<SettingsProps> = ({ currency, setCurrency, categories, 
         </div>
       )
     },
-
     {
       id: 'general',
       label: 'General',
       icon: <MonitorCog className="w-5 h-5" />,
       content: (
         <div className="space-y-4 pt-2">
+          {/* Dark Mode */}
           <div className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-800/50 rounded-2xl border border-gray-200 dark:border-gray-700 transition-colors">
-            <div>
-              <h4 className="font-black text-sm text-gray-900 dark:text-gray-100 uppercase mb-1 transition-colors">Dark Mode</h4>
-              <p className="text-xs text-gray-500 dark:text-gray-400 transition-colors">
-                Current Theme: <span className={`font-bold ${theme === 'dark' ? 'text-indigo-600' : 'text-amber-500'}`}>
-                  {theme === 'dark' ? 'DARK' : 'LIGHT'}
-                </span>
-              </p>
+            <div className="flex items-center gap-2">
+              <h4 className="font-black text-sm text-gray-900 dark:text-gray-100 uppercase transition-colors">Dark Mode</h4>
+              <button type="button" onClick={() => setInfoModal({ title: 'Dark Mode', description: 'Switch between the light and dark theme of the application.' })} className="text-gray-400 hover:text-amber-500 transition-colors">
+                <Lightbulb className="w-4 h-4" />
+              </button>
             </div>
-            <button
-              onClick={onToggleTheme}
-              className={`relative inline-flex h-8 w-16 items-center rounded-full transition-colors ${
-                theme === 'dark' ? 'bg-indigo-600' : 'bg-gray-300'
-              }`}
-            >
-              <span
-                className={`inline-block h-6 w-6 transform rounded-full bg-white transition-transform ${
-                  theme === 'dark' ? 'translate-x-9' : 'translate-x-1'
-                }`}
-              />
+            <button onClick={onToggleTheme} className={`relative inline-flex h-8 w-16 items-center rounded-full transition-colors ${theme === 'dark' ? 'bg-indigo-600' : 'bg-gray-300'}`}>
+              <span className={`inline-block h-6 w-6 transform rounded-full bg-white transition-transform ${theme === 'dark' ? 'translate-x-9' : 'translate-x-1'}`} />
             </button>
           </div>
 
-          {/* People & Shared Tracking Toggle */}
           <div className="p-4 bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-800 space-y-4 transition-colors">
+            {/* People Tracking */}
             <div className="flex items-center justify-between">
-              <div>
-                <h4 className="font-black text-sm text-gray-900 dark:text-gray-100 uppercase mb-1 transition-colors">People Tracking</h4>
-                <p className="text-xs text-gray-500 dark:text-gray-400 transition-colors">
-                  Enable tracking for shared payments, loans, and reports with specific people.
-                </p>
+              <div className="flex items-center gap-2">
+                <h4 className="font-black text-sm text-gray-900 dark:text-gray-100 uppercase transition-colors">People Tracking</h4>
+                <button type="button" onClick={() => setInfoModal({ title: 'People Tracking', description: 'Enable tracking for shared payments, loans, and reports with specific people.' })} className="text-gray-400 hover:text-amber-500 transition-colors">
+                  <Lightbulb className="w-4 h-4" />
+                </button>
               </div>
-              <button
-              type="button"
-              disabled={isTogglingPeople}
-                onClick={async () => {
-                if (!user || isTogglingPeople) return;
-                setIsTogglingPeople(true);
-                const newValue = !isPeopleEnabled;
-                setIsPeopleEnabled(newValue); // Optimistic UI
-                try {
-                  const newSettings = { ...(userProfile?.settings || {}), peopleEnabled: newValue, setupCompleted: true };
-                  const { error } = await updateUserProfile(user.id, { settings: newSettings });
-                  if (error) throw error;
-                  
-                  await refreshProfile();
-                } catch (err) {
-                  console.error('Failed to toggle people tracking:', err);
-                  setIsPeopleEnabled(!newValue); // Revert on failure
-                } finally {
-                  setIsTogglingPeople(false);
-                }
-                }}
-                className={`relative inline-flex h-8 w-16 items-center rounded-full transition-colors ${
-                isPeopleEnabled ? 'bg-indigo-600' : 'bg-gray-300'
-              } ${isTogglingPeople ? 'opacity-70 cursor-not-allowed' : ''}`}
-              >
-                <span
-                  className={`inline-block h-6 w-6 transform rounded-full bg-white transition-transform ${
-                  isPeopleEnabled ? 'translate-x-9' : 'translate-x-1'
-                  }`}
-                />
+              <button type="button" disabled={isTogglingPeople} onClick={async () => { if (!user) return; setIsTogglingPeople(true); const newValue = !isPeopleEnabled; setIsPeopleEnabled(newValue); try { const newSettings = { ...(userProfile?.settings || {}), peopleEnabled: newValue, setupCompleted: true }; await updateUserProfile(user.id, { settings: newSettings }); await refreshProfile(); } catch (err) { setIsPeopleEnabled(!newValue); } finally { setIsTogglingPeople(false); } }} className={`relative inline-flex h-8 w-16 items-center rounded-full transition-colors ${isPeopleEnabled ? 'bg-indigo-600' : 'bg-gray-300'} ${isTogglingPeople ? 'opacity-70 cursor-not-allowed' : ''}`}>
+                <span className={`inline-block h-6 w-6 transform rounded-full bg-white transition-transform ${isPeopleEnabled ? 'translate-x-9' : 'translate-x-1'}`} />
               </button>
             </div>
 
-            {/* People List Manager - Only visible if enabled */}
-          {isPeopleEnabled && (
-              <div className="pt-4 border-t border-gray-100 dark:border-gray-800 space-y-3">
-                <div className="flex items-center justify-between mb-5">
-                  <div>
-                    <h4 className="font-black text-sm text-gray-900 dark:text-gray-100 uppercase mb-1 transition-colors">Use People Page</h4>
-                    <p className="text-xs text-gray-500 dark:text-gray-400 transition-colors">
-                      Show the People page in the navigation menu.
-                    </p>
+            {isPeopleEnabled && (
+              <div className="pt-4 border-t border-gray-100 dark:border-gray-800 space-y-4">
+                {/* Use People Page Toggle */}
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <h4 className="font-black text-sm text-gray-900 dark:text-gray-100 uppercase transition-colors">Use People Page</h4>
+                    <button type="button" onClick={() => setInfoModal({ title: 'Use People Page', description: 'Show the dedicated My Budees page in your navigation menu.' })} className="text-gray-400 hover:text-amber-500 transition-colors">
+                      <Lightbulb className="w-4 h-4" />
+                    </button>
                   </div>
-                  <button
-                    type="button"
-                    disabled={isTogglingPeoplePage}
-                    onClick={async () => {
-                      if (!user || isTogglingPeoplePage) return;
-                      setIsTogglingPeoplePage(true);
-                      const newValue = !isPeoplePageEnabled;
-                      setIsPeoplePageEnabled(newValue); // Optimistic UI
-                      try {
-                        const newSettings = { ...(userProfile?.settings || {}), usePeoplePage: newValue, setupCompleted: true };
-                        const { error } = await updateUserProfile(user.id, { settings: newSettings });
-                        if (error) throw error;
-                        
-                        await refreshProfile();
-                      } catch (err) {
-                        console.error('Failed to toggle people page:', err);
-                        setIsPeoplePageEnabled(!newValue); // Revert on failure
-                      } finally {
-                        setIsTogglingPeoplePage(false);
-                      }
-                    }}
-                    className={`relative inline-flex h-8 w-16 items-center rounded-full transition-colors ${
-                      isPeoplePageEnabled ? 'bg-indigo-600' : 'bg-gray-300'
-                    } ${isTogglingPeoplePage ? 'opacity-70 cursor-not-allowed' : ''}`}
-                  >
-                    <span
-                      className={`inline-block h-6 w-6 transform rounded-full bg-white transition-transform ${
-                        isPeoplePageEnabled ? 'translate-x-9' : 'translate-x-1'
-                      }`}
-                    />
+                  <button type="button" disabled={isTogglingPeoplePage} onClick={async () => { if (!user) return; setIsTogglingPeoplePage(true); const newValue = !isPeoplePageEnabled; setIsPeoplePageEnabled(newValue); try { const newSettings = { ...(userProfile?.settings || {}), usePeoplePage: newValue, setupCompleted: true }; await updateUserProfile(user.id, { settings: newSettings }); await refreshProfile(); } catch (err) { setIsPeoplePageEnabled(!newValue); } finally { setIsTogglingPeoplePage(false); } }} className={`relative inline-flex h-8 w-16 items-center rounded-full transition-colors ${isPeoplePageEnabled ? 'bg-indigo-600' : 'bg-gray-300'} ${isTogglingPeoplePage ? 'opacity-70 cursor-not-allowed' : ''}`}>
+                    <span className={`inline-block h-6 w-6 transform rounded-full bg-white transition-transform ${isPeoplePageEnabled ? 'translate-x-9' : 'translate-x-1'}`} />
                   </button>
                 </div>
-                <h4 className="text-sm font-bold text-gray-900 dark:text-gray-100 uppercase transition-colors">Your People</h4>
-                {peopleList.length > 0 ? (
-                  <div className="space-y-2">
-                    {peopleList.map((person) => (
-                      <div key={person.id} className="flex items-center justify-between bg-gray-50 dark:bg-gray-800 rounded-xl p-3">
-                        <span className="text-sm font-medium text-gray-900 dark:text-gray-100">{person.name}</span>
-                        <button
-                          onClick={async () => {
-                            const { error } = await deletePerson(person.id);
-                            if (!error) {
-                              setPeopleList(peopleList.filter(p => p.id !== person.id));
-                            }
-                          }}
-                          className="text-red-500 hover:text-red-600 p-1 rounded-full hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
-                          title={`Remove ${person.name}`}
-                        >
-                          <X className="w-4 h-4" />
+
+                {/* Collapsible Your People Section */}
+                <div className="bg-gray-50 dark:bg-gray-800/30 rounded-2xl border border-gray-200 dark:border-gray-700 overflow-hidden transition-colors mt-2">
+                  <button type="button" onClick={() => setIsPeopleListExpanded(!isPeopleListExpanded)} className="w-full flex items-center justify-between p-4 hover:bg-gray-100 dark:hover:bg-gray-800/50 transition-colors">
+                    <span className="font-bold text-sm text-gray-900 dark:text-gray-100 uppercase transition-colors">Your People ({peopleList.length})</span>
+                    <ChevronDown className={`w-5 h-5 text-gray-500 transition-transform ${isPeopleListExpanded ? 'rotate-180' : ''}`} />
+                  </button>
+                  {isPeopleListExpanded && (
+                    <div className="p-4 border-t border-gray-200 dark:border-gray-700 space-y-4">
+                      {peopleList.length > 0 ? (
+                        <div className="space-y-2">
+                          {peopleList.map((person) => (
+                            <div key={person.id} className="flex items-center justify-between bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-3 shadow-sm">
+                              <span className="text-sm font-medium text-gray-900 dark:text-gray-100">{person.name}</span>
+                              <button onClick={async () => { const { error } = await deletePerson(person.id); if (!error) { setPeopleList(peopleList.filter(p => p.id !== person.id)); } }} className="text-red-500 hover:text-red-600 p-1.5 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors border border-transparent hover:border-red-200 dark:hover:border-red-800/30" title={`Remove ${person.name}`}>
+                                <X className="w-4 h-4" />
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="text-sm text-gray-500 dark:text-gray-400 italic">No people added yet.</p>
+                      )}
+                      <div className="flex gap-2 mt-4">
+                        <input type="text" value={personInput} onChange={(e) => setPersonInput(e.target.value)} placeholder="Add new person name" className="flex-1 px-4 py-3 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 border border-gray-200 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-indigo-500 transition-all" />
+                        <button onClick={async () => { if (!user) return; const trimmedName = personInput.trim(); if (trimmedName && !peopleList.some(p => p.name.toLowerCase() === trimmedName.toLowerCase())) { const { data, error } = await createPerson({ name: trimmedName }); if (!error && data) { setPeopleList([...peopleList, data]); setPersonInput(''); } } }} disabled={!personInput.trim()} className="px-4 py-3 bg-indigo-600 text-white rounded-xl font-bold hover:bg-indigo-700 disabled:opacity-50 transition-all shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[1px] hover:translate-y-[1px]">
+                          <Plus className="w-5 h-5" />
                         </button>
                       </div>
-                    ))}
-                  </div>
-                ) : (
-                  <p className="text-sm text-gray-500 dark:text-gray-400 italic">No people added yet.</p>
-                )}
-                <div className="flex gap-2 mt-4">
-                  <input
-                    type="text"
-                    value={personInput}
-                    onChange={(e) => setPersonInput(e.target.value)}
-                    placeholder="Add new person name"
-                    className="flex-1 px-4 py-3 bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-gray-100 border border-gray-200 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all placeholder:text-gray-400 dark:placeholder:text-gray-500"
-                  />
-                  <button
-                    onClick={async () => {
-                      if (!user) return;
-                      const trimmedName = personInput.trim();
-                      if (trimmedName && !peopleList.some(p => p.name.toLowerCase() === trimmedName.toLowerCase())) {
-                        const { data, error } = await createPerson({ name: trimmedName });
-                        if (error) {
-                          console.error('Failed to add person:', error);
-                        } else if (data) {
-                          setPeopleList([...peopleList, data]);
-                          setPersonInput('');
-                        }
-                      }
-                    }}
-                    disabled={!personInput.trim()}
-                    className="px-4 py-3 bg-indigo-600 text-white rounded-xl font-bold hover:bg-indigo-700 disabled:opacity-50 transition-all"
-                  >
-                    <Plus className="w-5 h-5" />
-                  </button>
+                    </div>
+                  )}
                 </div>
               </div>
             )}
 
-            {/* Default Deposit Account */}
             <div className="pt-4 border-t border-gray-100 dark:border-gray-800 space-y-3">
-              <div>
-                <h4 className="font-black text-sm text-gray-900 dark:text-gray-100 uppercase mb-1 transition-colors">Default Deposit Account</h4>
-                <p className="text-xs text-gray-500 dark:text-gray-400 transition-colors">
-                  Automatically deposit money received from Budies into this account.
-                </p>
+              <div className="flex items-center gap-2 mb-2">
+                <h4 className="font-black text-sm text-gray-900 dark:text-gray-100 uppercase transition-colors">Default Deposit Account</h4>
+                <button type="button" onClick={() => setInfoModal({ title: 'Default Deposit Account', description: 'Automatically deposit money received from Budies into this account without being prompted every time.' })} className="text-gray-400 hover:text-amber-500 transition-colors">
+                  <Lightbulb className="w-4 h-4" />
+                </button>
               </div>
-              <select
-                value={userProfile?.settings?.defaultReceiveAccountId || ''}
-                onChange={async (e) => {
-                  if (!user) return;
-                  const newAccountId = e.target.value;
-                  try {
-                  const newSettings = { ...(userProfile?.settings || {}), defaultReceiveAccountId: newAccountId, setupCompleted: true };
-                    const { error } = await updateUserProfile(user.id, { settings: newSettings });
-                    if (error) throw error;
-                    await refreshProfile();
-                  } catch (err) {
-                    console.error('Failed to update default account:', err);
-                    alert('Failed to update default deposit account.');
-                  }
-                }}
-                className="w-full bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-gray-100 border border-gray-200 dark:border-gray-700 rounded-xl p-3 outline-none focus:ring-2 focus:ring-indigo-500 transition-colors text-sm font-bold"
-              >
-                <option value="">Ask me every time (Pending Sync)</option>
+              <select value={userProfile?.settings?.defaultReceiveAccountId || ''} onChange={async (e) => { if (!user) return; const newAccountId = e.target.value; try { const newSettings = { ...(userProfile?.settings || {}), defaultReceiveAccountId: newAccountId, setupCompleted: true }; await updateUserProfile(user.id, { settings: newSettings }); await refreshProfile(); } catch (err) { alert('Failed to update default deposit account.'); } }} className="w-full bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-gray-100 border border-gray-200 dark:border-gray-700 rounded-xl p-3 outline-none focus:ring-2 focus:ring-indigo-500 transition-colors text-sm font-bold">
+                <option value="">Ask me every time</option>
                 {accounts.filter(a => a.type === 'Debit').map(acc => (
                   <option key={acc.id} value={acc.id}>{acc.bank} ({acc.classification})</option>
                 ))}
@@ -1118,607 +1032,370 @@ const Settings: React.FC<SettingsProps> = ({ currency, setCurrency, categories, 
       icon: <BanknoteX className="w-5 h-5" />,
       content: (
         <div className="space-y-4 pt-2">
-          <div className="rounded-2xl border border-gray-200 bg-white p-4 transition-colors dark:border-gray-800 dark:bg-gray-900">
-            <div className="mb-4">
-              <h4 className="text-sm font-black uppercase text-gray-900 transition-colors dark:text-gray-100">Debit Account Overdraft Behavior</h4>
-              <p className="mt-1 text-xs text-gray-500 transition-colors dark:text-gray-400">
-                Set the overdraft rule for each debit account, then save all account configurations together.
-              </p>
-            </div>
-
-            {accountPrefsMessage && (
-              <div className="mb-4 rounded-xl border border-green-200 bg-green-50 p-3 transition-colors dark:border-green-800/30 dark:bg-green-900/20">
-                <p className="text-sm text-green-800 dark:text-green-400">{accountPrefsMessage}</p>
+          <div className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-800 overflow-hidden transition-colors">
+            <button onClick={() => setExpandedAccountSection(prev => prev === 'overdraft' ? null : 'overdraft')} className="w-full flex items-center justify-between p-4 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
+              <div className="text-left flex items-center gap-2">
+                <span className="font-black text-sm uppercase text-gray-900 dark:text-gray-100">Debit Overdraft Behavior</span>
+                <button type="button" onClick={(e) => { e.stopPropagation(); setInfoModal({ title: 'Overdraft Behavior', description: 'Manage rules for debit accounts dropping below zero when recording expenses.' }); }} className="text-gray-400 hover:text-amber-500 transition-colors cursor-pointer">
+                  <Lightbulb className="w-4 h-4" />
+                </button>
               </div>
-            )}
-            {accountPrefsError && (
-              <div className="mb-4 rounded-xl border border-red-200 bg-red-50 p-3 transition-colors dark:border-red-800/30 dark:bg-red-900/20">
-                <p className="text-sm text-red-800 dark:text-red-400">{accountPrefsError}</p>
-              </div>
-            )}
+              <ChevronDown className={`w-5 h-5 text-gray-500 transition-transform ${expandedAccountSection === 'overdraft' ? 'rotate-180' : ''}`} />
+            </button>
+            
+            {expandedAccountSection === 'overdraft' && (
+              <div className="p-4 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/30">
+                <div className="mb-4">
+                  <p className="mt-1 text-xs text-gray-500 transition-colors dark:text-gray-400">
+                    Set the overdraft rule for each debit account, then save all account configurations together.
+                  </p>
+                </div>
 
-            {debitAccounts.length === 0 ? (
-              <div className="rounded-2xl border border-dashed border-gray-300 bg-gray-50 p-5 text-center transition-colors dark:border-gray-700 dark:bg-gray-800/50">
-                <p className="text-sm font-bold text-gray-600 transition-colors dark:text-gray-300">No debit accounts found.</p>
-                <p className="mt-1 text-xs text-gray-500 transition-colors dark:text-gray-400">
-                  Add a debit account first to configure its overdraft behavior.
-                </p>
-              </div>
-            ) : (
-              <div className="space-y-4">
-                {debitAccounts.map(account => (
-                  <div
-                    key={account.id}
-                    className="rounded-2xl border-2 border-gray-200 bg-gray-50 p-4 transition-colors dark:border-gray-700 dark:bg-gray-800/60"
-                  >
-                    <div className="mb-4 flex items-start justify-between gap-3">
-                      <div>
-                        <h5 className="text-sm font-black uppercase text-gray-900 transition-colors dark:text-gray-100">{account.bank}</h5>
-                        <p className="mt-1 text-xs text-gray-500 transition-colors dark:text-gray-400">
-                          {account.classification} · Current balance: {new Intl.NumberFormat('en-PH', {
-                            style: 'currency',
-                            currency: 'PHP',
-                            minimumFractionDigits: 2,
-                            maximumFractionDigits: 2,
-                          }).format(account.balance)}
-                        </p>
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
-                      {OVERDRAFT_OPTIONS.map(option => {
-                        const isSelected = (accountOverdraftModeDrafts[account.id] || 'allow') === option.value;
-                        return (
-                          <label
-                            key={`${account.id}-${option.value}`}
-                            className={`cursor-pointer rounded-2xl border-2 p-4 transition-all ${
-                              isSelected
-                                ? 'border-black bg-[#fff8ea] shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]'
-                                : 'border-gray-200 bg-white hover:border-black dark:border-gray-700 dark:bg-gray-900/70'
-                            }`}
-                          >
-                            <input
-                              type="radio"
-                              name={`debit-overdraft-mode-${account.id}`}
-                              value={option.value}
-                              checked={isSelected}
-                              onChange={() => setAccountOverdraftModeDrafts(prev => ({ ...prev, [account.id]: option.value }))}
-                              className="sr-only"
-                            />
-                            <div className="flex items-start justify-between gap-3">
-                              <div>
-                                <div className="flex items-center gap-2">
-                                  <span className="text-sm font-black uppercase text-gray-900 transition-colors dark:text-gray-100">{option.label}</span>
-                                  <button
-                                    type="button"
-                                    title={option.tip}
-                                    onClick={(e) => e.preventDefault()}
-                                    className="rounded-full p-1 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-gray-700 dark:hover:text-gray-200"
-                                    aria-label={`${account.bank} ${option.label} info`}
-                                  >
-                                    <Info className="h-3.5 w-3.5" />
-                                  </button>
-                                </div>
-                              </div>
-                              <div
-                                className={`mt-0.5 flex h-5 w-5 items-center justify-center rounded-full border-2 ${
-                                  isSelected ? 'border-black bg-black text-white' : 'border-gray-300 bg-white dark:border-gray-600 dark:bg-gray-900'
-                                }`}
-                              >
-                                {isSelected && <Check className="h-3 w-3" />}
-                              </div>
-                            </div>
-                          </label>
-                        );
-                      })}
-                    </div>
+                {accountPrefsMessage && (
+                  <div className="mb-4 rounded-xl border border-green-200 bg-green-50 p-3 transition-colors dark:border-green-800/30 dark:bg-green-900/20">
+                    <p className="text-sm text-green-800 dark:text-green-400">{accountPrefsMessage}</p>
                   </div>
-                ))}
+                )}
+                {accountPrefsError && (
+                  <div className="mb-4 rounded-xl border border-red-200 bg-red-50 p-3 transition-colors dark:border-red-800/30 dark:bg-red-900/20">
+                    <p className="text-sm text-red-800 dark:text-red-400">{accountPrefsError}</p>
+                  </div>
+                )}
+
+                {debitAccounts.length === 0 ? (
+                  <div className="rounded-2xl border border-dashed border-gray-300 bg-gray-50 p-5 text-center transition-colors dark:border-gray-700 dark:bg-gray-800/50">
+                    <p className="text-sm font-bold text-gray-600 transition-colors dark:text-gray-300">No debit accounts found.</p>
+                    <p className="mt-1 text-xs text-gray-500 transition-colors dark:text-gray-400">Add a debit account first to configure its overdraft behavior.</p>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {debitAccounts.map(account => (
+                      <div key={account.id} className="rounded-2xl border-2 border-gray-200 bg-white dark:bg-gray-800/60 p-4 transition-colors dark:border-gray-700">
+                        <div className="mb-4 flex items-start justify-between gap-3">
+                          <div>
+                            <h5 className="text-sm font-black uppercase text-gray-900 transition-colors dark:text-gray-100">{account.bank}</h5>
+                            <p className="mt-1 text-xs text-gray-500 transition-colors dark:text-gray-400">
+                              {account.classification} · Current balance: {new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(account.balance)}
+                            </p>
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+                          {OVERDRAFT_OPTIONS.map(option => {
+                            const isSelected = (accountOverdraftModeDrafts[account.id] || 'allow') === option.value;
+                            return (
+                              <label key={`${account.id}-${option.value}`} className={`cursor-pointer rounded-2xl border-2 p-4 transition-all ${isSelected ? 'border-black bg-[#fff8ea] shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]' : 'border-gray-200 bg-white hover:border-black dark:border-gray-700 dark:bg-gray-900/70'}`}>
+                                <input type="radio" name={`debit-overdraft-mode-${account.id}`} value={option.value} checked={isSelected} onChange={() => setAccountOverdraftModeDrafts(prev => ({ ...prev, [account.id]: option.value }))} className="sr-only" />
+                                <div className="flex items-start justify-between gap-3">
+                                  <div>
+                                    <div className="flex items-center gap-2">
+                                      <span className="text-sm font-black uppercase text-gray-900 transition-colors dark:text-gray-100">{option.label}</span>
+                                      <button type="button" title={option.tip} onClick={(e) => e.preventDefault()} className="rounded-full p-1 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-gray-700 dark:hover:text-gray-200">
+                                        <Info className="h-3.5 w-3.5" />
+                                      </button>
+                                    </div>
+                                  </div>
+                                  <div className={`mt-0.5 flex h-5 w-5 items-center justify-center rounded-full border-2 ${isSelected ? 'border-black bg-black text-white' : 'border-gray-300 bg-white dark:border-gray-600 dark:bg-gray-900'}`}>
+                                    {isSelected && <Check className="h-3 w-3" />}
+                                  </div>
+                                </div>
+                              </label>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                <div className="mt-5 flex justify-end">
+                  <button type="button" onClick={handleSaveAccountPreferences} disabled={isSavingAccountPrefs} className={`rounded-2xl border-[3px] border-black px-5 py-3 text-xs font-black uppercase tracking-widest text-white shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] transition-all hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none disabled:cursor-not-allowed disabled:opacity-60 ${getAccentClasses('bg')}`}>
+                    {isSavingAccountPrefs ? 'Saving...' : 'Save'}
+                  </button>
+                </div>
               </div>
             )}
-
-            <div className="mt-5 flex justify-end">
-              <button
-                type="button"
-                onClick={handleSaveAccountPreferences}
-                disabled={isSavingAccountPrefs}
-                className={`rounded-2xl border-[3px] border-black px-5 py-3 text-xs font-black uppercase tracking-widest text-white shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] transition-all hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none disabled:cursor-not-allowed disabled:opacity-60 ${getAccentClasses('bg')}`}
-              >
-                {isSavingAccountPrefs ? 'Saving...' : 'Save'}
-              </button>
-            </div>
           </div>
         </div>
       )
     },
-
-    //Pay Frequency Settings
     {
-      id: 'pay-schedule',
-      label: 'Pay Schedule',
-      icon: <HandCoins className="w-5 h-5" />, // or any icon you prefer
+      id: 'budget',
+      label: 'Budget',
+      icon: <Banknote className="w-5 h-5" />,
       content: (
         <div className="space-y-4 pt-2">
-          <PayScheduleSettings onRuleSaved={() => {
-            // Optional: trigger any callback or data refetch if needed
-            console.log('Pay rule updated!');
-          }} />
-        </div>
-      )
-    },
-
-    {
-      id: 'categories', 
-      label: 'Budget Categories', 
-      icon: <Hash className="w-5 h-5" />,
-      content: (
-        <div className="space-y-4 pt-2">
-          {categories.map(cat => (
-            <div key={cat.id} className={`p-4 rounded-[2rem] border transition-colors ${cat.active === false ? 'bg-amber-50/40 border-amber-100 dark:bg-amber-900/10 dark:border-amber-900/30' : 'bg-gray-50 border-gray-100 dark:bg-gray-800/50 dark:border-gray-700'}`}>
-              {/* Category header: name + badges + three-dot menu */}
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span className="text-sm font-black text-gray-900 dark:text-gray-100 uppercase tracking-widest transition-colors">{cat.name}</span>
-                  {cat.deactivatedAt && (
-                    <span className="text-[9px] font-black text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/30 border border-amber-200 dark:border-amber-800/50 px-2 py-0.5 rounded-full uppercase tracking-wider transition-colors">Legacy</span>
-                  )}
-                  {cat.flexiMode === false && (
-                    <span className="text-[9px] font-black text-gray-400 dark:text-gray-500 bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 px-2 py-0.5 rounded-full uppercase tracking-wider transition-colors">Data Only</span>
-                  )}
-                </div>
-                <button
-                  onClick={() => openCatSettings(cat)}
-                  className="text-gray-400 dark:text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 transition-colors p-1 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800"
-                  title="Category settings"
-                >
-                  <MoreVertical className="w-4 h-4" />
-                </button>
-              </div>
-              {/* Compact meta row */}
-              <div className="flex items-center gap-3 mt-2">
-                <button
-                  onClick={() => openCatSettings(cat)}
-                  className="text-[10px] font-bold text-gray-400 hover:text-indigo-500 dark:hover:text-indigo-400 transition-colors"
-                >
-                  {cat.subcategories.length} subcategor{cat.subcategories.length === 1 ? 'y' : 'ies'}
-                </button>
-                <span className="text-gray-200 dark:text-gray-700 transition-colors">·</span>
-                <span className="text-[10px] font-bold text-gray-400 dark:text-gray-500 transition-colors">
-                  Flexi: {cat.flexiMode === false ? 'Off' : 'On'}
-                </span>
-              </div>
+          {/* Income Slicer */}
+          <div className="flex items-center justify-between p-4 bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-800 transition-colors">
+            <div className="flex items-center gap-2">
+              <h4 className="font-black text-sm text-gray-900 dark:text-gray-100 uppercase transition-colors">Income Slicer</h4>
+              <button type="button" onClick={() => setInfoModal({ title: 'Income Slicer', description: 'Enable the interactive tool to distribute your newly recorded income into budget items.' })} className="text-gray-400 hover:text-amber-500 transition-colors">
+                <Lightbulb className="w-4 h-4" />
+              </button>
             </div>
-          ))}
-
-          {showAddCat ? (
-            <form onSubmit={handleAddCategory} className="p-4 border-2 border-dashed border-indigo-200 dark:border-indigo-800/50 rounded-[2rem] bg-indigo-50/30 dark:bg-indigo-900/20 space-y-4 animate-in zoom-in-95 transition-colors">
-               <input 
-                required
-                autoFocus
-                type="text" 
-                placeholder="Category Name (e.g. Utilities)" 
-                value={newCatName}
-                onChange={(e) => setNewCatName(e.target.value)}
-                className="w-full bg-white dark:bg-gray-900 border-transparent rounded-2xl p-4 text-sm font-bold outline-none focus:ring-2 focus:ring-indigo-500 dark:text-gray-100 transition-colors"
-              />
-              <div className="flex space-x-2">
-                <button type="button" onClick={() => setShowAddCat(false)} className="flex-1 bg-white dark:bg-gray-800 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700 py-3 rounded-xl font-bold text-xs uppercase transition-colors">Cancel</button>
-                <button type="submit" className="flex-1 bg-indigo-600 text-white py-3 rounded-xl font-bold text-xs uppercase shadow-lg shadow-indigo-100 dark:shadow-none hover:bg-indigo-700 transition-colors">Add Category</button>
-              </div>
-            </form>
-          ) : (
-            <button 
-              onClick={() => setShowAddCat(true)}
-              className="w-full p-4 border-2 border-dashed border-gray-200 dark:border-gray-700 rounded-[2rem] text-gray-400 dark:text-gray-500 text-xs font-black uppercase tracking-widest hover:border-indigo-400 dark:hover:border-indigo-500 hover:text-indigo-500 dark:hover:text-indigo-400 transition-all flex items-center justify-center space-x-2"
-            >
-              <Plus className="w-4 h-4" />
-              <span>Create New Category</span>
+            <button disabled={isTogglingSlicer} onClick={async () => { if (!user) return; setIsTogglingSlicer(true); const newValue = !isSlicerEnabled; setIsSlicerEnabled(newValue); try { const newSettings = { ...(userProfile?.settings || {}), useIncomeSlicer: newValue }; await updateUserProfile(user.id, { settings: newSettings }); await refreshProfile(); } catch (err) { setIsSlicerEnabled(!newValue); } finally { setIsTogglingSlicer(false); } }} className={`relative inline-flex h-8 w-16 items-center rounded-full transition-colors ${isSlicerEnabled ? 'bg-indigo-600' : 'bg-gray-300'}`}>
+              <span className={`inline-block h-6 w-6 transform rounded-full bg-white transition-transform ${isSlicerEnabled ? 'translate-x-9' : 'translate-x-1'}`} />
             </button>
-          )}
+          </div>
 
-          {/* Category Settings Modal */}
-          {catSettingsModal && (() => {
-            const cat = categories.find(c => c.id === catSettingsModal.catId);
-            if (!cat) return null;
-            const isDeactivated = !!cat.deactivatedAt;
-            const hasReactivation = !!cat.reactivatedFrom;
-            const currentYear = new Date().getFullYear();
-            const years = Array.from({ length: 8 }, (_, i) => currentYear - 1 + i);
+          {/* Pay Schedule */}
+          <div className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-800 overflow-hidden transition-colors">
+            <button onClick={() => setExpandedBudgetSection(prev => prev === 'schedule' ? null : 'schedule')} className="w-full flex items-center justify-between p-4 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
+              <span className="font-black text-sm uppercase text-gray-900 dark:text-gray-100">Pay Schedule</span>
+              <ChevronDown className={`w-5 h-5 text-gray-500 transition-transform ${expandedBudgetSection === 'schedule' ? 'rotate-180' : ''}`} />
+            </button>
+            {expandedBudgetSection === 'schedule' && (
+              <div className="p-4 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/30">
+                <PayScheduleSettings onRuleSaved={() => console.log('Pay rule updated!')} />
+              </div>
+            )}
+          </div>
 
-            // Compute which reactivation months/years are allowed (strictly after deactivation)
-            const deactDate = catSettingsDraftMonth !== null && catSettingsDraftYear !== null
-              ? new Date(catSettingsDraftYear, catSettingsDraftMonth - 1, 1)
-              : null;
-            const reactDate = reactDraftMonth !== null && reactDraftYear !== null
-              ? new Date(reactDraftYear, reactDraftMonth - 1, 1)
-              : null;
-            const reactIsValid = deactDate !== null && reactDate !== null && reactDate > deactDate;
-
-            return (
-              <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-end justify-center sm:items-center p-4" onClick={closeCatSettings}>
-                <div className="bg-white dark:bg-gray-900 rounded-[2rem] shadow-2xl w-full max-w-sm p-6 space-y-5 max-h-[90vh] overflow-y-auto transition-colors" onClick={e => e.stopPropagation()}>
-                  {/* Modal header */}
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest transition-colors">Category Settings</p>
-                      <h3 className="text-base font-black text-gray-900 dark:text-gray-100 uppercase tracking-widest mt-0.5 transition-colors">{catSettingsModal.catName}</h3>
+          {/* Categories */}
+          <div className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-800 overflow-hidden transition-colors">
+            <button onClick={() => setExpandedBudgetSection(prev => prev === 'categories' ? null : 'categories')} className="w-full flex items-center justify-between p-4 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
+              <span className="font-black text-sm uppercase text-gray-900 dark:text-gray-100">Budget Categories</span>
+              <ChevronDown className={`w-5 h-5 text-gray-500 transition-transform ${expandedBudgetSection === 'categories' ? 'rotate-180' : ''}`} />
+            </button>
+            {expandedBudgetSection === 'categories' && (
+              <div className="p-4 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/30 space-y-4">
+                {categories.map(cat => (
+                  <div key={cat.id} className={`p-4 rounded-[2rem] border transition-colors ${cat.active === false ? 'bg-amber-50/40 border-amber-100 dark:bg-amber-900/10 dark:border-amber-900/30' : 'bg-gray-50 border-gray-100 dark:bg-gray-800/50 dark:border-gray-700'}`}>
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-sm font-black text-gray-900 dark:text-gray-100 uppercase tracking-widest transition-colors">{cat.name}</span>
+                        {cat.deactivatedAt && (
+                          <span className="text-[9px] font-black text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/30 border border-amber-200 dark:border-amber-800/50 px-2 py-0.5 rounded-full uppercase tracking-wider transition-colors">Legacy</span>
+                        )}
+                        {cat.flexiMode === false && (
+                          <span className="text-[9px] font-black text-gray-400 dark:text-gray-500 bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 px-2 py-0.5 rounded-full uppercase tracking-wider transition-colors">Data Only</span>
+                        )}
+                      </div>
+                      <button onClick={() => openCatSettings(cat)} className="text-gray-400 dark:text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 transition-colors p-1 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800" title="Category settings">
+                        <MoreVertical className="w-4 h-4" />
+                      </button>
                     </div>
-                    <button onClick={closeCatSettings} className="text-gray-300 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-400 transition-colors">
-                      <X className="w-5 h-5" />
-                    </button>
+                    <div className="flex items-center gap-3 mt-2">
+                      <button onClick={() => openCatSettings(cat)} className="text-[10px] font-bold text-gray-400 hover:text-indigo-500 dark:hover:text-indigo-400 transition-colors">
+                        {cat.subcategories.length} subcategor{cat.subcategories.length === 1 ? 'y' : 'ies'}
+                      </button>
+                      <span className="text-gray-200 dark:text-gray-700 transition-colors">·</span>
+                      <span className="text-[10px] font-bold text-gray-400 dark:text-gray-500 transition-colors">
+                        Flexi: {cat.flexiMode === false ? 'Off' : 'On'}
+                      </span>
+                    </div>
                   </div>
+                ))}
 
-                  {/* Subcategories section (collapsible) */}
-                  <div className="space-y-2">
-                    <button
-                      type="button"
-                      onClick={() => setShowSubcatSection(p => !p)}
-                      className="flex items-center justify-between w-full"
-                    >
-                      <p className="text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest transition-colors">Subcategories</p>
-                      <ChevronDown className={`w-4 h-4 text-gray-400 dark:text-gray-500 transition-transform ${showSubcatSection ? 'rotate-180' : ''}`} />
-                    </button>
+                {showAddCat ? (
+                  <form onSubmit={handleAddCategory} className="p-4 border-2 border-dashed border-indigo-200 dark:border-indigo-800/50 rounded-[2rem] bg-indigo-50/30 dark:bg-indigo-900/20 space-y-4 animate-in zoom-in-95 transition-colors">
+                    <input required autoFocus type="text" placeholder="Category Name (e.g. Utilities)" value={newCatName} onChange={(e) => setNewCatName(e.target.value)} className="w-full bg-white dark:bg-gray-900 border-transparent rounded-2xl p-4 text-sm font-bold outline-none focus:ring-2 focus:ring-indigo-500 dark:text-gray-100 transition-colors" />
+                    <div className="flex space-x-2">
+                      <button type="button" onClick={() => setShowAddCat(false)} className="flex-1 bg-white dark:bg-gray-800 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700 py-3 rounded-xl font-bold text-xs uppercase transition-colors">Cancel</button>
+                      <button type="submit" className="flex-1 bg-indigo-600 text-white py-3 rounded-xl font-bold text-xs uppercase shadow-lg shadow-indigo-100 dark:shadow-none hover:bg-indigo-700 transition-colors">Add Category</button>
+                    </div>
+                  </form>
+                ) : (
+                  <button onClick={() => setShowAddCat(true)} className="w-full p-4 border-2 border-dashed border-gray-200 dark:border-gray-700 rounded-[2rem] text-gray-400 dark:text-gray-500 text-xs font-black uppercase tracking-widest hover:border-indigo-400 dark:hover:border-indigo-500 hover:text-indigo-500 dark:hover:text-indigo-400 transition-all flex items-center justify-center space-x-2">
+                    <Plus className="w-4 h-4" /><span>Create New Category</span>
+                  </button>
+                )}
 
-                    {showSubcatSection && (
+                {catSettingsModal && (() => {
+                  const cat = categories.find(c => c.id === catSettingsModal.catId);
+                  if (!cat) return null;
+                  const isDeactivated = !!cat.deactivatedAt;
+                  const hasReactivation = !!cat.reactivatedFrom;
+                  const currentYear = new Date().getFullYear();
+                  const years = Array.from({ length: 8 }, (_, i) => currentYear - 1 + i);
+                  const deactDate = catSettingsDraftMonth !== null && catSettingsDraftYear !== null ? new Date(catSettingsDraftYear, catSettingsDraftMonth - 1, 1) : null;
+                  const reactDate = reactDraftMonth !== null && reactDraftYear !== null ? new Date(reactDraftYear, reactDraftMonth - 1, 1) : null;
+                  const reactIsValid = deactDate !== null && reactDate !== null && reactDate > deactDate;
+
+                  return (
+                    <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-end justify-center sm:items-center p-4" onClick={closeCatSettings}>
+                      <div className="bg-white dark:bg-gray-900 rounded-[2rem] shadow-2xl w-full max-w-sm p-6 space-y-5 max-h-[90vh] overflow-y-auto transition-colors" onClick={e => e.stopPropagation()}>
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <p className="text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest transition-colors">Category Settings</p>
+                            <h3 className="text-base font-black text-gray-900 dark:text-gray-100 uppercase tracking-widest mt-0.5 transition-colors">{catSettingsModal.catName}</h3>
+                          </div>
+                          <button onClick={closeCatSettings} className="text-gray-300 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-400 transition-colors"><X className="w-5 h-5" /></button>
+                        </div>
+
+                        <div className="space-y-2">
+                          <button type="button" onClick={() => setShowSubcatSection(p => !p)} className="flex items-center justify-between w-full">
+                            <p className="text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest transition-colors">Subcategories</p>
+                            <ChevronDown className={`w-4 h-4 text-gray-400 dark:text-gray-500 transition-transform ${showSubcatSection ? 'rotate-180' : ''}`} />
+                          </button>
+                          {showSubcatSection && (
+                            <div className="space-y-2">
+                              {localSubcats.length > 0 && (
+                                <div className="flex flex-wrap gap-1.5">
+                                  {localSubcats.map(sub => (
+                                    <div key={sub} className="flex items-center gap-1.5 px-3 py-1 bg-gray-100 dark:bg-gray-800 rounded-full transition-colors">
+                                      <span className="text-[10px] font-bold text-gray-600 dark:text-gray-300 transition-colors">{sub}</span>
+                                      <button type="button" onClick={() => setLocalSubcats(prev => prev.filter(s => s !== sub))} className="text-gray-400 dark:text-gray-500 hover:text-red-500 dark:hover:text-red-400 transition-colors"><X className="w-3 h-3" /></button>
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                              {localSubcats.length === 0 && <p className="text-[10px] text-gray-400 dark:text-gray-500 italic transition-colors">No subcategories yet.</p>}
+                              <div className="flex gap-2">
+                                <input type="text" placeholder="New subcategory…" value={newSubcatInput} onChange={e => setNewSubcatInput(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); const trimmed = newSubcatInput.trim(); if (trimmed && !localSubcats.includes(trimmed)) { setLocalSubcats(prev => [...prev, trimmed]); setNewSubcatInput(''); } } }} className="flex-1 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-3 py-2 text-xs font-bold text-gray-700 dark:text-gray-300 outline-none focus:ring-2 focus:ring-indigo-400 transition-colors" />
+                                <button type="button" onClick={() => { const trimmed = newSubcatInput.trim(); if (trimmed && !localSubcats.includes(trimmed)) { setLocalSubcats(prev => [...prev, trimmed]); setNewSubcatInput(''); } }} className="p-2 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 transition-colors"><Plus className="w-4 h-4" /></button>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+
+                        <div className="space-y-2">
+                          <p className="text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest transition-colors">{isDeactivated ? 'Deactivated From' : 'Deactivate From'}</p>
+                          <div className="flex gap-2">
+                            <select value={catSettingsDraftMonth ?? ''} onChange={e => setCatSettingsDraftMonth(e.target.value === '' ? null : Number(e.target.value))} className="flex-1 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-3 py-2 text-xs font-bold text-gray-700 dark:text-gray-300 outline-none focus:ring-2 focus:ring-indigo-400 transition-colors">
+                              <option value="">— Month —</option>
+                              {SETTING_MONTHS.map((m, i) => <option key={m} value={i + 1}>{m}</option>)}
+                            </select>
+                            <select value={catSettingsDraftYear ?? ''} onChange={e => setCatSettingsDraftYear(e.target.value === '' ? null : Number(e.target.value))} className="w-24 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-3 py-2 text-xs font-bold text-gray-700 dark:text-gray-300 outline-none focus:ring-2 focus:ring-indigo-400 transition-colors">
+                              <option value="">— Year —</option>
+                              {years.map(y => <option key={y} value={y}>{y}</option>)}
+                            </select>
+                          </div>
+                          <p className="text-[9px] text-gray-400 dark:text-gray-500 transition-colors">From this month onwards the category will no longer appear in new budgets.</p>
+                          {catSettingsDraftMonth !== null && catSettingsDraftYear !== null && (
+                            <button type="button" onClick={() => { setCatSettingsDraftMonth(null); setCatSettingsDraftYear(null); }} className="text-[9px] text-red-400 dark:text-red-500 hover:text-red-600 dark:hover:text-red-400 font-bold uppercase tracking-widest transition-colors">Remove deactivation</button>
+                          )}
+                        </div>
+
+                        <div className="space-y-2">
+                          <button type="button" onClick={() => setShowReactivationPicker(p => !p)} className="flex items-center justify-between w-full bg-gray-50 dark:bg-gray-800/80 rounded-2xl px-4 py-3 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
+                            <div className="text-left">
+                              <p className="text-xs font-black text-gray-700 dark:text-gray-200 uppercase tracking-widest transition-colors">Reactivation</p>
+                              <p className="text-[9px] text-gray-400 dark:text-gray-500 mt-0.5 transition-colors">
+                                {hasReactivation && cat.reactivatedFrom ? `Scheduled: ${SETTING_MONTHS[parseInt(cat.reactivatedFrom.split('-')[1], 10) - 1]} ${cat.reactivatedFrom.split('-')[0]}` : showReactivationPicker ? 'Set reactivation date below' : 'Tap to schedule reactivation'}
+                              </p>
+                            </div>
+                            <ChevronDown className={`w-4 h-4 text-gray-400 dark:text-gray-500 transition-transform ${showReactivationPicker ? 'rotate-180' : ''}`} />
+                          </button>
+                          {showReactivationPicker && (
+                            <div className="pl-2 space-y-2">
+                              <div className="flex gap-2">
+                                <select value={reactDraftMonth ?? ''} onChange={e => setReactDraftMonth(e.target.value === '' ? null : Number(e.target.value))} className="flex-1 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-3 py-2 text-xs font-bold text-gray-700 dark:text-gray-300 outline-none focus:ring-2 focus:ring-green-400 transition-colors">
+                                  <option value="">— Month —</option>
+                                  {SETTING_MONTHS.map((m, i) => { const candidate = new Date(reactDraftYear ?? new Date().getFullYear(), i, 1); const disabled = deactDate !== null && candidate <= deactDate; return <option key={m} value={i + 1} disabled={disabled} className={disabled ? 'text-gray-300 dark:text-gray-600' : ''}>{m}{disabled ? ' ✕' : ''}</option>; })}
+                                </select>
+                                <select value={reactDraftYear ?? ''} onChange={e => setReactDraftYear(e.target.value === '' ? null : Number(e.target.value))} className="w-24 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-3 py-2 text-xs font-bold text-gray-700 dark:text-gray-300 outline-none focus:ring-2 focus:ring-green-400 transition-colors">
+                                  <option value="">— Year —</option>
+                                  {years.map(y => <option key={y} value={y}>{y}</option>)}
+                                </select>
+                              </div>
+                              {!reactIsValid && <p className="text-[9px] text-red-500 font-bold">Reactivation must be after the deactivation month.</p>}
+                              {reactIsValid && <p className="text-[9px] text-green-600 font-bold">Category will reappear from {SETTING_MONTHS[reactDraftMonth - 1]} {reactDraftYear}.</p>}
+                              <button type="button" onClick={() => { setShowReactivationPicker(false); setReactDraftMonth(null); setReactDraftYear(null); }} className="text-[9px] text-gray-400 dark:text-gray-500 hover:text-red-500 dark:hover:text-red-400 font-bold uppercase tracking-widest transition-colors">Remove reactivation date</button>
+                            </div>
+                          )}
+                        </div>
+
+                        <div className="flex items-center justify-between bg-gray-50 dark:bg-gray-800/80 rounded-2xl px-4 py-3 transition-colors">
+                          <div>
+                            <p className="text-xs font-black text-gray-700 dark:text-gray-200 uppercase tracking-widest transition-colors">Flexi Mode</p>
+                            <p className="text-[9px] text-gray-400 dark:text-gray-500 mt-0.5 transition-colors">{catSettingsDraftFlexi ? 'ON — manual items can be added' : 'OFF — data-only, no Add Item'}</p>
+                          </div>
+                          <button onClick={() => setCatSettingsDraftFlexi(f => !f)} className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${catSettingsDraftFlexi ? 'bg-indigo-500' : 'bg-gray-300 dark:bg-gray-600'}`}>
+                            <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${catSettingsDraftFlexi ? 'translate-x-6' : 'translate-x-1'}`} />
+                          </button>
+                        </div>
+
+                        <button onClick={handleCatSettingsSave} className="w-full bg-indigo-600 text-white py-3 rounded-xl font-black text-xs uppercase tracking-widest hover:bg-indigo-700 transition-colors">Save Settings</button>
+                        <button onClick={() => { closeCatSettings(); handleDeleteCategory(catSettingsModal.catId, catSettingsModal.catName); }} className="w-full py-3 rounded-xl font-black text-xs uppercase tracking-widest border border-red-100 dark:border-red-900/30 text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 hover:text-red-600 dark:hover:text-red-400 transition-colors flex items-center justify-center gap-2"><Trash2 className="w-3.5 h-3.5" />Delete Category</button>
+                      </div>
+                    </div>
+                  );
+                })()}
+
+                {deactConflictModal && (
+                  <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-end justify-center sm:items-center p-4">
+                    <div className="bg-white dark:bg-gray-900 rounded-[2rem] shadow-2xl w-full max-w-md p-6 space-y-5 max-h-[90vh] overflow-y-auto transition-colors">
+                      <div className="flex items-start justify-between">
+                        <div><p className="text-[10px] font-black text-amber-500 uppercase tracking-widest">Deactivation Conflict</p><h3 className="text-base font-black text-gray-900 dark:text-gray-100 mt-0.5 transition-colors">Deactivate "{deactConflictModal.catName}"</h3></div>
+                        <button onClick={() => setDeactConflictModal(null)} className="text-gray-300 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-400 transition-colors"><X className="w-5 h-5" /></button>
+                      </div>
+                      <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800/30 rounded-2xl p-4 flex gap-3 transition-colors">
+                        <AlertTriangle className="w-4 h-4 text-amber-500 flex-shrink-0 mt-0.5" />
+                        <p className="text-xs text-amber-700 dark:text-amber-400 font-medium transition-colors">The following items are still active at or after the proposed deactivation date. To proceed, either cancel and adjust them manually, or use "Align &amp; Deactivate" to automatically set their end date to <strong>{deactConflictModal.lastActiveLabel}</strong>.</p>
+                      </div>
                       <div className="space-y-2">
-                        {/* Existing subcategory chips */}
-                        {localSubcats.length > 0 && (
-                          <div className="flex flex-wrap gap-1.5">
-                            {localSubcats.map(sub => (
-                              <div key={sub} className="flex items-center gap-1.5 px-3 py-1 bg-gray-100 dark:bg-gray-800 rounded-full transition-colors">
-                                <span className="text-[10px] font-bold text-gray-600 dark:text-gray-300 transition-colors">{sub}</span>
-                                <button
-                                  type="button"
-                                  onClick={() => setLocalSubcats(prev => prev.filter(s => s !== sub))}
-                                  className="text-gray-400 dark:text-gray-500 hover:text-red-500 dark:hover:text-red-400 transition-colors"
-                                >
-                                  <X className="w-3 h-3" />
-                                </button>
+                        {deactConflictModal.conflicts.map(c => (
+                          <div key={c.id} className="flex items-center justify-between bg-gray-50 dark:bg-gray-800/80 rounded-2xl px-4 py-3 transition-colors">
+                            <div><p className="text-xs font-black text-gray-800 dark:text-gray-200 transition-colors">{c.name}</p><p className="text-[9px] text-gray-400 uppercase tracking-wider">{c.type}</p></div>
+                            <span className="text-[9px] font-bold text-red-500 dark:text-red-400 bg-red-50 dark:bg-red-900/20 px-2 py-1 rounded-full transition-colors">{c.lastActiveLabel}</span>
+                          </div>
+                        ))}
+                      </div>
+                      {deactConflictError && <p className="text-xs text-red-600 font-bold">{deactConflictError}</p>}
+                      <div className="flex gap-3">
+                        <button onClick={() => setDeactConflictModal(null)} className="flex-1 py-3 rounded-xl font-black text-xs uppercase tracking-widest border border-gray-200 dark:border-gray-700 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors" disabled={deactConflictSaving}>Cancel</button>
+                        <button onClick={handleAlignAndDeactivate} disabled={deactConflictSaving || !onUpdateBiller} className="flex-1 py-3 rounded-xl font-black text-xs uppercase tracking-widest bg-amber-500 text-white hover:bg-amber-600 disabled:opacity-50 transition-colors">{deactConflictSaving ? 'Aligning...' : 'Align & Deactivate'}</button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {deleteModal && (() => {
+                  const reassignableConflicts = deleteModal.conflicts.filter(c => c.reassignable);
+                  const lockedConflicts = deleteModal.conflicts.filter(c => !c.reassignable);
+                  const allReassigned = reassignableConflicts.every(c => c.newCategoryId !== null);
+                  const canDelete = allReassigned && lockedConflicts.length === 0;
+                  const otherCategories = categories.filter(c => c.id !== deleteModal.catId && c.active !== false);
+                  return (
+                    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-end justify-center sm:items-center p-4">
+                      <div className="bg-white dark:bg-gray-900 rounded-[2rem] shadow-2xl w-full max-w-md p-6 space-y-5 max-h-[90vh] overflow-y-auto transition-colors">
+                        <div className="flex items-start justify-between">
+                          <div><p className="text-[10px] font-black text-red-400 uppercase tracking-widest">Delete Category</p><h3 className="text-base font-black text-gray-900 dark:text-gray-100 mt-0.5 transition-colors">"{deleteModal.catName}"</h3></div>
+                          <button onClick={() => setDeleteModal(null)} className="text-gray-300 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-400 transition-colors"><X className="w-5 h-5" /></button>
+                        </div>
+                        <div className="bg-red-50 dark:bg-red-900/20 border border-red-100 dark:border-red-800/30 rounded-2xl p-4 flex gap-3 transition-colors">
+                          <AlertTriangle className="w-4 h-4 text-red-400 flex-shrink-0 mt-0.5" />
+                          <p className="text-xs text-red-600 dark:text-red-400 font-medium transition-colors">This category still has items assigned to it. Reassignable billers must be moved to another category before deletion. Loans/Installments are locked and must be handled in their own screens.</p>
+                        </div>
+                        {reassignableConflicts.length > 0 && (
+                          <div className="space-y-2">
+                            <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Reassign Billers</p>
+                            {reassignableConflicts.map(c => (
+                              <div key={c.id} className="flex items-center justify-between gap-3 bg-gray-50 dark:bg-gray-800/80 rounded-2xl px-4 py-3 transition-colors">
+                                <div className="min-w-0 flex-1"><p className="text-xs font-black text-gray-800 dark:text-gray-200 truncate transition-colors">{c.name}</p><p className="text-[9px] text-gray-400 uppercase tracking-wider">{c.currentCategory}</p></div>
+                                <select value={c.newCategoryId ?? ''} onChange={e => handleDeleteReassignChange(c.id, e.target.value)} className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl px-2 py-1.5 text-xs font-bold text-gray-700 dark:text-gray-300 outline-none focus:ring-2 focus:ring-red-300 dark:focus:ring-red-500/50 max-w-[140px] transition-colors">
+                                  <option value="">Select…</option>
+                                  {otherCategories.map(oc => <option key={oc.id} value={oc.id}>{oc.name}</option>)}
+                                </select>
                               </div>
                             ))}
                           </div>
                         )}
-                        {localSubcats.length === 0 && (
-                          <p className="text-[10px] text-gray-400 dark:text-gray-500 italic transition-colors">No subcategories yet.</p>
-                        )}
-
-                        {/* Add new subcategory */}
-                        <div className="flex gap-2">
-                          <input
-                            type="text"
-                            placeholder="New subcategory…"
-                            value={newSubcatInput}
-                            onChange={e => setNewSubcatInput(e.target.value)}
-                            onKeyDown={e => {
-                              if (e.key === 'Enter') {
-                                e.preventDefault();
-                                const trimmed = newSubcatInput.trim();
-                                if (trimmed && !localSubcats.includes(trimmed)) {
-                                  setLocalSubcats(prev => [...prev, trimmed]);
-                                  setNewSubcatInput('');
-                                }
-                              }
-                            }}
-                            className="flex-1 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-3 py-2 text-xs font-bold text-gray-700 dark:text-gray-300 outline-none focus:ring-2 focus:ring-indigo-400 transition-colors"
-                          />
-                          <button
-                            type="button"
-                            onClick={() => {
-                              const trimmed = newSubcatInput.trim();
-                              if (trimmed && !localSubcats.includes(trimmed)) {
-                                setLocalSubcats(prev => [...prev, trimmed]);
-                                setNewSubcatInput('');
-                              }
-                            }}
-                            className="p-2 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 transition-colors"
-                          >
-                            <Plus className="w-4 h-4" />
-                          </button>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Deactivation date picker */}
-                  <div className="space-y-2">
-                    <p className="text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest transition-colors">
-                      {isDeactivated ? 'Deactivated From' : 'Deactivate From'}
-                    </p>
-                    <div className="flex gap-2">
-                      <select
-                        value={catSettingsDraftMonth ?? ''}
-                        onChange={e => setCatSettingsDraftMonth(e.target.value === '' ? null : Number(e.target.value))}
-                        className="flex-1 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-3 py-2 text-xs font-bold text-gray-700 dark:text-gray-300 outline-none focus:ring-2 focus:ring-indigo-400 transition-colors"
-                      >
-                        <option value="">— Month —</option>
-                        {SETTING_MONTHS.map((m, i) => (
-                          <option key={m} value={i + 1}>{m}</option>
-                        ))}
-                      </select>
-                      <select
-                        value={catSettingsDraftYear ?? ''}
-                        onChange={e => setCatSettingsDraftYear(e.target.value === '' ? null : Number(e.target.value))}
-                        className="w-24 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-3 py-2 text-xs font-bold text-gray-700 dark:text-gray-300 outline-none focus:ring-2 focus:ring-indigo-400 transition-colors"
-                      >
-                        <option value="">— Year —</option>
-                        {years.map(y => (
-                          <option key={y} value={y}>{y}</option>
-                        ))}
-                      </select>
-                    </div>
-                    <p className="text-[9px] text-gray-400 dark:text-gray-500 transition-colors">From this month onwards the category will no longer appear in new budgets.</p>
-                    {catSettingsDraftMonth !== null && catSettingsDraftYear !== null && (
-                      <button
-                        type="button"
-                        onClick={() => { setCatSettingsDraftMonth(null); setCatSettingsDraftYear(null); }}
-                        className="text-[9px] text-red-400 dark:text-red-500 hover:text-red-600 dark:hover:text-red-400 font-bold uppercase tracking-widest transition-colors"
-                      >
-                        Remove deactivation
-                      </button>
-                    )}
-                  </div>
-
-                  {/* Reactivation toggle + picker */}
-                  <div className="space-y-2">
-                    <button
-                      type="button"
-                      onClick={() => setShowReactivationPicker(p => !p)}
-                      className="flex items-center justify-between w-full bg-gray-50 dark:bg-gray-800/80 rounded-2xl px-4 py-3 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
-                    >
-                      <div className="text-left">
-                        <p className="text-xs font-black text-gray-700 dark:text-gray-200 uppercase tracking-widest transition-colors">Reactivation</p>
-                        <p className="text-[9px] text-gray-400 dark:text-gray-500 mt-0.5 transition-colors">
-                          {hasReactivation && cat.reactivatedFrom
-                            ? `Scheduled: ${SETTING_MONTHS[parseInt(cat.reactivatedFrom.split('-')[1], 10) - 1]} ${cat.reactivatedFrom.split('-')[0]}`
-                            : showReactivationPicker
-                              ? 'Set reactivation date below'
-                              : 'Tap to schedule reactivation'}
-                        </p>
-                      </div>
-                      <ChevronDown className={`w-4 h-4 text-gray-400 dark:text-gray-500 transition-transform ${showReactivationPicker ? 'rotate-180' : ''}`} />
-                    </button>
-
-                    {showReactivationPicker && (
-                      <div className="pl-2 space-y-2">
-                        <div className="flex gap-2">
-                          <select
-                            value={reactDraftMonth ?? ''}
-                            onChange={e => setReactDraftMonth(e.target.value === '' ? null : Number(e.target.value))}
-                            className="flex-1 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-3 py-2 text-xs font-bold text-gray-700 dark:text-gray-300 outline-none focus:ring-2 focus:ring-green-400 transition-colors"
-                          >
-                            <option value="">— Month —</option>
-                            {SETTING_MONTHS.map((m, i) => {
-                              const candidate = new Date(reactDraftYear ?? new Date().getFullYear(), i, 1);
-                              const disabled = deactDate !== null && candidate <= deactDate;
-                              return (
-                                <option key={m} value={i + 1} disabled={disabled} className={disabled ? 'text-gray-300 dark:text-gray-600' : ''}>{m}{disabled ? ' ✕' : ''}</option>
-                              );
-                            })}
-                          </select>
-                          <select
-                            value={reactDraftYear ?? ''}
-                            onChange={e => setReactDraftYear(e.target.value === '' ? null : Number(e.target.value))}
-                            className="w-24 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-3 py-2 text-xs font-bold text-gray-700 dark:text-gray-300 outline-none focus:ring-2 focus:ring-green-400 transition-colors"
-                          >
-                            <option value="">— Year —</option>
-                            {years.map(y => (
-                              <option key={y} value={y}>{y}</option>
+                        {lockedConflicts.length > 0 && (
+                          <div className="space-y-2">
+                            <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Locked Items</p>
+                            {lockedConflicts.map(c => (
+                              <div key={c.id} className="flex items-center justify-between bg-orange-50 dark:bg-orange-900/10 border border-orange-100 dark:border-orange-800/30 rounded-2xl px-4 py-3 transition-colors">
+                                <div><p className="text-xs font-black text-gray-800 dark:text-gray-200 transition-colors">{c.name}</p><p className="text-[9px] text-orange-500 uppercase tracking-wider">{c.type} — Locked</p></div>
+                                <span className="text-[9px] font-bold text-orange-500 dark:text-orange-400 bg-orange-100 dark:bg-orange-900/30 px-2 py-1 rounded-full transition-colors">Must handle separately</span>
+                              </div>
                             ))}
-                          </select>
-                        </div>
-                        {!reactIsValid && (
-                          <p className="text-[9px] text-red-500 font-bold">Reactivation must be after the deactivation month.</p>
-                        )}
-                        {reactIsValid && (
-                          <p className="text-[9px] text-green-600 font-bold">
-                            Category will reappear from {SETTING_MONTHS[reactDraftMonth - 1]} {reactDraftYear}.
-                          </p>
-                        )}
-                        <button
-                          type="button"
-                          onClick={() => { setShowReactivationPicker(false); setReactDraftMonth(null); setReactDraftYear(null); }}
-                          className="text-[9px] text-gray-400 dark:text-gray-500 hover:text-red-500 dark:hover:text-red-400 font-bold uppercase tracking-widest transition-colors"
-                        >
-                          Remove reactivation date
-                        </button>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Flexi Mode toggle */}
-                  <div className="flex items-center justify-between bg-gray-50 dark:bg-gray-800/80 rounded-2xl px-4 py-3 transition-colors">
-                    <div>
-                      <p className="text-xs font-black text-gray-700 dark:text-gray-200 uppercase tracking-widest transition-colors">Flexi Mode</p>
-                      <p className="text-[9px] text-gray-400 dark:text-gray-500 mt-0.5 transition-colors">{catSettingsDraftFlexi ? 'ON — manual items can be added' : 'OFF — data-only, no Add Item'}</p>
-                    </div>
-                    <button
-                      onClick={() => setCatSettingsDraftFlexi(f => !f)}
-                      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${catSettingsDraftFlexi ? 'bg-indigo-500' : 'bg-gray-300 dark:bg-gray-600'}`}
-                    >
-                      <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${catSettingsDraftFlexi ? 'translate-x-6' : 'translate-x-1'}`} />
-                    </button>
-                  </div>
-
-                  {/* Save */}
-                  <button
-                    onClick={handleCatSettingsSave}
-                    className="w-full bg-indigo-600 text-white py-3 rounded-xl font-black text-xs uppercase tracking-widest hover:bg-indigo-700 transition-colors"
-                  >
-                    Save Settings
-                  </button>
-
-                  {/* Delete */}
-                  <button
-                    onClick={() => { closeCatSettings(); handleDeleteCategory(catSettingsModal.catId, catSettingsModal.catName); }}
-                    className="w-full py-3 rounded-xl font-black text-xs uppercase tracking-widest border border-red-100 dark:border-red-900/30 text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 hover:text-red-600 dark:hover:text-red-400 transition-colors flex items-center justify-center gap-2"
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                    Delete Category
-                  </button>
-                </div>
-              </div>
-            );
-          })()}
-
-          {/* Deactivation Conflicts Modal */}
-          {deactConflictModal && (
-            <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-end justify-center sm:items-center p-4">
-              <div className="bg-white dark:bg-gray-900 rounded-[2rem] shadow-2xl w-full max-w-md p-6 space-y-5 max-h-[90vh] overflow-y-auto transition-colors">
-                <div className="flex items-start justify-between">
-                  <div>
-                    <p className="text-[10px] font-black text-amber-500 uppercase tracking-widest">Deactivation Conflict</p>
-                    <h3 className="text-base font-black text-gray-900 dark:text-gray-100 mt-0.5 transition-colors">
-                      Deactivate "{deactConflictModal.catName}"
-                    </h3>
-                  </div>
-                  <button onClick={() => setDeactConflictModal(null)} className="text-gray-300 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-400 transition-colors">
-                    <X className="w-5 h-5" />
-                  </button>
-                </div>
-
-                <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800/30 rounded-2xl p-4 flex gap-3 transition-colors">
-                  <AlertTriangle className="w-4 h-4 text-amber-500 flex-shrink-0 mt-0.5" />
-                  <p className="text-xs text-amber-700 dark:text-amber-400 font-medium transition-colors">
-                    The following items are still active at or after the proposed deactivation date.
-                    To proceed, either cancel and adjust them manually, or use "Align &amp; Deactivate"
-                    to automatically set their end date to <strong>{deactConflictModal.lastActiveLabel}</strong>.
-                  </p>
-                </div>
-
-                <div className="space-y-2">
-                  {deactConflictModal.conflicts.map(c => (
-                    <div key={c.id} className="flex items-center justify-between bg-gray-50 dark:bg-gray-800/80 rounded-2xl px-4 py-3 transition-colors">
-                      <div>
-                        <p className="text-xs font-black text-gray-800 dark:text-gray-200 transition-colors">{c.name}</p>
-                        <p className="text-[9px] text-gray-400 uppercase tracking-wider">{c.type}</p>
-                      </div>
-                      <span className="text-[9px] font-bold text-red-500 dark:text-red-400 bg-red-50 dark:bg-red-900/20 px-2 py-1 rounded-full transition-colors">{c.lastActiveLabel}</span>
-                    </div>
-                  ))}
-                </div>
-
-                {deactConflictError && (
-                  <p className="text-xs text-red-600 font-bold">{deactConflictError}</p>
-                )}
-
-                <div className="flex gap-3">
-                  <button
-                    onClick={() => setDeactConflictModal(null)}
-                    className="flex-1 py-3 rounded-xl font-black text-xs uppercase tracking-widest border border-gray-200 dark:border-gray-700 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
-                    disabled={deactConflictSaving}
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    onClick={handleAlignAndDeactivate}
-                    disabled={deactConflictSaving || !onUpdateBiller}
-                    className="flex-1 py-3 rounded-xl font-black text-xs uppercase tracking-widest bg-amber-500 text-white hover:bg-amber-600 disabled:opacity-50 transition-colors"
-                  >
-                    {deactConflictSaving ? 'Aligning...' : 'Align & Deactivate'}
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Delete Reassignment Modal */}
-          {deleteModal && (() => {
-            const reassignableConflicts = deleteModal.conflicts.filter(c => c.reassignable);
-            const lockedConflicts = deleteModal.conflicts.filter(c => !c.reassignable);
-            const allReassigned = reassignableConflicts.every(c => c.newCategoryId !== null);
-            const canDelete = allReassigned && lockedConflicts.length === 0;
-            const otherCategories = categories.filter(c => c.id !== deleteModal.catId && c.active !== false);
-            return (
-              <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-end justify-center sm:items-center p-4">
-                <div className="bg-white dark:bg-gray-900 rounded-[2rem] shadow-2xl w-full max-w-md p-6 space-y-5 max-h-[90vh] overflow-y-auto transition-colors">
-                  <div className="flex items-start justify-between">
-                    <div>
-                      <p className="text-[10px] font-black text-red-400 uppercase tracking-widest">Delete Category</p>
-                      <h3 className="text-base font-black text-gray-900 dark:text-gray-100 mt-0.5 transition-colors">"{deleteModal.catName}"</h3>
-                    </div>
-                    <button onClick={() => setDeleteModal(null)} className="text-gray-300 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-400 transition-colors">
-                      <X className="w-5 h-5" />
-                    </button>
-                  </div>
-
-                  <div className="bg-red-50 dark:bg-red-900/20 border border-red-100 dark:border-red-800/30 rounded-2xl p-4 flex gap-3 transition-colors">
-                    <AlertTriangle className="w-4 h-4 text-red-400 flex-shrink-0 mt-0.5" />
-                    <p className="text-xs text-red-600 dark:text-red-400 font-medium transition-colors">
-                      This category still has items assigned to it.
-                      Reassignable billers must be moved to another category before deletion.
-                      Loans/Installments are locked and must be handled in their own screens.
-                    </p>
-                  </div>
-
-                  {reassignableConflicts.length > 0 && (
-                    <div className="space-y-2">
-                      <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Reassign Billers</p>
-                      {reassignableConflicts.map(c => (
-                        <div key={c.id} className="flex items-center justify-between gap-3 bg-gray-50 dark:bg-gray-800/80 rounded-2xl px-4 py-3 transition-colors">
-                          <div className="min-w-0 flex-1">
-                            <p className="text-xs font-black text-gray-800 dark:text-gray-200 truncate transition-colors">{c.name}</p>
-                            <p className="text-[9px] text-gray-400 uppercase tracking-wider">{c.currentCategory}</p>
+                            <p className="text-[9px] text-orange-500 font-bold">You have {lockedConflicts.length} locked item{lockedConflicts.length > 1 ? 's' : ''}. Close or move them in their own screens before deleting this category.</p>
                           </div>
-                          <select
-                            value={c.newCategoryId ?? ''}
-                            onChange={e => handleDeleteReassignChange(c.id, e.target.value)}
-                            className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl px-2 py-1.5 text-xs font-bold text-gray-700 dark:text-gray-300 outline-none focus:ring-2 focus:ring-red-300 dark:focus:ring-red-500/50 max-w-[140px] transition-colors"
-                          >
-                            <option value="">Select…</option>
-                            {otherCategories.map(oc => (
-                              <option key={oc.id} value={oc.id}>{oc.name}</option>
-                            ))}
-                          </select>
+                        )}
+                        {deleteError && <p className="text-xs text-red-600 font-bold">{deleteError}</p>}
+                        <div className="flex gap-3">
+                          <button onClick={() => setDeleteModal(null)} className="flex-1 py-3 rounded-xl font-black text-xs uppercase tracking-widest border border-gray-200 dark:border-gray-700 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors" disabled={deleteSaving}>Cancel</button>
+                          <button onClick={handleReassignAndDelete} disabled={!canDelete || deleteSaving || !onUpdateBiller} className="flex-1 py-3 rounded-xl font-black text-xs uppercase tracking-widest bg-red-500 text-white hover:bg-red-600 disabled:opacity-40 transition-colors" title={!canDelete ? (lockedConflicts.length > 0 ? 'Resolve locked items first' : 'Assign all billers to a new category') : undefined}>{deleteSaving ? 'Deleting...' : 'Reassign & Delete'}</button>
                         </div>
-                      ))}
+                      </div>
                     </div>
-                  )}
-
-                  {lockedConflicts.length > 0 && (
-                    <div className="space-y-2">
-                      <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Locked Items</p>
-                      {lockedConflicts.map(c => (
-                        <div key={c.id} className="flex items-center justify-between bg-orange-50 dark:bg-orange-900/10 border border-orange-100 dark:border-orange-800/30 rounded-2xl px-4 py-3 transition-colors">
-                          <div>
-                            <p className="text-xs font-black text-gray-800 dark:text-gray-200 transition-colors">{c.name}</p>
-                            <p className="text-[9px] text-orange-500 uppercase tracking-wider">{c.type} — Locked</p>
-                          </div>
-                          <span className="text-[9px] font-bold text-orange-500 dark:text-orange-400 bg-orange-100 dark:bg-orange-900/30 px-2 py-1 rounded-full transition-colors">Must handle separately</span>
-                        </div>
-                      ))}
-                      <p className="text-[9px] text-orange-500 font-bold">
-                        You have {lockedConflicts.length} locked item{lockedConflicts.length > 1 ? 's' : ''}.
-                        Close or move them in their own screens before deleting this category.
-                      </p>
-                    </div>
-                  )}
-
-                  {deleteError && (
-                    <p className="text-xs text-red-600 font-bold">{deleteError}</p>
-                  )}
-
-                  <div className="flex gap-3">
-                    <button
-                      onClick={() => setDeleteModal(null)}
-                      className="flex-1 py-3 rounded-xl font-black text-xs uppercase tracking-widest border border-gray-200 dark:border-gray-700 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
-                      disabled={deleteSaving}
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      onClick={handleReassignAndDelete}
-                      disabled={!canDelete || deleteSaving || !onUpdateBiller}
-                      className="flex-1 py-3 rounded-xl font-black text-xs uppercase tracking-widest bg-red-500 text-white hover:bg-red-600 disabled:opacity-40 transition-colors"
-                      title={!canDelete ? (lockedConflicts.length > 0 ? 'Resolve locked items first' : 'Assign all billers to a new category') : undefined}
-                    >
-                      {deleteSaving ? 'Deleting...' : 'Reassign & Delete'}
-                    </button>
-                  </div>
-                </div>
+                  );
+                })()}
               </div>
-            );
-          })()}
-
+            )}
+          </div>
         </div>
       )
     },
@@ -1751,16 +1428,14 @@ const Settings: React.FC<SettingsProps> = ({ currency, setCurrency, categories, 
       icon: <Shield className="w-5 h-5" />,
       content: <SecuritySettings />
     },
-
     {
       id: 'about',
       label: 'About & Updates',
-      icon: <Info classname="w-5 h-5" />,
+      icon: <Info className="w-5 h-5" />,
       content: (
         <div className="pt-2">
           <AboutSection />
-          </div>
-
+        </div>
       )
     },
     ...((userProfile as any)?.role === 'admin' ? [{
@@ -1807,31 +1482,15 @@ const Settings: React.FC<SettingsProps> = ({ currency, setCurrency, categories, 
           </div>
 
           <div className="space-y-3">
-            <PinProtectedAction
-              featureId="test_environment"
-              onVerified={copyProductionToTest}
-              actionLabel="Copy Production to Test"
-            >
-              <button
-                onClick={(e) => e.preventDefault()}
-                disabled={isCopying}
-                className="w-full flex items-center justify-center space-x-3 p-4 bg-blue-600 text-white rounded-2xl font-bold text-sm hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
-              >
+            <PinProtectedAction featureId="test_environment" onVerified={copyProductionToTest} actionLabel="Copy Production to Test">
+              <button onClick={(e) => e.preventDefault()} disabled={isCopying} className="w-full flex items-center justify-center space-x-3 p-4 bg-blue-600 text-white rounded-2xl font-bold text-sm hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all">
                 <Copy className="w-5 h-5" />
                 <span>{isCopying ? 'Copying...' : '🔒 Copy Production to Test'}</span>
               </button>
             </PinProtectedAction>
 
-            <PinProtectedAction
-              featureId="test_environment"
-              onVerified={clearTestData}
-              actionLabel="Clear Test Data"
-            >
-              <button
-                onClick={(e) => e.preventDefault()}
-                disabled={isClearing}
-                className="w-full flex items-center justify-center space-x-3 p-4 bg-red-600 text-white rounded-2xl font-bold text-sm hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
-              >
+            <PinProtectedAction featureId="test_environment" onVerified={clearTestData} actionLabel="Clear Test Data">
+              <button onClick={(e) => e.preventDefault()} disabled={isClearing} className="w-full flex items-center justify-center space-x-3 p-4 bg-red-600 text-white rounded-2xl font-bold text-sm hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all">
                 <Trash2 className="w-5 h-5" />
                 <span>{isClearing ? 'Clearing...' : '🔒 Clear Test Data'}</span>
               </button>
@@ -1841,6 +1500,8 @@ const Settings: React.FC<SettingsProps> = ({ currency, setCurrency, categories, 
       )
     }] : []),
   ];
+
+
 
   return (
     <div className="max-w-4xl mx-auto space-y-4 animate-in slide-in-from-right-4 duration-500 pb-20">
@@ -1857,29 +1518,46 @@ const Settings: React.FC<SettingsProps> = ({ currency, setCurrency, categories, 
         }
       />
       <div className="bg-white dark:bg-gray-900 rounded-[3rem] border border-gray-100 dark:border-gray-800 shadow-sm overflow-hidden transition-colors">
-        <div className="divide-y divide-gray-50 dark:divide-gray-800 transition-colors">
-          {sections.map((section) => (
-            <div key={section.id} className="p-2">
-              <button 
-                onClick={() => toggleSection(section.id)}
-                className="w-full flex items-center justify-between p-4 md:p-5 rounded-[1.5rem] hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors"
-              >
-                <div className="flex items-center space-x-4 md:space-x-6">
-                  <div className="p-3 bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400 rounded-2xl transition-colors">
-                    {section.icon}
+      <div className="divide-y divide-gray-50 dark:divide-gray-800 transition-colors">
+          {sections.map((section) => {
+            const isOpen = openSection === section.id;
+            
+            return (
+              <div key={section.id} className="p-2">
+                <button 
+                  onClick={() => toggleSection(section.id)}
+                  className="w-full flex items-center justify-between p-4 md:p-5 rounded-[1.5rem] hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors group"
+                >
+                  <div className="flex items-center space-x-4 md:space-x-6">
+                    {/* 🟢 Dynamic Neo-brutalist icon wrapper */}
+                    <div className={`p-3 rounded-2xl border-[3px] border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] transition-all duration-300 group-hover:-rotate-6 group-hover:scale-110 ${
+                      isOpen 
+                        ? 'bg-amber-400 text-black -rotate-3 scale-105' 
+                        : 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-500'
+                    }`}>
+                      {section.icon}
+                    </div>
+                    <span className={`font-black text-lg uppercase tracking-tight transition-colors ${
+                      isOpen ? 'text-gray-900 dark:text-white' : 'text-gray-700 dark:text-gray-200'
+                    }`}>
+                      {section.label}
+                    </span>
                   </div>
-                  <span className="font-black text-lg text-gray-700 dark:text-gray-200 uppercase tracking-tight transition-colors">{section.label}</span>
-                </div>
-                {openSection === section.id ? <ChevronDown className="w-6 h-6 text-gray-400" /> : <ChevronRight className="w-6 h-6 text-gray-400" />}
-              </button>
-              {openSection === section.id && (
-                <div className="px-6 md:px-16 pb-6 animate-in slide-in-from-top-4 duration-300">
-                  {section.content}
-                </div>
-              )}
-            </div>
-          ))}
+                  {isOpen ? <ChevronDown className="w-6 h-6 text-gray-900 dark:text-gray-100" /> : <ChevronRight className="w-6 h-6 text-gray-400" />}
+                </button>
+                {isOpen && (
+                  <div className="px-4 md:px-5 pb-6 animate-in slide-in-from-top-4 duration-300">
+                    {section.content}
+                  </div>
+                )}
+
+              </div>
+            );
+          })}
         </div>
+
+
+
       </div>
 
       <div className="bg-red-50/50 dark:bg-red-900/10 rounded-[3rem] border border-red-100 dark:border-red-900/30 p-6 md:p-8 transition-colors mt-8">
@@ -1919,10 +1597,32 @@ const Settings: React.FC<SettingsProps> = ({ currency, setCurrency, categories, 
         )}
       </div>
 
+
+      {infoModal && (
+  <div className="fixed inset-0 z-[250] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in" onClick={() => setInfoModal(null)}>
+    <div className="bg-white dark:bg-gray-900 border-4 border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] rounded-2xl w-full max-w-sm p-6 relative animate-in zoom-in-95 flex flex-col items-center text-center" onClick={e => e.stopPropagation()}>
+      <button onClick={() => setInfoModal(null)} className="absolute top-4 right-4 text-gray-400 p-1.5 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
+        <X className="w-5 h-5 text-black dark:text-white" />
+      </button>
+      <div className="w-16 h-16 bg-amber-50 dark:bg-amber-900/20 text-amber-500 border-2 border-black rounded-2xl flex items-center justify-center mb-4 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]">
+        <Lightbulb className="w-8 h-8" />
+      </div>
+      <h3 className="text-xl font-black text-gray-900 dark:text-gray-100 uppercase tracking-tight mb-2">{infoModal.title}</h3>
+      <p className="text-sm font-medium text-gray-600 dark:text-gray-400 leading-relaxed mb-6">{infoModal.description}</p>
+      <button onClick={() => setInfoModal(null)} className="w-full bg-indigo-600 text-white border-2 border-black py-4 rounded-xl font-black text-xs uppercase tracking-widest shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[2px] hover:translate-y-[2px] transition-all">
+        Got it
+      </button>
+    </div>
+  </div>
+)}
+
       {confirmModal.show && <ConfirmDialog {...confirmModal} onClose={() => setConfirmModal(p => ({ ...p, show: false }))} />}
     </div>
   );
 };
+
+
+
 
 const ConfirmDialog: React.FC<{ show: boolean; title: string; message: string; onConfirm: () => void; onClose: () => void }> = ({ title, message, onConfirm, onClose }) => (
   <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-in fade-in">

@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Account, BudgetItem, Installment, Transaction, SavedBudgetSetup } from '../types';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, PieChart, Pie, Legend, LabelList } from 'recharts';
-import { TrendingUp, TrendingDown, Landmark, ArrowUpRight, CreditCard, Wallet, Calendar, Trophy, Medal, CalendarClock, AlertCircle, ChevronRight, Settings, X, ChevronDown, Plus, Sparkles, Tag} from 'lucide-react';
+import { TrendingUp, TrendingDown, Landmark, ArrowUpRight, CreditCard, Wallet, Calendar, Trophy, Medal, CalendarClock, AlertCircle, HeartPlus, Users, ChevronRight, Settings, X, ChevronDown, Plus, Sparkles, Tag} from 'lucide-react';
 import type { SupabaseUserProfile } from '../src/types/supabase';
 import { useTheme } from '../src/contexts/ThemeContext';
 import { DashboardHeader } from '../DashboardHeader';
@@ -499,43 +499,44 @@ const Dashboard: React.FC<DashboardProps> = ({ accounts, budget, installments, t
 
   // 🟢 METRICS CAROUSEL STATE (Mobile)
   const [activeMetricIndex, setActiveMetricIndex] = useState(0);
-  const metricScrollRef = useRef<HTMLDivElement>(null);
 
-  const handleMetricScroll = (e: React.UIEvent<HTMLDivElement>) => {
-    const container = e.currentTarget;
-    const cardWidth = container.children[0]?.clientWidth || container.clientWidth;
-    const newIndex = Math.round(container.scrollLeft / cardWidth);
-    if (newIndex !== activeMetricIndex) {
-      setActiveMetricIndex(newIndex);
-    }
-  };
+  const [touchStartX, setTouchStartX] = useState<number | null>(null);
+const [touchEndX, setTouchEndX] = useState<number | null>(null);
 
-    // 🟢 AUTO-SCROLL EFFECT FOR METRICS CAROUSEL
-    useEffect(() => {
-      const container = metricScrollRef.current;
-      if (!container) return;
-  
-      const scrollInterval = setInterval(() => {
-        // 1. Don't auto-scroll if we are on a desktop/tablet (grid view)
-        if (window.innerWidth >= 768) return;
-  
-        const cardWidth = container.children[0]?.clientWidth || container.clientWidth;
-        const maxScroll = container.scrollWidth - container.clientWidth;
-        
-        let nextScrollLeft = container.scrollLeft + cardWidth;
-        
-        // 2. If we reach the end of the carousel, loop back to 0
-        if (nextScrollLeft >= maxScroll + 10) {
-          nextScrollLeft = 0;
-        }
-  
-        // 3. Perform the smooth swipe
-        container.scrollTo({ left: nextScrollLeft, behavior: 'smooth' });
-      }, 4000); // ⏳ 4000 = 4 seconds per slide
-  
-      // Clean up the timer if they navigate away from the dashboard
-      return () => clearInterval(scrollInterval);
-    }, []);
+const handleTouchStart = (e: React.TouchEvent) => setTouchStartX(e.targetTouches[0].clientX);
+const handleTouchMove = (e: React.TouchEvent) => setTouchEndX(e.targetTouches[0].clientX);
+const handleTouchEnd = () => {
+  if (!touchStartX || !touchEndX) return;
+  const distance = touchStartX - touchEndX;
+  if (distance > 50) setActiveMetricIndex(prev => (prev + 1) % 3); // Swipe Left
+  if (distance < -50) setActiveMetricIndex(prev => (prev + 2) % 3); // Swipe Right
+  setTouchStartX(null);
+  setTouchEndX(null);
+};
+
+
+useEffect(() => {
+  const interval = setInterval(() => {
+    setActiveMetricIndex(prev => (prev + 1) % 3);
+  }, 4000);
+  return () => clearInterval(interval);
+}, []);
+
+
+    const getCardPosition = (cardIndex: number) => {
+      if (cardIndex === activeMetricIndex) {
+        // 🟢 Center Stage Card
+        return "left-1/2 -translate-x-1/2 scale-100 opacity-100 z-30 shadow-[8px_8px_0px_0px_rgba(0,0,0,1)]";
+      }
+      if (cardIndex === (activeMetricIndex + 2) % 3) {
+        // 🔴 Left Background Card (Pushed 40% further left)
+        return "left-1/2 -translate-x-[90%] md:-translate-x-[110%] scale-90 opacity-40 z-10 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] cursor-pointer hover:opacity-80";
+      }
+      // 🔵 Right Background Card (Pushed 40% further right)
+      return "left-1/2 -translate-x-[10%] md:translate-x-[10%] scale-90 opacity-40 z-10 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] cursor-pointer hover:opacity-80";
+    };
+    
+    
   
 
     return (
@@ -548,111 +549,112 @@ const Dashboard: React.FC<DashboardProps> = ({ accounts, budget, installments, t
     
 
 
-      {/* Main Content Area */}
-      <div className={`space-y-8 pb-24 ${isMobile ? 'px-4' : 'px-8'}`}>
-           {/* Top Cards */}
-            {/* 🟢 TOP METRICS CAROUSEL (Now with anchor!) */}
-            <div ref={dashboardTopRef} className="relative w-full -mt-8 scroll-mt-[100px]">
-
+              {/* Main Content Area - Wrapper removed padding */}
+      <div className="w-full pb-24">
+        
+        {/* 🟢 TOP METRICS CAROUSEL - Natively Full Width */}
+        <div ref={dashboardTopRef} className="relative w-full -mt-8 scroll-mt-[100px] overflow-hidden">
         <div 
-          ref={metricScrollRef}
-          onScroll={(e: any) => {
-            const container = e.currentTarget;
-            const cardWidth = container.children[0]?.clientWidth || container.clientWidth;
-            const newIndex = Math.round(container.scrollLeft / cardWidth);
-            if (newIndex !== activeMetricIndex) {
-              setActiveMetricIndex(newIndex);
-            }
-          }}
-          className="flex md:grid md:grid-cols-3 gap-4 md:gap-8 overflow-x-auto snap-x snap-mandatory pb-4 -mx-4 px-4 md:mx-0 md:pb-4 md:px-1 md:pr-4"
-          style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
-        >
-          
-          {/* Card 1: Total Balance */}
-          <div className="w-[85vw] md:w-full shrink-0 snap-center bg-white dark:bg-gray-900 rounded-3xl border-[3px] border-black shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] overflow-hidden flex flex-col">
-            <div className="p-4 sm:p-6 bg-teal-400 border-b-[3px] border-black">
-              <h3 className="font-black text-sm sm:text-base text-black uppercase tracking-widest">Total Balance</h3>
-            </div>
-            <div className="p-4 sm:p-6 flex-grow flex flex-col justify-between">
-              <div className="flex justify-between items-start mb-4">
-                <div className="p-3 bg-black rounded-2xl shadow-[4px_4px_0px_0px_rgba(0,0,0,0.2)]">
-                  <Landmark className="w-6 h-6 sm:w-8 sm:h-8 text-teal-400" />
-                </div>
-                <span className="px-3 py-1 bg-green-400 border-2 border-black rounded-xl text-black font-black text-xs sm:text-sm shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]">
-                  +2.5%
-                </span>
-              </div>
-              <p className={`font-black text-gray-900 dark:text-gray-100 tracking-tighter transition-all duration-200 ${getDynamicTextSize(formatCurrency(totalBalance))}`}>
-                {formatCurrency(totalBalance)}
-              </p>
+            className="relative w-full h-[220px] md:h-[260px] overflow-visible mb-8"
+            onTouchStart={handleTouchStart}
+            onTouchMove={handleTouchMove}
+            onTouchEnd={handleTouchEnd}
+          >
 
-            </div>
-          </div>
-
-          {/* Card 2: Budget Used */}
-          <div className="w-[85vw] md:w-full shrink-0 snap-center bg-white dark:bg-gray-900 rounded-3xl border-[3px] border-black shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] overflow-hidden flex flex-col">
-            <div className="p-4 sm:p-6 bg-fuchsia-400 border-b-[3px] border-black">
-              <h3 className="font-black text-sm sm:text-base text-black uppercase tracking-widest">Budget Used</h3>
-            </div>
-            <div className="p-4 sm:p-6 flex-grow flex flex-col justify-between">
-              <div className="flex justify-between items-start mb-4">
-                <div className="p-3 bg-black rounded-2xl shadow-[4px_4px_0px_0px_rgba(0,0,0,0.2)]">
-                  <TrendingUp className="w-6 h-6 sm:w-8 sm:h-8 text-fuchsia-400" />
-                </div>
-                <span className="px-3 py-1 bg-amber-400 border-2 border-black rounded-xl text-black font-black text-xs sm:text-sm shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]">
-                  +12%
-                </span>
-              </div>
-              <p className={`font-black text-gray-900 dark:text-gray-100 tracking-tighter transition-all duration-200 ${getDynamicTextSize(formatCurrency(monthlySpending))}`}>
-                {formatCurrency(monthlySpending)}
-              </p>
-
-            </div>
-          </div>
-
-          {/* Card 3: Credit Debt */}
-          <div className="w-[85vw] md:w-full shrink-0 snap-center bg-white dark:bg-gray-900 rounded-3xl border-[3px] border-black shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] overflow-hidden flex flex-col">
-            <div className="p-4 sm:p-6 bg-amber-400 border-b-[3px] border-black">
-              <h3 className="font-black text-sm sm:text-base text-black uppercase tracking-widest">Credit Debt</h3>
-            </div>
-            <div className="p-4 sm:p-6 flex-grow flex flex-col justify-between">
-              <div className="flex justify-between items-start mb-4">
-                <div className="p-3 bg-black rounded-2xl shadow-[4px_4px_0px_0px_rgba(0,0,0,0.2)]">
-                  <TrendingDown className="w-6 h-6 sm:w-8 sm:h-8 text-amber-400" />
-                </div>
-                <span className="px-3 py-1 bg-green-400 border-2 border-black rounded-xl text-black font-black text-xs sm:text-sm shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]">
-                  -5%
-                </span>
-              </div>
-              <p className={`font-black text-gray-900 dark:text-gray-100 tracking-tighter transition-all duration-200 ${getDynamicTextSize(formatCurrency(totalDebt))}`}>
-                {formatCurrency(totalDebt)}
-              </p>
-            </div>
-          </div>
-
-        </div>
-
-        {/* 🟢 Mobile Dot Indicators */}
-        <div className="flex justify-center gap-2 mt-0 md:hidden">
-          {[0, 1, 2].map((i) => (
+            
+            {/* Card 1: Total Balance */}
             <div 
-              key={i} 
-              className={`h-2 rounded-full transition-all duration-300 ${
-                activeMetricIndex === i 
-                  ? 'w-6 bg-black dark:bg-white' 
-                  : 'w-2 bg-gray-300 dark:bg-gray-700'
-              }`}
-            />
-          ))}
+              onClick={() => setActiveMetricIndex(0)}
+              className={`absolute top-0 w-[75vw] md:w-[320px] bg-white dark:bg-gray-900 rounded-3xl border-[3px] border-black shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] overflow-hidden flex flex-col transition-all duration-500 ease-in-out ${getCardPosition(0)}`}
+            >
+              <div className="p-4 sm:p-6 bg-teal-400 border-b-[3px] border-black">
+                <h3 className="font-black text-sm sm:text-base text-black uppercase tracking-widest">Total Balance</h3>
+              </div>
+              <div className="p-4 sm:p-6 flex-grow flex flex-col justify-between">
+                <div className="flex justify-between items-start mb-4">
+                  <div className="p-3 bg-black rounded-2xl shadow-[4px_4px_0px_0px_rgba(0,0,0,0.2)]">
+                    <Landmark className="w-6 h-6 sm:w-8 sm:h-8 text-teal-400" />
+                  </div>
+                  <span className="px-3 py-1 bg-green-400 border-2 border-black rounded-xl text-black font-black text-xs sm:text-sm shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]">
+                    +2.5%
+                  </span>
+                </div>
+                <p className={`font-black text-gray-900 dark:text-gray-100 tracking-tighter transition-all duration-200 ${getDynamicTextSize(formatCurrency(totalBalance))}`}>
+                  {formatCurrency(totalBalance)}
+                </p>
+              </div>
+            </div>
+
+            {/* Card 2: Budget Used */}
+            <div 
+              onClick={() => setActiveMetricIndex(1)}
+              className={`absolute top-0 w-[75vw] md:w-[320px] bg-white dark:bg-gray-900 rounded-3xl border-[3px] border-black shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] overflow-hidden flex flex-col transition-all duration-500 ease-in-out ${getCardPosition(1)}`}
+            >
+              <div className="p-4 sm:p-6 bg-fuchsia-400 border-b-[3px] border-black">
+                <h3 className="font-black text-sm sm:text-base text-black uppercase tracking-widest">Budget Used</h3>
+              </div>
+              <div className="p-4 sm:p-6 flex-grow flex flex-col justify-between">
+                <div className="flex justify-between items-start mb-4">
+                  <div className="p-3 bg-black rounded-2xl shadow-[4px_4px_0px_0px_rgba(0,0,0,0.2)]">
+                    <TrendingUp className="w-6 h-6 sm:w-8 sm:h-8 text-fuchsia-400" />
+                  </div>
+                  <span className="px-3 py-1 bg-amber-400 border-2 border-black rounded-xl text-black font-black text-xs sm:text-sm shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]">
+                    +12%
+                  </span>
+                </div>
+                <p className={`font-black text-gray-900 dark:text-gray-100 tracking-tighter transition-all duration-200 ${getDynamicTextSize(formatCurrency(monthlySpending))}`}>
+                  {formatCurrency(monthlySpending)}
+                </p>
+              </div>
+            </div>
+
+            {/* Card 3: Credit Debt */}
+            <div 
+              onClick={() => setActiveMetricIndex(2)}
+              className={`absolute top-0 w-[75vw] md:w-[320px] bg-white dark:bg-gray-900 rounded-3xl border-[3px] border-black shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] overflow-hidden flex flex-col transition-all duration-500 ease-in-out ${getCardPosition(2)}`}
+            >
+              <div className="p-4 sm:p-6 bg-amber-400 border-b-[3px] border-black">
+                <h3 className="font-black text-sm sm:text-base text-black uppercase tracking-widest">Credit Debt</h3>
+              </div>
+              <div className="p-4 sm:p-6 flex-grow flex flex-col justify-between">
+                <div className="flex justify-between items-start mb-4">
+                  <div className="p-3 bg-black rounded-2xl shadow-[4px_4px_0px_0px_rgba(0,0,0,0.2)]">
+                    <TrendingDown className="w-6 h-6 sm:w-8 sm:h-8 text-amber-400" />
+                  </div>
+                  <span className="px-3 py-1 bg-green-400 border-2 border-black rounded-xl text-black font-black text-xs sm:text-sm shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]">
+                    -5%
+                  </span>
+                </div>
+                <p className={`font-black text-gray-900 dark:text-gray-100 tracking-tighter transition-all duration-200 ${getDynamicTextSize(formatCurrency(totalDebt))}`}>
+                  {formatCurrency(totalDebt)}
+                </p>
+              </div>
+            </div>
+
+          </div>
+
+          {/* 🟢 Mobile Dot Indicators */}
+          <div className="flex justify-center gap-2 -mt-10 mb-4 md:hidden">
+          {[0, 1, 2].map((i) => (
+              <div key={i} className={`h-2 rounded-full transition-all duration-300 ${activeMetricIndex === i ? 'w-6 bg-black dark:bg-white' : 'w-2 bg-gray-300 dark:bg-gray-700'}`} />
+            ))}
+          </div>
         </div>
-      </div>
+
+        {/* 🟢 NEW PADDED CONTAINER FOR THE REST OF THE DASHBOARD */}
+        <div className={`space-y-8 ${isMobile ? 'px-4' : 'px-8'}`}>
+
+
 
                     {/* 🟢 3 QUICK ACTIONS */}
-        <div className="grid grid-cols-3 gap-3 !mt-3 !mb-2 px-4 md:px-0">
+        <div className="grid grid-cols-4 gap-2 !mt-3 !mb-2 px-0 md:px-0">
         {[
-          { icon: Plus, label: 'Add Transaction', color: 'bg-[#c4a1ff]', route: '/transactions' },
+          { icon: Plus, label: 'Add Tx', color: 'bg-[#c4a1ff]', route: '/transactions' },
           { icon: Sparkles, label: 'Forecast', color: 'bg-white', route: '/budget' },
           { icon: Tag, label: 'Grocery Trip', color: 'bg-white', route: '/scanner' },
+          { icon: HeartPlus, label: 'Save Items', color: 'bg-white', route: '/wishlist' },
+          //{ icon: Users, label: 'My Budees', color: 'bg-white', route: '/people' },
+
         ].map((action, idx) => (
           <button 
             key={idx} 
@@ -1217,6 +1219,7 @@ const Dashboard: React.FC<DashboardProps> = ({ accounts, budget, installments, t
 
       
       </div>
+    </div>
     </div>
   );
 };
