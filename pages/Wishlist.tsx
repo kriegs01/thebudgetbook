@@ -16,6 +16,8 @@ export const Wishlist: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
 
   const [activeAlbumId, setActiveAlbumId] = useState<string | null>(null);
+
+  const [showAddTray, setShowAddTray] = useState(false);
   
   // Menus
   const [activeAlbumMenu, setActiveAlbumMenu] = useState<string | null>(null);
@@ -51,19 +53,26 @@ export const Wishlist: React.FC = () => {
     return () => window.removeEventListener('click', closeMenus);
   }, []);
 
-  // 🟢 Listens for the mobile global FAB button
-  useEffect(() => {
-    const handleOpenModal = () => {
-      setFormData(prev => ({ 
-        ...prev, 
-        album_id: activeAlbumId && activeAlbumId !== 'uncategorized' ? activeAlbumId : '' 
-      }));
-      setShowItemModal(true);
-    };
-    
-    window.addEventListener('open_add_wishlist_modal', handleOpenModal);
-    return () => window.removeEventListener('open_add_wishlist_modal', handleOpenModal);
-  }, [activeAlbumId]);
+    // 🟢 Listens for the mobile global FAB button
+    useEffect(() => {
+      const handleOpenModal = () => {
+        if (activeAlbumId) {
+          // If inside an album, bypass the tray and open the item modal directly
+          setFormData(prev => ({ 
+            ...prev, 
+            album_id: activeAlbumId !== 'uncategorized' ? activeAlbumId : '' 
+          }));
+          setShowItemModal(true);
+        } else {
+          // If on the global albums page, show the tray
+          setShowAddTray(true);
+        }
+      };
+      
+      window.addEventListener('open_add_wishlist_modal', handleOpenModal);
+      return () => window.removeEventListener('open_add_wishlist_modal', handleOpenModal);
+    }, [activeAlbumId]);
+  
 
   
   const loadData = async () => {
@@ -703,6 +712,60 @@ export const Wishlist: React.FC = () => {
         </div>,
         document.body
       )}
+
+            {/* 🟢 MOBILE ADD TRAY (Global Page Only) */}
+            {showAddTray && createPortal(
+        <>
+          <div 
+            className="fixed inset-0 bg-black/40 backdrop-blur-sm z-[110] animate-in fade-in duration-200 block md:hidden"
+            onClick={() => setShowAddTray(false)} 
+          />
+          <div 
+            className="fixed bottom-0 left-0 right-0 z-[120] bg-[#FCF6E8] dark:bg-gray-900 border-t-[4px] border-black rounded-t-[2.5rem] flex flex-col pb-10 pt-5 animate-in slide-in-from-bottom-full block md:hidden shadow-[0px_-8px_20px_rgba(0,0,0,0.15)]"
+          >
+            <div className="w-full flex justify-center pb-6 cursor-pointer" onClick={() => setShowAddTray(false)}>
+              <div className="w-14 h-1.5 bg-gray-300 dark:bg-gray-700 rounded-full" />
+            </div>
+            
+            <div className="px-6 space-y-4">
+              <h3 className="text-xl font-black uppercase tracking-tight text-center text-gray-900 dark:text-white mb-4">
+                Add to Wishlist
+              </h3>
+              
+              <div className="grid grid-cols-2 gap-4">
+                <button
+                  onClick={() => {
+                    setShowAddTray(false);
+                    setFormData(prev => ({ ...prev, album_id: '' }));
+                    setShowItemModal(true);
+                  }}
+                  className="flex flex-col items-center justify-center p-5 rounded-2xl border-[3px] border-black bg-white dark:bg-gray-800 text-gray-900 dark:text-white shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:bg-amber-50 active:bg-amber-100 dark:hover:bg-amber-900/20 dark:active:bg-amber-900/40 active:translate-x-[2px] active:translate-y-[2px] active:shadow-none transition-all"
+                >
+                  <Tag className="w-7 h-7 mb-2" />
+                  <span className="font-bold text-xs uppercase tracking-widest">Item</span>
+                </button>
+
+                <button
+                  onClick={() => {
+                    setShowAddTray(false);
+                    setAlbumFormData({ name: '', coverUrl: '', coverFile: null });
+                    setEditingAlbumId(null);
+                    setShowAlbumModal(true);
+                  }}
+                  className="flex flex-col items-center justify-center p-5 rounded-2xl border-[3px] border-black bg-white dark:bg-gray-800 text-gray-900 dark:text-white shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:bg-amber-50 active:bg-amber-100 dark:hover:bg-amber-900/20 dark:active:bg-amber-900/40 active:translate-x-[2px] active:translate-y-[2px] active:shadow-none transition-all"
+                >
+                  <FolderPlus className="w-7 h-7 mb-2" />
+                  <span className="font-bold text-xs uppercase tracking-widest">Album</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </>,
+        document.body
+      )}
+
+
+
     </div>
   );
 };
