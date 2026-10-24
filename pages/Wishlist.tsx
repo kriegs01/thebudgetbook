@@ -242,18 +242,28 @@ export const Wishlist: React.FC = () => {
           actions={
             !isMobile && (
               <div className="flex gap-3">
-                                {/* 🟢 UPGRADED: Desktop Add Item Button */}
-                                <button onClick={() => {
+                {/* 🟢 RESTORED: Desktop Add Album Button */}
+                <button onClick={() => {
+                  setAlbumFormData({ name: '', coverUrl: '', coverFile: null });
+                  setEditingAlbumId(null);
+                  setShowAlbumModal(true);
+                }} className={`flex items-center gap-2 bg-white dark:bg-gray-900 text-gray-900 dark:text-white px-5 py-3 rounded-xl font-bold text-sm border-[3px] border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] transition-all hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none`}>
+                  <FolderPlus className="w-4 h-4 stroke-[3]" />
+                  <span className="hidden sm:inline">New Album</span>
+                </button>
+          
+                {/* 🟢 UPGRADED: Desktop Add Item Button */}
+                <button onClick={() => {
                   setFormData(prev => ({ ...prev, album_id: activeAlbumId && activeAlbumId !== 'uncategorized' ? activeAlbumId : '' }));
                   setShowItemModal(true);
                 }} className={`flex items-center gap-2 text-white px-5 py-3 rounded-xl font-bold text-sm border-[3px] border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] transition-all hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none ${getAccentClasses('bg')}`}>
                   <Plus className="w-4 h-4 stroke-[3]" />
                   <span className="hidden sm:inline">Add Item</span>
                 </button>
-
               </div>
             )
           }
+          
         />
       </div>
 
