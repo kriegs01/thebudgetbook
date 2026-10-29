@@ -3,7 +3,7 @@ import { useSearchParams } from 'react-router-dom';
 import { useNavigate } from 'react-router-dom';
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { BudgetItem, Account, Biller, PaymentSchedule, CategorizedSetupItem, SavedBudgetSetup, BudgetCategory, Installment, Wallet } from '../types';
-import { Plus, Check, ChevronDown, Trash2, Save, Wallet as WalletIcon, ArrowLeft, Upload, CheckCircle2, X, AlertTriangle, Info, Archive, RotateCcw, List, Hand, Sparkles, ReceiptText, ArrowDownToLine, BanknoteArrowDown, ChartPie } from 'lucide-react';
+import { Plus, Check, ChevronDown, Trash2, Save, Wallet as WalletIcon, ArrowLeft, Upload, ZoomIn, Eye, ZoomOut, Download, CheckCircle2, X, AlertTriangle, Info, Archive, RotateCcw, List, Hand, Sparkles, ReceiptText, ArrowDownToLine, BanknoteArrowDown, ChartPie, Menu, Pencil } from 'lucide-react';
 import { PinProtectedAction } from '../src/components/PinProtectedAction';
 import { createBudgetSetupFrontend, updateBudgetSetupFrontend } from '../src/services/budgetSetupsService';
 import { createTransaction, getAllTransactions, updateTransaction, updateTransactionAndSyncSchedule, createPaymentScheduleTransaction, uploadTransactionReceipt, getTransactionsByPaymentSchedule, getReceiptSignedUrl, deleteTransactionAndRevertSchedule, getAllStashTransactions, createTransfer } from '../src/services/transactionsService';
@@ -37,7 +37,6 @@ import { createPortal } from 'react-dom';
 import { getCreditStatementsByPeriod } from '../src/services/statementsService';
 import { useAuth } from '../src/contexts/AuthContext';
 
-
 interface BudgetProps {
   items: BudgetItem[];
   accounts: Account[];
@@ -59,6 +58,7 @@ interface BudgetProps {
   userProfile?: any;
   // 🟢 NEW: Allow the component to receive the people table
   people?: { id: string; name: string; [key: string]: any }[]; 
+  onTransactionClick?: (transaction: SupabaseTransaction) => void;
 }
 
 // Add this type definition near the top of your file
@@ -326,8 +326,12 @@ const TimelineCard = ({
 }) => {
 
 
-  // 🟢 Local state for the accordion toggle
-  const [isExpanded, setIsExpanded] = React.useState(false);
+    // 🟢 Local state for the accordion toggle
+    const [isExpanded, setIsExpanded] = React.useState(false);
+  
+    // 🟢 NEW: Reference to programmatically control the swipe menu
+    const scrollRef = React.useRef<HTMLDivElement>(null);
+  
 
   // 🟢 Detect if this card is in "Reimbursement Mode"
   const isFronted = !!item.frontedInfo;
@@ -336,11 +340,39 @@ const TimelineCard = ({
   return (
     <div className="relative w-full">
       
-      {/* 🟢 CALENDAR BADGE OVER THE TIMELINE */}
-      <div className="absolute top-4 -left-[45px] z-10 flex flex-col items-center justify-center w-10 bg-white dark:bg-gray-800 border-2 border-black rounded-lg overflow-hidden shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]">
-        <span className={`w-full text-white text-[9px] font-black uppercase text-center py-0.5 tracking-widest border-b-2 border-black ${isSettled ? 'bg-gray-500' : 'bg-red-500'}`}>Due</span>
-        <span className={`text-[14px] leading-tight font-black py-1 ${isSettled ? 'text-gray-500' : 'text-gray-900 dark:text-gray-100'}`}>{item.dueDate}</span>
+            {/* 🟢 LEFT GUTTER: CALENDAR BADGE & MENU BUTTON */}
+            <div className="absolute top-4 -left-[45px] z-20 flex flex-col items-center gap-3">
+        
+        {/* CALENDAR BADGE */}
+        <div className="flex flex-col items-center justify-center w-10 bg-white dark:bg-gray-800 border-2 border-black rounded-lg overflow-hidden shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]">
+          <span className={`w-full text-white text-[9px] font-black uppercase text-center py-0.5 tracking-widest border-b-2 border-black ${isSettled ? 'bg-gray-500' : 'bg-red-500'}`}>Due</span>
+          <span className={`text-[14px] leading-tight font-black py-1 ${isSettled ? 'text-gray-500' : 'text-gray-900 dark:text-gray-100'}`}>{item.dueDate}</span>
+        </div>
+
+        {/* 🟢 PROGRAMMATIC MENU BUTTON */}
+        {!isSettled && (
+          <button 
+            type="button"
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              if (scrollRef.current) {
+                const isOpened = scrollRef.current.scrollLeft > 20;
+                scrollRef.current.scrollTo({ 
+                  left: isOpened ? 0 : scrollRef.current.scrollWidth, 
+                  behavior: 'smooth' 
+                });
+              }
+            }}
+            className="w-7 h-7 bg-amber-400 hover:bg-amber-500 text-black border-2 border-black rounded-full flex items-center justify-center shadow-[1.5px_1.5px_0px_0px_rgba(0,0,0,1)] active:shadow-none active:translate-x-[1px] active:translate-y-[1px] transition-all"
+            title="Toggle Options"
+          >
+            <Menu className="w-3.5 h-3.5 stroke-[3]" />
+          </button>
+        )}
+
       </div>
+
 
       {/* 📦 THE SWIPEABLE TIMELINE WRAPPER */}
       <div className="relative w-full mb-1">
@@ -374,10 +406,12 @@ const TimelineCard = ({
 
 
         {/* 🔵 FOREGROUND SCROLLER */}
-        <div className="flex overflow-x-auto snap-x snap-mandatory scrollbar-hide pb-2 w-full relative z-10">
+<div ref={scrollRef} className="flex overflow-x-auto snap-x snap-mandatory scrollbar-hide pb-2 w-full relative z-10">
+
           
                               {/* MAIN CARD CONTENT */}
-          <div className={`snap-start w-[calc(100%-8px)] ml-[2px] shrink-0 p-4 rounded-[1.25rem] border-[3px] flex flex-col transition-all shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] ${
+          {/* 🟢 ADDED 'relative' to this div so the button locks to its bottom corner */}
+          <div className={`snap-start w-[calc(100%-8px)] ml-[2px] shrink-0 p-4 rounded-[1.25rem] border-[3px] flex flex-col transition-all shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] relative ${
             !item.isIncluded ? 'bg-gray-100 dark:bg-gray-900 border-black grayscale-[0.5]' : 
             isFronted ? 'bg-blue-50 dark:bg-[#0f172a] border-blue-600 shadow-[4px_4px_0px_0px_rgba(37,99,235,1)]' : 
             isSettled ? 'bg-gray-100 dark:bg-gray-800 shadow-none border-black' : 'bg-white dark:bg-gray-800 border-black'
@@ -651,6 +685,9 @@ const TimelineCard = ({
               </div>
             )}
 
+                          
+
+
           </div>
 
                                                   {/* INVISIBLE SCROLL SPACER (Click Targets) */}
@@ -710,7 +747,8 @@ const Budget: React.FC<BudgetProps> = ({
   onArchiveBudget, 
   onReopenBudget, 
   userProfile,
-  people = [] 
+  people = [],
+  onTransactionClick 
 }) => {
 // Safe console log
 console.log("Budget Setup Categories:", (categories || []).map(c => c?.name));
@@ -748,7 +786,31 @@ const [creditStatements, setCreditStatements] = useState<any[]>([]);
   
 
 
+  // 🟢 NEW: Transaction Viewer State
+  const [selectedTx, setSelectedTx] = useState<SupabaseTransaction | null>(null);
+  const [receiptSignedUrl, setReceiptSignedUrl] = useState<string | null | undefined>(undefined);
+  const [previewReceiptUrl, setPreviewReceiptUrl] = useState<string | null>(null);
+  const [zoom, setZoom] = useState(0.5);
+
+  // Fetch signed URL when a transaction with a receipt is opened
+  useEffect(() => {
+    if (selectedTx?.receipt_url) {
+      setReceiptSignedUrl(undefined);
+      getReceiptSignedUrl(selectedTx.receipt_url)
+        .then(url => setReceiptSignedUrl(url))
+        .catch(() => setReceiptSignedUrl(null));
+    } else {
+      setReceiptSignedUrl(null);
+    }
+  }, [selectedTx]);
+
+
 const [showSandbox, setShowSandbox] = useState(false);
+
+const [isUpcomingExpanded, setIsUpcomingExpanded] = useState(false);
+const [isLedgerExpanded, setIsLedgerExpanded] = useState(false); // 🟢 ADD THIS
+
+
 
 const [isSlicerExpanded, setIsSlicerExpanded] = useState(false);
 
@@ -986,6 +1048,8 @@ const [activePeriodIndex, setActivePeriodIndex] = useState<number>(1);
   const [wallets, setWallets] = useState<Wallet[]>([]);
   const [stashTopUps, setStashTopUps] = useState<SupabaseTransaction[]>([]);
   const [excludedWalletIds, setExcludedWalletIds] = useState<Set<string>>(new Set());
+  const [flippedStashId, setFlippedStashId] = useState<string | null>(null); // 🟢 NEW STATE
+
 
   const [fundModal, setFundModal] = useState<{ wallet: Wallet } | null>(null);
   const [fundForm, setFundForm] = useState({ amount: '', date: '', notes: '', sourceAccountId: '' });
@@ -1036,8 +1100,12 @@ const [activePeriodIndex, setActivePeriodIndex] = useState<number>(1);
   const [payRules, setPayRules] = useState<PayScheduleRule[]>([]);
   const [currentPeriods, setCurrentPeriods] = useState<PayPeriod[]>([]);
 
-       // 🟢 PAYCHECK-TO-PAYCHECK EXPENSE LEDGER (Moved below currentPeriods)
-  const [expandedLedgerIds, setExpandedLedgerIds] = useState<Set<string>>(new Set());
+         // 🟢 AUTO-EXPAND TODAY'S LEDGER CARD
+  const [expandedLedgerIds, setExpandedLedgerIds] = useState<Set<string>>(() => {
+    const todayStr = new Date().toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+    return new Set([`day-${todayStr}`]);
+  });
+
 
       const dailyLedger = React.useMemo(() => {
     if (!transactions || transactions.length === 0) return [];
@@ -1138,11 +1206,32 @@ const [activePeriodIndex, setActivePeriodIndex] = useState<number>(1);
           groups[dateStr].totalSpent += Math.abs(tx.amount);
         }
       }
-    });
+        // ... existing periodTransactions.forEach loop ...
+      });
 
-    return Object.values(groups).sort((a, b) => b.date.getTime() - a.date.getTime());
-  }, [transactions, activePeriodIndex, currentPeriods, accounts, selectedMonth, selectedYear]);
-
+      // 🟢 INJECT "TODAY" PLACEHOLDER (Only if Today falls within this tab's boundaries)
+      const today = new Date();
+      const todayMidnight = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+      
+      // Check if real-world "Today" belongs in the active view
+      if (todayMidnight >= startBoundary && todayMidnight <= endBoundary) {
+        const todayStr = today.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+        
+        // If no transactions exist for today, create the temporary shell
+        if (!groups[todayStr]) {
+          groups[todayStr] = { 
+            date: today, 
+            dateStr: todayStr, 
+            txs: [], 
+            totalIncome: 0, 
+            totalSpent: 0 
+          };
+        }
+      }
+  
+      return Object.values(groups).sort((a, b) => b.date.getTime() - a.date.getTime());
+    }, [transactions, activePeriodIndex, currentPeriods, accounts, selectedMonth, selectedYear]);
+  
 
    
     
@@ -4273,6 +4362,8 @@ const getFrozenCycleAmount = (account: Account): number => {
     );
   }
 
+    
+  
 
 
   if (view === 'summary') {
@@ -4704,25 +4795,52 @@ const totalSpend = grandTotal;
   const actualSalaryValue = actualSalary.trim() !== '' ? parseFloat(actualSalary) : null;
   const projectedSalaryValue = parseFloat(projectedSalary) || 0;
   
-    // 🟢 LIVE INCOME CALCULATOR (Tab-Aware)
-    let salaryToUse = 0;
-  
-    if (allIncomeTxs && allIncomeTxs.length > 0) {
-      // 1. First Priority: If we have live transactions, force the math to use their exact sum
-      salaryToUse = allIncomeTxs.reduce((sum, tx) => sum + (parseFloat(tx.amount as any) || 0), 0);
-    } else {
-      // 2. Fallback: Use the manual input for this specific tab, or the projected amount
-      const actualTab = parseFloat(actualSalaryByPeriod[activePeriodIndex]);
-      const projectedTab = parseFloat(projectedSalaryByPeriod[activePeriodIndex]);
-      salaryToUse = !isNaN(actualTab) ? actualTab : (projectedTab || 0);
-    }
-  
-    const netIncome = Math.abs(salaryToUse) + totalOtherIncome;
-    const remaining = netIncome - totalSpend;
-  
+      // 🟢 LIVE INCOME CALCULATOR (Tab-Aware)
+  let salaryToUse = 0;
+
+  if (allIncomeTxs && allIncomeTxs.length > 0) {
+    salaryToUse = allIncomeTxs.reduce((sum, tx) => sum + (parseFloat(tx.amount as any) || 0), 0);
+  } else {
+    const actualTab = parseFloat(actualSalaryByPeriod[activePeriodIndex]);
+    const projectedTab = parseFloat(projectedSalaryByPeriod[activePeriodIndex]);
+    salaryToUse = !isNaN(actualTab) ? actualTab : (projectedTab || 0);
+  }
+
+  const netIncome = Math.abs(salaryToUse) + totalOtherIncome;
+
+  // 🟢 USAGE BAR FIX: Pull exact debit spend from the strictly bound Daily Ledger
+  const actualDebitSpend = dailyLedger.reduce((sum, dayGroup) => sum + dayGroup.totalSpent, 0);
+
+  // 🟢 SMART REMAINING OVERRIDE (Planning Mode vs Tracking Mode)
+  const hasActualIncome = allIncomeTxs.length > 0 || !!actualSalaryByPeriod[activePeriodIndex];
+  const remaining = hasActualIncome ? (netIncome - actualDebitSpend) : (netIncome - totalSpend);
+
+  // 🟢 PROGRESS BAR MATH
+  const periodTxs = (transactions || []).filter(tx => {
+    const txDate = new Date(tx.date);
+    return txDate.getMonth() === MONTHS.indexOf(selectedMonth) && txDate.getFullYear() === selectedYear;
+  });
+
+  const actualCreditSpend = periodTxs
+    .filter(tx => tx.amount > 0 && tx.transaction_type !== 'income' && tx.transaction_type !== 'transfer')
+    .filter(tx => {
+      const acc = accounts.find(a => a.id === tx.payment_method_id);
+      return acc && (acc.type === 'Credit' || acc.classification === 'Credit Card');
+    })
+    .reduce((sum, tx) => sum + tx.amount, 0);
+
+  const budgetedCreditSpend = categorySummary.find(c => c.category === 'Credit')?.total || 0;
+  const budgetedDebitSpend = totalSpend - budgetedCreditSpend; 
+
+  // 🟢 UNCAPPED MATH
+  const usagePercent = netIncome > 0 ? (actualDebitSpend / netIncome) * 100 : 0;
+  const debitPercent = budgetedDebitSpend > 0 ? (actualDebitSpend / budgetedDebitSpend) * 100 : (actualDebitSpend > 0 ? 100 : 0);
+  const creditPercent = budgetedCreditSpend > 0 ? (actualCreditSpend / budgetedCreditSpend) * 100 : (actualCreditSpend > 0 ? 100 : 0);
+  // 🟢 RESTORED UI STATE VARIABLES
   const currentSetup = savedSetups.find(s => s.month === selectedMonth && s.timing === selectedTiming);
   const isReadOnly = currentSetup?.isArchived ?? false;
   const legacyMode = isLegacyBudget(selectedYear, selectedMonth);
+
 
  
 
@@ -5101,11 +5219,11 @@ const totalSpend = grandTotal;
         {/* ========================================= */}
         {/* 3 & 4. SWIPEABLE SUMMARY CAROUSEL         */}
         {/* ========================================= */}
-        <div className="relative w-full z-10 mt-6 md:mt-8">
+        <div className="relative w-full z-10 mt-4 md:mt-4">
           
-          {/* Scrollable Snap Container (Using gap instead of space-x to fix desktop grid) */}
-          <div className="flex lg:grid lg:grid-cols-2 overflow-x-auto lg:overflow-visible snap-x snap-mandatory scrollbar-hide gap-4 lg:gap-8 pb-6 lg:pb-0 w-[calc(100%+2rem)] -mx-4 px-4 sm:w-full sm:mx-0 sm:px-0">
-            
+                              {/* Scrollable Snap Container (Using gap instead of space-x to fix desktop grid) */}
+          <div className="flex items-start lg:grid lg:grid-cols-2 overflow-x-auto lg:overflow-visible snap-x snap-mandatory scrollbar-hide gap-4 lg:gap-8 pb-6 lg:pb-0 w-[calc(100%+2rem)] -mx-4 px-4 sm:w-full sm:mx-0 sm:px-0">
+
             {/* CARD 1: BUDGET SUMMARY */}
             <div className="snap-center shrink-0 w-[88vw] lg:w-full h-auto flex flex-col">
               <div className="bg-white dark:bg-gray-900 rounded-2xl border-4 border-black shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] overflow-hidden w-full transition-colors flex-1">
@@ -5193,39 +5311,43 @@ const totalSpend = grandTotal;
 </h3></div>
                 
                 <table className="w-full text-left">
-                  <thead><tr className="text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase border-b border-gray-100 dark:border-gray-800"><th className="p-3 pl-6">Item</th><th className="p-3 pr-6 text-right">Amount</th></tr></thead>
+                  
                   <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
-                    <tr>
-                      <td className="p-3 pl-6 font-bold text-gray-700 dark:text-gray-300 text-sm">Projected Income</td>
-                      <td className="p-3 pr-6 text-right">
-                        <div className="flex items-center justify-end">
-                          {!isProjectedFocused ? (
-                            <span 
-                              className={`text-sm font-black text-gray-900 dark:text-gray-100 ${!isReadOnly ? 'cursor-pointer hover:text-indigo-600 dark:hover:text-indigo-400' : ''} transition-colors`}
-                              onClick={() => !isReadOnly && setIsProjectedFocused(true)}
-                            >
-                              {formatCurrency(parseFloat(projectedSalaryByPeriod[activePeriodIndex] || '0'))}
-                            </span>
-                          ) : (
-                            <div className="flex items-center justify-end space-x-1">
-                              <span className="text-gray-400 dark:text-gray-500 font-bold text-sm">₱</span>
-                              <input 
-                                autoFocus
-                                type="number" 
-                                min="0"
-                                step="0.01"
-                                value={projectedSalaryByPeriod[activePeriodIndex] || ''} 
-                                onChange={(e) => setProjectedSalaryByPeriod(prev => ({ ...prev, [activePeriodIndex]: e.target.value }))} 
-                                onFocus={() => { isFocusedRef.current = true; }}
-                                onBlur={() => { isFocusedRef.current = false; setIsProjectedFocused(false); }}
-                                disabled={isReadOnly}
-                                className="bg-transparent border-none text-sm font-black text-gray-900 dark:text-gray-100 w-28 text-right outline-none focus:bg-indigo-50 dark:focus:bg-indigo-900/30 rounded px-1 disabled:opacity-60 disabled:cursor-not-allowed"
-                              />
-                            </div>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
+                                        {/* 🟢 HIDES PROJECTED INCOME ONCE ACTUALS ARE LOGGED */}
+                                        {!(allIncomeTxs.length > 0 || actualSalaryByPeriod[activePeriodIndex]) && (
+                      <tr>
+                        <td className="p-3 pl-6 font-bold text-gray-700 dark:text-gray-300 text-sm">Projected Income</td>
+                        <td className="p-3 pr-6 text-right">
+                          <div className="flex items-center justify-end">
+                            {!isProjectedFocused ? (
+                              <span 
+                                className={`text-sm font-black text-gray-900 dark:text-gray-100 ${!isReadOnly ? 'cursor-pointer hover:text-indigo-600 dark:hover:text-indigo-400' : ''} transition-colors`}
+                                onClick={() => !isReadOnly && setIsProjectedFocused(true)}
+                              >
+                                {formatCurrency(parseFloat(projectedSalaryByPeriod[activePeriodIndex] || '0'))}
+                              </span>
+                            ) : (
+                              <div className="flex items-center justify-end space-x-1">
+                                <span className="text-gray-400 dark:text-gray-500 font-bold text-sm">₱</span>
+                                <input 
+                                  autoFocus
+                                  type="number" 
+                                  min="0"
+                                  step="0.01"
+                                  value={projectedSalaryByPeriod[activePeriodIndex] || ''} 
+                                  onChange={(e) => setProjectedSalaryByPeriod(prev => ({ ...prev, [activePeriodIndex]: e.target.value }))} 
+                                  onFocus={() => { isFocusedRef.current = true; }}
+                                  onBlur={() => { isFocusedRef.current = false; setIsProjectedFocused(false); }}
+                                  disabled={isReadOnly}
+                                  className="bg-transparent border-none text-sm font-black text-gray-900 dark:text-gray-100 w-28 text-right outline-none focus:bg-indigo-50 dark:focus:bg-indigo-900/30 rounded px-1 disabled:opacity-60 disabled:cursor-not-allowed"
+                                />
+                              </div>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+
                     <tr>
                       <td className="p-3 pl-6 font-bold text-gray-700 dark:text-gray-300 text-sm">Actual Income</td>
                       <td className="p-3 pr-6 text-right">
@@ -5312,12 +5434,94 @@ const totalSpend = grandTotal;
                       <td className="p-3 pl-6 font-bold text-gray-700 dark:text-gray-300 text-sm">Total Spend</td>
                       <td className="p-3 pr-6 text-right font-black text-gray-900 dark:text-gray-100 text-sm">{formatCurrency(totalSpend)}</td>
                     </tr>
+
+                                        {/* 🟢 3-WAY PROGRESS BARS (Only visible when actual income is recorded) */}
+                                        {(allIncomeTxs.length > 0 || actualSalaryByPeriod[activePeriodIndex]) && netIncome > 0 && (
+                      <tr>
+                        <td colSpan={2} className="p-4 pt-6 pb-2 border-t-2 border-dashed border-gray-200 dark:border-gray-800">
+                          <div className="space-y-4">
+
+                            
+                                                        {/* BAR 1: USAGE (Debit vs Actual Income) */}
+                                                        <div>
+                              <div className="flex justify-between items-end mb-1.5">
+                                <span className="text-[9px] font-black uppercase tracking-widest text-gray-500">Usage (Debit vs Income)</span>
+                                <span className={`text-[9px] font-black uppercase tracking-widest ${usagePercent > 100 ? 'text-red-600' : 'text-gray-900 dark:text-gray-100'}`}>
+                                  {usagePercent.toFixed(0)}%
+                                </span>
+                              </div>
+                              <div className="h-3.5 w-full bg-gray-100 dark:bg-gray-800 border-2 border-black rounded-full overflow-hidden shadow-[inset_1px_1px_0px_0px_rgba(0,0,0,0.1)]">
+                                <div className={`h-full border-r-2 border-black transition-all duration-500 ${usagePercent > 100 ? 'bg-red-500' : 'bg-emerald-400'}`} style={{ width: `${Math.min(100, usagePercent)}%` }} />
+                              </div>
+                              <div className="mt-1 flex justify-end">
+                                <span className="text-[10px] font-black text-gray-900 dark:text-gray-100">
+                                  {formatCurrency(actualDebitSpend)} <span className="text-gray-400">/ {formatCurrency(netIncome)}</span>
+                                </span>
+                              </div>
+                            </div>
+
+                            {/* BAR 2: DEBIT (Actual vs Budget) */}
+                            <div>
+                              <div className="flex justify-between items-end mb-1.5">
+                                <span className="text-[9px] font-black uppercase tracking-widest text-gray-500">Debit (Actual vs Budget)</span>
+                                <span className={`text-[9px] font-black uppercase tracking-widest ${debitPercent > 100 ? 'text-red-600' : 'text-gray-900 dark:text-gray-100'}`}>
+                                  {debitPercent.toFixed(0)}%
+                                </span>
+                              </div>
+                              <div className="h-3.5 w-full bg-gray-100 dark:bg-gray-800 border-2 border-black rounded-full overflow-hidden shadow-[inset_1px_1px_0px_0px_rgba(0,0,0,0.1)]">
+                                <div className={`h-full border-r-2 border-black transition-all duration-500 ${debitPercent > 100 ? 'bg-red-500' : 'bg-blue-400'}`} style={{ width: `${Math.min(100, debitPercent)}%` }} />
+                              </div>
+                              <div className="mt-1 flex justify-end">
+                                <span className="text-[10px] font-black text-gray-900 dark:text-gray-100">
+                                  {formatCurrency(actualDebitSpend)} <span className="text-gray-400">/ {budgetedDebitSpend > 0 ? formatCurrency(budgetedDebitSpend) : '∞'}</span>
+                                </span>
+                              </div>
+                            </div>
+
+                            {/* BAR 3: CREDIT (Actual vs Budget) */}
+                            <div>
+                              <div className="flex justify-between items-end mb-1.5">
+                                <span className="text-[9px] font-black uppercase tracking-widest text-gray-500">Credit (Actual vs Budget)</span>
+                                <span className={`text-[9px] font-black uppercase tracking-widest ${creditPercent > 100 ? 'text-red-600' : 'text-gray-900 dark:text-gray-100'}`}>
+                                  {creditPercent.toFixed(0)}%
+                                </span>
+                              </div>
+                              <div className="h-3.5 w-full bg-gray-100 dark:bg-gray-800 border-2 border-black rounded-full overflow-hidden shadow-[inset_1px_1px_0px_0px_rgba(0,0,0,0.1)]">
+                                <div className={`h-full border-r-2 border-black transition-all duration-500 ${creditPercent > 100 ? 'bg-red-500' : 'bg-purple-400'}`} style={{ width: `${Math.min(100, creditPercent)}%` }} />
+                              </div>
+                              <div className="mt-1 flex justify-end">
+                                <span className="text-[10px] font-black text-gray-900 dark:text-gray-100">
+                                  {formatCurrency(actualCreditSpend)} <span className="text-gray-400">/ {budgetedCreditSpend > 0 ? formatCurrency(budgetedCreditSpend) : '∞'}</span>
+                                </span>
+                              </div>
+                            </div>
+
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+
+
                   </tbody>
                   <tfoot>
-                    <tr className={`${remaining >= 0 ? 'bg-green-50/30 dark:bg-green-900/10' : 'bg-red-50/30 dark:bg-red-900/10'} border-t-2 border-black`}>
-                      <td className="p-3 pl-6 text-xs font-black uppercase">Remaining</td>
-                      <td className={`p-3 pr-6 text-right text-lg font-black ${remaining >= 0 ? 'text-green-600' : 'text-red-600'}`}>{formatCurrency(remaining)}</td>
+                                        {/* REMAINING ROW */}
+                                        <tr>
+                      <td className="p-3 pl-6 font-bold text-gray-700 dark:text-gray-300 text-sm">Remaining</td>
+                      <td className="p-3 pr-6 text-right">
+                        <div className="flex flex-col items-end">
+                          <span className={`text-sm font-black ${remaining < 0 ? 'text-red-600 dark:text-red-400' : 'text-gray-900 dark:text-gray-100'}`}>
+                            {formatCurrency(remaining)}
+                          </span>
+                          {/* 🟢 ONLY SHOWS IN LIVE TRACKING MODE */}
+                          {hasActualIncome && (
+                            <span className="text-[9px] font-bold text-gray-400 tracking-wider uppercase mt-0.5">
+                              As of {new Date().toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+                            </span>
+                          )}
+                        </div>
+                      </td>
                     </tr>
+
                   </tfoot>
                 </table>
 
@@ -5613,249 +5817,218 @@ const totalSpend = grandTotal;
 
 
       <div className="space-y-6">
-        {wallets.length > 0 && (
-          <div className="bg-white dark:bg-gray-900 rounded-2xl border-4 border-black shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] overflow-hidden w-full transition-colors">
-          <div className="px-8 py-5 border-b-4 border-black bg-gray-50/30 dark:bg-gray-800/30 flex justify-between items-center transition-colors">
-            <h3 className="text-xs font-black text-gray-900 dark:text-gray-100 uppercase tracking-[0.25em]">Stash</h3>
-            <div className="flex items-center space-x-3">
-              {stashStatusMsg && (
-                <span className={`text-xs font-bold px-3 py-1 rounded-xl ${stashStatusMsg.type === 'success' ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'}`}>
-                  {stashStatusMsg.msg}
-                </span>
-              )}
-              <span className="text-lg font-black text-indigo-600 dark:text-indigo-400">
-                {formatCurrency(periodStashTotal)}
-              </span>
+                  {/* ========================================= */}
+      {/* 🟢 STASH HORIZONTAL CAROUSEL              */}
+      {/* ========================================= */}
+      {wallets.length > 0 && (
+        <div className="w-full mt-8 mb-4 relative group">
+          
+          {/* COMPACT DASHBOARD HEADER */}
+          <div className="flex items-center justify-between pl-2 border-l-4 border-indigo-500 mb-2">
+            <div className="pl-2">
+              <h3 className="text-xs font-black text-gray-900 dark:text-gray-100 uppercase tracking-widest leading-none">
+                Stash Targets
+              </h3>
+              <p className="text-[10px] text-gray-500 font-bold mt-1 uppercase tracking-wider flex items-center gap-2">
+                {formatCurrency(periodStashTotal)} Expected
+                
+                {stashStatusMsg && (
+                  <span className={`px-1.5 py-0.5 rounded shadow-[1px_1px_0px_0px_rgba(0,0,0,1)] text-[8px] font-black border-2 border-black ${stashStatusMsg.type === 'success' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                    {stashStatusMsg.msg}
+                  </span>
+                )}
+              </p>
             </div>
           </div>
-          <div className="w-full">
-            {isMobile ? (
-              <div className="p-4 space-y-1 bg-gray-50/30 dark:bg-gray-955/10">
-                                {wallets.map((wallet) => {
-                  const linkedAccount = accounts.find(a => a.id === wallet.accountId);
-                  const { funded, isFunded } = getStashAggregates(wallet);
-                  const isIncluded = !excludedWalletIds.has(wallet.id);
 
-                  const periodCount = currentPeriods.length || 2;
-                  const allocatedAmount = (!wallet.timing || wallet.timing === 'split') 
-                    ? (wallet.amount / periodCount) 
-                    : (parseInt(wallet.timing, 10) === activePeriodIndex ? wallet.amount : 0);
+                    {/* 🟢 DESKTOP NAVIGATION BUTTONS */}
+                    <button 
+            type="button"
+            onClick={(e) => {
+              e.preventDefault();
+              const container = document.getElementById('stash-carousel');
+              if (container) {
+                // Guard: Prevent scrolling past 0 (left edge)
+                const target = Math.max(0, container.scrollLeft - 296);
+                container.scrollTo({ left: target, behavior: 'smooth' });
+              }
+            }}
+            className="hidden md:flex absolute left-[-16px] top-[60%] -translate-y-1/2 w-10 h-10 bg-white dark:bg-gray-800 border-2 border-black rounded-full items-center justify-center shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] transition-opacity z-30 text-gray-900 dark:text-gray-100 opacity-0 group-hover:opacity-100 hover:bg-gray-50 dark:hover:bg-gray-700"
+            aria-label="Scroll left"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="m15 18-6-6 6-6"/></svg>
+          </button>
+          
+          <button 
+            type="button"
+            onClick={(e) => {
+              e.preventDefault();
+              const container = document.getElementById('stash-carousel');
+              if (container) {
+                // Guard: Prevent scrolling past the container's max width
+                const maxScroll = container.scrollWidth - container.clientWidth;
+                const target = Math.min(maxScroll, container.scrollLeft + 296);
+                container.scrollTo({ left: target, behavior: 'smooth' });
+              }
+            }}
+            className="hidden md:flex absolute right-[-16px] top-[60%] -translate-y-1/2 w-10 h-10 bg-white dark:bg-gray-800 border-2 border-black rounded-full items-center justify-center shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] transition-opacity z-30 text-gray-900 dark:text-gray-100 opacity-0 group-hover:opacity-100 hover:bg-gray-50 dark:hover:bg-gray-700"
+            aria-label="Scroll right"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="m9 18 6-6-6-6"/></svg>
+          </button>
 
-                  const isOverFunded = funded > wallet.amount && wallet.amount > 0;
-                  const isExactlyFunded = funded === wallet.amount && wallet.amount > 0;
+
+                    {/* 🟢 HORIZONTAL SWIPE CAROUSEL (Center-staged for mobile) */}
+                    <div 
+            id="stash-carousel"
+            className="flex overflow-x-auto snap-x snap-mandatory scrollbar-hide py-4 gap-4 px-[calc(50%-120px)] sm:px-2 -mx-2"
+          >
+            {[...wallets].sort((a, b) => {
+              const aIncluded = !excludedWalletIds.has(a.id);
+              const bIncluded = !excludedWalletIds.has(b.id);
+              return aIncluded === bIncluded ? 0 : aIncluded ? -1 : 1;
+            }).map((wallet) => {
+              const linkedAccount = accounts.find(a => a.id === wallet.accountId);
+              const { funded, isFunded } = getStashAggregates(wallet);
+              const isIncluded = !excludedWalletIds.has(wallet.id);
+              const isFlipped = flippedStashId === wallet.id;
+
+              const periodCount = currentPeriods.length || 2;
+              const allocatedAmount = (!wallet.timing || wallet.timing === 'split') 
+                ? (wallet.amount / periodCount) 
+                : (parseInt(wallet.timing, 10) === activePeriodIndex ? wallet.amount : 0);
+
+              const isOverFunded = funded > wallet.amount && wallet.amount > 0;
+              const isExactlyFunded = funded === wallet.amount && wallet.amount > 0;
+
+              return (
+                <div key={wallet.id} className="snap-center shrink-0 w-[240px] sm:w-[280px] relative">
                   
-                  return (
-                    // 📦 OUTER WRAPPER
-                    <div key={wallet.id} className="relative w-full mb-1">
+                  {/* AMBER MENU BUTTON */}
+                  {!isReadOnly && (
+                    <button 
+                      onClick={() => setFlippedStashId(isFlipped ? null : wallet.id)}
+                      className="absolute -top-[8px] -right-[8px] w-7 h-7 bg-amber-400 hover:bg-amber-500 text-black border-2 border-black rounded-full flex items-center justify-center shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] active:shadow-none active:translate-x-[2px] active:translate-y-[2px] transition-all z-20"
+                      title={isFlipped ? "Close options" : "Options"}
+                    >
+                      {isFlipped ? <X className="w-3.5 h-3.5 stroke-[3]" /> : <Menu className="w-3.5 h-3.5 stroke-[3]" />}
+                    </button>
+                  )}
 
-                      {/* 🟠 UNDERLYING REVEAL TRAY (Clickable) */}
-                      {!isReadOnly && (
-                        <div 
-                          className={`absolute top-0 right-1 w-[90px] bottom-2 rounded-[1.25rem] border-[3px] border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] flex flex-col items-center justify-center transition-colors z-0 ${isIncluded ? 'bg-[#E8F5E9]' : 'bg-[#FFEBEE]'}`}
-                        >
-                          <button 
-                            className="flex flex-col items-center justify-center w-full h-full pb-1 pointer-events-none"
-                            tabIndex={-1}
-                          >
-                            <span className={`text-[10px] font-black uppercase tracking-wider mb-1 ${isIncluded ? 'text-[#2E7D32]' : 'text-[#C62828]'}`}>
-                              {isIncluded ? 'Included' : 'Skipped'}
-                            </span>
-                            {/* Toggle representing CURRENT STATE */}
-                            <div className={`w-[36px] h-[20px] rounded-full border-2 border-black relative transition-colors ${isIncluded ? 'bg-indigo-600' : 'bg-gray-300 dark:bg-gray-600'}`}>
-                              <span className={`absolute top-[1px] w-[14px] h-[14px] rounded-full border-2 border-black bg-white transition-transform ${isIncluded ? 'left-[17px]' : 'left-[1px]'}`} />
-                            </div>
-                          </button>
+                  {/* CARD BODY */}
+                  <div 
+                    className={`h-[110px] p-4 rounded-[1.25rem] border-[3px] border-black flex flex-col justify-center transition-all ${
+                      isIncluded && !isFlipped
+                        ? 'bg-white dark:bg-gray-800 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]' 
+                        : isFlipped
+                        ? (isIncluded ? 'bg-[#E8F5E9] shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]' : 'bg-[#FFEBEE] shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]')
+                        : 'bg-gray-100 dark:bg-gray-900 shadow-none grayscale-[0.5] opacity-75'
+                    }`}
+                  >
+                    
+                    {isFlipped ? (
+                      // 🔄 FLIPPED BACK VIEW (Toggle)
+                      <div 
+                        className="flex flex-col items-center justify-center h-full w-full cursor-pointer"
+                        onClick={() => handleWalletIncludeToggle(wallet.id)}
+                      >
+                        <span className={`text-[11px] font-black uppercase tracking-widest mb-2 ${isIncluded ? 'text-[#2E7D32]' : 'text-[#C62828]'}`}>
+                          {isIncluded ? 'Stash Included' : 'Stash Skipped'}
+                        </span>
+                        {/* 🟢 RESIZED TO 32x18 (Matches Timeline Cards) */}
+                        <div className={`w-[32px] h-[18px] rounded-full border-2 border-black relative transition-colors ${isIncluded ? 'bg-indigo-600' : 'bg-gray-300 dark:bg-gray-600'}`}>
+                          <span className={`absolute top-[1px] w-[12px] h-[12px] rounded-full border-2 border-black bg-white transition-transform ${isIncluded ? 'left-[15px]' : 'left-[1px]'}`} />
                         </div>
-                      )}
+                      </div>
+                    ) : (
 
-                      {/* 🔵 FOREGROUND SCROLLER */}
-                      <div className="flex overflow-x-auto snap-x snap-mandatory scrollbar-hide pb-2 w-full relative z-10">
-                        
-                                                {/* MAIN CARD (Now more compact!) */}
-                                                <div className={`snap-start w-[calc(100%-8px)] ml-[2px] shrink-0 py-3 px-4 rounded-[1.25rem] border-[3px] border-black flex justify-between gap-4 transition-all shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] ${isIncluded ? 'bg-white dark:bg-gray-800' : 'bg-gray-100 dark:bg-gray-900 grayscale-[0.5]'}`}>
-                          
-                          {/* LEFT COLUMN: Identity & Info (Reduced gap-4 to gap-2) */}
-                          <div className={`flex flex-col justify-between items-start gap-2 transition-opacity ${isIncluded ? 'opacity-100' : 'opacity-60'}`}>
-                          <div>
-  <span className="text-sm md:text-base font-black text-gray-900 dark:text-gray-100 block leading-tight truncate max-w-[170px] sm:max-w-[210px]">
-    {wallet.name}
-  </span>
-  {linkedAccount && (
-    <span className="text-[10px] text-gray-400 font-bold block mt-0.5 truncate max-w-[170px] sm:max-w-[210px]">
-      {linkedAccount.bank} ({linkedAccount.classification})
-    </span>
-  )}
-</div>
+                      // 💳 STANDARD FRONT VIEW
+                      <div className="flex flex-col h-full justify-between">
+                        {/* Top Row: Info */}
+                        <div className="flex flex-col gap-0.5">
+                          <span className="text-sm font-black text-gray-900 dark:text-gray-100 leading-tight line-clamp-1 pr-4" title={wallet.name}>
+                            {wallet.name}
+                          </span>
+                          {linkedAccount && (
+                            <span className="text-[9px] font-bold text-gray-400 truncate w-[180px]">
+                              {linkedAccount.bank}
+                            </span>
+                          )}
+                        </div>
 
+                        {/* Bottom Row: Math & Button */}
+                        <div className="flex items-end justify-between mt-auto pt-2 border-t-2 border-dashed border-gray-200 dark:border-gray-700">
+                          <div className="flex flex-col">
+                            <span className="text-[9px] font-black uppercase tracking-widest text-gray-400 mb-0.5">
+                              Target
+                            </span>
+                            <span className={`text-base font-black leading-none ${isIncluded ? 'text-indigo-600 dark:text-indigo-400' : 'text-gray-500'}`}>
+                              {formatCurrency(allocatedAmount)}
+                            </span>
+                          </div>
 
-                            <div className="flex items-center gap-2 mt-0.5">
-                              {isOverFunded ? (
-                                <span className="text-[9px] font-black text-blue-700 px-2 py-0.5 bg-blue-100 border-2 border-black rounded-md uppercase shadow-[1px_1px_0px_0px_rgba(0,0,0,1)]">
+                          <div className="flex items-center gap-2">
+                             {/* Status Badges */}
+                             {isOverFunded ? (
+                                <span className="text-[9px] font-black text-blue-700 px-1.5 py-0.5 bg-blue-100 border-2 border-black rounded uppercase shadow-[1px_1px_0px_0px_rgba(0,0,0,1)]">
                                   Over
                                 </span>
                               ) : isExactlyFunded ? (
-                                <span className="text-[9px] font-black text-green-700 px-2 py-0.5 bg-green-100 border-2 border-black rounded-md uppercase shadow-[1px_1px_0px_0px_rgba(0,0,0,1)]">
+                                <span className="text-[9px] font-black text-green-700 px-1.5 py-0.5 bg-green-100 border-2 border-black rounded uppercase shadow-[1px_1px_0px_0px_rgba(0,0,0,1)]">
                                   Funded
                                 </span>
-                              ) : (
-                                <span className="text-[9px] font-black text-gray-600 dark:text-gray-300 px-2 py-0.5 bg-white dark:bg-gray-700 border-2 border-black rounded-md uppercase shadow-[1px_1px_0px_0px_rgba(0,0,0,1)]">
-                                  Pending
-                                </span>
-                              )}
-                              <button onClick={() => setStashInfoModal({ wallet })} className="text-gray-400 hover:text-gray-600 transition-colors p-1 -ml-1">
-                                <Info className="w-4 h-4" />
-                              </button>
-                            </div>
-                          </div>
+                              ) : null}
 
-                          {/* RIGHT COLUMN: Just the Math & Fund Button (Reduced gap-2 to gap-1) */}
-                          <div className={`flex flex-col justify-between items-end gap-1 shrink-0 transition-opacity ${isIncluded ? 'opacity-100' : 'opacity-60'}`}>
-                          <span className="text-sm md:text-base font-black text-indigo-700 dark:text-indigo-400 leading-none mt-1">
-  {formatCurrency(allocatedAmount)}
-</span>
-
+                            <button onClick={() => setStashInfoModal({ wallet })} className="text-gray-400 hover:text-indigo-600 transition-colors bg-gray-50 dark:bg-gray-800 p-1.5 rounded-lg border-2 border-transparent hover:border-black shadow-none hover:shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]">
+                              <Info className="w-4 h-4" />
+                            </button>
 
                             {!isReadOnly && (
                               <button 
                                 onClick={() => handleOpenFundModal(wallet)} 
                                 disabled={!isIncluded}
-                                className={`w-12 h-6 border-[3px] border-black rounded-[0.4rem] flex items-center justify-center transition-all ${isIncluded ? 'bg-white dark:bg-gray-800 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[2px] hover:translate-y-[2px]' : 'bg-gray-200 dark:bg-gray-700 cursor-not-allowed shadow-[1px_1px_0px_0px_rgba(0,0,0,0.5)]'}`}
+                                className={`w-8 h-8 rounded-lg border-2 border-black flex items-center justify-center transition-all ${isIncluded ? 'bg-indigo-600 text-white shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[1px] hover:translate-y-[1px]' : 'bg-gray-200 dark:bg-gray-700 text-gray-400 cursor-not-allowed shadow-none'}`}
                               >
-                                <Plus className="w-4 h-4 stroke-[4] text-black dark:text-white" />
+                                <Plus className="w-4 h-4 stroke-[3]" />
                               </button>
                             )}
                           </div>
                         </div>
-
-
-                        {/* INVISIBLE SCROLL SPACER (Click Target) */}
-                        {!isReadOnly && (
-                          <div 
-                            className="snap-end w-[100px] shrink-0 cursor-pointer"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleWalletIncludeToggle(wallet.id);
-                            }}
-                          ></div>
-                        )}
-
                       </div>
-                    </div>
-                  );
-                })}
-
-              </div>
-                            ) : (
-                              <div className="overflow-x-auto">
-                                <table className="w-full text-left">
-                                  <thead>
-                                    <tr className="text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase border-b border-gray-50 dark:border-gray-800/50">
-                                      <th className="p-4 pl-10">Name</th>
-                                      <th className="p-4">Target</th>
-                                      <th className="p-4">Account</th>
-                                      <th className="p-4 text-center">Status</th>
-                                      <th className="p-4 pr-10 text-center w-48">Actions</th>
-                                    </tr>
-                                  </thead>
-                                  <tbody className="divide-y divide-gray-50 dark:divide-gray-800/50">
-                                    {wallets.map((wallet) => {
-                                      const linkedAccount = accounts.find(a => a.id === wallet.accountId);
-                                      const { funded, isFunded } = getStashAggregates(wallet);
-                                      const isIncluded = !excludedWalletIds.has(wallet.id);
-
-                                      // 🟢 Add this to calculate the split for the UI
-                                      const periodCount = currentPeriods.length || 2;
-                                      const allocatedAmount = (!wallet.timing || wallet.timing === 'split') 
-                                        ? (wallet.amount / periodCount) 
-                                        : (parseInt(wallet.timing, 10) === activePeriodIndex ? wallet.amount : 0);
-
-                                      const isOverFunded = funded > wallet.amount && wallet.amount > 0;
-                                      const isExactlyFunded = funded === wallet.amount && wallet.amount > 0;
-                                      
-                                      return (
-                                        <tr key={wallet.id} className={`${isIncluded ? 'bg-white dark:bg-gray-900' : 'bg-gray-50 dark:bg-gray-800/50 opacity-60'}`}>
-                                          <td className="p-4 pl-10">
-                                            <div className="flex items-center gap-3">
-                                              {!isReadOnly && (
-                                                <button 
-                                                  onClick={() => handleWalletIncludeToggle(wallet.id)} 
-                                                  className={`w-8 h-8 rounded-xl border-2 border-black flex items-center justify-center transition-all flex-shrink-0 ${isIncluded ? 'bg-indigo-600 text-white' : 'bg-white dark:bg-gray-800 text-transparent'}`}
-                                                >
-                                                  <Check className="w-4 h-4" />
-                                                </button>
-                                              )}
-                                              <span className="text-sm font-bold text-gray-900 dark:text-gray-100">{wallet.name}</span>
-                                            </div>
-                                          </td>
-                                          
-                                          <td className="p-4">
-                                            <span className="text-sm font-black text-indigo-600 dark:text-indigo-400">
-                                              {formatCurrency(allocatedAmount)}
-                                            </span>
-                                            <span className="text-[9px] font-bold text-gray-400 block mt-0.5 uppercase tracking-widest">Total: {formatCurrency(wallet.amount)}</span>
-                                          </td>
-
-                                          
-                                          <td className="p-4">
-                                            <span className="text-sm text-gray-600 dark:text-gray-400">
-                                              {linkedAccount ? `${linkedAccount.bank} (${linkedAccount.classification})` : wallet.accountId}
-                                            </span>
-                                          </td>
-                                          
-                                          <td className="p-4 text-center">
-                                            {isOverFunded ? (
-                                              <span className="inline-block px-2 py-1 text-[9px] font-black bg-blue-100 text-blue-700 border border-black rounded-lg uppercase tracking-wider text-center">
-                                                Over +{formatCurrency(funded - wallet.amount)}
-                                              </span>
-                                            ) : isExactlyFunded ? (
-                                              <span className="inline-block w-16 px-2 py-1 text-[9px] font-black bg-green-100 text-green-700 border border-black rounded-lg uppercase tracking-wider text-center">
-                                                Funded
-                                              </span>
-                                            ) : (
-                                              <span className="text-gray-300 dark:text-gray-600 text-xs">—</span>
-                                            )}
-                                          </td>
-                                          
-                                          <td className="p-4 pr-10">
-                                            <div className="flex items-center justify-center space-x-2">
-                                              <button 
-                                                onClick={() => setStashInfoModal({ wallet })} 
-                                                title="View stash details" 
-                                                className="p-1.5 bg-white dark:bg-gray-800 border-2 border-black rounded-lg text-gray-400 hover:text-indigo-600 shadow-[1px_1px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[0.5px] hover:translate-y-[0.5px] transition-all"
-                                              >
-                                                <Info className="w-4 h-4" />
-                                              </button>
-                                              
-                                              {!isReadOnly && (
-                                                <button 
-                                                  onClick={() => handleOpenFundModal(wallet)} 
-                                                  className="px-4 py-2 text-xs font-black uppercase rounded-xl border-2 border-black bg-indigo-600 text-white shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[1px] hover:translate-y-[1px] transition-all"
-                                                >
-                                                  {isFunded ? 'More' : 'Fund'}
-                                                </button>
-                                              )}
-                                            </div>
-                                          </td>
-                                        </tr>
-                                      );
-                                    })}
-                                  </tbody>
-                                </table>
-                              </div>
-                            )}            
+                    )}
+                  </div>
+                </div>
+              );
+            })}
           </div>
         </div>
-        )}
+      )}
+
+
 
 
 <div className="w-full space-y-8">
-  {/* BLOCK 1: UPCOMING */}
-  {upcomingItems.length > 0 && (
+    {/* BLOCK 1: UPCOMING */}
+    {upcomingItems.length > 0 && (
     <div className="space-y-3">
-      <h3 className="text-xs font-black text-gray-400 uppercase tracking-widest pl-2">
-        Upcoming Commitments
-      </h3>
-<div className="flex flex-col gap-1 pl-4 ml-6 border-l-2 border-dashed border-gray-300 dark:border-gray-700">        {upcomingItems.map(item => (
+      <div className="flex items-center justify-between pl-2">
+        <h3 className="text-xs font-black text-gray-400 uppercase tracking-widest">
+          Upcoming Commitments
+        </h3>
+        {/* Optional: Small top-right toggle */}
+        {upcomingItems.length > 1 && (
+          <button
+            type="button"
+            onClick={() => setIsUpcomingExpanded(!isUpcomingExpanded)}
+            className="text-[9px] font-black uppercase tracking-widest text-indigo-500 bg-indigo-50 dark:bg-indigo-900/20 px-2 py-1 rounded-md border border-indigo-200 dark:border-indigo-800 transition-colors"
+          >
+            {isUpcomingExpanded ? 'Show Less' : 'View All'}
+          </button>
+        )}
+      </div>
+
+      <div className="flex flex-col gap-1 pl-4 ml-6 border-l-2 border-dashed border-gray-300 dark:border-gray-700 transition-all duration-300">
+        {(isUpcomingExpanded ? upcomingItems : upcomingItems.slice(0, 1)).map(item => (
           <TimelineCard 
             key={item.id} 
             item={item} 
@@ -5866,16 +6039,12 @@ const totalSpend = grandTotal;
               if (item.type === 'credit') {
                 setExcludedCreditIds(prev => {
                   const next = new Set(prev);
-                  
-                  // 🟢 THE FIX: Strip 'credit-' so the status toggle actually clicks!
                   const rawId = item.id.replace('credit-', '');
                   const key = `${rawId}-${activePeriodIndex}`;
-                  
                   if (next.has(key)) next.delete(key); else next.add(key);
                   return next;
                 });
               } else if (item.type === 'installment') {
-
                 setExcludedInstallmentIds(prev => {
                   const next = new Set(prev);
                   if (next.has(item.id)) next.delete(item.id); else next.add(item.id);
@@ -5885,22 +6054,20 @@ const totalSpend = grandTotal;
                 handleSetupToggle(item.categoryName, item.id);
               }
             }}
-             // 🟢 NEW: Wire up the Partial Toggle
              onTogglePartial={() => {
               if (item.type === 'credit') {
                 setCreditOverrides(prev => {
                   const key = `${item.id.replace('credit-', '')}-${activePeriodIndex}`;
                   const next = { ...prev };
                   if (next[key] !== undefined) {
-                    delete next[key]; // Toggle OFF
+                    delete next[key]; 
                   } else {
-                    next[key] = item.amount; // Toggle ON (Defaults to current full amount)
+                    next[key] = item.amount; 
                   }
                   return next;
                 });
               }
             }}
-            // 🟢 NEW: Wire up the Amount Input
             onUpdatePartialAmount={(newAmount) => {
               if (item.type === 'credit') {
                 setCreditOverrides(prev => ({
@@ -5912,10 +6079,26 @@ const totalSpend = grandTotal;
           />
         ))}
       </div>
+
+            {/* 🟢 THE EXPAND BUTTON */}
+            {!isUpcomingExpanded && upcomingItems.length > 1 && (
+        <div className="pl-10 mt-1">
+          <button
+            type="button"
+            onClick={() => setIsUpcomingExpanded(true)}
+            className="w-full py-2.5 flex items-center justify-center gap-2 border-2 border-dashed border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-900/20 rounded-[1.25rem] text-[10px] font-black text-amber-700 dark:text-amber-500 hover:text-amber-900 hover:border-amber-400 hover:bg-amber-200 dark:hover:bg-amber-900/40 dark:hover:text-amber-400 dark:hover:border-amber-500 transition-all uppercase tracking-widest"
+          >
+            <ChevronDown className="w-3.5 h-3.5" />
+            View {upcomingItems.length - 1} more upcoming {upcomingItems.length - 1 === 1 ? 'item' : 'items'}
+          </button>
+        </div>
+      )}
+
     </div>
   )}
 
-  {/* BLOCK 2: SETTLED & SPENT */}
+
+  {/* BLOCK 2: SETTLED & SPENT 
   {settledItems.length > 0 && (
     <div className="space-y-3 pt-6">
       <h3 className="text-xs font-black text-gray-400 uppercase tracking-widest pl-2">
@@ -5980,20 +6163,35 @@ const totalSpend = grandTotal;
       </div>
     </div>
   )}
+    */}
 </div>
 
-            {/* 🟢 DAILY CASH FLOW LEDGER ACCORDIONS */}
+                        {/* 🟢 DAILY CASH FLOW LEDGER ACCORDIONS */}
       {dailyLedger.length > 0 && (
         <div className="mt-8 space-y-4">
-          <h3 className="text-xs font-black text-gray-400 uppercase tracking-widest pl-2 flex items-center gap-2">
-            <ArrowDownToLine className="w-3.5 h-3.5" />
-            Daily Cash Flow Ledger
-          </h3>
+          
+          <div className="flex items-center justify-between pl-2">
+            <h3 className="text-xs font-black text-gray-400 uppercase tracking-widest flex items-center gap-2">
+              <ArrowDownToLine className="w-3.5 h-3.5" />
+              Daily Cash Flow Ledger
+            </h3>
+            {dailyLedger.length > 1 && (
+              <button
+                type="button"
+                onClick={() => setIsLedgerExpanded(!isLedgerExpanded)}
+                className="text-[9px] font-black uppercase tracking-widest text-gray-500 bg-gray-100 dark:bg-gray-800 px-2 py-1 rounded-md border border-gray-200 dark:border-gray-700 transition-colors hover:text-gray-900 dark:hover:text-gray-100"
+              >
+                {isLedgerExpanded ? 'Show Less' : 'View All'}
+              </button>
+            )}
+          </div>
           
           <div className="flex flex-col gap-4 pl-4 border-l-2 border-solid border-gray-200 dark:border-gray-800">
-            {dailyLedger.map((dayGroup) => {
+            {/* 🟢 SLICE THE ARRAY IF COLLAPSED */}
+            {(isLedgerExpanded ? dailyLedger : dailyLedger.slice(0, 1)).map((dayGroup) => {
               const bucketId = `day-${dayGroup.dateStr}`;
               const isExpanded = expandedLedgerIds.has(bucketId);
+
 
               return (
                 <div key={bucketId} className="bg-white dark:bg-gray-800 rounded-xl border-2 border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] overflow-hidden transition-all">
@@ -6033,48 +6231,84 @@ const totalSpend = grandTotal;
                   </div>
 
                                     {/* EXPANDED TRANSACTION LIST */}
-                  <div className={`transition-all duration-300 ease-in-out overflow-hidden ${isExpanded ? 'max-h-[1000px] opacity-100 border-t-2 border-dashed border-black/10' : 'max-h-0 opacity-0 border-t-0'}`}>
+                                    <div className={`transition-all duration-300 ease-in-out overflow-hidden ${isExpanded ? 'max-h-[1000px] opacity-100 border-t-2 border-dashed border-black/10' : 'max-h-0 opacity-0 border-t-0'}`}>
                     <div className="bg-gray-50 dark:bg-gray-900/50 p-3 md:p-4 space-y-3">
-                      {dayGroup.txs.map((tx: any) => {
-                        const isIncome = tx.transaction_type === 'income' || tx.transaction_type === 'cash_in';
-                        const amount = Math.abs(tx.amount);
-                        const isCredit = tx.isCreditPurchase; // 🟢 Get the flag
-                        
-                        // Prevent invisible vault stash logic from rendering in the UI
-                        if (!isIncome && tx.amount > 0 && tx.notes === 'VAULT_STASH') return null;
-                        
-                        return (
-                          <div key={tx.id} className="flex justify-between items-center group">
-                            <div className="flex items-center gap-3 min-w-0 pr-4">
-                              {/* Change bullet color for credit */}
-                              <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${isIncome ? 'bg-green-400' : isCredit ? 'bg-purple-400' : 'bg-red-400'} shadow-[1px_1px_0px_0px_rgba(0,0,0,0.5)]`}></span>
-                              <div className="min-w-0 flex items-center gap-2">
-                                <p className={`text-xs font-bold truncate ${isCredit ? 'text-gray-500 dark:text-gray-400' : 'text-gray-700 dark:text-gray-300'}`}>{tx.name}</p>
+                      
+                      {/* 🟢 EMPTY STATE FALLBACK */}
+                      {dayGroup.txs.length === 0 ? (
+                        <div className="py-4 text-center">
+                          <span className="text-[10px] font-black uppercase tracking-widest text-gray-400 italic">
+                            No transactions yet
+                          </span>
+                        </div>
+                      ) : (
+                        dayGroup.txs.map((tx: any) => {
+                          const isIncome = tx.transaction_type === 'income' || tx.transaction_type === 'cash_in';
+                          const amount = Math.abs(tx.amount);
+                          const isCredit = tx.isCreditPurchase;
+                          
+                          // Prevent invisible vault stash logic from rendering in the UI
+                          if (!isIncome && tx.amount > 0 && tx.notes === 'VAULT_STASH') return null;
+                          
+                          return (
+                            <div key={tx.id} className="flex justify-between items-center group">
+                              <div className="flex items-center gap-3 min-w-0 pr-4">
+                                <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${isIncome ? 'bg-green-400' : isCredit ? 'bg-purple-400' : 'bg-red-400'} shadow-[1px_1px_0px_0px_rgba(0,0,0,0.5)]`}></span>
+                                <div className="min-w-0 flex items-center gap-2">
+                                  <p className={`text-xs font-bold truncate ${isCredit ? 'text-gray-500 dark:text-gray-400' : 'text-gray-700 dark:text-gray-300'}`}>{tx.name}</p>
+                                  
+                                  {isCredit && (
+                                    <span className="shrink-0 text-[8px] font-black uppercase tracking-widest text-purple-600 bg-purple-100 border border-purple-300 px-1.5 py-0.5 rounded shadow-[1px_1px_0px_0px_rgba(0,0,0,1)]">
+                                      Credit
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                              
+                              <div className="flex items-center gap-2 shrink-0">
+                                <span className={`text-xs font-black ${isIncome ? 'text-green-600 dark:text-green-400' : isCredit ? 'text-gray-400 dark:text-gray-500 line-through' : 'text-gray-900 dark:text-gray-100'}`}>
+                                  {isIncome ? '+' : '-'}₱{amount.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                                </span>
                                 
-                                {/* 🟢 THE CREDIT BADGE */}
-                                {isCredit && (
-                                  <span className="shrink-0 text-[8px] font-black uppercase tracking-widest text-purple-600 bg-purple-100 border border-purple-300 px-1.5 py-0.5 rounded shadow-[1px_1px_0px_0px_rgba(0,0,0,1)]">
-                                    Credit
-                                  </span>
-                                )}
+                                <button 
+                                  onClick={(e) => {
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                    setSelectedTx(tx);
+                                  }}
+                                  className="p-1 text-gray-400 hover:text-indigo-600 transition-colors"
+                                  title="View Transaction Details"
+                                >
+                                  <ReceiptText className="w-3.5 h-3.5" />
+                                </button>
                               </div>
                             </div>
-                            
-                            {/* 🟢 Dim and strikethrough credit amounts to show they are excluded */}
-                            <span className={`text-xs font-black shrink-0 ${isIncome ? 'text-green-600 dark:text-green-400' : isCredit ? 'text-gray-400 dark:text-gray-500 line-through' : 'text-gray-900 dark:text-gray-100'}`}>
-                              {isIncome ? '+' : '-'}₱{amount.toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                            </span>
-                          </div>
-                        );
-                      })}
+                          );
+                        })
+                      )}
+                      
                     </div>
                   </div>
+
 
                   
                 </div>
               );
             })}
           </div>
+            {/* 🟢 THE LEDGER EXPAND BUTTON */}
+            {!isLedgerExpanded && dailyLedger.length > 1 && (
+            <div className="pl-6 mt-2">
+              <button
+                type="button"
+                onClick={() => setIsLedgerExpanded(true)}
+                className="w-full py-2.5 flex items-center justify-center gap-2 border-2 border-dashed border-gray-300 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-800/30 rounded-[1.25rem] text-[10px] font-black text-gray-500 hover:text-indigo-600 hover:border-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 transition-all uppercase tracking-widest"
+              >
+                <ChevronDown className="w-3.5 h-3.5" />
+                View {dailyLedger.length - 1} earlier {dailyLedger.length - 1 === 1 ? 'day' : 'days'}
+              </button>
+            </div>
+          )}
         </div>
       )}
 
@@ -6264,7 +6498,15 @@ const totalSpend = grandTotal;
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md animate-in fade-in">
           <div className="bg-white dark:bg-gray-900 border-4 border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] rounded-2xl w-full max-w-sm p-6 relative transition-colors">
             <button onClick={() => setShowTransactionModal(false)} className="absolute right-4 top-4 p-1.5 hover:bg-gray-100 rounded-full transition-colors"><X className="w-5 h-5 text-gray-400" /></button>
-            <h2 className="text-xl font-black text-gray-900 dark:text-gray-100 mb-4">{transactionFormData.id ? `Edit Payment` : `Pay ${transactionFormData.name || 'Item'}`}</h2>
+            {/* 🟢 UPDATED: Stacked Modal Header with Item Name */}
+            <div className="mb-4 pr-6">
+              <h2 className="text-xl font-black text-gray-900 dark:text-gray-100 leading-none">
+                {transactionFormData.id ? 'Edit Payment' : 'Record Payment'}
+              </h2>
+              <p className="text-[10px] font-black text-gray-500 uppercase tracking-widest mt-1.5 truncate">
+                {transactionFormData.name || 'Transaction'}
+              </p>
+            </div>
             <form onSubmit={handleTransactionSubmit} className="space-y-4">
               <div>
                 <label className="block text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">Amount</label>
@@ -6274,17 +6516,28 @@ const totalSpend = grandTotal;
                 </div>
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
+                <div className="min-w-0">
                   <label className="block text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">Date Paid</label>
-                  <input required type="date" value={transactionFormData.date} onChange={(e) => setTransactionFormData({...transactionFormData, date: e.target.value})} className="w-full bg-gray-50 dark:bg-gray-800 border-2 border-black rounded-xl px-2.5 py-2 outline-none font-bold text-xs dark:text-gray-100" />
+                  <input 
+                    required 
+                    type="date" 
+                    value={transactionFormData.date} 
+                    onChange={(e) => setTransactionFormData({...transactionFormData, date: e.target.value})} 
+                    className="block w-full appearance-none min-w-0 bg-gray-50 dark:bg-gray-800 border-2 border-black rounded-xl px-2.5 py-2 outline-none font-bold text-xs dark:text-gray-100 text-center" 
+                  />
                 </div>
-                <div>
+                <div className="min-w-0">
                   <label className="block text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">Payment Method</label>
-                  <select value={transactionFormData.accountId} onChange={(e) => setTransactionFormData({...transactionFormData, accountId: e.target.value})} className="w-full bg-gray-50 dark:bg-gray-800 border-2 border-black rounded-xl px-2.5 py-2 outline-none font-bold text-xs dark:text-gray-100">
+                  <select 
+                    value={transactionFormData.accountId} 
+                    onChange={(e) => setTransactionFormData({...transactionFormData, accountId: e.target.value})} 
+                    className="block w-full appearance-none min-w-0 bg-gray-50 dark:bg-gray-800 border-2 border-black rounded-xl px-2.5 py-2 outline-none font-bold text-xs dark:text-gray-100 truncate"
+                  >
                     {accounts.map(acc => <option key={acc.id} value={acc.id}>{acc.bank} ({acc.classification})</option>)}
                   </select>
                 </div>
               </div>
+
               <div className="flex space-x-3 pt-2">
                 <button type="button" onClick={() => setShowTransactionModal(false)} className="flex-1 bg-gray-100 dark:bg-gray-800 border-2 border-black py-2.5 rounded-xl font-black text-xs text-gray-500 uppercase tracking-wider shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[1px] hover:translate-y-[1px] transition-all">Cancel</button>
                 <button type="submit" className="flex-1 bg-green-600 text-white border-2 border-black py-2.5 rounded-xl font-black text-xs uppercase tracking-wider shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[1px] hover:translate-y-[1px] transition-all">Submit</button>
@@ -8016,6 +8269,223 @@ const { data: creditTx, error: creditError } = await createTransaction({
         </div>
         </Portal>
       )}
+
+            {/* 🟢 TRANSACTION DETAILS MODAL */}
+            {selectedTx && (() => {
+        const pm = accounts.find(a => a.id === selectedTx.payment_method_id);
+        const linkedTransferTx = selectedTx.transaction_type === 'transfer' && selectedTx.related_transaction_id
+          ? transactions.find(t => t.id === selectedTx.related_transaction_id)
+          : null;
+        const linkedTransferAccount = linkedTransferTx
+          ? accounts.find(a => a.id === linkedTransferTx.payment_method_id)
+          : null;
+        
+        const transferAccountLabel = selectedTx.transaction_type === 'transfer'
+          ? (Number(selectedTx.amount || 0) > 0 ? 'To Account' : 'From Account')
+          : null;
+          
+        const transferAccountValue = linkedTransferAccount
+          ? linkedTransferAccount.bank
+          : linkedTransferTx?.payment_method_id || 'N/A';
+
+        // 🟢 Bulletproof Date Parsers
+        const safeDate = selectedTx.date ? new Date(selectedTx.date) : null;
+        const displayDate = safeDate && !isNaN(safeDate.getTime()) 
+          ? safeDate.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }) 
+          : 'Unknown Date';
+        const displayTime = safeDate && !isNaN(safeDate.getTime()) 
+          ? safeDate.toLocaleTimeString() 
+          : '';
+          
+        return (
+          <Portal>
+            <div className="fixed inset-0 z-[3000] flex items-center justify-center p-2 sm:p-4 bg-black/60 backdrop-blur-md" onClick={() => setSelectedTx(null)}>
+              <div className="w-full max-w-md bg-white dark:bg-gray-900 border-4 border-black rounded-2xl shadow-2xl sm:shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] p-6 md:p-8 relative transition-all flex flex-col max-h-[95vh]" onClick={e => e.stopPropagation()}>
+                <div className='flex-shrink-0'>
+                  <button
+                    onClick={() => setSelectedTx(null)}
+                    className="absolute top-4 right-4 text-gray-400 hover:text-gray-700 p-2 rounded-full hover:bg-gray-100 transition-colors"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
+                  <h2 className="text-2xl font-black text-gray-900 dark:text-gray-200 mb-6">Transaction Details</h2>
+                </div>
+                <div className="flex-1 overflow-y-auto overflow-x-hidden pr-2 -mr-2">
+                  <dl className="space-y-4 mb-6">
+                    <div className="flex justify-between">
+                      <dt className="text-[10px] font-black text-gray-400 uppercase tracking-widest self-center">Name</dt>
+                      <dd className="text-sm font-bold text-gray-900 dark:text-gray-100 flex items-center">
+                        {selectedTx.name || 'Unnamed Transaction'}
+                        {selectedTx.transaction_type === 'income' && (
+                          <span className="ml-2 inline-flex items-center bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 border border-emerald-300 dark:border-emerald-700 px-2 py-0.5 rounded-lg text-[9px] font-black uppercase tracking-widest shadow-[1px_1px_0px_0px_rgba(0,0,0,0.1)]">
+                            Income
+                          </span>
+                        )}
+                      </dd>
+                    </div>
+                    <div className="flex justify-between">
+                      <dt className="text-[10px] font-black text-gray-400 uppercase tracking-widest self-center">Date</dt>
+                      <dd className="text-sm text-gray-900 dark:text-gray-100">
+                        {displayDate}
+                        {displayTime && <span className="ml-2 text-xs text-gray-400">{displayTime}</span>}
+                      </dd>
+                    </div>
+                    <div className="flex justify-between">
+                      <dt className="text-[10px] font-black text-gray-400 uppercase tracking-widest self-center">Amount</dt>
+                      <dd className={`text-sm font-bold ${Number(selectedTx.amount || 0) > 0 ? 'text-red-600' : 'text-green-600'}`}>
+                        {formatCurrency(-Number(selectedTx.amount || 0))}
+                      </dd>
+                    </div>
+                    <div className="flex justify-between">
+                      <dt className="text-[10px] font-black text-gray-400 uppercase tracking-widest self-center">Account</dt>
+                      <dd className="text-sm text-gray-700 dark:text-gray-300">{pm ? pm.bank : selectedTx.payment_method_id}</dd>
+                    </div>
+                    {selectedTx.transaction_type === 'transfer' ? (
+                      <div className="flex justify-between">
+                        <dt className="text-[10px] font-black text-gray-400 uppercase tracking-widest self-center">{transferAccountLabel}</dt>
+                        <dd className="text-sm text-gray-700 dark:text-gray-300">{transferAccountValue}</dd>
+                      </div>
+                    ) : (
+                      <div className="flex justify-between">
+                        <dt className="text-[10px] font-black text-gray-400 uppercase tracking-widest self-center">
+                          {selectedTx.transaction_type === 'loan' ? 'Borrower' : 'Recipient'}
+                        </dt>
+                        <dd className="text-sm text-gray-700 dark:text-gray-300">
+                          {selectedTx.borrower_name || (selectedTx as any).person_name || 'N/A'}
+                        </dd>
+                      </div>
+                    )}
+                  </dl>
+
+                  {/* Receipt Section */}
+                  <div>
+                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-3">Receipt</p>
+                    {selectedTx.receipt_url ? (
+                      receiptSignedUrl === undefined ? (
+                        <div className="text-sm text-gray-400">Loading receipt…</div>
+                      ) : receiptSignedUrl ? (
+                        <div className="flex items-center space-x-3">
+                          <img
+                            src={receiptSignedUrl}
+                            alt="Receipt thumbnail"
+                            className="w-16 h-16 rounded-xl object-cover border-2 border-black"
+                            onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
+                          <button
+                            onClick={() => { setZoom(0.5); setPreviewReceiptUrl(receiptSignedUrl); }}
+                            className={`flex items-center space-x-1 px-3 py-2 rounded-xl text-sm font-bold border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[1px] hover:translate-y-[1px] transition-all bg-gray-50`}
+                          >
+                            <Eye className="w-4 h-4" />
+                            <span>Preview</span>
+                          </button>
+                        </div>
+                      ) : (
+                        <p className="text-sm text-gray-400 italic">Could not load receipt preview.</p>
+                      )
+                    ) : (
+                      <p className="text-sm text-gray-400 italic">No receipt attached</p>
+                    )}
+                  </div>
+                  
+                                                      {/* Edit & Delete Action Buttons */}
+                  <div className="mt-8 pt-4 border-t-2 border-dashed border-gray-200 dark:border-gray-700 flex gap-3">
+                     
+                     {/* 🟢 DELETE BUTTON */}
+                     <button
+                        onClick={async () => {
+                          if (window.confirm(`Are you sure you want to delete "${selectedTx.name}"? This cannot be undone.`)) {
+                            try {
+                              const { error } = await deleteTransactionAndRevertSchedule(selectedTx.id);
+                              if (error) throw error;
+                              
+                              // Force the app to refresh the data
+                              window.dispatchEvent(new Event('transactions_updated'));
+                              setSelectedTx(null);
+                            } catch (error) {
+                              console.error('Error deleting transaction:', error);
+                              alert('Failed to delete transaction.');
+                            }
+                          }
+                        }}
+                        className="flex-1 flex items-center justify-center gap-2 py-3 bg-red-400 hover:bg-red-500 text-black font-black uppercase tracking-wider text-xs rounded-xl border-2 border-black shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[1px] hover:translate-y-[1px] transition-all"
+                     >
+                       <Trash2 className="w-3.5 h-3.5 stroke-[3]" />
+                       Delete
+                     </button>
+
+                                          {/* 🟢 EDIT BUTTON */}
+                                          <button
+                        onClick={() => {
+                          const safeId = selectedTx.id;
+                          const safeName = selectedTx.name || 'Transaction';
+                          const safeScheduleId = selectedTx.payment_schedule_id || '';
+                          const safeDateStr = String(selectedTx.date || '').split('T')[0] || getTodayIso();
+                          const safeAmount = String(Math.abs(Number(selectedTx.amount) || 0));
+                          const safeAccountId = selectedTx.payment_method_id || '';
+                          const safeTxType = selectedTx.transaction_type || 'payment';
+
+                          setSelectedTx(null);
+
+                          // 🟢 Force open the Edit Transaction modal directly!
+                          setTransactionFormData({ 
+                            id: safeId, 
+                            name: safeName, 
+                            date: safeDateStr, 
+                            amount: safeAmount, 
+                            accountId: safeAccountId, 
+                            paymentScheduleId: safeScheduleId, // Kept so database sync still works
+                            transactionType: safeTxType 
+                          });
+                          setShowTransactionModal(true);
+                        }}
+                        className="flex-1 flex items-center justify-center gap-2 py-3 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 font-black uppercase tracking-wider text-xs rounded-xl border-2 border-black shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[1px] hover:translate-y-[1px] transition-all"
+                     >
+                       <Pencil className="w-3.5 h-3.5" />
+                       Edit
+                     </button>
+
+
+                  </div>
+
+
+                  
+                </div>
+              </div>
+            </div>
+          </Portal>
+        );
+      })()}
+
+      {/* 🟢 RECEIPT PREVIEW OVERLAY */}
+      {previewReceiptUrl && (
+        <Portal>
+          <div className="fixed inset-0 z-[4000] flex items-center justify-center p-4" onClick={() => setPreviewReceiptUrl(null)}>
+            <div className="w-full max-w-2xl bg-white rounded-3xl shadow-2xl flex flex-col overflow-hidden" style={{ maxHeight: '90vh' }} onClick={e => e.stopPropagation()}>
+              <div className="flex items-center justify-between p-4 border-b border-gray-100">
+                <h3 className="text-base font-black text-gray-900 uppercase tracking-widest">Receipt Preview</h3>
+                <div className="flex items-center space-x-2">
+                  <button onClick={() => setZoom(z => Math.max(0.25, parseFloat((z - 0.25).toFixed(2))))} className="p-2 rounded-xl hover:bg-gray-100 text-gray-600">
+                    <ZoomOut className="w-4 h-4" />
+                  </button>
+                  <span className="text-xs font-bold text-gray-500 w-10 text-center">{Math.round(zoom * 100)}%</span>
+                  <button onClick={() => setZoom(z => Math.min(4, parseFloat((z + 0.25).toFixed(2))))} className="p-2 rounded-xl hover:bg-gray-100 text-gray-600">
+                    <ZoomIn className="w-4 h-4" />
+                  </button>
+                  <a href={previewReceiptUrl} download target="_blank" rel="noreferrer" className="p-2 rounded-xl hover:bg-indigo-50 text-indigo-600">
+                    <Download className="w-4 h-4" />
+                  </a>
+                  <button onClick={() => setPreviewReceiptUrl(null)} className="p-2 rounded-xl hover:bg-gray-100 text-gray-600">
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+              <div className="overflow-auto flex-1 p-4 flex justify-center">
+                <img src={previewReceiptUrl} alt="Receipt" style={{ width: `${zoom * 100}%`, height: 'auto', transition: 'width 0.2s' }} />
+              </div>
+            </div>
+          </div>
+        </Portal>
+      )}
+
 
 
 

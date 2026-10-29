@@ -1,11 +1,12 @@
 // pages/Wishlist.tsx
 import React, { useState, useEffect, useMemo } from 'react';
-import { HeartPlus, Plus, X, Link as LinkIcon, ExternalLink, ChevronLeft, FolderHeart, Image as ImageIcon, MoreHorizontal, Edit3, Upload, Trash2, FolderPlus, Tag } from 'lucide-react';
+import { HeartPlus, Plus, X, Link as LinkIcon, ExternalLink, ChevronLeft, BookImage, FolderHeart, Image as ImageIcon, MoreHorizontal, Edit3, Upload, Trash2, FolderPlus, Tag } from 'lucide-react';
 import { PageHeader } from '../src/components/PageHeader';
 import { useTheme } from '../src/contexts/ThemeContext';
 import useMediaQuery from '../src/hooks/useMediaQuery';
 import { createPortal } from 'react-dom';
 import { getWishlistItems, addWishlistItem, updateWishlistItem, deleteWishlistItem, uploadWishlistCover, getWishlistAlbums, addWishlistAlbum, updateWishlistAlbum, deleteWishlistAlbum, WishlistItem, WishlistAlbum, WishlistVariant } from '../src/services/wishlistService';
+import { PixabayImagePicker } from '../src/components/PixabayImagePicker';
 
 export const Wishlist: React.FC = () => {
   const { getAccentClasses } = useTheme();
@@ -23,6 +24,10 @@ export const Wishlist: React.FC = () => {
   const [activeAlbumMenu, setActiveAlbumMenu] = useState<string | null>(null);
   const [activeItemMenu, setActiveItemMenu] = useState<string | null>(null);
   const [editingItemId, setEditingItemId] = useState<string | null>(null);
+
+//pixabay stuff
+const [isPixabayOpen, setIsPixabayOpen] = useState(false);
+
 
   // Album Modal
   const [showAlbumModal, setShowAlbumModal] = useState(false);
@@ -536,6 +541,12 @@ export const Wishlist: React.FC = () => {
                   )}
                   <div className="flex gap-2">
                     <input type="url" value={albumFormData.coverUrl} onChange={(e) => setAlbumFormData({...albumFormData, coverUrl: e.target.value, coverFile: null})} placeholder="Paste image URL..." className="flex-1 min-w-0 bg-gray-50 dark:bg-gray-800 border-2 border-black rounded-xl p-2.5 outline-none text-sm font-medium dark:text-gray-100" />
+                    
+                    {/* 🟢 NEW: PIXABAY SEARCH BUTTON */}
+                    <button type="button" onClick={() => setIsPixabayOpen(true)} className="shrink-0 flex items-center justify-center border-2 border-black p-2.5 rounded-xl cursor-pointer transition-colors shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] active:translate-x-[1px] active:translate-y-[1px] active:shadow-none bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 hover:bg-amber-200" title="Search Stock Photos">
+                      <BookImage className="w-5 h-5" />
+                    </button>
+
                     <label className={`shrink-0 flex items-center justify-center border-2 border-black p-2.5 rounded-xl cursor-pointer transition-colors shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] active:translate-x-[1px] active:translate-y-[1px] active:shadow-none ${albumFormData.coverFile ? getAccentClasses('bg') + ' text-white' : 'bg-gray-100 text-gray-700'}`}>
                       <Upload className="w-5 h-5" />
                       <input type="file" accept="image/*" className="hidden" onChange={(e) => { if (e.target.files?.[0]) setAlbumFormData({...albumFormData, coverFile: e.target.files[0], coverUrl: ''}); }} />
@@ -543,6 +554,7 @@ export const Wishlist: React.FC = () => {
                   </div>
                 </div>
               </div>
+
               <div className="flex space-x-3 pt-4">
                 <button type="button" disabled={isSubmittingAlbum} onClick={handleCloseAlbumModal} className="flex-1 bg-gray-100 border-2 border-black py-3 rounded-xl font-black text-xs text-gray-500 uppercase shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[1px] hover:translate-y-[1px] transition-all disabled:opacity-50">Cancel</button>
                 <button type="submit" disabled={isSubmittingAlbum} className={`flex-1 text-white border-2 border-black py-3 rounded-xl font-black text-xs uppercase shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[1px] hover:translate-y-[1px] transition-all disabled:opacity-50 ${getAccentClasses('bg')}`}>{isSubmittingAlbum ? 'Saving...' : 'Save Album'}</button>
@@ -763,6 +775,17 @@ export const Wishlist: React.FC = () => {
         </>,
         document.body
       )}
+
+<PixabayImagePicker 
+        isOpen={isPixabayOpen} 
+        onClose={() => setIsPixabayOpen(false)} 
+        onSelect={(url) => {
+          // 🟢 FIXED: Updates the Album Cover state
+          setAlbumFormData({ ...albumFormData, coverUrl: url, coverFile: null }); 
+          setIsPixabayOpen(false);
+        }} 
+      />
+
 
 
 
