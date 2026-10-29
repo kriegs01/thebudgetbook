@@ -698,11 +698,11 @@ export const PinProtectionProvider: React.FC<{ children: ReactNode }> = ({ child
           
           <div className="text-center mb-8">
             <div className="inline-block p-4 bg-white dark:bg-gray-900 border-[3px] border-black rounded-full shadow-[8px_8px_0px_#000] transition-colors duration-500">
-              <Lock className="w-12 h-12 text-[#FF6B6B]" />
+              <Lock className="w-12 h-12 text-amber-500" />
             </div>
           </div>
           
-          <h2 className="font-brand text-4xl text-[#FF6B6B] drop-shadow-[3px_3px_0px_#000] mb-2">
+          <h2 className="font-['Inter'] font-black text-4xl text-amber-500 drop-shadow-[3px_3px_0px_#000] mb-2">
             App Locked
           </h2>
           <p className="text-gray-600 dark:text-gray-400 mb-10 font-medium transition-colors duration-500">

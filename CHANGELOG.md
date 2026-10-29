@@ -1,4 +1,17 @@
 # Changelog
+
+##[4.3.0] - 2026-10-29
+### What's New
+- Smart Dashboard Modes (Paycheck Summary): The budget dashboard now intelligently transitions between "Planning Mode" and "Tracking Mode." Projected income rows automatically hide once actual income is logged.
+- Live Cash Flow Progress Bars: Introduced dynamic 3-way progress bars (Usage, Debit, and Credit) that only appear in Tracking Mode. These bars uncap past 100%, dynamically highlight red on overspend, and display exact matched peso amounts.
+- Intelligent "Remaining" Override: The remaining cash calculation now automatically shifts from forecasting (⁠Net Income - Budgeted Spend⁠) to live tracking (⁠Actual Income - Actual Debit Spend⁠) once paid, complete with a contextual "As of [Date]" timestamp.
+- Dynamic Daily Ledger Defaults: The ledger now initializes in a collapsed state, displaying only the most relevant timeframe. It automatically injects a "Today" shell with a "No transactions yet" placeholder, hiding older data behind a sleek "View earlier days" toggle to drastically reduce screen clutter.
+- Pixabay Stock Photo Integration (Wishlist): Integrated a seamless, high-res stock photo search modal using the Pixabay API, allowing users to instantly apply aesthetic cover images to Wishlist Albums without needing to download or upload files.
+
+### Bug Fixes
+- UI Fixes and Improvements:
+- Stash Interface Overhaul: Completely redesigned the Stash module from a basic flat list into a structured, card-based layout to drastically improve visual hierarchy and track savings goals more effectively.
+
 ##[4.2.2] - 2026-10-24
 ### What's New 
 - NEW: Income Slicer optional toggle: You can now opt- in or out of the income slicer whenever you want! Just go to Settings > Budget and just toggle of the Income Slicer option. 
