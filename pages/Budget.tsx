@@ -275,25 +275,67 @@ const isCategoryLegacyForBudget = (
 const calculateBudgetRemaining = (
   setup: SavedBudgetSetup,
   transactions: SupabaseTransaction[],
-  selectedYear: number
+  selectedYear: number,
+  accounts: Account[] = [] // 🟢 Added accounts to filter out credit swipes
 ): number => {
   try {
     if (!setup || !setup.data) return 0;
-    const totalSpend = setup.totalAmount || 0;
     
-    const actualStr = setup.data._actualSalary;
-    const projectedStr = setup.data._projectedSalary;
-    
-    const actualValue = actualStr && actualStr.trim() !== '' ? parseFloat(actualStr) : null;
-    const projectedValue = parseFloat(projectedStr || '0');
-    const baseSalary = projectedStr !== undefined ? parseFloat(projectedStr) || 0 : 0;
-    const incomeToUse = actualValue !== null && !isNaN(actualValue) ? actualValue : baseSalary;
+    const monthName = setup.month;
+    const monthIndex = MONTHS.indexOf(monthName);
+    if (monthIndex === -1) return 0;
 
-    return incomeToUse - totalSpend;
+    // 1. Find actual income transactions for this specific month & year
+    const monthIncomes = (transactions || []).filter(tx => {
+      if (tx.transaction_type !== 'income') return false;
+      const txDate = new Date(tx.date);
+      return txDate.getMonth() === monthIndex && txDate.getFullYear() === selectedYear;
+    });
+
+    const hasLiveIncome = monthIncomes.length > 0 || (setup.data._actualSalary && setup.data._actualSalary.trim() !== '');
+
+    // 2. Calculate the Income baseline
+    let totalIncome = 0;
+    if (monthIncomes.length > 0) {
+      totalIncome = monthIncomes.reduce((sum, tx) => sum + Math.abs(parseFloat(tx.amount as any) || 0), 0);
+    } else {
+      const actualStr = setup.data._actualSalary;
+      const projectedStr = setup.data._projectedSalary;
+      const actualValue = actualStr && actualStr.trim() !== '' ? parseFloat(actualStr) : null;
+      const baseSalary = projectedStr !== undefined ? parseFloat(projectedStr) || 0 : 0;
+      totalIncome = actualValue !== null && !isNaN(actualValue) ? actualValue : baseSalary;
+    }
+
+    // 3. TRACKING MODE: If actual income exists, calculate live debit spend
+    if (hasLiveIncome) {
+      const actualDebitSpend = (transactions || []).filter(tx => {
+        const txDate = new Date(tx.date);
+        if (txDate.getMonth() !== monthIndex || txDate.getFullYear() !== selectedYear) return false;
+        
+        // Exclude inflows and hidden system transfers
+        if (tx.transaction_type === 'income' || tx.transaction_type === 'cash_in' || tx.notes === 'VAULT_STASH') return false;
+        
+        // Exclude manual transfers and credit payments (moving money, not spending it)
+        if (tx.transaction_type === 'transfer' || tx.transaction_type === 'credit_payment') return false;
+
+        // 🟢 Exclude Credit Card purchases to get true Cash Remaining
+        const linkedAccount = accounts.find(a => a.id === tx.payment_method_id);
+        if (linkedAccount && (linkedAccount.type === 'Credit' || linkedAccount.classification === 'Credit Card')) return false;
+
+        return tx.amount > 0;
+      }).reduce((sum, tx) => sum + Math.abs(parseFloat(tx.amount as any) || 0), 0);
+
+      return totalIncome - actualDebitSpend;
+    }
+
+    // 4. PLANNING MODE: Fallback to Projected Income - Budgeted Spend
+    const totalSpend = setup.totalAmount || 0;
+    return totalIncome - totalSpend;
   } catch (e) {
     return 0;
   }
 };
+
 
 const Portal: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [mounted, setMounted] = React.useState(false);
@@ -1004,6 +1046,7 @@ const effectiveCategories = React.useMemo(() => {
 const [creditOverrides, setCreditOverrides] = useState<Record<string, number>>({}); 
 
 
+
   const isFocusedRef = useRef(false);
   const [excludedInstallmentIds, setExcludedInstallmentIds] = useState<Set<string>>(new Set());
 
@@ -1704,25 +1747,39 @@ const [activePeriodIndex, setActivePeriodIndex] = useState<number>(1);
   }, [accounts]);
 
   const handleOpenFundModal = useCallback((wallet: Wallet) => {
-    const { remaining } = getStashAggregates(wallet);
+    const { funded } = getStashAggregates(wallet);
+    const periodCount = currentPeriods.length || 2;
+    
+    // 🟢 Calculate how much should be funded by the end of this tab
+    const targetSoFar = (!wallet.timing || wallet.timing === 'split')
+      ? (wallet.amount / periodCount) * activePeriodIndex
+      : (parseInt(wallet.timing, 10) <= activePeriodIndex ? wallet.amount : 0);
+      
+    // 🟢 Only preload what is missing for THIS tab's target
+    const remainingForTab = Math.max(0, targetSoFar - funded);
+
     const defaultSourceAccountId = getDefaultStashSourceAccountId(wallet);
     const now = new Date();
     const selectedMonthIndex = MONTHS.indexOf(selectedMonth);
     const isCurrentPeriod = now.getFullYear() === selectedYear && now.getMonth() === selectedMonthIndex;
+    
     let defaultDate: string;
     if (isCurrentPeriod) {
       defaultDate = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
     } else {
       defaultDate = `${selectedYear}-${String(selectedMonthIndex + 1).padStart(2, '0')}-01`;
     }
+    
     setFundForm({
-      amount: remaining > 0 ? remaining.toFixed(2) : '',
+      amount: remainingForTab > 0 ? remainingForTab.toFixed(2) : '',
       date: defaultDate,
       notes: '',
       sourceAccountId: defaultSourceAccountId,
     });
+    
     setFundModal({ wallet });
-  }, [getDefaultStashSourceAccountId, getStashAggregates, selectedMonth, selectedYear]);
+  }, [getDefaultStashSourceAccountId, getStashAggregates, selectedMonth, selectedYear, activePeriodIndex, currentPeriods]);
+
 
   const handleOpenStashRepairModal = useCallback((wallet: Wallet, tx: SupabaseTransaction) => {
     setStashRepairForm({
@@ -1989,11 +2046,13 @@ const getFrozenCycleAmount = (account: Account): number => {
         date: walletTxDate,
         payment_method_id: sourceAccountId,
         transaction_type: 'withdraw' as const,
-        notes: fundForm.notes || null,
+        // 🟢 Permanently stamp the intended tab into the notes
+        notes: `Stash Allocation: ${activePeriodIndex} | ${fundForm.notes || ''}`.trim(),
         payment_schedule_id: null,
         related_transaction_id: null,
         receipt_url: null,
       };
+
       let creationResult = await createTransaction({ ...stashTxBase, wallet_id: walletId });
       if (creationResult.error) {
         const errMsg = JSON.stringify(creationResult.error).toLowerCase();
@@ -2043,17 +2102,19 @@ const getFrozenCycleAmount = (account: Account): number => {
     if (onTransactionCreated) onTransactionCreated();
   };
 
-  const handleWalletIncludeToggle = useCallback((walletId: string) => {
+  const handleWalletIncludeToggle = useCallback((walletId: string, periodIndex: number) => {
     setExcludedWalletIds(prev => {
       const next = new Set(prev);
-      if (next.has(walletId)) {
-        next.delete(walletId);
+      const key = `${walletId}-${periodIndex}`; // 🟢 Now tab-specific!
+      if (next.has(key)) {
+        next.delete(key);
       } else {
-        next.add(walletId);
+        next.add(key);
       }
       return next;
     });
   }, []);
+
 
   const getDynamicDate = (fakeDateStr: string | undefined, monthStr: string, yearNum: number) => {
     if (!fakeDateStr) return 'Not set';
@@ -2753,17 +2814,35 @@ const getFrozenCycleAmount = (account: Account): number => {
       let itemsTotal = 0;
       if (processedBudgetMap[period]) {
         Object.values(processedBudgetMap[period]).forEach(catItems => {
-          // 🟢 THE FIX: Safely check if catItems is an array before looping!
           if (!Array.isArray(catItems)) return;
           
           catItems.forEach(item => {
-            if (!item || !item.included) return; // 🟢 Safe item check
+            if (!item || !item.included) return; 
 
-            const val = item.amountsByPeriod?.[period] !== undefined ? item.amountsByPeriod[period] : item.amount;
-            itemsTotal += (parseFloat(val) || 0);
+            // 🟢 THE FIX: Perfectly mirror the Paycheck Summary UI logic!
+            const isBillerItem = item.isBiller || (billers && billers.some(b => b.id === item.id));
+            const isInstallmentItem = item.isInstallment || (installments && installments.some(i => i.id === item.id));
+
+            let finalAmount = 0;
+            if (!isBillerItem && !isInstallmentItem && !item.isCredit) {
+               if (item.amountsByPeriod && item.amountsByPeriod[period] !== undefined && item.amountsByPeriod[period] !== '') {
+                 finalAmount = parseFloat(item.amountsByPeriod[period]) || 0;
+               } else if (item.amountsByPeriod && Object.keys(item.amountsByPeriod).filter(k => item.amountsByPeriod[k] !== '').length > 0) {
+                 finalAmount = 0; 
+               } else {
+                 const legacyTab = item.timing ? parseInt(String(item.timing).split('/')[0], 10) : 1;
+                 if (legacyTab === period) finalAmount = parseFloat(item.amount) || 0;
+               }
+            } else {
+               const val = item.amountsByPeriod?.[period] !== undefined ? item.amountsByPeriod[period] : item.amount;
+               finalAmount = parseFloat(val) || 0;
+            }
+            
+            itemsTotal += finalAmount;
           });
         });
       }
+
 
 
 
@@ -2835,8 +2914,8 @@ const getFrozenCycleAmount = (account: Account): number => {
 
       const periodCount = currentPeriods.length || 2;
 
-      // 🟢 FIX: Calculate this specific period's stash requirement dynamically
-      const periodStashTotal = wallets.filter(w => !excludedWalletIds.has(w.id)).reduce((s, w) => {
+      // 🟢 FIX: Calculate this specific period's stash requirement dynamically
+      const periodStashTotal = wallets.filter(w => !excludedWalletIds.has(`${w.id}-${period}`)).reduce((s, w) => {
         
         // 🟢 PREVENT LEAKS: Stop stash math from bleeding into non-existent tabs (e.g., Tabs 3 & 4)
         if (period > periodCount) return s;
@@ -2885,19 +2964,45 @@ const getFrozenCycleAmount = (account: Account): number => {
       }
     });
 
-    const dataToSave = {
-      ...JSON.parse(JSON.stringify(setupData)),
-      _year: selectedYear,
-      _projectedSalary: projectedSalary,
-      _actualSalary: actualSalary,
-      _projectedSalaryByPeriod: projectedSalaryByPeriod,
-      _actualSalaryByPeriod: dynamicActualByPeriod,
-      _periodTotals: _periodTotals,
-      _excludedInstallmentIds: [...excludedInstallmentIds],
-      _excludedWalletIds: [...excludedWalletIds],
-      _excludedCreditIds: [...excludedCreditIds],
-      _creditOverrides: creditOverrides // 🟢 ADD THIS LINE
-    };
+    const _actualSpendByPeriod: Record<number, number> = {};
+    [1, 2, 3, 4].forEach(periodNum => {
+      const tabPeriod = currentPeriods[periodNum - 1];
+      if (!tabPeriod) return;
+      const pStart = new Date(tabPeriod.startDate); pStart.setHours(0,0,0,0);
+      const pEnd = new Date(tabPeriod.endDate); pEnd.setHours(23,59,59,999);
+    
+      _actualSpendByPeriod[periodNum] = (transactions || []).filter(tx => {
+        const txDate = new Date(tx.date);
+        if (txDate < pStart || txDate > pEnd) return false;
+        if (['income', 'cash_in', 'transfer', 'credit_payment'].includes(tx.transaction_type) || tx.notes === 'VAULT_STASH') return false;
+        if (tx.amount <= 0) return false;
+        const acc = accounts?.find(a => a.id === tx.payment_method_id);
+        if (acc && (acc.type === 'Credit' || acc.classification === 'Credit Card')) return false;
+        return true;
+      }).reduce((sum, tx) => sum + Math.abs(tx.amount), 0);
+    });
+    
+    // Include _actualSpendByPeriod: _actualSpendByPeriod inside dataToSave
+    
+        
+    
+        // 🟢 2. INJECT INTO THE DATABASE PAYLOAD
+        const dataToSave = {
+          ...JSON.parse(JSON.stringify(setupData)),
+          _year: selectedYear,
+          _projectedSalary: projectedSalary,
+          _actualSalary: actualSalary,
+          _projectedSalaryByPeriod: projectedSalaryByPeriod,
+          _actualSalaryByPeriod: dynamicActualByPeriod,
+          _periodTotals: _periodTotals,
+          _actualSpendByPeriod: _actualSpendByPeriod, // <-- Stored permanently in DB!
+          _excludedInstallmentIds: [...excludedInstallmentIds],
+          _excludedWalletIds: [...excludedWalletIds],
+          _excludedCreditIds: [...excludedCreditIds],
+          _creditOverrides: creditOverrides,
+          _actualSpendByPeriod: _actualSpendByPeriod,
+        };
+    
 
 
         // Calculate absolute grand total from our clean period totals!
@@ -2912,61 +3017,68 @@ const getFrozenCycleAmount = (account: Account): number => {
         try {
           setSaveStatus('syncing');
     
-                                // 🟢 Match BOTH month and year so January 2027 never collides with January 2026!
           const isSameMonthAndYear = (s: SavedBudgetSetup) =>
             s.month === selectedMonth &&
             parseInt(s.data?._year || new Date().getFullYear().toString(), 10) === selectedYear;
-
+    
           const unifiedExisting = savedSetups.find(s => isSameMonthAndYear(s) && (s.timing === 'unified' || s.data?._periodTotals));
           const fallbackExisting = savedSetups.find(s => isSameMonthAndYear(s) && s.timing === selectedTiming);
           const existingSetup = unifiedExisting || fallbackExisting;
-
     
           if (existingSetup) {
             const updatedSetup: SavedBudgetSetup = {
               ...existingSetup,
               totalAmount: total,
-              timing: 'unified', // 🟢 Force the database to drop legacy tags!
+              timing: 'unified', 
               data: dataToSave,
               status: 'Saved'
             };
             const { error } = await updateBudgetSetupFrontend(updatedSetup);
+            
+            // 🟢 INSTANT UI SYNC: Updates Global Cards immediately!
+            if (!error) {
+               setSavedSetups(prev => prev.map(s => s.id === updatedSetup.id ? updatedSetup : s));
+            }
     
-        
-        if (error) {
+            if (error) {
+              setSaveStatus('error');
+              setTimeout(() => setSaveStatus('idle'), AUTO_SAVE_STATUS_TIMEOUT_MS);
+              return;
+            }
+          } else {
+            const newSetup: Omit<SavedBudgetSetup, 'id'> = {
+              month: selectedMonth,
+              timing: selectedTiming,
+              status: BUDGET_SETUP_STATUS.SAVED,
+              totalAmount: total,
+              data: dataToSave
+            };
+            const { error, data: createdSetup } = await createBudgetSetupFrontend(newSetup);
+            
+            // 🟢 INSTANT UI SYNC for new budgets
+            if (!error && createdSetup) {
+               setSavedSetups(prev => [...prev, createdSetup]);
+            }
+    
+            if (error) {
+              setSaveStatus('error');
+              setTimeout(() => setSaveStatus('idle'), AUTO_SAVE_STATUS_TIMEOUT_MS);
+              return;
+            }
+          }
+          
+          lastSavedDataRef.current = currentDataString;
+          if (onReloadSetups) await onReloadSetups();
+          
+          setSaveStatus('saved');
+          setTimeout(() => setSaveStatus('idle'), 2000);
+        } catch (error) {
+          console.error('[Budget] Error in auto-save:', error);
           setSaveStatus('error');
           setTimeout(() => setSaveStatus('idle'), AUTO_SAVE_STATUS_TIMEOUT_MS);
-          return;
         }
-      } else {
-        const newSetup: Omit<SavedBudgetSetup, 'id'> = {
-          month: selectedMonth,
-          timing: selectedTiming,
-          status: BUDGET_SETUP_STATUS.SAVED,
-          totalAmount: total,
-          data: dataToSave
-        };
-        const { error } = await createBudgetSetupFrontend(newSetup);
-        
-        if (error) {
-          setSaveStatus('error');
-          setTimeout(() => setSaveStatus('idle'), AUTO_SAVE_STATUS_TIMEOUT_MS);
-          return;
-        }
-      }
-      
-      lastSavedDataRef.current = currentDataString;
-      if (onReloadSetups) {
-        await onReloadSetups();
-      }
-      
-      setSaveStatus('saved');
-      setTimeout(() => setSaveStatus('idle'), 2000);
-    } catch (error) {
-      console.error('[Budget] Error in auto-save:', error);
-      setSaveStatus('error');
-      setTimeout(() => setSaveStatus('idle'), AUTO_SAVE_STATUS_TIMEOUT_MS);
-    }
+    
+    
   }, [view, setupData, projectedSalary, actualSalary, projectedSalaryByPeriod, actualSalaryByPeriod, selectedMonth, selectedYear, selectedTiming, savedSetups, excludedInstallmentIds, excludedWalletIds, excludedCreditIds, wallets, getStashAggregates, onReloadSetups, installments, getPaymentSchedule, shouldShowInstallment, transactions, creditBudgetAccounts, currentPeriods, billers, processedBudgetMap]);
 
   const triggerAutoSave = useCallback(() => {
@@ -3074,24 +3186,14 @@ const getFrozenCycleAmount = (account: Account): number => {
   };
 
   const handleSaveSetup = async () => {
-    
+    const isSameMonthAndYear = (s: SavedBudgetSetup) =>
+      s.month === selectedMonth &&
+      parseInt(s.data?._year || new Date().getFullYear().toString(), 10) === selectedYear;
 
-        const isSameMonthAndYear = (s: SavedBudgetSetup) =>
-          s.month === selectedMonth &&
-          parseInt(s.data?._year || new Date().getFullYear().toString(), 10) === selectedYear;
+    const unifiedExisting = savedSetups.find(s => isSameMonthAndYear(s) && (s.timing === 'unified' || s.data?._periodTotals));
+    const fallbackExisting = savedSetups.find(s => isSameMonthAndYear(s) && s.timing === selectedTiming);
+    const existingSetup = unifiedExisting || fallbackExisting;
 
-
-
-
-        const unifiedExisting = savedSetups.find(s => isSameMonthAndYear(s) && (s.timing === 'unified' || s.data?._periodTotals));
-        const fallbackExisting = savedSetups.find(s => isSameMonthAndYear(s) && s.timing === selectedTiming);
-        const existingSetup = unifiedExisting || fallbackExisting;
-
-    
-        
-  
-    
-    {/* TO: Matches auto-save perfectly to prevent data loss on manual saves */}
     const dynamicActualByPeriod = { ...actualSalaryByPeriod };
     const currentMonthIdx = MONTHS.indexOf(selectedMonth);
     
@@ -3129,30 +3231,42 @@ const getFrozenCycleAmount = (account: Account): number => {
       let itemsTotal = 0;
       if (processedBudgetMap[period]) {
         Object.values(processedBudgetMap[period]).forEach(catItems => {
-          // 🟢 THE FIX: Safely check if catItems is an array before looping!
           if (!Array.isArray(catItems)) return;
           
           catItems.forEach(item => {
-            if (!item || !item.included) return; // 🟢 Safe item check
+            if (!item || !item.included) return; 
 
-            const val = item.amountsByPeriod?.[period] !== undefined ? item.amountsByPeriod[period] : item.amount;
-            itemsTotal += (parseFloat(val) || 0);
+            const isBillerItem = item.isBiller || (billers && billers.some(b => b.id === item.id));
+            const isInstallmentItem = item.isInstallment || (installments && installments.some(i => i.id === item.id));
+
+            let finalAmount = 0;
+            if (!isBillerItem && !isInstallmentItem && !item.isCredit) {
+               if (item.amountsByPeriod && item.amountsByPeriod[period] !== undefined && item.amountsByPeriod[period] !== '') {
+                 finalAmount = parseFloat(item.amountsByPeriod[period]) || 0;
+               } else if (item.amountsByPeriod && Object.keys(item.amountsByPeriod).filter(k => item.amountsByPeriod[k] !== '').length > 0) {
+                 finalAmount = 0; 
+               } else {
+                 const legacyTab = item.timing ? parseInt(String(item.timing).split('/')[0], 10) : 1;
+                 if (legacyTab === period) finalAmount = parseFloat(item.amount) || 0;
+               }
+            } else {
+               const val = item.amountsByPeriod?.[period] !== undefined ? item.amountsByPeriod[period] : item.amount;
+               finalAmount = parseFloat(val) || 0;
+            }
+            
+            itemsTotal += finalAmount;
           });
         });
       }
 
-
-
       const instTotal = (installments || []).filter(inst => {
         if (inst.isArchived || excludedInstallmentIds.has(inst.id)) return false;
-                // Guard against saving receivables into the total expense payload
         if (!inst.funding_friend_id && (inst.debtor_friend_id || (inst as any).friend_user_id)) return false;
         const linkedId = inst.accountId || inst.account_id || inst.linkedAccountId || inst.linked_account_id;
         const isSwallowedByCreditAccount = creditBudgetAccounts.some(acc => acc.id === linkedId);
         const isBudee = !!(inst.funding_friend_id || inst.debtor_friend_id || (inst as any).friend_user_id);
         if (!isBudee && isSwallowedByCreditAccount) return false;
 
-        // 🟢 FIX: Strictly use the unified engine for mapping (No hardcoded legacy '1/2' logic)
         const targetPeriod = determineItemPeriod(inst, currentPeriods, selectedMonth, selectedYear);
         if (targetPeriod !== period) return false;
 
@@ -3170,7 +3284,6 @@ const getFrozenCycleAmount = (account: Account): number => {
             if (isBudee) return false;
             if (inst.accountId !== account.id && inst.account_id !== account.id && inst.linkedAccountId !== account.id && inst.linked_account_id !== account.id) return false;
             
-            // 🟢 FIX: Strictly use the unified engine for mapping
             const targetPeriod = determineItemPeriod(inst, currentPeriods, selectedMonth, selectedYear);
             if (targetPeriod !== period) return false;
 
@@ -3181,7 +3294,6 @@ const getFrozenCycleAmount = (account: Account): number => {
         } else {
           let amt = getFrozenCycleAmount(account);
         
-          // 🟢 Mirror UI math: calculate sub-items so parent never drops below children
           const buckets = generateCreditBuckets(account, transactions || [], budgetInstallments, selectedYear, selectedMonth);
           const targetBucket = getBucketForMonth(buckets, selectedMonth, selectedYear);
           const pb = targetBucket?.personalBreakdown;
@@ -3197,9 +3309,7 @@ const getFrozenCycleAmount = (account: Account): number => {
               amt = subTotal;
             }
           }
-        }
-        
-          // 🟢 ADD THIS: Apply the partial override to the background math!
+          
           const exclusionKey = `${account.id}-${period}`;
           const overrideAmount = creditOverrides[exclusionKey];
           if (overrideAmount !== undefined) {
@@ -3207,48 +3317,60 @@ const getFrozenCycleAmount = (account: Account): number => {
           }
         
           return amt >= 0.01 ? sum + amt : sum;
-        
-        
+        }
       }, 0);
 
       const periodCount = currentPeriods.length || 2;
-
-      // 🟢 FIX: Calculate this specific period's stash requirement dynamically
-      const periodStashTotal = wallets.filter(w => !excludedWalletIds.has(w.id)).reduce((s, w) => {
-        
-        // 🟢 PREVENT LEAKS: Stop stash math from bleeding into non-existent tabs (e.g., Tabs 3 & 4)
+      const periodStashTotal = wallets.filter(w => !excludedWalletIds.has(`${w.id}-${period}`)).reduce((s, w) => {
         if (period > periodCount) return s;
-        
         const targetAmount = Math.max(w.amount, getStashAggregates(w).funded);
-        
         if (!w.timing || w.timing === 'split') return s + (targetAmount / periodCount);
         if (parseInt(w.timing, 10) === period) return s + targetAmount;
         return s;
       }, 0);
 
-
       _periodTotals[period] = itemsTotal + instTotal + creditTotal + periodStashTotal;
-
     });
 
-    
-    // Calculate absolute grand total from our clean period totals!
     const total = Object.values(_periodTotals).reduce((sum, val) => sum + (val as number), 0);
 
-
-    const dataToSave = {
-      ...JSON.parse(JSON.stringify(setupData)),
-      _year: selectedYear,
-      _projectedSalary: projectedSalary,
-      _actualSalary: actualSalary,
-      _projectedSalaryByPeriod: projectedSalaryByPeriod,
-      _actualSalaryByPeriod: dynamicActualByPeriod,
-      _periodTotals: _periodTotals,
-      _excludedInstallmentIds: [...excludedInstallmentIds],
-      _excludedWalletIds: [...excludedWalletIds],
-      _excludedCreditIds: [...excludedCreditIds]
-    };
-
+    const _actualSpendByPeriod: Record<number, number> = {};
+    [1, 2, 3, 4].forEach(periodNum => {
+      const tabPeriod = currentPeriods[periodNum - 1];
+      if (!tabPeriod) return;
+      const pStart = new Date(tabPeriod.startDate); pStart.setHours(0,0,0,0);
+      const pEnd = new Date(tabPeriod.endDate); pEnd.setHours(23,59,59,999);
+    
+      _actualSpendByPeriod[periodNum] = (transactions || []).filter(tx => {
+        const txDate = new Date(tx.date);
+        if (txDate < pStart || txDate > pEnd) return false;
+        if (['income', 'cash_in', 'transfer', 'credit_payment'].includes(tx.transaction_type) || tx.notes === 'VAULT_STASH') return false;
+        if (tx.amount <= 0) return false;
+        const acc = accounts?.find(a => a.id === tx.payment_method_id);
+        if (acc && (acc.type === 'Credit' || acc.classification === 'Credit Card')) return false;
+        return true;
+      }).reduce((sum, tx) => sum + Math.abs(tx.amount), 0);
+    });
+    
+    // Include _actualSpendByPeriod: _actualSpendByPeriod inside dataToSave
+    
+        // 🟢 2. INJECT INTO THE DATABASE PAYLOAD
+        const dataToSave = {
+          ...JSON.parse(JSON.stringify(setupData)),
+          _year: selectedYear,
+          _projectedSalary: projectedSalary,
+          _actualSalary: actualSalary,
+          _projectedSalaryByPeriod: projectedSalaryByPeriod,
+          _actualSalaryByPeriod: dynamicActualByPeriod,
+          _periodTotals: _periodTotals,
+          _actualSpendByPeriod: _actualSpendByPeriod, // <-- Stored permanently in DB!
+          _excludedInstallmentIds: [...excludedInstallmentIds],
+          _excludedWalletIds: [...excludedWalletIds],
+          _excludedCreditIds: [...excludedCreditIds],
+          _creditOverrides: creditOverrides,
+          _actualSpendByPeriod: _actualSpendByPeriod,
+        };
+    
 
     try {
       if (existingSetup) {
@@ -3260,14 +3382,18 @@ const getFrozenCycleAmount = (account: Account): number => {
         };
         const { error } = await updateBudgetSetupFrontend(updatedSetup);
         
+        // 🟢 INSTANT UI SYNC: Updates Global Cards immediately!
+        if (!error) {
+           setSavedSetups(prev => prev.map(s => s.id === updatedSetup.id ? updatedSetup : s));
+        }
+
         if (error) {
           alert(`Failed to save budget setup: ${error?.message || 'Unknown error occurred'}`);
           return;
         }
         
-        if (onReloadSetups) {
-          await onReloadSetups();
-        }
+        if (onReloadSetups) await onReloadSetups();
+        
       } else {
         const newSetup: Omit<SavedBudgetSetup, 'id'> = {
           month: selectedMonth,
@@ -3276,16 +3402,19 @@ const getFrozenCycleAmount = (account: Account): number => {
           totalAmount: total,
           data: dataToSave
         };
-        const { error } = await createBudgetSetupFrontend(newSetup);
+        const { error, data: createdSetup } = await createBudgetSetupFrontend(newSetup);
         
+        // 🟢 INSTANT UI SYNC for new budgets
+        if (!error && createdSetup) {
+           setSavedSetups(prev => [...prev, createdSetup]);
+        }
+
         if (error) {
           alert(`Failed to save budget setup: ${error?.message || 'Unknown error occurred'}`);
           return;
         }
         
-        if (onReloadSetups) {
-          await onReloadSetups();
-        }
+        if (onReloadSetups) await onReloadSetups();
       }
       
       setView('summary');
@@ -3293,6 +3422,10 @@ const getFrozenCycleAmount = (account: Account): number => {
       alert(`Failed to save budget setup: ${(error as any)?.message || 'Unknown error occurred'}`);
     }
   };
+
+
+        
+       
 
   const handleTransactionSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -4484,8 +4617,12 @@ const getFrozenCycleAmount = (account: Account): number => {
         });
       }}
       formatCurrency={formatCurrency}
-      calculateBudgetRemaining={(setup) => calculateBudgetRemaining(setup, transactions, selectedYear)}
+      // 🟢 PASS BOTH transactions AND accounts into the function!
+      calculateBudgetRemaining={(setup) => calculateBudgetRemaining(setup, transactions, selectedYear, accounts)}
       archiveSubmitting={archiveSubmitting}
+      // 🟢 ALSO PASS THE ARRAYS DOWN AS DIRECT PROPS:
+      transactions={transactions} 
+      accounts={accounts}         
     />
   </div>
 
@@ -4508,16 +4645,21 @@ const getFrozenCycleAmount = (account: Account): number => {
       
       {/* The Actual Archived List */}
       <div className={`lg:mt-8 ${showArchived ? 'block' : 'hidden'}`}>
-        <BudgetSetupsList
-          setups={archivedSetups}
-          title="Archived Budgets"
-          isArchived={true}
-          onLoadSetup={handleLoadSetup}
-          onReopenSetup={handleReopenSetup}
-          formatCurrency={formatCurrency}
-          calculateBudgetRemaining={(setup) => calculateBudgetRemaining(setup, transactions, selectedYear)}
-          archiveSubmitting={archiveSubmitting}
-        />
+      <BudgetSetupsList
+        setups={archivedSetups}
+        title="Archived Budgets"
+        isArchived={true}
+        onLoadSetup={handleLoadSetup}
+        onReopenSetup={handleReopenSetup}
+        formatCurrency={formatCurrency}
+      // 🟢 PASS BOTH transactions AND accounts into the function!
+      calculateBudgetRemaining={(setup) => calculateBudgetRemaining(setup, transactions, selectedYear, accounts)}
+      archiveSubmitting={archiveSubmitting}
+      // 🟢 ALSO PASS THE ARRAYS DOWN AS DIRECT PROPS:
+      transactions={transactions} 
+      accounts={accounts}         
+    />
+
       </div>
       
     </div>
@@ -4725,15 +4867,16 @@ const getFrozenCycleAmount = (account: Account): number => {
 
 
       
-            // 🟢 FIX: Calculate the stash total dynamically for the active UI tab
+                  // 🟢 FIX: Calculate the stash total dynamically for the active UI tab
 const periodCount = currentPeriods.length || 2;
-const periodStashTotal = wallets.filter(w => !excludedWalletIds.has(w.id)).reduce((s, w) => {
+const periodStashTotal = wallets.filter(w => !excludedWalletIds.has(`${w.id}-${activePeriodIndex}`)).reduce((s, w) => {
   const targetAmount = Math.max(w.amount, getStashAggregates(w).funded);
   
   if (!w.timing || w.timing === 'split') return s + (targetAmount / periodCount);
   if (parseInt(w.timing, 10) === activePeriodIndex) return s + targetAmount;
   return s;
 }, 0);
+
 
 const grandTotal = categorySummary
   .filter(cat => cat.category !== 'Budee In') // 🟢 Omit inflows from expense total
@@ -4808,8 +4951,11 @@ const totalSpend = grandTotal;
 
   const netIncome = Math.abs(salaryToUse) + totalOtherIncome;
 
-  // 🟢 USAGE BAR FIX: Pull exact debit spend from the strictly bound Daily Ledger
-  const actualDebitSpend = dailyLedger.reduce((sum, dayGroup) => sum + dayGroup.totalSpent, 0);
+    // 🟢 USAGE BAR FIX: Pull exact debit spend from the strictly bound Daily Ledger
+    const actualDebitSpend = dailyLedger.reduce((sum, dayGroup) => sum + dayGroup.totalSpent, 0);
+  
+    
+  
 
   // 🟢 SMART REMAINING OVERRIDE (Planning Mode vs Tracking Mode)
   const hasActualIncome = allIncomeTxs.length > 0 || !!actualSalaryByPeriod[activePeriodIndex];
@@ -5255,8 +5401,9 @@ const totalSpend = grandTotal;
                     
                     {periodStashTotal > 0 && (
                       <tr 
-                        onClick={() => {
-                          const stashBreakdown = wallets.filter(w => !excludedWalletIds.has(w.id)).map(w => {
+                      onClick={() => {
+                        const stashBreakdown = wallets.filter(w => !excludedWalletIds.has(`${w.id}-${activePeriodIndex}`)).map(w => {
+
                             const periodCount = currentPeriods.length || 2;
                             const targetAmount = Math.max(w.amount, getStashAggregates(w).funded);
                             const amt = (!w.timing || w.timing === 'split') ? (targetAmount / periodCount) : (parseInt(w.timing, 10) === activePeriodIndex ? targetAmount : 0);
@@ -5884,22 +6031,57 @@ const totalSpend = grandTotal;
             className="flex overflow-x-auto snap-x snap-mandatory scrollbar-hide py-4 gap-4 px-[calc(50%-120px)] sm:px-2 -mx-2"
           >
             {[...wallets].sort((a, b) => {
-              const aIncluded = !excludedWalletIds.has(a.id);
-              const bIncluded = !excludedWalletIds.has(b.id);
+              const aIncluded = !excludedWalletIds.has(`${a.id}-${activePeriodIndex}`);
+              const bIncluded = !excludedWalletIds.has(`${b.id}-${activePeriodIndex}`);
               return aIncluded === bIncluded ? 0 : aIncluded ? -1 : 1;
             }).map((wallet) => {
               const linkedAccount = accounts.find(a => a.id === wallet.accountId);
-              const { funded, isFunded } = getStashAggregates(wallet);
-              const isIncluded = !excludedWalletIds.has(wallet.id);
+              const { funded, isFunded, topUps } = getStashAggregates(wallet);
+              
+              // 🟢 Check the specific tab's inclusion status
+              const isIncluded = !excludedWalletIds.has(`${wallet.id}-${activePeriodIndex}`);
+
               const isFlipped = flippedStashId === wallet.id;
 
-              const periodCount = currentPeriods.length || 2;
-              const allocatedAmount = (!wallet.timing || wallet.timing === 'split') 
-                ? (wallet.amount / periodCount) 
-                : (parseInt(wallet.timing, 10) === activePeriodIndex ? wallet.amount : 0);
+              const periodCount = currentPeriods.length || 2;
+              const allocatedAmount = (!wallet.timing || wallet.timing === 'split') 
+                ? (wallet.amount / periodCount) 
+                : (parseInt(wallet.timing, 10) === activePeriodIndex ? wallet.amount : 0);
 
-              const isOverFunded = funded > wallet.amount && wallet.amount > 0;
-              const isExactlyFunded = funded === wallet.amount && wallet.amount > 0;
+                            // 🟢 1. Calculate what should be funded up to THIS tab
+              const targetSoFar = (!wallet.timing || wallet.timing === 'split')
+                ? (wallet.amount / periodCount) * activePeriodIndex
+                : (parseInt(wallet.timing, 10) <= activePeriodIndex ? wallet.amount : 0);
+
+              // 🟢 2. Calculate what was ACTUALLY funded during this tab's date range
+              const activePeriod = currentPeriods[activePeriodIndex - 1];
+              const periodStart = activePeriod?.startDate ? new Date(activePeriod.startDate) : new Date(selectedYear, MONTHS.indexOf(selectedMonth), 1);
+              const periodEnd = activePeriod?.endDate ? new Date(activePeriod.endDate) : new Date(selectedYear, MONTHS.indexOf(selectedMonth) + 1, 0);
+              
+              periodStart.setHours(0, 0, 0, 0);
+              periodEnd.setHours(23, 59, 59, 999);
+
+              const tabFundedAmount = topUps.reduce((sum, tx) => {
+                const isStampedForThisTab = tx.notes?.includes(`Stash Allocation: ${activePeriodIndex}`);
+                const hasAnyStamp = tx.notes?.includes('Stash Allocation:');
+
+                if (isStampedForThisTab) {
+                  return sum + Math.abs(tx.amount);
+                } 
+                
+                if (!hasAnyStamp) {
+                  const txDate = new Date(tx.date);
+                  if (txDate >= periodStart && txDate <= periodEnd) {
+                    return sum + Math.abs(tx.amount);
+                  }
+                }
+                
+                return sum;
+              }, 0);
+
+              // 🟢 3. Compare the TAB funded amount against the TARGET so far
+              const isOverFunded = tabFundedAmount > (allocatedAmount + 0.01) && allocatedAmount > 0;
+              const isTabFunded = tabFundedAmount >= (allocatedAmount - 0.01) && allocatedAmount > 0; 
 
               return (
                 <div key={wallet.id} className="snap-center shrink-0 w-[240px] sm:w-[280px] relative">
@@ -5927,11 +6109,12 @@ const totalSpend = grandTotal;
                   >
                     
                     {isFlipped ? (
-                      // 🔄 FLIPPED BACK VIEW (Toggle)
-                      <div 
-                        className="flex flex-col items-center justify-center h-full w-full cursor-pointer"
-                        onClick={() => handleWalletIncludeToggle(wallet.id)}
-                      >
+                                            // 🔄 FLIPPED BACK VIEW (Toggle)
+                                            <div 
+                                            className="flex flex-col items-center justify-center h-full w-full cursor-pointer"
+                                            onClick={() => handleWalletIncludeToggle(wallet.id, activePeriodIndex)}
+                                          >
+                    
                         <span className={`text-[11px] font-black uppercase tracking-widest mb-2 ${isIncluded ? 'text-[#2E7D32]' : 'text-[#C62828]'}`}>
                           {isIncluded ? 'Stash Included' : 'Stash Skipped'}
                         </span>
@@ -5968,16 +6151,16 @@ const totalSpend = grandTotal;
                           </div>
 
                           <div className="flex items-center gap-2">
-                             {/* Status Badges */}
-                             {isOverFunded ? (
-                                <span className="text-[9px] font-black text-blue-700 px-1.5 py-0.5 bg-blue-100 border-2 border-black rounded uppercase shadow-[1px_1px_0px_0px_rgba(0,0,0,1)]">
-                                  Over
-                                </span>
-                              ) : isExactlyFunded ? (
-                                <span className="text-[9px] font-black text-green-700 px-1.5 py-0.5 bg-green-100 border-2 border-black rounded uppercase shadow-[1px_1px_0px_0px_rgba(0,0,0,1)]">
-                                  Funded
-                                </span>
-                              ) : null}
+                             {/* Status Badges */}
+                             {isOverFunded ? (
+                                <span className="text-[9px] font-black text-blue-700 px-1.5 py-0.5 bg-blue-100 border-2 border-black rounded uppercase shadow-[1px_1px_0px_0px_rgba(0,0,0,1)]">
+                                  Over
+                                </span>
+                              ) : isTabFunded ? (
+                                <span className="text-[9px] font-black text-green-700 px-1.5 py-0.5 bg-green-100 border-2 border-black rounded uppercase shadow-[1px_1px_0px_0px_rgba(0,0,0,1)]">
+                                  Funded
+                                </span>
+                              ) : null}
 
                             <button onClick={() => setStashInfoModal({ wallet })} className="text-gray-400 hover:text-indigo-600 transition-colors bg-gray-50 dark:bg-gray-800 p-1.5 rounded-lg border-2 border-transparent hover:border-black shadow-none hover:shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]">
                               <Info className="w-4 h-4" />
@@ -8389,28 +8572,37 @@ const { data: creditTx, error: creditError } = await createTransaction({
                                                       {/* Edit & Delete Action Buttons */}
                   <div className="mt-8 pt-4 border-t-2 border-dashed border-gray-200 dark:border-gray-700 flex gap-3">
                      
-                     {/* 🟢 DELETE BUTTON */}
-                     <button
-                        onClick={async () => {
-                          if (window.confirm(`Are you sure you want to delete "${selectedTx.name}"? This cannot be undone.`)) {
-                            try {
-                              const { error } = await deleteTransactionAndRevertSchedule(selectedTx.id);
-                              if (error) throw error;
-                              
-                              // Force the app to refresh the data
-                              window.dispatchEvent(new Event('transactions_updated'));
-                              setSelectedTx(null);
-                            } catch (error) {
-                              console.error('Error deleting transaction:', error);
-                              alert('Failed to delete transaction.');
+                                          {/* 🟢 DELETE BUTTON (Custom ConfirmDialog) */}
+                                          <button
+                        type="button"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          setConfirmModal({
+                            show: true,
+                            title: 'Delete Transaction',
+                            message: `Are you sure you want to delete "${selectedTx.name}"? This cannot be undone.`,
+                            onConfirm: async () => {
+                              setConfirmModal(prev => ({ ...prev, show: false }));
+                              try {
+                                const { error } = await deleteTransactionAndRevertSchedule(selectedTx.id);
+                                if (error) throw error;
+                                
+                                // Force the app to refresh the data
+                                window.dispatchEvent(new Event('transactions_updated'));
+                                setSelectedTx(null);
+                              } catch (error) {
+                                console.error('Error deleting transaction:', error);
+                                alert('Failed to delete transaction.');
+                              }
                             }
-                          }
+                          });
                         }}
                         className="flex-1 flex items-center justify-center gap-2 py-3 bg-red-400 hover:bg-red-500 text-black font-black uppercase tracking-wider text-xs rounded-xl border-2 border-black shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[1px] hover:translate-y-[1px] transition-all"
                      >
                        <Trash2 className="w-3.5 h-3.5 stroke-[3]" />
                        Delete
                      </button>
+
 
                                           {/* 🟢 EDIT BUTTON */}
                                           <button
@@ -8495,7 +8687,8 @@ const { data: creditTx, error: creditError } = await createTransaction({
 
 // Separate component definition
 const ConfirmDialog: React.FC<{ show: boolean; title: string; message: string; onConfirm: () => void; onClose: () => void }> = ({ title, message, onConfirm, onClose }) => (
-  <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-in fade-in">
+  <Portal>
+  <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-in fade-in">
     <div className="bg-white dark:bg-gray-900 rounded-2xl border-4 border-black w-full max-w-xs p-6 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] flex flex-col items-center text-center transition-colors">
       <div className="w-12 h-12 bg-red-50 dark:bg-red-900/20 border-2 border-black text-red-600 rounded-xl flex items-center justify-center mb-4 shadow-[1.5px_1.5px_0px_0px_rgba(0,0,0,1)]"><AlertTriangle className="w-6 h-6" /></div>
       <h3 className="text-base font-black text-gray-900 dark:text-gray-100 mb-1 uppercase tracking-tight">{title}</h3>
@@ -8506,6 +8699,7 @@ const ConfirmDialog: React.FC<{ show: boolean; title: string; message: string; o
       </div>
     </div>
   </div>
+  </Portal>
 );
 
 export default Budget;

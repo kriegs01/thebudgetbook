@@ -286,8 +286,28 @@ const [isPixabayOpen, setIsPixabayOpen] = useState(false);
           <div className="text-center py-20 text-gray-400 font-bold animate-pulse">Loading wishlist...</div>
         ) : !activeAlbumId ? (
           
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 md:gap-6 animate-in zoom-in-95 duration-300">
-            {albums.map((album) => {
+          albums.length === 0 && uncategorizedItems.length === 0 ? (
+            // 🟢 NEW: Global Empty State for brand new users
+            <div className="flex flex-col items-center justify-center py-24 px-4 text-center border-4 border-dashed border-gray-300 dark:border-gray-700 rounded-[2rem] w-full animate-in zoom-in-95">
+              <div className="w-20 h-20 bg-gray-100 dark:bg-gray-800 rounded-full flex items-center justify-center mb-4 border-4 border-gray-200 dark:border-gray-700">
+                <HeartPlus className="w-10 h-10 text-gray-400 dark:text-gray-500" />
+              </div>
+              <h3 className="text-xl md:text-2xl font-black text-gray-900 dark:text-white uppercase tracking-widest">Nothing saved yet</h3>
+              <p className="text-sm font-medium text-gray-500 mt-2 mb-8 max-w-sm">Start building your wishlist by adding your first item or creating an album to organize your goals.</p>
+              
+              <div className="flex flex-col sm:flex-row gap-4">
+                <button onClick={() => {
+                  setFormData(prev => ({ ...prev, album_id: '' }));
+                  setShowItemModal(true);
+                }} className={`flex justify-center items-center gap-2 text-white px-6 py-3.5 rounded-xl font-black text-sm uppercase border-[3px] border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] transition-all hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none ${getAccentClasses('bg')}`}>
+                  <Plus className="w-5 h-5 stroke-[3]" /> Add First Item
+                </button>
+              </div>
+            </div>
+          ) : (
+            // Existing Album Grid begins here
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 md:gap-6 animate-in zoom-in-95 duration-300">
+              {albums.map((album) => {
               const albumItems = items.filter(i => i.album_id === album.id);
               
               const totalCost = albumItems.reduce((sum, item) => {
@@ -369,6 +389,7 @@ const [isPixabayOpen, setIsPixabayOpen] = useState(false);
               </div>
             )}
           </div>
+          )
         ) : (
 
           <div className="space-y-6 animate-in slide-in-from-right-8 duration-300">
@@ -779,12 +800,27 @@ const [isPixabayOpen, setIsPixabayOpen] = useState(false);
 <PixabayImagePicker 
         isOpen={isPixabayOpen} 
         onClose={() => setIsPixabayOpen(false)} 
-        onSelect={(url) => {
-          // 🟢 FIXED: Updates the Album Cover state
-          setAlbumFormData({ ...albumFormData, coverUrl: url, coverFile: null }); 
-          setIsPixabayOpen(false);
+        onSelect={async (url) => {
+          try {
+            // 1. Fetch the image directly from Pixabay
+            const response = await fetch(url);
+            const blob = await response.blob();
+            
+            // 2. Convert the Blob into a standard File object
+            const file = new File([blob], `pixabay-cover-${Date.now()}.jpg`, { type: blob.type });
+            
+            // 3. Save it as a coverFile so your existing form logic uploads it to Supabase
+            setAlbumFormData({ ...albumFormData, coverUrl: '', coverFile: file }); 
+          } catch (error) {
+            console.error("Failed to process Pixabay image:", error);
+            // Fallback to URL if the fetch fails
+            setAlbumFormData({ ...albumFormData, coverUrl: url, coverFile: null });
+          } finally {
+            setIsPixabayOpen(false);
+          }
         }} 
       />
+
 
 
 

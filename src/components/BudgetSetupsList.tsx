@@ -15,6 +15,9 @@ interface BudgetSetupsListProps {
   formatCurrency: (amount: number) => string;
   calculateBudgetRemaining: (setup: SavedBudgetSetup) => number;
   archiveSubmitting: boolean;
+  // 🟢 ADD THESE:
+  transactions?: any[];
+  accounts?: any[];
 }
 
 export const BudgetSetupsList: React.FC<BudgetSetupsListProps> = ({
@@ -26,8 +29,12 @@ export const BudgetSetupsList: React.FC<BudgetSetupsListProps> = ({
   onReopenSetup,
   onMoveToTrash,
   formatCurrency,
-  archiveSubmitting
+  archiveSubmitting,
+  // 🟢 DESTRUCTURE THEM HERE:
+  transactions = [],
+  accounts = []
 }) => {
+
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const [activeIndex, setActiveIndex] = useState(0);
   const [canScrollLeft, setCanScrollLeft] = useState(false);
@@ -141,23 +148,97 @@ export const BudgetSetupsList: React.FC<BudgetSetupsListProps> = ({
                       const hasUnifiedMath = !!(masterSetup.data && masterSetup.data._periodTotals);
                       const specificSetup = hasUnifiedMath ? masterSetup : (group.setups.find(s => s.timing === legacyTimingVal) || masterSetup);
                       
-                      const actualStr = specificSetup.data?._actualSalaryByPeriod?.[periodIndex] || masterSetup.data?._actualSalaryByPeriod?.[periodIndex] || (periodIndex === 1 ? specificSetup.data?._actualSalary : undefined);
-                      const projectedStr = specificSetup.data?._projectedSalaryByPeriod?.[periodIndex] || masterSetup.data?._projectedSalaryByPeriod?.[periodIndex] || (periodIndex === 1 ? specificSetup.data?._projectedSalary : undefined);
+                      // 🟢 1. STRICT TAB MAPPING: 1 for First Paycheck, 2 for Second Paycheck. No guessing!
+                      const tabNum = periodIndex; 
+
+                      const monthToUse = specificSetup?.month || group?.month || 'January';
+                      const yearToUse = specificSetup?.year || specificSetup?.data?._year || group?.year || new Date().getFullYear();
+                      const monthIdx = MONTHS.indexOf(monthToUse);
                       
-                      const actualValue = actualStr && actualStr.trim() !== '' ? parseFloat(actualStr) : null;
-                      const projectedValue = parseFloat(projectedStr || '0');
-                      const incomeToUse = actualValue !== null && !isNaN(actualValue) ? actualValue : projectedValue;
+                      const actualStr = specificSetup.data?._actualSalaryByPeriod?.[tabNum] ?? specificSetup.data?._actualSalary;
+                      const projectedStr = specificSetup.data?._projectedSalaryByPeriod?.[tabNum] ?? specificSetup.data?._projectedSalary;
+                      
+                      const actualValue = actualStr && String(actualStr).trim() !== '' ? parseFloat(String(actualStr)) : null;
+                      const incomeToUse = actualValue !== null && !isNaN(actualValue) ? actualValue : parseFloat(String(projectedStr || '0'));
 
+                      const hasLiveIncome = actualValue !== null && actualValue > 0;
                       let spent = 0;
-                      if (hasUnifiedMath) {
-                        spent = masterSetup.data._periodTotals[periodIndex] || 0;
-                      } else if (specificSetup.data && specificSetup.data._periodTotals && specificSetup.data._periodTotals[periodIndex] !== undefined) {
-                        spent = specificSetup.data._periodTotals[periodIndex];
-                      } else {
-                        spent = specificSetup.totalAmount || 0;
-                      }
 
-                      const remaining = incomeToUse - spent;
+                      if (hasLiveIncome) {
+                        // 🟢 2. IDENTIFY EXACT INCOMES (Strictly using notes or explicit tab index)
+                        const getIncomesForTab = (targetTabNum: number) => {
+                          const pName = ['First', 'Second', 'Third', 'Fourth', 'Fifth'][targetTabNum - 1] 
+                            ? `${['First', 'Second', 'Third', 'Fourth', 'Fifth'][targetTabNum - 1]} Paycheck` 
+                            : `Paycheck ${targetTabNum}`;
+                          const targetLabel = `Income - ${monthToUse} (${pName})`;
+                          const legacyLabel = targetTabNum === 1 ? '1/2' : '2/2';
+                          
+                          return (transactions || []).filter(tx => {
+                            if (tx.transaction_type !== 'income') return false;
+                            const txDate = new Date(tx.date);
+                            if (txDate.getMonth() !== monthIdx || txDate.getFullYear() !== yearToUse) return false;
+                            
+                            const isTaggedIncome = tx.notes?.startsWith('Income -') || tx.notes?.startsWith('Income Record');
+                            const nameLower = (tx.name || '').trim().toLowerCase();
+                            const isPrimaryIncome = isTaggedIncome || nameLower === 'salary' || nameLower === 'income';
+
+                            if (!isPrimaryIncome) return false;
+                            if (isTaggedIncome) return tx.notes === targetLabel || tx.notes?.includes(`- ${legacyLabel}`);
+                            
+                            // 🟢 THE FIX: Eliminated date math. If untagged, strictly use your getPeriodIndex logic!
+                            const txDay = txDate.getDate();
+                            const fallbackIndex = txDay <= 15 ? 1 : 2;
+                            return fallbackIndex === targetTabNum;
+                            
+                          }).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+                        };
+
+
+                      
+                                              const tabIncomes = getIncomesForTab(tabNum);
+                                              const nextIncomes = getIncomesForTab(tabNum + 1);
+                      
+                                              // 🟢 2. SET DYNAMIC BOUNDARIES
+                                              let startBoundary = new Date(yearToUse, monthIdx, tabNum === 1 ? 1 : 16);
+                                              startBoundary.setHours(0, 0, 0, 0);
+                                              if (tabIncomes.length > 0) {
+                                                startBoundary = new Date(tabIncomes[0].date);
+                                                startBoundary.setHours(0, 0, 0, 0);
+                                              }
+                      
+                                              let endBoundary = new Date(yearToUse, monthIdx + 1, 0);
+                                              endBoundary.setHours(23, 59, 59, 999);
+                                              if (nextIncomes.length > 0) {
+                                                endBoundary = new Date(nextIncomes[0].date);
+                                                endBoundary.setHours(0, 0, 0, 0);
+                                                endBoundary = new Date(endBoundary.getTime() - 1);
+                                              }
+                                              
+                                              // 🟢 3. CALCULATE LIVE SPENT (Mirrors dailyLedger identically)
+                                              spent = (transactions || []).filter(tx => {
+                                                const txDate = new Date(tx.date);
+                                                if (txDate < startBoundary || txDate > endBoundary) return false;
+                                                
+                                                const isIncome = tx.transaction_type === 'income' || tx.transaction_type === 'cash_in';
+                                                const isExpense = !isIncome && tx.amount > 0 && tx.notes !== 'VAULT_STASH';
+                                                if (!isExpense) return false;
+                                                
+                                                const linkedAccount = accounts?.find(a => a.id === tx.payment_method_id);
+                                                const isCreditPurchase = linkedAccount && (linkedAccount.type === 'Credit' || linkedAccount.classification === 'Credit Card');
+                                                
+                                                return !isCreditPurchase; // Excludes credit swipes, but INCLUDES budget outflows like credit payments!
+                                              }).reduce((sum, tx) => sum + Math.abs(parseFloat(tx.amount as any) || 0), 0);
+                                               
+                                            } else {
+                                              // ⚪ PATH C: Planning Mode (Using ?? ensures 0 doesn't steal Grand Total)
+                                              spent = specificSetup.data?._periodTotals?.[tabNum] ?? specificSetup.totalAmount ?? 0;
+                                            }
+                      
+                                            const remaining = incomeToUse - spent;
+                      
+
+
+
                       const percentSpent = incomeToUse > 0 ? Math.min(100, (spent / incomeToUse) * 100) : 100;
                       const isOverBudget = remaining < 0;
 
