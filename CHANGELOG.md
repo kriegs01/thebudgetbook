@@ -1,5 +1,14 @@
 # Changelog
 
+##[4.3.1] - 2026-11-04
+### What's New
+- Budget Summary Card Bar Data can now sync with the Live Tracking mode: once income is recorded, the Summary Card progress bar and numbers can now sync based on the live transaction data and remaining amounts. 
+
+### Bug Fixes
+- Wishlist Album Cover from Pixabay corrupting: Fixed the issue where album cover fetched from Pixabay API are not showing after some session. Implemented download-upload flow to keep image persistent between sessions.
+- Missing Lock Button in User action tray (Mobile): added the missing lock button in the user action tray for mobile view.
+- New Stash Carousel card state bleed through between paychecks tabs: fixed the issue where stash cards between paycheck tabs are showing the same despite supposed isolation between paycheck tabs.
+
 ##[4.3.0] - 2026-10-29
 ### What's New
 - Smart Dashboard Modes (Paycheck Summary): The budget dashboard now intelligently transitions between "Planning Mode" and "Tracking Mode." Projected income rows automatically hide once actual income is logged.

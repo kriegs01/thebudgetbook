@@ -2231,18 +2231,34 @@ className="fixed bottom-0 left-0 w-full h-20 pointer-events-none z-[90] bg-gradi
             </div>
 
             <div className="px-6 pt-2 pb-6 space-y-4">
-              {/* Profile Header */}
-              <div className="bg-white dark:bg-gray-900 border-[3px] border-black rounded-2xl p-4 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] flex items-center justify-between">
+                            {/* Profile Header */}
+                            <div className="bg-white dark:bg-gray-900 border-[3px] border-black rounded-2xl p-4 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] flex items-center justify-between">
                 <div className="min-w-0 pr-4">
                   <p className="text-lg font-black text-gray-900 dark:text-gray-100 uppercase tracking-tight truncate">
                     {userProfile ? `${userProfile.first_name} ${userProfile.last_name}` : 'User'}
                   </p>
                   <p className="text-[10px] font-bold text-gray-500 dark:text-gray-400 truncate">{user?.email}</p>
                 </div>
-                <button onClick={async () => { setShowRightTray(false); await signOut(); }} className="w-12 h-12 shrink-0 bg-red-100 dark:bg-red-900/30 border-2 border-black rounded-xl flex items-center justify-center text-red-600 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] active:scale-95 active:shadow-none transition-all">
-                  <LogOut className="w-5 h-5" />
-                </button>
+                
+                {/* 🟢 Action Buttons Container */}
+                <div className="flex items-center gap-2 shrink-0">
+                  {isPinEnabled() && (
+                    <button 
+                      onClick={() => { setShowRightTray(false); triggerStandbyLock(); }} 
+                      className="w-12 h-12 shrink-0 bg-amber-100 dark:bg-amber-900/30 border-2 border-black rounded-xl flex items-center justify-center text-amber-700 dark:text-amber-500 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] active:scale-95 active:shadow-none transition-all"
+                    >
+                      <Lock className="w-5 h-5" />
+                    </button>
+                  )}
+                  <button 
+                    onClick={async () => { setShowRightTray(false); await signOut(); }} 
+                    className="w-12 h-12 shrink-0 bg-red-100 dark:bg-red-900/30 border-2 border-black rounded-xl flex items-center justify-center text-red-600 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] active:scale-95 active:shadow-none transition-all"
+                  >
+                    <LogOut className="w-5 h-5" />
+                  </button>
+                </div>
               </div>
+
 
               {/* Social Navigation Grid */}
               <div className="grid grid-cols-3 gap-3">
