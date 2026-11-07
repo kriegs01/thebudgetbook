@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { 
   Menu, ChevronLeft, SlidersHorizontal, ArrowUp, ArrowDown, Eye, EyeOff, X, ChevronDown, 
   LogOut, Lock, Users, Bell, MessageCircle, AlertCircle, LayoutDashboard, PieChart, 
-  WalletCards, Plus, MoreHorizontal, Receipt, Wallet, FileText, CreditCard, Tag, ToolCase, ChartPie, ArrowLeftRight, HeartPlus 
+  WalletCards, Plus, MoreHorizontal, Receipt, Wallet, FileText, CreditCard, Tag, ToolCase, ChartPie, ArrowLeftRight, HeartPlus, Compass, 
 } from 'lucide-react';
 
 import { BrowserRouter, Routes, Route, NavLink, useLocation, useNavigate, Navigate, Outlet } from 'react-router-dom';
@@ -24,6 +24,7 @@ import { acceptFriendRequest, removeFriendship } from './src/services/friendship
 import { getAllPeople, createPerson } from './src/services/peopleService';
 import type { Biller, Account, Installment, Transaction, BudgetCategory, SavingsJar } from './types';
 import type { SupabaseTransaction } from './src/types/supabase';
+
 
 // Context
 import { TestEnvironmentProvider, useTestEnvironment } from './src/contexts/TestEnvironmentContext';
@@ -57,6 +58,7 @@ import { SetupWizard } from './src/components/SetupWizard';
 import { Logo } from './src/components/Logo';
 import useMediaQuery from './src/hooks/useMediaQuery';
 import { MessagesInbox } from './src/components/MessagesInbox';
+import SideQuests from './pages/SideQuests';
 
 import MigrationModal from './src/components/MigrationModal';
 
@@ -66,6 +68,7 @@ import { bulkSyncCreditStatements } from './src/services/statementsService';
 
 import Wishlist from './pages/Wishlist';
 
+import SideQuestView from './pages/SideQuestView';
 
 // Helper function to convert UI Account to Supabase format
 const accountToSupabase = (account: Account) => ({
@@ -236,6 +239,14 @@ const MainApp: React.FC = () => {
   const [isScrolled, setIsScrolled] = useState(false);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const isMobile = useMediaQuery('(max-width: 767px)');
+  const [isSideQuestWorkspaceOpen, setIsSideQuestWorkspaceOpen] = useState(false);
+
+  useEffect(() => {
+    const handleWorkspaceState = (e: any) => setIsSideQuestWorkspaceOpen(e.detail.isOpen);
+    window.addEventListener('sidequest_workspace_state', handleWorkspaceState);
+    return () => window.removeEventListener('sidequest_workspace_state', handleWorkspaceState);
+  }, []);
+
   const [isSidebarOpen, setIsSidebarOpen] = useState(!isMobile);
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
@@ -2091,6 +2102,9 @@ useEffect(() => {
               <Route path="*" element={<Navigate to="/" replace />} />
 
               <Route path="/wishlist" element={<Wishlist />} />
+              <Route path="/sidequests" element={<SideQuests />} />
+              <Route path="/sidequests/:id" element={<SideQuestView />} />
+
 
 
 
@@ -2295,8 +2309,15 @@ className="fixed bottom-0 left-0 w-full h-20 pointer-events-none z-[90] bg-gradi
 
                     {/* 1. Floating Nav Bar */}
           <div id="global-nav-bar" className="fixed bottom-6 md:bottom-10 left-0 w-full px-4 z-[100] flex items-center justify-center gap-3 md:gap-5 pointer-events-none">
-                      {/* BACK BUBBLE */}
-                      {(['/accounts/view', '/accounts/statement', '/wallets/view'].includes(location.pathname) || (location.pathname === '/budget' && (location.search || '').includes('view=setup'))) && (
+                                                  {/* BACK BUBBLE */}
+          {(
+            ['/accounts/view', '/accounts/statement', '/wallets/view'].includes(location.pathname) || 
+            (location.pathname.startsWith('/sidequests/') && !isSideQuestWorkspaceOpen) || 
+            (location.pathname === '/budget' && (location.search || '').includes('view=setup'))
+          ) && (
+
+
+
               <button
                 type="button"
                 onClick={() => {
@@ -2314,10 +2335,16 @@ className="fixed bottom-0 left-0 w-full h-20 pointer-events-none z-[90] bg-gradi
               </button>
             )}
 
-            {/* MAIN NAVIGATION BAR */}
+                                                {/* MAIN NAVIGATION BAR */}
             <nav className={`pointer-events-auto flex items-center bg-white dark:bg-gray-900 border-[3px] md:border-[4px] border-black rounded-full px-4 py-2.5 md:px-6 md:py-3.5 shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] md:shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] transition-all duration-300 ${
-              ['/accounts', '/transactions', '/billers', '/installments', '/wallets', '/wishlist'].includes(location.pathname) || (location.pathname === '/budget' && !(location.search || '').includes('view=setup')) ? 'animate-mitosis' : 'gap-2 md:gap-4'
+              ['/accounts', '/transactions', '/billers', '/installments', '/wallets', '/wishlist', '/sidequests'].includes(location.pathname) || 
+              (location.pathname.startsWith('/sidequests/') && isSideQuestWorkspaceOpen) || 
+              (location.pathname === '/budget' && !(location.search || '').includes('view=setup')) 
+                ? 'animate-mitosis' 
+                : 'gap-2 md:gap-4'
             }`}>
+
+
               
               <div className="flex items-center gap-1 md:gap-2">
                 <NavLink to="/" className={({ isActive }) => `p-2.5 md:p-3 rounded-2xl transition-all ${isActive ? getAccentClasses('bg') + ' text-white -rotate-3 border-2 md:border-[3px] border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]' : 'text-gray-500 hover:bg-amber-500/10 dark:hover:bg-amber-500/20'}`}>
@@ -2327,13 +2354,22 @@ className="fixed bottom-0 left-0 w-full h-20 pointer-events-none z-[90] bg-gradi
                   <FileText className="w-5 h-5 md:w-6 md:h-6" />
                 </NavLink>
               </div>
-
+              
               {/* FLOATING ACTION BUTTON (+) */}
-              {(['/accounts', '/transactions', '/billers', '/installments', '/wallets', '/wishlist'].includes(location.pathname) || (location.pathname === '/budget' && !(location.search || '').includes('view=setup'))) && (
+              {(
+                ['/accounts', '/transactions', '/billers', '/installments', '/wallets', '/wishlist', '/sidequests'].includes(location.pathname) || 
+                (location.pathname.startsWith('/sidequests/') && isSideQuestWorkspaceOpen) || 
+                (location.pathname === '/budget' && !(location.search || '').includes('view=setup'))
+              ) && (
                 <div id="global-mobile-fab" className="animate-in zoom-in-50 duration-300 px-1 md:px-3 -my-4 md:-my-6 relative z-10">
                   <button
                     type="button"
                     onClick={() => {
+                      if (location.pathname.startsWith('/sidequests/')) {
+                        window.dispatchEvent(new CustomEvent('open_sidequest_action'));
+                        return;
+                      }
+                      
                       const eventMap: Record<string, string> = {
                         '/accounts': 'open_add_account_modal',
                         '/transactions': 'open_add_transaction_modal',
@@ -2341,7 +2377,8 @@ className="fixed bottom-0 left-0 w-full h-20 pointer-events-none z-[90] bg-gradi
                         '/billers': 'open_add_biller_modal',
                         '/installments': 'open_add_installment_modal',
                         '/wallets': 'open_add_wallet_modal',
-                        '/wishlist': 'open_add_wishlist_modal' // 🟢 Added this line
+                        '/wishlist': 'open_add_wishlist_modal',
+                        '/sidequests': 'open_add_sidequest_modal'
                       };
 
                       const eventName = eventMap[location.pathname];
@@ -2355,6 +2392,8 @@ className="fixed bottom-0 left-0 w-full h-20 pointer-events-none z-[90] bg-gradi
                   </button>
                 </div>
               )}
+
+
 
               <div className="flex items-center gap-1 md:gap-2">
                 <NavLink to="/budget" className={({ isActive }) => `p-2.5 md:p-3 rounded-2xl transition-all ${isActive ? getAccentClasses('bg') + ' text-white -rotate-3 border-2 md:border-[3px] border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]' : 'text-gray-500 hover:bg-amber-500/10 dark:hover:bg-amber-500/20'}`}>
@@ -2412,7 +2451,8 @@ className="fixed bottom-0 left-0 w-full h-20 pointer-events-none z-[90] bg-gradi
                   { path: '/installments', label: 'Installments', icon: <CreditCard className="w-6 h-6" /> },
                   { path: '/wallets', label: 'Wallets', icon: <Wallet className="w-6 h-6" /> },
                   { path: '/wishlist', label: 'Wishlist', icon: <HeartPlus className="w-6 h-6" /> }, // 🟢 Added this line
-                  { path: '/settings', label: 'Settings', icon: <SlidersHorizontal className="w-6 h-6" /> },
+                  { path: '/sidequests', label: 'SideQuests', icon: <Compass className="w-6 h-6" />},
+                  { path: '/settings', label: 'Settings', icon: <SlidersHorizontal className="w-6 h-6" /> }
                 ].map((item) => (
 
                   <NavLink
