@@ -1,5 +1,9 @@
 # Changelog
 
+##[v4.4.2] - 2026-11-24
+### What's New
+- SIDEQUESTS feature! Planning for a trip or a nice house project? We got you, bud! Plan away with SideQuests page. Simply add your project or trip, add your Goals and watch your budget materialize! You can also use the benchmark feature to compare options. Just add your criteria through the predefined types like date, time, text, numbers, or drop-down. 
+
 ##[4.3.1] - 2026-11-04
 ### What's New
 - Budget Summary Card Bar Data can now sync with the Live Tracking mode: once income is recorded, the Summary Card progress bar and numbers can now sync based on the live transaction data and remaining amounts. 
