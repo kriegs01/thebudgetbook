@@ -3,9 +3,10 @@ import { Compass, Plus, MapPin, Target, X, Loader2, ArrowRight, Pencil, Trash2, 
 import { useNavigate } from 'react-router-dom';
 import { PageHeader } from '../src/components/PageHeader';
 import { useTheme } from '../src/contexts/ThemeContext';
-import { getSideQuests, createSideQuest, updateSideQuest, deleteSideQuest } from '../src/services/sideQuestsService';
+import { getSideQuests, createSideQuest, updateSideQuest, deleteSideQuest, uploadSideQuestCover } from '../src/services/sideQuestsService';
 import { PixabayImagePicker } from '../src/components/PixabayImagePicker'; // Adjust this import path if yours differs!
 import type { SideQuest } from '../types';
+
 
 export default function SideQuests() {
   const { getAccentClasses } = useTheme();
@@ -22,11 +23,15 @@ export default function SideQuests() {
   const [showPixabayModal, setShowPixabayModal] = useState(false);
   const [editQuestId, setEditQuestId] = useState<string | null>(null);
   
+  const [isUploadingImage, setIsUploadingImage] = useState(false);
+
+
   // Form States
   const [questName, setQuestName] = useState('');
   const [questTargetAmount, setQuestTargetAmount] = useState('');
   const [questDate, setQuestDate] = useState('');
   const [coverPhotoUrl, setCoverPhotoUrl] = useState('');
+  const [coverFile, setCoverFile] = useState<File | null>(null);
 
   const formatCurrency = (val: number) => new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP' }).format(val);
   const formatDate = (dateStr: string) => new Date(dateStr).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
@@ -76,25 +81,55 @@ export default function SideQuests() {
       setQuestTargetAmount(quest.targetAmount.toString());
       setQuestDate(quest.targetDate);
       setCoverPhotoUrl(quest.coverPhotoUrl || '');
+      setCoverFile(null);
     } else {
       setEditQuestId(null);
       setQuestName('');
       setQuestTargetAmount('');
       setQuestDate('');
       setCoverPhotoUrl('');
+      setCoverFile(null);
     }
   };
 
-    // 🟢 NEW: Stable callback to prevent the Pixabay component from infinitely re-rendering
-    const handleSelectCoverPhoto = React.useCallback((url: string) => {
-      setCoverPhotoUrl(url);
-      setShowPixabayModal(false);
+            // 🟢 NEW: The Wishlist Blob Conversion Trick
+    const handleSelectCoverPhoto = React.useCallback(async (url: string) => {
+      try {
+        // Fetch the image from Pixabay and convert to a File object
+        const response = await fetch(url);
+        const blob = await response.blob();
+        const file = new File([blob], `pixabay-cover-${Date.now()}.jpg`, { type: blob.type });
+        
+        setCoverFile(file);
+        setCoverPhotoUrl(''); // Clear the text URL since we have a file now
+      } catch (error) {
+        console.error("Failed to process Pixabay image:", error);
+        setCoverPhotoUrl(url); // Fallback to raw URL if blob fails
+        setCoverFile(null);
+      } finally {
+        setShowPixabayModal(false);
+      }
     }, []);
+
+
   
 
-  const handleSaveQuest = async (e: React.FormEvent) => {
+    const handleSaveQuest = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!questName || !questTargetAmount || !questDate) return;
+
+        // 🟢 UPLOAD THE FILE FIRST (If one exists)
+    let finalCoverUrl = coverPhotoUrl;
+    if (coverFile) {
+      const { url, error } = await uploadSideQuestCover(coverFile);
+      if (error || !url) {
+        console.error("Supabase Upload Error:", error);
+        alert(`Upload Failed: ${error?.message || 'Check the console for details'}`);
+        return; 
+      }
+      finalCoverUrl = url;
+    }
+
 
     if (showModal === 'add') {
       const { data, error } = await createSideQuest({
@@ -102,7 +137,7 @@ export default function SideQuests() {
         type: 'Travel', 
         targetDate: questDate,
         targetAmount: parseFloat(questTargetAmount),
-        coverPhotoUrl,
+        coverPhotoUrl: finalCoverUrl, // 🟢 Saves the permanent link
         isCompleted: false,
         isArchived: false,
       });
@@ -115,7 +150,7 @@ export default function SideQuests() {
         name: questName,
         targetDate: questDate,
         targetAmount: parseFloat(questTargetAmount),
-        coverPhotoUrl,
+        coverPhotoUrl: finalCoverUrl, // 🟢 Saves the permanent link
       });
       if (!error && data) {
         setQuests(prev => prev.map(q => q.id === editQuestId ? { ...q, ...data } : q));
@@ -123,6 +158,7 @@ export default function SideQuests() {
     }
     setShowModal(null);
   };
+
 
   const handleDeleteQuest = async (id: string) => {
     if (!window.confirm("Are you sure you want to delete this SideQuest?")) return;
@@ -171,9 +207,14 @@ export default function SideQuests() {
               onScroll={handleScroll}
               className="flex overflow-x-auto snap-x snap-mandatory gap-4 pb-4 hide-scrollbar [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
             >
-              {quests.map((quest) => {
-                const stashFunded = quest.targetAmount * 0.15; 
-                const progressPercent = quest.targetAmount > 0 ? (stashFunded / quest.targetAmount) * 100 : 0;
+              {quests.map((quest) => {
+                // 🟢 Dynamically calculate the real locked-in stash!
+                // (Using fallbacks like isPaid/estimatedAmount just in case the old mapper is still active)
+                const stashFunded = (quest.expenses || [])
+                  .filter((e: any) => e.isCompleted || e.isPaid)
+                  .reduce((sum, e: any) => sum + (e.amount || e.actualAmount || e.estimatedAmount || 0), 0);
+                  
+                const progressPercent = quest.targetAmount > 0 ? (stashFunded / quest.targetAmount) * 100 : 0;
 
                 return (
                   <div key={quest.id} className="shrink-0 w-full md:w-[600px] snap-center snap-always pt-6 pr-4 md:pt-10 md:pr-8">
@@ -301,13 +342,15 @@ export default function SideQuests() {
                 <input required type="text" placeholder="e.g. Out of town trip" value={questName} onChange={e => setQuestName(e.target.value)} className="w-full bg-gray-50 dark:bg-gray-800 border-2 border-black rounded-xl p-3 font-bold text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500" />
               </div>
               <div className="grid grid-cols-2 gap-4">
-                <div>
+                  <div>
                    <label className="block text-[10px] font-black text-gray-500 uppercase tracking-widest mb-1">Target Date</label>
-                   <input required type="date" value={questDate} onChange={e => setQuestDate(e.target.value)} className="w-full bg-gray-50 dark:bg-gray-800 border-2 border-black rounded-xl p-3 font-bold text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                   <input required type="date" value={questDate} onChange={e => setQuestDate(e.target.value)} 
+                     className="relative appearance-none w-full h-[48px] py-0 px-3 bg-gray-50 dark:bg-gray-800 border-2 border-black rounded-xl font-bold text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500" />
                 </div>
+
                 <div>
                    <label className="block text-[10px] font-black text-gray-500 uppercase tracking-widest mb-1">Goal Amount (₱)</label>
-                   <input required type="number" step="0.01" placeholder="20000" value={questTargetAmount} onChange={e => setQuestTargetAmount(e.target.value)} className="w-full bg-gray-50 dark:bg-gray-800 border-2 border-black rounded-xl p-3 font-bold text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                   <input required type="number" step="0.01" placeholder="20000" value={questTargetAmount} onChange={e => setQuestTargetAmount(e.target.value)} className="relative appearance-none w-full bg-gray-50 dark:bg-gray-800 border-2 border-black rounded-xl p-3 font-bold text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500" />
                 </div>
               </div>
               
@@ -323,24 +366,34 @@ export default function SideQuests() {
                     onChange={e => setCoverPhotoUrl(e.target.value)} 
                     className="flex-1 min-w-0 bg-gray-50 dark:bg-gray-800 border-2 border-black rounded-xl p-3 text-sm font-bold text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500" 
                   />
-                  <button 
+                                    <button 
                     type="button" 
+                    disabled={isUploadingImage}
                     onClick={() => setShowPixabayModal(true)} 
-                    className="shrink-0 flex items-center justify-center gap-2 px-4 bg-indigo-200 text-indigo-900 border-[3px] border-black rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-indigo-300 transition-colors shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] active:translate-x-[2px] active:translate-y-[2px] active:shadow-none"
+                    className="shrink-0 flex items-center justify-center gap-2 px-4 bg-indigo-200 text-indigo-900 border-[3px] border-black rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-indigo-300 transition-colors shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] active:translate-x-[2px] active:translate-y-[2px] active:shadow-none disabled:opacity-50"
                   >
-                    <ImageIcon className="w-4 h-4" />
-                    <span>Search</span>
+                    {isUploadingImage ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <ImageIcon className="w-4 h-4" />
+                    )}
+                    <span>{isUploadingImage ? 'Processing...' : 'Search'}</span>
                   </button>
+
                 </div>
               </div>
 
-              {/* Cover Preview */}
-              {coverPhotoUrl && (
+                            {/* Cover Preview */}
+              {(coverPhotoUrl || coverFile) && (
                 <div className="mt-2 w-full h-32 rounded-xl border-[3px] border-black overflow-hidden shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] relative">
-                  <img src={coverPhotoUrl} alt="Cover preview" className="w-full h-full object-cover" />
+                  <img 
+                    src={coverFile ? URL.createObjectURL(coverFile) : coverPhotoUrl} 
+                    alt="Cover preview" 
+                    className="w-full h-full object-cover" 
+                  />
                   <button 
                     type="button"
-                    onClick={() => setCoverPhotoUrl('')}
+                    onClick={() => { setCoverPhotoUrl(''); setCoverFile(null); }}
                     className="absolute top-2 right-2 p-1.5 bg-red-400 text-black border-2 border-black rounded-lg shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:bg-red-500 transition-colors"
                   >
                     <Trash2 className="w-4 h-4" />
@@ -349,11 +402,17 @@ export default function SideQuests() {
               )}
 
 
+
               <div className="pt-4 flex gap-3">
                 <button type="button" onClick={() => setShowModal(null)} className="flex-1 py-3 bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors">Cancel</button>
-                <button type="submit" className={`flex-1 py-3 text-white rounded-xl font-black text-[10px] uppercase tracking-widest border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] active:scale-95 active:shadow-none transition-all ${getAccentClasses('bg')}`}>
+                                <button 
+                  type="submit" 
+                  disabled={isUploadingImage}
+                  className={`flex-1 py-3 text-white rounded-xl font-black text-[10px] uppercase tracking-widest border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] active:scale-95 active:shadow-none transition-all disabled:opacity-50 ${getAccentClasses('bg')}`}
+                >
                   {showModal === 'add' ? 'Create Quest' : 'Save Changes'}
                 </button>
+
               </div>
             </form>
           </div>

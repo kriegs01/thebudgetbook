@@ -159,6 +159,8 @@ export interface Transaction {
   conversion_status?: 'none' | 'pending' | 'approved' | 'rejected';
   order_status?: 'pending_delivery' | 'completed' | 'return_pending' | 'returned';
   completed_date?: string | null;
+  side_quest_id?: string | null;
+  side_quest_objective?: string | null;
 }
 
 
@@ -231,6 +233,7 @@ export interface SideQuest {
   budeeIds?: string[];
   expenses: SideQuestExpense[];
   coverPhotoUrl?: string;
+  status?: 'planning' | 'active' | 'completed';
 }
 
 // 1. Add the new Objective interface

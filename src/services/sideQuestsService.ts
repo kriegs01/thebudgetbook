@@ -5,12 +5,18 @@ import type { SideQuest, SideQuestExpense } from '../../types';
 const mapExpenseToUI = (dbExpense: any): SideQuestExpense => ({
   id: dbExpense.id,
   questId: dbExpense.quest_id,
+  objectiveId: dbExpense.objective_id,
   name: dbExpense.name,
-  estimatedAmount: dbExpense.estimated_amount,
-  actualAmount: dbExpense.actual_amount,
-  isPaid: dbExpense.is_paid,
-  frontedByBudeeId: dbExpense.fronted_by_budee_id,
+  
+  // 🟢 Use the new column names, but keep the old ones as fallbacks just in case
+  amount: dbExpense.amount || dbExpense.actual_amount || dbExpense.estimated_amount || 0,
+  isCompleted: dbExpense.is_completed || dbExpense.is_paid || false,
+  
+  benchmarkUrl: dbExpense.benchmark_url,
+  subset_group: dbExpense.subset_group,
+  criteria_values: dbExpense.criteria_values || {}
 });
+
 
 // Map Supabase Quest -> UI Quest
 const mapQuestToUI = (dbQuest: any): SideQuest => ({
@@ -146,14 +152,17 @@ export const getSideQuestExpenses = async (questId: string) => {
   if (error) return { data: [], error };
   
   const formatted = data.map(item => ({
-    id: item.id,
-    questId: item.quest_id,
-    objectiveId: item.objective_id, // 🟢 NEW: Links to the parent Objective
-    name: item.name,
-    amount: item.amount,
-    isCompleted: item.is_completed,
-    benchmarkUrl: item.benchmark_url // 🟢 NEW: Optional link for planning
-  }));
+  id: item.id,
+  questId: item.quest_id,
+  objectiveId: item.objective_id,
+  name: item.name,
+  amount: item.amount,
+  isCompleted: item.is_completed,
+  benchmarkUrl: item.benchmark_url,
+  subset_group: item.subset_group, // 🟢 ADD THIS LINE
+  criteria_values: item.criteria_values || {} // 🟢 ADD THIS LINE
+}));
+
   
   return { data: formatted, error: null };
 };
@@ -174,6 +183,7 @@ export const getSideQuestObjectives = async (questId: string) => {
     questId: obj.quest_id,
     name: obj.name,
     targetAmount: obj.target_amount,
+    criteria_schema: obj.criteria_schema || [],
     expenses: [] // We'll attach the expenses to this in the UI!
   }));
 
@@ -188,7 +198,8 @@ export const createSideQuestObjective = async (objective: { questId: string, nam
       .insert({
         quest_id: objective.questId,
         name: objective.name,
-        target_amount: objective.targetAmount || 0
+        target_amount: objective.targetAmount || 0,
+        criteria_schema: objective.criteria_schema || []
       })
       .select()
       .single();
@@ -198,24 +209,25 @@ export const createSideQuestObjective = async (objective: { questId: string, nam
       return { data: null, error };
     }
     
-    return { 
+        return { 
       data: {
         id: data.id,
         questId: data.quest_id,
         name: data.name,
         targetAmount: data.target_amount,
+        criteria_schema: data.criteria_schema || [], // 🟢 THIS IS THE MISSING PIECE
         expenses: []
       }, 
       error: null 
     };
+
   } catch (err) {
     console.error("Service Catch Error:", err);
     return { data: null, error: { message: "Service execution failed" } };
   }
 };
 
-// CREATE EXPENSE (CHECKLIST ITEM)
-export const createSideQuestExpense = async (expense: { questId: string, objectiveId: string, name: string, amount: number, benchmarkUrl?: string }) => {
+export const createSideQuestExpense = async (expense: { questId: string, objectiveId: string, name: string, amount: number, benchmarkUrl?: string, subset_group?: string | null, criteria_values?: any }) => {
   const { data, error } = await supabase
     .from('side_quest_expenses')
     .insert({
@@ -223,8 +235,10 @@ export const createSideQuestExpense = async (expense: { questId: string, objecti
       objective_id: expense.objectiveId,
       name: expense.name,
       amount: expense.amount,
-      is_completed: false, // Always false by default
-      benchmark_url: expense.benchmarkUrl || null
+      is_completed: false,
+      benchmark_url: expense.benchmarkUrl || null,
+      subset_group: expense.subset_group || null,
+      criteria_values: expense.criteria_values || {}
     })
     .select()
     .single();
@@ -239,18 +253,23 @@ export const createSideQuestExpense = async (expense: { questId: string, objecti
       name: data.name,
       amount: data.amount,
       isCompleted: data.is_completed,
-      benchmarkUrl: data.benchmark_url
+      benchmarkUrl: data.benchmark_url,
+      subset_group: data.subset_group,
+      criteria_values: data.criteria_values // 🟢 MUST BE RETURNED HERE
     },
     error: null
   };
 };
 
+
+
 // --- OBJECTIVE ACTIONS ---
 
-export const updateSideQuestObjective = async (id: string, updates: { name?: string, targetAmount?: number }) => {
+export const updateSideQuestObjective = async (id: string, updates: { name?: string, targetAmount?: number, criteria_schema?: any[] }) => {
   const payload: any = {};
   if (updates.name !== undefined) payload.name = updates.name;
   if (updates.targetAmount !== undefined) payload.target_amount = updates.targetAmount;
+  if (updates.criteria_schema !== undefined) payload.criteria_schema = updates.criteria_schema; // 🟢 Pass schema to DB
 
   const { data, error } = await supabase
     .from('side_quest_objectives')
@@ -259,7 +278,20 @@ export const updateSideQuestObjective = async (id: string, updates: { name?: str
     .select()
     .single();
     
-  return { data, error };
+  if (error || !data) return { data: null, error };
+
+  // 🟢 Format the return object exactly how the UI expects it
+  return { 
+    data: {
+      id: data.id,
+      questId: data.quest_id,
+      name: data.name,
+      targetAmount: data.target_amount,
+      criteria_schema: data.criteria_schema || [], 
+      expenses: []
+    }, 
+    error: null 
+  };
 };
 
 export const deleteSideQuestObjective = async (id: string) => {
@@ -270,12 +302,16 @@ export const deleteSideQuestObjective = async (id: string) => {
 
 // --- EXPENSE ACTIONS ---
 
-export const updateSideQuestExpense = async (id: string, updates: { name?: string, amount?: number, benchmarkUrl?: string, isCompleted?: boolean }) => {
+export const updateSideQuestExpense = async (id: string, updates: { name?: string, amount?: number, benchmarkUrl?: string, isCompleted?: boolean, subset_group?: string | null, criteria_values?: any }) => {
   const payload: any = {};
   if (updates.name !== undefined) payload.name = updates.name;
   if (updates.amount !== undefined) payload.amount = updates.amount;
   if (updates.benchmarkUrl !== undefined) payload.benchmark_url = updates.benchmarkUrl;
   if (updates.isCompleted !== undefined) payload.is_completed = updates.isCompleted;
+  
+  // 🟢 ADD THESE TWO LINES SO IT SAVES:
+  if (updates.subset_group !== undefined) payload.subset_group = updates.subset_group;
+  if (updates.criteria_values !== undefined) payload.criteria_values = updates.criteria_values;
 
   const { data, error } = await supabase
     .from('side_quest_expenses')
@@ -284,12 +320,47 @@ export const updateSideQuestExpense = async (id: string, updates: { name?: strin
     .select()
     .single();
     
-  return { data, error };
+  // 🟢 ALSO RETURN THE UPDATED VALUES TO THE UI
+  if (error) return { data: null, error };
+  return { 
+    data: {
+      id: data.id,
+      questId: data.quest_id,
+      objectiveId: data.objective_id,
+      name: data.name,
+      amount: data.amount,
+      isCompleted: data.is_completed,
+      benchmarkUrl: data.benchmark_url,
+      subset_group: data.subset_group,
+      criteria_values: data.criteria_values
+    }, 
+    error: null 
+  };
 };
+
 
 export const deleteSideQuestExpense = async (id: string) => {
   const { error } = await supabase.from('side_quest_expenses').delete().eq('id', id);
   return { error };
 };
 
+// 🟢 NEW: Uploads a cover photo file to Supabase Storage
+export const uploadSideQuestCover = async (file: File) => {
+  try {
+    const fileExt = file.name.split('.').pop();
+    const fileName = `${Date.now()}.${fileExt}`;
+    
+    // Note: Make sure a 'sidequests' bucket exists in your Supabase Storage!
+    const { error: uploadError } = await supabase.storage
+      .from('sidequests') 
+      .upload(fileName, file);
+
+    if (uploadError) return { url: null, error: uploadError };
+
+    const { data } = supabase.storage.from('sidequests').getPublicUrl(fileName);
+    return { url: data.publicUrl, error: null };
+  } catch (error) {
+    return { url: null, error };
+  }
+};
 
