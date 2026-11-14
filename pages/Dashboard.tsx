@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Account, BudgetItem, Installment, Transaction, SavedBudgetSetup } from '../types';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, PieChart, Pie, Legend, LabelList } from 'recharts';
-import { TrendingUp, TrendingDown, Landmark, ArrowUpRight, CreditCard, Wallet, Calendar, Trophy, Medal, CalendarClock, AlertCircle, HeartPlus, Users, ChevronRight, Settings, X, ChevronDown, Plus, Sparkles, Tag} from 'lucide-react';
+import { TrendingUp, TrendingDown, Landmark, ArrowUpRight, Compass, CreditCard, Wallet, Calendar, Trophy, Medal, CalendarClock, AlertCircle, HeartPlus, Users, ChevronRight, Settings, X, ChevronDown, Plus, Sparkles, Tag} from 'lucide-react';
 import type { SupabaseUserProfile } from '../src/types/supabase';
 import { useTheme } from '../src/contexts/ThemeContext';
 import { DashboardHeader } from '../DashboardHeader';
@@ -653,7 +653,8 @@ useEffect(() => {
           { icon: Sparkles, label: 'Forecast', color: 'bg-white', route: '/budget' },
           { icon: Tag, label: 'Grocery Trip', color: 'bg-white', route: '/scanner' },
           { icon: HeartPlus, label: 'Save Items', color: 'bg-white', route: '/wishlist' },
-          //{ icon: Users, label: 'My Budees', color: 'bg-white', route: '/people' },
+          //{ icon: Users, label: 'My Budees', color: 'bg-white', route: '/people' }
+          { icon: Compass, label: 'Plan Trip', color: 'bg-white', route: '/sidequests'}
 
         ].map((action, idx) => (
           <button 

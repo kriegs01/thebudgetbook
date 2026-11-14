@@ -6,7 +6,7 @@
 
 A modern, feature-rich budgeting application built with React, TypeScript, and Supabase.
 
-View your app in AI Studio: https://ai.studio/apps/drive/1ycYQEQFQoXZUCpk8DStQVrpnPutXVJFd
+View your app in AI Studio: https://ai.studio/apps/drive/1ycYQEQFQoXZUCpk8DStQVrpnPutXVJFv
 
 ## 🚀 Quick Start
 

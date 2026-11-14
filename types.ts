@@ -159,6 +159,8 @@ export interface Transaction {
   conversion_status?: 'none' | 'pending' | 'approved' | 'rejected';
   order_status?: 'pending_delivery' | 'completed' | 'return_pending' | 'returned';
   completed_date?: string | null;
+  side_quest_id?: string | null;
+  side_quest_objective?: string | null;
 }
 
 
@@ -218,3 +220,41 @@ export enum Page {
   SETTINGS = 'SETTINGS',
   TRASH = 'TRASH',
 }
+
+export interface SideQuest {
+  id: string;
+  name: string;
+  type: 'Travel' | 'Renovation' | 'Event' | 'Other';
+  targetDate: string; 
+  targetAmount: number; 
+  linkedWalletId?: string; 
+  isCompleted: boolean;
+  isArchived: boolean;
+  budeeIds?: string[];
+  expenses: SideQuestExpense[];
+  coverPhotoUrl?: string;
+  status?: 'planning' | 'active' | 'completed';
+}
+
+// 1. Add the new Objective interface
+export interface SideQuestObjective {
+  id: string;
+  questId: string;
+  name: string;
+  targetAmount: number;
+  expenses?: SideQuestExpense[]; // Holds its specific checklist items
+}
+
+// 2. Update the Expense interface
+export interface SideQuestExpense {
+  id: string;
+  questId: string;
+  objectiveId: string; // 🟢 NEW: Links this item to a specific Objective bucket
+  name: string;
+  amount: number;
+  isCompleted: boolean;
+  benchmarkUrl?: string; // 🟢 OPTIONAL BONUS: For saving Agoda/Skyscanner links!
+subsetGroup?: string;
+}
+
+
