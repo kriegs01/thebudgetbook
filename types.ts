@@ -153,7 +153,8 @@ export interface Transaction {
   expected_account_id?: string | null;
   iou_status?: 'none' | 'pending' | 'settled';
   split_details?: Record<string, number> | null;
-  statement_ref?: string | null; 
+  statement_ref?: string | null;
+  statement_id?: string | null; 
   // 🟢 NEW: BNPL & Decoupled Order Tags
   conversion_group_id?: string | null;
   conversion_status?: 'none' | 'pending' | 'approved' | 'rejected';
@@ -161,6 +162,7 @@ export interface Transaction {
   completed_date?: string | null;
   side_quest_id?: string | null;
   side_quest_objective?: string | null;
+
 }
 
 
@@ -169,12 +171,18 @@ export interface Transaction {
 export interface CategorizedSetupItem {
   id: string;
   name: string;
-  amount?: string; // Legacy fallback for the lazy merge
-  amountsByPeriod?: Record<number, string>; // NEW: Maps tab index to amount (e.g., { 1: "2500", 2: "2500" })
+  amount?: string; 
+  amountsByPeriod?: Record<number, string>; 
   included: boolean;
   isBiller?: boolean;
   timing?: string;
+  
+  // 🟢 NEW: Smart Rollover Commitments
+  isRollover?: boolean;     // Flags this item as a pushed credit balance
+  accountId?: string;       // Routes the payment to the correct card
+  statementId?: string;     // Stamps the resulting payment with the exact cycle
 }
+
 
 
 export interface SavedBudgetSetup {

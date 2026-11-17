@@ -356,7 +356,8 @@ const TimelineCard = ({
   onPay,
   onInfo,
   onTogglePartial,         // 🟢 MUST BE HERE
-  onUpdatePartialAmount    // 🟢 MUST BE HERE
+  onUpdatePartialAmount,    // 🟢 MUST BE HERE
+  onDelete
 }: { 
   item: TimelineNode, 
   isSettled: boolean, 
@@ -364,7 +365,8 @@ const TimelineCard = ({
   onPay: () => void,
   onInfo: (subItemId?: string) => void,
   onTogglePartial?: () => void,                  // 🟢 MUST BE HERE
-  onUpdatePartialAmount?: (amount: number) => void // 🟢 MUST BE HERE
+  onUpdatePartialAmount?: (amount: number) => void, // 🟢 MUST BE HERE
+  onDelete?: () => void
 }) => {
 
 
@@ -517,6 +519,17 @@ const TimelineCard = ({
                     ₱{(item.isTargetMet && item.partialTargetAmount ? item.partialTargetAmount : item.amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}
                   </span>
                 )}
+              {/* 🟢 NEW: Delete Button for Rollovers */}
+                {item.rawItem?.isRollover && !isSettled && (
+                  <button 
+                    onClick={(e) => { e.preventDefault(); e.stopPropagation(); onDelete?.(); }} 
+                    className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-lg transition-colors ml-1" 
+                    title="Remove Rollover"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                )}
+
 
                 
 <div className="flex flex-col md:flex-row items-end md:items-center gap-2 md:mt-0">
@@ -963,6 +976,14 @@ const effectiveCategories = React.useMemo(() => {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
     
+    // 🟢 THE PHANTOM FIX: Force the Budget page to pull fresh data from the DB 
+  // every time it opens so it doesn't accidentally overwrite your newly pushed rollovers!
+  useEffect(() => {
+    if (onReloadSetups) {
+      onReloadSetups();
+    }
+  }, [selectedMonth, selectedYear, onReloadSetups]);
+
 
   useEffect(() => {
     const viewParam = searchParams.get('view');
@@ -4134,13 +4155,16 @@ const getFrozenCycleAmount = (account: Account): number => {
             const linkedBiller = isBillerItem ? billers.find(b => b.id === item.id) : null;
             const rawDue = linkedBiller?.dueDate || item.dueDay || '1';
     
-            // 🟢 FRONTING MATH FOR BILLERS
+                        // 🟢 FRONTING MATH FOR BILLERS
             let frontedInfo = getFrontedData(item.name);
             const schedule = getPaymentSchedule('biller', item.id, selectedMonth, selectedYear);
             let isPaid = false;
             let periodAmountPaid = 0;
             
-            if (schedule) {
+            // 🟢 BUG FIX: Prevent aggressive fuzzy-matching from auto-settling rollovers
+            if (item.isRollover) {
+              isPaid = false;
+            } else if (schedule) {
               isPaid = checkIfPaidBySchedule('biller', item.id);
               periodAmountPaid = schedule.amount_paid || 0;
             } else {
@@ -4148,6 +4172,7 @@ const getFrozenCycleAmount = (account: Account): number => {
             }
             
             if (frontedInfo) isPaid = false; // Force it to stay active!
+
     
             timeline.push({
               id: item.id, name: item.name, amount, type: isBillerItem ? 'bill' : 'expense',
@@ -4296,6 +4321,26 @@ const getFrozenCycleAmount = (account: Account): number => {
             });
           }
         });
+
+                    // 🟢 NEW: Scoop up injected 'Fixed' Rollovers so they appear on the timeline!
+            const fixedItems = processedBudgetMap[activePeriodIndex]?.['Fixed'] || [];
+            fixedItems.forEach((item: any) => {
+              if (item && item.isRollover && item.accountId === acc.id) {
+                subItems.push({ 
+                  id: item.id, 
+                  name: item.name, 
+                  amount: parseFloat(item.amountsByPeriod?.[activePeriodIndex] || item.amount) || 0, 
+                  type: 'expense',
+                  dueDate: 0,
+                  displayDueDate: '',
+                  isPaid: false, // 🟢 Forces it to stay in Upcoming!
+                  isIncluded: true,
+                  rawItem: item,
+                  frontedInfo: null
+                });
+              }
+            });
+
 
                 // Budee Reimbursables on this statement
                 cardReimbursableItems = (targetBucket?.budeeBreakdown || []).map((item: any) => {
@@ -4826,6 +4871,9 @@ const getFrozenCycleAmount = (account: Account): number => {
               });
             }
           }
+
+          
+
 
           // 🟢 FIX 1: Apply the bulletproof math override to the Category Summary too!
           const subItemsTotal = subItems.reduce((s, i) => s + (Number(i.amount) || 0), 0);

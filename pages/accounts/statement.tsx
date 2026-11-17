@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { ArrowLeft, Calendar, CreditCard, ChevronDown, Info, ChevronUp, Box, ShoppingBag } from 'lucide-react';
+import { createPortal } from 'react-dom';
 import { useSearchParams, Link } from 'react-router-dom';
 import { Account, Installment } from '../../types';
 import { getTransactionsByPaymentSchedule } from '../../src/services/transactionsService';
@@ -14,6 +14,10 @@ import { useQueryClient } from '@tanstack/react-query';
 import { supabase } from '../../src/utils/supabaseClient';
 import { saveCreditStatement } from '../../src/services/statementsService';
 import { getCreditStatementsByPeriod } from '../../src/services/statementsService';
+import { ArrowLeft, Calendar, CreditCard, ChevronDown, Info, ChevronUp, Box, ShoppingBag, X, Pencil, Trash2, Plus } from 'lucide-react';
+import { getTodayIso, combineDateWithCurrentTime } from '../../src/utils/dateUtils';
+import { createTransaction, updateTransactionAndSyncSchedule, deleteTransactionAndRevertSchedule } from '../../src/services/transactionsService';
+import { PinProtectedAction } from '../../src/components/PinProtectedAction';
 
 
 const formatCurrency = (val: number) =>
@@ -52,7 +56,199 @@ const StatementPage: React.FC<StatementPageProps> = ({ accounts, installments = 
 const [showMultiBNPLModal, setShowMultiBNPLModal] = useState(false);
 const [showReviewModal, setShowReviewModal] = useState(false);
 
+  // 🟢 NEW: Unified Dashboard States
+  const [isLedgerOpen, setIsLedgerOpen] = useState(false);
+  
+  // 🟢 NEW: Card Payment & Edit States
+  const [showCardPaymentModal, setShowCardPaymentModal] = useState(false);
+  const [cardPaymentForm, setCardPaymentForm] = useState({ name: '', amount: '', date: getTodayIso(), notes: '' });
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  
+  const [showEditTxModal, setShowEditTxModal] = useState(false);
+  const [editingTx, setEditingTx] = useState<any>(null);
+  const [editTxForm, setEditTxForm] = useState({ name: '', amount: '', date: '' });
+
+  // 🟢 NEW: Submission Handlers
+  const handleCardPaymentSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!account) return;
+    const amountValue = Math.abs(parseFloat(cardPaymentForm.amount || '0'));
+    if (isNaN(amountValue) || amountValue <= 0) return;
+
+    setIsSubmitting(true);
+    try {
+      const { error } = await createTransaction({
+        name: cardPaymentForm.name.trim() || 'Credit Card Payment',
+        date: combineDateWithCurrentTime(cardPaymentForm.date),
+        amount: -amountValue,
+        payment_method_id: account.id,
+        transaction_type: 'credit_payment',
+        notes: cardPaymentForm.notes.trim() || null
+      } as any);
+      if (error) throw error;
+      if (onRefreshData) await onRefreshData();
+      setShowCardPaymentModal(false);
+      setCardPaymentForm({ name: '', amount: '', date: getTodayIso(), notes: '' });
+    } catch (error) {
+      alert('Failed to record credit card payment');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleEditTxSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingTx) return;
+    setIsSubmitting(true);
+    try {
+      const sign = editingTx.amount < 0 ? -1 : 1;
+      const { error } = await updateTransactionAndSyncSchedule(editingTx.id, {
+        name: editTxForm.name,
+        date: combineDateWithCurrentTime(editTxForm.date),
+        amount: sign * parseFloat(editTxForm.amount)
+      });
+      if (error) throw error;
+      if (onRefreshData) await onRefreshData();
+      setShowEditTxModal(false);
+      setEditingTx(null);
+    } catch (error) {
+      alert('Failed to update transaction');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+
+    const [showPushToBudget, setShowPushToBudget] = useState(false);
+  const [pushBudgetForm, setPushBudgetForm] = useState({
+    amount: '',
+    targetMonth: monthNames[new Date().getMonth() + 1 > 11 ? 0 : new Date().getMonth() + 1],
+    targetYear: new Date().getMonth() + 1 > 11 ? new Date().getFullYear() + 1 : new Date().getFullYear(),
+    targetPeriod: 1 // 🟢 NEW: Added this to track 1st vs 2nd paycheck!
+  });
+  const [isPushing, setIsPushing] = useState(false);
+
+
+        const handlePushToBudget = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!account || !selectedCycle) return;
+    setIsPushing(true);
+
+    try {
+      console.log("1. Starting Push to Budget...");
+      
+      // 🟢 THE FIX: Grab the authenticated user FIRST
+      const { data: userData } = await supabase.auth.getUser();
+      if (!userData.user) throw new Error("You must be logged in to do this.");
+      
+      const monthIndex = monthNames.indexOf(selectedCycle.targetMonth) + 1;
+      const statementPeriod = `${selectedCycle.targetYear}-${String(monthIndex).padStart(2, '0')}`;
+      
+      console.log("2. Fetching statement ID for period:", statementPeriod);
+      const { data: stmtData, error: stmtError } = await supabase
+        .from('credit_statements')
+        .select('id')
+        .eq('account_id', account.id)
+        .eq('statement_period', statementPeriod)
+        .single();
+        
+      if (stmtError || !stmtData) throw new Error("Could not find the saved statement. Please wait for it to sync and try again.");
+
+      console.log("3. Fetching budget securely for user:", userData.user.id);
+      const { data: budgetData, error: budgetError } = await supabase
+        .from('budget_setups')
+        .select('*')
+        .eq('month', pushBudgetForm.targetMonth)
+        .eq('user_id', userData.user.id); // 🟢 THE FIX: Strictly lock the query to this specific user!
+        
+      if (budgetError) throw budgetError;
+      
+      const targetBudget = budgetData?.find(b => parseInt(b.data?._year || new Date().getFullYear()) === pushBudgetForm.targetYear);
+
+            // 🟢 1. Extract the raw paycheck number (e.g., turns "Second Paycheck" into 2)
+      const rawTabString = String(pushBudgetForm.targetPeriod || '1');
+      const tabMatch = rawTabString.match(/\d+/);
+      const targetTab = tabMatch ? parseInt(tabMatch[0]) : 1;
+
+      // 🟢 2. Force the amount into a strict mathematical number
+      const parsedAmount = parseFloat(pushBudgetForm.amount);
+
+      const rolloverItem = {
+        id: `rollover-${Date.now()}`,
+        name: `Leftover ${account.bank} Balance`,
+        amount: parsedAmount, // 🟢 Now a strict Number
+        amountsByPeriod: { [targetTab]: parsedAmount }, // 🟢 Now strictly { 2: 4025 }
+        included: true,
+        isRollover: true, 
+        isBiller: true, 
+        type: 'bill', // 🟢 NEW: Explicitly tells the engine it is a timeline bill
+        dueDay: account.dueDate ? String(account.dueDate).replace(/\D/g, '') : '15',
+        accountId: account.id,
+        statementId: stmtData.id 
+      };
+
+
+      if (targetBudget) {
+        console.log("4a. Injecting into YOUR existing budget ID:", targetBudget.id);
+        
+        const updatedData = JSON.parse(JSON.stringify(targetBudget.data));
+        if (!updatedData['Fixed']) updatedData['Fixed'] = []; 
+        
+        const alreadyExists = updatedData['Fixed'].some((item: any) => item.statementId === stmtData.id);
+        if (alreadyExists) throw new Error("This statement balance has already been pushed to that budget!");
+
+        updatedData['Fixed'].push(rolloverItem);
+        const newTotal = (targetBudget.total_amount || 0) + parseFloat(pushBudgetForm.amount);
+
+        const { error: updateError } = await supabase
+          .from('budget_setups')
+          .update({ data: updatedData, total_amount: newTotal })
+          .eq('id', targetBudget.id);
+
+        if (updateError) throw updateError;
+        console.log("5a. Successfully updated database!");
+      } else {
+        console.log("4b. Creating brand new budget setup...");
+        const newBudgetData = {
+          _year: pushBudgetForm.targetYear,
+          'Fixed': [rolloverItem] 
+        };
+
+        const { error: insertError } = await supabase
+          .from('budget_setups')
+          .insert([{
+            month: pushBudgetForm.targetMonth,
+            timing: 'unified',
+            status: 'Saved',
+            total_amount: parseFloat(pushBudgetForm.amount),
+            data: newBudgetData,
+            user_id: userData.user.id // 🟢 Already had this part right!
+          }]);
+
+        if (insertError) throw insertError;
+        console.log("5b. Successfully inserted new database row!");
+      }
+
+      if (onRefreshData) {
+        await onRefreshData();
+      }
+      setShowPushToBudget(false);
+      alert(`Success! Pushed to ${pushBudgetForm.targetMonth} Paycheck ${targetTab}. Switch to that tab in your budget to view it!`);
+
+    } catch (error: any) {
+      console.error("PUSH ERROR:", error);
+      alert(error.message || 'Failed to push to budget.');
+    } finally {
+      setIsPushing(false);
+    }
+  };
+
+
+
+
+
 const [isFilterExpanded, setIsFilterExpanded] = useState(false);
+
 
 const [showAllCyclesModal, setShowAllCyclesModal] = useState(false);
 
@@ -473,6 +669,23 @@ const [showAllCyclesModal, setShowAllCyclesModal] = useState(false);
   }
 
   const selectedCycle = cycles[selectedCycleIndex];
+    // 🟢 NEW: Calculate where this statement originally belongs so we can block duplicates
+  let originMonth = monthNames[new Date().getMonth()];
+  let originYear = new Date().getFullYear();
+  let originPeriod = 1;
+  
+  if (selectedCycle?.calculatedDueDate) {
+    const due = new Date(selectedCycle.calculatedDueDate + 'T00:00:00');
+    originMonth = monthNames[due.getMonth()];
+    originYear = due.getFullYear();
+    originPeriod = due.getDate() <= 15 ? 1 : 2;
+  }
+  
+  // 🟢 NEW: The error flag to lock the submit button
+  const isSameAsOrigin = pushBudgetForm.targetMonth === originMonth && 
+                         pushBudgetForm.targetYear === originYear && 
+                         pushBudgetForm.targetPeriod === originPeriod;
+
 
   // 🟢 Break down the statement math exactly like a real bank
   const previousBalance = selectedCycle?.startingBalance ?? 0;
@@ -726,23 +939,65 @@ const [showAllCyclesModal, setShowAllCyclesModal] = useState(false);
                   <span className="shrink-0 text-xs font-bold text-gray-400">{visibleStatementCount} items</span>
                 </div>
 
-                <div className="flex shrink-0 flex-col items-end gap-2">
-                  <button
-                    onClick={() => setShowMultiBNPLModal(true)}
-                    className="whitespace-nowrap rounded-lg border-2 border-black bg-indigo-100 px-3 py-1 text-[10px] font-black uppercase tracking-widest text-indigo-700 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] transition-all hover:translate-x-[1px] hover:translate-y-[1px] hover:shadow-none"
-                  >
-                    Convert to BNPL
-                  </button>
-                  {pendingConversions.length > 0 && (
-                    <button
-                      type="button"
-                      onClick={() => setShowReviewModal(true)}
-                      className="whitespace-nowrap rounded-lg border-2 border-black bg-amber-100 px-3 py-1 text-[10px] font-black uppercase tracking-widest text-amber-700 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] transition-all hover:translate-x-[1px] hover:translate-y-[1px] hover:shadow-none animate-pulse"
+                <div className="flex shrink-0 flex-row flex-wrap justify-end gap-2 md:gap-3">
+                  
+                  
+
+
+
+
+                  {/* 🟢 NEW: Push to Budget Button (Only shows if there is an unpaid balance) */}
+                  {statementBalance > 0 && (
+                                        <button
+                      onClick={() => {
+                        // Auto-calculate the NEXT paycheck as the default target
+                        let targetPeriod = originPeriod === 1 ? 2 : 1;
+                        let targetMonthIdx = monthNames.indexOf(originMonth);
+                        let targetYear = originYear;
+
+                        if (originPeriod === 2) {
+                          targetMonthIdx += 1;
+                          if (targetMonthIdx > 11) {
+                            targetMonthIdx = 0;
+                            targetYear++;
+                          }
+                        }
+
+                        setPushBudgetForm({ 
+                          amount: statementBalance.toFixed(2), // 🟢 Forces a clean 2-decimal string!
+                          targetMonth: monthNames[targetMonthIdx],
+                          targetYear: targetYear,
+                          targetPeriod: targetPeriod
+                        });
+                        setShowPushToBudget(true);
+                      }}
+                      className="whitespace-nowrap rounded-lg border-2 border-black bg-emerald-100 px-3 py-1 text-[10px] font-black uppercase tracking-widest text-emerald-700 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] transition-all hover:translate-x-[1px] hover:translate-y-[1px] hover:shadow-none"
                     >
-                      Review Pending ({pendingConversions.length})
+                      Push to Budget
                     </button>
-                  )}
-                </div>
+
+                  )}
+
+
+
+
+                  <button
+                    onClick={() => setShowMultiBNPLModal(true)}
+                    className="whitespace-nowrap rounded-lg border-2 border-black bg-indigo-100 px-3 py-1 text-[10px] font-black uppercase tracking-widest text-indigo-700 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] transition-all hover:translate-x-[1px] hover:translate-y-[1px] hover:shadow-none"
+                  >
+                    BNPL
+                  </button>
+                  
+                  {pendingConversions.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => setShowReviewModal(true)}
+                      className="whitespace-nowrap rounded-lg border-2 border-black bg-amber-100 px-3 py-1 text-[10px] font-black uppercase tracking-widest text-amber-700 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] transition-all hover:translate-x-[1px] hover:translate-y-[1px] hover:shadow-none animate-pulse"
+                    >
+                      Review ({pendingConversions.length})
+                    </button>
+                  )}
+                </div>
               </div>
 
               <div className="p-4">
@@ -963,8 +1218,307 @@ const [showAllCyclesModal, setShowAllCyclesModal] = useState(false);
   />
 )}
 
+      {/* 🟢 FLOATING ACTION BUTTONS */}
+      <div className="fixed bottom-24 md:bottom-8 right-4 md:right-8 z-[90] flex flex-col gap-3 animate-in slide-in-from-bottom-8">
+        <button
+          onClick={() => setIsLedgerOpen(true)}
+          className="flex items-center justify-center w-12 h-12 rounded-full border-[3px] border-black bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[2px] hover:translate-y-[2px] transition-all"
+          title="View Raw Ledger"
+        >
+          <Box className="w-5 h-5" />
+        </button>
+        <button
+          onClick={() => setShowCardPaymentModal(true)}
+          className="flex items-center justify-center w-14 h-14 rounded-full border-[3px] border-black bg-teal-500 text-white shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[2px] hover:translate-y-[2px] transition-all"
+          title="Make Payment"
+        >
+          <CreditCard className="w-6 h-6" />
+        </button>
+      </div>
 
 
+      {/* ========================================= */}
+      {/* 🟢 SIDE-PEEK: RAW TRANSACTION LEDGER      */}
+      {/* ========================================= */}
+      {isLedgerOpen && createPortal(
+        <>
+          {/* DIMMED BACKDROP */}
+          <div 
+            className="fixed inset-0 z-[9990] bg-black/30 backdrop-blur-sm animate-in fade-in duration-300"
+            onClick={() => setIsLedgerOpen(false)}
+          />
+
+          {/* SLIDE-IN PANEL */}
+          <div className="fixed top-0 right-0 bottom-0 z-[9999] w-full md:w-[600px] lg:w-[700px] bg-[#FCF6E8] dark:bg-gray-950 md:border-l-[4px] border-black shadow-[-8px_0_20px_rgba(0,0,0,0.3)] flex flex-col animate-in slide-in-from-right duration-300">
+            
+            {/* HEADER NAV */}
+            <div className="shrink-0 sticky top-0 z-10 bg-[#FCF6E8]/90 dark:bg-gray-950/90 backdrop-blur-md px-4 py-4 md:px-8 md:py-6 flex items-center justify-between border-b-[3px] border-black shadow-sm">
+              <div className="flex items-center gap-4">
+                <button 
+                  onClick={() => setIsLedgerOpen(false)}
+                  className="flex items-center justify-center w-10 h-10 rounded-full border-[3px] border-black bg-white dark:bg-gray-800 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] active:scale-95 active:translate-y-[2px] active:shadow-none transition-all hover:-translate-y-0.5"
+                >
+                  <X className="w-4 h-4 text-black dark:text-white" strokeWidth={3} />
+                </button>
+                <div>
+                  <h2 className="text-xl font-black text-gray-900 dark:text-white uppercase tracking-tight truncate">
+                    Raw Ledger
+                  </h2>
+                  <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mt-0.5">
+                    {account.bank} Transactions
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* SCROLLABLE WORKSPACE CONTENT */}
+            <div className="flex-1 overflow-y-auto p-4 md:p-8 space-y-4 relative custom-scrollbar">
+              <div className="bg-white dark:bg-gray-900 rounded-2xl border-4 border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] overflow-hidden">
+                <table className="w-full text-left">
+                  <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
+                    {(transactions || [])
+                      .filter(tx => tx.payment_method_id === account.id || tx.paymentMethodId === account.id)
+                      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+                      .map((tx) => (
+                                                <tr key={tx.id} className="hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors group">
+                          <td className="p-4">
+                            <div className="text-sm font-black text-gray-900 dark:text-gray-100">{tx.name}</div>
+                            <div className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mt-1">
+                              {new Date(tx.date).toLocaleDateString()} • {tx.transaction_type}
+                            </div>
+                          </td>
+                          <td className="p-4 text-right">
+                            <div className={`text-sm font-black ${tx.amount > 0 ? 'text-gray-900 dark:text-gray-100' : 'text-green-600 dark:text-green-400'}`}>
+                              {formatCurrency(tx.amount)}
+                            </div>
+                          </td>
+                          <td className="p-4 pr-6 w-20">
+                            {/* 🟢 EDIT & DELETE ACTIONS (Visible on hover) */}
+                            <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                              <button
+                                onClick={() => {
+                                  setEditingTx(tx);
+                                  setEditTxForm({ name: tx.name, amount: Math.abs(tx.amount).toString(), date: tx.date.split('T')[0] });
+                                  setShowEditTxModal(true);
+                                }}
+                                className="p-1.5 text-gray-400 hover:text-indigo-600 transition-colors"
+                              >
+                                <Pencil className="w-4 h-4" />
+                              </button>
+                              <PinProtectedAction
+                                featureId="transaction_deletions"
+                                onVerified={async () => {
+                                  await deleteTransactionAndRevertSchedule(tx.id);
+                                  if (onRefreshData) await onRefreshData();
+                                }}
+                                actionLabel="Delete Record"
+                              >
+                                <button onClick={(e) => e.preventDefault()} className="p-1.5 text-gray-400 hover:text-red-600 transition-colors">
+                                  <Trash2 className="w-4 h-4" />
+                                </button>
+                              </PinProtectedAction>
+                            </div>
+                          </td>
+                        </tr>
+
+                    ))}
+                    {transactions?.length === 0 && (
+                      <tr>
+                        <td colSpan={2} className="p-8 text-center text-xs font-bold text-gray-400 uppercase tracking-widest">
+                          No transactions found
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </>,
+        document.body
+      )}
+
+      {/* ========================================= */}
+      {/* 🟢 MODAL: PUSH TO BUDGET                  */}
+      {/* ========================================= */}
+      {showPushToBudget && createPortal(
+        <div className="fixed inset-0 z-[99999] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in" onClick={() => setShowPushToBudget(false)}>
+          <div className="w-full max-w-sm bg-white dark:bg-gray-900 border-[4px] border-black rounded-[2rem] p-6 shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] relative flex flex-col" onClick={e => e.stopPropagation()}>
+            
+            <button onClick={() => setShowPushToBudget(false)} className="absolute top-4 right-4 w-8 h-8 flex items-center justify-center rounded-full border-2 border-black bg-gray-100 dark:bg-gray-800 hover:-translate-y-0.5 active:scale-95 transition-all">
+              <X className="w-4 h-4 text-gray-900 dark:text-white" />
+            </button>
+            
+            <div className="mb-6 pr-8">
+              <h2 className="text-xl font-black text-gray-900 dark:text-white uppercase tracking-tight leading-none">Push to Budget</h2>
+              <p className="text-xs font-bold text-gray-500 mt-2 uppercase tracking-widest truncate">Roll over unpaid balance</p>
+            </div>
+
+                                    <form onSubmit={handlePushToBudget} className="space-y-5">
+              <div>
+                <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5">Rollover Amount</label>
+                <div className="relative">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 font-black text-gray-400">₱</span>
+                  <input 
+                    type="number" 
+                    step="0.01" 
+                    value={pushBudgetForm.amount} 
+                    onChange={e => setPushBudgetForm({...pushBudgetForm, amount: e.target.value})} 
+                    className="w-full bg-gray-50 dark:bg-gray-800 border-[3px] border-black rounded-xl p-3 pl-8 outline-none text-lg font-black dark:text-gray-100" 
+                  />
+                </div>
+              </div>
+
+                            <div className="flex flex-col gap-3">
+                <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest -mb-1">Target Budget Period</label>
+                <div className="flex gap-2">
+                  <select 
+                    value={pushBudgetForm.targetMonth} 
+                    onChange={e => setPushBudgetForm({...pushBudgetForm, targetMonth: e.target.value})} 
+                    className="flex-[2] bg-gray-50 dark:bg-gray-800 border-[3px] border-black rounded-xl p-3 outline-none text-xs font-black dark:text-gray-100 appearance-none"
+                  >
+                    {monthNames.map((m, index) => {
+                      const currentYear = new Date().getFullYear();
+                      const currentMonthIdx = new Date().getMonth();
+                      
+                      // 🟢 Disable the month if the selected year is in the past, 
+                      // OR if it's the current year and the month has already passed!
+                      const isDisabled = pushBudgetForm.targetYear < currentYear || 
+                                        (pushBudgetForm.targetYear === currentYear && index < currentMonthIdx);
+                      
+                      return (
+                        <option key={m} value={m} disabled={isDisabled}>
+                          {m}
+                        </option>
+                      );
+                    })}
+                  </select>
+                  <input 
+                    type="number" 
+                    min={new Date().getFullYear()} // 🟢 Blocks past years entirely
+                    value={pushBudgetForm.targetYear} 
+                    onChange={e => setPushBudgetForm({...pushBudgetForm, targetYear: parseInt(e.target.value) || new Date().getFullYear()})} 
+                    className="flex-[1.5] bg-gray-50 dark:bg-gray-800 border-[3px] border-black rounded-xl p-3 outline-none text-xs font-black dark:text-gray-100 text-center" 
+                  />
+                </div>
+
+                <select 
+                  value={pushBudgetForm.targetPeriod} 
+                  onChange={e => setPushBudgetForm({...pushBudgetForm, targetPeriod: parseInt(e.target.value)})} 
+                  className="w-full bg-gray-50 dark:bg-gray-800 border-[3px] border-black rounded-xl p-3 outline-none text-xs font-black dark:text-gray-100 appearance-none text-center"
+                >
+                  <option value={1}>First Paycheck (1st Half)</option>
+                  <option value={2}>Second Paycheck (2nd Half)</option>
+                </select>
+              </div>
+
+              {isSameAsOrigin ? (
+                <div className="bg-red-50 dark:bg-red-900/20 border-2 border-red-400 p-3 rounded-xl mt-2 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]">
+                  <p className="text-[10px] font-medium text-red-900 dark:text-red-300 leading-relaxed">
+                    <strong>Cannot push to origin period.</strong> This statement is already due in the {originMonth} {originYear} (Paycheck {originPeriod}) budget. Please select a future paycheck to roll the balance over.
+                  </p>
+                </div>
+              ) : (
+                <div className="bg-emerald-50 dark:bg-emerald-900/20 border-2 border-emerald-400 p-3 rounded-xl mt-2 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]">
+                  <p className="text-[10px] font-medium text-emerald-900 dark:text-emerald-300 leading-relaxed">
+                    This will inject a <strong>Leftover {account.bank} Balance</strong> line item directly into your <strong>{pushBudgetForm.targetMonth} {pushBudgetForm.targetYear} (Paycheck {pushBudgetForm.targetPeriod})</strong> budget plan to ensure you map out cash to pay it off.
+                  </p>
+                </div>
+              )}
+
+              <div className="pt-2 mt-auto flex gap-3">
+                <button 
+                  type="button" 
+                  onClick={() => setShowPushToBudget(false)}
+                  className="px-4 py-3.5 rounded-xl font-black text-xs uppercase tracking-widest text-gray-700 bg-gray-100 border-[3px] border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] active:translate-y-1 active:shadow-none transition-all"
+                >
+                  Cancel
+                </button>
+                <button 
+                  type="submit" 
+                  disabled={isPushing || isSameAsOrigin}
+                  className={`flex-1 py-3.5 rounded-xl font-black text-xs uppercase tracking-widest text-white border-[3px] border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] active:translate-y-1 active:shadow-none transition-all disabled:opacity-50 disabled:cursor-not-allowed ${getAccentClasses('bg')}`}
+                >
+                  {isPushing ? 'Pushing...' : 'Push to Budget'}
+                </button>
+              </div>
+            </form>
+
+          </div>
+        </div>,
+        document.body
+      )}
+
+
+      {/* 🟢 MODAL: CARD PAYMENT */}
+      {showCardPaymentModal && createPortal(
+        <div className="fixed inset-0 z-[99999] flex justify-center bg-black/60 p-4 backdrop-blur-md items-center">
+          <div className="w-full max-w-sm rounded-[2rem] border-[4px] border-black bg-[#fff7e8] p-6 shadow-[10px_10px_0px_0px_rgba(0,0,0,1)] transition-colors dark:bg-gray-900 relative">
+            <button onClick={() => setShowCardPaymentModal(false)} className="absolute right-5 top-5 inline-flex h-9 w-9 items-center justify-center rounded-xl border-[3px] border-black bg-white text-gray-700 shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] transition-all hover:translate-x-[1px] hover:translate-y-[1px] hover:shadow-none dark:bg-gray-800 dark:text-gray-100"><X className="w-4 h-4" /></button>
+            <div className="mb-4 inline-flex items-center justify-center rounded-[1.5rem] border-[3px] border-black bg-teal-500 text-white shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] h-12 w-12"><CreditCard className="w-6 h-6" /></div>
+            <h2 className="text-xl font-black uppercase tracking-tight text-gray-900 dark:text-gray-100 mb-1">Make Payment</h2>
+            <p className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-5">Record a balance reduction</p>
+            <form onSubmit={handleCardPaymentSubmit} className="space-y-4">
+              <div>
+                <label className="block text-[10px] font-black uppercase tracking-widest text-gray-400 mb-1.5">Amount</label>
+                <div className="relative">
+                  <span className="absolute left-4 top-1/2 -translate-y-1/2 font-bold text-gray-400">₱</span>
+                  <input type="number" step="0.01" min="0.01" value={cardPaymentForm.amount} onChange={e => setCardPaymentForm({...cardPaymentForm, amount: e.target.value})} required className="w-full rounded-xl border-[3px] border-black bg-white p-3 pl-8 font-black outline-none transition-colors dark:bg-gray-800 dark:text-gray-100" />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-[10px] font-black uppercase tracking-widest text-gray-400 mb-1.5">Date</label>
+                  <input type="date" value={cardPaymentForm.date} onChange={e => setCardPaymentForm({...cardPaymentForm, date: e.target.value})} required className="relative appearance-none w-full rounded-xl border-[3px] border-black bg-white p-3 font-bold text-xs outline-none transition-colors dark:bg-gray-800 dark:text-gray-100" />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-black uppercase tracking-widest text-gray-400 mb-1.5">Name</label>
+                  <input value={cardPaymentForm.name} onChange={e => setCardPaymentForm({...cardPaymentForm, name: e.target.value})} placeholder="Optional" className="w-full rounded-xl border-[3px] border-black bg-white p-3 font-bold text-xs outline-none transition-colors dark:bg-gray-800 dark:text-gray-100" />
+                </div>
+              </div>
+              <div className="pt-2">
+                <button type="submit" disabled={isSubmitting} className="w-full rounded-xl border-[3px] border-black bg-teal-500 py-3.5 font-black text-white shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] uppercase tracking-widest text-xs transition-all hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none disabled:opacity-50">
+                  {isSubmitting ? 'Processing...' : 'Record Payment'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* 🟢 MODAL: EDIT TRANSACTION */}
+      {showEditTxModal && editingTx && createPortal(
+        <div className="fixed inset-0 z-[99999] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md">
+          <div className="w-full max-w-sm rounded-[2rem] border-[4px] border-black bg-[#fff7e8] p-6 shadow-[10px_10px_0px_0px_rgba(0,0,0,1)] relative dark:bg-gray-900">
+            <button onClick={() => { setShowEditTxModal(false); setEditingTx(null); }} className="absolute right-5 top-5 inline-flex h-9 w-9 items-center justify-center rounded-xl border-[3px] border-black bg-white text-gray-700 shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] transition-all hover:translate-x-[1px] hover:translate-y-[1px] hover:shadow-none"><X className="w-4 h-4" /></button>
+            <div className="mb-4 inline-flex h-12 w-12 items-center justify-center rounded-[1.5rem] border-[3px] border-black bg-indigo-500 text-white shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]"><Pencil className="w-6 h-6" /></div>
+            <h2 className="text-xl font-black uppercase tracking-tight text-gray-900 dark:text-gray-100 mb-5">Edit Transaction</h2>
+            <form onSubmit={handleEditTxSubmit} className="space-y-4">
+              <div>
+                <label className="block text-[10px] font-black uppercase tracking-widest text-gray-400 mb-1.5">Name</label>
+                <input value={editTxForm.name} onChange={e => setEditTxForm({...editTxForm, name: e.target.value})} required className="w-full rounded-xl border-[3px] border-black bg-white p-3 font-bold text-sm outline-none dark:bg-gray-800 dark:text-gray-100" />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-[10px] font-black uppercase tracking-widest text-gray-400 mb-1.5">Amount</label>
+                  <input type="number" step="0.01" min="0" value={editTxForm.amount} onChange={e => setEditTxForm({...editTxForm, amount: e.target.value})} required className="w-full rounded-xl border-[3px] border-black bg-white p-3 font-black text-sm outline-none dark:bg-gray-800 dark:text-gray-100" />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-black uppercase tracking-widest text-gray-400 mb-1.5">Date</label>
+                  <input type="date" value={editTxForm.date} onChange={e => setEditTxForm({...editTxForm, date: e.target.value})} required className="w-full rounded-xl border-[3px] border-black bg-white p-3 font-bold text-sm outline-none dark:bg-gray-800 dark:text-gray-100" />
+                </div>
+              </div>
+              <div className="pt-2">
+                <button type="submit" disabled={isSubmitting} className="w-full rounded-xl border-[3px] border-black bg-indigo-600 py-3.5 font-black text-white shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] uppercase tracking-widest text-xs transition-all hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none disabled:opacity-50">
+                  {isSubmitting ? 'Saving...' : 'Update Transaction'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>,
+        document.body
+      )}
 
 
       </div>
